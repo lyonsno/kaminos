@@ -4,6 +4,10 @@ export const MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA =
   'kaminos.muscle-compartment-packing-source.v0';
 export const MUSCLE_COMPARTMENT_PACKING_RESULT_SCHEMA =
   'kaminos.muscle-compartment-packing-result.v0';
+export const SOURCE_SHAPED_PACKING_PERTURBATION_SERIES_SCHEMA =
+  'kaminos.source-shaped-muscle-packing-perturbation-series.v0';
+export const SOURCE_SHAPED_PACKING_PERTURBATION_RESULT_SCHEMA =
+  'kaminos.source-shaped-muscle-packing-perturbation-result.v0';
 
 const DEFAULT_CONFIG = Object.freeze({
   maxIterations: 640,
@@ -33,6 +37,10 @@ function canonical(value) {
 
 function hashJson(value) {
   return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+export function hashMusclePackingCanonicalJson(value) {
+  return hashJson(value);
 }
 
 function add(left, right) {
@@ -563,6 +571,358 @@ export function createSyntheticFourMuscleCompartment() {
   };
 }
 
+function candidateValuesAgree(field, label) {
+  if (!field || (field.state !== 'candidate' && field.state !== 'admitted')) {
+    throw new Error(`${label} must preserve candidate or admitted evidence`);
+  }
+  const candidates = Array.isArray(field.candidates) ? field.candidates : [];
+  const values = [
+    ...(field.selected?.value === undefined ? [] : [field.selected.value]),
+    ...candidates.map(candidate => candidate.value),
+  ];
+  if (values.length === 0) throw new Error(`${label} has no measured candidate value`);
+  const first = values[0];
+  const agrees = values.every(value => {
+    if (isFinitePoint(first) && isFinitePoint(value)) {
+      return first.every((coordinate, axis) => Math.abs(coordinate - value[axis]) <= 1e-6);
+    }
+    return JSON.stringify(canonical(first)) === JSON.stringify(canonical(value));
+  });
+  if (!agrees) throw new Error(`${label} candidate values disagree`);
+  return structuredClone(field.selected?.value ?? candidates[0].value);
+}
+
+function validateSourceShapedAtlas(parentAtlas, parentAtlasFileSha256) {
+  if (parentAtlas?.schema !== 'kaminos.authored-muscle-coordinate-parent-atlas.v0') {
+    throw new Error(`parent atlas schema mismatch: ${parentAtlas?.schema || 'missing'}`);
+  }
+  if (!HASH_PATTERN.test(parentAtlasFileSha256 || '')) {
+    throw new Error('parent atlas file SHA-256 must be a SHA-256 identity');
+  }
+  if (!HASH_PATTERN.test(parentAtlas.atlasSha256 || '')) {
+    throw new Error('parent atlas SHA-256 must be a SHA-256 identity');
+  }
+  const { atlasSha256: ignored, ...core } = parentAtlas;
+  if (hashJson(core) !== parentAtlas.atlasSha256) {
+    throw new Error('parent atlas SHA-256 does not match its effective payload');
+  }
+  if (!Array.isArray(parentAtlas.routeInventory)) {
+    throw new Error('parent atlas route inventory must be an array');
+  }
+}
+
+function selectedSourceShapedRoutes(parentAtlas, requestedConstructionIds) {
+  if (
+    !Array.isArray(requestedConstructionIds) ||
+    requestedConstructionIds.length < 2 ||
+    requestedConstructionIds.length > 8
+  ) {
+    throw new Error('source-shaped packing assay requires two to eight requested construction ids');
+  }
+  if (new Set(requestedConstructionIds).size !== requestedConstructionIds.length) {
+    throw new Error('source-shaped packing assay construction ids must be unique');
+  }
+  return requestedConstructionIds.map(constructionId => {
+    requireString(constructionId, 'requested construction id');
+    const matches = parentAtlas.routeInventory.filter(route => route.constructionId === constructionId);
+    if (matches.length !== 1) {
+      throw new Error(
+        `requested construction ${constructionId} resolved to ${matches.length} parent-atlas rows`,
+      );
+    }
+    const route = matches[0];
+    if (route.state !== 'candidate' && route.state !== 'admitted') {
+      throw new Error(`requested construction ${constructionId} has unusable authority state ${route.state}`);
+    }
+    return route;
+  });
+}
+
+function validatePerturbationLevels(levels) {
+  if (!Array.isArray(levels) || levels.length < 2) {
+    throw new Error('source-shaped packing assay requires at least two perturbation levels');
+  }
+  const ids = new Set();
+  let previous = -Infinity;
+  for (const level of levels) {
+    requireString(level?.id, 'perturbation level id');
+    requireFinite(level?.crowdingFraction, `${level?.id || 'perturbation'} crowding fraction`);
+    if (level.crowdingFraction < 0 || level.crowdingFraction >= 1) {
+      throw new Error('perturbation crowding fractions must be in [0, 1)');
+    }
+    if (ids.has(level.id)) throw new Error(`duplicate perturbation level id ${level.id}`);
+    if (level.crowdingFraction <= previous) {
+      throw new Error('perturbation crowding fractions must be strictly increasing');
+    }
+    ids.add(level.id);
+    previous = level.crowdingFraction;
+  }
+}
+
+function sourceShapedCandidateRoute(route) {
+  const constructionId = route.constructionId;
+  const centerlineField = route.fields?.centerline;
+  if (!centerlineField || (centerlineField.state !== 'candidate' && centerlineField.state !== 'admitted')) {
+    throw new Error(`${constructionId} centerline must preserve candidate or admitted evidence`);
+  }
+  const centerlineCandidates = Array.isArray(centerlineField.candidates)
+    ? centerlineField.candidates
+    : [];
+  const centerlineValue = centerlineField.selected?.value ?? centerlineCandidates[0]?.value;
+  const samples = centerlineValue?.resampledSamples;
+  if (!Array.isArray(samples) || samples.length < 4) {
+    throw new Error(`${constructionId} centerline candidate requires at least four resampled samples`);
+  }
+  const centerline = samples.map((sample, index) => {
+    requirePoint(sample.position, `${constructionId} centerline candidate[${index}]`);
+    requireFinite(sample.radius, `${constructionId} centerline candidate[${index}] radius`);
+    if (!(sample.radius > 0)) throw new Error(`${constructionId} centerline candidate radii must be positive`);
+    return { position: [...sample.position], radius: sample.radius };
+  });
+  const origin = candidateValuesAgree(
+    route.fields?.['attachments.origin.position'],
+    `${constructionId} origin`,
+  );
+  const insertion = candidateValuesAgree(
+    route.fields?.['attachments.insertion.position'],
+    `${constructionId} insertion`,
+  );
+  if (
+    distance(centerline[0].position, origin) > 1e-6 ||
+    distance(centerline.at(-1).position, insertion) > 1e-6
+  ) {
+    throw new Error(`${constructionId} centerline endpoints disagree with attachment candidates`);
+  }
+  centerline[0].position = [...origin];
+  centerline.at(-1).position = [...insertion];
+  const targetVolume = candidateValuesAgree(
+    route.fields?.targetVolume,
+    `${constructionId} target volume`,
+  );
+  requireFinite(targetVolume, `${constructionId} target volume candidate`);
+  if (!(targetVolume > 0)) throw new Error(`${constructionId} target volume candidate must be positive`);
+  const baseVolume = carrierVolume(centerline);
+  if (!(baseVolume > 0)) throw new Error(`${constructionId} candidate centerline volume must be positive`);
+  const radiusScale = Math.sqrt(targetVolume / baseVolume);
+  for (const knot of centerline) knot.radius *= radiusScale;
+  return {
+    route,
+    centerline,
+    origin,
+    insertion,
+    targetVolume,
+    sourcePathSha256: centerlineValue.sourcePathSha256 ?? null,
+  };
+}
+
+function cohortCentroids(candidateRoutes) {
+  const knotCount = candidateRoutes[0].centerline.length;
+  if (!candidateRoutes.every(route => route.centerline.length === knotCount)) {
+    throw new Error('source-shaped packing routes must share one resampled knot count');
+  }
+  return Array.from({ length: knotCount }, (_, knotIndex) => (
+    candidateRoutes.reduce(
+      (sum, route) => add(sum, route.centerline[knotIndex].position),
+      [0, 0, 0],
+    ).map(value => value / candidateRoutes.length)
+  ));
+}
+
+function provisionalCohortEnvironment(candidateRoutes, centroids) {
+  const knots = candidateRoutes.flatMap(route => route.centerline);
+  const maximumRadius = Math.max(...knots.map(knot => knot.radius));
+  const margin = maximumRadius * 1.5;
+  const minimum = [0, 1, 2].map(axis =>
+    Math.min(...knots.map(knot => knot.position[axis])) - maximumRadius - margin);
+  const maximum = [0, 1, 2].map(axis =>
+    Math.max(...knots.map(knot => knot.position[axis])) + maximumRadius + margin);
+  const lowerIndex = Math.max(1, Math.floor((centroids.length - 1) * 0.35));
+  const upperIndex = Math.min(centroids.length - 2, Math.ceil((centroids.length - 1) * 0.65));
+  return {
+    compartment: {
+      id: 'agent-authored-k4-data-envelope',
+      kind: 'box',
+      minimum,
+      maximum,
+      clearance: maximumRadius * 0.05,
+    },
+    obstacle: {
+      id: 'agent-authored-k4-central-pressure-capsule',
+      kind: 'capsule',
+      start: [...centroids[lowerIndex]],
+      end: [...centroids[upperIndex]],
+      radius: maximumRadius * 0.15,
+      clearance: maximumRadius * 0.05,
+      authority: 'agent-authored-provisional',
+    },
+  };
+}
+
+function provisionalSourceForLevel({
+  parentAtlas,
+  parentAtlasFileSha256,
+  requestedConstructionIds,
+  candidateRoutes,
+  centroids,
+  environment,
+  level,
+}) {
+  const requestedPerturbation = {
+    kind: 'interior-samples-toward-cohort-centroid',
+    crowdingFraction: level.crowdingFraction,
+    endpointPolicy: 'fixed-measured-candidates',
+  };
+  const requestedAssumptions = {
+    id: 'source-shaped-k4-provisional-environment.v0',
+    authority: 'agent-authored-provisional',
+    compartmentDerivation: 'selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin',
+    obstacleDerivation: 'cohort-centroid-middle-thirty-percent-capsule',
+  };
+  const effectiveAssumptionPayload = {
+    compartment: structuredClone(environment.compartment),
+    obstacles: [structuredClone(environment.obstacle)],
+  };
+  const muscles = candidateRoutes.map((candidate, muscleIndex) => {
+    const route = candidate.route;
+    const centerline = candidate.centerline.map((knot, knotIndex) => ({
+      position: knotIndex === 0 || knotIndex === candidate.centerline.length - 1
+        ? [...knot.position]
+        : interpolatePoint(knot.position, centroids[knotIndex], level.crowdingFraction),
+      radius: knot.radius,
+    }));
+    return {
+      id: route.constructionId,
+      identity: {
+        sourceId: `${parentAtlas.source?.assetSha256 || parentAtlas.id}:${route.constructionId}`,
+        constructionId: route.constructionId,
+        lineageId: route.lineageId,
+        instanceId: route.instanceId,
+      },
+      authority: {
+        kind: 'synthetic-proxy',
+        anatomicalAdmission: 'none',
+      },
+      attachments: {
+        origin: {
+          id: route.attachments?.origin?.id || `${route.constructionId}:origin`,
+          sourceAuthority: 'measured-candidate-not-admitted',
+          position: [...centerline[0].position],
+        },
+        insertion: {
+          id: route.attachments?.insertion?.id || `${route.constructionId}:insertion`,
+          sourceAuthority: 'measured-candidate-not-admitted',
+          position: [...centerline.at(-1).position],
+        },
+      },
+      centerline,
+      targetVolume: candidate.targetVolume,
+      volumeAuthority: 'measured-candidate-not-admitted',
+      candidateEvidence: {
+        parentAtlasId: parentAtlas.id,
+        parentAtlasSha256: parentAtlas.atlasSha256,
+        parentAtlasFileSha256,
+        routeIndex: muscleIndex,
+        centerlineState: route.fields.centerline.state,
+        targetVolumeState: route.fields.targetVolume.state,
+        sourcePathSha256: candidate.sourcePathSha256,
+      },
+    };
+  });
+  const core = {
+    schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
+    id: `source-shaped-${requestedConstructionIds.join('-')}-${level.id}-v0`,
+    authority: {
+      kind: 'synthetic-proxy',
+      anatomicalAdmission: 'none',
+    },
+    dimension: 3,
+    compartment: structuredClone(environment.compartment),
+    obstacles: [structuredClone(environment.obstacle)],
+    muscles,
+    assayProvenance: {
+      evidenceTrack: 'experimental',
+      claimCeiling: 'qualitative-route-local-mechanical-response',
+      parentAtlas: {
+        id: parentAtlas.id,
+        atlasSha256: parentAtlas.atlasSha256,
+        fileSha256: parentAtlasFileSha256,
+      },
+      requestedConstructionIds: [...requestedConstructionIds],
+      effectiveConstructionIds: muscles.map(muscle => muscle.identity.constructionId),
+      perturbation: {
+        id: level.id,
+        ...requestedPerturbation,
+        requested: structuredClone(requestedPerturbation),
+        effective: structuredClone(requestedPerturbation),
+      },
+      compartment: {
+        authority: 'agent-authored-provisional',
+        derivation: 'selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin',
+      },
+      obstacle: {
+        authority: 'agent-authored-provisional',
+        derivation: 'cohort-centroid-middle-thirty-percent-capsule',
+      },
+      assumptions: {
+        requested: requestedAssumptions,
+        effective: {
+          ...structuredClone(requestedAssumptions),
+          ...effectiveAssumptionPayload,
+          sha256: hashJson(effectiveAssumptionPayload),
+        },
+      },
+    },
+  };
+  const sha256 = hashJson(core);
+  return {
+    ...core,
+    input: {
+      requested: { kind: 'synthetic-fixture', id: core.id, sha256 },
+      effective: { kind: 'synthetic-fixture', id: core.id, sha256 },
+    },
+  };
+}
+
+export function createSourceShapedPackingPerturbationSeries({
+  parentAtlas,
+  parentAtlasFileSha256,
+  requestedConstructionIds,
+  levels,
+}) {
+  validateSourceShapedAtlas(parentAtlas, parentAtlasFileSha256);
+  validatePerturbationLevels(levels);
+  const routes = selectedSourceShapedRoutes(parentAtlas, requestedConstructionIds);
+  const candidateRoutes = routes.map(sourceShapedCandidateRoute);
+  const centroids = cohortCentroids(candidateRoutes);
+  const environment = provisionalCohortEnvironment(candidateRoutes, centroids);
+  const conditions = levels.map(level => ({
+    id: level.id,
+    crowdingFraction: level.crowdingFraction,
+    source: provisionalSourceForLevel({
+      parentAtlas,
+      parentAtlasFileSha256,
+      requestedConstructionIds,
+      candidateRoutes,
+      centroids,
+      environment,
+      level,
+    }),
+  }));
+  return canonical({
+    schema: SOURCE_SHAPED_PACKING_PERTURBATION_SERIES_SCHEMA,
+    evidenceTrack: 'experimental',
+    claimCeiling: 'qualitative-route-local-mechanical-response',
+    parentAtlas: {
+      id: parentAtlas.id,
+      atlasSha256: parentAtlas.atlasSha256,
+      fileSha256: parentAtlasFileSha256,
+    },
+    requestedConstructionIds: [...requestedConstructionIds],
+    effectiveConstructionIds: routes.map(route => route.constructionId),
+    conditions,
+  });
+}
+
 function projectObstacle(point, radius, obstacle, muscleIndex, knotIndex, amount) {
   const nearest = closestPointOnObstacle(point, obstacle);
   const offset = subtract(point, nearest);
@@ -758,4 +1118,95 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     },
     iterationHistory,
   };
+}
+
+function perturbationDisplacement(source, result) {
+  let maximumInteriorDisplacement = 0;
+  let totalInteriorDisplacement = 0;
+  let interiorSampleCount = 0;
+  for (const [muscleIndex, packed] of result.muscles.entries()) {
+    const input = source.muscles[muscleIndex];
+    for (let knotIndex = 1; knotIndex < packed.centerline.length - 1; knotIndex += 1) {
+      const displacement = distance(
+        packed.centerline[knotIndex].position,
+        input.centerline[knotIndex].position,
+      );
+      maximumInteriorDisplacement = Math.max(maximumInteriorDisplacement, displacement);
+      totalInteriorDisplacement += displacement;
+      interiorSampleCount += 1;
+    }
+  }
+  return {
+    maximumInteriorDisplacement: rounded(maximumInteriorDisplacement),
+    meanInteriorDisplacement: rounded(
+      interiorSampleCount === 0 ? 0 : totalInteriorDisplacement / interiorSampleCount,
+    ),
+    interiorSampleCount,
+  };
+}
+
+export function runSourceShapedPackingPerturbationSeries({
+  parentAtlas,
+  parentAtlasFileSha256,
+  requestedConstructionIds,
+  levels,
+  solverConfig = {},
+}) {
+  const requestedMechanismConfig = Object.keys(solverConfig).length === 0
+    ? { ...DEFAULT_CONFIG }
+    : { ...DEFAULT_CONFIG, ...structuredClone(solverConfig) };
+  const series = createSourceShapedPackingPerturbationSeries({
+    parentAtlas,
+    parentAtlasFileSha256,
+    requestedConstructionIds,
+    levels,
+  });
+  const conditions = series.conditions.map(condition => {
+    const result = solveMuscleCompartmentPacking(condition.source, requestedMechanismConfig);
+    return {
+      ...condition,
+      result,
+      response: perturbationDisplacement(condition.source, result),
+    };
+  });
+  const initialPairwisePenetrations = conditions.map(
+    condition => condition.result.metrics.initial.pairwisePenetration,
+  );
+  const maximumInteriorDisplacements = conditions.map(
+    condition => condition.response.maximumInteriorDisplacement,
+  );
+  return canonical({
+    schema: SOURCE_SHAPED_PACKING_PERTURBATION_RESULT_SCHEMA,
+    evidenceTrack: series.evidenceTrack,
+    claimCeiling: series.claimCeiling,
+    parentAtlas: series.parentAtlas,
+    requestedConstructionIds: series.requestedConstructionIds,
+    effectiveConstructionIds: series.effectiveConstructionIds,
+    mechanism: {
+      requested: {
+        id: 'muscle-compartment-packing-projection.v0',
+        config: requestedMechanismConfig,
+      },
+      effective: {
+        id: 'muscle-compartment-packing-projection.v0',
+        config: conditions[0]?.result.config ?? {},
+      },
+    },
+    solverConfig: conditions[0]?.result.config ?? {},
+    interpretationChecks: {
+      initialPairwisePenetrationStrictlyIncreasing: initialPairwisePenetrations.every(
+        (value, index) => index === 0 || value > initialPairwisePenetrations[index - 1],
+      ),
+      maximumInteriorDisplacementNondecreasing: maximumInteriorDisplacements.every(
+        (value, index) => index === 0 || value >= maximumInteriorDisplacements[index - 1],
+      ),
+      fixedEndpointsPreserved: conditions.every(
+        condition => condition.result.metrics.packed.endpointDrift === 0,
+      ),
+      targetVolumesPreserved: conditions.every(
+        condition => condition.result.metrics.packed.maximumRelativeVolumeError <= 1e-9,
+      ),
+    },
+    conditions,
+  });
 }
