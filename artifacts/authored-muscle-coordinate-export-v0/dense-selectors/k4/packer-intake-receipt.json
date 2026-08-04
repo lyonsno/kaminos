@@ -1,19 +1,5 @@
 {
-  "acceptedFields": [
-    "source.assetSha256",
-    "source.graphSha256",
-    "source.graphFileSha256",
-    "source.routingFixtureSha256",
-    "muscles[].constructionId",
-    "muscles[].lineageId",
-    "muscles[].instanceId",
-    "muscles[].surfaceInstanceId",
-    "muscles[].surfaceGeometrySha256",
-    "muscles[].pathInstanceId",
-    "muscles[].pathGeometrySha256",
-    "muscles[].attachments.origin",
-    "muscles[].attachments.insertion"
-  ],
+  "acceptedFields": [],
   "admitted": false,
   "conflictingFields": [],
   "execution": {
@@ -21,15 +7,17 @@
       "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4/packer-authority-probe.json",
       "coordinateCarrierFileSha256": "c47ccc991911e0200c2d0536379454e20a10c60c84899998bcf779702e465148",
       "receipt": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4/packer-intake-receipt.json",
-      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
-      "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      "routingFixture": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
+      "routingFixtureFileSha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5",
+      "witnessOut": null
     },
     "lastTrustworthyEvidence": "admission-receipt-constructed",
     "phase": "admission-complete",
     "requested": {
       "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4/packer-authority-probe.json",
       "receipt": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4/packer-intake-receipt.json",
-      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json"
+      "routingFixture": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
+      "witnessOut": null
     }
   },
   "input": {
@@ -47,27 +35,55 @@
     },
     "routingFixture": {
       "effective": {
-        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "id": "current-graph-k4-m34-m13-m12-m45-v0",
         "kind": "track-m-routing-fixture",
-        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+        "sha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5"
       },
       "requested": {
-        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "id": "current-graph-k4-m34-m13-m12-m45-v0",
         "kind": "track-m-routing-fixture",
-        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+        "sha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5"
       }
     }
   },
-  "missingFields": [],
+  "missingFields": [
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.coordinateSpace.unit",
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.compartment",
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.obstacles",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.attachments.insertion.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.volumeAuthority",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.attachments.insertion.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.volumeAuthority",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.attachments.insertion.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.volumeAuthority",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.attachments.insertion.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.volumeAuthority"
+  ],
   "packingSource": null,
-  "reason": "coordinate carrier atlas selected construction ids do not match the routing fixture route set",
-  "receiptSha256": "b3075b2d1e66bcf0ee5d3d4b0a8e6fb8902354d81d403b78392d30c818108c88",
+  "reason": "muscle-34 selected-row authority state candidate is not admitted",
+  "receiptSha256": "5352e2604b41eaaba873c295081841476affedfdb42458e2477f89911c7e55d9",
   "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
   "source": {
     "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
-    "graphFileSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
-    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
-    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "routingFixtureSha256": "d691489aa154c60f7de9aa71b670d892fc618d08986453518a0ed2a2037280c8"
   },
-  "status": "source-identity-mismatch"
+  "status": "authority-incomplete"
 }
