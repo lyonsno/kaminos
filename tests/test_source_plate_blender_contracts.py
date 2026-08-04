@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 import sys
 from tempfile import TemporaryDirectory
@@ -364,6 +365,60 @@ def test_cli_paths_are_explicit_and_argument_failure_is_durable():
         assert failure["status"] == "failed"
         assert failure["failurePhase"] == "argument-validation"
 
+        default_success = root / "default-success.json"
+        default_failure = root / "default-success-failure.json"
+        exit_code = _main(
+            [
+                "--descriptor",
+                str(root / "plate.json"),
+                "--report",
+                str(default_success),
+            ]
+        )
+        assert exit_code == 2
+        assert default_failure.is_file()
+        assert __import__("json").loads(default_failure.read_text())[
+            "failurePhase"
+        ] == "argument-validation"
+
+
+def test_core_import_failure_uses_caller_addressed_failure_report():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        adapter_copy = root / "source_plate_blender.py"
+        adapter_copy.write_text(
+            (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+        )
+        (root / "source_plate_core.py").write_text(
+            'raise RuntimeError("simulated core import failure")\n'
+        )
+        failure_path = root / "bootstrap-failure.json"
+
+        process = subprocess.run(
+            [
+                sys.executable,
+                str(adapter_copy),
+                "--",
+                "--descriptor",
+                str(root / "plate.json"),
+                "--out-dir",
+                str(root / "products"),
+                "--report",
+                str(root / "success.json"),
+                "--failure-report",
+                str(failure_path),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        assert process.returncode == 1
+        failure = __import__("json").loads(failure_path.read_text())
+        assert failure["status"] == "failed"
+        assert failure["failurePhase"] == "bootstrap-import"
+        assert failure["error"]["message"] == "simulated core import failure"
+
 
 def test_failed_staged_promotion_preserves_prior_complete_product_set():
     assert callable(_promote_staged_run), "adapter lacks staged atomic promotion"
@@ -429,5 +484,6 @@ if __name__ == "__main__":
     test_output_inspection_rejects_blank_wrong_size_and_unsigned_normal_claims()
     test_explicit_encoded_normal_derivative_is_decoded_and_unit_checked()
     test_cli_paths_are_explicit_and_argument_failure_is_durable()
+    test_core_import_failure_uses_caller_addressed_failure_report()
     test_failed_staged_promotion_preserves_prior_complete_product_set()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()

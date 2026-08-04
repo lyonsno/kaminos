@@ -22,18 +22,101 @@ import tempfile
 import traceback
 from typing import Any, Callable, Mapping
 
+
+def _bootstrap_arguments() -> list[str]:
+    separator = sys.argv.index("--") if "--" in sys.argv else -1
+    return sys.argv[separator + 1 :] if separator >= 0 else []
+
+
+def _bootstrap_known_path(arguments: list[str], flag: str) -> Path | None:
+    try:
+        index = arguments.index(flag)
+    except ValueError:
+        return None
+    if index + 1 >= len(arguments) or arguments[index + 1].startswith("--"):
+        return None
+    return Path(arguments[index + 1]).expanduser().resolve()
+
+
+def _bootstrap_failure_path(arguments: list[str]) -> Path | None:
+    explicit = _bootstrap_known_path(arguments, "--failure-report")
+    if explicit is not None:
+        return explicit
+    report = _bootstrap_known_path(arguments, "--report")
+    if report is None:
+        return None
+    return report.with_name(f"{report.stem}-failure{report.suffix or '.json'}")
+
+
+def _bootstrap_atomic_json(path: Path, value: Mapping[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            json.dump(value, temporary, indent=2, sort_keys=True, allow_nan=False)
+            temporary.write("\n")
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
+
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from source_plate_core import (
-    SourcePlateContractError,
-    descriptor_sha256,
-    read_descriptor,
-    require_effective_renderer,
-    validate_complete_outputs,
-    validate_transform_contracts,
-    verify_source_freshness,
-    verify_source_unchanged,
-)
+try:
+    from source_plate_core import (
+        SourcePlateContractError,
+        descriptor_sha256,
+        read_descriptor,
+        require_effective_renderer,
+        validate_complete_outputs,
+        validate_transform_contracts,
+        verify_source_freshness,
+        verify_source_unchanged,
+    )
+except BaseException as bootstrap_error:
+    bootstrap_arguments = _bootstrap_arguments()
+    bootstrap_failure_path = _bootstrap_failure_path(bootstrap_arguments)
+    if bootstrap_failure_path is not None:
+        _bootstrap_atomic_json(
+            bootstrap_failure_path,
+            {
+                "schema": "kaminos.source-plate-render-report.v0",
+                "status": "failed",
+                "failurePhase": "bootstrap-import",
+                "requested": {
+                    "descriptorPath": str(
+                        _bootstrap_known_path(bootstrap_arguments, "--descriptor")
+                    )
+                    if _bootstrap_known_path(bootstrap_arguments, "--descriptor")
+                    else None,
+                    "outputDirectory": str(
+                        _bootstrap_known_path(bootstrap_arguments, "--out-dir")
+                    )
+                    if _bootstrap_known_path(bootstrap_arguments, "--out-dir")
+                    else None,
+                    "failureReportPath": str(bootstrap_failure_path),
+                },
+                "lastTrustworthyEvidence": {"arguments": bootstrap_arguments},
+                "error": {
+                    "type": type(bootstrap_error).__name__,
+                    "message": str(bootstrap_error),
+                },
+            },
+        )
+    print(f"source plate bootstrap import failed: {bootstrap_error}", file=sys.stderr)
+    raise SystemExit(1) from bootstrap_error
 
 
 REPORT_SCHEMA = "kaminos.source-plate-render-report.v0"
@@ -716,13 +799,7 @@ def _parse_cli_arguments(arguments: list[str]) -> dict[str, Path]:
 
 
 def _known_argument_path(arguments: list[str], flag: str) -> Path | None:
-    try:
-        index = arguments.index(flag)
-    except ValueError:
-        return None
-    if index + 1 >= len(arguments) or arguments[index + 1].startswith("--"):
-        return None
-    return Path(arguments[index + 1]).expanduser().resolve()
+    return _bootstrap_known_path(arguments, flag)
 
 
 def render_descriptor(
@@ -914,7 +991,7 @@ def _main(arguments: list[str] | None = None) -> int:
     try:
         parsed = _parse_cli_arguments(arguments)
     except SourcePlateContractError as error:
-        failure_report_path = _known_argument_path(arguments, "--failure-report")
+        failure_report_path = _bootstrap_failure_path(arguments)
         if failure_report_path is not None:
             failure = failure_document(
                 descriptor_path=_known_argument_path(arguments, "--descriptor"),
