@@ -675,6 +675,7 @@ function validateConfig(config) {
     'clusterTurnRadians',
     'clusterChirality',
     'clusterRadialReference',
+    'clusterAllocationSchedule',
   ];
   if (config.clusterUpdate === 'capsule-axis-belly-turn') {
     if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
@@ -699,6 +700,42 @@ function validateConfig(config) {
       throw new Error(
         'capsule-axis-belly-turn clusterRadialReference must be source-knot or attachment-bridge',
       );
+    }
+    if (config.clusterAllocationSchedule !== undefined) {
+      if (
+        !Array.isArray(config.clusterAllocationSchedule) ||
+        config.clusterAllocationSchedule.length === 0
+      ) {
+        throw new Error(
+          'capsule-axis-belly-turn clusterAllocationSchedule must be a nonempty array',
+        );
+      }
+      const allocationMuscleIds = new Set();
+      for (const [index, allocation] of config.clusterAllocationSchedule.entries()) {
+        if (
+          allocation === null ||
+          typeof allocation !== 'object' ||
+          Array.isArray(allocation)
+        ) {
+          throw new Error(`clusterAllocationSchedule[${index}] must be an object`);
+        }
+        if (typeof allocation.muscleId !== 'string' || allocation.muscleId.length === 0) {
+          throw new Error(
+            `clusterAllocationSchedule[${index}] requires a nonempty muscleId`,
+          );
+        }
+        if (!Number.isFinite(allocation.axialOffset)) {
+          throw new Error(
+            `clusterAllocationSchedule[${index}] axialOffset must be finite`,
+          );
+        }
+        if (allocationMuscleIds.has(allocation.muscleId)) {
+          throw new Error(
+            `clusterAllocationSchedule contains duplicate muscleId ${allocation.muscleId}`,
+          );
+        }
+        allocationMuscleIds.add(allocation.muscleId);
+      }
     }
     if (
       config.curvatureUpdate !== undefined &&
@@ -732,6 +769,26 @@ function validateConfig(config) {
     }
   } else if (config.crossSectionStep !== undefined) {
     throw new Error('crossSectionStep requires contact-redistributed crossSectionUpdate');
+  }
+}
+
+function validateClusterAllocationSource(config, source) {
+  if (config.clusterAllocationSchedule === undefined) return;
+  const sourceMuscleIds = new Set(source.muscles.map(muscle => muscle.id));
+  const allocationMuscleIds = new Set(
+    config.clusterAllocationSchedule.map(allocation => allocation.muscleId),
+  );
+  const missingMuscleIds = [...sourceMuscleIds]
+    .filter(muscleId => !allocationMuscleIds.has(muscleId));
+  const unknownMuscleIds = [...allocationMuscleIds]
+    .filter(muscleId => !sourceMuscleIds.has(muscleId));
+  if (missingMuscleIds.length > 0 || unknownMuscleIds.length > 0) {
+    throw new Error(
+      `clusterAllocationSchedule must bind every source muscle exactly once: ${JSON.stringify({
+        missingMuscleIds,
+        unknownMuscleIds,
+      })}`,
+    );
   }
 }
 
@@ -931,6 +988,11 @@ function clusterProjectionReceipt(config) {
     receipt.chirality = config.clusterChirality;
     receipt.radialReference = config.clusterRadialReference || 'source-knot';
     receipt.fixedAttachmentEnvelope = 'normalized-sine-zero-at-endpoints';
+    if (config.clusterAllocationSchedule !== undefined) {
+      receipt.allocationSchedule = structuredClone(config.clusterAllocationSchedule);
+      receipt.allocationReference =
+        'capsule-axis-source-position-sine-zero-at-attachments';
+    }
   }
   receipt.fallbackUsed = false;
   return receipt;
@@ -2104,6 +2166,12 @@ function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, con
   if (axisLength <= 1e-12) throw new Error('capsule-axis-belly-turn obstacle axis is degenerate');
   const axis = scale(axisVector, 1 / axisLength);
   const chirality = config.clusterChirality === 'positive' ? 1 : -1;
+  const allocationByMuscleId = new Map(
+    (config.clusterAllocationSchedule || []).map(allocation => [
+      allocation.muscleId,
+      allocation.axialOffset,
+    ]),
+  );
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
     const attachmentRadialLengths = [sourceCenterline[0], sourceCenterline.at(-1)].map(
@@ -2135,13 +2203,17 @@ function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, con
         axis,
         chirality * config.clusterTurnRadians * envelope,
       );
+      const allocatedAxisPoint = add(
+        axisPoint,
+        scale(axis, (allocationByMuscleId.get(muscle.id) || 0) * envelope),
+      );
       applyAttributedPosition(
         attribution,
         category,
         muscles,
         muscleIndex,
         knotIndex,
-        add(axisPoint, scale(turnedDirection, targetRadius)),
+        add(allocatedAxisPoint, scale(turnedDirection, targetRadius)),
       );
     }
   }
@@ -2382,6 +2454,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     ? { ...DEFAULT_CONFIG }
     : { ...DEFAULT_CONFIG, ...structuredClone(requestedConfig) };
   validateConfig(config);
+  validateClusterAllocationSource(config, source);
   const muscles = structuredClone(source.muscles);
   const correctionAttribution = createCorrectionAttribution(muscles);
   const initial = measureState(source, muscles, config.sampleCount, true);

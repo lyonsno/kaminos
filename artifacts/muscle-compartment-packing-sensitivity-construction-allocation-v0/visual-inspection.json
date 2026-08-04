@@ -1,0 +1,366 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-visual-inspection.v0",
+  "status": "completed-agent-inspection",
+  "disposition": "visually-rejected",
+  "observedAt": "2026-08-04T22:56:00Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "bindings": {
+    "inspectionInputReportSha256": "a98bb3585c032384531ed950fd91af181922ca93b923e9a6771240b8e5fc2bb8",
+    "inspectionInputPortfolioSha256": "f05cc2c15751867122282b6ba9386e2fc1759d6af7dab012d8448eb3c1280a87",
+    "inspectedPortfolioSha256": "da6bd0ace8fe6ad9866c5ec4ce3d0add1498a453660230d4177129164c932672",
+    "runId": "run-258e32b339266a04e331",
+    "sourceSha256": "876ea27a0c1a19315fc446161f834c255d5aaf53a3de5364773b7ef9fba8be24"
+  },
+  "variants": [
+    {
+      "id": "scalar-bridge-025",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "6ffc467a70f7e8a1fd3e1a3a8899e82711e072cebcfc72099ff896dfce5edf1a",
+        "packedJsonSha256": "505508549bd9a2a3fc6012b70e636672814b328e2607eed387d3b4aec3d30203",
+        "indexHtmlSha256": "ad540ec4319ab7521c66d1bb1c86ab5d56303cd30e1797e96f3ebd95f9022fba"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/scalar-bridge-025/before.png",
+          "sha256": "865c473843d2475ed40810cdbfc5be49e7a31a0a2f0b7ae0b19247b94b6e61e2",
+          "sizeBytes": 270315,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/scalar-bridge-025/capture-before-report.json",
+            "reportSha256": "bab7252ba6e8aac7784d5a62ed4d169887a914716970996d432e8c53f4b118c1",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/scalar-bridge-025/packed.png",
+          "sha256": "73b6d0d49082c527dee5d6abbdb27bccea8d4b0b2d7dd37ac9e840bd801e3250",
+          "sizeBytes": 285093,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/scalar-bridge-025/capture-packed-report.json",
+            "reportSha256": "d5b61cb1937c7a1215f5df7150b717bcfc88e4be5aae34ac297bbf4ea71331a5",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The reviewed scalar bridge remains the shape-laundering reference. It clears the skeletal shaft and reaches pairwise residual 0.08612 by moving the eight bowed constructions into a ring of thick, nearly parallel peripheral columns. The visible source-relative bow and transition profile are materially flattened, so the low residual is not packing admission."
+    },
+    {
+      "id": "axial-two-band-025",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "6ffc467a70f7e8a1fd3e1a3a8899e82711e072cebcfc72099ff896dfce5edf1a",
+        "packedJsonSha256": "e1f2ff7d7bc5e24fc2699a2883f1a1af549800b78f654147b21431d0ecd96fc0",
+        "indexHtmlSha256": "2a859d266b8fce5f9ca0af4d38bd3a3c1b5768548f2b8bb6c09faedfbe6c90f7"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/axial-two-band-025/before.png",
+          "sha256": "789b16a8ed2cfe898f5b66519e27056197cea4a13e1e5f38eda894e3101f44a4",
+          "sizeBytes": 272001,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/axial-two-band-025/capture-before-report.json",
+            "reportSha256": "068a62df25798811b30cb2d1ad6c92fce26341bcec0e31463233544aa9dd1ef6",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/axial-two-band-025/packed.png",
+          "sha256": "ccff17f81f187ffbe3b0f5ab86ac1331aeb1c3d78250cd01b0ad456e23b33e36",
+          "sizeBytes": 288656,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/axial-two-band-025/capture-packed-report.json",
+            "reportSha256": "e6c92adff47fcb6c7fa4484dab6a1e8232e5538909bf55dfd976360e6706a608",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The two-band schedule shears four constructions upward and four downward without allocating their shared radial transition. Each four-muscle cohort remains visibly clumped through the central braid, with crossing displacement fans, occlusion, and abrupt longitudinal shoulders. Bend retention rises to 0.77229, but pairwise residual 0.98937 and relation cosine 0.53358 match the visibly destroyed cohort relationships."
+    },
+    {
+      "id": "axial-eight-slot-0025",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "6ffc467a70f7e8a1fd3e1a3a8899e82711e072cebcfc72099ff896dfce5edf1a",
+        "packedJsonSha256": "527bd88d90faf0d35d5d4575f3524e306ac2b75192f0c67136c9a0e88843355f",
+        "indexHtmlSha256": "c745b04f894847b7294027a79dd70f8eef85b7bfb2a286bcd8fb25dc3fc3eee7"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/axial-eight-slot-0025/before.png",
+          "sha256": "7a8570d97d7a7ddff4f8c7425625a5531516350a0ef4a6aee129f574a8c39c48",
+          "sizeBytes": 271931,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/axial-eight-slot-0025/capture-before-report.json",
+            "reportSha256": "e8cb8cc98cf9be8128cbd738eb1e629e667042a1c9f42546b40a4000bfef06d9",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-eight-slot-0025/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/axial-eight-slot-0025/packed.png",
+          "sha256": "5a952f25f690ddb15a841243dac5c45772e41fc9b739d6c60a4b262cc4a793bf",
+          "sizeBytes": 286968,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-258e32b339266a04e331/axial-eight-slot-0025/capture-packed-report.json",
+            "reportSha256": "b39bec2384eadf329f3582c80b3720811240216910c546b0bee72111c4ff9511",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-eight-slot-0025/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "independent-default",
+                "executable": null
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": 1234,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "Eight shallow axial slots soften the two-cohort discontinuity and retain more individual bow, but they still shear one shared radial transition fan instead of assigning radial or azimuthal occupancy. The center seam remains visibly crowded, multiple identities occlude one another, curvature sits on the sign plane, and pairwise residual 0.63651 remains far worse than the scalar reference. Axial spacing alone is rejected as the next mechanism family."
+    }
+  ]
+}

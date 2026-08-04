@@ -1,0 +1,105 @@
+{
+  "observedAt": "2026-08-04T22:56:00Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/",
+  "variants": [
+    {
+      "id": "scalar-bridge-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/scalar-bridge-025/before.png",
+          "captureReport": "run-258e32b339266a04e331/scalar-bridge-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/scalar-bridge-025/packed.png",
+          "captureReport": "run-258e32b339266a04e331/scalar-bridge-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The reviewed scalar bridge remains the shape-laundering reference. It clears the skeletal shaft and reaches pairwise residual 0.08612 by moving the eight bowed constructions into a ring of thick, nearly parallel peripheral columns. The visible source-relative bow and transition profile are materially flattened, so the low residual is not packing admission."
+    },
+    {
+      "id": "axial-two-band-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/axial-two-band-025/before.png",
+          "captureReport": "run-258e32b339266a04e331/axial-two-band-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/axial-two-band-025/packed.png",
+          "captureReport": "run-258e32b339266a04e331/axial-two-band-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The two-band schedule shears four constructions upward and four downward without allocating their shared radial transition. Each four-muscle cohort remains visibly clumped through the central braid, with crossing displacement fans, occlusion, and abrupt longitudinal shoulders. Bend retention rises to 0.77229, but pairwise residual 0.98937 and relation cosine 0.53358 match the visibly destroyed cohort relationships."
+    },
+    {
+      "id": "axial-eight-slot-0025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-258e32b339266a04e331/axial-eight-slot-0025/before.png",
+          "captureReport": "run-258e32b339266a04e331/axial-eight-slot-0025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-258e32b339266a04e331/axial-eight-slot-0025/packed.png",
+          "captureReport": "run-258e32b339266a04e331/axial-eight-slot-0025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "Eight shallow axial slots soften the two-cohort discontinuity and retain more individual bow, but they still shear one shared radial transition fan instead of assigning radial or azimuthal occupancy. The center seam remains visibly crowded, multiple identities occlude one another, curvature sits on the sign plane, and pairwise residual 0.63651 remains far worse than the scalar reference. Axial spacing alone is rejected as the next mechanism family."
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-request.v0",
+  "id": "synthetic-k8-construction-allocation-localization-v0",
+  "expectedSourceSha256": "876ea27a0c1a19315fc446161f834c255d5aaf53a3de5364773b7ef9fba8be24",
+  "variants": [
+    {
+      "id": "scalar-bridge-025",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "minimumPairwiseRelationCosine": 0.9,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
+        "clusterUpdate": "capsule-axis-belly-turn",
+        "clusterObstacleId": "central-skeletal-shaft",
+        "clusterBellyRadius": 0.52,
+        "clusterTurnRadians": 0.4363323129985824,
+        "clusterChirality": "positive",
+        "clusterRadialReference": "attachment-bridge"
+      }
+    },
+    {
+      "id": "axial-two-band-025",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "minimumPairwiseRelationCosine": 0.9,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
+        "clusterUpdate": "capsule-axis-belly-turn",
+        "clusterObstacleId": "central-skeletal-shaft",
+        "clusterBellyRadius": 0.52,
+        "clusterTurnRadians": 0.4363323129985824,
+        "clusterChirality": "positive",
+        "clusterRadialReference": "source-knot",
+        "clusterAllocationSchedule": [
+          { "muscleId": "muscle-01", "axialOffset": 0.25 },
+          { "muscleId": "muscle-02", "axialOffset": 0.25 },
+          { "muscleId": "muscle-03", "axialOffset": 0.25 },
+          { "muscleId": "muscle-04", "axialOffset": 0.25 },
+          { "muscleId": "muscle-05", "axialOffset": -0.25 },
+          { "muscleId": "muscle-06", "axialOffset": -0.25 },
+          { "muscleId": "muscle-07", "axialOffset": -0.25 },
+          { "muscleId": "muscle-08", "axialOffset": -0.25 }
+        ]
+      }
+    },
+    {
+      "id": "axial-eight-slot-0025",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "minimumPairwiseRelationCosine": 0.9,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
+        "clusterUpdate": "capsule-axis-belly-turn",
+        "clusterObstacleId": "central-skeletal-shaft",
+        "clusterBellyRadius": 0.52,
+        "clusterTurnRadians": 0.4363323129985824,
+        "clusterChirality": "positive",
+        "clusterRadialReference": "source-knot",
+        "clusterAllocationSchedule": [
+          { "muscleId": "muscle-01", "axialOffset": -0.0875 },
+          { "muscleId": "muscle-02", "axialOffset": -0.0625 },
+          { "muscleId": "muscle-03", "axialOffset": -0.0375 },
+          { "muscleId": "muscle-04", "axialOffset": -0.0125 },
+          { "muscleId": "muscle-05", "axialOffset": 0.0125 },
+          { "muscleId": "muscle-06", "axialOffset": 0.0375 },
+          { "muscleId": "muscle-07", "axialOffset": 0.0625 },
+          { "muscleId": "muscle-08", "axialOffset": 0.0875 }
+        ]
+      }
+    }
+  ]
+}

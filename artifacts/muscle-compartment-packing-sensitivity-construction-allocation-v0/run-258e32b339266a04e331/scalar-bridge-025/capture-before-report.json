@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before",
+    "outputPath": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/before.png",
+    "reportPath": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/capture-before-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 50375,
+    "processGroupId": 50375,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 50375,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2944,
+    "retainedBytes": 2944,
+    "truncated": false,
+    "tail": "[0804/184240.683996:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/184240.773105:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184241.253869:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before (0)\n[0804/184241.254922:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before (0)\n[0804/184241.256697:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184241.303686:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before (0)\n[0804/184241.306431:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184241.320902:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before (0)\n[0804/184241.321816:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/184241.337756:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/?state=before (0)\n270315 bytes written to file repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/before.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/before.png",
+    "sizeBytes": 270315,
+    "sha256": "865c473843d2475ed40810cdbfc5be49e7a31a0a2f0b7ae0b19247b94b6e61e2",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 69,
+      "idatBytes": 269466
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/scalar-bridge-025/before.png",
+      "sizeBytes": 270315,
+      "sha256": "865c473843d2475ed40810cdbfc5be49e7a31a0a2f0b7ae0b19247b94b6e61e2",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 69,
+        "idatBytes": 269466
+      }
+    }
+  }
+}

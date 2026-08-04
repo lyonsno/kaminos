@@ -1045,3 +1045,108 @@ test('attachment-bridge radial reference relieves a refined k8 transition withou
   assert.equal(relieved.metrics.packed.nonFiniteValueCount, 0);
   assert.equal(relieved.metrics.packed.nonPositiveRadiusCount, 0);
 });
+
+test('explicit per-muscle axial allocation is identity-bound and exposes rejected two-band crowding', () => {
+  const parent = createSyntheticMuscleDensityLadder(8, { knotCount:6 });
+  const { source } = deriveMuscleCompartmentPackingSensitivitySource(parent, {
+    axis:'attachment-radial-scale',
+    obstacleId:'central-skeletal-shaft',
+    scaleFactor:1.1,
+  });
+  const common = {
+    maxIterations:480,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    maximumSourceBendEnergyRatio:1.05,
+    minimumSourceCurvatureCosine:0.3,
+    minimumSourceTangentCosine:0,
+    minimumPairwiseRelationCosine:0.9,
+    curvatureUpdate:'source-sign-halfspace',
+    clusterUpdate:'capsule-axis-belly-turn',
+    clusterObstacleId:'central-skeletal-shaft',
+    clusterBellyRadius:0.52,
+    clusterTurnRadians:5 * Math.PI / 36,
+    clusterChirality:'positive',
+  };
+  const scalarEnvelope = solveMuscleCompartmentPacking(source, {
+    ...common,
+    clusterRadialReference:'attachment-bridge',
+  });
+  const allocationSchedule = [
+    { muscleId:'muscle-01', axialOffset:0.25 },
+    { muscleId:'muscle-02', axialOffset:0.25 },
+    { muscleId:'muscle-03', axialOffset:0.25 },
+    { muscleId:'muscle-04', axialOffset:0.25 },
+    { muscleId:'muscle-05', axialOffset:-0.25 },
+    { muscleId:'muscle-06', axialOffset:-0.25 },
+    { muscleId:'muscle-07', axialOffset:-0.25 },
+    { muscleId:'muscle-08', axialOffset:-0.25 },
+  ];
+  const phased = solveMuscleCompartmentPacking(source, {
+    ...common,
+    clusterRadialReference:'source-knot',
+    clusterAllocationSchedule:allocationSchedule,
+  });
+
+  assert.deepEqual(phased.clusterProjection.allocationSchedule, allocationSchedule);
+  assert.equal(
+    phased.clusterProjection.allocationReference,
+    'capsule-axis-source-position-sine-zero-at-attachments',
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(source, {
+      ...common,
+      clusterRadialReference:'source-knot',
+      clusterAllocationSchedule:[
+        ...allocationSchedule.slice(0, -1),
+        structuredClone(allocationSchedule[0]),
+      ],
+    }),
+    /duplicate muscleId muscle-01/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(source, {
+      ...common,
+      clusterRadialReference:'source-knot',
+      clusterAllocationSchedule:allocationSchedule.slice(0, -1),
+    }),
+    /bind every source muscle exactly once.*muscle-08/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(source, {
+      ...common,
+      clusterRadialReference:'source-knot',
+      clusterAllocationSchedule:allocationSchedule.map((allocation, index) => (
+        index === allocationSchedule.length - 1
+          ? { muscleId:'unknown-muscle', axialOffset:allocation.axialOffset }
+          : allocation
+      )),
+    }),
+    /bind every source muscle exactly once.*unknown-muscle/i,
+  );
+  assert.equal(phased.status, 'pairwise-exclusion-failed');
+  assert.ok(
+    phased.metrics.packed.pairwisePenetration >
+      scalarEnvelope.metrics.packed.pairwisePenetration * 5,
+    `rejected two-band schedule unexpectedly approached the scalar endpoint: ${JSON.stringify({ scalar:scalarEnvelope.metrics.packed, phased:phased.metrics.packed })}`,
+  );
+  assert.equal(phased.metrics.packed.skeletalPenetration, 0);
+  assert.ok(phased.metrics.packed.minimumSourceBendEnergyRetention >= 0.75);
+  assert.ok(phased.metrics.packed.minimumSourceCurvatureCosine < 1e-5);
+  assert.ok(phased.metrics.packed.minimumSourceTangentCosine > 0);
+  assert.equal(phased.metrics.packed.sourceTangentReversalCount, 0);
+  assert.equal(phased.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(phased.metrics.packed.minimumPairwiseRelationCosine < 0.6);
+  assert.equal(phased.metrics.packed.pairwiseRelationReversalCount, 0);
+  assert.equal(phased.metrics.packed.endpointDrift, 0);
+  assert.ok(phased.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(phased.metrics.packed.compartmentEscape <= common.convergenceTolerance);
+  assert.equal(phased.metrics.packed.nonFiniteValueCount, 0);
+  assert.equal(phased.metrics.packed.nonPositiveRadiusCount, 0);
+});

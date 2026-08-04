@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed",
+    "outputPath": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/packed.png",
+    "reportPath": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/capture-packed-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 51061,
+    "processGroupId": 51061,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 51061,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2950,
+    "retainedBytes": 2950,
+    "truncated": false,
+    "tail": "[0804/184245.912770:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/184245.981460:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184246.451310:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed (0)\n[0804/184246.451409:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed (0)\n[0804/184246.453338:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184246.519909:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed (0)\n[0804/184246.522089:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/184246.568870:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed (0)\n[0804/184246.570503:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/184246.629885:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/?state=packed (0)\n288656 bytes written to file repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/packed.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/packed.png",
+    "sizeBytes": 288656,
+    "sha256": "ccff17f81f187ffbe3b0f5ab86ac1331aeb1c3d78250cd01b0ad456e23b33e36",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 74,
+      "idatBytes": 287747
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/muscle-compartment-packing-sensitivity-construction-allocation-v0/run-258e32b339266a04e331/axial-two-band-025/packed.png",
+      "sizeBytes": 288656,
+      "sha256": "ccff17f81f187ffbe3b0f5ab86ac1331aeb1c3d78250cd01b0ad456e23b33e36",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 74,
+        "idatBytes": 287747
+      }
+    }
+  }
+}
