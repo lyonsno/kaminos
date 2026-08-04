@@ -104,6 +104,59 @@ function closestPointOnSegment(point, start, end) {
   return add(start, scale(direction, t));
 }
 
+function closestSegmentParameters(leftStart, leftEnd, rightStart, rightEnd) {
+  const leftDirection = subtract(leftEnd, leftStart);
+  const rightDirection = subtract(rightEnd, rightStart);
+  const startOffset = subtract(leftStart, rightStart);
+  const leftLengthSquared = dot(leftDirection, leftDirection);
+  const rightLengthSquared = dot(rightDirection, rightDirection);
+  const directionDot = dot(leftDirection, rightDirection);
+  const leftOffsetDot = dot(leftDirection, startOffset);
+  const rightOffsetDot = dot(rightDirection, startOffset);
+  const denominator = leftLengthSquared * rightLengthSquared - directionDot ** 2;
+  let leftNumerator;
+  let leftDenominator = denominator;
+  let rightNumerator;
+  let rightDenominator = denominator;
+
+  if (denominator < 1e-24) {
+    leftNumerator = 0;
+    leftDenominator = 1;
+    rightNumerator = rightOffsetDot;
+    rightDenominator = rightLengthSquared;
+  } else {
+    leftNumerator = directionDot * rightOffsetDot - rightLengthSquared * leftOffsetDot;
+    rightNumerator = leftLengthSquared * rightOffsetDot - directionDot * leftOffsetDot;
+    if (leftNumerator < 0) {
+      leftNumerator = 0;
+      rightNumerator = rightOffsetDot;
+      rightDenominator = rightLengthSquared;
+    } else if (leftNumerator > leftDenominator) {
+      leftNumerator = leftDenominator;
+      rightNumerator = rightOffsetDot + directionDot;
+      rightDenominator = rightLengthSquared;
+    }
+  }
+
+  if (rightNumerator < 0) {
+    rightNumerator = 0;
+    leftNumerator = Math.max(0, Math.min(leftDenominator, -leftOffsetDot));
+    leftDenominator = leftLengthSquared;
+  } else if (rightNumerator > rightDenominator) {
+    rightNumerator = rightDenominator;
+    leftNumerator = Math.max(
+      0,
+      Math.min(leftLengthSquared, directionDot - leftOffsetDot),
+    );
+    leftDenominator = leftLengthSquared;
+  }
+
+  return {
+    leftT:leftDenominator <= 1e-24 ? 0 : leftNumerator / leftDenominator,
+    rightT:rightDenominator <= 1e-24 ? 0 : rightNumerator / rightDenominator,
+  };
+}
+
 function interpolate(left, right, amount) {
   return left * (1 - amount) + right * amount;
 }
@@ -135,10 +188,43 @@ function goldenSectionMinimum(fn, iterations = 48) {
       rightValue = fn(right);
     }
   }
-  return {
-    value: Math.min(fn(0), fn(1), leftValue, rightValue, fn((lower + upper) / 2)),
-    intervalWidth: upper - lower,
-  };
+  const midpoint = (lower + upper) / 2;
+  const candidates = [
+    { parameter:0, value:fn(0) },
+    { parameter:1, value:fn(1) },
+    { parameter:left, value:leftValue },
+    { parameter:right, value:rightValue },
+    { parameter:midpoint, value:fn(midpoint) },
+  ];
+  const minimum = candidates.reduce((best, candidate) =>
+    candidate.value < best.value ? candidate : best);
+  return { ...minimum, intervalWidth:upper - lower };
+}
+
+function taperedSegmentSurfaceMinimum(
+  leftStart,
+  leftEnd,
+  rightStart,
+  rightEnd,
+) {
+  // This cheap contact estimate guides projection only. Convergence still
+  // depends on the conservative nested-search lower bound in measureState.
+  const gapAt = (leftT, rightT) => distance(
+    interpolatePoint(leftStart.position, leftEnd.position, leftT),
+    interpolatePoint(rightStart.position, rightEnd.position, rightT),
+  ) - interpolate(leftStart.radius, leftEnd.radius, leftT) -
+    interpolate(rightStart.radius, rightEnd.radius, rightT);
+  let { leftT, rightT } = closestSegmentParameters(
+    leftStart.position,
+    leftEnd.position,
+    rightStart.position,
+    rightEnd.position,
+  );
+  for (let round = 0; round < 3; round += 1) {
+    leftT = goldenSectionMinimum(candidate => gapAt(candidate, rightT), 16).parameter;
+    rightT = goldenSectionMinimum(candidate => gapAt(leftT, candidate), 16).parameter;
+  }
+  return { leftT, rightT, gap:gapAt(leftT, rightT) };
 }
 
 function taperedSegmentSurfaceGapLowerBound(leftStart, leftEnd, rightStart, rightEnd) {
@@ -517,6 +603,17 @@ function syntheticMuscleAtAngle(index, angle) {
   };
 }
 
+const SYNTHETIC_DENSITY_LADDER_ANGLES = Object.freeze([
+  0,
+  Math.PI,
+  Math.PI / 2,
+  3 * Math.PI / 2,
+  Math.PI / 4,
+  5 * Math.PI / 4,
+  3 * Math.PI / 4,
+  7 * Math.PI / 4,
+]);
+
 export function createSyntheticFourMuscleCompartment() {
   const core = {
     schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
@@ -559,6 +656,56 @@ export function createSyntheticFourMuscleCompartment() {
         id: core.id,
         sha256,
       },
+    },
+  };
+}
+
+export function createSyntheticMuscleDensityLadder(muscleCount) {
+  if (![4, 6, 8].includes(muscleCount)) {
+    throw new Error('synthetic muscle density ladder supports exactly 4, 6, or 8 muscles');
+  }
+  const bellyRadius = 0.2;
+  const core = {
+    schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
+    id: `synthetic-muscle-density-ladder-${muscleCount}-v0`,
+    authority: {
+      kind:'synthetic-proxy',
+      anatomicalAdmission:'none',
+    },
+    dimension:3,
+    compartment: {
+      id:'local-muscle-compartment',
+      kind:'box',
+      minimum:[-0.95, -1.1, -0.95],
+      maximum:[0.95, 1.1, 0.95],
+      clearance:0.015,
+    },
+    obstacles:[{
+      id:'central-skeletal-shaft',
+      kind:'capsule',
+      start:[0, -0.96, 0],
+      end:[0, 0.96, 0],
+      radius:0.18,
+      clearance:0.02,
+      authority:'synthetic-proxy',
+    }],
+    muscles:SYNTHETIC_DENSITY_LADDER_ANGLES.slice(0, muscleCount).map(
+      (angle, index) => {
+        const muscle = syntheticMuscleAtAngle(index, angle);
+        for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+          muscle.centerline[knotIndex].radius = bellyRadius;
+        }
+        muscle.targetVolume = carrierVolume(muscle.centerline);
+        return muscle;
+      },
+    ),
+  };
+  const sha256 = hashJson(core);
+  return {
+    ...core,
+    input: {
+      requested: { kind:'synthetic-fixture', id:core.id, sha256 },
+      effective: { kind:'synthetic-fixture', id:core.id, sha256 },
     },
   };
 }
@@ -611,17 +758,154 @@ function projectPairwise(muscles, amount) {
   const knotCount = muscles[0].centerline.length;
   for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
-      for (let knotIndex = 1; knotIndex < knotCount - 1; knotIndex += 1) {
-        const left = muscles[leftIndex].centerline[knotIndex];
-        const right = muscles[rightIndex].centerline[knotIndex];
-        const offset = subtract(left.position, right.position);
-        const separation = length(offset);
-        const required = left.radius + right.radius;
-        if (separation >= required) continue;
-        const direction = normalizedOrFallback(offset, leftIndex, rightIndex + knotIndex);
-        const correction = scale(direction, (required - separation) * amount / 2);
-        left.position = add(left.position, correction);
-        right.position = subtract(right.position, correction);
+      for (let leftKnotIndex = 0; leftKnotIndex < knotCount; leftKnotIndex += 1) {
+        for (let rightKnotIndex = 0; rightKnotIndex < knotCount; rightKnotIndex += 1) {
+          const leftMovable = leftKnotIndex > 0 && leftKnotIndex < knotCount - 1;
+          const rightMovable = rightKnotIndex > 0 && rightKnotIndex < knotCount - 1;
+          if (!leftMovable && !rightMovable) continue;
+          const left = muscles[leftIndex].centerline[leftKnotIndex];
+          const right = muscles[rightIndex].centerline[rightKnotIndex];
+          const offset = subtract(left.position, right.position);
+          const separation = length(offset);
+          const required = left.radius + right.radius;
+          if (separation >= required) continue;
+          const direction = normalizedOrFallback(
+            offset,
+            leftIndex + leftKnotIndex,
+            rightIndex + rightKnotIndex,
+          );
+          const movableCount = Number(leftMovable) + Number(rightMovable);
+          const correction = scale(
+            direction,
+            (required - separation) * amount / movableCount,
+          );
+          if (leftMovable) left.position = add(left.position, correction);
+          if (rightMovable) right.position = subtract(right.position, correction);
+        }
+      }
+    }
+  }
+}
+
+function segmentPointMutableResponse(centerline, segmentIndex, segmentT) {
+  const weights = [1 - segmentT, segmentT];
+  const mutable = [
+    segmentIndex > 0,
+    segmentIndex + 1 < centerline.length - 1,
+  ];
+  return weights.reduce(
+    (sum, weight, endpoint) => sum + (mutable[endpoint] ? weight ** 2 : 0),
+    0,
+  );
+}
+
+function moveSegmentPoint(centerline, segmentIndex, segmentT, displacement) {
+  const weights = [1 - segmentT, segmentT];
+  const mutable = [
+    segmentIndex > 0,
+    segmentIndex + 1 < centerline.length - 1,
+  ];
+  const response = segmentPointMutableResponse(centerline, segmentIndex, segmentT);
+  if (response <= 1e-18) return false;
+  for (let endpoint = 0; endpoint < 2; endpoint += 1) {
+    if (!mutable[endpoint]) continue;
+    const knot = centerline[segmentIndex + endpoint];
+    // Do not divide by the response. Near a fixed attachment that would turn
+    // an infinitesimal contact weight into unbounded interior-knot motion.
+    knot.position = add(
+      knot.position,
+      scale(displacement, weights[endpoint]),
+    );
+  }
+  return true;
+}
+
+function projectSegmentPairwise(muscles, amount) {
+  for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
+    const leftCenterline = muscles[leftIndex].centerline;
+    for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
+      const rightCenterline = muscles[rightIndex].centerline;
+      for (let leftSegment = 0; leftSegment < leftCenterline.length - 1; leftSegment += 1) {
+        for (
+          let rightSegment = 0;
+          rightSegment < rightCenterline.length - 1;
+          rightSegment += 1
+        ) {
+          const leftStart = leftCenterline[leftSegment];
+          const leftEnd = leftCenterline[leftSegment + 1];
+          const rightStart = rightCenterline[rightSegment];
+          const rightEnd = rightCenterline[rightSegment + 1];
+          const spatialParameters = closestSegmentParameters(
+            leftStart.position,
+            leftEnd.position,
+            rightStart.position,
+            rightEnd.position,
+          );
+          const spatialLeftPoint = interpolatePoint(
+            leftStart.position,
+            leftEnd.position,
+            spatialParameters.leftT,
+          );
+          const spatialRightPoint = interpolatePoint(
+            rightStart.position,
+            rightEnd.position,
+            spatialParameters.rightT,
+          );
+          const possibleSurfaceGap = distance(spatialLeftPoint, spatialRightPoint) -
+            Math.max(leftStart.radius, leftEnd.radius) -
+            Math.max(rightStart.radius, rightEnd.radius);
+          // Minimum centerline distance minus both maximum endpoint radii is a
+          // safe broad-phase lower bound for linearly tapered segments.
+          if (possibleSurfaceGap >= 0) continue;
+          const { leftT, rightT, gap } = taperedSegmentSurfaceMinimum(
+            leftStart,
+            leftEnd,
+            rightStart,
+            rightEnd,
+          );
+          const leftPoint = interpolatePoint(leftStart.position, leftEnd.position, leftT);
+          const rightPoint = interpolatePoint(rightStart.position, rightEnd.position, rightT);
+          const leftRadius = interpolate(leftStart.radius, leftEnd.radius, leftT);
+          const rightRadius = interpolate(rightStart.radius, rightEnd.radius, rightT);
+          const offset = subtract(leftPoint, rightPoint);
+          const separation = length(offset);
+          const overlap = Math.max(leftRadius + rightRadius - separation, -gap);
+          if (overlap <= 0) continue;
+          const direction = normalizedOrFallback(
+            offset,
+            leftIndex + leftSegment,
+            rightIndex + rightSegment,
+          );
+          const leftCanMove = segmentPointMutableResponse(
+            leftCenterline,
+            leftSegment,
+            leftT,
+          ) > 1e-18;
+          const rightCanMove = segmentPointMutableResponse(
+            rightCenterline,
+            rightSegment,
+            rightT,
+          ) > 1e-18;
+          const movableSideCount = Number(leftCanMove) + Number(rightCanMove);
+          if (movableSideCount === 0) continue;
+          const correction = overlap * amount / movableSideCount;
+          if (leftCanMove) {
+            moveSegmentPoint(
+              leftCenterline,
+              leftSegment,
+              leftT,
+              scale(direction, correction),
+            );
+          }
+          if (rightCanMove) {
+            moveSegmentPoint(
+              rightCenterline,
+              rightSegment,
+              rightT,
+              scale(direction, -correction),
+            );
+          }
+        }
       }
     }
   }
@@ -678,16 +962,22 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
   let packed = initial;
   let status = 'iteration-limit';
   let iterations = 0;
+  let continuousCandidateFailed = false;
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
-    const smoothingAmount = config.smoothnessStep *
-      (1 - iteration / config.maxIterations);
+    const smoothingProgress = Math.max(
+      0,
+      1 - iteration / (config.maxIterations * 0.8),
+    );
+    const smoothingAmount = config.smoothnessStep * smoothingProgress ** 2;
     smoothInterior(muscles, smoothingAmount);
     projectRigidAndBounds(source, muscles, config.relaxationStep);
     projectPairwise(muscles, config.relaxationStep);
+    projectSegmentPairwise(muscles, config.relaxationStep);
     projectRigidAndBounds(source, muscles, config.relaxationStep);
     restoreTargetVolumes(muscles);
     projectRigidAndBounds(source, muscles, config.relaxationStep);
     projectPairwise(muscles, config.relaxationStep);
+    projectSegmentPairwise(muscles, config.relaxationStep);
     projectRigidAndBounds(source, muscles, config.relaxationStep);
     restoreTargetVolumes(muscles);
 
@@ -699,16 +989,18 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       packed.nonPositiveRadiusCount === 0
     ) {
       packed = measureState(source, muscles, config.sampleCount, true);
-      status = residualMaximum(packed) <= config.convergenceTolerance
-        ? 'converged'
-        : 'continuous-clearance-failed';
       iterationHistory.push({
         iteration,
         validationKind:'conservative-continuous',
         residualMaximum:rounded(residualMaximum(packed)),
         ...packed,
       });
-      break;
+      if (residualMaximum(packed) <= config.convergenceTolerance) {
+        status = 'converged';
+        break;
+      }
+      continuousCandidateFailed = true;
+      continue;
     }
     iterationHistory.push({
       iteration,
@@ -720,6 +1012,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
 
   if (status === 'iteration-limit') {
     packed = measureState(source, muscles, config.sampleCount, true);
+    if (continuousCandidateFailed) status = 'continuous-clearance-failed';
     if (iterationHistory.length > 0) {
       iterationHistory[iterationHistory.length - 1] = {
         iteration:iterations,

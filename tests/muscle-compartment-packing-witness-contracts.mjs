@@ -5,7 +5,10 @@ import {
   admitMuscleCompartmentPackingVisualInspection,
   writeMuscleCompartmentPackingWitness,
 } from '../muscle-compartment-packing-witness.mjs';
-import { createSyntheticFourMuscleCompartment } from '../muscle-compartment-packing-core.mjs';
+import {
+  createSyntheticFourMuscleCompartment,
+  createSyntheticMuscleDensityLadder,
+} from '../muscle-compartment-packing-core.mjs';
 
 function memoryIo() {
   const files = new Map();
@@ -51,9 +54,35 @@ test('witness publishes exact source, result, interactive route, and pending vis
   const witnessHtml = String(memory.files.get(`${outDir}/index.html`));
   assert.match(witnessHtml, /Overlapping input/);
   assert.match(witnessHtml, /Collision-resolved result/);
+  assert.match(witnessHtml, /physically interpenetrate/);
+  assert.match(witnessHtml, /skeletal obstacle/);
   assert.doesNotMatch(witnessHtml, />Before packing</);
   assert.doesNotMatch(witnessHtml, />Packed result</);
   assert.match(String(memory.files.get(`${outDir}/index.html`)), /OrbitControls/);
+});
+
+test('eight-carrier density witness exposes every stable muscle identity', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/muscle-compartment-packing-density-eight';
+  const source = createSyntheticMuscleDensityLadder(8);
+  const written = await writeMuscleCompartmentPackingWitness({
+    outDir,
+    source,
+    config: {
+      maxIterations:960,
+      relaxationStep:0.35,
+      smoothnessStep:0.035,
+      sampleCount:25,
+      convergenceTolerance:1e-7,
+    },
+    io:memory.io,
+  });
+  const witnessHtml = String(memory.files.get(`${outDir}/index.html`));
+
+  assert.equal(written.report.result.muscleCount, 8);
+  assert.equal(written.report.claims.authoredSourcePacking, 'not-assayed-by-synthetic-witness');
+  for (const muscle of source.muscles) assert.match(witnessHtml, new RegExp(muscle.id));
+  assert.match(witnessHtml, /#f4a261/);
 });
 
 test('visual admission rejects blank captures and binds admitted pixels to current artifacts', async () => {

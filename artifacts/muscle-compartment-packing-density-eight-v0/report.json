@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "muscle-compartment-packing-orbitable-v0",
+    "effective": "muscle-compartment-packing-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "input": {
+    "requested": {
+      "kind": "synthetic-fixture",
+      "id": "synthetic-muscle-density-ladder-8-v0",
+      "sha256": "f4e5207394a214574862aaea9ea37f17429d2bf96d8c9a355c73e08147464431"
+    },
+    "effective": {
+      "kind": "synthetic-fixture",
+      "id": "synthetic-muscle-density-ladder-8-v0",
+      "sha256": "f4e5207394a214574862aaea9ea37f17429d2bf96d8c9a355c73e08147464431"
+    }
+  },
+  "source": {
+    "id": "synthetic-muscle-density-ladder-8-v0",
+    "schema": "kaminos.muscle-compartment-packing-source.v0",
+    "authority": "synthetic-proxy",
+    "anatomicalAdmission": "none"
+  },
+  "config": {
+    "maxIterations": 960,
+    "relaxationStep": 0.35,
+    "smoothnessStep": 0.035,
+    "sampleCount": 25,
+    "convergenceTolerance": 1e-7
+  },
+  "result": {
+    "schema": "kaminos.muscle-compartment-packing-result.v0",
+    "status": "converged",
+    "iterations": 773,
+    "muscleCount": 8,
+    "metrics": {
+      "initial": {
+        "pairwisePenetration": 5.569379776526,
+        "skeletalPenetration": 0.260000000495,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 0.2592,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      },
+      "packed": {
+        "pairwisePenetration": 7.9751e-8,
+        "skeletalPenetration": 0,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 0.006630951636,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    }
+  },
+  "claims": {
+    "threeDimensionalPacking": "supported-by-numerical-contract",
+    "fixedAttachmentIdentity": "supported-by-numerical-contract",
+    "approximateIndividualVolumePreservation": "supported-by-numerical-contract",
+    "pairwiseAndSkeletalExclusion": "supported-by-numerical-contract",
+    "anatomicalCorrectness": "unassayed",
+    "authoredSourcePacking": "not-assayed-by-synthetic-witness"
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "index.html",
+    "receipt": "visual-inspection.json",
+    "indexHtmlSha256": "6949491d16aa026cfc34535c3be96370ec5f9eb9e148e29e7d334feff7b1c58a",
+    "sourceJsonSha256": "f0c6e3567b22cb8bedf3155271a2f569816461d3f8aff829e0fc39cbf6855e49",
+    "packedJsonSha256": "9beff1a7bbbfd0180d4d0102df5b224b49bf570347d0cc172853dd872e7bedd1",
+    "pendingReportSha256": "9cf10df6637944253d0c58eb76f61c564e3ba32fbd75c034f484df5b0336b4df"
+  }
+}

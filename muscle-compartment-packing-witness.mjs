@@ -29,10 +29,26 @@ function formatMetric(value) {
   return value.toFixed(5);
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function renderHtml({ source, result, report }) {
   const payload = JSON.stringify({ source, result, route: report.route });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
+  const muscleColors = [
+    '#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff',
+    '#63a4ff', '#ff8fab', '#72efdd', '#f4a261',
+  ];
+  const muscleLegend = source.muscles.map((muscle, index) =>
+    `<span><i class="swatch" style="background:${muscleColors[index]}"></i>${escapeHtml(muscle.id)}</span>`,
+  ).join('');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -47,7 +63,8 @@ function renderHtml({ source, result, report }) {
     canvas { display: block; width: 100%; height: 100%; }
     .panel { position: fixed; z-index: 3; top: 18px; left: 18px; width: min(390px, calc(100vw - 36px)); padding: 16px 17px 15px; border: 1px solid #ffffff24; border-radius: 14px; background: #0b1017e8; box-shadow: 0 16px 60px #000a; backdrop-filter: blur(14px); }
     h1 { margin: 0 0 4px; font: 650 19px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.03em; }
-    .authority { margin: 0 0 13px; color: #e5b77d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .authority { margin: 0 0 7px; color: #e5b77d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .explanation { margin: 0 0 13px; color: #aeb9c6; font-size: 10px; line-height: 1.35; }
     .controls { display: flex; gap: 8px; margin-bottom: 13px; }
     button { flex: 1; padding: 9px 10px; border: 1px solid #ffffff24; border-radius: 9px; color: #dce6f0; background: #111923; cursor: pointer; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
     button[aria-pressed="true"] { color: #081016; background: #e7d1a8; border-color: #fff1d0; }
@@ -67,6 +84,7 @@ function renderHtml({ source, result, report }) {
   <section class="panel" aria-label="Packing witness controls and residuals">
     <h1>Muscle Compartment Packing</h1>
     <p class="authority">Synthetic 3D overlap-resolution falsifier · no anatomical admission</p>
+    <p class="explanation">Input carriers physically interpenetrate; resolution spreads them only enough to clear each other and the skeletal obstacle.</p>
     <div class="controls">
       <button data-state="before">Overlapping input</button>
       <button data-state="packed">Collision-resolved result</button>
@@ -80,11 +98,9 @@ function renderHtml({ source, result, report }) {
       <span>max volume error</span><span class="value">${formatMetric(initial.maximumRelativeVolumeError)}</span><span class="value packed">${formatMetric(packed.maximumRelativeVolumeError)}</span>
     </div>
     <div class="legend">
-      <span><i class="swatch" style="background:#ff6b6b"></i>muscle 01</span>
-      <span><i class="swatch" style="background:#ffd166"></i>muscle 02</span>
-      <span><i class="swatch" style="background:#4ecdc4"></i>muscle 03</span>
-      <span><i class="swatch" style="background:#8f7cff"></i>muscle 04</span>
+      ${muscleLegend}
       <span><i class="swatch" style="background:#f5f1e8"></i>attachments</span>
+      <span><i class="swatch" style="background:#b9d8ef"></i>skeletal obstacle</span>
     </div>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · resolved view retains faint input-state centerlines and displacement vectors</div>
@@ -154,7 +170,13 @@ function renderHtml({ source, result, report }) {
       new THREE.LineDashedMaterial({ color:0x86a6c8, transparent:true, opacity:.28, dashSize:.05, gapSize:.035 }),
     ); boxEdges.computeLineDistances(); boxEdges.position.set(...center); scene.add(boxEdges);
     for (const obstacle of payload.source.obstacles) {
-      if (obstacle.kind === 'capsule') scene.add(capsuleBetween(obstacle.start, obstacle.end, obstacle.radius, material(0xcdd6df,.94)));
+      if (obstacle.kind === 'capsule') {
+        scene.add(capsuleBetween(obstacle.start, obstacle.end, obstacle.radius, material(0xcdd6df,.94)));
+        const xrayMaterial = new THREE.MeshBasicMaterial({ color:0xb9d8ef, wireframe:true, transparent:true, opacity:.32, depthTest:false });
+        const xray = capsuleBetween(obstacle.start, obstacle.end, obstacle.radius * 1.015, xrayMaterial);
+        xray.renderOrder = 5;
+        scene.add(xray);
+      }
       else { const sphere=new THREE.Mesh(new THREE.SphereGeometry(obstacle.radius,28,20),material(0xcdd6df,.94)); sphere.position.set(...obstacle.center); scene.add(sphere); }
     }
     const beforeGroup = new THREE.Group(), packedGroup = new THREE.Group(), ghosts = new THREE.Group();
@@ -241,7 +263,7 @@ export async function writeMuscleCompartmentPackingWitness({
         approximateIndividualVolumePreservation: 'supported-by-numerical-contract',
         pairwiseAndSkeletalExclusion: 'supported-by-numerical-contract',
         anatomicalCorrectness: 'unassayed',
-        authoredSourcePacking: 'blocked-on-coordinate-bearing-atlas',
+        authoredSourcePacking: 'not-assayed-by-synthetic-witness',
       },
       visualInspection: { status:'pending-agent-inspection', artifact:'index.html' },
     };

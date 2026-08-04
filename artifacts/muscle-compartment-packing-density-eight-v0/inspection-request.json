@@ -1,0 +1,37 @@
+{
+  "observedAt": "2026-08-04T04:50:05Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-density-eight-v0/",
+  "backend": {
+    "kind": "playwright-chromium-headless-shell",
+    "playwrightRevision": 1234,
+    "installedStableChrome": false
+  },
+  "capture": {
+    "route": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "viewport": [1400, 900],
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "images": [
+    {
+      "path": "before.png",
+      "viewport": [1400, 900],
+      "state": "before"
+    },
+    {
+      "path": "packed.png",
+      "viewport": [1400, 900],
+      "state": "packed"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "movementLegible": true,
+    "stableMuscleIdentityLegible": true,
+    "attachmentHandlesLegible": true,
+    "skeletonAndCompartmentLegible": true,
+    "metricsLegible": true,
+    "textContained": true
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-04T04:50:05Z",
+  "route": {
+    "requested": "muscle-compartment-packing-orbitable-v0",
+    "effective": "muscle-compartment-packing-orbitable-v0",
+    "fallbackUsed": false,
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-density-eight-v0/"
+  },
+  "backend": {
+    "kind": "playwright-chromium-headless-shell",
+    "playwrightRevision": 1234,
+    "installedStableChrome": false
+  },
+  "capture": {
+    "route": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "viewport": [
+      1400,
+      900
+    ],
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "bindings": {
+    "indexHtmlSha256": "6949491d16aa026cfc34535c3be96370ec5f9eb9e148e29e7d334feff7b1c58a",
+    "sourceJsonSha256": "f0c6e3567b22cb8bedf3155271a2f569816461d3f8aff829e0fc39cbf6855e49",
+    "packedJsonSha256": "9beff1a7bbbfd0180d4d0102df5b224b49bf570347d0cc172853dd872e7bedd1",
+    "pendingReportSha256": "9cf10df6637944253d0c58eb76f61c564e3ba32fbd75c034f484df5b0336b4df"
+  },
+  "images": [
+    {
+      "path": "before.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "state": "before",
+      "byteLength": 191978,
+      "sha256": "0ceb11bf075dc9705bd6eb6ebbbb5aa9aa03fa97910a8e091a37e13faabe75d5"
+    },
+    {
+      "path": "packed.png",
+      "viewport": [
+        1400,
+        900
+      ],
+      "state": "packed",
+      "byteLength": 220367,
+      "sha256": "65e35250907a1de2e9a43eb870958cb135c4144233f836ba20db5878fc2153a3"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "movementLegible": true,
+    "stableMuscleIdentityLegible": true,
+    "attachmentHandlesLegible": true,
+    "skeletonAndCompartmentLegible": true,
+    "metricsLegible": true,
+    "textContained": true
+  }
+}

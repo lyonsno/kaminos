@@ -5,6 +5,7 @@ import {
   MUSCLE_COMPARTMENT_PACKING_RESULT_SCHEMA,
   MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
   createSyntheticFourMuscleCompartment,
+  createSyntheticMuscleDensityLadder,
   measureMuscleCompartmentPacking,
   solveMuscleCompartmentPacking,
 } from '../muscle-compartment-packing-core.mjs';
@@ -121,6 +122,48 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   );
 });
 
+test('nested four six and eight carrier density rungs preserve prior identity and converge', () => {
+  const config = {
+    maxIterations: 960,
+    relaxationStep: 0.35,
+    smoothnessStep: 0.035,
+    sampleCount: 25,
+    convergenceTolerance: 1e-7,
+  };
+  let priorSource = null;
+  for (const muscleCount of [4, 6, 8]) {
+    const source = createSyntheticMuscleDensityLadder(muscleCount);
+    if (priorSource) {
+      assert.deepEqual(
+        source.muscles.slice(0, priorSource.muscles.length),
+        priorSource.muscles,
+        `${muscleCount}-carrier rung must preserve every prior source carrier`,
+      );
+    }
+    const result = solveMuscleCompartmentPacking(source, config);
+    assert.equal(
+      result.status,
+      'converged',
+      `${muscleCount}-carrier density rung failed: ${JSON.stringify(result.metrics.packed)}`,
+    );
+    assert.equal(result.muscles.length, muscleCount);
+    assert.ok(result.metrics.initial.pairwisePenetration > 0.2);
+    assert.ok(result.metrics.initial.skeletalPenetration > 0.2);
+    assert.ok(
+      result.metrics.packed.pairwisePenetration <= config.convergenceTolerance,
+      `${muscleCount}-carrier overlap remained ${result.metrics.packed.pairwisePenetration}`,
+    );
+    assert.ok(result.metrics.packed.skeletalPenetration <= config.convergenceTolerance);
+    assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
+    assert.equal(result.metrics.packed.endpointDrift, 0);
+    assert.ok(result.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+    assert.equal(result.metrics.packed.nonFiniteValueCount, 0);
+    assert.equal(result.metrics.packed.nonPositiveRadiusCount, 0);
+    assert.deepEqual(solveMuscleCompartmentPacking(source, config), result);
+    priorSource = source;
+  }
+});
+
 test('source validation rejects identity collision and non-finite carrier state', () => {
   const duplicate = createSyntheticFourMuscleCompartment();
   duplicate.muscles[1].identity.instanceId = duplicate.muscles[0].identity.instanceId;
@@ -165,4 +208,32 @@ test('convergence cannot hide a continuous inter-segment crossing between sparse
     })}`,
   );
   assert.ok(result.metrics.packed.pairwisePenetration > 0.2);
+});
+
+test('pairwise exclusion cannot launder colliding fixed attachments into convergence', () => {
+  const source = createInterSegmentCrossingSource();
+  const fixedOrigin = [...source.muscles[0].attachments.origin.position];
+  source.id = 'operator-authored-fixed-attachment-collision';
+  source.input.requested.id = source.id;
+  source.input.effective.id = source.id;
+  source.muscles[1].centerline[0].position = [...fixedOrigin];
+  source.muscles[1].attachments.origin.position = [...fixedOrigin];
+  source.muscles[1].targetVolume = carrierVolume(source.muscles[1].centerline);
+
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 64,
+    relaxationStep: 0.35,
+    smoothnessStep: 0.035,
+    sampleCount: 25,
+    convergenceTolerance: 1e-7,
+  });
+
+  assert.notEqual(result.status, 'converged');
+  assert.equal(result.metrics.packed.endpointDrift, 0);
+  assert.ok(result.metrics.packed.pairwisePenetration >= 0.24);
+  assert.equal(result.metrics.packed.maximumRelativeVolumeError, 0);
+  assert.equal(result.metrics.packed.nonFiniteValueCount, 0);
+  assert.equal(result.metrics.packed.nonPositiveRadiusCount, 0);
+  assert.deepEqual(result.muscles[0].centerline[0].position, fixedOrigin);
+  assert.deepEqual(result.muscles[1].centerline[0].position, fixedOrigin);
 });
