@@ -105,6 +105,15 @@ function fieldRecord({ candidates = [], authorityCandidateKind = null, missingRe
       reason: missingReason ?? 'no source-backed candidate was extracted',
     };
   }
+  const authorityConflict = candidates.find(candidate => candidate.authorityConflict)?.authorityConflict;
+  if (authorityConflict) {
+    return {
+      state: 'conflict',
+      selected: null,
+      candidates,
+      reason: `${authorityConflict.field} authority binding expected ${authorityConflict.expected ?? 'missing'} but received ${authorityConflict.actual ?? 'missing'}`,
+    };
+  }
   const first = candidates[0].value;
   const disagreement = candidates.some(candidate => !samePoint(first, candidate.value));
   if (disagreement) {
@@ -251,6 +260,8 @@ function endpointField(muscle, endpoint, fixtureRoute) {
   const pathPoint = endpoint === 'origin' ? nativeSamples[0] : nativeSamples.at(-1);
   const surfaceValue = visibleSurfaceEndpoint(muscle, endpoint);
   const fixtureEndpoint = fixtureRoute?.[endpoint];
+  const expectedHandleInstanceId = component?.identity?.instance_id ?? null;
+  const fixtureHandleMatches = fixtureEndpoint?.assignedHandleInstanceId === expectedHandleInstanceId;
   const candidates = [];
   if (component) {
     candidates.push({
@@ -284,13 +295,22 @@ function endpointField(muscle, endpoint, fixtureRoute) {
       kind: 'routing-fixture-endpoint',
       value: structuredClone(fixtureEndpoint.point),
       method: 'reviewed-routing-fixture-selection',
-      authority: fixtureEndpoint.sourceAuthority === 'source_mesh' ? 'admitted' : 'candidate',
+      authority: fixtureEndpoint.sourceAuthority === 'source_mesh' && fixtureHandleMatches
+        ? 'admitted'
+        : 'candidate',
+      ...(!fixtureHandleMatches ? {
+        authorityConflict: {
+          field: 'assignedHandleInstanceId',
+          expected: expectedHandleInstanceId,
+          actual: fixtureEndpoint.assignedHandleInstanceId ?? null,
+        },
+      } : {}),
       evidenceLocators: [`routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`],
     });
   }
   return fieldRecord({
     candidates,
-    authorityCandidateKind: fixtureEndpoint?.sourceAuthority === 'source_mesh'
+    authorityCandidateKind: fixtureEndpoint?.sourceAuthority === 'source_mesh' && fixtureHandleMatches
       ? 'routing-fixture-endpoint'
       : null,
   });

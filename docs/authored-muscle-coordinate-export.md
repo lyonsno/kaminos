@@ -16,9 +16,9 @@ Endpoint candidates are independently reconstructed from:
 - origin/insertion helper world-matrix translations;
 - first/last native path samples transformed into source-world coordinates;
 - the centroid of the visible surface's extreme cap ring along the helper chord;
-- the reviewed routing fixture endpoint when exact construction, lineage, instance, component, geometry, and asset identities agree.
+- the reviewed routing fixture endpoint when exact construction, lineage, instance, endpoint assigned-handle, component, geometry, and asset identities agree.
 
-Agreement does not create authority. A reviewed fixture candidate can admit an endpoint only when it carries `source_mesh` authority and all named candidates agree within extraction precision. A provisional fixture endpoint remains a candidate even when its coordinates agree. Disagreement remains a conflict with every candidate and locator preserved.
+Agreement does not create authority. A reviewed fixture candidate can admit an endpoint only when it carries `source_mesh` authority, its `assignedHandleInstanceId` matches the source graph endpoint component, and all named candidates agree within extraction precision. A provisional fixture endpoint remains a candidate even when its coordinates agree. A stale handle assignment or coordinate disagreement remains a conflict with every candidate and locator preserved.
 
 Native curve samples are uniformly resampled by arc length for the candidate centerline. The receipt records native samples, resampled samples, source path hash, arc length, and residual. Blender curve point radius is preserved but is not assumed to be physical muscle radius.
 

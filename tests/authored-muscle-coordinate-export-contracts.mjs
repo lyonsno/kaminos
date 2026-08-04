@@ -334,6 +334,30 @@ test('a matching routing endpoint without source_mesh authority remains a candid
   assert.equal(result.coordinateCarrier, null);
 });
 
+test('a routing endpoint assigned to the wrong helper remains an explicit identity conflict', () => {
+  const staleFixture = routingFixture();
+  staleFixture.conditions.correct.routes[0].origin.assignedHandleInstanceId = 'wrong-origin-handle';
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: staleFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+  const origin = result.authorityReceipt.rows[0].fields['attachments.origin.position'];
+
+  assert.equal(origin.state, 'conflict');
+  assert.equal(origin.selected, null);
+  assert.deepEqual(origin.candidates.at(-1).authorityConflict, {
+    field: 'assignedHandleInstanceId',
+    expected: 'origin-route-a',
+    actual: 'wrong-origin-handle',
+  });
+  assert.match(result.authorityReceipt.blockers.join('\n'), /assignedHandleInstanceId.*origin-route-a.*wrong-origin-handle/i);
+  assert.equal(result.coordinateCarrier, null);
+});
+
 test('candidate receipt is byte-identical on replay and keeps non-authoritative geometry out of the carrier', () => {
   const first = build();
   const second = build();
