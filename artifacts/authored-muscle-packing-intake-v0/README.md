@@ -11,10 +11,10 @@ centerlines, parent-atlas derivation, target-volume authority,
 skeletal-clearance primitives, and local compartment bounds were not present.
 No packing source or packed geometry was manufactured.
 
-Current receipt identities after the reusable-atlas contract revision:
+Current receipt identities after the source-to-carrier conflict-status revision:
 
-- file SHA-256: `5c4fe4e6692dd0e0048c77267b7d39e63b19a28c8dacb8230a9ab31716c92404`
-- internal receipt SHA-256: `835471d4e059b8af200f4988216578da55e7a04243788dbaab603c43d4173c08`
+- file SHA-256: `b422a6482ab52c7af089d3424f3c13451c6f4402b030b41daee3ad7e6697f8c0`
+- internal receipt SHA-256: `82f162cc8870eb79a2f8e8a9cb1cf972c466c39dbba1f113e685bcbd25d75ca4`
 
 Reproduce from the repository root:
 

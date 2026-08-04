@@ -198,6 +198,7 @@ try {
     source: null,
     acceptedFields: [],
     missingFields: [],
+    conflictingFields: [],
     packingSource: null,
     execution: {
       phase,

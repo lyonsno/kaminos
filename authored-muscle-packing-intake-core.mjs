@@ -68,6 +68,14 @@ class AuthorityIncompleteError extends Error {
   }
 }
 
+class SourceToCarrierBindingInvalidError extends Error {
+  constructor(message, conflictingFields = []) {
+    super(message);
+    this.name = 'SourceToCarrierBindingInvalidError';
+    this.conflictingFields = conflictingFields;
+  }
+}
+
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
   if (value && typeof value === 'object') {
@@ -102,7 +110,15 @@ function receipt(core) {
   });
 }
 
-function reject({ status, reason, input, source, acceptedFields = [], missingFields = [] }) {
+function reject({
+  status,
+  reason,
+  input,
+  source,
+  acceptedFields = [],
+  missingFields = [],
+  conflictingFields = [],
+}) {
   return receipt({
     status,
     admitted: false,
@@ -111,6 +127,7 @@ function reject({ status, reason, input, source, acceptedFields = [], missingFie
     source: structuredClone(source),
     acceptedFields: [...acceptedFields],
     missingFields: [...missingFields],
+    conflictingFields: [...conflictingFields],
     packingSource: null,
   });
 }
@@ -199,6 +216,47 @@ function validateSelectionAuthority(derivation, routeConstructionIds) {
   }
   if (!sameValue(rows.map(row => row?.constructionId), routeConstructionIds)) {
     throw new Error('selected-route authority construction ids do not match the routing fixture route set');
+  }
+
+  const conflictingFields = [];
+  for (const field of REQUIRED_SHARED_AUTHORITY_FIELDS) {
+    if (selectionAuthority.sharedFields?.[field] === 'conflict') {
+      conflictingFields.push(
+        `coordinateCarrier.derivation.selectionAuthority.sharedFields.${field}`,
+      );
+    }
+  }
+  for (const row of rows) {
+    if (row.state === 'conflict') {
+      conflictingFields.push(
+        `coordinateCarrier.derivation.selectionAuthority.rows[${row.constructionId}].state`,
+      );
+    }
+    for (const field of REQUIRED_ROW_AUTHORITY_FIELDS) {
+      if (row.requiredFields?.[field] === 'conflict') {
+        conflictingFields.push(
+          `coordinateCarrier.derivation.selectionAuthority.rows[${row.constructionId}].requiredFields.${field}`,
+        );
+      }
+    }
+  }
+  if (conflictingFields.length > 0) {
+    const firstSharedField = REQUIRED_SHARED_AUTHORITY_FIELDS.find(
+      field => selectionAuthority.sharedFields?.[field] === 'conflict',
+    );
+    const firstRow = rows.find(row => row.state === 'conflict');
+    const firstRowField = rows.flatMap(row => REQUIRED_ROW_AUTHORITY_FIELDS.map(field => ({ row, field })))
+      .find(({ row, field }) => row.requiredFields?.[field] === 'conflict');
+    let reason;
+    if (firstSharedField) {
+      reason = `shared packing field ${firstSharedField} authority state conflict invalidates source-to-carrier binding`;
+    } else if (firstRow) {
+      reason = `${firstRow.constructionId} selected-row authority state conflict invalidates source-to-carrier binding`;
+    } else {
+      const { row, field } = firstRowField;
+      reason = `${row.constructionId} required field ${field} authority state conflict invalidates source-to-carrier binding`;
+    }
+    throw new SourceToCarrierBindingInvalidError(reason, conflictingFields);
   }
 
   const incompleteFields = [];
@@ -406,8 +464,10 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
     orderedMuscles = validateCoordinateCarrier(routingFixture, routes, coordinateCarrier);
   } catch (error) {
     return reject({
-      status: error instanceof AuthorityIncompleteError
-        ? 'authority-incomplete'
+      status: error instanceof SourceToCarrierBindingInvalidError
+        ? 'source-to-carrier-binding-invalid'
+        : error instanceof AuthorityIncompleteError
+          ? 'authority-incomplete'
         : /match the routing fixture|missing from coordinate|route set|construction ids/i.test(error.message)
           ? 'source-identity-mismatch'
           : 'geometry-invalid',
@@ -416,6 +476,9 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
       source,
       acceptedFields: ACCEPTED_IDENTITY_FIELDS,
       missingFields: error instanceof AuthorityIncompleteError ? error.missingFields : [],
+      conflictingFields: error instanceof SourceToCarrierBindingInvalidError
+        ? error.conflictingFields
+        : [],
     });
   }
 
