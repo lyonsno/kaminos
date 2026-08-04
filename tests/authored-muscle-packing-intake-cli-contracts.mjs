@@ -307,6 +307,9 @@ test('admitted carrier pipeline drives the generic deterministic witness and bin
   const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
   assert.equal(receipt.status, 'admitted');
   assert.equal(receipt.admitted, true);
+  assert.deepEqual(receipt.packingSource.formation, {
+    centerlineSmoothingReference: 'source-displacement',
+  }, 'pipeline source must use the packer-owned source-formation policy');
   assert.equal(receipt.execution.witness.requested, witnessOut);
   assert.equal(receipt.execution.witness.effective, await realpath(witnessOut));
   assert.deepEqual(receipt.execution.witness.route, {

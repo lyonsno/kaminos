@@ -280,6 +280,9 @@ test('complete world-space carrier is admitted only when every route identity re
   assert.deepEqual(receipt.missingFields, []);
   assert.equal(receipt.packingSource.authority.kind, 'operator-authored');
   assert.equal(receipt.packingSource.authority.anatomicalAdmission, 'geometric-only');
+  assert.deepEqual(receipt.packingSource.formation, {
+    centerlineSmoothingReference: 'source-displacement',
+  }, 'authored intake must retain source-relative formation instead of silently using absolute smoothing');
   assert.deepEqual(receipt.packingSource.derivation, coordinateCarrier.derivation);
   assert.equal(receipt.packingSource.muscles.length, 2);
   assert.deepEqual(

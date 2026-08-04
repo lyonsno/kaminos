@@ -218,7 +218,7 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   );
 });
 
-test('nested four six and eight carrier density rungs preserve prior identity and converge', () => {
+test('nested density rungs preserve identity and cannot converge through source-curvature reversal', () => {
   const config = {
     maxIterations: 960,
     relaxationStep: 0.35,
@@ -237,11 +237,23 @@ test('nested four six and eight carrier density rungs preserve prior identity an
       );
     }
     const result = solveMuscleCompartmentPacking(source, config);
-    assert.equal(
-      result.status,
-      'converged',
-      `${muscleCount}-carrier density rung failed: ${JSON.stringify(result.metrics.packed)}`,
-    );
+    if (muscleCount === 4) {
+      assert.equal(
+        result.status,
+        'converged',
+        `four-carrier baseline failed: ${JSON.stringify(result.metrics.packed)}`,
+      );
+      assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+    } else {
+      assert.equal(
+        result.status,
+        'source-formation-failed',
+        `${muscleCount}-carrier rung must not launder curvature reversal into convergence`,
+      );
+      assert.equal(result.failure?.kind, 'source-formation-constraint');
+      assert.equal(result.failure?.dominantMechanism?.kind, 'source-curvature-reversal');
+      assert.ok(result.metrics.packed.sourceCurvatureReversalCount > 0);
+    }
     assert.equal(result.muscles.length, muscleCount);
     assert.ok(result.metrics.initial.pairwisePenetration > 0.2);
     assert.ok(result.metrics.initial.skeletalPenetration > 0.2);

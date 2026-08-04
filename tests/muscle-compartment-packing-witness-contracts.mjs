@@ -143,28 +143,31 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.match(String(memory.files.get(`${outDir}/index.html`)), /OrbitControls/);
 });
 
-test('eight-carrier density witness exposes every stable muscle identity', async () => {
+test('eight-carrier density witness refuses curvature-reversing packed geometry', async () => {
   const memory = memoryIo();
   const outDir = '/virtual/muscle-compartment-packing-density-eight';
   const source = createSyntheticMuscleDensityLadder(8);
-  const written = await writeMuscleCompartmentPackingWitness({
-    outDir,
-    source,
-    config: {
-      maxIterations:960,
-      relaxationStep:0.35,
-      smoothnessStep:0.035,
-      sampleCount:25,
-      convergenceTolerance:1e-7,
-    },
-    io:memory.io,
-  });
-  const witnessHtml = String(memory.files.get(`${outDir}/index.html`));
-
-  assert.equal(written.report.result.muscleCount, 8);
-  assert.equal(written.report.claims.authoredSourcePacking, 'not-assayed-by-synthetic-witness');
-  for (const muscle of source.muscles) assert.match(witnessHtml, new RegExp(muscle.id));
-  assert.match(witnessHtml, /#f4a261/);
+  await assert.rejects(
+    () => writeMuscleCompartmentPackingWitness({
+      outDir,
+      source,
+      config: {
+        maxIterations:960,
+        relaxationStep:0.35,
+        smoothnessStep:0.035,
+        sampleCount:25,
+        convergenceTolerance:1e-7,
+      },
+      io:memory.io,
+    }),
+    /source-formation-failed/i,
+  );
+  const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.result.status, 'source-formation-failed');
+  assert.equal(report.result.failure.kind, 'source-formation-constraint');
+  assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
+  assert.ok(!memory.files.has(`${outDir}/index.html`));
 });
 
 test('visual admission rejects blank captures and binds admitted pixels to current artifacts', async () => {

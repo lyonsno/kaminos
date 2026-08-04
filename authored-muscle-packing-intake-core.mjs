@@ -397,6 +397,9 @@ function buildPackingSource(routingFixture, coordinateCarrier, orderedMuscles, i
     input: structuredClone(input.coordinateCarrier),
     source: sourceIdentity(routingFixture),
     derivation: structuredClone(coordinateCarrier.derivation),
+    formation: {
+      centerlineSmoothingReference: 'source-displacement',
+    },
     coordinateSpace: structuredClone(coordinateCarrier.coordinateSpace),
     compartment: structuredClone(coordinateCarrier.compartment),
     obstacles: structuredClone(coordinateCarrier.obstacles),

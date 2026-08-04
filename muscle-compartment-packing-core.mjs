@@ -1681,7 +1681,23 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
         ...packed,
       });
       if (residualMaximum(packed) <= config.convergenceTolerance) {
-        status = 'converged';
+        if (packed.sourceCurvatureReversalCount > 0) {
+          status = 'source-formation-failed';
+          failure = {
+            phase: 'solve',
+            kind: 'source-formation-constraint',
+            sourceId: source.id,
+            iterations,
+            dominantMechanism: {
+              kind: 'source-curvature-reversal',
+              reversalCount: packed.sourceCurvatureReversalCount,
+              minimumSourceCurvatureCosine: packed.minimumSourceCurvatureCosine,
+            },
+            residuals: structuredClone(packed),
+          };
+        } else {
+          status = 'converged';
+        }
         break;
       }
       continuousCandidateFailed = true;
