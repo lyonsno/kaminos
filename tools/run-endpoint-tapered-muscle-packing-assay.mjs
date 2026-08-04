@@ -18,6 +18,24 @@ const SOURCE_COMPILER_LEVELS = Object.freeze([
   { id: 'baseline', crowdingFraction: 0 },
   { id: 'compiler-contract-sentinel', crowdingFraction: 0.001 },
 ]);
+const OWNED_ARTIFACT_PATHS = Object.freeze([
+  'authenticated-source.json',
+  'parent-preflight-result.json',
+  'derived-source.json',
+  'derivation-receipt.json',
+  'packing-result.json',
+  'parent/index.html',
+  'tapered/index.html',
+  'index.html',
+  'parent-before.png',
+  'tapered-before.png',
+  'tapered-packed.png',
+  'parent-before-capture-report.json',
+  'tapered-before-capture-report.json',
+  'tapered-packed-capture-report.json',
+  'visual-inspection.json',
+  'interpretation.md',
+]);
 
 function parseArguments(argv) {
   const parsed = {};
@@ -159,16 +177,9 @@ try {
   args = parseArguments(process.argv.slice(2));
   await mkdir(args.outputDirectory, { recursive: true });
   reportPath = path.join(args.outputDirectory, 'run-report.json');
-  outputPaths = [
-    'authenticated-source.json',
-    'parent-preflight-result.json',
-    'derived-source.json',
-    'derivation-receipt.json',
-    'packing-result.json',
-    'parent/index.html',
-    'tapered/index.html',
-    'index.html',
-  ].map(relative => path.join(args.outputDirectory, relative));
+  outputPaths = OWNED_ARTIFACT_PATHS.map(
+    relative => path.join(args.outputDirectory, relative),
+  );
   for (const target of outputPaths) {
     await unlink(target).catch(error => {
       if (error.code !== 'ENOENT') throw error;

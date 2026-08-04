@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -80,4 +80,42 @@ test('endpoint-taper assay fails loud on invalid taper without publishing a prim
   assert.equal(report.failurePhase, 'derive-source');
   assert.match(report.error, /radius multiplier must be in \(0, 1\)/);
   await assert.rejects(readFile(path.join(output, 'packing-result.json')), /ENOENT/);
+});
+
+test('failed reused-root assay clears stale visual captures, receipts, and interpretation', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-endpoint-taper-reused-'));
+  const stalePaths = [
+    'parent-before.png',
+    'tapered-before.png',
+    'tapered-packed.png',
+    'parent-before-capture-report.json',
+    'tapered-before-capture-report.json',
+    'tapered-packed-capture-report.json',
+    'visual-inspection.json',
+    'interpretation.md',
+  ];
+  await mkdir(path.join(output, 'parent'), { recursive: true });
+  await mkdir(path.join(output, 'tapered'), { recursive: true });
+  await Promise.all(stalePaths.map(relative => writeFile(path.join(output, relative), 'stale')));
+  await writeFile(path.join(output, 'packing-result.json'), '{"status":"stale-success"}\n');
+  await writeFile(path.join(output, 'parent', 'index.html'), 'stale parent viewer');
+  await writeFile(path.join(output, 'tapered', 'index.html'), 'stale taper viewer');
+
+  const failed = run(output, ['--endpoint-radius-multiplier', '1']);
+  assert.notEqual(failed.status, 0);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'derive-source');
+  assert.equal(report.outputs, null);
+  assert.equal(report.visual, null);
+  for (const relative of stalePaths) {
+    await assert.rejects(
+      readFile(path.join(output, relative)),
+      /ENOENT/,
+      `${relative} must not survive a failed reused-root run`,
+    );
+  }
+  await assert.rejects(readFile(path.join(output, 'packing-result.json')), /ENOENT/);
+  await assert.rejects(readFile(path.join(output, 'parent', 'index.html')), /ENOENT/);
+  await assert.rejects(readFile(path.join(output, 'tapered', 'index.html')), /ENOENT/);
 });
