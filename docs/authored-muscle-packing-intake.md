@@ -158,18 +158,27 @@ state with a byte-identical terminal receipt.
 Admission remains the phase boundary. An `authority-incomplete`, conflicting,
 identity-mismatched, or otherwise rejected carrier records
 `status: not-run-intake-refused`, effective witness path and route `null`, and
-writes no witness directory or success artifact. An admitted carrier invokes
-the existing deterministic solver and witness without changing selector,
-source-authority, or geometry semantics. A solver refusal writes its structured
-witness failure report and the intake receipt records the failed witness phase;
-it cannot look like a visually admitted route. When an output root is reused,
-the refusal clears any prior `source.json`, `packed.json`, and `index.html`
-before publishing the failed report, and records that cleanup in the report.
+writes no witness directory or success artifact. If that requested root already
+contains an earlier successful witness, intake refusal removes its
+`source.json`, `packed.json`, `index.html`, and `report.json` without invoking
+the solver and records the cleanup in the terminal receipt. An admitted carrier
+invokes the existing deterministic solver and witness without changing
+selector, source-authority, or geometry semantics. A solver refusal writes its
+structured witness failure report and the intake receipt records the failed
+witness phase; it cannot look like a visually admitted route. When an output
+root is reused, the solver refusal clears any prior `source.json`, `packed.json`,
+and `index.html` before publishing the failed report, and records that cleanup
+in the report.
 
 The witness directory may not contain the routing fixture, coordinate carrier,
 or terminal receipt. This is checked before input consumption so a rerun cannot
 overwrite authenticated inputs with `source.json`, `packed.json`, `index.html`,
-or `report.json`.
+or `report.json`. Validation compares lexical and real/effective witness roots
+plus each concrete artifact destination, so an existing root symlink or an
+artifact-level symlink cannot redirect writes onto an authenticated input. The
+receipt preserves the caller's requested path and records the canonical
+effective destination, including symlinked-parent resolution before the output
+directory exists.
 
 ## Producer and consumer boundary
 

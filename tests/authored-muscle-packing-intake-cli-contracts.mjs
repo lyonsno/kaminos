@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -236,8 +236,53 @@ test('candidate probe pipeline preserves exact intake refusal and emits no witne
     effective: null,
     route: { requested: 'muscle-compartment-packing-orbitable-v0', effective: null },
     status: 'not-run-intake-refused',
+    staleWitnessArtifactCleanup: {
+      status: 'cleared',
+      paths: ['source.json', 'packed.json', 'index.html', 'report.json'],
+    },
   });
   await assert.rejects(stat(witnessOut), /ENOENT/);
+});
+
+test('intake refusal clears a prior successful witness route without running the solver', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-reused-refusal-'));
+  const fixtureFile = join(directory, 'fixture.json');
+  const carrierFile = join(directory, 'carrier.json');
+  const receiptPath = join(directory, 'receipt.json');
+  const witnessOut = join(directory, 'witness');
+  const { fixture, carrier } = syntheticAdmittedInputs();
+  await Promise.all([
+    writeFile(fixtureFile, `${JSON.stringify(fixture, null, 2)}\n`),
+    writeFile(carrierFile, `${JSON.stringify(carrier, null, 2)}\n`),
+  ]);
+  const success = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+  assert.equal(success.status, 0, success.stderr);
+  assert.equal(JSON.parse(await readFile(join(witnessOut, 'report.json'))).status, 'complete');
+
+  const refusal = runTool([
+    '--routing-fixture', fixturePath.pathname,
+    '--coordinate-carrier', candidateProbePath.pathname,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+  assert.equal(refusal.status, 3, refusal.stderr);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'authority-incomplete');
+  assert.equal(receipt.execution.witness.status, 'not-run-intake-refused');
+  assert.equal(receipt.execution.witness.effective, null);
+  assert.equal(receipt.execution.witness.route.effective, null);
+  assert.deepEqual(receipt.execution.witness.staleWitnessArtifactCleanup, {
+    status: 'cleared',
+    paths: ['source.json', 'packed.json', 'index.html', 'report.json'],
+  });
+  for (const artifact of ['source.json', 'packed.json', 'index.html', 'report.json']) {
+    await assert.rejects(stat(join(witnessOut, artifact)), /ENOENT/);
+  }
 });
 
 test('admitted carrier pipeline drives the generic deterministic witness and binds its report', async () => {
@@ -263,7 +308,7 @@ test('admitted carrier pipeline drives the generic deterministic witness and bin
   assert.equal(receipt.status, 'admitted');
   assert.equal(receipt.admitted, true);
   assert.equal(receipt.execution.witness.requested, witnessOut);
-  assert.equal(receipt.execution.witness.effective, witnessOut);
+  assert.equal(receipt.execution.witness.effective, await realpath(witnessOut));
   assert.deepEqual(receipt.execution.witness.route, {
     requested: 'muscle-compartment-packing-orbitable-v0',
     effective: 'muscle-compartment-packing-orbitable-v0',
@@ -313,6 +358,69 @@ test('witness output cannot contain or overwrite authenticated pipeline inputs',
   assert.deepEqual(await readFile(fixtureFile), fixtureBytes);
   const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
   assert.equal(receipt.status, 'input-read-failed');
+  assert.equal(receipt.execution.phase, 'output-path-validation');
+  assert.match(receipt.reason, /witness output directory.*input|contain.*input/i);
+});
+
+test('symlinked witness root cannot bypass authenticated input containment', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-symlink-root-'));
+  const protectedDirectory = join(directory, 'protected');
+  const witnessOut = join(directory, 'witness-link');
+  const fixtureFile = join(protectedDirectory, 'fixture.json');
+  const carrierFile = join(directory, 'carrier.json');
+  const receiptPath = join(directory, 'receipt.json');
+  const { fixture, carrier } = syntheticAdmittedInputs();
+  const fixtureBytes = Buffer.from(`${JSON.stringify(fixture, null, 2)}\n`);
+  await mkdir(protectedDirectory, { recursive: true });
+  await Promise.all([
+    writeFile(fixtureFile, fixtureBytes),
+    writeFile(carrierFile, `${JSON.stringify(carrier, null, 2)}\n`),
+  ]);
+  await symlink(protectedDirectory, witnessOut, 'dir');
+
+  const result = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(await readFile(fixtureFile), fixtureBytes);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'input-read-failed');
+  assert.equal(receipt.execution.phase, 'output-path-validation');
+  assert.match(receipt.reason, /witness output directory.*input|contain.*input/i);
+  for (const artifact of ['source.json', 'packed.json', 'index.html', 'report.json']) {
+    await assert.rejects(stat(join(protectedDirectory, artifact)), /ENOENT/);
+  }
+});
+
+test('symlinked witness artifact cannot overwrite an authenticated input outside its root', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-symlink-artifact-'));
+  const witnessOut = join(directory, 'witness');
+  const fixtureFile = join(directory, 'fixture.json');
+  const carrierFile = join(directory, 'carrier.json');
+  const receiptPath = join(directory, 'receipt.json');
+  const { fixture, carrier } = syntheticAdmittedInputs();
+  const fixtureBytes = Buffer.from(`${JSON.stringify(fixture, null, 2)}\n`);
+  await mkdir(witnessOut, { recursive: true });
+  await Promise.all([
+    writeFile(fixtureFile, fixtureBytes),
+    writeFile(carrierFile, `${JSON.stringify(carrier, null, 2)}\n`),
+  ]);
+  await symlink(fixtureFile, join(witnessOut, 'source.json'));
+
+  const result = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.deepEqual(await readFile(fixtureFile), fixtureBytes);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
   assert.equal(receipt.execution.phase, 'output-path-validation');
   assert.match(receipt.reason, /witness output directory.*input|contain.*input/i);
 });

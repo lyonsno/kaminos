@@ -8,7 +8,7 @@ M31 and M47 have a coherent source-world endpoint measurement: helper transforms
 
 The remaining admission gap is not “find coordinates.” It is source authority for the measured centerline/radii and target volumes, real-world units, compartment bounds, and skeletal-obstacle membership. The current operator-path source graph also differs from the older fixture graph because requested/effective source path and newly preserved measurement payload participate in graph/file identity. That discrepancy is preserved as two binding conflicts; it is not repaired by substituting the older graph.
 
-Packer consumed `m31-m47/packer-authority-probe.json`, which is explicitly marked `notAnAdmittedCoordinateCarrier`, and returned `authority-incomplete` with `packingSource: null`. No `coordinate-carrier.json` exists.
+Packer consumed `m31-m47/packer-authority-probe.json`, which is explicitly marked `notAnAdmittedCoordinateCarrier`, through the composed intake-to-witness command. It returned `authority-incomplete` with `packingSource: null`, recorded the requested witness route as `not-run-intake-refused`, and created no witness directory. No `coordinate-carrier.json` exists.
 
 ## Source and replay identity
 
@@ -21,7 +21,7 @@ Packer consumed `m31-m47/packer-authority-probe.json`, which is explicitly marke
 - Source graph file SHA-256: `a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785`
 - Parent atlas id SHA-256: `b9a857559f7d20e1efe18e0a29103ba7cb2347dc3e0b20ac0df409929af6b77b`
 - Authority receipt id SHA-256: `64d586c0831d48868ac51f4b1d519df0dac37073c95ad96047c352542907a490`
-- Packer receipt id SHA-256: `196195295ffd64f6a0e2c54a4c412b512c6acb00518b9fa6b6435fa91c80144b`
+- Packer receipt id SHA-256: `6a1cf5b6e0b46925bebec2c70bbcc5a429b6388c631e5971fb24cbe296da5077`
 
 Two executions of the current Blender extractor produced byte-identical `source-extraction.json`. Recompiling the graph, atlas, receipt, Packer probe, and Packer receipt reproduced the same file SHA-256 values.
 

@@ -8,14 +8,34 @@
       "coordinateCarrierFileSha256": "cab51a67377ffbf848a301ffc823f361ff96f9c82b58140359f75f72ea426d50",
       "receipt": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-intake-receipt.json",
       "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
-      "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075",
+      "witnessOut": null
     },
-    "lastTrustworthyEvidence": "admission-receipt-constructed",
-    "phase": "admission-complete",
+    "lastTrustworthyEvidence": "intake refusal constructed; witness not run",
+    "phase": "pipeline-refused",
     "requested": {
       "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-authority-probe.json",
       "receipt": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-intake-receipt.json",
-      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json"
+      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "witnessOut": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packing-witness"
+    },
+    "witness": {
+      "effective": null,
+      "requested": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packing-witness",
+      "route": {
+        "effective": null,
+        "requested": "muscle-compartment-packing-orbitable-v0"
+      },
+      "staleWitnessArtifactCleanup": {
+        "paths": [
+          "source.json",
+          "packed.json",
+          "index.html",
+          "report.json"
+        ],
+        "status": "cleared"
+      },
+      "status": "not-run-intake-refused"
     }
   },
   "input": {
@@ -59,7 +79,7 @@
   ],
   "packingSource": null,
   "reason": "muscle-31 selected-row authority state candidate is not admitted",
-  "receiptSha256": "196195295ffd64f6a0e2c54a4c412b512c6acb00518b9fa6b6435fa91c80144b",
+  "receiptSha256": "6a1cf5b6e0b46925bebec2c70bbcc5a429b6388c631e5971fb24cbe296da5077",
   "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
   "source": {
     "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",

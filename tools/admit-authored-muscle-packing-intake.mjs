@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import {
   AUTHORED_MUSCLE_PACKING_INTAKE_RECEIPT_SCHEMA,
@@ -12,6 +12,13 @@ import {
   MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE,
   writeMuscleCompartmentPackingWitness,
 } from '../muscle-compartment-packing-witness.mjs';
+
+const WITNESS_ARTIFACT_PATHS = Object.freeze([
+  'source.json',
+  'packed.json',
+  'index.html',
+  'report.json',
+]);
 
 function usage() {
   return [
@@ -73,11 +80,18 @@ async function writeReceipt(path, value) {
 }
 
 async function effectiveDestination(path) {
-  try {
-    return await realpath(path);
-  } catch (error) {
-    if (error?.code === 'ENOENT') return resolve(path);
-    throw error;
+  let existingAncestor = resolve(path);
+  const missingSuffix = [];
+  while (true) {
+    try {
+      return resolve(await realpath(existingAncestor), ...missingSuffix.reverse());
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      const parent = dirname(existingAncestor);
+      if (parent === existingAncestor) return resolve(path);
+      missingSuffix.push(basename(existingAncestor));
+      existingAncestor = parent;
+    }
   }
 }
 
@@ -90,6 +104,33 @@ async function safeFailureSidecar(requestedPath, protectedPaths) {
     if (!protectedPaths.has(await effectiveDestination(candidate))) return candidate;
     suffix += 1;
   }
+}
+
+function isAtOrInside(path, root) {
+  const relation = relative(root, path);
+  return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation));
+}
+
+async function clearRefusedWitnessArtifacts(outputRoot) {
+  const results = await Promise.allSettled(WITNESS_ARTIFACT_PATHS.map(async path => {
+    try {
+      await unlink(resolve(outputRoot, path));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }));
+  const failures = results.flatMap((result, index) => result.status === 'rejected'
+    ? [{ path: WITNESS_ARTIFACT_PATHS[index], reason: result.reason?.message || String(result.reason) }]
+    : []);
+  const cleanup = failures.length === 0
+    ? { status: 'cleared', paths: [...WITNESS_ARTIFACT_PATHS] }
+    : { status: 'failed', paths: [...WITNESS_ARTIFACT_PATHS], failures };
+  if (failures.length > 0) {
+    const error = new Error('refused intake could not clear the requested witness artifacts');
+    error.staleWitnessArtifactCleanup = cleanup;
+    throw error;
+  }
+  return cleanup;
 }
 
 function identity(kind, id, bytes) {
@@ -146,15 +187,31 @@ try {
     throw new Error(`receipt path must not alias an input; redirected receipt to ${effective.receipt}`);
   }
   if (effective.witnessOut) {
-    const witnessRoot = resolve(effective.witnessOut);
-    const protectedOutputs = [
+    const witnessRoots = [...new Set([
+      resolve(effective.witnessOut),
+      await effectiveDestination(effective.witnessOut),
+    ])];
+    const protectedOutputs = [...new Set([
       resolve(effective.receipt),
+      await effectiveDestination(effective.receipt),
       ...inputPaths.map(path => resolve(path)),
       ...resolvedInputs,
-    ];
-    if (protectedOutputs.some(path => path === witnessRoot || path.startsWith(`${witnessRoot}/`))) {
+    ])];
+    const witnessArtifactDestinations = new Set();
+    for (const root of witnessRoots) {
+      for (const artifact of WITNESS_ARTIFACT_PATHS) {
+        const path = resolve(root, artifact);
+        witnessArtifactDestinations.add(path);
+        witnessArtifactDestinations.add(await effectiveDestination(path));
+      }
+    }
+    if (
+      protectedOutputs.some(path => witnessRoots.some(root => isAtOrInside(path, root))) ||
+      protectedOutputs.some(path => witnessArtifactDestinations.has(path))
+    ) {
       throw new Error('witness output directory must not contain an authenticated input or receipt');
     }
+    effective.witnessOut = witnessRoots.at(-1);
   }
 
   phase = 'read-routing-fixture';
@@ -190,6 +247,8 @@ try {
   });
   let witness = null;
   if (effective.witnessOut && !admitted.admitted) {
+    phase = 'clear-refused-witness';
+    const staleWitnessArtifactCleanup = await clearRefusedWitnessArtifacts(effective.witnessOut);
     effective.witnessOut = null;
     phase = 'pipeline-refused';
     lastTrustworthyEvidence = 'intake refusal constructed; witness not run';
@@ -201,6 +260,7 @@ try {
         effective: null,
       },
       status: 'not-run-intake-refused',
+      staleWitnessArtifactCleanup,
     };
   } else if (effective.witnessOut) {
     phase = 'write-packing-witness';
@@ -246,8 +306,8 @@ try {
   const terminal = withReceiptIdentity({
     ...admitted,
     execution: {
-      phase: effective.witnessOut ? phase : 'admission-complete',
-      lastTrustworthyEvidence: effective.witnessOut
+      phase: witness ? phase : 'admission-complete',
+      lastTrustworthyEvidence: witness
         ? lastTrustworthyEvidence
         : 'admission-receipt-constructed',
       requested,
@@ -290,6 +350,9 @@ try {
         routingFixtureFileSha256: routingBytes ? sha256(routingBytes) : null,
         coordinateCarrierFileSha256: coordinateBytes ? sha256(coordinateBytes) : null,
       },
+      ...(error.staleWitnessArtifactCleanup
+        ? { staleWitnessArtifactCleanup: error.staleWitnessArtifactCleanup }
+        : {}),
     },
   });
   try {
