@@ -62,8 +62,15 @@ def test_blender_bootstraps_its_script_directory_before_importing_the_core():
     assert adapter.index("sys.path.insert") < adapter.index("from source_plate_core import")
 
 
+def test_blender_51_uses_the_scene_compositing_node_group():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert "scene.compositing_node_group" in adapter
+
+
 if __name__ == "__main__":
     test_four_channel_paths_are_unique_and_caller_addressed()
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
     test_blender_adapter_never_saves_the_loaded_source()
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
+    test_blender_51_uses_the_scene_compositing_node_group()

@@ -367,7 +367,15 @@ def _configure_compositor(bpy: Any, output_dir: Path) -> None:
     view_layer.use_pass_normal = True
     view_layer.use_pass_object_index = True
     scene.use_nodes = True
-    tree = scene.node_tree
+    if hasattr(scene, "compositing_node_group"):
+        tree = scene.compositing_node_group
+        if tree is None:
+            tree = bpy.data.node_groups.new(
+                "SOURCE_PLATE_COMPOSITOR", "CompositorNodeTree"
+            )
+            scene.compositing_node_group = tree
+    else:
+        tree = scene.node_tree
     tree.nodes.clear()
     render_layers = tree.nodes.new("CompositorNodeRLayers")
     composite = tree.nodes.new("CompositorNodeComposite")
