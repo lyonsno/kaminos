@@ -19,7 +19,7 @@
   "execution": {
     "effective": {
       "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/packer-authority-probe.json",
-      "coordinateCarrierFileSha256": "be869a0a7fc53e3adb8f50f71baffdf16e795d4130db95925edb75fe1010f1fe",
+      "coordinateCarrierFileSha256": "ee0c392d09e9449baa60caddf52ec953cfdfd453675b0811e20e234eeacf7f2c",
       "receipt": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/packer-intake-receipt.json",
       "routingFixture": "fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
       "routingFixtureFileSha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5"
@@ -35,14 +35,14 @@
   "input": {
     "coordinateCarrier": {
       "effective": {
-        "id": "packer-authority-probe-ef5b6cb016287c1f",
+        "id": "packer-authority-probe-d69f4b8466451913",
         "kind": "authored-coordinate-carrier",
-        "sha256": "be869a0a7fc53e3adb8f50f71baffdf16e795d4130db95925edb75fe1010f1fe"
+        "sha256": "ee0c392d09e9449baa60caddf52ec953cfdfd453675b0811e20e234eeacf7f2c"
       },
       "requested": {
-        "id": "packer-authority-probe-ef5b6cb016287c1f",
+        "id": "packer-authority-probe-d69f4b8466451913",
         "kind": "authored-coordinate-carrier",
-        "sha256": "be869a0a7fc53e3adb8f50f71baffdf16e795d4130db95925edb75fe1010f1fe"
+        "sha256": "ee0c392d09e9449baa60caddf52ec953cfdfd453675b0811e20e234eeacf7f2c"
       }
     },
     "routingFixture": {
@@ -63,25 +63,33 @@
     "coordinateCarrier.derivation.selectionAuthority.sharedFields.compartment",
     "coordinateCarrier.derivation.selectionAuthority.sharedFields.obstacles",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.attachments.insertion.position",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.centerline",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.targetVolume",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-34].requiredFields.volumeAuthority",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.attachments.insertion.position",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.centerline",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.targetVolume",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-13].requiredFields.volumeAuthority",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.attachments.insertion.position",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.centerline",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.targetVolume",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-12].requiredFields.volumeAuthority",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.attachments.origin.position",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.attachments.insertion.position",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.centerline",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.targetVolume",
     "coordinateCarrier.derivation.selectionAuthority.rows[muscle-45].requiredFields.volumeAuthority"
   ],
   "packingSource": null,
   "reason": "muscle-34 selected-row authority state candidate is not admitted",
-  "receiptSha256": "b71c2b7f19a5580d5bf0841ea929d725f72339b93e3913f3886e35a194526834",
+  "receiptSha256": "880a76eb75c82d76b534a6ff5e40408502dbbd2ff22bbd73686e99a0fc63a231",
   "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
   "source": {
     "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",

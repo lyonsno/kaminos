@@ -8,7 +8,7 @@
   "derivation": {
     "atlas": {
       "id": "coordinate-parent-atlas-3f4c65867a776edf",
-      "sha256": "8098190ddc3666e3152243c0943ccf5d28c7b9aa332b16956ed0bd709cde0f92"
+      "sha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8"
     },
     "kind": "atlas-route-subset",
     "selectedConstructionIds": [
@@ -19,15 +19,15 @@
     ],
     "selectionAuthority": {
       "receipt": {
-        "id": "coordinate-authority-receipt-d574c9d36349c45b",
-        "sha256": "ef5b6cb016287c1f0428f4f77d15defd19e2bbbf9956cb980c5878923a54bc8d"
+        "id": "coordinate-authority-receipt-970ed8ac10777d30",
+        "sha256": "d69f4b846645191338c4ac8d444142ee7753af35baa57fa5839a3b64c19cb619"
       },
       "rows": [
         {
           "constructionId": "muscle-34",
           "requiredFields": {
-            "attachments.insertion.position": "admitted",
-            "attachments.origin.position": "admitted",
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
             "centerline": "candidate",
             "targetVolume": "candidate",
             "volumeAuthority": "candidate"
@@ -37,8 +37,8 @@
         {
           "constructionId": "muscle-13",
           "requiredFields": {
-            "attachments.insertion.position": "admitted",
-            "attachments.origin.position": "admitted",
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
             "centerline": "candidate",
             "targetVolume": "candidate",
             "volumeAuthority": "candidate"
@@ -48,8 +48,8 @@
         {
           "constructionId": "muscle-12",
           "requiredFields": {
-            "attachments.insertion.position": "admitted",
-            "attachments.origin.position": "admitted",
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
             "centerline": "candidate",
             "targetVolume": "candidate",
             "volumeAuthority": "candidate"
@@ -59,8 +59,8 @@
         {
           "constructionId": "muscle-45",
           "requiredFields": {
-            "attachments.insertion.position": "admitted",
-            "attachments.origin.position": "admitted",
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
             "centerline": "candidate",
             "targetVolume": "candidate",
             "volumeAuthority": "candidate"
@@ -79,11 +79,11 @@
     "kind": "candidate-authority-consumer-probe",
     "notAnAdmittedCoordinateCarrier": true,
     "sourceReceipt": {
-      "id": "coordinate-authority-receipt-d574c9d36349c45b",
-      "sha256": "ef5b6cb016287c1f0428f4f77d15defd19e2bbbf9956cb980c5878923a54bc8d"
+      "id": "coordinate-authority-receipt-970ed8ac10777d30",
+      "sha256": "d69f4b846645191338c4ac8d444142ee7753af35baa57fa5839a3b64c19cb619"
     }
   },
-  "id": "packer-authority-probe-ef5b6cb016287c1f",
+  "id": "packer-authority-probe-d69f4b8466451913",
   "muscles": [
     {
       "attachments": {

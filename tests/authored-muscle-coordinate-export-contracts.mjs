@@ -334,6 +334,44 @@ test('a matching routing endpoint without source_mesh authority remains a candid
   assert.equal(result.coordinateCarrier, null);
 });
 
+test('an explicit fixture candidate ceiling outranks route-local source_mesh labels', () => {
+  const candidateFixture = routingFixture();
+  candidateFixture.authority = { geometryAuthority: 'candidate' };
+  candidateFixture.selection = {
+    authorityReceipt: {
+      admitted: false,
+      rows: ['route-a', 'route-b'].map(constructionId => ({
+        constructionId,
+        state: 'candidate',
+        requiredFields: {
+          'attachments.origin.position': 'candidate',
+          'attachments.insertion.position': 'candidate',
+          centerline: 'candidate',
+          targetVolume: 'candidate',
+          volumeAuthority: 'candidate',
+        },
+      })),
+    },
+  };
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: candidateFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+
+  for (const row of result.authorityReceipt.rows) {
+    assert.equal(row.state, 'candidate');
+    assert.equal(row.fields['attachments.origin.position'].state, 'candidate');
+    assert.equal(row.fields['attachments.origin.position'].selected, null);
+    assert.equal(row.fields['attachments.insertion.position'].state, 'candidate');
+    assert.equal(row.fields['attachments.insertion.position'].selected, null);
+  }
+  assert.equal(result.coordinateCarrier, null);
+});
+
 test('a routing endpoint assigned to the wrong helper remains an explicit identity conflict', () => {
   const staleFixture = routingFixture();
   staleFixture.conditions.correct.routes[0].origin.assignedHandleInstanceId = 'wrong-origin-handle';

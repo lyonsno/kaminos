@@ -253,7 +253,31 @@ function visibleSurfaceEndpoint(muscle, endpoint) {
   );
 }
 
-function endpointField(muscle, endpoint, fixtureRoute) {
+function fixtureEndpointAuthority(routingFixture, constructionId, endpoint) {
+  const receipt = routingFixture?.selection?.authorityReceipt;
+  const receiptPresent = receipt && typeof receipt === 'object';
+  const receiptRow = Array.isArray(receipt?.rows)
+    ? receipt.rows.find(row => row.constructionId === constructionId)
+    : null;
+  const field = `attachments.${endpoint}.position`;
+  const fieldState = receiptRow?.requiredFields?.[field] ?? null;
+  const geometryState = routingFixture?.authority?.geometryAuthority ?? null;
+  const explicitStates = [
+    ...(receiptPresent ? [fieldState] : []),
+    ...(geometryState ? [geometryState] : []),
+  ];
+  return {
+    admitted: explicitStates.length === 0 || explicitStates.every(state => state === 'admitted'),
+    evidenceLocators: [
+      ...(receiptPresent
+        ? [`routingFixture.selection.authorityReceipt.rows[constructionId=${constructionId}].requiredFields.${field}`]
+        : []),
+      ...(geometryState ? ['routingFixture.authority.geometryAuthority'] : []),
+    ],
+  };
+}
+
+function endpointField(muscle, endpoint, fixtureRoute, routingFixture) {
   const constructionId = graphConstructionId(muscle);
   const component = muscle.components?.[endpoint];
   const nativeSamples = curveNativeSamples(muscle);
@@ -262,6 +286,10 @@ function endpointField(muscle, endpoint, fixtureRoute) {
   const fixtureEndpoint = fixtureRoute?.[endpoint];
   const expectedHandleInstanceId = component?.identity?.instance_id ?? null;
   const fixtureHandleMatches = fixtureEndpoint?.assignedHandleInstanceId === expectedHandleInstanceId;
+  const fixtureAuthority = fixtureEndpointAuthority(routingFixture, constructionId, endpoint);
+  const fixtureEndpointAdmitted = fixtureEndpoint?.sourceAuthority === 'source_mesh'
+    && fixtureHandleMatches
+    && fixtureAuthority.admitted;
   const candidates = [];
   if (component) {
     candidates.push({
@@ -295,9 +323,7 @@ function endpointField(muscle, endpoint, fixtureRoute) {
       kind: 'routing-fixture-endpoint',
       value: structuredClone(fixtureEndpoint.point),
       method: 'reviewed-routing-fixture-selection',
-      authority: fixtureEndpoint.sourceAuthority === 'source_mesh' && fixtureHandleMatches
-        ? 'admitted'
-        : 'candidate',
+      authority: fixtureEndpointAdmitted ? 'admitted' : 'candidate',
       ...(!fixtureHandleMatches ? {
         authorityConflict: {
           field: 'assignedHandleInstanceId',
@@ -305,14 +331,15 @@ function endpointField(muscle, endpoint, fixtureRoute) {
           actual: fixtureEndpoint.assignedHandleInstanceId ?? null,
         },
       } : {}),
-      evidenceLocators: [`routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`],
+      evidenceLocators: [
+        `routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`,
+        ...fixtureAuthority.evidenceLocators,
+      ],
     });
   }
   return fieldRecord({
     candidates,
-    authorityCandidateKind: fixtureEndpoint?.sourceAuthority === 'source_mesh' && fixtureHandleMatches
-      ? 'routing-fixture-endpoint'
-      : null,
+    authorityCandidateKind: fixtureEndpointAdmitted ? 'routing-fixture-endpoint' : null,
   });
 }
 
@@ -380,8 +407,8 @@ function routeRow(muscle, routingFixture) {
   const constructionId = graphConstructionId(muscle);
   const fixtureRoute = matchingFixtureRoute(routingFixture, muscle);
   const fields = {
-    'attachments.origin.position': endpointField(muscle, 'origin', fixtureRoute),
-    'attachments.insertion.position': endpointField(muscle, 'insertion', fixtureRoute),
+    'attachments.origin.position': endpointField(muscle, 'origin', fixtureRoute, routingFixture),
+    'attachments.insertion.position': endpointField(muscle, 'insertion', fixtureRoute, routingFixture),
     centerline: centerlineField(muscle),
     targetVolume: targetVolumeField(muscle),
     volumeAuthority: volumeAuthorityField(muscle),
