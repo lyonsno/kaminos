@@ -939,6 +939,7 @@ test('explicit capsule-axis belly turn opens the k8 source-cone allocation regio
     bellyRadius:0.52,
     turnRadians:5 * Math.PI / 36,
     chirality:'positive',
+    radialReference:'source-knot',
     fixedAttachmentEnvelope:'normalized-sine-zero-at-endpoints',
     fallbackUsed:false,
   });
@@ -964,4 +965,83 @@ test('explicit capsule-axis belly turn opens the k8 source-cone allocation regio
   assert.ok(allocated.metrics.packed.compartmentEscape <= common.convergenceTolerance);
   assert.equal(allocated.metrics.packed.nonFiniteValueCount, 0);
   assert.equal(allocated.metrics.packed.nonPositiveRadiusCount, 0);
+});
+
+test('attachment-bridge radial reference relieves a refined k8 transition without curvature reversal', () => {
+  const baselineParent = createSyntheticMuscleDensityLadder(8);
+  const { source:baselineSource } = deriveMuscleCompartmentPackingSensitivitySource(
+    baselineParent,
+    {
+      axis:'attachment-radial-scale',
+      obstacleId:'central-skeletal-shaft',
+      scaleFactor:1.1,
+    },
+  );
+  const refinedParent = createSyntheticMuscleDensityLadder(8, { knotCount:6 });
+  const { source:refinedSource } = deriveMuscleCompartmentPackingSensitivitySource(
+    refinedParent,
+    {
+      axis:'attachment-radial-scale',
+      obstacleId:'central-skeletal-shaft',
+      scaleFactor:1.1,
+    },
+  );
+  const common = {
+    maxIterations:480,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    maximumSourceBendEnergyRatio:1.05,
+    minimumSourceCurvatureCosine:0.3,
+    minimumSourceTangentCosine:0,
+    minimumPairwiseRelationCosine:0.9,
+    curvatureUpdate:'unconstrained',
+    clusterUpdate:'capsule-axis-belly-turn',
+    clusterObstacleId:'central-skeletal-shaft',
+    clusterBellyRadius:0.52,
+    clusterTurnRadians:5 * Math.PI / 36,
+    clusterChirality:'positive',
+  };
+  const baseline = solveMuscleCompartmentPacking(baselineSource, common);
+  const relieved = solveMuscleCompartmentPacking(refinedSource, {
+    ...common,
+    clusterRadialReference:'attachment-bridge',
+    clusterTurnRadians:Math.PI / 36,
+    curvatureUpdate:'source-sign-halfspace',
+  });
+
+  assert.equal(relieved.clusterProjection.radialReference, 'attachment-bridge');
+  assert.equal(relieved.clusterProjection.turnRadians, Math.PI / 36);
+  assert.deepEqual(relieved.curvatureProjection, {
+    requestedUpdate:'source-sign-halfspace',
+    effectiveUpdate:'source-sign-halfspace',
+    fallbackUsed:false,
+  });
+  assert.deepEqual(refinedSource.longitudinalResolution, {
+    kind:'analytic-source-curve-resample-v0',
+    sampleCount:6,
+    comparisonSource:baselineParent.input.effective,
+  });
+  assert.ok(
+    relieved.metrics.packed.pairwisePenetration <
+      baseline.metrics.packed.pairwisePenetration * 0.25,
+    `attachment bridge did not materially relieve the transition fan: ${JSON.stringify({ baseline:baseline.metrics.packed, relieved:relieved.metrics.packed })}`,
+  );
+  assert.equal(relieved.metrics.packed.skeletalPenetration, 0);
+  assert.ok(relieved.metrics.packed.minimumSourceCurvatureCosine >= 0.3);
+  assert.ok(relieved.metrics.packed.minimumSourceTangentCosine > 0);
+  assert.equal(relieved.metrics.packed.sourceTangentReversalCount, 0);
+  assert.equal(relieved.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(relieved.metrics.packed.minimumPairwiseRelationCosine >= 0.9);
+  assert.equal(relieved.metrics.packed.pairwiseRelationReversalCount, 0);
+  assert.equal(relieved.metrics.packed.endpointDrift, 0);
+  assert.ok(relieved.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(relieved.metrics.packed.compartmentEscape <= common.convergenceTolerance);
+  assert.equal(relieved.metrics.packed.nonFiniteValueCount, 0);
+  assert.equal(relieved.metrics.packed.nonPositiveRadiusCount, 0);
 });

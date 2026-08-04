@@ -1,0 +1,105 @@
+{
+  "observedAt": "2026-08-04T22:18:48Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/",
+  "variants": [
+    {
+      "id": "refined-source-knot-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-c24145bd0bad9738ef8d/refined-source-knot-025/before.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/refined-source-knot-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-c24145bd0bad9738ef8d/refined-source-knot-025/packed.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/refined-source-knot-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The refined source-knot 25-degree output retains a recognizable bowed/hourglass family but becomes visibly faceted and crosses through crowded transition regions. Pairwise residual 0.35338 and sixteen source-curvature reversals agree with the kinked visible construction."
+    },
+    {
+      "id": "attachment-bridge-005",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-c24145bd0bad9738ef8d/attachment-bridge-005/before.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/attachment-bridge-005/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-c24145bd0bad9738ef8d/attachment-bridge-005/packed.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/attachment-bridge-005/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The attachment-bridge 5-degree output cuts pairwise residual to 0.03109 and retains positive curvature direction, but visibly straightens the authored bow into a generic ring of nearly uniform cylinders. Bend retention 0.01276 predicts the observed constructional collapse; numerical clearance does not admit it."
+    },
+    {
+      "id": "attachment-bridge-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-c24145bd0bad9738ef8d/attachment-bridge-025/before.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/attachment-bridge-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-c24145bd0bad9738ef8d/attachment-bridge-025/packed.png",
+          "captureReport": "run-c24145bd0bad9738ef8d/attachment-bridge-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The attachment-bridge 25-degree output recovers some visible bow but introduces an S-like faceted transition, leaves pairwise residual 0.08612, and places minimum curvature cosine essentially on the sign boundary. It is a useful tradeoff endpoint, not a plausible packed construction."
+    }
+  ]
+}

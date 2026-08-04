@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before",
+    "outputPath": "repo://artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/before.png",
+    "reportPath": "repo://artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/capture-before-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 53708,
+    "processGroupId": 53708,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 53708,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2956,
+    "retainedBytes": 2956,
+    "truncated": false,
+    "tail": "[0804/181743.034949:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/181743.090465:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/181743.468778:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before (0)\n[0804/181743.468881:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before (0)\n[0804/181743.470211:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/181743.504285:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before (0)\n[0804/181743.506508:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/181743.517758:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before (0)\n[0804/181743.518581:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/181743.529783:INFO:CONSOLE:0] \"[.WebGL-0x12400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/?state=before (0)\n273077 bytes written to file repo://artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/before.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/before.png",
+    "sizeBytes": 273077,
+    "sha256": "462b732b77079608da018ecba8f659d7c10e3440ff85ec5f05d36dec9aeda89a",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 70,
+      "idatBytes": 272216
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/muscle-compartment-packing-sensitivity-transition-refinement-v0/run-c24145bd0bad9738ef8d/attachment-bridge-005/before.png",
+      "sizeBytes": 273077,
+      "sha256": "462b732b77079608da018ecba8f659d7c10e3440ff85ec5f05d36dec9aeda89a",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 70,
+        "idatBytes": 272216
+      }
+    }
+  }
+}

@@ -674,6 +674,7 @@ function validateConfig(config) {
     'clusterBellyRadius',
     'clusterTurnRadians',
     'clusterChirality',
+    'clusterRadialReference',
   ];
   if (config.clusterUpdate === 'capsule-axis-belly-turn') {
     if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
@@ -691,8 +692,21 @@ function validateConfig(config) {
     if (!['positive', 'negative'].includes(config.clusterChirality)) {
       throw new Error('capsule-axis-belly-turn requires positive or negative clusterChirality');
     }
-    if (config.curvatureUpdate !== undefined && config.curvatureUpdate !== 'unconstrained') {
-      throw new Error('capsule-axis-belly-turn requires unconstrained curvatureUpdate');
+    if (
+      config.clusterRadialReference !== undefined &&
+      !['source-knot', 'attachment-bridge'].includes(config.clusterRadialReference)
+    ) {
+      throw new Error(
+        'capsule-axis-belly-turn clusterRadialReference must be source-knot or attachment-bridge',
+      );
+    }
+    if (
+      config.curvatureUpdate !== undefined &&
+      !['unconstrained', 'source-sign-halfspace'].includes(config.curvatureUpdate)
+    ) {
+      throw new Error(
+        'capsule-axis-belly-turn curvatureUpdate must be unconstrained or source-sign-halfspace',
+      );
     }
   } else {
     for (const key of bellyTurnKeys) {
@@ -915,6 +929,7 @@ function clusterProjectionReceipt(config) {
     receipt.bellyRadius = config.clusterBellyRadius;
     receipt.turnRadians = config.clusterTurnRadians;
     receipt.chirality = config.clusterChirality;
+    receipt.radialReference = config.clusterRadialReference || 'source-knot';
     receipt.fixedAttachmentEnvelope = 'normalized-sine-zero-at-endpoints';
   }
   receipt.fallbackUsed = false;
@@ -2091,6 +2106,9 @@ function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, con
   const chirality = config.clusterChirality === 'positive' ? 1 : -1;
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
+    const attachmentRadialLengths = [sourceCenterline[0], sourceCenterline.at(-1)].map(
+      knot => length(subtract(knot.position, closestPointOnObstacle(knot.position, obstacle))),
+    );
     const envelopeMaximum = Math.max(
       ...sourceCenterline.slice(1, -1).map((_, interiorIndex) =>
         Math.sin(Math.PI * (interiorIndex + 1) / (sourceCenterline.length - 1))),
@@ -2107,8 +2125,11 @@ function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, con
       }
       const progress = knotIndex / (muscle.centerline.length - 1);
       const envelope = Math.sin(Math.PI * progress) / envelopeMaximum;
-      const targetRadius = sourceRadialLength +
-        (config.clusterBellyRadius - sourceRadialLength) * envelope;
+      const radialReference = config.clusterRadialReference === 'attachment-bridge'
+        ? attachmentRadialLengths[0] * (1 - progress) + attachmentRadialLengths[1] * progress
+        : sourceRadialLength;
+      const targetRadius = radialReference +
+        (config.clusterBellyRadius - radialReference) * envelope;
       const turnedDirection = rotateAroundAxis(
         scale(sourceRadial, 1 / sourceRadialLength),
         axis,
