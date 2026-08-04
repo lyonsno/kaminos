@@ -688,13 +688,13 @@
   "visualInspection": {
     "status": "completed-agent-inspection",
     "disposition": "visually-rejected",
-    "observedAt": "2026-08-04T21:32:00Z",
+    "observedAt": "2026-08-04T21:28:00Z",
     "portfolio": "index.html",
     "inspectionInputReportSha256": "b2f6ad1440232b2ca7411d1b082e47e81efe2f9c5ac2a6799bb99cedfb3de25a",
     "priorPortfolioSha256": "a21d9b46554d41aa8bde95872eeeb3b281e42cc76b6bbb6dd63a1f3629348ebc",
     "variantCount": 3,
     "portfolioSha256": "1f1da0769ac4609d9b7195722ec1ef21dd43fb4710fba809c133f11d370697e5",
     "receipt": "repo://artifacts/muscle-compartment-packing-sensitivity-source-frame-v0/visual-inspection.json",
-    "receiptSha256": "0e854eca85d3520a3c697439645be2e838f9254f18f18f9248bd73974c04b383"
+    "receiptSha256": "409091e23ca71eb04235f919c32f8a697ec0fec2a30bb37cc091c6043245c85b"
   }
 }
