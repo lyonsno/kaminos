@@ -31,4 +31,19 @@ assert.equal(failure.failurePhase, 'assay-execution');
 assert.equal(failure.effectiveRoute, null);
 assert.match(failure.error, /finite and nonnegative/);
 
+const parseFailedPath = join(directory, 'parse-failed.json');
+await assert.rejects(
+  runCollarAssayCli([
+    '--output', parseFailedPath,
+    '--unknown', 'value',
+  ]),
+  /unknown collar assay argument --unknown/,
+);
+const parseFailure = JSON.parse(await readFile(parseFailedPath, 'utf8'));
+assert.equal(parseFailure.status, 'failed');
+assert.equal(parseFailure.failurePhase, 'argument-parsing');
+assert.equal(parseFailure.effectiveRoute, null);
+assert.equal(parseFailure.lastTrustworthyEvidence, 'caller output path parsed');
+assert.match(parseFailure.error, /unknown collar assay argument --unknown/);
+
 console.log('analytical elbow collar assay CLI contracts passed');

@@ -8,7 +8,12 @@
     "id": "synthetic-mammalian-elbow-v0",
     "schema": "kaminos.analytical-elbow-descriptor.v0",
     "requestedRoute": "analytical-cage",
-    "effectiveRoute": "analytical-cage"
+    "effectiveRoute": "analytical-cage",
+    "fallbackUsed": false,
+    "authority": {
+      "kind": "synthetic-proxy",
+      "anatomicalAdmission": "structural-hypothesis"
+    }
   },
   "poseDegrees": [
     0,
@@ -21,6 +26,13 @@
     0.48,
     0.72
   ],
+  "thresholds": {
+    "maximumEdgeStretchRatio": 1.15,
+    "maximumAreaStretchRatio": 1.3,
+    "maximumRelativeVolumeDrift": 0.15,
+    "maximumRigidZoneError": 1e-12,
+    "minimumRigidZoneSampleCount": 25
+  },
   "sleeve": {
     "vertexCount": 986,
     "triangleCount": 1968,
@@ -37,6 +49,8 @@
         "relativeVolumeDrift": 0,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 529,
+        "childRigidSampleCount": 457,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -52,6 +66,8 @@
         "relativeVolumeDrift": 0,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 433,
+        "childRigidSampleCount": 385,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -67,6 +83,8 @@
         "relativeVolumeDrift": 0,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 337,
+        "childRigidSampleCount": 289,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -82,6 +100,8 @@
         "relativeVolumeDrift": 0,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 241,
+        "childRigidSampleCount": 193,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -97,6 +117,8 @@
         "relativeVolumeDrift": 0.007416514109193019,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 529,
+        "childRigidSampleCount": 457,
         "invertedTriangleCount": 18,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -112,6 +134,8 @@
         "relativeVolumeDrift": 0.0011931111822089566,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 433,
+        "childRigidSampleCount": 385,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -127,6 +151,8 @@
         "relativeVolumeDrift": 0.0005888982256327094,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 337,
+        "childRigidSampleCount": 289,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -142,6 +168,8 @@
         "relativeVolumeDrift": 0.0003826626704251153,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 241,
+        "childRigidSampleCount": 193,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -157,6 +185,8 @@
         "relativeVolumeDrift": 0.033888411541036396,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 529,
+        "childRigidSampleCount": 457,
         "invertedTriangleCount": 22,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -172,6 +202,8 @@
         "relativeVolumeDrift": 0.006208872959785088,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 433,
+        "childRigidSampleCount": 385,
         "invertedTriangleCount": 43,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -187,6 +219,8 @@
         "relativeVolumeDrift": 0.0030736151618097275,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 337,
+        "childRigidSampleCount": 289,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0
@@ -202,6 +236,8 @@
         "relativeVolumeDrift": 0.0019983203654098183,
         "maximumParentRigidError": 0,
         "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 241,
+        "childRigidSampleCount": 193,
         "invertedTriangleCount": 0,
         "openBoundaryEdgeCount": 0,
         "nonFiniteVertexCount": 0

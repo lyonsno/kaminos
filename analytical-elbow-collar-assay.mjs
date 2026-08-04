@@ -17,13 +17,24 @@ function parseArguments(argv) {
   const options = { collarHalfWidths: [0, 0.24, 0.48, 0.72] };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === '--output') options.output = argv[++index];
+    if (argument === '--output') {
+      options.output = argv[++index];
+      if (!options.output) throw new Error('collar assay --output requires a path');
+    }
     else if (argument === '--collar-half-widths') {
-      options.collarHalfWidths = argv[++index].split(',').map(Number);
+      const value = argv[++index];
+      if (!value) throw new Error('collar assay --collar-half-widths requires a value');
+      options.collarHalfWidths = value.split(',').map(Number);
     } else throw new Error(`unknown collar assay argument ${argument}`);
   }
   if (!options.output) throw new Error('collar assay requires --output');
   return options;
+}
+
+function extractOutputPath(argv) {
+  const outputIndex = argv.indexOf('--output');
+  if (outputIndex < 0 || !argv[outputIndex + 1]) return null;
+  return resolve(argv[outputIndex + 1]);
 }
 
 async function writeJsonAtomically(path, value) {
@@ -34,12 +45,14 @@ async function writeJsonAtomically(path, value) {
 }
 
 export async function runCollarAssayCli(argv) {
-  let outputPath = null;
+  let outputPath = extractOutputPath(argv);
   let requestedWidths = null;
+  let failurePhase = 'argument-parsing';
   try {
     const options = parseArguments(argv);
     outputPath = resolve(options.output);
     requestedWidths = options.collarHalfWidths;
+    failurePhase = 'assay-execution';
     const source = createAnalyticalElbowConsumerExport(
       createAnalyticalElbowDescriptor(),
       { flexionDegrees: [0, 35, 80] },
@@ -58,7 +71,7 @@ export async function runCollarAssayCli(argv) {
         requestedRoute: 'analytical-elbow-graded-collar',
         effectiveRoute: null,
         requestedCollarHalfWidths: requestedWidths,
-        failurePhase: 'assay-execution',
+        failurePhase,
         lastTrustworthyEvidence: 'caller output path parsed',
         error: error.message,
       });

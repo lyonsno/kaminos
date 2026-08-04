@@ -1,7 +1,16 @@
+import {
+  ANALYTICAL_ELBOW_DESCRIPTOR_SCHEMA,
+  ANALYTICAL_ELBOW_EXPORT_SCHEMA,
+  ANALYTICAL_ELBOW_POSE_SCHEMA,
+} from './analytical-elbow-core.mjs';
+
 export const COLLAR_ASSAY_SCHEMA = 'kaminos.shape-bearing-collar-assay.v0';
 
 const ROUTE = 'analytical-elbow-graded-collar';
 const EPSILON = 1e-12;
+const MAXIMUM_EDGE_STRETCH_RATIO = 1.15;
+const MAXIMUM_AREA_STRETCH_RATIO = 1.3;
+const MAXIMUM_RELATIVE_VOLUME_DRIFT = 0.15;
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -177,14 +186,18 @@ function measure(mesh, vertices, flexionDegrees, collarHalfWidth) {
   const radians = flexionDegrees * Math.PI / 180;
   let maximumParentRigidError = 0;
   let maximumChildRigidError = 0;
+  let parentRigidSampleCount = 0;
+  let childRigidSampleCount = 0;
   for (const vertex of vertices) {
     if (vertex.axial >= collarHalfWidth) {
+      parentRigidSampleCount += 1;
       maximumParentRigidError = Math.max(
         maximumParentRigidError,
         distance(vertex.rest, vertex.posed),
       );
     }
     if (vertex.axial <= -collarHalfWidth) {
+      childRigidSampleCount += 1;
       maximumChildRigidError = Math.max(
         maximumChildRigidError,
         distance(rotateAroundZ(vertex.rest, radians), vertex.posed),
@@ -199,6 +212,8 @@ function measure(mesh, vertices, flexionDegrees, collarHalfWidth) {
     relativeVolumeDrift: Math.abs(posedVolume - restVolume) / restVolume,
     maximumParentRigidError,
     maximumChildRigidError,
+    parentRigidSampleCount,
+    childRigidSampleCount,
     invertedTriangleCount,
     openBoundaryEdgeCount: [...edges.values()].filter(count => count !== 2).length,
     nonFiniteVertexCount: vertices.filter(vertex =>
@@ -210,6 +225,16 @@ function validateSource(source) {
   if (!source || source.effectiveRoute !== 'analytical-cage') {
     throw new Error('shape-bearing collar assay requires effective analytical-cage source route');
   }
+  const hasReviewedIdentity = source?.schema === ANALYTICAL_ELBOW_EXPORT_SCHEMA &&
+    source.sourceSchema === ANALYTICAL_ELBOW_DESCRIPTOR_SCHEMA &&
+    source.requestedRoute === 'analytical-cage' &&
+    source.effectiveRoute === 'analytical-cage' &&
+    source.fallbackUsed === false &&
+    source.sourceAuthority?.kind === 'synthetic-proxy' &&
+    source.sourceAuthority?.anatomicalAdmission === 'structural-hypothesis';
+  if (!hasReviewedIdentity) {
+    throw new Error('shape-bearing collar assay requires reviewed analytical elbow source identity');
+  }
   if (source.sourceId !== 'synthetic-mammalian-elbow-v0') {
     throw new Error('shape-bearing collar assay requires the reviewed analytical elbow source');
   }
@@ -217,6 +242,11 @@ function validateSource(source) {
     throw new Error('shape-bearing collar assay requires at least one source pose');
   }
   for (const pose of source.poses) {
+    if (pose.schema !== ANALYTICAL_ELBOW_POSE_SCHEMA ||
+        pose.sourceSchema !== ANALYTICAL_ELBOW_DESCRIPTOR_SCHEMA ||
+        pose.sourceAuthority !== 'synthetic-proxy') {
+      throw new Error('shape-bearing collar assay requires reviewed analytical elbow source identity');
+    }
     if (!Number.isFinite(pose.effectiveFlexionDegrees)) {
       throw new Error('shape-bearing collar assay source pose must be finite');
     }
@@ -237,6 +267,7 @@ export function runShapeBearingCollarAssay({ source, collarHalfWidths }) {
     }
   }
   const mesh = createSleeve();
+  const minimumRigidZoneSampleCount = mesh.radialSegments + 1;
   const rows = source.poses.flatMap(pose => collarHalfWidths.map(collarHalfWidth => {
     const vertices = deformSleeve(
       mesh,
@@ -252,11 +283,13 @@ export function runShapeBearingCollarAssay({ source, collarHalfWidths }) {
     const qualifies = metrics.invertedTriangleCount === 0 &&
       metrics.openBoundaryEdgeCount === 0 &&
       metrics.nonFiniteVertexCount === 0 &&
-      metrics.maximumAbsoluteLogEdgeStrain <= Math.log(1.15) &&
-      metrics.maximumAbsoluteLogAreaStrain <= Math.log(1.3) &&
-      metrics.relativeVolumeDrift <= 0.15 &&
+      metrics.maximumAbsoluteLogEdgeStrain <= Math.log(MAXIMUM_EDGE_STRETCH_RATIO) &&
+      metrics.maximumAbsoluteLogAreaStrain <= Math.log(MAXIMUM_AREA_STRETCH_RATIO) &&
+      metrics.relativeVolumeDrift <= MAXIMUM_RELATIVE_VOLUME_DRIFT &&
       metrics.maximumParentRigidError <= EPSILON &&
-      metrics.maximumChildRigidError <= EPSILON;
+      metrics.maximumChildRigidError <= EPSILON &&
+      metrics.parentRigidSampleCount >= minimumRigidZoneSampleCount &&
+      metrics.childRigidSampleCount >= minimumRigidZoneSampleCount;
     return {
       flexionDegrees: pose.effectiveFlexionDegrees,
       collarHalfWidth,
@@ -278,9 +311,18 @@ export function runShapeBearingCollarAssay({ source, collarHalfWidths }) {
       schema: source.sourceSchema,
       requestedRoute: source.requestedRoute,
       effectiveRoute: source.effectiveRoute,
+      fallbackUsed: source.fallbackUsed,
+      authority: structuredClone(source.sourceAuthority),
     },
     poseDegrees: source.poses.map(pose => pose.effectiveFlexionDegrees),
     collarHalfWidths: [...collarHalfWidths],
+    thresholds: {
+      maximumEdgeStretchRatio: MAXIMUM_EDGE_STRETCH_RATIO,
+      maximumAreaStretchRatio: MAXIMUM_AREA_STRETCH_RATIO,
+      maximumRelativeVolumeDrift: MAXIMUM_RELATIVE_VOLUME_DRIFT,
+      maximumRigidZoneError: EPSILON,
+      minimumRigidZoneSampleCount,
+    },
     sleeve: {
       vertexCount: mesh.vertices.length,
       triangleCount: mesh.triangles.length,
