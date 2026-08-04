@@ -124,6 +124,73 @@ const TARGET_FIRST_MULTIVIEW_CONDITIONS = Object.freeze([
   }),
 ]);
 
+const REFERENCE_CARDINALITY_CONDITIONS = Object.freeze([
+  Object.freeze({
+    id: 'target-one',
+    referenceViewIds: Object.freeze(['target-three-quarter']),
+    authoritativeReferenceIndices: Object.freeze([1]),
+    requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile',
+    probeAxis: 'reference-cardinality',
+  }),
+  Object.freeze({
+    id: 'target-double',
+    referenceViewIds: Object.freeze(['target-three-quarter', 'target-three-quarter']),
+    authoritativeReferenceIndices: Object.freeze([1, 2]),
+    requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_2ref',
+    probeAxis: 'reference-cardinality',
+  }),
+  Object.freeze({
+    id: 'target-side',
+    referenceViewIds: Object.freeze(['target-three-quarter', 'side']),
+    authoritativeReferenceIndices: Object.freeze([1]),
+    requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_2ref',
+    probeAxis: 'two-reference-order',
+  }),
+  Object.freeze({
+    id: 'side-target',
+    referenceViewIds: Object.freeze(['side', 'target-three-quarter']),
+    authoritativeReferenceIndices: Object.freeze([2]),
+    requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_2ref',
+    probeAxis: 'two-reference-order',
+  }),
+  Object.freeze({
+    id: 'target-triple-control',
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'target-three-quarter',
+      'target-three-quarter',
+    ]),
+    authoritativeReferenceIndices: Object.freeze([1, 2, 3]),
+    requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+    probeAxis: 'reference-cardinality',
+    reuseConditionId: 'target-all-slots',
+  }),
+]);
+
+function createReferenceCardinalityPrompt(condition) {
+  let authority;
+  if (condition.referenceViewIds.length === 1) {
+    authority = 'The supplied reference image is the authoritative target view.';
+  } else if (condition.authoritativeReferenceIndices.length === condition.referenceViewIds.length) {
+    authority = 'All supplied reference images repeat the authoritative target view.';
+  } else {
+    const targetIndex = condition.authoritativeReferenceIndices[0];
+    const supplementalIndices = condition.referenceViewIds
+      .map((_, index) => index + 1)
+      .filter(index => index !== targetIndex);
+    authority = [
+      `Reference image ${targetIndex} is the authoritative target view.`,
+      `Use reference ${supplementalIndices.join(' and ')} only to resolve occluded structure belonging to that same organism.`,
+    ].join(' ');
+  }
+  return [
+    'Every supplied reference image shows the same authored organism; repeated images are deliberate controls.',
+    authority,
+    'Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution.',
+    'Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.',
+  ].join(' ');
+}
+
 const vec3 = (x, y, z) => ({ x, y, z });
 
 function add(a, b) {
@@ -292,6 +359,34 @@ export function createMetaballTargetFirstMultiviewTranche() {
   };
 }
 
+export function createMetaballReferenceCardinalityTranche() {
+  return {
+    schema: 'kaminos.lirm-metaball-reference-cardinality.v0',
+    status: 'source-contract-frozen',
+    conditions: REFERENCE_CARDINALITY_CONDITIONS.map(condition => ({
+      ...condition,
+      referenceViewIds: [...condition.referenceViewIds],
+      authoritativeReferenceIndices: [...condition.authoritativeReferenceIndices],
+      prompt: createReferenceCardinalityPrompt(condition),
+    })),
+    fixedGenerator: {
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seeds: [80401],
+      provisionalCarrierKind: 'depth',
+      carrierDisposition: 'projection-sentinel-depth-selected',
+    },
+    claimCeiling: [
+      'Experimental evidence for reference-cardinality and two-reference-order effects on one square depth Bowplan source.',
+      'No exact target-projection preservation, semantic reference obedience, multiview geometric consistency, or reconstructed volume claim.',
+    ].join(' '),
+  };
+}
+
 async function sha256(path) {
   const bytes = await readFile(path);
   return {
@@ -433,6 +528,78 @@ export async function writeMetaballTargetFirstMultiviewSources({
       downstreamResize: `${tranche.fixedGenerator.width}x${tranche.fixedGenerator.height}`,
     },
     views,
+    conditions,
+    fixedGenerator: tranche.fixedGenerator,
+    claimCeiling: tranche.claimCeiling,
+  };
+  const manifestPath = join(outDir, 'manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
+}
+
+export async function writeMetaballReferenceCardinalitySources({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-reference-cardinality-v0'),
+  sourceArtifactRoot = join(
+    process.cwd(),
+    'artifacts',
+    'lirm-metaball-target-first-multiview-v0',
+  ),
+} = {}) {
+  const tranche = createMetaballReferenceCardinalityTranche();
+  const sourceManifest = JSON.parse(await readFile(join(sourceArtifactRoot, 'manifest.json'), 'utf8'));
+  const sourceJobs = JSON.parse(await readFile(join(sourceArtifactRoot, 'greenroom-jobs.json'), 'utf8'));
+  const viewsById = new Map(sourceManifest.views.map(view => [view.id, view]));
+  const jobsByCondition = new Map(sourceJobs.jobs.map(job => [job.conditionId, job]));
+  await mkdir(outDir, { recursive: true });
+  const promptDir = join(outDir, 'prompts');
+  await mkdir(promptDir, { recursive: true });
+
+  const conditions = [];
+  for (const condition of tranche.conditions) {
+    const promptPath = join(promptDir, `${condition.id}.txt`);
+    await writeFile(promptPath, `${condition.prompt}\n`);
+    const promptIdentity = await sha256(promptPath);
+    const references = condition.referenceViewIds.map(viewId => {
+      const source = viewsById.get(viewId)?.sourceImages?.depth;
+      if (!source?.relativePath || !source?.sha256) {
+        throw new Error(`missing square depth source for view ${viewId}`);
+      }
+      return {
+        viewId,
+        path: relative(process.cwd(), join(sourceArtifactRoot, source.relativePath)),
+        sha256: source.sha256,
+      };
+    });
+    const persisted = {
+      ...condition,
+      references,
+      promptPath: relative(outDir, promptPath),
+      promptSha256: promptIdentity.sha256,
+    };
+    if (condition.reuseConditionId) {
+      const reused = jobsByCondition.get(condition.reuseConditionId);
+      if (!reused?.jobId) {
+        throw new Error(`missing reusable job for ${condition.reuseConditionId}`);
+      }
+      persisted.reuseJobId = reused.jobId;
+      persisted.reuseOutputPath = relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'generated', condition.reuseConditionId, 'seed-80401', 'output.png'),
+      );
+      persisted.reuseReceiptPath = relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'receipts', `${condition.reuseConditionId}.json`),
+      );
+    }
+    conditions.push(persisted);
+  }
+
+  const manifest = {
+    schema: tranche.schema,
+    status: 'sources-complete',
+    sourceArtifact: relative(process.cwd(), sourceArtifactRoot),
+    sourceSchema: sourceManifest.schema,
+    sourceRasterPolicy: sourceManifest.effectiveConfig.sourceRasterPolicy,
     conditions,
     fixedGenerator: tranche.fixedGenerator,
     claimCeiling: tranche.claimCeiling,

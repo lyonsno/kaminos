@@ -1,0 +1,165 @@
+{
+  "schema": "kaminos.lirm-metaball-reference-cardinality.v0",
+  "status": "sources-complete",
+  "sourceArtifact": "artifacts/lirm-metaball-target-first-multiview-v0",
+  "sourceSchema": "kaminos.lirm-metaball-target-first-multiview.v0",
+  "sourceRasterPolicy": "generator-native-square",
+  "conditions": [
+    {
+      "id": "target-one",
+      "referenceViewIds": [
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "probeAxis": "reference-cardinality",
+      "prompt": "Every supplied reference image shows the same authored organism; repeated images are deliberate controls. The supplied reference image is the authoritative target view. Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "prompts/target-one.txt",
+      "promptSha256": "sha256:78d2f19836eb4124dea2484d8acd27d20d8e2e9b79b807f732495f32ff5e27a1"
+    },
+    {
+      "id": "target-double",
+      "referenceViewIds": [
+        "target-three-quarter",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        2
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "probeAxis": "reference-cardinality",
+      "prompt": "Every supplied reference image shows the same authored organism; repeated images are deliberate controls. All supplied reference images repeat the authoritative target view. Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "prompts/target-double.txt",
+      "promptSha256": "sha256:bc2437be1d9e784b80854299f3a80160af60378baa0914c3b6d70eb29b43907a"
+    },
+    {
+      "id": "target-side",
+      "referenceViewIds": [
+        "target-three-quarter",
+        "side"
+      ],
+      "authoritativeReferenceIndices": [
+        1
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "probeAxis": "two-reference-order",
+      "prompt": "Every supplied reference image shows the same authored organism; repeated images are deliberate controls. Reference image 1 is the authoritative target view. Use reference 2 only to resolve occluded structure belonging to that same organism. Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        }
+      ],
+      "promptPath": "prompts/target-side.txt",
+      "promptSha256": "sha256:5914c895cfd54a625ff37566057d5140fa0fc1a779b8e64c62a9ed379ce8250c"
+    },
+    {
+      "id": "side-target",
+      "referenceViewIds": [
+        "side",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        2
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "probeAxis": "two-reference-order",
+      "prompt": "Every supplied reference image shows the same authored organism; repeated images are deliberate controls. Reference image 2 is the authoritative target view. Use reference 1 only to resolve occluded structure belonging to that same organism. Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "references": [
+        {
+          "viewId": "side",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "prompts/side-target.txt",
+      "promptSha256": "sha256:c7618281ae8e2fd7bdcdb38499ef4c17b06c5f22089b426789bbeaefb5b60215"
+    },
+    {
+      "id": "target-triple-control",
+      "referenceViewIds": [
+        "target-three-quarter",
+        "target-three-quarter",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        2,
+        3
+      ],
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "probeAxis": "reference-cardinality",
+      "reuseConditionId": "target-all-slots",
+      "prompt": "Every supplied reference image shows the same authored organism; repeated images are deliberate controls. All supplied reference images repeat the authoritative target view. Preserve the authoritative target camera, outer silhouette, body proportions, support placement, and major mass distribution. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "prompts/target-triple-control.txt",
+      "promptSha256": "sha256:bc2437be1d9e784b80854299f3a80160af60378baa0914c3b6d70eb29b43907a",
+      "reuseJobId": "b8e9bcbbf918",
+      "reuseOutputPath": "artifacts/lirm-metaball-target-first-multiview-v0/generated/target-all-slots/seed-80401/output.png",
+      "reuseReceiptPath": "artifacts/lirm-metaball-target-first-multiview-v0/receipts/target-all-slots.json"
+    }
+  ],
+  "fixedGenerator": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seeds": [
+      80401
+    ],
+    "provisionalCarrierKind": "depth",
+    "carrierDisposition": "projection-sentinel-depth-selected"
+  },
+  "claimCeiling": "Experimental evidence for reference-cardinality and two-reference-order effects on one square depth Bowplan source. No exact target-projection preservation, semantic reference obedience, multiview geometric consistency, or reconstructed volume claim."
+}
