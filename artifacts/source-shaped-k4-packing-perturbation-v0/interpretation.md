@@ -46,13 +46,16 @@ Pairwise penetration falls by only about 20%, 23%, and 31%, leaving residuals
 of 4.445, 4.448, and 4.462. The three outputs nearly collapse to the same high
 residual despite their different initial pressures.
 
-## Budget discrimination
+## Exploratory budget checks
 
-This is not an arbitrary 640-iteration cutoff. Doubling the budget to 1,280
-iterations leaves residual pairwise penetration at 4.465, 4.462, and 4.469.
-Increasing the relaxation step from 0.18 to 0.30 at 640 iterations leaves it at
-4.444, 4.448, and 4.463. Neither change materially improves or differentiates
-the packed state.
+Two local orientation checks were run outside the hash-bound artifact route.
+Doubling the budget to 1,280 iterations left residual pairwise penetration at
+4.465, 4.462, and 4.469. Increasing the relaxation step from 0.18 to 0.30 at
+640 iterations left it at 4.444, 4.448, and 4.463. These values motivated the
+next mechanism comparison, but they are informal exploratory notes: the
+committed machine-readable result does not bind their requested/effective
+configs, outputs, or replay hashes, so they do not rule out a hidden budget
+effect within the admitted evidence claim.
 
 ## Interpretation
 
@@ -65,10 +68,11 @@ The assay answers the first campaign question partially and usefully:
   this mechanism at the measured candidate volumes and fixed attachment
   geometry.
 
-The strongest supported reading is a limit of this formation under the current
-projection mechanism, not a source-authority blocker and not a hidden
-iteration-budget limit. It does not yet distinguish an infeasible volume/pose
-combination from a missing per-construction allocation degree of freedom.
+The strongest supported reading is a residual wall for this formation under
+the committed projection configuration, not a source-authority blocker. It
+does not yet distinguish an infeasible volume/pose combination, a missing
+per-construction allocation degree of freedom, or a solver-configuration
+effect outside the committed route.
 
 The immediate consumer experiment is therefore Packer's independently selected
 per-construction axial/azimuthal occupancy allocation on this exact fixture,

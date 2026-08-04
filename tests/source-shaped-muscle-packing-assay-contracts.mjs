@@ -170,4 +170,23 @@ test('parent-atlas and candidate disagreements fail before a provisional fixture
     }),
     /candidate.*disagree|disagree.*candidate/i,
   );
+
+  const centerlineConflict = structuredClone(fixture.parentAtlas);
+  const centerlineRoute = centerlineConflict.routeInventory.find(
+    route => route.constructionId === K4_IDS[0],
+  );
+  const disagreeingCenterline = structuredClone(centerlineRoute.fields.centerline.candidates[0]);
+  disagreeingCenterline.value.resampledSamples[1].position[0] += 0.25;
+  centerlineRoute.fields.centerline.candidates.push(disagreeingCenterline);
+  const { atlasSha256: staleSha256, ...centerlineCore } = centerlineConflict;
+  centerlineConflict.atlasSha256 = packing.hashMusclePackingCanonicalJson(centerlineCore);
+  assert.throws(
+    () => api.createSourceShapedPackingPerturbationSeries({
+      ...fixture,
+      parentAtlas: centerlineConflict,
+      requestedConstructionIds: K4_IDS,
+      levels: LEVELS,
+    }),
+    /centerline.*candidate.*disagree/i,
+  );
 });
