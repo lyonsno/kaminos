@@ -93,8 +93,16 @@ def _descriptor(source: Path, *, plate_name: str = "cat-ecorche-right-sagittal-r
         "channels": [
             {"name": "rgb", "encoding": "png"},
             {"name": "silhouette", "encoding": "png"},
-            {"name": "depth", "encoding": "openexr"},
-            {"name": "normal", "encoding": "openexr"},
+            {
+                "name": "depth",
+                "encoding": "openexr",
+                "representation": "normalized_camera_z_rgb",
+            },
+            {
+                "name": "normal",
+                "encoding": "openexr",
+                "representation": "camera_space_unit_normal_rgb",
+            },
         ],
     }
 
@@ -111,6 +119,7 @@ def _output_records(root: Path, descriptor: dict) -> dict[str, dict]:
             "status": "complete",
             "path": str(path),
             "encoding": channel["encoding"],
+            "representation": channel.get("representation"),
             "width": descriptor["render"]["width"],
             "height": descriptor["render"]["height"],
             "byteLength": len(payload),
@@ -287,6 +296,19 @@ def test_complete_output_set_returns_identity_bound_receipt():
         ]
 
 
+def test_data_output_cannot_impersonate_another_representation():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source = root / "source.blend"
+        source.write_bytes(b"operator-authored-source")
+        descriptor = _descriptor(source)
+        outputs = _output_records(root, descriptor)
+        outputs["depth"]["representation"] = "beauty_rgba"
+
+        with _raises(SourcePlateContractError, match="wrong representation"):
+            validate_complete_outputs(descriptor, outputs)
+
+
 if __name__ == "__main__":
     test_descriptor_identity_is_canonical_and_binds_authored_state()
     test_caller_addressed_sibling_descriptors_do_not_stomp_each_other()
@@ -297,3 +319,4 @@ if __name__ == "__main__":
     test_one_artifact_cannot_impersonate_a_complete_channel_set()
     test_missing_dimensions_metadata_cannot_complete()
     test_complete_output_set_returns_identity_bound_receipt()
+    test_data_output_cannot_impersonate_another_representation()

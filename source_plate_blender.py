@@ -360,6 +360,53 @@ def _apply_presentation(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, An
     }
 
 
+def _emission_material(bpy: Any, name: str) -> tuple[Any, Any, Any]:
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    tree = material.node_tree
+    tree.nodes.clear()
+    output = tree.nodes.new("ShaderNodeOutputMaterial")
+    emission = tree.nodes.new("ShaderNodeEmission")
+    emission.inputs["Strength"].default_value = 1.0
+    tree.links.new(emission.outputs["Emission"], output.inputs["Surface"])
+    return material, tree, emission
+
+
+def _depth_material(bpy: Any, *, clip_start: float, clip_end: float) -> Any:
+    material, tree, emission = _emission_material(bpy, "SOURCE_PLATE_DEPTH")
+    camera_data = tree.nodes.new("ShaderNodeCameraData")
+    mapper = tree.nodes.new("ShaderNodeMapRange")
+    mapper.data_type = "FLOAT"
+    mapper.clamp = True
+    mapper.inputs["From Min"].default_value = clip_start
+    mapper.inputs["From Max"].default_value = clip_end
+    mapper.inputs["To Min"].default_value = 0.0
+    mapper.inputs["To Max"].default_value = 1.0
+    tree.links.new(camera_data.outputs["View Z Depth"], mapper.inputs["Value"])
+    tree.links.new(mapper.outputs["Result"], emission.inputs["Color"])
+    return material
+
+
+def _normal_material(bpy: Any) -> Any:
+    material, tree, emission = _emission_material(bpy, "SOURCE_PLATE_NORMAL")
+    geometry = tree.nodes.new("ShaderNodeNewGeometry")
+    transform = tree.nodes.new("ShaderNodeVectorTransform")
+    transform.vector_type = "NORMAL"
+    transform.convert_from = "WORLD"
+    transform.convert_to = "CAMERA"
+    multiply = tree.nodes.new("ShaderNodeVectorMath")
+    multiply.operation = "MULTIPLY"
+    multiply.inputs[1].default_value = (0.5, 0.5, 0.5)
+    add = tree.nodes.new("ShaderNodeVectorMath")
+    add.operation = "ADD"
+    add.inputs[1].default_value = (0.5, 0.5, 0.5)
+    tree.links.new(geometry.outputs["True Normal"], transform.inputs["Vector"])
+    tree.links.new(transform.outputs["Vector"], multiply.inputs[0])
+    tree.links.new(multiply.outputs["Vector"], add.inputs[0])
+    tree.links.new(add.outputs["Vector"], emission.inputs["Color"])
+    return material
+
+
 def _write_silhouette_mask(bpy: Any, source_path: Path, output_path: Path) -> None:
     source_image = bpy.data.images.load(str(source_path), check_existing=False)
     width, height = source_image.size
@@ -391,16 +438,18 @@ def _write_silhouette_mask(bpy: Any, source_path: Path, output_path: Path) -> No
 def _record_outputs(descriptor: Mapping[str, Any], paths: Mapping[str, Path]) -> dict[str, Any]:
     identity = descriptor_sha256(descriptor)
     render = descriptor["render"]
-    encoding_by_channel = {
-        channel["name"]: channel["encoding"] for channel in descriptor["channels"]
+    channel_by_name = {
+        channel["name"]: channel for channel in descriptor["channels"]
     }
     records: dict[str, Any] = {}
     for name, path in paths.items():
+        channel_contract = channel_by_name[name]
         sha256, byte_length = _sha256_file(path)
         records[name] = {
             "status": "complete",
             "path": str(path.resolve()),
-            "encoding": encoding_by_channel[name],
+            "encoding": channel_contract["encoding"],
+            "representation": channel_contract.get("representation"),
             "width": render["width"],
             "height": render["height"],
             "byteLength": byte_length,
@@ -475,23 +524,34 @@ def render_descriptor(
         bpy.ops.render.render(write_still=True)
 
         view_layer = bpy.context.view_layer
+        scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        )
+        scene.world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.0
+        depth_material = _depth_material(
+            bpy,
+            clip_start=float(camera_receipt["clipStart"]),
+            clip_end=float(camera_receipt["clipEnd"]),
+        )
+        normal_material = _normal_material(bpy)
         scene.render.image_settings.file_format = "OPEN_EXR"
-        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_mode = "RGB"
         scene.render.image_settings.color_depth = "32"
-        view_layer.use_pass_z = True
-        view_layer.use_pass_normal = False
+        view_layer.material_override = depth_material
         scene.render.filepath = str(outputs["depth"])
         bpy.ops.render.render(write_still=True)
 
         scene.render.image_settings.file_format = "OPEN_EXR"
-        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_mode = "RGB"
         scene.render.image_settings.color_depth = "32"
-        view_layer.use_pass_z = False
-        view_layer.use_pass_normal = True
+        view_layer.material_override = normal_material
         scene.render.filepath = str(outputs["normal"])
         bpy.ops.render.render(write_still=True)
 
-        view_layer.use_pass_normal = False
+        view_layer.material_override = None
         scene.render.image_settings.file_format = "PNG"
         scene.render.image_settings.color_mode = "RGBA"
         scene.render.image_settings.color_depth = "8"
@@ -525,6 +585,14 @@ def render_descriptor(
                 "lighting": lighting_receipt,
                 "presentation": presentation_receipt,
                 "materials": material_receipt,
+                "channelSemantics": {
+                    channel["name"]: {
+                        key: value
+                        for key, value in channel.items()
+                        if key != "name"
+                    }
+                    for channel in descriptor["channels"]
+                },
                 "blenderVersion": bpy.app.version_string,
             },
             "outputs": validation,
