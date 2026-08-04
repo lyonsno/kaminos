@@ -126,6 +126,51 @@ class SourcePlateAssayCliContracts(unittest.TestCase):
             self.assertFalse((root / "manifest.json").exists())
             self.assertFalse((root / "plate.html").exists())
 
+    def test_cli_has_no_external_image_mode_for_authoritative_plates(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(_spec(root)))
+            plate_path = root / "plate.html"
+
+            completed = subprocess.run(
+                [sys.executable, str(CLI), "--input", str(spec_path), "--manifest", str(root / "manifest.json"),
+                 "--plate", str(plate_path), "--report", str(root / "report.json"), "--external-images"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("unrecognized arguments: --external-images", completed.stderr)
+            self.assertFalse(plate_path.exists())
+
+    def test_plate_write_failure_preserves_validated_manifest_identity(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            spec_path = root / "spec.json"
+            spec_path.write_text(json.dumps(_spec(root)))
+            manifest_path = root / "manifest.json"
+            plate_path = root / "plate-directory"
+            plate_path.mkdir()
+            report_path = root / "report.json"
+
+            completed = subprocess.run(
+                [sys.executable, str(CLI), "--input", str(spec_path), "--manifest", str(manifest_path),
+                 "--plate", str(plate_path), "--report", str(report_path)],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            manifest = json.loads(manifest_path.read_text())
+            report = json.loads(report_path.read_text())
+            self.assertEqual(report["failurePhase"], "plate-write")
+            self.assertEqual(report["manifestSha256"], manifest["manifestSha256"])
+            self.assertEqual(report["lastTrustworthyEvidence"]["validatedManifestSha256"], manifest["manifestSha256"])
+            self.assertTrue(report["manifestDurablyWritten"])
+
 
 if __name__ == "__main__":
     unittest.main()
