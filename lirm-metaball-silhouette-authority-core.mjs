@@ -43,6 +43,59 @@ const FIXED_PROMPT = [
   'Present one intact healthy quadruped with a continuous closed outer surface and four load-bearing supports on a clean pale studio background.',
 ].join(' ');
 
+const TARGET_FIRST_MULTIVIEW_PROMPT = [
+  'Every supplied reference image shows the same authored organism from a different camera.',
+  'The first reference image is the authoritative target view: preserve its exact camera, outer silhouette, body proportions, support placement, and major mass distribution.',
+  'Use later reference images only to resolve occluded three-dimensional structure belonging to that same organism.',
+  'Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the first view authored outline.',
+].join(' ');
+
+const TARGET_FIRST_MULTIVIEW_VIEWS = Object.freeze([
+  Object.freeze({ id: 'target-three-quarter', role: 'authoritative-target', cameraYawRadians: 0.42 }),
+  Object.freeze({ id: 'front', role: 'supplemental-structure', cameraYawRadians: 0 }),
+  Object.freeze({ id: 'side', role: 'supplemental-structure', cameraYawRadians: 1.3 }),
+  Object.freeze({ id: 'rear-three-quarter', role: 'supplemental-structure', cameraYawRadians: 2.2 }),
+]);
+
+const TARGET_FIRST_MULTIVIEW_CONDITIONS = Object.freeze([
+  Object.freeze({
+    id: 'target-only',
+    distinctViewCount: 1,
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'target-three-quarter',
+      'target-three-quarter',
+    ]),
+  }),
+  Object.freeze({
+    id: 'target-plus-front',
+    distinctViewCount: 2,
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'target-three-quarter',
+      'front',
+    ]),
+  }),
+  Object.freeze({
+    id: 'target-plus-side',
+    distinctViewCount: 2,
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'target-three-quarter',
+      'side',
+    ]),
+  }),
+  Object.freeze({
+    id: 'target-plus-side-plus-rear',
+    distinctViewCount: 3,
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'side',
+      'rear-three-quarter',
+    ]),
+  }),
+]);
+
 const vec3 = (x, y, z) => ({ x, y, z });
 
 function add(a, b) {
@@ -178,6 +231,38 @@ export function createMetaballSilhouetteAuthorityTranche() {
   };
 }
 
+export function createMetaballTargetFirstMultiviewTranche() {
+  return {
+    schema: 'kaminos.lirm-metaball-target-first-multiview.v0',
+    status: 'source-contract-frozen',
+    armatureProgram: METABALL_SILHOUETTE_ARMATURE_PROGRAM,
+    parameters: { ...BASELINE_PARAMETERS },
+    views: TARGET_FIRST_MULTIVIEW_VIEWS.map(view => ({ ...view })),
+    conditions: TARGET_FIRST_MULTIVIEW_CONDITIONS.map(condition => ({
+      ...condition,
+      referenceViewIds: [...condition.referenceViewIds],
+    })),
+    fixedGenerator: {
+      requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seeds: [80401],
+      prompt: TARGET_FIRST_MULTIVIEW_PROMPT,
+      provisionalCarrierKind: 'clay',
+      carrierDisposition: 'pending-projection-sentinel',
+      referenceBudget: 3,
+    },
+    claimCeiling: [
+      'Experimental evidence for target-view retention and supplemental-view structural contribution only.',
+      'No authenticated Bowplan transfer, general multiview consistency, reconstructed geometry, or production admission claim.',
+    ].join(' '),
+  };
+}
+
 async function sha256(path) {
   const bytes = await readFile(path);
   return {
@@ -242,6 +327,67 @@ export async function writeMetaballSilhouetteAuthoritySources({
     effectiveConfig: { pixelWidth, pixelHeight, projection: 'orthographic' },
     fixedGenerator: tranche.fixedGenerator,
     rows,
+  };
+  const manifestPath = join(outDir, 'manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
+}
+
+export async function writeMetaballTargetFirstMultiviewSources({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-target-first-multiview-v0'),
+  pixelWidth = 256,
+  pixelHeight = 192,
+} = {}) {
+  const tranche = createMetaballTargetFirstMultiviewTranche();
+  await mkdir(outDir, { recursive: true });
+  await writeFile(join(outDir, 'prompt.txt'), `${tranche.fixedGenerator.prompt}\n`);
+
+  const views = [];
+  for (const view of tranche.views) {
+    const viewOutDir = join(outDir, 'views', view.id);
+    const result = await writeLirmArmatureProgramImplicitBodyWitness({
+      outDir: viewOutDir,
+      armatureProgram: tranche.armatureProgram,
+      parameters: tranche.parameters,
+      candidateId: view.id,
+      pixelWidth,
+      pixelHeight,
+      cameraYawRadians: view.cameraYawRadians,
+    });
+    const sourceRoot = join(viewOutDir, view.id);
+    const sourceImages = {};
+    for (const kind of ['clay', 'depth', 'normal']) {
+      const path = join(sourceRoot, `${kind}-implicit.png`);
+      sourceImages[kind] = {
+        ...(await sha256(path)),
+        relativePath: relative(outDir, path),
+      };
+    }
+    views.push({
+      ...view,
+      witnessReceiptPath: relative(outDir, result.receiptPath),
+      sourceImages,
+    });
+  }
+
+  const manifest = {
+    schema: tranche.schema,
+    status: 'sources-complete',
+    armatureProgram: {
+      id: tranche.armatureProgram.id,
+      parameterVocabulary: tranche.armatureProgram.parameterVocabulary,
+    },
+    parameters: tranche.parameters,
+    effectiveConfig: {
+      pixelWidth,
+      pixelHeight,
+      projection: 'orthographic',
+      cameraControl: 'explicit-yaw-radians',
+    },
+    views,
+    conditions: tranche.conditions,
+    fixedGenerator: tranche.fixedGenerator,
+    claimCeiling: tranche.claimCeiling,
   };
   const manifestPath = join(outDir, 'manifest.json');
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

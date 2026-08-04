@@ -1902,12 +1902,16 @@ export function createLirmArmatureProgramImplicitBodyBundle({
   candidateId = 'lirm-armature-program-candidate',
   pixelWidth = 192,
   pixelHeight = 144,
+  cameraYawRadians = 0.42,
 } = {}) {
   if (typeof candidateId !== 'string' || !/^[A-Za-z0-9._-]+$/.test(candidateId)) {
     throw new Error('armature program candidateId must be filesystem-safe');
   }
   if (!Number.isInteger(pixelWidth) || !Number.isInteger(pixelHeight) || pixelWidth < 32 || pixelHeight < 24) {
     throw new Error('armature program conditioning raster must be at least 32x24');
+  }
+  if (!Number.isFinite(cameraYawRadians)) {
+    throw new Error('armature program cameraYawRadians must be finite');
   }
   const normalizedParameters = validateArmatureProgramParameters(armatureProgram, parameters);
   const sourcePrimitives = armatureProgram.createPrimitives(normalizedParameters);
@@ -1921,6 +1925,7 @@ export function createLirmArmatureProgramImplicitBodyBundle({
     primitives: implicitPrimitives,
     pixelWidth,
     pixelHeight,
+    cameraYaw: cameraYawRadians,
   });
   const renderMaps = renderResult.renderMaps;
   const trellisSource = renderImplicitTrellisSourceSvg({
@@ -1928,6 +1933,7 @@ export function createLirmArmatureProgramImplicitBodyBundle({
     primitives: implicitPrimitives,
     pixelWidth,
     pixelHeight,
+    cameraYaw: cameraYawRadians,
   });
   return {
     schema: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_BUNDLE_SCHEMA,
@@ -1953,6 +1959,7 @@ export function createLirmArmatureProgramImplicitBodyBundle({
       pixelHeight,
       projection: 'orthographic',
       view: 'front-three-quarter',
+      cameraYawRadians,
       raySource: 'software-sdf-raymarch',
     },
     implicitPrimitiveCount: implicitPrimitives.length,
@@ -1976,10 +1983,11 @@ export async function writeLirmArmatureProgramImplicitBodyWitness({
   candidateId = 'lirm-armature-program-candidate',
   pixelWidth = 192,
   pixelHeight = 144,
+  cameraYawRadians = 0.42,
 } = {}) {
   await mkdir(outDir, { recursive: true });
   const receiptPath = join(outDir, 'receipt.json');
-  const requestedConfig = { pixelWidth, pixelHeight };
+  const requestedConfig = { pixelWidth, pixelHeight, cameraYawRadians };
   const initialized = {
     schema: LIRM_ARMATURE_PROGRAM_IMPLICIT_BODY_WITNESS_SCHEMA,
     status: 'running',
@@ -2006,6 +2014,7 @@ export async function writeLirmArmatureProgramImplicitBodyWitness({
       candidateId,
       pixelWidth,
       pixelHeight,
+      cameraYawRadians,
     });
     const candidateDir = join(outDir, candidateId);
     await mkdir(candidateDir, { recursive: true });

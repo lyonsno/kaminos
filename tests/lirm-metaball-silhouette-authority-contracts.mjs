@@ -4,7 +4,11 @@ import assert from 'node:assert/strict';
 
 import {
   createMetaballSilhouetteAuthorityTranche,
+  METABALL_SILHOUETTE_ARMATURE_PROGRAM,
 } from '../lirm-metaball-silhouette-authority-core.mjs';
+import {
+  createLirmArmatureProgramImplicitBodyBundle,
+} from '../lirm-speciation-armature-core.js';
 
 const tranche = createMetaballSilhouetteAuthorityTranche();
 
@@ -50,5 +54,27 @@ assert.equal(tranche.fixedGenerator.model, 'flux2-klein-9b');
 assert.equal(tranche.fixedGenerator.guidance, 1);
 assert.match(tranche.fixedGenerator.prompt, /outer silhouette/);
 assert.doesNotMatch(tranche.fixedGenerator.prompt, /horror|wound|hole|aperture/i);
+
+const targetView = createLirmArmatureProgramImplicitBodyBundle({
+  armatureProgram: METABALL_SILHOUETTE_ARMATURE_PROGRAM,
+  parameters: baseline.parameters,
+  candidateId: 'baseline-target',
+  cameraYawRadians: 0.42,
+});
+const frontView = createLirmArmatureProgramImplicitBodyBundle({
+  armatureProgram: METABALL_SILHOUETTE_ARMATURE_PROGRAM,
+  parameters: baseline.parameters,
+  candidateId: 'baseline-front',
+  cameraYawRadians: 0,
+});
+
+assert.equal(targetView.effectiveConfig.cameraYawRadians, 0.42);
+assert.equal(frontView.effectiveConfig.cameraYawRadians, 0);
+assert.equal(targetView.projectionEvidence.cameraYawRadians, 0.42);
+assert.equal(frontView.projectionEvidence.cameraYawRadians, 0);
+assert.notEqual(
+  targetView.renderMaps.find(map => map.kind === 'clay').svg,
+  frontView.renderMaps.find(map => map.kind === 'clay').svg,
+);
 
 process.stdout.write('LIRM metaball silhouette authority contracts passed\n');

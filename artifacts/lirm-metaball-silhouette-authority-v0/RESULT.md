@@ -31,11 +31,13 @@ spacing also remained legible, though posterior mass was the weakest of the
 six. Seed changed finish, color, facial suggestion, and local surface treatment
 far more than it changed the authored morphology delta.
 
-The result does **not** establish exact screen-space silhouette authority. Every
-conditioning package presents a strict side view; the generated animals
-consistently canonicalized toward frontal or three-quarter views. The model is
-therefore re-projecting inherited low-frequency morphology rather than obeying
-the authored camera and contour.
+The result does **not** establish exact screen-space silhouette authority. The
+source renderer used its historical fixed yaw of `0.42` radians, a
+front-three-quarter view rather than a strict side view. Generated animals
+shifted toward nearby canonical frontal or three-quarter presentations while
+retaining the authored morphology deltas. The tranche therefore establishes
+morphology inheritance under modest projection drift; it does not by itself
+establish reconstruction across a large camera change.
 
 Elaboration was also conservative. The outputs are coherent creatures, but
 they remain close to smooth source masses. This tranche establishes a causal
