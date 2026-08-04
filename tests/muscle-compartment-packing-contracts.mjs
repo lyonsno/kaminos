@@ -856,6 +856,9 @@ test('source-frame halfspaces preserve declared longitudinal order and bend floo
 
   const result = solveMuscleCompartmentPacking(source, config);
 
+  assert.equal(result.status, 'pairwise-exclusion-failed');
+  assert.equal(result.failure?.kind, 'residual-constraint');
+  assert.equal(result.failure?.dominantMechanism?.kind, 'pairwise-exclusion-residual');
   assert.deepEqual(result.curvatureProjection, {
     requestedUpdate:'source-frame-halfspace',
     effectiveUpdate:'source-frame-halfspace',
@@ -888,4 +891,77 @@ test('source-frame halfspaces preserve declared longitudinal order and bend floo
   assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
   assert.equal(result.metrics.packed.nonFiniteValueCount, 0);
   assert.equal(result.metrics.packed.nonPositiveRadiusCount, 0);
+});
+
+test('explicit capsule-axis belly turn opens the k8 source-cone allocation region', () => {
+  const parent = createSyntheticMuscleDensityLadder(8);
+  const { source } = deriveMuscleCompartmentPackingSensitivitySource(parent, {
+    axis:'attachment-radial-scale',
+    obstacleId:'central-skeletal-shaft',
+    scaleFactor:1.1,
+  });
+  const common = {
+    maxIterations:480,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    maximumSourceBendEnergyRatio:1.05,
+    minimumSourceCurvatureCosine:0.3,
+    minimumSourceTangentCosine:0,
+  };
+  const exactFrame = solveMuscleCompartmentPacking(source, {
+    ...common,
+    curvatureUpdate:'source-frame-halfspace',
+    minimumSourceTangentProjectionRatio:0.2,
+    minimumSourceCurvatureProjectionRatio:0.5,
+  });
+  const allocated = solveMuscleCompartmentPacking(source, {
+    ...common,
+    curvatureUpdate:'unconstrained',
+    minimumSourceBendEnergyRetention:0.25,
+    minimumPairwiseRelationCosine:0.9,
+    clusterUpdate:'capsule-axis-belly-turn',
+    clusterObstacleId:'central-skeletal-shaft',
+    clusterBellyRadius:0.52,
+    clusterTurnRadians:5 * Math.PI / 36,
+    clusterChirality:'positive',
+  });
+
+  assert.deepEqual(allocated.clusterProjection, {
+    requestedUpdate:'capsule-axis-belly-turn',
+    effectiveUpdate:'capsule-axis-belly-turn',
+    obstacleId:'central-skeletal-shaft',
+    bellyRadius:0.52,
+    turnRadians:5 * Math.PI / 36,
+    chirality:'positive',
+    fixedAttachmentEnvelope:'normalized-sine-zero-at-endpoints',
+    fallbackUsed:false,
+  });
+  assert.ok(
+    allocated.metrics.packed.pairwisePenetration <
+      exactFrame.metrics.packed.pairwisePenetration * 0.25,
+    `coordinated belly turn did not materially beat exact-frame pairwise residual: ${JSON.stringify({ exactFrame:exactFrame.metrics.packed, allocated:allocated.metrics.packed })}`,
+  );
+  assert.ok(
+    allocated.metrics.packed.skeletalPenetration <
+      exactFrame.metrics.packed.skeletalPenetration * 0.01,
+    `coordinated belly turn did not clear the skeletal residual: ${JSON.stringify({ exactFrame:exactFrame.metrics.packed, allocated:allocated.metrics.packed })}`,
+  );
+  assert.ok(allocated.metrics.packed.minimumSourceBendEnergyRetention >= 0.25);
+  assert.ok(allocated.metrics.packed.minimumSourceCurvatureCosine >= 0.3);
+  assert.ok(allocated.metrics.packed.minimumSourceTangentCosine > 0);
+  assert.equal(allocated.metrics.packed.sourceTangentReversalCount, 0);
+  assert.equal(allocated.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(allocated.metrics.packed.minimumPairwiseRelationCosine >= 0.9);
+  assert.equal(allocated.metrics.packed.pairwiseRelationReversalCount, 0);
+  assert.equal(allocated.metrics.packed.endpointDrift, 0);
+  assert.ok(allocated.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(allocated.metrics.packed.compartmentEscape <= common.convergenceTolerance);
+  assert.equal(allocated.metrics.packed.nonFiniteValueCount, 0);
+  assert.equal(allocated.metrics.packed.nonPositiveRadiusCount, 0);
 });

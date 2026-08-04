@@ -73,6 +73,15 @@ function cross(left, right) {
   ];
 }
 
+function rotateAroundAxis(vector, axis, angle) {
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  return add(
+    add(scale(vector, cosine), scale(cross(axis, vector), sine)),
+    scale(axis, dot(axis, vector) * (1 - cosine)),
+  );
+}
+
 function length(vector) {
   return Math.hypot(...vector);
 }
@@ -591,6 +600,26 @@ function validateConfig(config) {
       throw new Error(`muscle packing ${key} must be finite and in [-1, 1]`);
     }
   }
+  if (
+    config.minimumSourceBendEnergyRetention !== undefined &&
+    (
+      !Number.isFinite(config.minimumSourceBendEnergyRetention) ||
+      config.minimumSourceBendEnergyRetention < 0 ||
+      config.minimumSourceBendEnergyRetention > 1
+    )
+  ) {
+    throw new Error('muscle packing minimumSourceBendEnergyRetention must be finite and in [0, 1]');
+  }
+  if (
+    config.minimumPairwiseRelationCosine !== undefined &&
+    (
+      !Number.isFinite(config.minimumPairwiseRelationCosine) ||
+      config.minimumPairwiseRelationCosine < -1 ||
+      config.minimumPairwiseRelationCosine > 1
+    )
+  ) {
+    throw new Error('muscle packing minimumPairwiseRelationCosine must be finite and in [-1, 1]');
+  }
   if (config.relaxationStep > 1) {
     throw new Error('muscle packing relaxationStep cannot exceed 1');
   }
@@ -629,6 +658,46 @@ function validateConfig(config) {
     for (const key of sourceFrameRatioKeys) {
       if (config[key] !== undefined) {
         throw new Error(`${key} requires source-frame-halfspace curvatureUpdate`);
+      }
+    }
+  }
+  if (
+    config.clusterUpdate !== undefined &&
+    !['unconstrained', 'capsule-axis-belly-turn'].includes(config.clusterUpdate)
+  ) {
+    throw new Error(
+      'muscle packing clusterUpdate must be unconstrained or capsule-axis-belly-turn',
+    );
+  }
+  const bellyTurnKeys = [
+    'clusterObstacleId',
+    'clusterBellyRadius',
+    'clusterTurnRadians',
+    'clusterChirality',
+  ];
+  if (config.clusterUpdate === 'capsule-axis-belly-turn') {
+    if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
+      throw new Error('capsule-axis-belly-turn requires a nonempty clusterObstacleId');
+    }
+    if (!Number.isFinite(config.clusterBellyRadius) || config.clusterBellyRadius <= 0) {
+      throw new Error('capsule-axis-belly-turn requires a positive finite clusterBellyRadius');
+    }
+    if (
+      !Number.isFinite(config.clusterTurnRadians) ||
+      config.clusterTurnRadians <= 0 || config.clusterTurnRadians > Math.PI
+    ) {
+      throw new Error('capsule-axis-belly-turn requires clusterTurnRadians in (0, pi]');
+    }
+    if (!['positive', 'negative'].includes(config.clusterChirality)) {
+      throw new Error('capsule-axis-belly-turn requires positive or negative clusterChirality');
+    }
+    if (config.curvatureUpdate !== undefined && config.curvatureUpdate !== 'unconstrained') {
+      throw new Error('capsule-axis-belly-turn requires unconstrained curvatureUpdate');
+    }
+  } else {
+    for (const key of bellyTurnKeys) {
+      if (config[key] !== undefined) {
+        throw new Error(`${key} requires capsule-axis-belly-turn clusterUpdate`);
       }
     }
   }
@@ -833,6 +902,23 @@ function crossSectionProjectionReceipt(config) {
     effectiveStep: update === 'contact-redistributed' ? config.crossSectionStep : null,
     fallbackUsed: false,
   };
+}
+
+function clusterProjectionReceipt(config) {
+  const update = config.clusterUpdate || 'unconstrained';
+  const receipt = {
+    requestedUpdate:update,
+    effectiveUpdate:update,
+  };
+  if (update === 'capsule-axis-belly-turn') {
+    receipt.obstacleId = config.clusterObstacleId;
+    receipt.bellyRadius = config.clusterBellyRadius;
+    receipt.turnRadians = config.clusterTurnRadians;
+    receipt.chirality = config.clusterChirality;
+    receipt.fixedAttachmentEnvelope = 'normalized-sine-zero-at-endpoints';
+  }
+  receipt.fallbackUsed = false;
+  return receipt;
 }
 
 function syntheticMuscleAtAngle(index, angle) {
@@ -1990,6 +2076,56 @@ function projectSourceFormation(source, muscles, attribution, category, config) 
   }
 }
 
+function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, config) {
+  const obstacle = source.obstacles.find(row => row.id === config.clusterObstacleId);
+  if (!obstacle) {
+    throw new Error(`capsule-axis-belly-turn obstacle not found: ${config.clusterObstacleId}`);
+  }
+  if (obstacle.kind !== 'capsule') {
+    throw new Error('capsule-axis-belly-turn requires a capsule obstacle');
+  }
+  const axisVector = subtract(obstacle.end, obstacle.start);
+  const axisLength = length(axisVector);
+  if (axisLength <= 1e-12) throw new Error('capsule-axis-belly-turn obstacle axis is degenerate');
+  const axis = scale(axisVector, 1 / axisLength);
+  const chirality = config.clusterChirality === 'positive' ? 1 : -1;
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const sourceCenterline = source.muscles[muscleIndex].centerline;
+    const envelopeMaximum = Math.max(
+      ...sourceCenterline.slice(1, -1).map((_, interiorIndex) =>
+        Math.sin(Math.PI * (interiorIndex + 1) / (sourceCenterline.length - 1))),
+    );
+    for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+      const sourcePosition = sourceCenterline[knotIndex].position;
+      const axisPoint = closestPointOnObstacle(sourcePosition, obstacle);
+      const sourceRadial = subtract(sourcePosition, axisPoint);
+      const sourceRadialLength = length(sourceRadial);
+      if (sourceRadialLength <= 1e-12) {
+        throw new Error(
+          `muscle ${muscle.id} source knot ${knotIndex} has undefined capsule radial direction`,
+        );
+      }
+      const progress = knotIndex / (muscle.centerline.length - 1);
+      const envelope = Math.sin(Math.PI * progress) / envelopeMaximum;
+      const targetRadius = sourceRadialLength +
+        (config.clusterBellyRadius - sourceRadialLength) * envelope;
+      const turnedDirection = rotateAroundAxis(
+        scale(sourceRadial, 1 / sourceRadialLength),
+        axis,
+        chirality * config.clusterTurnRadians * envelope,
+      );
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        add(axisPoint, scale(turnedDirection, targetRadius)),
+      );
+    }
+  }
+}
+
 function residualMaximum(metrics) {
   return Math.max(
     metrics.pairwisePenetration,
@@ -2087,6 +2223,27 @@ function classifySourceFormationRetention(initial, packed, config) {
       maximumSourceBendEnergyRatio:config.maximumSourceBendEnergyRatio,
       sourceMaximumBendEnergy:initial.maximumBendEnergy,
       packedMaximumBendEnergy:packed.maximumBendEnergy,
+    });
+  }
+  if (
+    config.minimumSourceBendEnergyRetention !== undefined &&
+    packed.minimumSourceBendEnergyRetention < config.minimumSourceBendEnergyRetention
+  ) {
+    violations.push({
+      kind:'source-bend-energy-collapse',
+      minimumSourceBendEnergyRetention:packed.minimumSourceBendEnergyRetention,
+      requiredMinimumSourceBendEnergyRetention:config.minimumSourceBendEnergyRetention,
+    });
+  }
+  if (
+    config.minimumPairwiseRelationCosine !== undefined &&
+    packed.minimumPairwiseRelationCosine < config.minimumPairwiseRelationCosine
+  ) {
+    violations.push({
+      kind:'source-pairwise-relation-loss',
+      minimumPairwiseRelationCosine:packed.minimumPairwiseRelationCosine,
+      requiredMinimumPairwiseRelationCosine:config.minimumPairwiseRelationCosine,
+      reversalCount:packed.pairwiseRelationReversalCount,
     });
   }
   return {
@@ -2220,6 +2377,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       pairwiseCoordinate: pairwiseCoordinateReceipt(config),
       curvatureProjection: curvatureProjectionReceipt(config),
       crossSectionProjection: crossSectionProjectionReceipt(config),
+      clusterProjection: clusterProjectionReceipt(config),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
         centerlineDistance: 'nested-convex-golden-section',
@@ -2388,6 +2546,15 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       correctionAttribution,
       'compartmentProjection',
     );
+    if (config.clusterUpdate === 'capsule-axis-belly-turn') {
+      projectCapsuleAxisBellyTurn(
+        source,
+        muscles,
+        correctionAttribution,
+        'formationConstraint',
+        config,
+      );
+    }
     if (
       config.curvatureUpdate === 'source-sign-halfspace' ||
       config.curvatureUpdate === 'source-frame-halfspace'
@@ -2481,6 +2648,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     pairwiseCoordinate: pairwiseCoordinateReceipt(config),
     curvatureProjection: curvatureProjectionReceipt(config),
     crossSectionProjection: crossSectionProjectionReceipt(config),
+    clusterProjection: clusterProjectionReceipt(config),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
       centerlineDistance: 'nested-convex-golden-section',

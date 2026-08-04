@@ -1,0 +1,105 @@
+{
+  "observedAt": "2026-08-04T21:49:39Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/",
+  "variants": [
+    {
+      "id": "exact-frame-050",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/before.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/exact-frame-050/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/packed.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/exact-frame-050/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The reviewed exact-frame baseline preserves bow direction but locks every carrier into its original source sector. The output remains visibly crowded around the shaft and carries pairwise 1.25001 plus skeletal 0.06515 residuals."
+    },
+    {
+      "id": "belly-turn-positive-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/before.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/packed.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The positive requested chirality produces a coherent whole-cluster turn: bowed bellies move around the shaft rather than being ironed straight, bone clearance reaches zero, and pairwise residual falls to 0.23975. Visible transition-fan contact remains, so the result is progress in mechanism and appearance but not packing admission."
+    },
+    {
+      "id": "belly-turn-negative-025",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/before.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/packed.png",
+          "captureReport": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The negative requested chirality mirrors the same coherent belly motion and the same residual metrics without becoming a hidden fallback or solver-owned anatomical choice. It clears the shaft and retains shape, while the fixed-endpoint transition fan still collides; neither chirality is anatomically preferred by this synthetic assay."
+    }
+  ]
+}

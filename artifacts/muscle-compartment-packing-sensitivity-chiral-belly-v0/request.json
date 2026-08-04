@@ -1,0 +1,92 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-request.v0",
+  "id": "synthetic-k8-attachment-0550-chiral-belly-v0",
+  "expectedSourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3",
+  "variants": [
+    {
+      "id": "exact-frame-050",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-frame-halfspace",
+        "minimumSourceTangentProjectionRatio": 0.2,
+        "minimumSourceCurvatureProjectionRatio": 0.5,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    },
+    {
+      "id": "belly-turn-positive-025",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "unconstrained",
+        "minimumSourceBendEnergyRetention": 0.25,
+        "minimumPairwiseRelationCosine": 0.9,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
+        "clusterUpdate": "capsule-axis-belly-turn",
+        "clusterObstacleId": "central-skeletal-shaft",
+        "clusterBellyRadius": 0.52,
+        "clusterTurnRadians": 0.4363323129985824,
+        "clusterChirality": "positive"
+      }
+    },
+    {
+      "id": "belly-turn-negative-025",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "unconstrained",
+        "minimumSourceBendEnergyRetention": 0.25,
+        "minimumPairwiseRelationCosine": 0.9,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
+        "clusterUpdate": "capsule-axis-belly-turn",
+        "clusterObstacleId": "central-skeletal-shaft",
+        "clusterBellyRadius": 0.52,
+        "clusterTurnRadians": 0.4363323129985824,
+        "clusterChirality": "negative"
+      }
+    }
+  ]
+}

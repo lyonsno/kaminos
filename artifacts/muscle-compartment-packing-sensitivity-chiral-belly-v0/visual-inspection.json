@@ -1,0 +1,366 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-visual-inspection.v0",
+  "status": "completed-agent-inspection",
+  "disposition": "visually-rejected",
+  "observedAt": "2026-08-04T21:49:39Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "bindings": {
+    "inspectionInputReportSha256": "61429f237effac995a1fabb36e01e06930904b1fe5613ff452a1d400a07c307c",
+    "inspectionInputPortfolioSha256": "209bc2ddbfcaf3db6d7b2846b0c12b8751d1acd47df7ba60ab9bcf3bfcec589c",
+    "inspectedPortfolioSha256": "99049765915d7456b546cb2fe9352dea0a1cd5088c1f3dc9b9a306ce279876d6",
+    "runId": "run-55bbb8baceeebaabb8a5",
+    "sourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3"
+  },
+  "variants": [
+    {
+      "id": "exact-frame-050",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "f53752323816c9c327e56e7628a0d331ff3e3c473dcb8b16bc89a88896340576",
+        "indexHtmlSha256": "e0a1e0f95889ea812d1394d4d16ab9a9b88105bd19bc066ed904ec0a1e2aed10"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/before.png",
+          "sha256": "6eb2ad95a27b96f6b3ff27635c1ec00e47b6e77dbbe40806cf3198d5d8260489",
+          "sizeBytes": 274388,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/exact-frame-050/capture-before-report.json",
+            "reportSha256": "68fa5fb0cf5aae19cfdbfc75efd7a32f1a3d348c94fcc04f0bb5fb7c90f4cece",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/exact-frame-050/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/packed.png",
+          "sha256": "b6ad3fe819cef8c77971028171a7bd3da7a1e113ab23becafe16a62563232aab",
+          "sizeBytes": 267397,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/exact-frame-050/capture-packed-report.json",
+            "reportSha256": "af129e32d9364d1f8476fd62f1e7079de091d6f59e14b2df320f508afcb159bb",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/exact-frame-050/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": false,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The reviewed exact-frame baseline preserves bow direction but locks every carrier into its original source sector. The output remains visibly crowded around the shaft and carries pairwise 1.25001 plus skeletal 0.06515 residuals."
+    },
+    {
+      "id": "belly-turn-positive-025",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "3197b32024fc7d48888cb406a800face6dac8529fefec8478e37dfc679a067b5",
+        "indexHtmlSha256": "d57563c80910a827c6111cf868d66804f4534aece6171073285b99f3956712b8"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/before.png",
+          "sha256": "b9c22479b282531dbe9d08fcb0587f6c7a4400fa33ae4b03d81e914180e117f7",
+          "sizeBytes": 277173,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/capture-before-report.json",
+            "reportSha256": "6e279d859603240d5ed4046bf7f6482504af3fb7e071e7473fafcc251833b825",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/belly-turn-positive-025/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/packed.png",
+          "sha256": "8e4b2afd42ffef6b0b508e92acf36987e07248d3bd7cd0d3157ad23b330c75e1",
+          "sizeBytes": 283777,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/capture-packed-report.json",
+            "reportSha256": "7c15e7c0f4492c1b9649aa8613dadbae2a070ee0c6c23af39b2881e50b43613c",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/belly-turn-positive-025/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The positive requested chirality produces a coherent whole-cluster turn: bowed bellies move around the shaft rather than being ironed straight, bone clearance reaches zero, and pairwise residual falls to 0.23975. Visible transition-fan contact remains, so the result is progress in mechanism and appearance but not packing admission."
+    },
+    {
+      "id": "belly-turn-negative-025",
+      "solveStatus": "pairwise-exclusion-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "b50e008486ae7ebb29e19865ac4acbf25215f43a287585c28c17da6de9a29d70",
+        "indexHtmlSha256": "8cebc820a8600cfe3a276c1e6a697742f0b5ee1eead3ac22baf35cb59f54aa73"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/before.png",
+          "sha256": "036e16238ea9912c9912a8465d6e59b9192526efb90a61b0b79a859de9d22ead",
+          "sizeBytes": 277150,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/capture-before-report.json",
+            "reportSha256": "85aef1aacfbfecbd4f3cefcf08057adf0783b51ccd305866992409f712dffe42",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/belly-turn-negative-025/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/packed.png",
+          "sha256": "cd0775a3f6d9b670fd599a85c20d842df30adde9bb4bb5638485c1aedb8b32de",
+          "sizeBytes": 286307,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/capture-packed-report.json",
+            "reportSha256": "6e2150192909bc2db343a4ac1955e545fac40525c0372e284f9183396cba0bce",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/run-55bbb8baceeebaabb8a5/belly-turn-negative-025/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": true,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": false,
+        "shapeDegeneracyAbsent": true
+      },
+      "disposition": "visually-rejected",
+      "notes": "The negative requested chirality mirrors the same coherent belly motion and the same residual metrics without becoming a hidden fallback or solver-owned anatomical choice. It clears the shaft and retains shape, while the fixed-endpoint transition fan still collides; neither chirality is anatomically preferred by this synthetic assay."
+    }
+  ]
+}

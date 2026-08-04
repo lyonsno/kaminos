@@ -1,0 +1,730 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "request": {
+    "id": "synthetic-k8-attachment-0550-chiral-belly-v0",
+    "schema": "kaminos.muscle-compartment-packing-sensitivity-request.v0"
+  },
+  "run": {
+    "id": "run-55bbb8baceeebaabb8a5",
+    "relativeRoot": "run-55bbb8baceeebaabb8a5"
+  },
+  "input": {
+    "source": {
+      "requested": {
+        "path": "repo://artifacts/muscle-compartment-packing-sensitivity-attachment-v0/source.json",
+        "sha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3"
+      },
+      "effective": {
+        "path": "repo://artifacts/muscle-compartment-packing-sensitivity-attachment-v0/source.json",
+        "sha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3"
+      },
+      "sha256After": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3",
+      "mutated": false
+    },
+    "request": {
+      "requested": {
+        "path": "repo://artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/request.json",
+        "sha256": "454f20192315c03207d36c0b1cf3e9dcecc6b1e30134260f9ee4f31efd5b28f1"
+      },
+      "effective": {
+        "path": "repo://artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/request.json",
+        "sha256": "454f20192315c03207d36c0b1cf3e9dcecc6b1e30134260f9ee4f31efd5b28f1"
+      }
+    }
+  },
+  "variants": [
+    {
+      "schema": "kaminos.muscle-compartment-packing-sensitivity-variant.v0",
+      "status": "complete",
+      "id": "exact-frame-050",
+      "route": {
+        "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "fallbackUsed": false
+      },
+      "derivation": {
+        "schema": "kaminos.muscle-compartment-packing-sensitivity-derivation.v0",
+        "axis": "attachment-radial-scale",
+        "parentSource": {
+          "id": "synthetic-muscle-density-ladder-8-v0",
+          "input": {
+            "kind": "synthetic-fixture",
+            "id": "synthetic-muscle-density-ladder-8-v0",
+            "sha256": "ae2fd71cf78af2430cd382ca6fcd2e78164b9193684a1a7aa83864f740c95381"
+          }
+        },
+        "requested": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "effective": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "fallbackUsed": false,
+        "derivedSource": {
+          "kind": "sensitivity-derived-source",
+          "id": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "sha256": "310edc1262d30b2ccc1f7bafface9b548c21336bfb462c1a0c00a7c24b7cfa6d"
+        }
+      },
+      "solve": {
+        "status": "pairwise-exclusion-failed",
+        "iterations": 480,
+        "requestedConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "source-frame-halfspace",
+          "minimumSourceTangentProjectionRatio": 0.2,
+          "minimumSourceCurvatureProjectionRatio": 0.5,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0
+        },
+        "effectiveConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "source-frame-halfspace",
+          "minimumSourceTangentProjectionRatio": 0.2,
+          "minimumSourceCurvatureProjectionRatio": 0.5
+        },
+        "fallbackUsed": false,
+        "config": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "source-frame-halfspace",
+          "minimumSourceTangentProjectionRatio": 0.2,
+          "minimumSourceCurvatureProjectionRatio": 0.5
+        },
+        "metrics": {
+          "initial": {
+            "pairwisePenetration": 5.569379776807,
+            "skeletalPenetration": 0.2600000005,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0.025258755418,
+            "maximumBendEnergy": 0.3362,
+            "maximumSourceKnotDisplacement": 0,
+            "rootMeanSquareSourceKnotDisplacement": 0,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": 1,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 1,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1,
+            "minimumPairwiseRelationCosine": 1,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          },
+          "packed": {
+            "pairwisePenetration": 1.250012806456,
+            "skeletalPenetration": 0.065151584927,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.08405,
+            "maximumSourceKnotDisplacement": 0.205,
+            "rootMeanSquareSourceKnotDisplacement": 0.144956890143,
+            "minimumSourceBendEnergyRetention": 0.25,
+            "minimumSourceCurvatureCosine": 1,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.963711985711,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.050757922215,
+            "minimumPairwiseRelationCosine": 1,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "iterations": 480,
+          "dominantMechanism": {
+            "kind": "pairwise-exclusion-residual",
+            "residual": 1.250012806456
+          },
+          "residuals": {
+            "pairwisePenetration": 1.250012806456,
+            "skeletalPenetration": 0.065151584927,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.08405,
+            "maximumSourceKnotDisplacement": 0.205,
+            "rootMeanSquareSourceKnotDisplacement": 0.144956890143,
+            "minimumSourceBendEnergyRetention": 0.25,
+            "minimumSourceCurvatureCosine": 1,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.963711985711,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.050757922215,
+            "minimumPairwiseRelationCosine": 1,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        }
+      },
+      "visual": {
+        "role": "diagnostic-not-admission",
+        "status": "pending-agent-inspection",
+        "route": {
+          "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "fallbackUsed": false
+        },
+        "artifact": "index.html"
+      },
+      "artifacts": {
+        "relativeRoot": "run-55bbb8baceeebaabb8a5/exact-frame-050",
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "f53752323816c9c327e56e7628a0d331ff3e3c473dcb8b16bc89a88896340576",
+        "indexHtmlSha256": "e0a1e0f95889ea812d1394d4d16ab9a9b88105bd19bc066ed904ec0a1e2aed10"
+      },
+      "visualInspection": {
+        "status": "completed-agent-inspection",
+        "disposition": "visually-rejected",
+        "evidence": {
+          "nonblank": true,
+          "statesDistinct": true,
+          "stableMuscleIdentityLegible": true,
+          "attachmentAndObstacleLegible": true,
+          "displacementLegible": true,
+          "metricsAndSolveStatusLegible": true,
+          "residualBearingOutputNotPresentedAsAdmission": true
+        },
+        "judgment": {
+          "sourceFormationPlausible": true,
+          "packedRelationshipsPlausible": false,
+          "skeletalClearanceVisuallyPlausible": false,
+          "pairwiseExclusionVisuallyPlausible": false,
+          "shapeDegeneracyAbsent": true
+        },
+        "notes": "The reviewed exact-frame baseline preserves bow direction but locks every carrier into its original source sector. The output remains visibly crowded around the shaft and carries pairwise 1.25001 plus skeletal 0.06515 residuals.",
+        "images": [
+          {
+            "state": "before",
+            "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/before.png",
+            "sha256": "6eb2ad95a27b96f6b3ff27635c1ec00e47b6e77dbbe40806cf3198d5d8260489"
+          },
+          {
+            "state": "packed",
+            "path": "run-55bbb8baceeebaabb8a5/exact-frame-050/packed.png",
+            "sha256": "b6ad3fe819cef8c77971028171a7bd3da7a1e113ab23becafe16a62563232aab"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "kaminos.muscle-compartment-packing-sensitivity-variant.v0",
+      "status": "complete",
+      "id": "belly-turn-positive-025",
+      "route": {
+        "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "fallbackUsed": false
+      },
+      "derivation": {
+        "schema": "kaminos.muscle-compartment-packing-sensitivity-derivation.v0",
+        "axis": "attachment-radial-scale",
+        "parentSource": {
+          "id": "synthetic-muscle-density-ladder-8-v0",
+          "input": {
+            "kind": "synthetic-fixture",
+            "id": "synthetic-muscle-density-ladder-8-v0",
+            "sha256": "ae2fd71cf78af2430cd382ca6fcd2e78164b9193684a1a7aa83864f740c95381"
+          }
+        },
+        "requested": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "effective": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "fallbackUsed": false,
+        "derivedSource": {
+          "kind": "sensitivity-derived-source",
+          "id": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "sha256": "310edc1262d30b2ccc1f7bafface9b548c21336bfb462c1a0c00a7c24b7cfa6d"
+        }
+      },
+      "solve": {
+        "status": "pairwise-exclusion-failed",
+        "iterations": 480,
+        "requestedConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "positive"
+        },
+        "effectiveConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "positive"
+        },
+        "fallbackUsed": false,
+        "config": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "positive"
+        },
+        "metrics": {
+          "initial": {
+            "pairwisePenetration": 5.569379776807,
+            "skeletalPenetration": 0.2600000005,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0.025258755418,
+            "maximumBendEnergy": 0.3362,
+            "maximumSourceKnotDisplacement": 0,
+            "rootMeanSquareSourceKnotDisplacement": 0,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": 1,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 1,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1,
+            "minimumPairwiseRelationCosine": 1,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          },
+          "packed": {
+            "pairwisePenetration": 0.239747847364,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.10898389163,
+            "maximumSourceKnotDisplacement": 0.397544445575,
+            "rootMeanSquareSourceKnotDisplacement": 0.281106373289,
+            "minimumSourceBendEnergyRetention": 0.324163865646,
+            "minimumSourceCurvatureCosine": 0.337224139862,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.838445230146,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.028517967093,
+            "minimumPairwiseRelationCosine": 0.906307787037,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "iterations": 480,
+          "dominantMechanism": {
+            "kind": "pairwise-exclusion-residual",
+            "residual": 0.239747847364
+          },
+          "residuals": {
+            "pairwisePenetration": 0.239747847364,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.10898389163,
+            "maximumSourceKnotDisplacement": 0.397544445575,
+            "rootMeanSquareSourceKnotDisplacement": 0.281106373289,
+            "minimumSourceBendEnergyRetention": 0.324163865646,
+            "minimumSourceCurvatureCosine": 0.337224139862,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.838445230146,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.028517967093,
+            "minimumPairwiseRelationCosine": 0.906307787037,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        }
+      },
+      "visual": {
+        "role": "diagnostic-not-admission",
+        "status": "pending-agent-inspection",
+        "route": {
+          "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "fallbackUsed": false
+        },
+        "artifact": "index.html"
+      },
+      "artifacts": {
+        "relativeRoot": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025",
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "3197b32024fc7d48888cb406a800face6dac8529fefec8478e37dfc679a067b5",
+        "indexHtmlSha256": "d57563c80910a827c6111cf868d66804f4534aece6171073285b99f3956712b8"
+      },
+      "visualInspection": {
+        "status": "completed-agent-inspection",
+        "disposition": "visually-rejected",
+        "evidence": {
+          "nonblank": true,
+          "statesDistinct": true,
+          "stableMuscleIdentityLegible": true,
+          "attachmentAndObstacleLegible": true,
+          "displacementLegible": true,
+          "metricsAndSolveStatusLegible": true,
+          "residualBearingOutputNotPresentedAsAdmission": true
+        },
+        "judgment": {
+          "sourceFormationPlausible": true,
+          "packedRelationshipsPlausible": false,
+          "skeletalClearanceVisuallyPlausible": true,
+          "pairwiseExclusionVisuallyPlausible": false,
+          "shapeDegeneracyAbsent": true
+        },
+        "notes": "The positive requested chirality produces a coherent whole-cluster turn: bowed bellies move around the shaft rather than being ironed straight, bone clearance reaches zero, and pairwise residual falls to 0.23975. Visible transition-fan contact remains, so the result is progress in mechanism and appearance but not packing admission.",
+        "images": [
+          {
+            "state": "before",
+            "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/before.png",
+            "sha256": "b9c22479b282531dbe9d08fcb0587f6c7a4400fa33ae4b03d81e914180e117f7"
+          },
+          {
+            "state": "packed",
+            "path": "run-55bbb8baceeebaabb8a5/belly-turn-positive-025/packed.png",
+            "sha256": "8e4b2afd42ffef6b0b508e92acf36987e07248d3bd7cd0d3157ad23b330c75e1"
+          }
+        ]
+      }
+    },
+    {
+      "schema": "kaminos.muscle-compartment-packing-sensitivity-variant.v0",
+      "status": "complete",
+      "id": "belly-turn-negative-025",
+      "route": {
+        "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+        "fallbackUsed": false
+      },
+      "derivation": {
+        "schema": "kaminos.muscle-compartment-packing-sensitivity-derivation.v0",
+        "axis": "attachment-radial-scale",
+        "parentSource": {
+          "id": "synthetic-muscle-density-ladder-8-v0",
+          "input": {
+            "kind": "synthetic-fixture",
+            "id": "synthetic-muscle-density-ladder-8-v0",
+            "sha256": "ae2fd71cf78af2430cd382ca6fcd2e78164b9193684a1a7aa83864f740c95381"
+          }
+        },
+        "requested": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "effective": {
+          "axis": "attachment-radial-scale",
+          "obstacleId": "central-skeletal-shaft",
+          "scaleFactor": 1.1
+        },
+        "fallbackUsed": false,
+        "derivedSource": {
+          "kind": "sensitivity-derived-source",
+          "id": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "sha256": "310edc1262d30b2ccc1f7bafface9b548c21336bfb462c1a0c00a7c24b7cfa6d"
+        }
+      },
+      "solve": {
+        "status": "pairwise-exclusion-failed",
+        "iterations": 480,
+        "requestedConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "negative"
+        },
+        "effectiveConfig": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "negative"
+        },
+        "fallbackUsed": false,
+        "config": {
+          "maxIterations": 480,
+          "relaxationStep": 0.35,
+          "smoothnessStep": 0.035,
+          "sampleCount": 25,
+          "convergenceTolerance": 1e-7,
+          "maximumSourceBendEnergyRatio": 1.05,
+          "minimumSourceCurvatureCosine": 0.3,
+          "minimumSourceTangentCosine": 0,
+          "pairwiseUpdate": "reciprocal-batched",
+          "pairwiseCoordinate": "source-normal",
+          "crossSectionUpdate": "contact-redistributed",
+          "crossSectionStep": 0.02,
+          "curvatureUpdate": "unconstrained",
+          "minimumSourceBendEnergyRetention": 0.25,
+          "minimumPairwiseRelationCosine": 0.9,
+          "clusterUpdate": "capsule-axis-belly-turn",
+          "clusterObstacleId": "central-skeletal-shaft",
+          "clusterBellyRadius": 0.52,
+          "clusterTurnRadians": 0.4363323129985824,
+          "clusterChirality": "negative"
+        },
+        "metrics": {
+          "initial": {
+            "pairwisePenetration": 5.569379776807,
+            "skeletalPenetration": 0.2600000005,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0.025258755418,
+            "maximumBendEnergy": 0.3362,
+            "maximumSourceKnotDisplacement": 0,
+            "rootMeanSquareSourceKnotDisplacement": 0,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": 1,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 1,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1,
+            "minimumPairwiseRelationCosine": 1,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          },
+          "packed": {
+            "pairwisePenetration": 0.239747847364,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.10898389163,
+            "maximumSourceKnotDisplacement": 0.397544445575,
+            "rootMeanSquareSourceKnotDisplacement": 0.281106373289,
+            "minimumSourceBendEnergyRetention": 0.324163865646,
+            "minimumSourceCurvatureCosine": 0.337224139862,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.838445230146,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.028517967093,
+            "minimumPairwiseRelationCosine": 0.906307787037,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "synthetic-muscle-density-ladder-8-v0--sensitivity-a37eee8587d4cfc3",
+          "iterations": 480,
+          "dominantMechanism": {
+            "kind": "pairwise-exclusion-residual",
+            "residual": 0.239747847364
+          },
+          "residuals": {
+            "pairwisePenetration": 0.239747847364,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.10898389163,
+            "maximumSourceKnotDisplacement": 0.397544445575,
+            "rootMeanSquareSourceKnotDisplacement": 0.281106373289,
+            "minimumSourceBendEnergyRetention": 0.324163865646,
+            "minimumSourceCurvatureCosine": 0.337224139862,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.838445230146,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.028517967093,
+            "minimumPairwiseRelationCosine": 0.906307787037,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        }
+      },
+      "visual": {
+        "role": "diagnostic-not-admission",
+        "status": "pending-agent-inspection",
+        "route": {
+          "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+          "fallbackUsed": false
+        },
+        "artifact": "index.html"
+      },
+      "artifacts": {
+        "relativeRoot": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025",
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "b50e008486ae7ebb29e19865ac4acbf25215f43a287585c28c17da6de9a29d70",
+        "indexHtmlSha256": "8cebc820a8600cfe3a276c1e6a697742f0b5ee1eead3ac22baf35cb59f54aa73"
+      },
+      "visualInspection": {
+        "status": "completed-agent-inspection",
+        "disposition": "visually-rejected",
+        "evidence": {
+          "nonblank": true,
+          "statesDistinct": true,
+          "stableMuscleIdentityLegible": true,
+          "attachmentAndObstacleLegible": true,
+          "displacementLegible": true,
+          "metricsAndSolveStatusLegible": true,
+          "residualBearingOutputNotPresentedAsAdmission": true
+        },
+        "judgment": {
+          "sourceFormationPlausible": true,
+          "packedRelationshipsPlausible": false,
+          "skeletalClearanceVisuallyPlausible": true,
+          "pairwiseExclusionVisuallyPlausible": false,
+          "shapeDegeneracyAbsent": true
+        },
+        "notes": "The negative requested chirality mirrors the same coherent belly motion and the same residual metrics without becoming a hidden fallback or solver-owned anatomical choice. It clears the shaft and retains shape, while the fixed-endpoint transition fan still collides; neither chirality is anatomically preferred by this synthetic assay.",
+        "images": [
+          {
+            "state": "before",
+            "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/before.png",
+            "sha256": "036e16238ea9912c9912a8465d6e59b9192526efb90a61b0b79a859de9d22ead"
+          },
+          {
+            "state": "packed",
+            "path": "run-55bbb8baceeebaabb8a5/belly-turn-negative-025/packed.png",
+            "sha256": "cd0775a3f6d9b670fd599a85c20d842df30adde9bb4bb5638485c1aedb8b32de"
+          }
+        ]
+      }
+    }
+  ],
+  "visualInspection": {
+    "status": "completed-agent-inspection",
+    "disposition": "visually-rejected",
+    "observedAt": "2026-08-04T21:49:39Z",
+    "portfolio": "index.html",
+    "inspectionInputReportSha256": "61429f237effac995a1fabb36e01e06930904b1fe5613ff452a1d400a07c307c",
+    "priorPortfolioSha256": "209bc2ddbfcaf3db6d7b2846b0c12b8751d1acd47df7ba60ab9bcf3bfcec589c",
+    "variantCount": 3,
+    "portfolioSha256": "99049765915d7456b546cb2fe9352dea0a1cd5088c1f3dc9b9a306ce279876d6",
+    "receipt": "repo://artifacts/muscle-compartment-packing-sensitivity-chiral-belly-v0/visual-inspection.json",
+    "receiptSha256": "a8b1f8c94341bbf74d16dfc7b70e4aed2fd7c0e84691d5843abde40bcbb44c92"
+  }
+}
