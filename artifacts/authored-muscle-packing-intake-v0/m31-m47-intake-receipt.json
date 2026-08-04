@@ -48,6 +48,7 @@
   },
   "missingFields": [
     "coordinateCarrier.derivation",
+    "coordinateCarrier.derivation.selectionAuthority",
     "coordinateCarrier.coordinateSpace",
     "coordinateCarrier.compartment",
     "coordinateCarrier.obstacles",
@@ -57,7 +58,7 @@
   ],
   "packingSource": null,
   "reason": "authenticated routing identities and byte-bound endpoints are present, but no world-space packing coordinate carrier was supplied",
-  "receiptSha256": "835471d4e059b8af200f4988216578da55e7a04243788dbaab603c43d4173c08",
+  "receiptSha256": "8de1d98011cc086cc79c1c089f0175c825445f9cf5778ec48421e85420e39aa8",
   "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
   "source": {
     "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",

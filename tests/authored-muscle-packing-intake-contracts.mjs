@@ -109,6 +109,28 @@ function makeCoordinateCarrier(routingFixture = fixture, {
         sha256: atlasSha256,
       },
       selectedConstructionIds: routes.map(route => route.constructionId),
+      selectionAuthority: {
+        receipt: {
+          id: `${carrierId}-authority-receipt`,
+          sha256: 'd'.repeat(64),
+        },
+        sharedFields: {
+          'coordinateSpace.unit': 'admitted',
+          compartment: 'admitted',
+          obstacles: 'admitted',
+        },
+        rows: routes.map(route => ({
+          constructionId: route.constructionId,
+          state: 'admitted',
+          requiredFields: {
+            'attachments.origin.position': 'admitted',
+            'attachments.insertion.position': 'admitted',
+            centerline: 'admitted',
+            targetVolume: 'admitted',
+            volumeAuthority: 'admitted',
+          },
+        })),
+      },
     },
     source: {
       assetSha256: routingFixture.source.assetSha256,
@@ -225,6 +247,7 @@ test('identity-coherent M31/M47 fixture fails loud when packing geometry is unav
   ]);
   assert.deepEqual(receipt.missingFields, [
     'coordinateCarrier.derivation',
+    'coordinateCarrier.derivation.selectionAuthority',
     'coordinateCarrier.coordinateSpace',
     'coordinateCarrier.compartment',
     'coordinateCarrier.obstacles',
@@ -321,6 +344,69 @@ test('fixture-specific geometry cannot omit reusable atlas derivation provenance
   assert.equal(wrongSubsetReceipt.status, 'source-identity-mismatch');
   assert.equal(wrongSubsetReceipt.admitted, false);
   assert.match(wrongSubsetReceipt.reason, /selected construction ids.*route set/i);
+});
+
+test('candidate selected rows cannot pass as an admitted packing carrier', () => {
+  const candidateCarrier = makeCoordinateCarrier();
+  candidateCarrier.derivation.selectionAuthority.rows[0].state = 'candidate';
+
+  const receipt = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: candidateCarrier,
+    input: intakeIdentity(candidateCarrier),
+  });
+
+  assert.equal(receipt.status, 'authority-incomplete');
+  assert.equal(receipt.admitted, false);
+  assert.equal(receipt.packingSource, null);
+  assert.match(receipt.reason, /muscle-31.*candidate/i);
+});
+
+test('selected-row admission requires a byte-bound receipt and every required solve field', () => {
+  const missingReceipt = makeCoordinateCarrier();
+  delete missingReceipt.derivation.selectionAuthority;
+  const missingReceiptResult = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: missingReceipt,
+    input: intakeIdentity(missingReceipt),
+  });
+  assert.equal(missingReceiptResult.status, 'authority-incomplete');
+  assert.deepEqual(missingReceiptResult.missingFields, [
+    'coordinateCarrier.derivation.selectionAuthority',
+  ]);
+
+  const candidateCenterline = makeCoordinateCarrier();
+  candidateCenterline.derivation.selectionAuthority.rows[1]
+    .requiredFields.centerline = 'candidate';
+  const candidateCenterlineResult = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: candidateCenterline,
+    input: intakeIdentity(candidateCenterline),
+  });
+  assert.equal(candidateCenterlineResult.status, 'authority-incomplete');
+  assert.match(candidateCenterlineResult.reason, /muscle-47.*centerline.*candidate/i);
+
+  const conflictingCompartment = makeCoordinateCarrier();
+  conflictingCompartment.derivation.selectionAuthority.sharedFields.compartment = 'conflict';
+  const conflictingCompartmentResult = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: conflictingCompartment,
+    input: intakeIdentity(conflictingCompartment),
+  });
+  assert.equal(conflictingCompartmentResult.status, 'authority-incomplete');
+  assert.match(conflictingCompartmentResult.reason, /compartment.*conflict/i);
+});
+
+test('selected-row authority receipt preserves exact fixture route order', () => {
+  const wrongOrder = makeCoordinateCarrier();
+  wrongOrder.derivation.selectionAuthority.rows.reverse();
+  const receipt = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: wrongOrder,
+    input: intakeIdentity(wrongOrder),
+  });
+  assert.equal(receipt.status, 'source-identity-mismatch');
+  assert.match(receipt.reason, /authority construction ids.*route set/i);
 });
 
 test('two arbitrary non-M31/M47 atlas subsets feed the generic intake deterministically', () => {

@@ -29,6 +29,7 @@ const ACCEPTED_IDENTITY_FIELDS = Object.freeze([
 ]);
 const REQUIRED_GEOMETRY_FIELDS = Object.freeze([
   'coordinateCarrier.derivation',
+  'coordinateCarrier.derivation.selectionAuthority',
   'coordinateCarrier.coordinateSpace',
   'coordinateCarrier.compartment',
   'coordinateCarrier.obstacles',
@@ -38,6 +39,7 @@ const REQUIRED_GEOMETRY_FIELDS = Object.freeze([
 ]);
 const ACCEPTED_COORDINATE_FIELDS = Object.freeze([
   'coordinateCarrier.derivation',
+  'coordinateCarrier.derivation.selectionAuthority',
   'coordinateCarrier.coordinateSpace',
   'coordinateCarrier.compartment',
   'coordinateCarrier.obstacles',
@@ -45,6 +47,26 @@ const ACCEPTED_COORDINATE_FIELDS = Object.freeze([
   'coordinateCarrier.muscles[].targetVolume',
   'coordinateCarrier.muscles[].volumeAuthority',
 ]);
+const REQUIRED_SHARED_AUTHORITY_FIELDS = Object.freeze([
+  'coordinateSpace.unit',
+  'compartment',
+  'obstacles',
+]);
+const REQUIRED_ROW_AUTHORITY_FIELDS = Object.freeze([
+  'attachments.origin.position',
+  'attachments.insertion.position',
+  'centerline',
+  'targetVolume',
+  'volumeAuthority',
+]);
+
+class AuthorityIncompleteError extends Error {
+  constructor(message, missingFields = []) {
+    super(message);
+    this.name = 'AuthorityIncompleteError';
+    this.missingFields = missingFields;
+  }
+}
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -143,6 +165,83 @@ function compareField(actual, expected, label) {
   if (!sameValue(actual, expected)) throw new Error(`${label} does not match the routing fixture`);
 }
 
+function validateSelectionAuthority(derivation, routeConstructionIds) {
+  const selectionAuthority = derivation.selectionAuthority;
+  if (!selectionAuthority || typeof selectionAuthority !== 'object') {
+    throw new AuthorityIncompleteError(
+      'coordinate carrier requires a selected-route authority receipt',
+      ['coordinateCarrier.derivation.selectionAuthority'],
+    );
+  }
+  if (
+    typeof selectionAuthority.receipt?.id !== 'string' ||
+    selectionAuthority.receipt.id.length === 0
+  ) {
+    throw new AuthorityIncompleteError(
+      'selected-route authority receipt id must be a nonempty string',
+      ['coordinateCarrier.derivation.selectionAuthority.receipt.id'],
+    );
+  }
+  try {
+    assertHash(selectionAuthority.receipt.sha256, 'selected-route authority receipt');
+  } catch (error) {
+    throw new AuthorityIncompleteError(error.message, [
+      'coordinateCarrier.derivation.selectionAuthority.receipt.sha256',
+    ]);
+  }
+
+  const rows = selectionAuthority.rows;
+  if (!Array.isArray(rows)) {
+    throw new AuthorityIncompleteError(
+      'selected-route authority rows are missing',
+      ['coordinateCarrier.derivation.selectionAuthority.rows'],
+    );
+  }
+  if (!sameValue(rows.map(row => row?.constructionId), routeConstructionIds)) {
+    throw new Error('selected-route authority construction ids do not match the routing fixture route set');
+  }
+
+  const incompleteFields = [];
+  for (const field of REQUIRED_SHARED_AUTHORITY_FIELDS) {
+    const state = selectionAuthority.sharedFields?.[field];
+    if (state !== 'admitted') {
+      incompleteFields.push(`coordinateCarrier.derivation.selectionAuthority.sharedFields.${field}`);
+    }
+  }
+  for (const row of rows) {
+    if (row.state !== 'admitted') {
+      incompleteFields.push(
+        `coordinateCarrier.derivation.selectionAuthority.rows[${row.constructionId}].state`,
+      );
+    }
+    for (const field of REQUIRED_ROW_AUTHORITY_FIELDS) {
+      if (row.requiredFields?.[field] !== 'admitted') {
+        incompleteFields.push(
+          `coordinateCarrier.derivation.selectionAuthority.rows[${row.constructionId}].requiredFields.${field}`,
+        );
+      }
+    }
+  }
+  if (incompleteFields.length > 0) {
+    const firstRow = rows.find(row => row.state !== 'admitted');
+    const firstSharedField = REQUIRED_SHARED_AUTHORITY_FIELDS.find(
+      field => selectionAuthority.sharedFields?.[field] !== 'admitted',
+    );
+    const firstRowField = rows.flatMap(row => REQUIRED_ROW_AUTHORITY_FIELDS.map(field => ({ row, field })))
+      .find(({ row, field }) => row.requiredFields?.[field] !== 'admitted');
+    let reason;
+    if (firstRow) {
+      reason = `${firstRow.constructionId} selected-row authority state ${firstRow.state || 'missing'} is not admitted`;
+    } else if (firstSharedField) {
+      reason = `shared packing field ${firstSharedField} authority state ${selectionAuthority.sharedFields?.[firstSharedField] || 'missing'} is not admitted`;
+    } else {
+      const { row, field } = firstRowField;
+      reason = `${row.constructionId} required field ${field} authority state ${row.requiredFields?.[field] || 'missing'} is not admitted`;
+    }
+    throw new AuthorityIncompleteError(reason, incompleteFields);
+  }
+}
+
 function validateCoordinateCarrier(routingFixture, routes, coordinateCarrier) {
   if (coordinateCarrier?.schema !== AUTHORED_MUSCLE_PACKING_COORDINATE_CARRIER_SCHEMA) {
     throw new Error(`coordinate carrier schema mismatch: ${coordinateCarrier?.schema || 'missing'}`);
@@ -163,6 +262,7 @@ function validateCoordinateCarrier(routingFixture, routes, coordinateCarrier) {
   if (!sameValue(derivation.selectedConstructionIds, routeConstructionIds)) {
     throw new Error('coordinate carrier atlas selected construction ids do not match the routing fixture route set');
   }
+  validateSelectionAuthority(derivation, routeConstructionIds);
   compareField(coordinateCarrier.source, sourceIdentity(routingFixture), 'coordinate carrier source identity');
   if (
     coordinateCarrier.coordinateSpace?.kind !== 'source-world' ||
@@ -306,13 +406,16 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
     orderedMuscles = validateCoordinateCarrier(routingFixture, routes, coordinateCarrier);
   } catch (error) {
     return reject({
-      status: /match the routing fixture|missing from coordinate|route set|construction ids/i.test(error.message)
-        ? 'source-identity-mismatch'
-        : 'geometry-invalid',
+      status: error instanceof AuthorityIncompleteError
+        ? 'authority-incomplete'
+        : /match the routing fixture|missing from coordinate|route set|construction ids/i.test(error.message)
+          ? 'source-identity-mismatch'
+          : 'geometry-invalid',
       reason: error.message,
       input,
       source,
       acceptedFields: ACCEPTED_IDENTITY_FIELDS,
+      missingFields: error instanceof AuthorityIncompleteError ? error.missingFields : [],
     });
   }
 
@@ -332,7 +435,7 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
   return receipt({
     status: 'admitted',
     admitted: true,
-    reason: 'routing identities, atlas subset derivation, fixed endpoints, coordinate space, carrier geometry, volume authority, skeletal clearance, and compartment bounds agree',
+    reason: 'routing identities, atlas subset derivation, selected-row authority, fixed endpoints, coordinate space, carrier geometry, volume authority, skeletal clearance, and compartment bounds agree',
     input: structuredClone(input),
     source,
     acceptedFields: [...ACCEPTED_IDENTITY_FIELDS, ...ACCEPTED_COORDINATE_FIELDS],
