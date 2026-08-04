@@ -62,10 +62,11 @@ def test_blender_bootstraps_its_script_directory_before_importing_the_core():
     assert adapter.index("sys.path.insert") < adapter.index("from source_plate_core import")
 
 
-def test_blender_51_writes_distinct_multilayer_render_pass_artifacts():
+def test_blender_51_writes_distinct_exr_render_pass_artifacts():
     adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
 
-    assert adapter.count('file_format = "OPEN_EXR_MULTILAYER"') == 2
+    assert adapter.count('file_format = "OPEN_EXR"') == 2
+    assert 'file_format = "OPEN_EXR_MULTILAYER"' not in adapter
     assert 'scene.render.filepath = str(outputs["depth"])' in adapter
     assert 'scene.render.filepath = str(outputs["normal"])' in adapter
     assert "view_layer.use_pass_z = True" in adapter
@@ -86,5 +87,5 @@ if __name__ == "__main__":
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
     test_blender_adapter_never_saves_the_loaded_source()
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
-    test_blender_51_writes_distinct_multilayer_render_pass_artifacts()
+    test_blender_51_writes_distinct_exr_render_pass_artifacts()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()
