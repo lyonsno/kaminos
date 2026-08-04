@@ -314,6 +314,88 @@ test('disagreeing helper, curve, and surface candidates remain visible and block
   assert.match(result.authorityReceipt.blockers.join('\n'), /unresolved.*origin.*conflict/i);
 });
 
+test('a matching routing endpoint without source_mesh authority remains a candidate', () => {
+  const provisionalFixture = routingFixture();
+  provisionalFixture.conditions.correct.routes[0].origin.sourceAuthority = 'provisional_muscle_surface';
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: provisionalFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+  const origin = result.authorityReceipt.rows[0].fields['attachments.origin.position'];
+
+  assert.equal(origin.state, 'candidate');
+  assert.equal(origin.selected, null);
+  assert.equal(origin.candidates.at(-1).authority, 'candidate');
+  assert.match(result.authorityReceipt.blockers.join('\n'), /route-a.*origin.*candidate/i);
+  assert.equal(result.coordinateCarrier, null);
+});
+
+test('an explicit fixture candidate ceiling outranks route-local source_mesh labels', () => {
+  const candidateFixture = routingFixture();
+  candidateFixture.authority = { geometryAuthority: 'candidate' };
+  candidateFixture.selection = {
+    authorityReceipt: {
+      admitted: false,
+      rows: ['route-a', 'route-b'].map(constructionId => ({
+        constructionId,
+        state: 'candidate',
+        requiredFields: {
+          'attachments.origin.position': 'candidate',
+          'attachments.insertion.position': 'candidate',
+          centerline: 'candidate',
+          targetVolume: 'candidate',
+          volumeAuthority: 'candidate',
+        },
+      })),
+    },
+  };
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: candidateFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+
+  for (const row of result.authorityReceipt.rows) {
+    assert.equal(row.state, 'candidate');
+    assert.equal(row.fields['attachments.origin.position'].state, 'candidate');
+    assert.equal(row.fields['attachments.origin.position'].selected, null);
+    assert.equal(row.fields['attachments.insertion.position'].state, 'candidate');
+    assert.equal(row.fields['attachments.insertion.position'].selected, null);
+  }
+  assert.equal(result.coordinateCarrier, null);
+});
+
+test('a routing endpoint assigned to the wrong helper remains an explicit identity conflict', () => {
+  const staleFixture = routingFixture();
+  staleFixture.conditions.correct.routes[0].origin.assignedHandleInstanceId = 'wrong-origin-handle';
+  const result = buildAuthoredMuscleCoordinateExport({
+    extraction: extraction(),
+    sourceGraph: graph(),
+    sourceGraphFileSha256: GRAPH_FILE_SHA,
+    routingFixture: staleFixture,
+    routingFixtureFileSha256: ROUTING_SHA,
+    requestedConstructionIds: ['route-a', 'route-b'],
+  });
+  const origin = result.authorityReceipt.rows[0].fields['attachments.origin.position'];
+
+  assert.equal(origin.state, 'conflict');
+  assert.equal(origin.selected, null);
+  assert.deepEqual(origin.candidates.at(-1).authorityConflict, {
+    field: 'assignedHandleInstanceId',
+    expected: 'origin-route-a',
+    actual: 'wrong-origin-handle',
+  });
+  assert.match(result.authorityReceipt.blockers.join('\n'), /assignedHandleInstanceId.*origin-route-a.*wrong-origin-handle/i);
+  assert.equal(result.coordinateCarrier, null);
+});
+
 test('candidate receipt is byte-identical on replay and keeps non-authoritative geometry out of the carrier', () => {
   const first = build();
   const second = build();

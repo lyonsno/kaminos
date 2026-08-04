@@ -105,6 +105,15 @@ function fieldRecord({ candidates = [], authorityCandidateKind = null, missingRe
       reason: missingReason ?? 'no source-backed candidate was extracted',
     };
   }
+  const authorityConflict = candidates.find(candidate => candidate.authorityConflict)?.authorityConflict;
+  if (authorityConflict) {
+    return {
+      state: 'conflict',
+      selected: null,
+      candidates,
+      reason: `${authorityConflict.field} authority binding expected ${authorityConflict.expected ?? 'missing'} but received ${authorityConflict.actual ?? 'missing'}`,
+    };
+  }
   const first = candidates[0].value;
   const disagreement = candidates.some(candidate => !samePoint(first, candidate.value));
   if (disagreement) {
@@ -244,13 +253,43 @@ function visibleSurfaceEndpoint(muscle, endpoint) {
   );
 }
 
-function endpointField(muscle, endpoint, fixtureRoute) {
+function fixtureEndpointAuthority(routingFixture, constructionId, endpoint) {
+  const receipt = routingFixture?.selection?.authorityReceipt;
+  const receiptPresent = receipt && typeof receipt === 'object';
+  const receiptRow = Array.isArray(receipt?.rows)
+    ? receipt.rows.find(row => row.constructionId === constructionId)
+    : null;
+  const field = `attachments.${endpoint}.position`;
+  const fieldState = receiptRow?.requiredFields?.[field] ?? null;
+  const geometryState = routingFixture?.authority?.geometryAuthority ?? null;
+  const explicitStates = [
+    ...(receiptPresent ? [fieldState] : []),
+    ...(geometryState ? [geometryState] : []),
+  ];
+  return {
+    admitted: explicitStates.length === 0 || explicitStates.every(state => state === 'admitted'),
+    evidenceLocators: [
+      ...(receiptPresent
+        ? [`routingFixture.selection.authorityReceipt.rows[constructionId=${constructionId}].requiredFields.${field}`]
+        : []),
+      ...(geometryState ? ['routingFixture.authority.geometryAuthority'] : []),
+    ],
+  };
+}
+
+function endpointField(muscle, endpoint, fixtureRoute, routingFixture) {
   const constructionId = graphConstructionId(muscle);
   const component = muscle.components?.[endpoint];
   const nativeSamples = curveNativeSamples(muscle);
   const pathPoint = endpoint === 'origin' ? nativeSamples[0] : nativeSamples.at(-1);
   const surfaceValue = visibleSurfaceEndpoint(muscle, endpoint);
   const fixtureEndpoint = fixtureRoute?.[endpoint];
+  const expectedHandleInstanceId = component?.identity?.instance_id ?? null;
+  const fixtureHandleMatches = fixtureEndpoint?.assignedHandleInstanceId === expectedHandleInstanceId;
+  const fixtureAuthority = fixtureEndpointAuthority(routingFixture, constructionId, endpoint);
+  const fixtureEndpointAdmitted = fixtureEndpoint?.sourceAuthority === 'source_mesh'
+     && fixtureHandleMatches
+     && fixtureAuthority.admitted;
   const candidates = [];
   if (component) {
     candidates.push({
@@ -284,11 +323,24 @@ function endpointField(muscle, endpoint, fixtureRoute) {
       kind: 'routing-fixture-endpoint',
       value: structuredClone(fixtureEndpoint.point),
       method: 'reviewed-routing-fixture-selection',
-      authority: fixtureEndpoint.sourceAuthority === 'source_mesh' ? 'admitted' : 'candidate',
-      evidenceLocators: [`routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`],
+      authority: fixtureEndpointAdmitted ? 'admitted' : 'candidate',
+      ...(!fixtureHandleMatches ? {
+        authorityConflict: {
+          field: 'assignedHandleInstanceId',
+          expected: expectedHandleInstanceId,
+          actual: fixtureEndpoint.assignedHandleInstanceId ?? null,
+        },
+      } : {}),
+      evidenceLocators: [
+        `routingFixture.conditions.correct.routes[constructionId=${constructionId}].${endpoint}`,
+        ...fixtureAuthority.evidenceLocators,
+      ],
     });
   }
-  return fieldRecord({ candidates, authorityCandidateKind: 'routing-fixture-endpoint' });
+  return fieldRecord({
+    candidates,
+    authorityCandidateKind: fixtureEndpointAdmitted ? 'routing-fixture-endpoint' : null,
+  });
 }
 
 function centerlineField(muscle) {
@@ -355,8 +407,8 @@ function routeRow(muscle, routingFixture) {
   const constructionId = graphConstructionId(muscle);
   const fixtureRoute = matchingFixtureRoute(routingFixture, muscle);
   const fields = {
-    'attachments.origin.position': endpointField(muscle, 'origin', fixtureRoute),
-    'attachments.insertion.position': endpointField(muscle, 'insertion', fixtureRoute),
+    'attachments.origin.position': endpointField(muscle, 'origin', fixtureRoute, routingFixture),
+    'attachments.insertion.position': endpointField(muscle, 'insertion', fixtureRoute, routingFixture),
     centerline: centerlineField(muscle),
     targetVolume: targetVolumeField(muscle),
     volumeAuthority: volumeAuthorityField(muscle),

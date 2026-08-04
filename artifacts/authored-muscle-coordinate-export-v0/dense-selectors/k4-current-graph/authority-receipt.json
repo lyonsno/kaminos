@@ -5,15 +5,23 @@
     "compartment authority missing: no named source-authority compartment exists",
     "coordinateSpace.unit authority candidate: Blender unit declaration is not real-world unit authority",
     "obstacles authority missing: no named source-authority obstacle membership exists",
+    "muscle-34 attachments.insertion.position authority candidate: mechanically measured agreement is not an authority source",
+    "muscle-34 attachments.origin.position authority candidate: mechanically measured agreement is not an authority source",
     "muscle-34 centerline authority candidate: mechanically derived value is not admitted authority",
     "muscle-34 targetVolume authority candidate: mechanically derived value is not admitted authority",
     "muscle-34 volumeAuthority authority candidate: mechanically derived value is not admitted authority",
+    "muscle-13 attachments.insertion.position authority candidate: mechanically measured agreement is not an authority source",
+    "muscle-13 attachments.origin.position authority candidate: mechanically measured agreement is not an authority source",
     "muscle-13 centerline authority candidate: mechanically derived value is not admitted authority",
     "muscle-13 targetVolume authority candidate: mechanically derived value is not admitted authority",
     "muscle-13 volumeAuthority authority candidate: mechanically derived value is not admitted authority",
+    "muscle-12 attachments.insertion.position authority candidate: mechanically measured agreement is not an authority source",
+    "muscle-12 attachments.origin.position authority candidate: mechanically measured agreement is not an authority source",
     "muscle-12 centerline authority candidate: mechanically derived value is not admitted authority",
     "muscle-12 targetVolume authority candidate: mechanically derived value is not admitted authority",
     "muscle-12 volumeAuthority authority candidate: mechanically derived value is not admitted authority",
+    "muscle-45 attachments.insertion.position authority candidate: mechanically measured agreement is not an authority source",
+    "muscle-45 attachments.origin.position authority candidate: mechanically measured agreement is not an authority source",
     "muscle-45 centerline authority candidate: mechanically derived value is not admitted authority",
     "muscle-45 targetVolume authority candidate: mechanically derived value is not admitted authority",
     "muscle-45 volumeAuthority authority candidate: mechanically derived value is not admitted authority"
@@ -21,7 +29,7 @@
   "derivation": {
     "atlas": {
       "id": "coordinate-parent-atlas-3f4c65867a776edf",
-      "sha256": "8098190ddc3666e3152243c0943ccf5d28c7b9aa332b16956ed0bd709cde0f92"
+      "sha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8"
     },
     "kind": "atlas-route-subset",
     "selectedConstructionIds": [
@@ -31,14 +39,14 @@
       "muscle-45"
     ]
   },
-  "id": "coordinate-authority-receipt-d574c9d36349c45b",
+  "id": "coordinate-authority-receipt-970ed8ac10777d30",
   "packingSelectionAuthority": {
     "rows": [
       {
         "constructionId": "muscle-34",
         "requiredFields": {
-          "attachments.insertion.position": "admitted",
-          "attachments.origin.position": "admitted",
+          "attachments.insertion.position": "candidate",
+          "attachments.origin.position": "candidate",
           "centerline": "candidate",
           "targetVolume": "candidate",
           "volumeAuthority": "candidate"
@@ -48,8 +56,8 @@
       {
         "constructionId": "muscle-13",
         "requiredFields": {
-          "attachments.insertion.position": "admitted",
-          "attachments.origin.position": "admitted",
+          "attachments.insertion.position": "candidate",
+          "attachments.origin.position": "candidate",
           "centerline": "candidate",
           "targetVolume": "candidate",
           "volumeAuthority": "candidate"
@@ -59,8 +67,8 @@
       {
         "constructionId": "muscle-12",
         "requiredFields": {
-          "attachments.insertion.position": "admitted",
-          "attachments.origin.position": "admitted",
+          "attachments.insertion.position": "candidate",
+          "attachments.origin.position": "candidate",
           "centerline": "candidate",
           "targetVolume": "candidate",
           "volumeAuthority": "candidate"
@@ -70,8 +78,8 @@
       {
         "constructionId": "muscle-45",
         "requiredFields": {
-          "attachments.insertion.position": "admitted",
-          "attachments.origin.position": "admitted",
+          "attachments.insertion.position": "candidate",
+          "attachments.origin.position": "candidate",
           "centerline": "candidate",
           "targetVolume": "candidate",
           "volumeAuthority": "candidate"
@@ -85,7 +93,7 @@
       "obstacles": "missing"
     }
   },
-  "receiptSha256": "ef5b6cb016287c1f0428f4f77d15defd19e2bbbf9956cb980c5878923a54bc8d",
+  "receiptSha256": "d69f4b846645191338c4ac8d444142ee7753af35baa57fa5839a3b64c19cb619",
   "request": {
     "effectiveConstructionIds": [
       "muscle-34",
@@ -162,9 +170,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-34].insertion"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-34].insertion",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-34].requiredFields.attachments.insertion.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -175,21 +185,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-34].insertion"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              8.319665909,
-              -2.78211689,
-              8.736489296
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "attachments.origin.position": {
           "candidates": [
@@ -233,9 +231,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-34].origin"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-34].origin",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-34].requiredFields.attachments.origin.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -246,21 +246,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-34].origin"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              4.189600945,
-              8.059602737,
-              -5.167895317
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "centerline": {
           "candidates": [
@@ -746,9 +734,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-13].insertion"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-13].insertion",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-13].requiredFields.attachments.insertion.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -759,21 +749,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-13].insertion"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              6.266059875,
-              -2.056589127,
-              10.305938721
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "attachments.origin.position": {
           "candidates": [
@@ -817,9 +795,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-13].origin"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-13].origin",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-13].requiredFields.attachments.origin.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -830,21 +810,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-13].origin"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              1.544946909,
-              9.841607094,
-              -2.553966284
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "centerline": {
           "candidates": [
@@ -1330,9 +1298,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-12].insertion"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-12].insertion",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-12].requiredFields.attachments.insertion.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -1343,21 +1313,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-12].insertion"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              8.526236534,
-              -2.489732265,
-              9.570702553
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "attachments.origin.position": {
           "candidates": [
@@ -1401,9 +1359,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-12].origin"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-12].origin",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-12].requiredFields.attachments.origin.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -1414,21 +1374,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-12].origin"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              3.534674406,
-              10.325469971,
-              -3.888942957
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "centerline": {
           "candidates": [
@@ -1914,9 +1862,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-45].insertion"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-45].insertion",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-45].requiredFields.attachments.insertion.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -1927,21 +1877,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-45].insertion"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              8.619001389,
-              -3.208676815,
-              9.192866325
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "attachments.origin.position": {
           "candidates": [
@@ -1985,9 +1923,11 @@
               ]
             },
             {
-              "authority": "admitted",
+              "authority": "candidate",
               "evidenceLocators": [
-                "routingFixture.conditions.correct.routes[constructionId=muscle-45].origin"
+                "routingFixture.conditions.correct.routes[constructionId=muscle-45].origin",
+                "routingFixture.selection.authorityReceipt.rows[constructionId=muscle-45].requiredFields.attachments.origin.position",
+                "routingFixture.authority.geometryAuthority"
               ],
               "kind": "routing-fixture-endpoint",
               "method": "reviewed-routing-fixture-selection",
@@ -1998,21 +1938,9 @@
               ]
             }
           ],
-          "reason": null,
-          "selected": {
-            "authority": "admitted",
-            "evidenceLocators": [
-              "routingFixture.conditions.correct.routes[constructionId=muscle-45].origin"
-            ],
-            "kind": "routing-fixture-endpoint",
-            "method": "reviewed-routing-fixture-selection",
-            "value": [
-              3.766583204,
-              11.328212738,
-              -3.9319911
-            ]
-          },
-          "state": "admitted"
+          "reason": "mechanically measured agreement is not an authority source",
+          "selected": null,
+          "state": "candidate"
         },
         "centerline": {
           "candidates": [
