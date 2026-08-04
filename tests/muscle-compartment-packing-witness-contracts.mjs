@@ -101,6 +101,10 @@ test('witness publishes exact source, result, interactive route, and pending vis
     written.result.pairwiseCoordinate,
   );
   assert.deepEqual(
+    written.report.result.curvatureProjection,
+    written.result.curvatureProjection,
+  );
+  assert.deepEqual(
     written.report.result.crossSectionProjection,
     written.result.crossSectionProjection,
   );
@@ -194,6 +198,11 @@ test('eight-carrier density witness refuses the source-relative residual without
     effective:'cartesian',
     fallbackUsed:false,
   });
+  assert.deepEqual(report.result.curvatureProjection, {
+    requestedUpdate:'unconstrained',
+    effectiveUpdate:'unconstrained',
+    fallbackUsed:false,
+  });
   assert.equal(report.result.failure.kind, 'residual-constraint');
   assert.equal(report.result.failure.dominantMechanism.kind, 'pairwise-exclusion-residual');
   assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
@@ -235,6 +244,42 @@ test('source-normal dense witness preserves exact coordinate receipt while refus
   assert.equal(report.result.failure.dominantMechanism.kind, 'source-curvature-reversal');
   assert.ok(report.result.metrics.packed.pairwisePenetration <= 1e-7);
   assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
+  assert.ok(!memory.files.has(`${outDir}/index.html`));
+});
+
+test('curvature-sign dense witness publishes the exact formation constraint before refusal', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/muscle-compartment-packing-density-eight-curvature-sign';
+  const source = createSyntheticMuscleDensityLadder(8);
+  await assert.rejects(
+    () => writeMuscleCompartmentPackingWitness({
+      outDir,
+      source,
+      config: {
+        maxIterations:32,
+        relaxationStep:0.35,
+        smoothnessStep:0.035,
+        sampleCount:25,
+        convergenceTolerance:1e-7,
+        pairwiseUpdate:'reciprocal-batched',
+        pairwiseCoordinate:'source-normal',
+        crossSectionUpdate:'contact-redistributed',
+        crossSectionStep:0.02,
+        curvatureUpdate:'source-sign-halfspace',
+      },
+      io:memory.io,
+    }),
+    /failed/i,
+  );
+  const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
+  assert.equal(report.status, 'failed');
+  assert.deepEqual(report.result.curvatureProjection, {
+    requestedUpdate:'source-sign-halfspace',
+    effectiveUpdate:'source-sign-halfspace',
+    fallbackUsed:false,
+  });
+  assert.equal(report.result.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(report.result.metrics.packed.pairwisePenetration > 1e-7);
   assert.ok(!memory.files.has(`${outDir}/index.html`));
 });
 

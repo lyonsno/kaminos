@@ -111,6 +111,7 @@ function renderHtml({ source, result, report }) {
   ).join('');
   const correctionLabels = {
     sourceSmoothing: 'source smoothing',
+    formationConstraint: 'formation constraint',
     skeletalClearance: 'skeletal clearance',
     pairwiseExclusion: 'pairwise exclusion',
     compartmentProjection: 'compartment projection',
@@ -403,6 +404,7 @@ export async function writeMuscleCompartmentPackingWitness({
         formation: structuredClone(result.formation),
         pairwiseProjection: structuredClone(result.pairwiseProjection),
         pairwiseCoordinate: structuredClone(result.pairwiseCoordinate),
+        curvatureProjection: structuredClone(result.curvatureProjection),
         crossSectionProjection: structuredClone(result.crossSectionProjection),
         correctionAttribution: structuredClone(result.correctionAttribution),
         metrics: structuredClone(result.metrics),
@@ -442,6 +444,7 @@ export async function writeMuscleCompartmentPackingWitness({
         config: structuredClone(result.config),
         pairwiseProjection: structuredClone(result.pairwiseProjection),
         pairwiseCoordinate: structuredClone(result.pairwiseCoordinate),
+        curvatureProjection: structuredClone(result.curvatureProjection),
         crossSectionProjection: structuredClone(result.crossSectionProjection),
         clearanceValidation: structuredClone(result.clearanceValidation),
         metrics: structuredClone(result.metrics),

@@ -17,6 +17,7 @@ const CORRECTION_ATTRIBUTION_SCHEMA =
   'kaminos.muscle-compartment-packing-correction-attribution.v0';
 const CORRECTION_CATEGORIES = Object.freeze([
   'sourceSmoothing',
+  'formationConstraint',
   'skeletalClearance',
   'pairwiseExclusion',
   'compartmentProjection',
@@ -560,6 +561,14 @@ function validateConfig(config) {
     throw new Error('muscle packing pairwiseCoordinate must be cartesian or source-normal');
   }
   if (
+    config.curvatureUpdate !== undefined &&
+    !['unconstrained', 'source-sign-halfspace'].includes(config.curvatureUpdate)
+  ) {
+    throw new Error(
+      'muscle packing curvatureUpdate must be unconstrained or source-sign-halfspace',
+    );
+  }
+  if (
     config.crossSectionUpdate !== undefined &&
     !['uniform', 'contact-redistributed'].includes(config.crossSectionUpdate)
   ) {
@@ -731,6 +740,15 @@ function pairwiseCoordinateReceipt(config) {
   return {
     requested: coordinate,
     effective: coordinate,
+    fallbackUsed: false,
+  };
+}
+
+function curvatureProjectionReceipt(config) {
+  const update = config.curvatureUpdate || 'unconstrained';
+  return {
+    requestedUpdate: update,
+    effectiveUpdate: update,
     fallbackUsed: false,
   };
 }
@@ -1615,6 +1633,67 @@ function smoothInteriorAbsolute(muscles, amount, attribution, category) {
   }
 }
 
+function projectSourceCurvatureSigns(source, muscles, attribution, category) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const sourceCenterline = source.muscles[muscleIndex].centerline;
+    let projected = false;
+    for (let sweep = 0; sweep < 64; sweep += 1) {
+      let correctionApplied = false;
+      for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+        const sourceCurvature = centerlineSecondDifference(sourceCenterline, knotIndex);
+        const sourceMagnitudeSquared = dot(sourceCurvature, sourceCurvature);
+        if (sourceMagnitudeSquared <= 1e-24) continue;
+        const packedCurvature = centerlineSecondDifference(muscle.centerline, knotIndex);
+        const currentDot = dot(sourceCurvature, packedCurvature);
+        // Stay just inside the admissible halfspace so the neighboring
+        // constraint's sequential projection cannot turn rounding noise into
+        // a sign reversal at measurement time.
+        const requiredDot = sourceMagnitudeSquared * 1e-6;
+        if (currentDot >= requiredDot - sourceMagnitudeSquared * 1e-12) continue;
+        correctionApplied = true;
+        const coefficients = [1, -2, 1];
+        const movable = [
+          knotIndex - 1 > 0,
+          true,
+          knotIndex + 1 < muscle.centerline.length - 1,
+        ];
+        const response = coefficients.reduce(
+          (sum, coefficient, index) => sum + (movable[index] ? coefficient ** 2 : 0),
+          0,
+        );
+        if (response <= 0) continue;
+        const correctionScale = (requiredDot - currentDot) /
+          (sourceMagnitudeSquared * response);
+        for (let localIndex = 0; localIndex < 3; localIndex += 1) {
+          if (!movable[localIndex]) continue;
+          const targetKnotIndex = knotIndex + localIndex - 1;
+          const knot = muscle.centerline[targetKnotIndex];
+          applyAttributedPosition(
+            attribution,
+            category,
+            muscles,
+            muscleIndex,
+            targetKnotIndex,
+            add(
+              knot.position,
+              scale(sourceCurvature, correctionScale * coefficients[localIndex]),
+            ),
+          );
+        }
+      }
+      if (!correctionApplied) {
+        projected = true;
+        break;
+      }
+    }
+    if (!projected) {
+      throw new Error(
+        `muscle ${muscle.id} source-curvature halfspace projection did not stabilize`,
+      );
+    }
+  }
+}
+
 function residualMaximum(metrics) {
   return Math.max(
     metrics.pairwisePenetration,
@@ -1793,6 +1872,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       formation: formationReceipt(source),
       pairwiseProjection: pairwiseProjectionReceipt(config),
       pairwiseCoordinate: pairwiseCoordinateReceipt(config),
+      curvatureProjection: curvatureProjectionReceipt(config),
       crossSectionProjection: crossSectionProjectionReceipt(config),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
@@ -1962,6 +2042,14 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       correctionAttribution,
       'compartmentProjection',
     );
+    if (config.curvatureUpdate === 'source-sign-halfspace') {
+      projectSourceCurvatureSigns(
+        source,
+        muscles,
+        correctionAttribution,
+        'formationConstraint',
+      );
+    }
     restoreTargetVolumes(muscles, correctionAttribution, 'volumeRestoration');
     packed = measureState(source, muscles, config.sampleCount, false);
     iterations = iteration;
@@ -2039,6 +2127,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     formation: formationReceipt(source),
     pairwiseProjection: pairwiseProjectionReceipt(config),
     pairwiseCoordinate: pairwiseCoordinateReceipt(config),
+    curvatureProjection: curvatureProjectionReceipt(config),
     crossSectionProjection: crossSectionProjectionReceipt(config),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',

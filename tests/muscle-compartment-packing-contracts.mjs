@@ -112,6 +112,7 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     result.correctionAttribution.categories,
     [
       'sourceSmoothing',
+      'formationConstraint',
       'skeletalClearance',
       'pairwiseExclusion',
       'compartmentProjection',
@@ -430,6 +431,42 @@ test('source-normal pairwise coordinates reduce dense folding without surrenderi
   assert.ok(sourceNormal.metrics.packed.compartmentEscape <= baseConfig.convergenceTolerance);
 });
 
+test('source-curvature halfspaces return the dense contact residual instead of folding', () => {
+  const source = createSyntheticMuscleDensityLadder(8);
+  const config = {
+    maxIterations:480,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    pairwiseCoordinate:'source-normal',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.02,
+    curvatureUpdate:'source-sign-halfspace',
+  };
+  const result = solveMuscleCompartmentPacking(source, config);
+  assert.deepEqual(result.curvatureProjection, {
+    requestedUpdate:'source-sign-halfspace',
+    effectiveUpdate:'source-sign-halfspace',
+    fallbackUsed:false,
+  });
+  assert.equal(result.status, 'continuous-clearance-failed');
+  assert.equal(result.failure?.kind, 'residual-constraint');
+  assert.equal(
+    result.failure?.dominantMechanism?.kind,
+    'continuous-clearance-residual',
+  );
+  assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(result.metrics.packed.pairwisePenetration > config.convergenceTolerance);
+  assert.ok(result.metrics.packed.pairwisePenetration < 0.001);
+  assert.ok(result.metrics.packed.maximumSourceRadiusRatio <= 1.5);
+  assert.equal(result.metrics.packed.endpointDrift, 0);
+  assert.ok(result.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(result.metrics.packed.skeletalPenetration <= config.convergenceTolerance);
+  assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
+});
+
 test('source validation rejects identity collision and non-finite carrier state', () => {
   assert.throws(
     () => solveMuscleCompartmentPacking(
@@ -444,6 +481,13 @@ test('source validation rejects identity collision and non-finite carrier state'
       { pairwiseCoordinate:'silent-fallback' },
     ),
     /pairwiseCoordinate.*cartesian.*source-normal/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(
+      createSyntheticFourMuscleCompartment(),
+      { curvatureUpdate:'silent-fallback' },
+    ),
+    /curvatureUpdate.*unconstrained.*source-sign-halfspace/i,
   );
   const duplicate = createSyntheticFourMuscleCompartment();
   duplicate.muscles[1].identity.instanceId = duplicate.muscles[0].identity.instanceId;
