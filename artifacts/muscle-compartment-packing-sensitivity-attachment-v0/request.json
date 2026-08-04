@@ -1,0 +1,76 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-request.v0",
+  "id": "synthetic-k8-attachment-bracket-visual-v0",
+  "expectedSourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3",
+  "variants": [
+    {
+      "id": "attachment-0500",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1
+      },
+      "solverConfig": {
+        "maxIterations": 480,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    },
+    {
+      "id": "attachment-0545",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.09
+      },
+      "solverConfig": {
+        "maxIterations": 1280,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    },
+    {
+      "id": "attachment-0550",
+      "derivation": {
+        "axis": "attachment-radial-scale",
+        "obstacleId": "central-skeletal-shaft",
+        "scaleFactor": 1.1
+      },
+      "solverConfig": {
+        "maxIterations": 1280,
+        "relaxationStep": 0.35,
+        "smoothnessStep": 0.035,
+        "sampleCount": 25,
+        "convergenceTolerance": 1e-7,
+        "pairwiseUpdate": "reciprocal-batched",
+        "pairwiseCoordinate": "source-normal",
+        "crossSectionUpdate": "contact-redistributed",
+        "crossSectionStep": 0.02,
+        "curvatureUpdate": "source-sign-halfspace",
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0
+      }
+    }
+  ]
+}

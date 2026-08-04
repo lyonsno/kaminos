@@ -1,0 +1,366 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-visual-inspection.v0",
+  "status": "completed-agent-inspection",
+  "disposition": "visually-rejected",
+  "observedAt": "2026-08-04T20:21:06Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "bindings": {
+    "inspectionInputReportSha256": "345c1ed4f1654e5abf51f926a6d0dfdfb818a3c9a24fc2a5572347572220518d",
+    "inspectionInputPortfolioSha256": "a67a8d22dfbc9dde667f9db0a4526db757f23cc64f8b9a73b814d8cf9c958d43",
+    "inspectedPortfolioSha256": "5d015c4a101120cfae100a0d100e5d4898a8498b9eec1303f5a97cb563257b61",
+    "runId": "run-9b1bd4443c00a7dcbf24",
+    "sourceSha256": "0577bc78607bc418b5cee376f09a7fb5b23018be3b3de04e9bfab16749e9d2b3"
+  },
+  "variants": [
+    {
+      "id": "attachment-0500",
+      "solveStatus": "continuous-clearance-failed",
+      "bindings": {
+        "sourceJsonSha256": "57053a18bef43787681df05e003627296dede8767b9aa1115fb74e1fe5da769f",
+        "packedJsonSha256": "0ec566094d2214f717d2b1139fe3b3745e510aac2e7991c2f5dd9b084ae8e418",
+        "indexHtmlSha256": "a5094b6e0007344940828ca2e4dd9fb9f808b25a0052bff123351a883dbefa7b"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0500/before.png",
+          "sha256": "5f4a839cd51230ff5ac0d55929b3178afd10dd7c3f8dfee06dde2104a4f71daa",
+          "sizeBytes": 266701,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0500/capture-before-report.json",
+            "reportSha256": "45ce014c2dc7913556f2832e57b97983735e6d056c04dd1904cd5b8bcb174e0e",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0500/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0500/packed.png",
+          "sha256": "7fd2b9a5260d7c51292d06420608021ee646069432485fc466e3c126f17359b2",
+          "sizeBytes": 254005,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0500/capture-packed-report.json",
+            "reportSha256": "63f00f07b94c6bae6d578280b064d84476b8c8a785c8aea5495ed46077961494",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0500/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The residual-bearing output clears the gross central collision but straightens every authored bowed carrier into a generic radial cylinder; the source crossing/bowing relationships do not survive."
+    },
+    {
+      "id": "attachment-0545",
+      "solveStatus": "continuous-clearance-failed",
+      "bindings": {
+        "sourceJsonSha256": "677893f9766e475349464247d442631af45234385cd0ab8fc2734cf72bcbdeeb",
+        "packedJsonSha256": "8b122892e4a6ace35f63b5d3d4ed7fd820c666dbab2369c8a96677917aac059c",
+        "indexHtmlSha256": "b77bd81356e9158f89b3fb81a659a29289709243c18ba6e5709e77caaf645b7d"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0545/before.png",
+          "sha256": "c8a002c8b12d5c8da571d0fe78caa10702da248b56d3febc7812652e39c478d1",
+          "sizeBytes": 273394,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0545/capture-before-report.json",
+            "reportSha256": "7daca021e535003ca14654b31121801a2e5b07446fdd8e05cf047cc863ba42e2",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0545/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0545/packed.png",
+          "sha256": "381e760e88fc5354557aaae2645d3b4d08ddd4985a4441dc929402d67a7cd39f",
+          "sizeBytes": 261640,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0545/capture-packed-report.json",
+            "reportSha256": "3d878319ed52a8d33c059cbcfd4bf004ac6cd62d942a00041ad01e521c4e3751",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0545/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The near-tolerance row is visually indistinguishable in mechanism from the base failure: attachment spread changes the endpoints, but the solver still destroys curvature magnitude and regularizes the cluster into straight cylinders."
+    },
+    {
+      "id": "attachment-0550",
+      "solveStatus": "source-formation-failed",
+      "bindings": {
+        "sourceJsonSha256": "4ef26706b2636b8a055d20c7d9208e2a64a3990cdc049327b645b1f9e3679375",
+        "packedJsonSha256": "9c9fa023c3ee316a3d624d8a628815a90348791d542756ad6199d7b293753338",
+        "indexHtmlSha256": "f197a04673c1580fe41285307c8772cd0ed1e05de28204eac2585c8f4be160c3"
+      },
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0550/before.png",
+          "sha256": "8cb0e3c8407ed6b3c27e9a9b55792fb0e417d2c38e5065c9ce0b379df323f426",
+          "sizeBytes": 274654,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0550/capture-before-report.json",
+            "reportSha256": "c9e32da4beb4b2b3968f6405ae8a14d2edc1e5fa9aa71170c54b97b56d7cffa4",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0550/?state=before",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0550/packed.png",
+          "sha256": "9404711db4ec7b3ff7f4bfcbbfb1bac98f43743a61815bf532ff89f1785bf7bb",
+          "sizeBytes": 262961,
+          "viewport": [
+            1400,
+            900
+          ],
+          "capture": {
+            "report": "run-9b1bd4443c00a7dcbf24/attachment-0550/capture-packed-report.json",
+            "reportSha256": "67ec628fe2393665881cfacf37d2105b88bd86b137e63d80d3969c5d25c5a086",
+            "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/run-9b1bd4443c00a7dcbf24/attachment-0550/?state=packed",
+            "route": {
+              "requested": "independent-headless-screenshot-v0",
+              "effective": "independent-headless-screenshot-v0",
+              "fallbackUsed": false
+            },
+            "browser": {
+              "schema": "kaminos.headless-browser-resolution.v0",
+              "request": {
+                "source": "cli",
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+              },
+              "effective": {
+                "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+                "kind": "playwright-chromium-headless-shell",
+                "playwrightRevision": null,
+                "installedStableChrome": false,
+                "fileIdentity": {
+                  "device": 16777231,
+                  "inode": 789173631,
+                  "sizeBytes": 163329264,
+                  "modifiedMs": 1785793228817.7512
+                }
+              },
+              "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+              "rejectedCandidates": []
+            },
+            "fallbackUsed": false
+          }
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "Clearance convergence does not rescue the formation: the solver now correctly reports source-formation-failed because the output is the same generic radial cylinder array. The sign-only curvature halfspace avoids curvature-vector sign reversal while allowing curvature magnitude to collapse almost to zero and longitudinal tangents to reverse."
+    }
+  ]
+}

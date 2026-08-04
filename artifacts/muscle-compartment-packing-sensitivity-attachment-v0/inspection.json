@@ -1,0 +1,105 @@
+{
+  "observedAt": "2026-08-04T20:21:06Z",
+  "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-sensitivity-attachment-v0/",
+  "variants": [
+    {
+      "id": "attachment-0500",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0500/before.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0500/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0500/packed.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0500/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The residual-bearing output clears the gross central collision but straightens every authored bowed carrier into a generic radial cylinder; the source crossing/bowing relationships do not survive."
+    },
+    {
+      "id": "attachment-0545",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0545/before.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0545/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0545/packed.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0545/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "The near-tolerance row is visually indistinguishable in mechanism from the base failure: attachment spread changes the endpoints, but the solver still destroys curvature magnitude and regularizes the cluster into straight cylinders."
+    },
+    {
+      "id": "attachment-0550",
+      "images": [
+        {
+          "state": "before",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0550/before.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0550/capture-before-report.json"
+        },
+        {
+          "state": "packed",
+          "path": "run-9b1bd4443c00a7dcbf24/attachment-0550/packed.png",
+          "captureReport": "run-9b1bd4443c00a7dcbf24/attachment-0550/capture-packed-report.json"
+        }
+      ],
+      "evidence": {
+        "nonblank": true,
+        "statesDistinct": true,
+        "stableMuscleIdentityLegible": true,
+        "attachmentAndObstacleLegible": true,
+        "displacementLegible": true,
+        "metricsAndSolveStatusLegible": true,
+        "residualBearingOutputNotPresentedAsAdmission": true
+      },
+      "judgment": {
+        "sourceFormationPlausible": false,
+        "packedRelationshipsPlausible": false,
+        "skeletalClearanceVisuallyPlausible": true,
+        "pairwiseExclusionVisuallyPlausible": true,
+        "shapeDegeneracyAbsent": false
+      },
+      "disposition": "visually-rejected",
+      "notes": "Clearance convergence does not rescue the formation: the solver now correctly reports source-formation-failed because the output is the same generic radial cylinder array. The sign-only curvature halfspace avoids curvature-vector sign reversal while allowing curvature magnitude to collapse almost to zero and longitudinal tangents to reverse."
+    }
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-sensitivity-variant.v0",
+  "status": "complete",
+  "id": "attachment-0500",
+  "route": {
+    "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "derivation": {
+    "schema": "kaminos.muscle-compartment-packing-sensitivity-derivation.v0",
+    "axis": "attachment-radial-scale",
+    "parentSource": {
+      "id": "synthetic-muscle-density-ladder-8-v0",
+      "input": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-muscle-density-ladder-8-v0",
+        "sha256": "ae2fd71cf78af2430cd382ca6fcd2e78164b9193684a1a7aa83864f740c95381"
+      }
+    },
+    "requested": {
+      "axis": "attachment-radial-scale",
+      "obstacleId": "central-skeletal-shaft",
+      "scaleFactor": 1
+    },
+    "effective": {
+      "axis": "attachment-radial-scale",
+      "obstacleId": "central-skeletal-shaft",
+      "scaleFactor": 1
+    },
+    "fallbackUsed": false,
+    "derivedSource": {
+      "kind": "sensitivity-derived-source",
+      "id": "synthetic-muscle-density-ladder-8-v0--sensitivity-6e95d96c8ba4dbb6",
+      "sha256": "12516a0cb7a7ca7188d35df2ece11e1ea5c4920ed5a216c869618b0e0cd0a00d"
+    }
+  },
+  "solve": {
+    "status": "continuous-clearance-failed",
+    "iterations": 480,
+    "requestedConfig": {
+      "maxIterations": 480,
+      "relaxationStep": 0.35,
+      "smoothnessStep": 0.035,
+      "sampleCount": 25,
+      "convergenceTolerance": 1e-7,
+      "pairwiseUpdate": "reciprocal-batched",
+      "pairwiseCoordinate": "source-normal",
+      "crossSectionUpdate": "contact-redistributed",
+      "crossSectionStep": 0.02,
+      "curvatureUpdate": "source-sign-halfspace",
+      "maximumSourceBendEnergyRatio": 1.05,
+      "minimumSourceCurvatureCosine": 0.3,
+      "minimumSourceTangentCosine": 0
+    },
+    "effectiveConfig": {
+      "maxIterations": 480,
+      "relaxationStep": 0.35,
+      "smoothnessStep": 0.035,
+      "sampleCount": 25,
+      "convergenceTolerance": 1e-7,
+      "maximumSourceBendEnergyRatio": 1.05,
+      "minimumSourceCurvatureCosine": 0.3,
+      "minimumSourceTangentCosine": 0,
+      "pairwiseUpdate": "reciprocal-batched",
+      "pairwiseCoordinate": "source-normal",
+      "crossSectionUpdate": "contact-redistributed",
+      "crossSectionStep": 0.02,
+      "curvatureUpdate": "source-sign-halfspace"
+    },
+    "fallbackUsed": false,
+    "config": {
+      "maxIterations": 480,
+      "relaxationStep": 0.35,
+      "smoothnessStep": 0.035,
+      "sampleCount": 25,
+      "convergenceTolerance": 1e-7,
+      "maximumSourceBendEnergyRatio": 1.05,
+      "minimumSourceCurvatureCosine": 0.3,
+      "minimumSourceTangentCosine": 0,
+      "pairwiseUpdate": "reciprocal-batched",
+      "pairwiseCoordinate": "source-normal",
+      "crossSectionUpdate": "contact-redistributed",
+      "crossSectionStep": 0.02,
+      "curvatureUpdate": "source-sign-halfspace"
+    },
+    "metrics": {
+      "initial": {
+        "pairwisePenetration": 5.569379776526,
+        "skeletalPenetration": 0.260000000495,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 0.2592,
+        "maximumSourceKnotDisplacement": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": 1,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      },
+      "packed": {
+        "pairwisePenetration": 0.000477657435,
+        "skeletalPenetration": 0,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 3.201988270714,
+        "maximumSourceKnotDisplacement": 0.561430951991,
+        "rootMeanSquareSourceKnotDisplacement": 0.391212025762,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 2.83696e-7,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": -1,
+        "sourceTangentReversalCount": 8,
+        "maximumSourceRadiusRatio": 1.04750336244,
+        "minimumPairwiseRelationCosine": 0.999473186497,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    },
+    "failure": {
+      "phase": "solve",
+      "kind": "residual-constraint",
+      "sourceId": "synthetic-muscle-density-ladder-8-v0--sensitivity-6e95d96c8ba4dbb6",
+      "iterations": 480,
+      "dominantMechanism": {
+        "kind": "continuous-clearance-residual",
+        "residual": 0.000477657435
+      },
+      "residuals": {
+        "pairwisePenetration": 0.000477657435,
+        "skeletalPenetration": 0,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 3.201988270714,
+        "maximumSourceKnotDisplacement": 0.561430951991,
+        "rootMeanSquareSourceKnotDisplacement": 0.391212025762,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 2.83696e-7,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": -1,
+        "sourceTangentReversalCount": 8,
+        "maximumSourceRadiusRatio": 1.04750336244,
+        "minimumPairwiseRelationCosine": 0.999473186497,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    }
+  },
+  "visual": {
+    "role": "diagnostic-not-admission",
+    "status": "pending-agent-inspection",
+    "route": {
+      "requested": "muscle-compartment-packing-sensitivity-orbitable-v0",
+      "effective": "muscle-compartment-packing-sensitivity-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "artifact": "index.html"
+  },
+  "artifacts": {
+    "relativeRoot": "run-9b1bd4443c00a7dcbf24/attachment-0500",
+    "sourceJsonSha256": "57053a18bef43787681df05e003627296dede8767b9aa1115fb74e1fe5da769f",
+    "packedJsonSha256": "0ec566094d2214f717d2b1139fe3b3745e510aac2e7991c2f5dd9b084ae8e418",
+    "indexHtmlSha256": "a5094b6e0007344940828ca2e4dd9fb9f808b25a0052bff123351a883dbefa7b"
+  }
+}

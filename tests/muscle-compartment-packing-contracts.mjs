@@ -81,6 +81,9 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     smoothnessStep: 0.035,
     sampleCount: 25,
     convergenceTolerance: 1e-7,
+    maximumSourceBendEnergyRatio: 1.05,
+    minimumSourceCurvatureCosine: 0.3,
+    minimumSourceTangentCosine: 0,
   };
   const result = solveMuscleCompartmentPacking(source, config);
 
@@ -186,6 +189,8 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   assert.equal(result.metrics.initial.minimumSourceBendEnergyRetention, 1);
   assert.equal(result.metrics.initial.minimumSourceCurvatureCosine, 1);
   assert.equal(result.metrics.initial.sourceCurvatureReversalCount, 0);
+  assert.equal(result.metrics.initial.minimumSourceTangentCosine, 1);
+  assert.equal(result.metrics.initial.sourceTangentReversalCount, 0);
   assert.ok(result.metrics.packed.maximumSourceKnotDisplacement < 0.5);
   assert.ok(result.metrics.packed.rootMeanSquareSourceKnotDisplacement < 0.35);
   assert.ok(
@@ -194,6 +199,8 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   );
   assert.ok(result.metrics.packed.minimumSourceCurvatureCosine > 0.3);
   assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+  assert.ok(result.metrics.packed.minimumSourceTangentCosine > 0.9);
+  assert.equal(result.metrics.packed.sourceTangentReversalCount, 0);
   assert.ok(result.metrics.packed.minimumPairwiseRelationCosine > 0.9);
   assert.equal(result.metrics.packed.pairwiseRelationReversalCount, 0);
   assert.ok(result.metrics.packed.nonFiniteValueCount === 0);
@@ -551,6 +558,20 @@ test('source validation rejects identity collision and non-finite carrier state'
       { curvatureUpdate:'silent-fallback' },
     ),
     /curvatureUpdate.*unconstrained.*source-sign-halfspace/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(
+      createSyntheticFourMuscleCompartment(),
+      { maximumSourceBendEnergyRatio:0.99 },
+    ),
+    /maximumSourceBendEnergyRatio.*at least 1/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(
+      createSyntheticFourMuscleCompartment(),
+      { minimumSourceTangentCosine:1.01 },
+    ),
+    /minimumSourceTangentCosine.*\[-1, 1\]/i,
   );
   const duplicate = createSyntheticFourMuscleCompartment();
   duplicate.muscles[1].identity.instanceId = duplicate.muscles[0].identity.instanceId;

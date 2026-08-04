@@ -144,6 +144,8 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.match(witnessHtml, /source displacement/);
   assert.match(witnessHtml, /source bend retention/);
   assert.match(witnessHtml, /curvature cosine/);
+  assert.match(witnessHtml, /tangent cosine/);
+  assert.match(witnessHtml, /max bend energy/);
   assert.match(witnessHtml, /relation cosine/);
   assert.match(witnessHtml, /function carrierSurface/);
   assert.match(witnessHtml, /startCapCenter/);

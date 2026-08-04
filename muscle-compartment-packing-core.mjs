@@ -11,6 +11,9 @@ const DEFAULT_CONFIG = Object.freeze({
   smoothnessStep: 0.035,
   sampleCount: 25,
   convergenceTolerance: 1e-7,
+  maximumSourceBendEnergyRatio: 1.05,
+  minimumSourceCurvatureCosine: 0.3,
+  minimumSourceTangentCosine: 0,
 });
 
 const CORRECTION_ATTRIBUTION_SCHEMA =
@@ -330,6 +333,8 @@ function measureSourceRelationshipRetention(source, muscles) {
   let minimumSourceBendEnergyRetention = 1;
   let minimumSourceCurvatureCosine = 1;
   let sourceCurvatureReversalCount = 0;
+  let minimumSourceTangentCosine = 1;
+  let sourceTangentReversalCount = 0;
   let maximumSourceRadiusRatio = 1;
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceMuscle = source.muscles[muscleIndex];
@@ -372,6 +377,26 @@ function measureSourceRelationshipRetention(source, muscles) {
       minimumSourceCurvatureCosine = Math.min(minimumSourceCurvatureCosine, cosine);
       if (cosine < 0) sourceCurvatureReversalCount += 1;
     }
+    for (let knotIndex = 0; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+      const sourceTangent = subtract(
+        sourceMuscle.centerline[knotIndex + 1].position,
+        sourceMuscle.centerline[knotIndex].position,
+      );
+      const packedTangent = subtract(
+        muscle.centerline[knotIndex + 1].position,
+        muscle.centerline[knotIndex].position,
+      );
+      const sourceMagnitude = length(sourceTangent);
+      const packedMagnitude = length(packedTangent);
+      if (!(sourceMagnitude > 1e-12) || !(packedMagnitude > 1e-12)) continue;
+      const cosine = Math.max(-1, Math.min(
+        1,
+        dot(sourceTangent, packedTangent) / (sourceMagnitude * packedMagnitude),
+      ));
+      if (!Number.isFinite(cosine)) continue;
+      minimumSourceTangentCosine = Math.min(minimumSourceTangentCosine, cosine);
+      if (cosine < 0) sourceTangentReversalCount += 1;
+    }
   }
   for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
@@ -405,6 +430,8 @@ function measureSourceRelationshipRetention(source, muscles) {
     minimumSourceBendEnergyRetention: rounded(minimumSourceBendEnergyRetention),
     minimumSourceCurvatureCosine: rounded(minimumSourceCurvatureCosine),
     sourceCurvatureReversalCount,
+    minimumSourceTangentCosine: rounded(minimumSourceTangentCosine),
+    sourceTangentReversalCount,
     maximumSourceRadiusRatio: rounded(maximumSourceRadiusRatio),
     minimumPairwiseRelationCosine: rounded(minimumPairwiseRelationCosine),
     pairwiseRelationReversalCount,
@@ -543,6 +570,17 @@ function validateConfig(config) {
   for (const key of ['relaxationStep', 'smoothnessStep', 'convergenceTolerance']) {
     if (!Number.isFinite(config[key]) || config[key] <= 0) {
       throw new Error(`muscle packing ${key} must be positive and finite`);
+    }
+  }
+  if (
+    !Number.isFinite(config.maximumSourceBendEnergyRatio) ||
+    config.maximumSourceBendEnergyRatio < 1
+  ) {
+    throw new Error('muscle packing maximumSourceBendEnergyRatio must be finite and at least 1');
+  }
+  for (const key of ['minimumSourceCurvatureCosine', 'minimumSourceTangentCosine']) {
+    if (!Number.isFinite(config[key]) || config[key] < -1 || config[key] > 1) {
+      throw new Error(`muscle packing ${key} must be finite and in [-1, 1]`);
     }
   }
   if (config.relaxationStep > 1) {
@@ -1866,6 +1904,56 @@ function classifyTerminalResidual(metrics, continuousCandidateFailed) {
   };
 }
 
+function classifySourceFormationRetention(initial, packed, config) {
+  const bendEnergyRatio = initial.maximumBendEnergy > 1e-12
+    ? packed.maximumBendEnergy / initial.maximumBendEnergy
+    : 1;
+  const violations = [];
+  if (packed.sourceCurvatureReversalCount > 0) {
+    violations.push({
+      kind:'source-curvature-reversal',
+      reversalCount:packed.sourceCurvatureReversalCount,
+      minimumSourceCurvatureCosine:packed.minimumSourceCurvatureCosine,
+    });
+  }
+  if (
+    packed.sourceTangentReversalCount > 0 ||
+    packed.minimumSourceTangentCosine < config.minimumSourceTangentCosine
+  ) {
+    violations.push({
+      kind:'source-longitudinal-fold',
+      reversalCount:packed.sourceTangentReversalCount,
+      minimumSourceTangentCosine:packed.minimumSourceTangentCosine,
+      requiredMinimumSourceTangentCosine:config.minimumSourceTangentCosine,
+    });
+  }
+  if (
+    packed.sourceCurvatureReversalCount === 0 &&
+    packed.minimumSourceCurvatureCosine < config.minimumSourceCurvatureCosine
+  ) {
+    violations.push({
+      kind:'source-curvature-alignment-loss',
+      reversalCount:packed.sourceCurvatureReversalCount,
+      minimumSourceCurvatureCosine:packed.minimumSourceCurvatureCosine,
+      requiredMinimumSourceCurvatureCosine:config.minimumSourceCurvatureCosine,
+    });
+  }
+  if (bendEnergyRatio > config.maximumSourceBendEnergyRatio) {
+    violations.push({
+      kind:'source-bend-energy-inflation',
+      bendEnergyRatio:rounded(bendEnergyRatio),
+      maximumSourceBendEnergyRatio:config.maximumSourceBendEnergyRatio,
+      sourceMaximumBendEnergy:initial.maximumBendEnergy,
+      packedMaximumBendEnergy:packed.maximumBendEnergy,
+    });
+  }
+  return {
+    passed:violations.length === 0,
+    dominantMechanism:violations[0] || null,
+    violations,
+  };
+}
+
 function immutableFixedAttachmentConflicts(source) {
   const blockingMechanisms = [];
   const endpoints = ['origin', 'insertion'];
@@ -2182,18 +2270,20 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
         ...packed,
       });
       if (residualMaximum(packed) <= config.convergenceTolerance) {
-        if (packed.sourceCurvatureReversalCount > 0) {
+        const formationClassification = classifySourceFormationRetention(
+          initial,
+          packed,
+          config,
+        );
+        if (!formationClassification.passed) {
           status = 'source-formation-failed';
           failure = {
             phase: 'solve',
             kind: 'source-formation-constraint',
             sourceId: source.id,
             iterations,
-            dominantMechanism: {
-              kind: 'source-curvature-reversal',
-              reversalCount: packed.sourceCurvatureReversalCount,
-              minimumSourceCurvatureCosine: packed.minimumSourceCurvatureCosine,
-            },
+            dominantMechanism:formationClassification.dominantMechanism,
+            violations:formationClassification.violations,
             residuals: structuredClone(packed),
           };
         } else {

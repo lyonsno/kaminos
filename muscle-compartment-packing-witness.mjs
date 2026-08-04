@@ -98,10 +98,29 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function renderHtml({ source, result, report }) {
+export function renderMuscleCompartmentPackingHtml({
+  source,
+  result,
+  report,
+  presentation = {},
+}) {
   const payload = JSON.stringify({ source, result, route: report.route });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
+  const title = presentation.title || 'Muscle Compartment Packing';
+  const authorityLabel = presentation.authorityLabel ||
+    'Synthetic 3D overlap-resolution falsifier · no anatomical admission';
+  const explanation = presentation.explanation ||
+    `Packing means nonpenetrating occupancy, not compression. Input carriers physically ` +
+    `interpenetrate; resolution clears them while retaining fixed attachments and measured ` +
+    `source relationships. Formation policy: ` +
+    `${result.formation.effectiveCenterlineSmoothingReference} smoothing · ` +
+    `${result.formation.fallbackUsed ? 'fallback used' : 'no fallback'}.`;
+  const beforeLabel = presentation.beforeLabel || 'Overlapping input';
+  const packedLabel = presentation.packedLabel || 'Collision-resolved result';
+  const solveStatus = presentation.solveStatus || null;
+  const hint = presentation.hint ||
+    'Drag to orbit · wheel to zoom · resolved view retains faint input-state centerlines and displacement vectors';
   const muscleColors = [
     '#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff',
     '#63a4ff', '#ff8fab', '#72efdd', '#f4a261',
@@ -132,7 +151,7 @@ function renderHtml({ source, result, report }) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Muscle Compartment Packing · Overlapping Input / Collision-Resolved Result</title>
+  <title>${escapeHtml(title)} · ${escapeHtml(beforeLabel)} / ${escapeHtml(packedLabel)}</title>
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -142,6 +161,7 @@ function renderHtml({ source, result, report }) {
     .panel { position: fixed; z-index: 3; top: 18px; left: 18px; width: min(390px, calc(100vw - 36px)); padding: 16px 17px 15px; border: 1px solid #ffffff24; border-radius: 14px; background: #0b1017e8; box-shadow: 0 16px 60px #000a; backdrop-filter: blur(14px); }
     h1 { margin: 0 0 4px; font: 650 19px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.03em; }
     .authority { margin: 0 0 7px; color: #e5b77d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .solve-status { margin: -1px 0 8px; color: #ffd166; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
     .explanation { margin: 0 0 13px; color: #aeb9c6; font-size: 10px; line-height: 1.35; }
     .controls { display: flex; gap: 8px; margin-bottom: 13px; }
     button { flex: 1; padding: 9px 10px; border: 1px solid #ffffff24; border-radius: 9px; color: #dce6f0; background: #111923; cursor: pointer; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -163,12 +183,13 @@ function renderHtml({ source, result, report }) {
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="Packing witness controls and residuals">
-    <h1>Muscle Compartment Packing</h1>
-    <p class="authority">Synthetic 3D overlap-resolution falsifier · no anatomical admission</p>
-    <p class="explanation">Packing means nonpenetrating occupancy, not compression. Input carriers physically interpenetrate; resolution clears them while retaining fixed attachments and measured source relationships. Formation policy: ${escapeHtml(result.formation.effectiveCenterlineSmoothingReference)} smoothing · ${result.formation.fallbackUsed ? 'fallback used' : 'no fallback'}.</p>
+    <h1>${escapeHtml(title)}</h1>
+    <p class="authority">${escapeHtml(authorityLabel)}</p>
+    ${solveStatus ? `<p class="solve-status">Solver disposition · ${escapeHtml(solveStatus)}</p>` : ''}
+    <p class="explanation">${escapeHtml(explanation)}</p>
     <div class="controls">
-      <button data-state="before">Overlapping input</button>
-      <button data-state="packed">Collision-resolved result</button>
+      <button data-state="before">${escapeHtml(beforeLabel)}</button>
+      <button data-state="packed">${escapeHtml(packedLabel)}</button>
     </div>
     <div class="metrics">
       <span class="head">residual</span><span class="head value">input</span><span class="head value">resolved</span>
@@ -179,7 +200,9 @@ function renderHtml({ source, result, report }) {
       <span>max volume error</span><span class="value">${formatMetric(initial.maximumRelativeVolumeError)}</span><span class="value packed">${formatMetric(packed.maximumRelativeVolumeError)}</span>
       <span>source displacement</span><span class="value">${formatMetric(initial.maximumSourceKnotDisplacement)}</span><span class="value packed">${formatMetric(packed.maximumSourceKnotDisplacement)}</span>
       <span>source bend retention</span><span class="value">${formatMetric(initial.minimumSourceBendEnergyRetention)}</span><span class="value packed">${formatMetric(packed.minimumSourceBendEnergyRetention)}</span>
+      <span>max bend energy</span><span class="value">${formatMetric(initial.maximumBendEnergy)}</span><span class="value packed">${formatMetric(packed.maximumBendEnergy)}</span>
       <span>curvature cosine</span><span class="value">${formatMetric(initial.minimumSourceCurvatureCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceCurvatureCosine)}</span>
+      <span>tangent cosine</span><span class="value">${formatMetric(initial.minimumSourceTangentCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceTangentCosine)}</span>
       <span>relation cosine</span><span class="value">${formatMetric(initial.minimumPairwiseRelationCosine)}</span><span class="value packed">${formatMetric(packed.minimumPairwiseRelationCosine)}</span>
     </div>
     <p class="attribution-title">Dominant algorithmic correction path · not physical force</p>
@@ -190,7 +213,7 @@ function renderHtml({ source, result, report }) {
       <span><i class="swatch" style="background:#b9d8ef"></i>skeletal obstacle</span>
     </div>
   </section>
-  <div class="hint">Drag to orbit · wheel to zoom · resolved view retains faint input-state centerlines and displacement vectors</div>
+  <div class="hint">${escapeHtml(hint)}</div>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -427,7 +450,10 @@ export async function writeMuscleCompartmentPackingWitness({
     const writes = await Promise.allSettled([
       io.writeFile(resolve(outputRoot, 'source.json'), `${JSON.stringify(source, null, 2)}\n`),
       io.writeFile(resolve(outputRoot, 'packed.json'), `${JSON.stringify(result, null, 2)}\n`),
-      io.writeFile(resolve(outputRoot, 'index.html'), renderHtml({ source, result, report })),
+      io.writeFile(
+        resolve(outputRoot, 'index.html'),
+        renderMuscleCompartmentPackingHtml({ source, result, report }),
+      ),
     ]);
     const rejected = writes.find(write => write.status === 'rejected');
     if (rejected) throw rejected.reason;
