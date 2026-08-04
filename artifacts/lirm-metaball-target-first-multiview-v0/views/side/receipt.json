@@ -12,12 +12,12 @@
   },
   "requestedConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "cameraYawRadians": 1.3
   },
   "effectiveConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "projection": "orthographic",
     "view": "front-three-quarter",
     "cameraYawRadians": 1.3,
@@ -62,68 +62,68 @@
   "outputEvidence": [
     {
       "path": "side/bundle.json",
-      "byteSize": 8359,
-      "sha256": "sha256:1e8b062a86dfaa965153d080f4726f06dad749f9680a61c854bd6ebae03ef97c"
+      "byteSize": 8366,
+      "sha256": "sha256:2a5f13bb9ea8a4cecbc8a0edf4109b59e01d02bee5ed282a31d2f3f556d1e22f"
     },
     {
       "path": "side/clay-implicit.svg",
-      "byteSize": 709160,
-      "sha256": "sha256:f4dd26ea46de0b660f0dedcc5b23d13a9520d11770007010e1c47b89040e51b2"
+      "byteSize": 950493,
+      "sha256": "sha256:280176e459e2499cba1c0f80f54cbcf5b3d7eefaa4c0a09bb5b8396ed3f455e8"
     },
     {
       "path": "side/clay-implicit.png",
-      "byteSize": 29081,
-      "sha256": "sha256:eedea4500d62d2f9bf55c4211564168a0e058d593d77d1d61b73c6d3e4aada98"
+      "byteSize": 22564,
+      "sha256": "sha256:b1155626d5e6a872ec303083c1343661b035ed5120859dd88dfaf4b0d10e1b15"
     },
     {
       "path": "side/depth-implicit.svg",
-      "byteSize": 731253,
-      "sha256": "sha256:bd0bcb38c77a97a5e2ee82be5cec2d7954df06c8058f51f8f7385abcb7ece6ae"
+      "byteSize": 979923,
+      "sha256": "sha256:c72ec51b63bd77743a16ff48cddc15fa8f7877378ffa1f571b9d11626e67da02"
     },
     {
       "path": "side/depth-implicit.png",
-      "byteSize": 16389,
-      "sha256": "sha256:d436c3ea94862c98197acc6b04fcc25fe36e313b91ee69e8c0a488bbd6974847"
+      "byteSize": 14233,
+      "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
     },
     {
       "path": "side/normal-implicit.svg",
-      "byteSize": 713558,
-      "sha256": "sha256:155789c938baf58ef424500f252e041441f7bbabef5b37f035d1f089cfa3cc8c"
+      "byteSize": 956358,
+      "sha256": "sha256:201c914d94242c1280cd9b8cc1d522017ae34ed2ebd04ad507bd2ce7d96381e3"
     },
     {
       "path": "side/normal-implicit.png",
-      "byteSize": 40668,
-      "sha256": "sha256:5fb0ab36e3990b930747558bd13add93e4ba6244a486421b24135021c258a619"
+      "byteSize": 27434,
+      "sha256": "sha256:a2d287489459ce31c3353500ccdfa93797a4080f4fd31947f6bc250a010d3b78"
     },
     {
       "path": "side/mask-implicit.svg",
-      "byteSize": 731209,
-      "sha256": "sha256:637c5d930629f04f61e9d391639d0f00863af19d6467a803df6f909ead7088ea"
+      "byteSize": 979879,
+      "sha256": "sha256:4d45cc60be1972a13b5420724425be5255ec3ddad390bb8aa88ab6b621c56845"
     },
     {
       "path": "side/mask-implicit.png",
-      "byteSize": 5394,
-      "sha256": "sha256:edccbe55a9296c4b579a5530ac038892f728355dc43d1b13e3737c1864b87a1f"
+      "byteSize": 8185,
+      "sha256": "sha256:0064d8337c59c2f26b1cade98305d135500a5085ebb5703cd950547dac2e1b7c"
     },
     {
       "path": "side/semantic-implicit.svg",
-      "byteSize": 790476,
-      "sha256": "sha256:d598a1053674d4b0e801df7bc05e97a29fb3acf31366b0bfa7a5fdc5e5b771b6"
+      "byteSize": 1058894,
+      "sha256": "sha256:2c62668cafd15d131b38aa8b61f986d88144cee9468cf5e549d9fd853dfc9887"
     },
     {
       "path": "side/semantic-implicit.png",
-      "byteSize": 6575,
-      "sha256": "sha256:959196e44b3a9cd2b6937e79f40e6ab7c4fc85632bd716819fc686b39d2f7ff4"
+      "byteSize": 9977,
+      "sha256": "sha256:412dc7eceae118a2015230424cb9fa9da322f089169960c301cdba34c7fe7865"
     },
     {
       "path": "side/trellis-source.svg",
-      "byteSize": 708735,
-      "sha256": "sha256:11fb2acfee777336dd667e49e02b2517eae00fe7a9b8e9314dd4612bc7bf2f94"
+      "byteSize": 949910,
+      "sha256": "sha256:a093ccf1ea408899a3d6d2774790ebc53ef6fc7753a8e5ff5d54351ef7fa8f3d"
     },
     {
       "path": "side/trellis-source.png",
-      "byteSize": 106231,
-      "sha256": "sha256:403969aabcaf4bf12d8b501005d8aa715061a12cdc105927dc886db10a179282"
+      "byteSize": 137576,
+      "sha256": "sha256:f323baadf4074ef15935dcb0729392d8ea42853ee82903dca1293f5b0e5e92db"
     }
   ],
   "armatureProgram": {

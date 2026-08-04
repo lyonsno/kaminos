@@ -45,6 +45,11 @@ for (const condition of manifest.conditions) {
     const cellId = `${condition.id}-seed-${seed}`;
     if (byCell.has(cellId)) continue;
 
+    if (!condition.promptPath || !condition.promptSha256) {
+      throw new Error(`missing prompt identity for condition ${condition.id}`);
+    }
+    const promptPath = join(artifactRoot, condition.promptPath);
+
     const references = condition.referenceViewIds.map(viewId => {
       const view = viewsById.get(viewId);
       const image = view?.sourceImages?.[carrierKind];
@@ -67,7 +72,7 @@ for (const condition of manifest.conditions) {
       '--params',
       `reference_path_2=${references[1].path}`,
       `reference_path_3=${references[2].path}`,
-      `prompt_file=${join(artifactRoot, 'prompt.txt')}`,
+      `prompt_file=${promptPath}`,
       `model=${manifest.fixedGenerator.model}`,
       `quantize=${manifest.fixedGenerator.quantize}`,
       `width=${manifest.fixedGenerator.width}`,
@@ -90,6 +95,8 @@ for (const condition of manifest.conditions) {
         seed,
         carrierKind,
         references,
+        promptPath,
+        promptSha256: condition.promptSha256,
         requestedRoute: manifest.fixedGenerator.requestedRoute,
         jobId,
         outputDir,
@@ -105,6 +112,8 @@ for (const condition of manifest.conditions) {
         conditionId: condition.id,
         seed,
         references,
+        promptPath,
+        promptSha256: condition.promptSha256,
         lastTrustworthyEvidence: `${byCell.size} prior cells recorded in ${jobIndexPath}`,
         errorMessage: String(error?.message || error),
       }, null, 2)}\n`);

@@ -66,7 +66,7 @@
   },
   "effectiveConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "projection": "orthographic",
     "view": "front-three-quarter",
     "cameraYawRadians": 0,
@@ -84,10 +84,10 @@
     "schema": "kaminos.projected-support-identity-evidence.v0",
     "pixelGrid": {
       "width": 256,
-      "height": 192
+      "height": 256
     },
     "cameraYawRadians": 0,
-    "organismalMaskPixelCount": 5884,
+    "organismalMaskPixelCount": 7834,
     "projectedContactMarkerOccupancy": 0,
     "projectedSupportGeometryOccupancy": 0,
     "primitiveVisibility": [
@@ -124,11 +124,11 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 650,
+        "visiblePixelCount": 856,
         "projectedCentroid": {
           "x": 127.5,
-          "y": 82.591,
-          "depth01": 0.431
+          "y": 110.47,
+          "depth01": 0.43
         }
       },
       {
@@ -137,10 +137,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1022,
+        "visiblePixelCount": 1362,
         "projectedCentroid": {
           "x": 127.5,
-          "y": 94.622,
+          "y": 126.126,
           "depth01": 0.361
         }
       },
@@ -150,11 +150,11 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 100,
+        "visiblePixelCount": 134,
         "projectedCentroid": {
           "x": 127.5,
-          "y": 118.42,
-          "depth01": 0.287
+          "y": 157.299,
+          "depth01": 0.288
         }
       },
       {
@@ -163,10 +163,10 @@
         "role": "headOrientation",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1574,
+        "visiblePixelCount": 2094,
         "projectedCentroid": {
           "x": 127.5,
-          "y": 91.457,
+          "y": 122.129,
           "depth01": 0.24
         }
       },
@@ -176,10 +176,10 @@
         "role": "facialLandmark",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1242,
+        "visiblePixelCount": 1658,
         "projectedCentroid": {
           "x": 127.5,
-          "y": 94.633,
+          "y": 126.366,
           "depth01": 0.174
         }
       },
@@ -191,9 +191,9 @@
         "pairMember": null,
         "visiblePixelCount": 1,
         "projectedCentroid": {
-          "x": 94,
-          "y": 138,
-          "depth01": 0.584
+          "x": 82,
+          "y": 185,
+          "depth01": 0.583
         }
       },
       {
@@ -202,12 +202,8 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1,
-        "projectedCentroid": {
-          "x": 77,
-          "y": 136,
-          "depth01": 0.582
-        }
+        "visiblePixelCount": 0,
+        "projectedCentroid": null
       },
       {
         "id": "contactLimb-10",
@@ -217,9 +213,9 @@
         "pairMember": null,
         "visiblePixelCount": 1,
         "projectedCentroid": {
-          "x": 161,
-          "y": 138,
-          "depth01": 0.584
+          "x": 173,
+          "y": 185,
+          "depth01": 0.583
         }
       },
       {
@@ -228,12 +224,8 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1,
-        "projectedCentroid": {
-          "x": 178,
-          "y": 136,
-          "depth01": 0.582
-        }
+        "visiblePixelCount": 0,
+        "projectedCentroid": null
       },
       {
         "id": "contactLimb-12",
@@ -241,10 +233,10 @@
         "role": "contactLimb",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 240,
+        "visiblePixelCount": 321,
         "projectedCentroid": {
-          "x": 92.013,
-          "y": 118.954,
+          "x": 91.963,
+          "y": 158.769,
           "depth01": 0.36
         }
       },
@@ -254,10 +246,10 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 406,
+        "visiblePixelCount": 543,
         "projectedCentroid": {
-          "x": 87.929,
-          "y": 129.665,
+          "x": 87.901,
+          "y": 172.991,
           "depth01": 0.347
         }
       },
@@ -267,10 +259,10 @@
         "role": "contactLimb",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 240,
+        "visiblePixelCount": 321,
         "projectedCentroid": {
-          "x": 162.988,
-          "y": 118.954,
+          "x": 163.037,
+          "y": 158.769,
           "depth01": 0.36
         }
       },
@@ -280,10 +272,10 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 406,
+        "visiblePixelCount": 543,
         "projectedCentroid": {
-          "x": 167.071,
-          "y": 129.665,
+          "x": 167.099,
+          "y": 172.991,
           "depth01": 0.347
         }
       }
@@ -324,7 +316,7 @@
     "framing": {
       "background": "transparent",
       "crop": "tight-surface-bounds",
-      "sourcePixelGrid": "256x192",
+      "sourcePixelGrid": "256x256",
       "displayedPixels": "512x512"
     }
   },

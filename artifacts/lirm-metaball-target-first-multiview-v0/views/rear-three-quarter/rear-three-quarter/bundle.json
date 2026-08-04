@@ -66,7 +66,7 @@
   },
   "effectiveConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "projection": "orthographic",
     "view": "front-three-quarter",
     "cameraYawRadians": 2.2,
@@ -84,10 +84,10 @@
     "schema": "kaminos.projected-support-identity-evidence.v0",
     "pixelGrid": {
       "width": 256,
-      "height": 192
+      "height": 256
     },
     "cameraYawRadians": 2.2,
-    "organismalMaskPixelCount": 9100,
+    "organismalMaskPixelCount": 12128,
     "projectedContactMarkerOccupancy": 0,
     "projectedSupportGeometryOccupancy": 0,
     "primitiveVisibility": [
@@ -97,10 +97,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1723,
+        "visiblePixelCount": 2301,
         "projectedCentroid": {
-          "x": 86.632,
-          "y": 95.515,
+          "x": 86.629,
+          "y": 127.548,
           "depth01": 0.329
         }
       },
@@ -110,10 +110,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1235,
+        "visiblePixelCount": 1637,
         "projectedCentroid": {
-          "x": 113.07,
-          "y": 90.236,
+          "x": 113.123,
+          "y": 120.413,
           "depth01": 0.347
         }
       },
@@ -123,10 +123,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1239,
+        "visiblePixelCount": 1654,
         "projectedCentroid": {
-          "x": 136.181,
-          "y": 86.36,
+          "x": 136.107,
+          "y": 115.404,
           "depth01": 0.372
         }
       },
@@ -136,10 +136,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 1075,
+        "visiblePixelCount": 1437,
         "projectedCentroid": {
-          "x": 155.043,
-          "y": 92.314,
+          "x": 155.038,
+          "y": 123.45,
           "depth01": 0.412
         }
       },
@@ -149,11 +149,11 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 597,
+        "visiblePixelCount": 789,
         "projectedCentroid": {
-          "x": 171.273,
-          "y": 87.757,
-          "depth01": 0.467
+          "x": 171.418,
+          "y": 116.923,
+          "depth01": 0.466
         }
       },
       {
@@ -162,10 +162,10 @@
         "role": "bodyMass",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 337,
+        "visiblePixelCount": 447,
         "projectedCentroid": {
-          "x": 183.395,
-          "y": 97.395,
+          "x": 183.472,
+          "y": 130.26,
           "depth01": 0.515
         }
       },
@@ -175,10 +175,10 @@
         "role": "headOrientation",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 753,
+        "visiblePixelCount": 1001,
         "projectedCentroid": {
-          "x": 192.785,
-          "y": 87.934,
+          "x": 192.706,
+          "y": 117.306,
           "depth01": 0.547
         }
       },
@@ -188,11 +188,11 @@
         "role": "facialLandmark",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 114,
+        "visiblePixelCount": 161,
         "projectedCentroid": {
-          "x": 206.746,
-          "y": 96.36,
-          "depth01": 0.612
+          "x": 206.714,
+          "y": 128.435,
+          "depth01": 0.613
         }
       },
       {
@@ -201,10 +201,10 @@
         "role": "contactLimb",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 363,
+        "visiblePixelCount": 483,
         "projectedCentroid": {
-          "x": 124.887,
-          "y": 115.576,
+          "x": 124.867,
+          "y": 154.358,
           "depth01": 0.315
         }
       },
@@ -214,11 +214,11 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 415,
+        "visiblePixelCount": 552,
         "projectedCentroid": {
-          "x": 128.152,
-          "y": 129.672,
-          "depth01": 0.283
+          "x": 128.172,
+          "y": 173.018,
+          "depth01": 0.282
         }
       },
       {
@@ -227,10 +227,10 @@
         "role": "contactLimb",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 136,
+        "visiblePixelCount": 183,
         "projectedCentroid": {
-          "x": 83.316,
-          "y": 124.184,
+          "x": 83.536,
+          "y": 165.831,
           "depth01": 0.503
         }
       },
@@ -240,10 +240,10 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 386,
+        "visiblePixelCount": 512,
         "projectedCentroid": {
-          "x": 80.87,
-          "y": 130.249,
+          "x": 80.816,
+          "y": 173.791,
           "depth01": 0.504
         }
       },
@@ -253,10 +253,10 @@
         "role": "contactLimb",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 301,
+        "visiblePixelCount": 393,
         "projectedCentroid": {
-          "x": 171.239,
-          "y": 117.126,
+          "x": 171.16,
+          "y": 156.053,
           "depth01": 0.426
         }
       },
@@ -266,11 +266,11 @@
         "role": "groundContact",
         "pairId": null,
         "pairMember": null,
-        "visiblePixelCount": 425,
+        "visiblePixelCount": 577,
         "projectedCentroid": {
-          "x": 174.824,
-          "y": 129.562,
-          "depth01": 0.401
+          "x": 174.912,
+          "y": 172.825,
+          "depth01": 0.402
         }
       },
       {
@@ -291,8 +291,8 @@
         "visiblePixelCount": 1,
         "projectedCentroid": {
           "x": 113,
-          "y": 132,
-          "depth01": 0.654
+          "y": 176,
+          "depth01": 0.65
         }
       }
     ]
@@ -332,7 +332,7 @@
     "framing": {
       "background": "transparent",
       "crop": "tight-surface-bounds",
-      "sourcePixelGrid": "256x192",
+      "sourcePixelGrid": "256x256",
       "displayedPixels": "512x512"
     }
   },

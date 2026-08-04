@@ -13,7 +13,7 @@ const result = await writeMetaballTargetFirstMultiviewSources({
     'artifacts/lirm-metaball-target-first-multiview-v0',
   ),
   pixelWidth: Number(readOption('--pixel-width', '256')),
-  pixelHeight: Number(readOption('--pixel-height', '192')),
+  pixelHeight: Number(readOption('--pixel-height', '256')),
 });
 
 process.stdout.write(`${JSON.stringify({

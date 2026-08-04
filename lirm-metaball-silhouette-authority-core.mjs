@@ -43,12 +43,21 @@ const FIXED_PROMPT = [
   'Present one intact healthy quadruped with a continuous closed outer surface and four load-bearing supports on a clean pale studio background.',
 ].join(' ');
 
-const TARGET_FIRST_MULTIVIEW_PROMPT = [
-  'Every supplied reference image shows the same authored organism from a different camera.',
-  'The first reference image is the authoritative target view: preserve its exact camera, outer silhouette, body proportions, support placement, and major mass distribution.',
-  'Use later reference images only to resolve occluded three-dimensional structure belonging to that same organism.',
-  'Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the first view authored outline.',
-].join(' ');
+function referenceIndexPhrase(indices) {
+  if (indices.length === 3) return 'All three reference images repeat';
+  if (indices.length === 1) return `Reference image ${indices[0]} is`;
+  return `Reference images ${indices.slice(0, -1).join(', ')} and ${indices.at(-1)} are repeated`;
+}
+
+function createTargetFirstMultiviewPrompt(authoritativeReferenceIndices) {
+  const authority = referenceIndexPhrase(authoritativeReferenceIndices);
+  return [
+    'Every supplied reference image shows the same authored organism from a different camera unless explicitly described as a repeated view.',
+    `${authority} the authoritative target view: preserve that view's exact camera, outer silhouette, body proportions, support placement, and major mass distribution.`,
+    'Use every other reference image only to resolve occluded three-dimensional structure belonging to that same organism.',
+    'Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.',
+  ].join(' ');
+}
 
 const TARGET_FIRST_MULTIVIEW_VIEWS = Object.freeze([
   Object.freeze({ id: 'target-three-quarter', role: 'authoritative-target', cameraYawRadians: 0.42 }),
@@ -59,40 +68,59 @@ const TARGET_FIRST_MULTIVIEW_VIEWS = Object.freeze([
 
 const TARGET_FIRST_MULTIVIEW_CONDITIONS = Object.freeze([
   Object.freeze({
-    id: 'target-only',
+    id: 'target-all-slots',
     distinctViewCount: 1,
     referenceViewIds: Object.freeze([
       'target-three-quarter',
       'target-three-quarter',
       'target-three-quarter',
     ]),
+    authoritativeReferenceIndices: Object.freeze([1, 2, 3]),
+    probeAxis: 'repeated-target-baseline',
   }),
   Object.freeze({
-    id: 'target-plus-front',
-    distinctViewCount: 2,
-    referenceViewIds: Object.freeze([
-      'target-three-quarter',
-      'target-three-quarter',
-      'front',
-    ]),
-  }),
-  Object.freeze({
-    id: 'target-plus-side',
+    id: 'side-last',
     distinctViewCount: 2,
     referenceViewIds: Object.freeze([
       'target-three-quarter',
       'target-three-quarter',
       'side',
     ]),
+    authoritativeReferenceIndices: Object.freeze([1, 2]),
+    probeAxis: 'supplemental-reference-position',
   }),
   Object.freeze({
-    id: 'target-plus-side-plus-rear',
+    id: 'side-middle',
+    distinctViewCount: 2,
+    referenceViewIds: Object.freeze([
+      'target-three-quarter',
+      'side',
+      'target-three-quarter',
+    ]),
+    authoritativeReferenceIndices: Object.freeze([1, 3]),
+    probeAxis: 'supplemental-reference-position',
+  }),
+  Object.freeze({
+    id: 'side-first',
+    distinctViewCount: 2,
+    referenceViewIds: Object.freeze([
+      'side',
+      'target-three-quarter',
+      'target-three-quarter',
+    ]),
+    authoritativeReferenceIndices: Object.freeze([2, 3]),
+    probeAxis: 'supplemental-reference-position',
+  }),
+  Object.freeze({
+    id: 'front-target-rear',
     distinctViewCount: 3,
     referenceViewIds: Object.freeze([
+      'front',
       'target-three-quarter',
-      'side',
       'rear-three-quarter',
     ]),
+    authoritativeReferenceIndices: Object.freeze([2]),
+    probeAxis: 'three-view-completion',
   }),
 ]);
 
@@ -241,6 +269,8 @@ export function createMetaballTargetFirstMultiviewTranche() {
     conditions: TARGET_FIRST_MULTIVIEW_CONDITIONS.map(condition => ({
       ...condition,
       referenceViewIds: [...condition.referenceViewIds],
+      authoritativeReferenceIndices: [...condition.authoritativeReferenceIndices],
+      prompt: createTargetFirstMultiviewPrompt(condition.authoritativeReferenceIndices),
     })),
     fixedGenerator: {
       requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
@@ -251,9 +281,8 @@ export function createMetaballTargetFirstMultiviewTranche() {
       steps: 8,
       guidance: 1,
       seeds: [80401],
-      prompt: TARGET_FIRST_MULTIVIEW_PROMPT,
-      provisionalCarrierKind: 'clay',
-      carrierDisposition: 'pending-projection-sentinel',
+      provisionalCarrierKind: 'depth',
+      carrierDisposition: 'projection-sentinel-depth-selected',
       referenceBudget: 3,
     },
     claimCeiling: [
@@ -336,12 +365,15 @@ export async function writeMetaballSilhouetteAuthoritySources({
 export async function writeMetaballTargetFirstMultiviewSources({
   outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-target-first-multiview-v0'),
   pixelWidth = 256,
-  pixelHeight = 192,
+  pixelHeight = 256,
 } = {}) {
+  if (pixelWidth !== pixelHeight) {
+    throw new Error(
+      `target-first multiview requires generator-native square source rasters; received ${pixelWidth}x${pixelHeight}`,
+    );
+  }
   const tranche = createMetaballTargetFirstMultiviewTranche();
   await mkdir(outDir, { recursive: true });
-  await writeFile(join(outDir, 'prompt.txt'), `${tranche.fixedGenerator.prompt}\n`);
-
   const views = [];
   for (const view of tranche.views) {
     const viewOutDir = join(outDir, 'views', view.id);
@@ -370,6 +402,20 @@ export async function writeMetaballTargetFirstMultiviewSources({
     });
   }
 
+  const promptDir = join(outDir, 'prompts');
+  await mkdir(promptDir, { recursive: true });
+  const conditions = [];
+  for (const condition of tranche.conditions) {
+    const promptPath = join(promptDir, `${condition.id}.txt`);
+    await writeFile(promptPath, `${condition.prompt}\n`);
+    const promptIdentity = await sha256(promptPath);
+    conditions.push({
+      ...condition,
+      promptPath: relative(outDir, promptPath),
+      promptSha256: promptIdentity.sha256,
+    });
+  }
+
   const manifest = {
     schema: tranche.schema,
     status: 'sources-complete',
@@ -383,9 +429,11 @@ export async function writeMetaballTargetFirstMultiviewSources({
       pixelHeight,
       projection: 'orthographic',
       cameraControl: 'explicit-yaw-radians',
+      sourceRasterPolicy: 'generator-native-square',
+      downstreamResize: `${tranche.fixedGenerator.width}x${tranche.fixedGenerator.height}`,
     },
     views,
-    conditions: tranche.conditions,
+    conditions,
     fixedGenerator: tranche.fixedGenerator,
     claimCeiling: tranche.claimCeiling,
   };

@@ -12,12 +12,12 @@
   },
   "requestedConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "cameraYawRadians": 2.2
   },
   "effectiveConfig": {
     "pixelWidth": 256,
-    "pixelHeight": 192,
+    "pixelHeight": 256,
     "projection": "orthographic",
     "view": "front-three-quarter",
     "cameraYawRadians": 2.2,
@@ -62,68 +62,68 @@
   "outputEvidence": [
     {
       "path": "rear-three-quarter/bundle.json",
-      "byteSize": 8375,
-      "sha256": "sha256:1e163ee5794518ea1fcec7be91ab8b871eaf5e04bcafa061c5ce6764925ac28a"
+      "byteSize": 8385,
+      "sha256": "sha256:cab65013609bcd30caad0a9178e2d4ef5ad1a04a7b9966c75b080afde8d079b7"
     },
     {
       "path": "rear-three-quarter/clay-implicit.svg",
-      "byteSize": 635001,
-      "sha256": "sha256:f897f905336f301690e5b33b7c8dc08b86e9c40d7c567175cb0c36e951c2b2bb"
+      "byteSize": 850772,
+      "sha256": "sha256:3c55f3ad1e8a147021bb096fbcc0e4d7393f6590bb2fd4d3ea7704ee017d807d"
     },
     {
       "path": "rear-three-quarter/clay-implicit.png",
-      "byteSize": 23775,
-      "sha256": "sha256:8b30e0559c9def0e6196b6d89b54be2defe622fc19e5ff29cb18c6e77e003c5f"
+      "byteSize": 19626,
+      "sha256": "sha256:1ad26fffef187f8ba7bbc089d22c91beb09472dbabdc276740b51289ed4bc519"
     },
     {
       "path": "rear-three-quarter/depth-implicit.svg",
-      "byteSize": 658218,
-      "sha256": "sha256:ef9f0ebae873131597e34df9718db31ef90ba9eb7b6e9731804d656aa8e14bbc"
+      "byteSize": 881670,
+      "sha256": "sha256:3b1c0cc7f983a4d81fbf41252c30944a926b03679319376f1ed1c4f429133202"
     },
     {
       "path": "rear-three-quarter/depth-implicit.png",
-      "byteSize": 16275,
-      "sha256": "sha256:3bbcc43b09093ae206a2acf4ab7434565c74516d2d0060ebd9f15785999f1480"
+      "byteSize": 13517,
+      "sha256": "sha256:67dd02218c94aa2b68169f70f409375ab0fecabc61acfeaf6da0d49fc91a6025"
     },
     {
       "path": "rear-three-quarter/normal-implicit.svg",
-      "byteSize": 639857,
-      "sha256": "sha256:69966397fbd4121939286a5e9a41c67af1ea442d2b6760dd1de4ef8646d58c60"
+      "byteSize": 857175,
+      "sha256": "sha256:aa2d3e6ce32a76a65988cecc3a83f0c5d3394462b577b8956d33cbb1bbe778ac"
     },
     {
       "path": "rear-three-quarter/normal-implicit.png",
-      "byteSize": 38556,
-      "sha256": "sha256:e49f89e8a8b263710da7cc137f34cf8507f7719aeff3b99c7359ca3d4c5a7f99"
+      "byteSize": 26082,
+      "sha256": "sha256:4bca5d27cd78d879616404748da93cb0bcfd898b8950ac9c851fe778c425d5aa"
     },
     {
       "path": "rear-three-quarter/mask-implicit.svg",
-      "byteSize": 658174,
-      "sha256": "sha256:e837cddfa34976c11338e6b75fcf3ae5dcb8e457d46b77295084758b28b877c1"
+      "byteSize": 881626,
+      "sha256": "sha256:ee0ad1d0dcda358bd135215b77c240b4d61542803a6c83473277342a10bdcf29"
     },
     {
       "path": "rear-three-quarter/mask-implicit.png",
-      "byteSize": 5627,
-      "sha256": "sha256:1bc9efd2684fe8bf8319e3b4c1bf571631b5632b95d11368aa4e7da9e0a41f75"
+      "byteSize": 8241,
+      "sha256": "sha256:4d9768278f4d5efe2b600c422a3e2d4ace6fdebe372fe76c525124e163f13138"
     },
     {
       "path": "rear-three-quarter/semantic-implicit.svg",
-      "byteSize": 711515,
-      "sha256": "sha256:3c7db92e2b0395e37e874297d1151b5767cce4c9a713ce42f6d6f1b469e11f3b"
+      "byteSize": 952720,
+      "sha256": "sha256:c2884eb15e0667351d521b3cec2d4a3eb0a2dec5389dfd1a8e224966bb9f50b1"
     },
     {
       "path": "rear-three-quarter/semantic-implicit.png",
-      "byteSize": 6720,
-      "sha256": "sha256:e0ceb83a4a90f53f0a01d78dbedd833e19c8ab4289e097347fc75c06d59f4ede"
+      "byteSize": 9753,
+      "sha256": "sha256:a9565a82566479df1f3f44c3159bd183ae50870425e3a6f17f9a6b4855cdb03c"
     },
     {
       "path": "rear-three-quarter/trellis-source.svg",
-      "byteSize": 635059,
-      "sha256": "sha256:a3561d0e11a800077dd1ef0bc9046668e6b040a0df3b258f98337ac72a6b8aae"
+      "byteSize": 850824,
+      "sha256": "sha256:d7902124b3103361b28fcd57974895acc210bd9e72239bc36be38a04b27c8b15"
     },
     {
       "path": "rear-three-quarter/trellis-source.png",
-      "byteSize": 89900,
-      "sha256": "sha256:d80412d710328c8d74a8f02d90fbab0b42001be3a44d693a3c4e6f057a6bbaa9"
+      "byteSize": 116888,
+      "sha256": "sha256:787eb41293ca8c6d40249fd579142c52736a91503068509679df8fc537fdd2bb"
     }
   ],
   "armatureProgram": {
