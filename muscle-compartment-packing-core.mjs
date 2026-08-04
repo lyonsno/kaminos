@@ -945,6 +945,52 @@ function residualMaximum(metrics) {
   );
 }
 
+function classifyTerminalResidual(metrics, continuousCandidateFailed) {
+  if (continuousCandidateFailed) {
+    return {
+      status: 'continuous-clearance-failed',
+      dominantMechanism: {
+        kind: 'continuous-clearance-residual',
+        residual: rounded(residualMaximum(metrics)),
+      },
+    };
+  }
+  const candidates = [
+    {
+      status: 'pairwise-exclusion-failed',
+      kind: 'pairwise-exclusion-residual',
+      residual: metrics.pairwisePenetration,
+    },
+    {
+      status: 'skeletal-clearance-failed',
+      kind: 'skeletal-clearance-residual',
+      residual: metrics.skeletalPenetration,
+    },
+    {
+      status: 'compartment-clearance-failed',
+      kind: 'compartment-clearance-residual',
+      residual: metrics.compartmentEscape,
+    },
+    {
+      status: 'iteration-limit',
+      kind: 'iteration-exhausted',
+      residual: Math.max(
+        metrics.endpointDrift,
+        metrics.maximumRelativeVolumeError,
+      ),
+    },
+  ];
+  const dominant = candidates.reduce((best, candidate) =>
+    candidate.residual > best.residual ? candidate : best);
+  return {
+    status: dominant.status,
+    dominantMechanism: {
+      kind: dominant.kind,
+      residual: rounded(dominant.residual),
+    },
+  };
+}
+
 function immutableFixedAttachmentConflicts(source) {
   const blockingMechanisms = [];
   const endpoints = ['origin', 'insertion'];
@@ -1094,6 +1140,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
   let status = 'iteration-limit';
   let iterations = 0;
   let continuousCandidateFailed = false;
+  let failure = null;
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
     const smoothingProgress = Math.max(
       0,
@@ -1143,7 +1190,16 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
 
   if (status === 'iteration-limit') {
     packed = measureState(source, muscles, config.sampleCount, true);
-    if (continuousCandidateFailed) status = 'continuous-clearance-failed';
+    const classification = classifyTerminalResidual(packed, continuousCandidateFailed);
+    status = classification.status;
+    failure = {
+      phase: 'solve',
+      kind: 'residual-constraint',
+      sourceId: source.id,
+      iterations,
+      dominantMechanism: classification.dominantMechanism,
+      residuals: structuredClone(packed),
+    };
     if (iterationHistory.length > 0) {
       iterationHistory[iterationHistory.length - 1] = {
         iteration:iterations,
@@ -1181,5 +1237,6 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       packed,
     },
     iterationHistory,
+    ...(failure ? { failure } : {}),
   };
 }

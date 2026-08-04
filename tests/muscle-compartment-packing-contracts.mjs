@@ -208,6 +208,90 @@ test('convergence cannot hide a continuous inter-segment crossing between sparse
     })}`,
   );
   assert.ok(result.metrics.packed.pairwisePenetration > 0.2);
+  assert.equal(result.status, 'continuous-clearance-failed');
+  assert.equal(result.failure.phase, 'solve');
+  assert.equal(result.failure.kind, 'residual-constraint');
+  assert.equal(result.failure.sourceId, source.id);
+  assert.equal(result.failure.iterations, 1);
+  assert.equal(result.failure.dominantMechanism.kind, 'continuous-clearance-residual');
+  assert.equal(
+    result.failure.dominantMechanism.residual,
+    result.metrics.packed.pairwisePenetration,
+  );
+});
+
+test('post-iteration pairwise residual is classified instead of generic exhaustion', () => {
+  const source = createInterSegmentCrossingSource();
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 1,
+    relaxationStep: 1e-12,
+    smoothnessStep: 1e-12,
+    sampleCount: 25,
+    convergenceTolerance: 1e-12,
+  });
+
+  assert.equal(result.status, 'pairwise-exclusion-failed');
+  assert.equal(result.failure.phase, 'solve');
+  assert.equal(result.failure.kind, 'residual-constraint');
+  assert.deepEqual(result.failure.dominantMechanism, {
+    kind: 'pairwise-exclusion-residual',
+    residual: result.metrics.packed.pairwisePenetration,
+  });
+});
+
+test('post-iteration skeletal residual is classified with obstacle-constrained source intact', () => {
+  const source = createInterSegmentCrossingSource();
+  const distantMuscle = source.muscles[1];
+  for (const knot of distantMuscle.centerline) knot.position[2] += 1;
+  distantMuscle.attachments.origin.position[2] += 1;
+  distantMuscle.attachments.insertion.position[2] += 1;
+  distantMuscle.targetVolume = carrierVolume(distantMuscle.centerline);
+  source.obstacles = [{
+    id: 'interior-skeletal-process',
+    kind: 'sphere',
+    center: [...source.muscles[0].centerline[1].position],
+    radius: 0.2,
+    clearance: 0.03,
+  }];
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 1,
+    relaxationStep: 1e-12,
+    smoothnessStep: 1e-12,
+    sampleCount: 25,
+    convergenceTolerance: 1e-12,
+  });
+
+  assert.equal(result.status, 'skeletal-clearance-failed');
+  assert.deepEqual(result.failure.dominantMechanism, {
+    kind: 'skeletal-clearance-residual',
+    residual: result.metrics.packed.skeletalPenetration,
+  });
+  assert.deepEqual(result.obstacles, source.obstacles);
+});
+
+test('post-iteration compartment residual is classified with radius-aware bound intact', () => {
+  const source = createInterSegmentCrossingSource();
+  const distantMuscle = source.muscles[1];
+  for (const knot of distantMuscle.centerline) knot.position[2] += 1;
+  distantMuscle.attachments.origin.position[2] += 1;
+  distantMuscle.attachments.insertion.position[2] += 1;
+  distantMuscle.targetVolume = carrierVolume(distantMuscle.centerline);
+  source.muscles[0].centerline[1].position = [2.2, 0, 0];
+  source.muscles[0].targetVolume = carrierVolume(source.muscles[0].centerline);
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 1,
+    relaxationStep: 1e-12,
+    smoothnessStep: 1e-12,
+    sampleCount: 25,
+    convergenceTolerance: 1e-12,
+  });
+
+  assert.equal(result.status, 'compartment-clearance-failed');
+  assert.deepEqual(result.failure.dominantMechanism, {
+    kind: 'compartment-clearance-residual',
+    residual: result.metrics.packed.compartmentEscape,
+  });
+  assert.deepEqual(result.compartment, source.compartment);
 });
 
 test('pairwise exclusion cannot launder colliding fixed attachments into convergence', () => {
