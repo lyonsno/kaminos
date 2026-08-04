@@ -270,6 +270,14 @@ def validate_complete_outputs(
             raise SourcePlateContractError(
                 "output-validation", f"output {name} has the wrong encoding"
             )
+        expected_representation = channel_contracts[name].get("representation")
+        if (
+            expected_representation is not None
+            and record.get("representation") != expected_representation
+        ):
+            raise SourcePlateContractError(
+                "output-validation", f"output {name} has the wrong representation"
+            )
         record_width = record.get("width")
         record_height = record.get("height")
         if (
@@ -312,8 +320,7 @@ def validate_complete_outputs(
             raise SourcePlateContractError(
                 "output-validation", f"output {name} SHA-256 does not match its file"
             )
-        validated.append(
-            {
+        validated_record = {
                 "channel": name,
                 "status": "complete",
                 "path": str(effective_path),
@@ -324,7 +331,9 @@ def validate_complete_outputs(
                 "sha256": effective_sha256,
                 "descriptorSha256": descriptor_identity,
             }
-        )
+        if expected_representation is not None:
+            validated_record["representation"] = expected_representation
+        validated.append(validated_record)
     return {
         "status": "complete",
         "descriptorSha256": descriptor_identity,

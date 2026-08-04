@@ -69,9 +69,20 @@ def test_blender_51_writes_distinct_exr_render_pass_artifacts():
     assert 'file_format = "OPEN_EXR_MULTILAYER"' not in adapter
     assert 'scene.render.filepath = str(outputs["depth"])' in adapter
     assert 'scene.render.filepath = str(outputs["normal"])' in adapter
-    assert "view_layer.use_pass_z = True" in adapter
-    assert "view_layer.use_pass_normal = True" in adapter
+    assert 'nodes.new("ShaderNodeCameraData")' in adapter
+    assert 'nodes.new("ShaderNodeNewGeometry")' in adapter
+    assert 'nodes.new("ShaderNodeVectorTransform")' in adapter
+    assert "view_layer.material_override = depth_material" in adapter
+    assert "view_layer.material_override = normal_material" in adapter
+    assert "view_layer.use_pass_z = True" not in adapter
+    assert "view_layer.use_pass_normal = True" not in adapter
     assert "CompositorNodeOutputFile" not in adapter
+
+
+def test_output_records_bind_channel_representation():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert '"representation": channel_contract.get("representation")' in adapter
 
 
 def test_silhouette_is_derived_from_the_same_camera_render_alpha():
@@ -88,4 +99,5 @@ if __name__ == "__main__":
     test_blender_adapter_never_saves_the_loaded_source()
     test_blender_bootstraps_its_script_directory_before_importing_the_core()
     test_blender_51_writes_distinct_exr_render_pass_artifacts()
+    test_output_records_bind_channel_representation()
     test_silhouette_is_derived_from_the_same_camera_render_alpha()
