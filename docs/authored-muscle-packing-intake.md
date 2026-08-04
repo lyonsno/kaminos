@@ -137,6 +137,40 @@ When the coordinate producer supplies the sidecar, add
 `--coordinate-carrier <carrier.json>`. The `.blend` remains read-only; both the
 carrier and deterministic packed output live outside it.
 
+### One-command intake-to-witness route
+
+Add `--witness-out <directory>` to make the same headless command carry an
+admitted `packingSource` through the generic solver and orbitable witness:
+
+```sh
+node tools/admit-authored-muscle-packing-intake.mjs \
+  --routing-fixture <fixture.json> \
+  --coordinate-carrier <carrier.json> \
+  --receipt <terminal-intake-receipt.json> \
+  --witness-out <witness-directory>
+```
+
+The terminal intake receipt records the requested/effective witness directory,
+requested/effective route, witness status, report path, and report file
+SHA-256. Repeating the same files and output paths overwrites the same persistent
+state with a byte-identical terminal receipt.
+
+Admission remains the phase boundary. An `authority-incomplete`, conflicting,
+identity-mismatched, or otherwise rejected carrier records
+`status: not-run-intake-refused`, effective witness path and route `null`, and
+writes no witness directory or success artifact. An admitted carrier invokes
+the existing deterministic solver and witness without changing selector,
+source-authority, or geometry semantics. A solver refusal writes its structured
+witness failure report and the intake receipt records the failed witness phase;
+it cannot look like a visually admitted route. When an output root is reused,
+the refusal clears any prior `source.json`, `packed.json`, and `index.html`
+before publishing the failed report, and records that cleanup in the report.
+
+The witness directory may not contain the routing fixture, coordinate carrier,
+or terminal receipt. This is checked before input consumption so a rerun cannot
+overwrite authenticated inputs with `source.json`, `packed.json`, `index.html`,
+or `report.json`.
+
 ## Producer and consumer boundary
 
 - The source compiler owns the authenticated construction, lineage, instance,

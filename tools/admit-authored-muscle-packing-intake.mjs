@@ -8,6 +8,10 @@ import {
   AUTHORED_MUSCLE_PACKING_INTAKE_RECEIPT_SCHEMA,
   admitAuthoredMusclePackingIntake,
 } from '../authored-muscle-packing-intake-core.mjs';
+import {
+  MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE,
+  writeMuscleCompartmentPackingWitness,
+} from '../muscle-compartment-packing-witness.mjs';
 
 function usage() {
   return [
@@ -15,6 +19,7 @@ function usage() {
     '  node tools/admit-authored-muscle-packing-intake.mjs \\',
     '    --routing-fixture <fixture.json> \\',
     '    [--coordinate-carrier <carrier.json>] \\',
+    '    [--witness-out <directory>] \\',
     '    --receipt <receipt.json>',
   ].join('\n');
 }
@@ -24,7 +29,12 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     if (flag === '--help' || flag === '-h') return { help: true };
-    if (!['--routing-fixture', '--coordinate-carrier', '--receipt'].includes(flag)) {
+    if (![
+      '--routing-fixture',
+      '--coordinate-carrier',
+      '--witness-out',
+      '--receipt',
+    ].includes(flag)) {
       throw new Error(`unknown argument: ${flag}`);
     }
     const value = argv[index + 1];
@@ -102,11 +112,13 @@ try {
 const requested = {
   routingFixture: args['routing-fixture'],
   coordinateCarrier: args['coordinate-carrier'] || null,
+  witnessOut: args['witness-out'] || null,
   receipt: args.receipt,
 };
 const effective = {
   routingFixture: args['routing-fixture'],
   coordinateCarrier: args['coordinate-carrier'] || null,
+  witnessOut: args['witness-out'] || null,
   receipt: args.receipt,
 };
 let phase = 'read-routing-fixture';
@@ -132,6 +144,17 @@ try {
   if (protectedInputs.has(await effectiveDestination(effective.receipt))) {
     effective.receipt = await safeFailureSidecar(requested.receipt, protectedInputs);
     throw new Error(`receipt path must not alias an input; redirected receipt to ${effective.receipt}`);
+  }
+  if (effective.witnessOut) {
+    const witnessRoot = resolve(effective.witnessOut);
+    const protectedOutputs = [
+      resolve(effective.receipt),
+      ...inputPaths.map(path => resolve(path)),
+      ...resolvedInputs,
+    ];
+    if (protectedOutputs.some(path => path === witnessRoot || path.startsWith(`${witnessRoot}/`))) {
+      throw new Error('witness output directory must not contain an authenticated input or receipt');
+    }
   }
 
   phase = 'read-routing-fixture';
@@ -165,17 +188,75 @@ try {
     coordinateCarrier,
     input,
   });
+  let witness = null;
+  if (effective.witnessOut && !admitted.admitted) {
+    effective.witnessOut = null;
+    phase = 'pipeline-refused';
+    lastTrustworthyEvidence = 'intake refusal constructed; witness not run';
+    witness = {
+      requested: requested.witnessOut,
+      effective: null,
+      route: {
+        requested: MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE,
+        effective: null,
+      },
+      status: 'not-run-intake-refused',
+    };
+  } else if (effective.witnessOut) {
+    phase = 'write-packing-witness';
+    lastTrustworthyEvidence = 'coordinate carrier admitted and packing source constructed';
+    try {
+      const written = await writeMuscleCompartmentPackingWitness({
+        outDir: effective.witnessOut,
+        source: admitted.packingSource,
+      });
+      const witnessReportPath = resolve(written.outputRoot, 'report.json');
+      const witnessReportBytes = await readFile(witnessReportPath);
+      effective.witnessOut = written.outputRoot;
+      witness = {
+        requested: requested.witnessOut,
+        effective: written.outputRoot,
+        route: {
+          requested: MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE,
+          effective: written.report.route.effective,
+        },
+        status: written.report.status,
+        report: witnessReportPath,
+        reportFileSha256: sha256(witnessReportBytes),
+      };
+      phase = 'pipeline-complete';
+      lastTrustworthyEvidence = 'intake receipt and witness report constructed';
+    } catch (error) {
+      effective.witnessOut = resolve(effective.witnessOut);
+      witness = {
+        requested: requested.witnessOut,
+        effective: resolve(effective.witnessOut),
+        route: {
+          requested: MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE,
+          effective: null,
+        },
+        status: 'failed',
+        failureReport: error.failureReportPath || null,
+        reason: error.message,
+      };
+      phase = 'pipeline-failed';
+      lastTrustworthyEvidence = 'coordinate carrier admitted; witness returned durable failure';
+    }
+  }
   const terminal = withReceiptIdentity({
     ...admitted,
     execution: {
-      phase: 'admission-complete',
-      lastTrustworthyEvidence: 'admission-receipt-constructed',
+      phase: effective.witnessOut ? phase : 'admission-complete',
+      lastTrustworthyEvidence: effective.witnessOut
+        ? lastTrustworthyEvidence
+        : 'admission-receipt-constructed',
       requested,
       effective: {
         ...effective,
         routingFixtureFileSha256: sha256(routingBytes),
         coordinateCarrierFileSha256: coordinateBytes ? sha256(coordinateBytes) : null,
       },
+      ...(witness ? { witness } : {}),
     },
   });
   await writeReceipt(effective.receipt, terminal);
@@ -186,7 +267,7 @@ try {
     receiptSha256: terminal.receiptSha256,
   }));
   process.exitCode = terminal.admitted
-    ? 0
+    ? witness?.status === 'failed' ? 1 : 0
     : terminal.status === 'identity-coherent_geometry-unavailable' ? 2 : 3;
 } catch (error) {
   const terminal = withReceiptIdentity({

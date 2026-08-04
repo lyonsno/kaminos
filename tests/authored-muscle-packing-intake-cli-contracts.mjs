@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,12 +8,129 @@ import test from 'node:test';
 
 import { AUTHORED_MUSCLE_PACKING_INTAKE_RECEIPT_SCHEMA } from
   '../authored-muscle-packing-intake-core.mjs';
+import { createSyntheticFourMuscleCompartment } from
+  '../muscle-compartment-packing-core.mjs';
 
 const fixturePath = new URL(
   '../fixtures/track-m-routing/m31-m47-routing-fixture.json',
   import.meta.url,
 );
 const toolPath = new URL('../tools/admit-authored-muscle-packing-intake.mjs', import.meta.url);
+const candidateProbePath = new URL(
+  '../artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-authority-probe.json',
+  import.meta.url,
+);
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  }
+  return typeof value === 'number' && Object.is(value, -0) ? 0 : value;
+}
+
+function hashJson(value) {
+  return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function syntheticAdmittedInputs() {
+  const source = createSyntheticFourMuscleCompartment();
+  const routes = source.muscles.map((muscle, index) => ({
+    constructionId: muscle.identity.constructionId,
+    lineageId: muscle.identity.lineageId,
+    instanceId: muscle.identity.instanceId,
+    name: muscle.id,
+    components: {
+      surfaceInstanceId: `surface-${index}`,
+      surfaceGeometrySha256: hashJson(['surface', index]),
+      pathInstanceId: `path-${index}`,
+      pathGeometrySha256: hashJson(['path', index]),
+    },
+    origin: {
+      assignedHandleInstanceId: muscle.attachments.origin.id,
+      sourceAuthority: muscle.attachments.origin.sourceAuthority,
+      point: [...muscle.attachments.origin.position],
+    },
+    insertion: {
+      assignedHandleInstanceId: muscle.attachments.insertion.id,
+      sourceAuthority: muscle.attachments.insertion.sourceAuthority,
+      point: [...muscle.attachments.insertion.position],
+    },
+  }));
+  const fixturePayload = {
+    selection: {
+      id: 'synthetic-authored-four-route-selection',
+      correctConstructionId: routes[0].constructionId,
+      crossWireDonorConstructionId: routes[1].constructionId,
+      nullConstructionIds: [],
+    },
+    source: {
+      assetSha256: '1'.repeat(64),
+      graphSha256: '2'.repeat(64),
+      graphFileSha256: '3'.repeat(64),
+    },
+    conditions: { correct: { routes } },
+  };
+  const fixture = {
+    schema: 'kaminos.track-m-source-routing-fixture.v0',
+    fixtureSha256: hashJson(fixturePayload),
+    ...fixturePayload,
+  };
+  const carrier = {
+    schema: 'kaminos.authored-muscle-packing-coordinate-carrier.v0',
+    id: 'synthetic-authored-four-coordinate-carrier',
+    derivation: {
+      kind: 'atlas-route-subset',
+      atlas: { id: 'synthetic-four-atlas', sha256: '4'.repeat(64) },
+      selectedConstructionIds: routes.map(route => route.constructionId),
+      selectionAuthority: {
+        receipt: { id: 'synthetic-four-authority', sha256: '5'.repeat(64) },
+        sharedFields: {
+          'coordinateSpace.unit': 'admitted',
+          compartment: 'admitted',
+          obstacles: 'admitted',
+        },
+        rows: routes.map(route => ({
+          constructionId: route.constructionId,
+          state: 'admitted',
+          requiredFields: {
+            'attachments.origin.position': 'admitted',
+            'attachments.insertion.position': 'admitted',
+            centerline: 'admitted',
+            targetVolume: 'admitted',
+            volumeAuthority: 'admitted',
+          },
+        })),
+      },
+    },
+    source: {
+      assetSha256: fixture.source.assetSha256,
+      graphSha256: fixture.source.graphSha256,
+      graphFileSha256: fixture.source.graphFileSha256,
+      routingFixtureSha256: fixture.fixtureSha256,
+    },
+    coordinateSpace: { kind: 'source-world', dimension: 3, unit: 'synthetic-unit' },
+    compartment: structuredClone(source.compartment),
+    obstacles: source.obstacles.map(obstacle => ({
+      ...structuredClone(obstacle),
+      sourceAuthority: 'synthetic-authored-test',
+    })),
+    muscles: source.muscles.map((muscle, index) => ({
+      constructionId: muscle.identity.constructionId,
+      lineageId: muscle.identity.lineageId,
+      instanceId: muscle.identity.instanceId,
+      surfaceInstanceId: routes[index].components.surfaceInstanceId,
+      surfaceGeometrySha256: routes[index].components.surfaceGeometrySha256,
+      pathInstanceId: routes[index].components.pathInstanceId,
+      pathGeometrySha256: routes[index].components.pathGeometrySha256,
+      attachments: structuredClone(muscle.attachments),
+      centerline: structuredClone(muscle.centerline),
+      targetVolume: muscle.targetVolume,
+      volumeAuthority: 'synthetic-authored-test',
+    })),
+  };
+  return { fixture, carrier };
+}
 
 function runTool(args) {
   return spawnSync(process.execPath, [toolPath.pathname, ...args], {
@@ -94,4 +212,107 @@ test('receipt aliasing cannot overwrite an authenticated input and redirects fai
   assert.equal(receipt.execution.requested.receipt, protectedFixturePath);
   assert.equal(receipt.execution.effective.receipt, redirectedPath);
   assert.match(receipt.reason, /receipt path must not alias an input/i);
+});
+
+test('candidate probe pipeline preserves exact intake refusal and emits no witness artifacts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-refusal-'));
+  const receiptPath = join(directory, 'receipt.json');
+  const witnessOut = join(directory, 'witness');
+  const result = runTool([
+    '--routing-fixture', fixturePath.pathname,
+    '--coordinate-carrier', candidateProbePath.pathname,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+
+  assert.equal(result.status, 3, result.stderr);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'authority-incomplete');
+  assert.equal(receipt.admitted, false);
+  assert.equal(receipt.packingSource, null);
+  assert.deepEqual(receipt.acceptedFields, []);
+  assert.deepEqual(receipt.execution.witness, {
+    requested: witnessOut,
+    effective: null,
+    route: { requested: 'muscle-compartment-packing-orbitable-v0', effective: null },
+    status: 'not-run-intake-refused',
+  });
+  await assert.rejects(stat(witnessOut), /ENOENT/);
+});
+
+test('admitted carrier pipeline drives the generic deterministic witness and binds its report', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-admitted-'));
+  const fixtureFile = join(directory, 'fixture.json');
+  const carrierFile = join(directory, 'carrier.json');
+  const receiptPath = join(directory, 'receipt.json');
+  const witnessOut = join(directory, 'witness');
+  const { fixture, carrier } = syntheticAdmittedInputs();
+  await Promise.all([
+    writeFile(fixtureFile, `${JSON.stringify(fixture, null, 2)}\n`),
+    writeFile(carrierFile, `${JSON.stringify(carrier, null, 2)}\n`),
+  ]);
+  const result = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'admitted');
+  assert.equal(receipt.admitted, true);
+  assert.equal(receipt.execution.witness.requested, witnessOut);
+  assert.equal(receipt.execution.witness.effective, witnessOut);
+  assert.deepEqual(receipt.execution.witness.route, {
+    requested: 'muscle-compartment-packing-orbitable-v0',
+    effective: 'muscle-compartment-packing-orbitable-v0',
+  });
+  assert.equal(receipt.execution.witness.status, 'complete');
+  assert.match(receipt.execution.witness.reportFileSha256, /^[0-9a-f]{64}$/);
+  const report = JSON.parse(await readFile(join(witnessOut, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'complete');
+  assert.equal(report.result.status, 'converged');
+  assert.match(String(await readFile(join(witnessOut, 'index.html'))), /Collision-resolved result/);
+
+  const repeated = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+  assert.equal(repeated.status, 0, repeated.stderr);
+  assert.deepEqual(
+    JSON.parse(await readFile(receiptPath, 'utf8')),
+    receipt,
+    'the same admitted inputs and output paths must reproduce the same terminal receipt',
+  );
+});
+
+test('witness output cannot contain or overwrite authenticated pipeline inputs', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kaminos-authored-pipeline-alias-'));
+  const witnessOut = join(directory, 'witness');
+  const fixtureFile = join(witnessOut, 'fixture.json');
+  const carrierFile = join(directory, 'carrier.json');
+  const receiptPath = join(directory, 'receipt.json');
+  const { fixture, carrier } = syntheticAdmittedInputs();
+  const fixtureBytes = Buffer.from(`${JSON.stringify(fixture, null, 2)}\n`);
+  await mkdir(witnessOut, { recursive: true });
+  await Promise.all([
+    writeFile(fixtureFile, fixtureBytes),
+    writeFile(carrierFile, `${JSON.stringify(carrier, null, 2)}\n`),
+  ]);
+  const result = runTool([
+    '--routing-fixture', fixtureFile,
+    '--coordinate-carrier', carrierFile,
+    '--receipt', receiptPath,
+    '--witness-out', witnessOut,
+  ]);
+
+  assert.equal(result.status, 1);
+  assert.deepEqual(await readFile(fixtureFile), fixtureBytes);
+  const receipt = JSON.parse(await readFile(receiptPath, 'utf8'));
+  assert.equal(receipt.status, 'input-read-failed');
+  assert.equal(receipt.execution.phase, 'output-path-validation');
+  assert.match(receipt.reason, /witness output directory.*input|contain.*input/i);
 });

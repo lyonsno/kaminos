@@ -21,6 +21,14 @@ function memoryIo() {
         assert.ok(files.has(path), `witness input exists: ${path}`);
         return files.get(path);
       },
+      async unlink(path) {
+        if (!files.has(path)) {
+          const error = new Error(`missing file: ${path}`);
+          error.code = 'ENOENT';
+          throw error;
+        }
+        files.delete(path);
+      },
       async rename(from, to) {
         assert.ok(files.has(from), `temporary witness artifact exists: ${from}`);
         files.set(to, files.get(from));
@@ -28,6 +36,28 @@ function memoryIo() {
       },
     },
   };
+}
+
+function fixedAttachmentConflictSource() {
+  const source = createSyntheticFourMuscleCompartment();
+  source.id = 'operator-authored-witness-fixed-attachment-conflict';
+  source.authority = { kind: 'operator-authored', anatomicalAdmission: 'test-only' };
+  source.input = {
+    requested: {
+      kind: 'operator-authored-test',
+      id: source.id,
+      sha256: 'a'.repeat(64),
+    },
+    effective: {
+      kind: 'operator-authored-test',
+      id: source.id,
+      sha256: 'a'.repeat(64),
+    },
+  };
+  const fixedOrigin = [...source.muscles[0].attachments.origin.position];
+  source.muscles[1].centerline[0].position = [...fixedOrigin];
+  source.muscles[1].attachments.origin.position = [...fixedOrigin];
+  return source;
 }
 
 test('witness publishes exact source, result, interactive route, and pending visual gate atomically', async () => {
@@ -208,24 +238,7 @@ test('pre-artifact solve failure leaves a durable phase-specific report with no 
 test('structured solver refusal survives witness failure reporting without visual proof substitution', async () => {
   const memory = memoryIo();
   const outDir = '/virtual/immutable-muscle-compartment-conflict';
-  const source = createSyntheticFourMuscleCompartment();
-  source.id = 'operator-authored-witness-fixed-attachment-conflict';
-  source.authority = { kind: 'operator-authored', anatomicalAdmission: 'test-only' };
-  source.input = {
-    requested: {
-      kind: 'operator-authored-test',
-      id: source.id,
-      sha256: 'a'.repeat(64),
-    },
-    effective: {
-      kind: 'operator-authored-test',
-      id: source.id,
-      sha256: 'a'.repeat(64),
-    },
-  };
-  const fixedOrigin = [...source.muscles[0].attachments.origin.position];
-  source.muscles[1].centerline[0].position = [...fixedOrigin];
-  source.muscles[1].attachments.origin.position = [...fixedOrigin];
+  const source = fixedAttachmentConflictSource();
 
   await assert.rejects(
     () => writeMuscleCompartmentPackingWitness({ outDir, source, io: memory.io }),
@@ -264,4 +277,35 @@ test('structured solver refusal survives witness failure reporting without visua
   assert.ok(!memory.files.has(`${outDir}/source.json`));
   assert.ok(!memory.files.has(`${outDir}/packed.json`));
   assert.ok(!memory.files.has(`${outDir}/index.html`));
+});
+
+test('structured refusal clears stale success artifacts from a reused witness root', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/reused-muscle-compartment-witness';
+  const success = await writeMuscleCompartmentPackingWitness({ outDir, io: memory.io });
+  assert.equal(success.report.status, 'complete');
+  assert.ok(memory.files.has(`${outDir}/source.json`));
+  assert.ok(memory.files.has(`${outDir}/packed.json`));
+  assert.ok(memory.files.has(`${outDir}/index.html`));
+
+  await assert.rejects(
+    () => writeMuscleCompartmentPackingWitness({
+      outDir,
+      source: fixedAttachmentConflictSource(),
+      io: memory.io,
+    }),
+    /immutable-constraint-conflict/i,
+  );
+
+  assert.ok(!memory.files.has(`${outDir}/source.json`));
+  assert.ok(!memory.files.has(`${outDir}/packed.json`));
+  assert.ok(!memory.files.has(`${outDir}/index.html`));
+  const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.effective, null);
+  assert.equal(report.result.status, 'immutable-constraint-conflict');
+  assert.deepEqual(report.staleSuccessArtifactCleanup, {
+    status: 'cleared',
+    paths: ['source.json', 'packed.json', 'index.html'],
+  });
 });

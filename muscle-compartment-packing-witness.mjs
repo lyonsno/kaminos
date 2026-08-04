@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -8,10 +8,13 @@ import {
   solveMuscleCompartmentPacking,
 } from './muscle-compartment-packing-core.mjs';
 
-const WITNESS_ROUTE = 'muscle-compartment-packing-orbitable-v0';
+export const MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE =
+  'muscle-compartment-packing-orbitable-v0';
+const WITNESS_ROUTE = MUSCLE_COMPARTMENT_PACKING_WITNESS_ROUTE;
 const REPORT_SCHEMA = 'kaminos.muscle-compartment-packing-witness-report.v0';
 const INSPECTION_SCHEMA = 'kaminos.muscle-compartment-packing-visual-inspection.v0';
-const DEFAULT_IO = { mkdir, readFile, rename, writeFile };
+const DEFAULT_IO = { mkdir, readFile, rename, unlink, writeFile };
+const SUCCESS_ARTIFACT_PATHS = Object.freeze(['source.json', 'packed.json', 'index.html']);
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -21,6 +24,22 @@ async function writeJsonAtomically(io, path, value) {
   const temporaryPath = `${path}.tmp`;
   await io.writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`);
   await io.rename(temporaryPath, path);
+}
+
+async function clearStaleSuccessArtifacts(io, outputRoot) {
+  const results = await Promise.allSettled(SUCCESS_ARTIFACT_PATHS.map(async path => {
+    try {
+      await io.unlink(resolve(outputRoot, path));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }));
+  const failures = results.flatMap((result, index) => result.status === 'rejected'
+    ? [{ path: SUCCESS_ARTIFACT_PATHS[index], reason: result.reason?.message || String(result.reason) }]
+    : []);
+  return failures.length === 0
+    ? { status: 'cleared', paths: [...SUCCESS_ARTIFACT_PATHS] }
+    : { status: 'failed', paths: [...SUCCESS_ARTIFACT_PATHS], failures };
 }
 
 function formatMetric(value) {
@@ -292,6 +311,9 @@ export async function writeMuscleCompartmentPackingWitness({
         failure: result.failure ? structuredClone(result.failure) : null,
       }
       : null;
+    const staleSuccessArtifactCleanup = phase === 'prepare-output'
+      ? { status: 'not-attempted-output-unavailable', paths: [...SUCCESS_ARTIFACT_PATHS] }
+      : await clearStaleSuccessArtifacts(io, outputRoot);
     const failureReport = {
       ...failureBase,
       failurePhase: phase,
@@ -309,6 +331,7 @@ export async function writeMuscleCompartmentPackingWitness({
           input: source?.input ? structuredClone(source.input) : null,
         },
       ...(structuredSolverFailure ? { result: structuredSolverFailure } : {}),
+      staleSuccessArtifactCleanup,
       error: { name:error.name, message:error.message },
     };
     const failureReportPath = phase === 'prepare-output'
