@@ -329,6 +329,7 @@ function measureSourceRelationshipRetention(source, muscles) {
   let minimumSourceBendEnergyRetention = 1;
   let minimumSourceCurvatureCosine = 1;
   let sourceCurvatureReversalCount = 0;
+  let maximumSourceRadiusRatio = 1;
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceMuscle = source.muscles[muscleIndex];
     for (const [knotIndex, knot] of muscle.centerline.entries()) {
@@ -337,6 +338,14 @@ function measureSourceRelationshipRetention(source, muscles) {
       maximumSourceKnotDisplacement = Math.max(maximumSourceKnotDisplacement, displacement);
       squaredDisplacementSum += displacement ** 2;
       displacementCount += 1;
+      const sourceRadius = sourceMuscle.centerline[knotIndex].radius;
+      if (knot.radius > 0 && sourceRadius > 0) {
+        maximumSourceRadiusRatio = Math.max(
+          maximumSourceRadiusRatio,
+          knot.radius / sourceRadius,
+          sourceRadius / knot.radius,
+        );
+      }
     }
     const sourceBendEnergy = bendEnergy(sourceMuscle);
     const packedBendEnergy = bendEnergy(muscle);
@@ -395,6 +404,7 @@ function measureSourceRelationshipRetention(source, muscles) {
     minimumSourceBendEnergyRetention: rounded(minimumSourceBendEnergyRetention),
     minimumSourceCurvatureCosine: rounded(minimumSourceCurvatureCosine),
     sourceCurvatureReversalCount,
+    maximumSourceRadiusRatio: rounded(maximumSourceRadiusRatio),
     minimumPairwiseRelationCosine: rounded(minimumPairwiseRelationCosine),
     pairwiseRelationReversalCount,
   };
@@ -543,6 +553,24 @@ function validateConfig(config) {
   ) {
     throw new Error('muscle packing pairwiseUpdate must be sequential or reciprocal-batched');
   }
+  if (
+    config.crossSectionUpdate !== undefined &&
+    !['uniform', 'contact-redistributed'].includes(config.crossSectionUpdate)
+  ) {
+    throw new Error(
+      'muscle packing crossSectionUpdate must be uniform or contact-redistributed',
+    );
+  }
+  if (config.crossSectionUpdate === 'contact-redistributed') {
+    if (
+      !Number.isFinite(config.crossSectionStep) ||
+      config.crossSectionStep <= 0 || config.crossSectionStep > 1
+    ) {
+      throw new Error('contact-redistributed cross sections require crossSectionStep in (0, 1]');
+    }
+  } else if (config.crossSectionStep !== undefined) {
+    throw new Error('crossSectionStep requires contact-redistributed crossSectionUpdate');
+  }
 }
 
 function validateSource(source) {
@@ -688,6 +716,17 @@ function pairwiseProjectionReceipt(config) {
   return {
     requestedUpdate: update,
     effectiveUpdate: update,
+    fallbackUsed: false,
+  };
+}
+
+function crossSectionProjectionReceipt(config) {
+  const update = config.crossSectionUpdate || 'uniform';
+  return {
+    requestedUpdate: update,
+    effectiveUpdate: update,
+    requestedStep: update === 'contact-redistributed' ? config.crossSectionStep : null,
+    effectiveStep: update === 'contact-redistributed' ? config.crossSectionStep : null,
     fallbackUsed: false,
   };
 }
@@ -1405,6 +1444,51 @@ function restoreTargetVolumes(muscles, attribution, category) {
   }
 }
 
+function redistributePairwiseCrossSections(muscles, amount, attribution, category) {
+  const pressures = muscles.map(muscle => muscle.centerline.map(() => 0));
+  const knotCount = muscles[0].centerline.length;
+  for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
+      for (let leftKnotIndex = 1; leftKnotIndex < knotCount - 1; leftKnotIndex += 1) {
+        for (let rightKnotIndex = 1; rightKnotIndex < knotCount - 1; rightKnotIndex += 1) {
+          const left = muscles[leftIndex].centerline[leftKnotIndex];
+          const right = muscles[rightIndex].centerline[rightKnotIndex];
+          const required = left.radius + right.radius;
+          const overlap = required - distance(left.position, right.position);
+          if (overlap <= 0 || required <= 0) continue;
+          const normalizedPressure = overlap / required;
+          pressures[leftIndex][leftKnotIndex] = Math.max(
+            pressures[leftIndex][leftKnotIndex],
+            normalizedPressure,
+          );
+          pressures[rightIndex][rightKnotIndex] = Math.max(
+            pressures[rightIndex][rightKnotIndex],
+            normalizedPressure,
+          );
+        }
+      }
+    }
+  }
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const interiorPressures = pressures[muscleIndex].slice(1, -1);
+    const meanPressure = interiorPressures.reduce((sum, value) => sum + value, 0) /
+      interiorPressures.length;
+    for (let knotIndex = 1; knotIndex < knotCount - 1; knotIndex += 1) {
+      const pressureOffset = pressures[muscleIndex][knotIndex] - meanPressure;
+      if (Math.abs(pressureOffset) <= 1e-15) continue;
+      const knot = muscle.centerline[knotIndex];
+      applyAttributedRadius(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        knot.radius * Math.exp(-amount * pressureOffset),
+      );
+    }
+  }
+}
+
 function smoothInteriorDisplacement(source, muscles, amount, attribution, category) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
@@ -1625,6 +1709,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       dimension: 3,
       formation: formationReceipt(source),
       pairwiseProjection: pairwiseProjectionReceipt(config),
+      crossSectionProjection: crossSectionProjectionReceipt(config),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
         centerlineDistance: 'nested-convex-golden-section',
@@ -1734,6 +1819,14 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       correctionAttribution,
       'compartmentProjection',
     );
+    if (config.crossSectionUpdate === 'contact-redistributed') {
+      redistributePairwiseCrossSections(
+        muscles,
+        config.crossSectionStep,
+        correctionAttribution,
+        'volumeRestoration',
+      );
+    }
     restoreTargetVolumes(muscles, correctionAttribution, 'volumeRestoration');
     projectObstacles(
       source,
@@ -1853,6 +1946,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     dimension: 3,
     formation: formationReceipt(source),
     pairwiseProjection: pairwiseProjectionReceipt(config),
+    crossSectionProjection: crossSectionProjectionReceipt(config),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
       centerlineDistance: 'nested-convex-golden-section',

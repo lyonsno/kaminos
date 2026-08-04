@@ -97,6 +97,10 @@ test('witness publishes exact source, result, interactive route, and pending vis
     written.result.pairwiseProjection,
   );
   assert.deepEqual(
+    written.report.result.crossSectionProjection,
+    written.result.crossSectionProjection,
+  );
+  assert.deepEqual(
     written.report.result.correctionAttribution,
     written.result.correctionAttribution,
   );
@@ -172,6 +176,13 @@ test('eight-carrier density witness refuses the source-relative residual without
   assert.deepEqual(report.result.pairwiseProjection, {
     requestedUpdate:'sequential',
     effectiveUpdate:'sequential',
+    fallbackUsed:false,
+  });
+  assert.deepEqual(report.result.crossSectionProjection, {
+    requestedUpdate:'uniform',
+    effectiveUpdate:'uniform',
+    requestedStep:null,
+    effectiveStep:null,
     fallbackUsed:false,
   });
   assert.equal(report.result.failure.kind, 'residual-constraint');

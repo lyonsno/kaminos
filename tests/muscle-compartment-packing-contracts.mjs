@@ -349,6 +349,46 @@ test('reciprocal-batched pairwise projection cuts k8 residual and correction chu
   assert.ok(reciprocal.metrics.packed.compartmentEscape <= baseConfig.convergenceTolerance);
 });
 
+test('contact-redistributed cross-sections trade local radius for reciprocal k8 clearance at exact volume', () => {
+  const source = createSyntheticMuscleDensityLadder(8);
+  const baseConfig = {
+    maxIterations:960,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+  };
+  const uniform = solveMuscleCompartmentPacking(source, baseConfig);
+  const redistributed = solveMuscleCompartmentPacking(source, {
+    ...baseConfig,
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.01,
+  });
+  assert.deepEqual(redistributed.crossSectionProjection, {
+    requestedUpdate:'contact-redistributed',
+    effectiveUpdate:'contact-redistributed',
+    requestedStep:0.01,
+    effectiveStep:0.01,
+    fallbackUsed:false,
+  });
+  assert.ok(
+    redistributed.metrics.packed.pairwisePenetration <
+      uniform.metrics.packed.pairwisePenetration * 0.5,
+    `redistributed residual ${redistributed.metrics.packed.pairwisePenetration} did not halve uniform residual ${uniform.metrics.packed.pairwisePenetration}`,
+  );
+  assert.ok(
+    redistributed.metrics.packed.sourceCurvatureReversalCount <=
+      uniform.metrics.packed.sourceCurvatureReversalCount,
+  );
+  assert.ok(redistributed.metrics.packed.maximumSourceRadiusRatio <= 1.5);
+  assert.equal(redistributed.metrics.packed.endpointDrift, 0);
+  assert.ok(redistributed.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(redistributed.metrics.packed.skeletalPenetration <= baseConfig.convergenceTolerance);
+  assert.ok(redistributed.metrics.packed.compartmentEscape <= baseConfig.convergenceTolerance);
+  assert.equal(redistributed.metrics.packed.nonPositiveRadiusCount, 0);
+});
+
 test('source validation rejects identity collision and non-finite carrier state', () => {
   assert.throws(
     () => solveMuscleCompartmentPacking(
