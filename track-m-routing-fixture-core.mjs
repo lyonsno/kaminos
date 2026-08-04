@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer';
 export const TRACK_M_ROUTING_FIXTURE_SCHEMA = 'kaminos.track-m-source-routing-fixture.v0';
 export const TRACK_M_ROUTING_FIXTURE_FAILURE_SCHEMA = 'kaminos.track-m-source-routing-fixture-failure.v0';
 export const TRACK_M_ROUTING_FIXTURE_COMPILER_ID = 'track-m-m31-m47-routing-fixture-v0';
+export const TRACK_M_DENSE_ROUTING_FIXTURE_COMPILER_ID = 'track-m-m34-m13-dense-routing-fixture-v0';
 
 const SOURCE_GRAPH_SCHEMA = 'kaminos.track-m-authored-source-graph.v0';
 const GEOMETRY_ASSAY_SCHEMA = 'counterfactual.cat-armature-relation-geometry.v1';
@@ -41,6 +42,56 @@ const NULL_SPECS = Object.freeze([
     sourceName: 'SRC_PELVIS',
   },
 ]);
+const DENSE_ROUTE_SPECS = Object.freeze([
+  {
+    constructionId: 'muscle-34',
+    name: 'Muscle 34',
+    instanceId: 'instance-dfa1e302-587f-4a02-813d-e18b63e1b78d',
+    lineageId: 'lineage-452338f8-5611-49e9-913f-d5b62c921b1e',
+  },
+  {
+    constructionId: 'muscle-13',
+    name: 'Muscle 13',
+    instanceId: 'instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1',
+    lineageId: 'lineage-128e590e-d1ca-4373-a030-c619c0ee277f',
+  },
+]);
+const DEFAULT_SELECTION_ID = 'cube002-cube003-m31-m47-routing-sensitivity-v0';
+const DENSE_SELECTION_ID = 'src-pelvis-cube002-m34-m13-routing-sensitivity-v0';
+const SELECTION_PROFILES = Object.freeze({
+  [DEFAULT_SELECTION_ID]: Object.freeze({
+    id: DEFAULT_SELECTION_ID,
+    compilerId: TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
+    routeSpecs: ROUTE_SPECS,
+    nullSpecs: NULL_SPECS,
+    expectedPair: Object.freeze(['Cube.002', 'Cube.003']),
+    transformSlug: 'm31-m47',
+    selectionAuthority: 'track-m-relation-selection-2026-08-03',
+    includeAbsent: false,
+    denseFamilyRouteCount: null,
+  }),
+  [DENSE_SELECTION_ID]: Object.freeze({
+    id: DENSE_SELECTION_ID,
+    compilerId: TRACK_M_DENSE_ROUTING_FIXTURE_COMPILER_ID,
+    routeSpecs: DENSE_ROUTE_SPECS,
+    nullSpecs: NULL_SPECS,
+    expectedPair: Object.freeze(['SRC_PELVIS', 'Cube.002']),
+    transformSlug: 'm34-m13',
+    selectionAuthority: 'golden-object-parallel-assay-portfolio-2026-08-03',
+    includeAbsent: true,
+    denseFamilyRouteCount: 36,
+  }),
+});
+
+function selectionProfile(selectionId = DEFAULT_SELECTION_ID) {
+  const profile = SELECTION_PROFILES[selectionId];
+  if (!profile) throw new Error(`unknown Track M routing selection ${selectionId}`);
+  return profile;
+}
+
+export function trackMRoutingFixtureCompilerId(selectionId = DEFAULT_SELECTION_ID) {
+  return selectionProfile(selectionId).compilerId;
+}
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -307,7 +358,7 @@ function representationalBudget(routes) {
   };
 }
 
-function condition(id, kind, routes) {
+function condition(id, kind, routes, transformSlug = 'm31-m47') {
   const routingGraphSha256 = hashJson(routeGraph(routes));
   const core = {
     id,
@@ -320,10 +371,31 @@ function condition(id, kind, routes) {
   return {
     ...core,
     transform: {
-      id: `${id}-m31-m47-v0`,
+      id: `${id}-${transformSlug}-v0`,
       kind,
       sha256: hashJson({ kind, routingGraphSha256, routes: routeGraph(routes) }),
     },
+  };
+}
+
+function absentCondition(authoredRoutes, transformSlug, densityContext) {
+  const removedConstructionIds = authoredRoutes.map(route => route.constructionId).sort();
+  const removedComponentInstanceIds = authoredRoutes.flatMap(route => [
+    route.components.originInstanceId,
+    route.components.insertionInstanceId,
+    route.components.pathInstanceId,
+    route.components.surfaceInstanceId,
+  ]).sort();
+  return {
+    ...condition('deep-geometry-absent', 'remove-deep-geometry', [], transformSlug),
+    deepGeometryPresent: false,
+    testedRelationPresent: false,
+    removedConstructionIds,
+    removedComponentInstanceIds,
+    preservedNeighborRouteCount: densityContext.neighborRouteCount,
+    preservedNeighborConstructionIds: densityContext.neighborConstructionIds,
+    preservedNeighborFamilyIdentitySha256: densityContext.neighborFamilyIdentitySha256,
+    budgetMatchStatus: 'outside-matched-budget-pair',
   };
 }
 
@@ -357,6 +429,23 @@ export function validateMatchedRoutePreservation(correct, matchedWrong) {
   if (correct.routingGraphSha256 === matchedWrong.routingGraphSha256) {
     throw new Error('matched-wrong condition does not destroy the selected routing graph');
   }
+  if (correct.routes.length !== 2 || matchedWrong.routes.length !== 2) {
+    throw new Error('matched routing comparison requires exactly two routes');
+  }
+  const correctByConstruction = new Map(correct.routes.map(route => [route.constructionId, route]));
+  const wrongByConstruction = new Map(matchedWrong.routes.map(route => [route.constructionId, route]));
+  if (correctByConstruction.size !== 2 || wrongByConstruction.size !== 2) {
+    throw new Error('matched routing comparison requires unique route identities');
+  }
+  for (const route of correct.routes) {
+    const wrongRoute = wrongByConstruction.get(route.constructionId);
+    const donorRoute = correct.routes.find(candidate => candidate.constructionId !== route.constructionId);
+    if (!wrongRoute || !donorRoute) throw new Error('matched-wrong condition route set drifted');
+    const expectedWrongRoute = assignedRoute(route, donorRoute);
+    if (hashJson(wrongRoute) !== hashJson(expectedWrongRoute)) {
+      throw new Error(`matched-wrong condition does not preserve exact route body for ${route.constructionId}`);
+    }
+  }
   return true;
 }
 
@@ -375,6 +464,78 @@ function validateNull(graph, assay, spec) {
   };
 }
 
+function midpoint(left, right) {
+  return left.map((value, index) => (value + right[index]) / 2);
+}
+
+function denseRouteIdentity(route) {
+  return {
+    constructionId: route.constructionId,
+    instanceId: route.instanceId,
+    lineageId: route.lineageId,
+    originHandleInstanceId: route.origin.authoredHandleInstanceId,
+    insertionHandleInstanceId: route.insertion.authoredHandleInstanceId,
+    pathGeometrySha256: route.components.pathGeometrySha256,
+    surfaceGeometrySha256: route.components.surfaceGeometrySha256,
+  };
+}
+
+function buildDensityContext(graph, assay, profile, authoredRoutes) {
+  const familyRoutes = graph.muscles
+    .filter(muscle => (
+      muscle.completenessAuthority === 'declared_components_present'
+      && muscle.missingComponentRoles?.length === 0
+      && muscle.origin?.sourceAuthority === 'source_mesh'
+      && muscle.insertion?.sourceAuthority === 'source_mesh'
+      && muscle.origin.sourceName === profile.expectedPair[0]
+      && muscle.insertion.sourceName === profile.expectedPair[1]
+    ))
+    .map(muscle => validateRoute(graph, assay, {
+      constructionId: muscle.identity?.construction_id,
+      name: muscle.name,
+      instanceId: muscle.identity?.instance_id,
+      lineageId: muscle.identity?.lineage_id,
+    }, profile.expectedPair))
+    .sort((left, right) => left.constructionId.localeCompare(right.constructionId));
+  if (familyRoutes.length !== profile.denseFamilyRouteCount) {
+    throw new Error(
+      `dense family route count mismatch: expected ${profile.denseFamilyRouteCount}, got ${familyRoutes.length}`,
+    );
+  }
+  const selectedIds = new Set(authoredRoutes.map(route => route.constructionId));
+  const neighborRoutes = familyRoutes.filter(route => !selectedIds.has(route.constructionId));
+  const correctRoute = authoredRoutes[0];
+  const donorRoute = authoredRoutes[1];
+  const familyConstructionIds = familyRoutes.map(route => route.constructionId);
+  const neighborConstructionIds = neighborRoutes.map(route => route.constructionId);
+  return {
+    family: { originSource: profile.expectedPair[0], insertionSource: profile.expectedPair[1] },
+    familyRouteCount: familyRoutes.length,
+    neighborRouteCount: neighborRoutes.length,
+    familyConstructionIds,
+    familyIdentitySha256: hashJson(familyRoutes.map(denseRouteIdentity)),
+    neighborConstructionIds,
+    neighborFamilyIdentitySha256: hashJson(neighborRoutes.map(denseRouteIdentity)),
+    targetCorridor: {
+      freezeStatus: 'frozen-before-condition-output',
+      conditionIndependent: true,
+      authority: 'authenticated-source-route-endpoints',
+      selectedConstructionId: correctRoute.constructionId,
+      donorConstructionId: donorRoute.constructionId,
+      selectedOriginPoint: correctRoute.origin.point,
+      selectedInsertionPoint: correctRoute.insertion.point,
+      selectedCenterPoint: midpoint(correctRoute.origin.point, correctRoute.insertion.point),
+      donorOriginPoint: donorRoute.origin.point,
+      donorInsertionPoint: donorRoute.insertion.point,
+      donorCenterPoint: midpoint(donorRoute.origin.point, donorRoute.insertion.point),
+      attachmentNeighborhoodRadius: null,
+      castProjection: 'unavailable-held',
+      expectedSignedLocalization: 'unassigned-held',
+      neighboringRouteLeakage: 'unmeasured-held',
+    },
+  };
+}
+
 export function compileTrackMRoutingFixture(graphBytes, assayBytes, options = {}) {
   const graphInput = parseAuthenticatedBytes(graphBytes, 'source graph');
   const assayInput = parseAuthenticatedBytes(assayBytes, 'geometry assay');
@@ -386,12 +547,29 @@ export function compileTrackMRoutingFixture(graphBytes, assayBytes, options = {}
     assayFileSha256: assayInput.sha256,
   };
   assertSourceIdentities(graph, assay, authenticatedOptions);
-  const authoredRoutes = ROUTE_SPECS.map(spec => validateRoute(graph, assay, spec));
+  const profile = selectionProfile(options.selectionId);
+  const authoredRoutes = profile.routeSpecs.map(spec => validateRoute(graph, assay, spec, profile.expectedPair));
   const correctRoutes = authoredRoutes.map(route => assignedRoute(route));
   const wrongRoutes = authoredRoutes.map((route, index) => assignedRoute(route, authoredRoutes[1 - index]));
-  const correct = condition('deep-geometry-correctly-routed', 'preserve-correct-routing', correctRoutes);
-  const matchedWrong = condition('deep-geometry-matched-wrong-routing', 'matched-wrong-routing', wrongRoutes);
+  const correct = condition('deep-geometry-correctly-routed', 'preserve-correct-routing', correctRoutes, profile.transformSlug);
+  const matchedWrong = condition('deep-geometry-matched-wrong-routing', 'matched-wrong-routing', wrongRoutes, profile.transformSlug);
   validateMatchedRoutePreservation(correct, matchedWrong);
+  const densityContext = profile.denseFamilyRouteCount === null
+    ? null
+    : buildDensityContext(graph, assay, profile, authoredRoutes);
+
+  const conditions = profile.includeAbsent
+    ? {
+      absent: absentCondition(authoredRoutes, profile.transformSlug, densityContext),
+      correct: { ...correct, deepGeometryPresent: true, testedRelationPresent: true },
+      matchedWrong: {
+        ...matchedWrong,
+        deepGeometryPresent: true,
+        testedRelationPresent: false,
+        destroyedRelationId: profile.id,
+      },
+    }
+    : { correct, matchedWrong };
 
   const deltaRoutes = authoredRoutes.map((route, index) => {
     const crossWireChordLength = distance(route.origin.point, authoredRoutes[1 - index].insertion.point);
@@ -408,16 +586,16 @@ export function compileTrackMRoutingFixture(graphBytes, assayBytes, options = {}
   });
 
   const fixtureCore = {
-    compilerId: TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
+    compilerId: profile.compilerId,
     status: 'compiled',
     trackId: TRACK_ID,
     selection: {
-      id: 'cube002-cube003-m31-m47-routing-sensitivity-v0',
-      family: { originSource: 'Cube.002', insertionSource: 'Cube.003' },
-      correctConstructionId: 'muscle-31',
-      crossWireDonorConstructionId: 'muscle-47',
-      nullConstructionIds: NULL_SPECS.map(spec => spec.constructionId),
-      selectionAuthority: 'track-m-relation-selection-2026-08-03',
+      id: profile.id,
+      family: { originSource: profile.expectedPair[0], insertionSource: profile.expectedPair[1] },
+      correctConstructionId: profile.routeSpecs[0].constructionId,
+      crossWireDonorConstructionId: profile.routeSpecs[1].constructionId,
+      nullConstructionIds: profile.nullSpecs.map(spec => spec.constructionId),
+      selectionAuthority: profile.selectionAuthority,
     },
     source: {
       assetSha256: graph.source.sha256,
@@ -428,8 +606,8 @@ export function compileTrackMRoutingFixture(graphBytes, assayBytes, options = {}
       geometryAssayFileSha256: authenticatedOptions.assayFileSha256,
       graphCompilerId: graph.compilerId,
     },
-    conditions: { correct, matchedWrong },
-    nulls: NULL_SPECS.map(spec => validateNull(graph, assay, spec)),
+    conditions,
+    nulls: profile.nullSpecs.map(spec => validateNull(graph, assay, spec)),
     deltaLedger: {
       routes: deltaRoutes,
       maximumAbsoluteRelativeChange: Math.max(...deltaRoutes.map(route => Math.abs(route.relativeChange))),
@@ -496,6 +674,7 @@ export function compileTrackMRoutingFixture(graphBytes, assayBytes, options = {}
         'packing-geometry-admission',
       ],
     },
+    ...(densityContext === null ? {} : { densityContext }),
   };
   return canonical({
     schema: TRACK_M_ROUTING_FIXTURE_SCHEMA,

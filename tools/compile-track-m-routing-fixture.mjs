@@ -4,9 +4,9 @@ import { mkdir, readFile, realpath, rename, unlink, writeFile } from 'node:fs/pr
 import { dirname, resolve } from 'node:path';
 
 import {
-  TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
   TRACK_M_ROUTING_FIXTURE_FAILURE_SCHEMA,
   compileTrackMRoutingFixture,
+  trackMRoutingFixtureCompilerId,
 } from '../track-m-routing-fixture-core.mjs';
 
 function parseArgs(argv) {
@@ -78,8 +78,17 @@ let outputPath = null;
 let outputPathIsSafe = false;
 let failurePathIsSafe = false;
 let lastTrustworthyEvidence = 'no input bytes read';
+let selectionId = null;
+let compilerId = null;
+let selectionError = null;
 try {
   args = parseArgs(process.argv.slice(2));
+  selectionId = args.get('--selection') ?? null;
+  try {
+    compilerId = trackMRoutingFixtureCompilerId(selectionId ?? undefined);
+  } catch (error) {
+    selectionError = error;
+  }
   requestedGraphPath = args.get('--graph');
   requestedAssayPath = args.get('--assay');
   requestedFailurePath = resolve(args.get('--failure'));
@@ -115,6 +124,7 @@ try {
     failurePathIsSafe = true;
     throw new Error(`primary output and failure receipt paths must be distinct; redirected receipt to ${failurePath}`);
   }
+  if (selectionError) throw selectionError;
 
   const [graphResolution, assayResolution] = await Promise.allSettled([
     realpath(requestedGraphPath),
@@ -151,6 +161,7 @@ try {
   assayFileSha256 = createHash('sha256').update(assayBytes).digest('hex');
   lastTrustworthyEvidence = 'graph and assay bytes read and hashed';
   const fixture = compileTrackMRoutingFixture(graphBytes, assayBytes, {
+    selectionId: selectionId ?? undefined,
     expectedSourceSha256: args.get('--expected-source-sha256'),
     expectedGraphSha256: args.get('--expected-graph-sha256'),
     expectedGraphFileSha256: args.get('--expected-graph-file-sha256'),
@@ -166,8 +177,9 @@ try {
   const expected = key => args?.get(key) ?? null;
   const report = {
     schema: TRACK_M_ROUTING_FIXTURE_FAILURE_SCHEMA,
-    compilerId: TRACK_M_ROUTING_FIXTURE_COMPILER_ID,
+    compilerId,
     status: 'failed',
+    requestedSelectionId: selectionId,
     failurePhase: lastTrustworthyEvidence === 'no input bytes read' ? 'input-read' : 'source-identity-validation',
     requestedGraphPath,
     effectiveGraphPath,

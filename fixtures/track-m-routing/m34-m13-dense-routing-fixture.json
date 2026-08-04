@@ -1,0 +1,888 @@
+{
+  "authority": {
+    "admittedClaims": [
+      "source-side-routing-sensitivity-fixture"
+    ],
+    "heldClaims": [
+      "correct-route-superiority",
+      "musculature-source-evidence",
+      "selected-relation-m0",
+      "station-instance",
+      "source-to-cast-correspondence",
+      "expected-signed-localization",
+      "packing-geometry-admission"
+    ]
+  },
+  "compilerId": "track-m-m34-m13-dense-routing-fixture-v0",
+  "conditions": {
+    "absent": {
+      "attachmentEndpointMultisetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "budgetMatchStatus": "outside-matched-budget-pair",
+      "deepGeometryContentSetSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "deepGeometryPresent": false,
+      "id": "deep-geometry-absent",
+      "preservedNeighborConstructionIds": [
+        "muscle",
+        "muscle-02",
+        "muscle-03",
+        "muscle-04",
+        "muscle-05",
+        "muscle-06",
+        "muscle-07",
+        "muscle-08",
+        "muscle-09",
+        "muscle-10",
+        "muscle-11",
+        "muscle-12",
+        "muscle-14",
+        "muscle-15",
+        "muscle-16",
+        "muscle-18",
+        "muscle-20",
+        "muscle-21",
+        "muscle-22",
+        "muscle-23",
+        "muscle-25",
+        "muscle-26",
+        "muscle-27",
+        "muscle-30",
+        "muscle-32",
+        "muscle-37",
+        "muscle-39",
+        "muscle-41",
+        "muscle-42",
+        "muscle-43",
+        "muscle-44",
+        "muscle-45",
+        "muscle-52",
+        "muscle-53"
+      ],
+      "preservedNeighborFamilyIdentitySha256": "ee137d793e5cefb80a12c1572ad3ef4f7a325db10da9b8240639ef921b5e02b6",
+      "preservedNeighborRouteCount": 34,
+      "removedComponentInstanceIds": [
+        "instance-173e65f0-0ffc-4678-ad5b-461ba87204b1",
+        "instance-182a0783-9dc7-4283-9189-3460f8e36fba",
+        "instance-25a5fbea-a3dc-4c43-92a2-d4d9c977746e",
+        "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+        "instance-76120608-af3c-4aaa-bff2-720daca75154",
+        "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+        "instance-a9b5e1a5-d219-404b-aa95-5a6e087e7783",
+        "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+      ],
+      "removedConstructionIds": [
+        "muscle-13",
+        "muscle-34"
+      ],
+      "representationalBudget": {
+        "insertionTendonFractionSum": 0,
+        "longitudinalSectionCount": 0,
+        "originTendonFractionSum": 0,
+        "pathPointCount": 0,
+        "profileSideCount": 0,
+        "routeCount": 0,
+        "surfaceEdgeCount": 0,
+        "surfacePolygonCount": 0,
+        "surfaceVertexCount": 0
+      },
+      "routes": [],
+      "routingGraphSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "testedRelationPresent": false,
+      "transform": {
+        "id": "deep-geometry-absent-m34-m13-v0",
+        "kind": "remove-deep-geometry",
+        "sha256": "5b75b3a3c2f6a3187afaa1985480a065e92e7005af9bdaa2f503c882c1e2a10f"
+      }
+    },
+    "correct": {
+      "attachmentEndpointMultisetSha256": "4bfee34ff59b96fac10ca56bd59e365c36c6f9a325ac9428f019859e4914efbb",
+      "deepGeometryContentSetSha256": "d1fb51159e831603600bd9b6bc70ab9a74c3da1aabef280a40ef98f932fe71db",
+      "deepGeometryPresent": true,
+      "id": "deep-geometry-correctly-routed",
+      "representationalBudget": {
+        "insertionTendonFractionSum": 0.36,
+        "longitudinalSectionCount": 24,
+        "originTendonFractionSum": 0.36,
+        "pathPointCount": 50,
+        "profileSideCount": 24,
+        "routeCount": 2,
+        "surfaceEdgeCount": 1176,
+        "surfacePolygonCount": 580,
+        "surfaceVertexCount": 600
+      },
+      "routes": [
+        {
+          "authoredChordLength": 18.10889919337251,
+          "authoredCompleteness": "wip_procedural",
+          "chordConsistencyDelta": 7.067113116931978e-8,
+          "completenessAuthority": "declared_components_present",
+          "components": {
+            "insertionInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "originInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "pathGeometrySha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+            "pathInstanceId": "instance-a9b5e1a5-d219-404b-aa95-5a6e087e7783",
+            "pathPointCount": 25,
+            "surfaceEdgeCount": 588,
+            "surfaceGeometrySha256": "b8795bd26a24cc9506def18ca1bdf2645ff82b4499253a015c472500edbf4dac",
+            "surfaceInstanceId": "instance-25a5fbea-a3dc-4c43-92a2-d4d9c977746e",
+            "surfacePolygonCount": 290,
+            "surfaceVertexCount": 300
+          },
+          "constructionId": "muscle-34",
+          "endpointDerivedChordLength": 18.10889926404364,
+          "endpointRoute": "draw_muscle",
+          "endpointStrategy": "surface_hits",
+          "insertion": {
+            "assignedFromConstructionId": "muscle-34",
+            "assignedHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "authoredHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "graphToAssayRegistrationDelta": 1.9643060527473894e-10,
+            "matrixWorld": [
+              -0.454095334,
+              0.027241236,
+              0.440522492,
+              8.319665909,
+              0.442170262,
+              0.027975822,
+              0.452403039,
+              -2.78211689,
+              3.3e-8,
+              0.45103544,
+              -0.054667067,
+              8.736489296,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              8.319665908813477,
+              -2.7821168899536133,
+              8.736489295959473
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "Cube.002"
+          },
+          "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+          "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+          "name": "Muscle 34",
+          "origin": {
+            "assignedFromConstructionId": "muscle-34",
+            "assignedHandleInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "authoredHandleInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "graphToAssayRegistrationDelta": 6.47663866936624e-10,
+            "matrixWorld": [
+              -0.051902369,
+              -0.060304035,
+              -0.626015544,
+              4.189600945,
+              -0.631682813,
+              0.004954892,
+              0.051436711,
+              8.059602737,
+              1e-9,
+              0.448660821,
+              -0.084710166,
+              -5.167895317,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              4.189600944519043,
+              8.059602737426758,
+              -5.167895317077637
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "SRC_PELVIS"
+          },
+          "settings": {
+            "insertion_tendon_fraction": 0.18,
+            "longitudinal_sections": 12,
+            "origin_tendon_fraction": 0.18,
+            "profile_sides": 12
+          }
+        },
+        {
+          "authoredChordLength": 18.144783115178726,
+          "authoredCompleteness": "wip_procedural",
+          "chordConsistencyDelta": 4.5826329397868903e-7,
+          "completenessAuthority": "declared_components_present",
+          "components": {
+            "insertionInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "originInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "pathGeometrySha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+            "pathInstanceId": "instance-173e65f0-0ffc-4678-ad5b-461ba87204b1",
+            "pathPointCount": 25,
+            "surfaceEdgeCount": 588,
+            "surfaceGeometrySha256": "41afac51a52007866e49e533224734b77588341baaec5cb2cf5654ece89e5dce",
+            "surfaceInstanceId": "instance-182a0783-9dc7-4283-9189-3460f8e36fba",
+            "surfacePolygonCount": 290,
+            "surfaceVertexCount": 300
+          },
+          "constructionId": "muscle-13",
+          "endpointDerivedChordLength": 18.14478265691543,
+          "endpointRoute": "draw_muscle",
+          "endpointStrategy": "surface_hits",
+          "insertion": {
+            "assignedFromConstructionId": "muscle-13",
+            "assignedHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "authoredHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "graphToAssayRegistrationDelta": 7.051197082651024e-10,
+            "matrixWorld": [
+              -0.634592235,
+              0.001388218,
+              0.024489984,
+              6.266059875,
+              0.02456698,
+              0.035860419,
+              0.632603109,
+              -2.056589127,
+              -7e-8,
+              0.45219782,
+              -0.050242372,
+              10.305938721,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              6.266059875488281,
+              -2.056589126586914,
+              10.305938720703125
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "Cube.002"
+          },
+          "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+          "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+          "name": "Muscle 13",
+          "origin": {
+            "assignedFromConstructionId": "muscle-13",
+            "assignedHandleInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "authoredHandleInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "graphToAssayRegistrationDelta": 2.8079174892055475e-10,
+            "matrixWorld": [
+              0.543799102,
+              -0.206152573,
+              -0.155869573,
+              1.544946909,
+              -0.328013927,
+              -0.341771007,
+              -0.258408904,
+              9.841607094,
+              -7.1e-8,
+              0.215556324,
+              -0.558784723,
+              -2.553966284,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              1.5449469089508057,
+              9.841607093811035,
+              -2.5539662837982178
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "SRC_PELVIS"
+          },
+          "settings": {
+            "insertion_tendon_fraction": 0.18,
+            "longitudinal_sections": 12,
+            "origin_tendon_fraction": 0.18,
+            "profile_sides": 12
+          }
+        }
+      ],
+      "routingGraphSha256": "fd1e676fe07bb481494c4548be922fc846ae9f063b85c63300ad24584be8d8ec",
+      "testedRelationPresent": true,
+      "transform": {
+        "id": "deep-geometry-correctly-routed-m34-m13-v0",
+        "kind": "preserve-correct-routing",
+        "sha256": "35c61750c1b748ab79b8fd188cc95cb154751baaee6096b3e257b46492b1c043"
+      }
+    },
+    "matchedWrong": {
+      "attachmentEndpointMultisetSha256": "4bfee34ff59b96fac10ca56bd59e365c36c6f9a325ac9428f019859e4914efbb",
+      "deepGeometryContentSetSha256": "d1fb51159e831603600bd9b6bc70ab9a74c3da1aabef280a40ef98f932fe71db",
+      "deepGeometryPresent": true,
+      "destroyedRelationId": "src-pelvis-cube002-m34-m13-routing-sensitivity-v0",
+      "id": "deep-geometry-matched-wrong-routing",
+      "representationalBudget": {
+        "insertionTendonFractionSum": 0.36,
+        "longitudinalSectionCount": 24,
+        "originTendonFractionSum": 0.36,
+        "pathPointCount": 50,
+        "profileSideCount": 24,
+        "routeCount": 2,
+        "surfaceEdgeCount": 1176,
+        "surfacePolygonCount": 580,
+        "surfaceVertexCount": 600
+      },
+      "routes": [
+        {
+          "authoredChordLength": 18.10889919337251,
+          "authoredCompleteness": "wip_procedural",
+          "chordConsistencyDelta": 7.067113116931978e-8,
+          "completenessAuthority": "declared_components_present",
+          "components": {
+            "insertionInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "originInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "pathGeometrySha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+            "pathInstanceId": "instance-a9b5e1a5-d219-404b-aa95-5a6e087e7783",
+            "pathPointCount": 25,
+            "surfaceEdgeCount": 588,
+            "surfaceGeometrySha256": "b8795bd26a24cc9506def18ca1bdf2645ff82b4499253a015c472500edbf4dac",
+            "surfaceInstanceId": "instance-25a5fbea-a3dc-4c43-92a2-d4d9c977746e",
+            "surfacePolygonCount": 290,
+            "surfaceVertexCount": 300
+          },
+          "constructionId": "muscle-34",
+          "endpointDerivedChordLength": 18.10889926404364,
+          "endpointRoute": "draw_muscle",
+          "endpointStrategy": "surface_hits",
+          "insertion": {
+            "assignedFromConstructionId": "muscle-13",
+            "assignedHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "authoredHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "graphToAssayRegistrationDelta": 7.051197082651024e-10,
+            "matrixWorld": [
+              -0.634592235,
+              0.001388218,
+              0.024489984,
+              6.266059875,
+              0.02456698,
+              0.035860419,
+              0.632603109,
+              -2.056589127,
+              -7e-8,
+              0.45219782,
+              -0.050242372,
+              10.305938721,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              6.266059875488281,
+              -2.056589126586914,
+              10.305938720703125
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "Cube.002"
+          },
+          "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+          "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+          "name": "Muscle 34",
+          "origin": {
+            "assignedFromConstructionId": "muscle-34",
+            "assignedHandleInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "authoredHandleInstanceId": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+            "graphToAssayRegistrationDelta": 6.47663866936624e-10,
+            "matrixWorld": [
+              -0.051902369,
+              -0.060304035,
+              -0.626015544,
+              4.189600945,
+              -0.631682813,
+              0.004954892,
+              0.051436711,
+              8.059602737,
+              1e-9,
+              0.448660821,
+              -0.084710166,
+              -5.167895317,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              4.189600944519043,
+              8.059602737426758,
+              -5.167895317077637
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "SRC_PELVIS"
+          },
+          "settings": {
+            "insertion_tendon_fraction": 0.18,
+            "longitudinal_sections": 12,
+            "origin_tendon_fraction": 0.18,
+            "profile_sides": 12
+          }
+        },
+        {
+          "authoredChordLength": 18.144783115178726,
+          "authoredCompleteness": "wip_procedural",
+          "chordConsistencyDelta": 4.5826329397868903e-7,
+          "completenessAuthority": "declared_components_present",
+          "components": {
+            "insertionInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "originInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "pathGeometrySha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+            "pathInstanceId": "instance-173e65f0-0ffc-4678-ad5b-461ba87204b1",
+            "pathPointCount": 25,
+            "surfaceEdgeCount": 588,
+            "surfaceGeometrySha256": "41afac51a52007866e49e533224734b77588341baaec5cb2cf5654ece89e5dce",
+            "surfaceInstanceId": "instance-182a0783-9dc7-4283-9189-3460f8e36fba",
+            "surfacePolygonCount": 290,
+            "surfaceVertexCount": 300
+          },
+          "constructionId": "muscle-13",
+          "endpointDerivedChordLength": 18.14478265691543,
+          "endpointRoute": "draw_muscle",
+          "endpointStrategy": "surface_hits",
+          "insertion": {
+            "assignedFromConstructionId": "muscle-34",
+            "assignedHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "authoredHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+            "graphToAssayRegistrationDelta": 1.9643060527473894e-10,
+            "matrixWorld": [
+              -0.454095334,
+              0.027241236,
+              0.440522492,
+              8.319665909,
+              0.442170262,
+              0.027975822,
+              0.452403039,
+              -2.78211689,
+              3.3e-8,
+              0.45103544,
+              -0.054667067,
+              8.736489296,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              8.319665908813477,
+              -2.7821168899536133,
+              8.736489295959473
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "Cube.002"
+          },
+          "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+          "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+          "name": "Muscle 13",
+          "origin": {
+            "assignedFromConstructionId": "muscle-13",
+            "assignedHandleInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "authoredHandleInstanceId": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+            "graphToAssayRegistrationDelta": 2.8079174892055475e-10,
+            "matrixWorld": [
+              0.543799102,
+              -0.206152573,
+              -0.155869573,
+              1.544946909,
+              -0.328013927,
+              -0.341771007,
+              -0.258408904,
+              9.841607094,
+              -7.1e-8,
+              0.215556324,
+              -0.558784723,
+              -2.553966284,
+              0,
+              0,
+              0,
+              1
+            ],
+            "point": [
+              1.5449469089508057,
+              9.841607093811035,
+              -2.5539662837982178
+            ],
+            "sourceAuthority": "source_mesh",
+            "sourceName": "SRC_PELVIS"
+          },
+          "settings": {
+            "insertion_tendon_fraction": 0.18,
+            "longitudinal_sections": 12,
+            "origin_tendon_fraction": 0.18,
+            "profile_sides": 12
+          }
+        }
+      ],
+      "routingGraphSha256": "a601197284808e651cf0f85662a6495c84675229a055f0bbf7cfb305e8801f67",
+      "testedRelationPresent": false,
+      "transform": {
+        "id": "deep-geometry-matched-wrong-routing-m34-m13-v0",
+        "kind": "matched-wrong-routing",
+        "sha256": "c821eaa8903991691a9382405f8274702d6f7c021a2c0bda259d45c152bd4aa7"
+      }
+    }
+  },
+  "deltaLedger": {
+    "budgetMatchStatus": "measured-awaiting-owner-tolerance",
+    "maximumAbsoluteRelativeChange": 0.02731012950405119,
+    "routes": [
+      {
+        "absoluteChange": 0.4945563821468113,
+        "authoredChordLength": 18.10889919337251,
+        "constructionId": "muscle-34",
+        "crossWireChordLength": 18.60345557551932,
+        "relativeChange": 0.02731012950405119,
+        "relativePercent": 2.731012950405119
+      },
+      {
+        "absoluteChange": 0.09609438410448945,
+        "authoredChordLength": 18.144783115178726,
+        "constructionId": "muscle-13",
+        "crossWireChordLength": 18.240877499283215,
+        "relativeChange": 0.005295978656482438,
+        "relativePercent": 0.5295978656482437
+      }
+    ],
+    "tolerance": null,
+    "toleranceAuthority": "unassigned"
+  },
+  "densityContext": {
+    "family": {
+      "insertionSource": "Cube.002",
+      "originSource": "SRC_PELVIS"
+    },
+    "familyConstructionIds": [
+      "muscle",
+      "muscle-02",
+      "muscle-03",
+      "muscle-04",
+      "muscle-05",
+      "muscle-06",
+      "muscle-07",
+      "muscle-08",
+      "muscle-09",
+      "muscle-10",
+      "muscle-11",
+      "muscle-12",
+      "muscle-13",
+      "muscle-14",
+      "muscle-15",
+      "muscle-16",
+      "muscle-18",
+      "muscle-20",
+      "muscle-21",
+      "muscle-22",
+      "muscle-23",
+      "muscle-25",
+      "muscle-26",
+      "muscle-27",
+      "muscle-30",
+      "muscle-32",
+      "muscle-34",
+      "muscle-37",
+      "muscle-39",
+      "muscle-41",
+      "muscle-42",
+      "muscle-43",
+      "muscle-44",
+      "muscle-45",
+      "muscle-52",
+      "muscle-53"
+    ],
+    "familyIdentitySha256": "e8b0e9b7337aaa7f2949472f08d2c99f9874d251e30f1dfa4cb2061a08d50eb7",
+    "familyRouteCount": 36,
+    "neighborConstructionIds": [
+      "muscle",
+      "muscle-02",
+      "muscle-03",
+      "muscle-04",
+      "muscle-05",
+      "muscle-06",
+      "muscle-07",
+      "muscle-08",
+      "muscle-09",
+      "muscle-10",
+      "muscle-11",
+      "muscle-12",
+      "muscle-14",
+      "muscle-15",
+      "muscle-16",
+      "muscle-18",
+      "muscle-20",
+      "muscle-21",
+      "muscle-22",
+      "muscle-23",
+      "muscle-25",
+      "muscle-26",
+      "muscle-27",
+      "muscle-30",
+      "muscle-32",
+      "muscle-37",
+      "muscle-39",
+      "muscle-41",
+      "muscle-42",
+      "muscle-43",
+      "muscle-44",
+      "muscle-45",
+      "muscle-52",
+      "muscle-53"
+    ],
+    "neighborFamilyIdentitySha256": "ee137d793e5cefb80a12c1572ad3ef4f7a325db10da9b8240639ef921b5e02b6",
+    "neighborRouteCount": 34,
+    "targetCorridor": {
+      "attachmentNeighborhoodRadius": null,
+      "authority": "authenticated-source-route-endpoints",
+      "castProjection": "unavailable-held",
+      "conditionIndependent": true,
+      "donorCenterPoint": [
+        3.9055033922195435,
+        3.8925089836120605,
+        3.8759862184524536
+      ],
+      "donorConstructionId": "muscle-13",
+      "donorInsertionPoint": [
+        6.266059875488281,
+        -2.056589126586914,
+        10.305938720703125
+      ],
+      "donorOriginPoint": [
+        1.5449469089508057,
+        9.841607093811035,
+        -2.5539662837982178
+      ],
+      "expectedSignedLocalization": "unassigned-held",
+      "freezeStatus": "frozen-before-condition-output",
+      "neighboringRouteLeakage": "unmeasured-held",
+      "selectedCenterPoint": [
+        6.25463342666626,
+        2.6387429237365723,
+        1.784296989440918
+      ],
+      "selectedConstructionId": "muscle-34",
+      "selectedInsertionPoint": [
+        8.319665908813477,
+        -2.7821168899536133,
+        8.736489295959473
+      ],
+      "selectedOriginPoint": [
+        4.189600944519043,
+        8.059602737426758,
+        -5.167895317077637
+      ]
+    }
+  },
+  "fieldLedger": {
+    "changed": [
+      {
+        "field": "routes.muscle-34.insertion.assignment",
+        "from": {
+          "assignedFromConstructionId": "muscle-34",
+          "assignedHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "matrixWorld": [
+            -0.454095334,
+            0.027241236,
+            0.440522492,
+            8.319665909,
+            0.442170262,
+            0.027975822,
+            0.452403039,
+            -2.78211689,
+            3.3e-8,
+            0.45103544,
+            -0.054667067,
+            8.736489296,
+            0,
+            0,
+            0,
+            1
+          ],
+          "point": [
+            8.319665908813477,
+            -2.7821168899536133,
+            8.736489295959473
+          ],
+          "sourceName": "Cube.002"
+        },
+        "to": {
+          "assignedFromConstructionId": "muscle-13",
+          "assignedHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "matrixWorld": [
+            -0.634592235,
+            0.001388218,
+            0.024489984,
+            6.266059875,
+            0.02456698,
+            0.035860419,
+            0.632603109,
+            -2.056589127,
+            -7e-8,
+            0.45219782,
+            -0.050242372,
+            10.305938721,
+            0,
+            0,
+            0,
+            1
+          ],
+          "point": [
+            6.266059875488281,
+            -2.056589126586914,
+            10.305938720703125
+          ],
+          "sourceName": "Cube.002"
+        }
+      },
+      {
+        "field": "routes.muscle-13.insertion.assignment",
+        "from": {
+          "assignedFromConstructionId": "muscle-13",
+          "assignedHandleInstanceId": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "matrixWorld": [
+            -0.634592235,
+            0.001388218,
+            0.024489984,
+            6.266059875,
+            0.02456698,
+            0.035860419,
+            0.632603109,
+            -2.056589127,
+            -7e-8,
+            0.45219782,
+            -0.050242372,
+            10.305938721,
+            0,
+            0,
+            0,
+            1
+          ],
+          "point": [
+            6.266059875488281,
+            -2.056589126586914,
+            10.305938720703125
+          ],
+          "sourceName": "Cube.002"
+        },
+        "to": {
+          "assignedFromConstructionId": "muscle-34",
+          "assignedHandleInstanceId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "matrixWorld": [
+            -0.454095334,
+            0.027241236,
+            0.440522492,
+            8.319665909,
+            0.442170262,
+            0.027975822,
+            0.452403039,
+            -2.78211689,
+            3.3e-8,
+            0.45103544,
+            -0.054667067,
+            8.736489296,
+            0,
+            0,
+            0,
+            1
+          ],
+          "point": [
+            8.319665908813477,
+            -2.7821168899536133,
+            8.736489295959473
+          ],
+          "sourceName": "Cube.002"
+        }
+      }
+    ],
+    "preserved": [
+      "source.asset.identity",
+      "source.graph.identity",
+      "route.set.identity",
+      "route.identity",
+      "route.origin.assignment",
+      "component.identity",
+      "component.geometry.identity",
+      "authored.completeness",
+      "endpoint.route",
+      "endpoint.strategy",
+      "muscle.settings",
+      "attachment.endpoint.multiset",
+      "deep.geometry.content.set",
+      "representational.budget",
+      "total.route.count"
+    ]
+  },
+  "fixtureSha256": "f4fb4b8d54ad547bd5c095d7972cc699ab75b344da977ba68737cafae7a71b3e",
+  "geometricCoherence": {
+    "authoredChordAuthority": "byte-bound-independent-assay-measurement",
+    "centerlineCoordinates": "unavailable-hash-only",
+    "chordConsistencyEpsilon": 0.000001,
+    "counterfactualChordAuthority": "derived-from-byte-bound-full-precision-assay-points",
+    "endpointCoordinates": "byte-bound-full-precision-assay-points",
+    "endpointRegistrationEpsilon": 0.000001,
+    "endpointTransforms": "byte-bound-rounded-source-graph-matrices",
+    "packingAdmission": "identity-coherent_geometry-unavailable",
+    "surfaceCoordinates": "unavailable-hash-only"
+  },
+  "nulls": [
+    {
+      "constructionId": "muscle-35",
+      "insertionPoint": [
+        6.570624828338623,
+        -4.713774681091309,
+        10.858918190002441
+      ],
+      "instanceId": "instance-df26f025-7412-43c8-abc1-c7082fdd906c",
+      "lineageId": "lineage-6e15ea13-947d-4971-928a-4f1547a46a65",
+      "originPoint": [
+        5.643123149871826,
+        4.881115913391113,
+        -4.754794597625732
+      ],
+      "pathGeometrySha256": "c4855e81cdf60c48b849701bb2cc23f7f16e94712626a654ef83abba072429a6",
+      "sameObject": true,
+      "sourceName": "Cube.002",
+      "surfaceGeometrySha256": "247b5fae4fb6a748a167c313a83edf281498db4667bd28776fdabec0e7a551d5"
+    },
+    {
+      "constructionId": "muscle-38",
+      "insertionPoint": [
+        4.781585693359375,
+        -0.9724617004394531,
+        -9.411046981811523
+      ],
+      "instanceId": "instance-11cb7bdf-288c-4cbf-9004-f854279c5e8b",
+      "lineageId": "lineage-f950b812-9a33-41c0-8cc3-40b922aad2e8",
+      "originPoint": [
+        2.8988864421844482,
+        -0.5979963541030884,
+        -9.855504035949707
+      ],
+      "pathGeometrySha256": "14b0ec70e3acd2f9f1fe0205144f156cfbc8e6ad00f962cc6d5f4913be35f996",
+      "sameObject": true,
+      "sourceName": "SRC_PELVIS",
+      "surfaceGeometrySha256": "7c0ad1956ca1985befb68fa438e266e6872bb9784d0a3e55b52ff8287e0647e2"
+    }
+  ],
+  "schema": "kaminos.track-m-source-routing-fixture.v0",
+  "selection": {
+    "correctConstructionId": "muscle-34",
+    "crossWireDonorConstructionId": "muscle-13",
+    "family": {
+      "insertionSource": "Cube.002",
+      "originSource": "SRC_PELVIS"
+    },
+    "id": "src-pelvis-cube002-m34-m13-routing-sensitivity-v0",
+    "nullConstructionIds": [
+      "muscle-35",
+      "muscle-38"
+    ],
+    "selectionAuthority": "golden-object-parallel-assay-portfolio-2026-08-03"
+  },
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "effectiveAssetPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend",
+    "geometryAssayFileSha256": "c7fdd24474f965ee92d0131c595129f4f0432bf9930bb8b6eb703ce8cbe850c2",
+    "graphCompilerId": "track-m-source-projection-compiler-v0",
+    "graphFileSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "requestedAssetPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend"
+  },
+  "status": "compiled",
+  "trackId": "shape-bearing-musculature"
+}
