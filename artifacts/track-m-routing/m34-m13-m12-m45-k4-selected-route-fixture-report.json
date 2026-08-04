@@ -1,0 +1,46 @@
+{
+  "schema": "kaminos.track-m-selected-route-fixture-compiler-report.v0",
+  "compilerId": "track-m-current-graph-selected-route-fixture-v0",
+  "status": "compiled",
+  "requested": {
+    "graphPath": "/private/tmp/kaminos-molten-k4-current-graph-inputs-0804/source-graph.json",
+    "receiptPath": "/private/tmp/kaminos-molten-k4-current-graph-inputs-0804/authority-receipt.json",
+    "outputPath": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
+    "reportPath": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/artifacts/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture-report.json",
+    "constructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ],
+    "expectedSourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "expectedGraphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "expectedGraphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "expectedReceiptFileSha256": "0154dbc704ea94ea1f87f906b1c817911c9a3b83783e1763c26ea9ad892e34f2"
+  },
+  "effective": {
+    "graphPath": "/private/tmp/kaminos-molten-k4-current-graph-inputs-0804/source-graph.json",
+    "receiptPath": "/private/tmp/kaminos-molten-k4-current-graph-inputs-0804/authority-receipt.json",
+    "outputPath": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
+    "reportPath": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/artifacts/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture-report.json",
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "receiptFileSha256": "0154dbc704ea94ea1f87f906b1c817911c9a3b83783e1763c26ea9ad892e34f2",
+    "constructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  },
+  "output": {
+    "path": "/private/tmp/kaminos-molten-k4-current-graph-fixture-0804/fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fixture.json",
+    "fileSha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5",
+    "fixtureSha256": "d691489aa154c60f7de9aa71b670d892fc618d08986453518a0ed2a2037280c8",
+    "constructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  }
+}
