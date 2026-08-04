@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+from tempfile import TemporaryDirectory
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from source_plate_blender import channel_paths, failure_document  # noqa: E402
+
+
+def test_four_channel_paths_are_unique_and_caller_addressed():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+
+        paths = channel_paths(root)
+
+        assert paths == {
+            "rgb": root / "rgb.png",
+            "silhouette": root / "silhouette.png",
+            "depth": root / "depth.exr",
+            "normal": root / "normal.exr",
+        }
+        assert len(set(paths.values())) == 4
+
+
+def test_failure_report_preserves_phase_and_last_trustworthy_identity():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        descriptor = root / "plate.json"
+
+        report = failure_document(
+            descriptor_path=descriptor,
+            output_dir=root,
+            phase="source-freshness",
+            error=RuntimeError("wrong source"),
+            last_trustworthy_evidence={
+                "descriptorPath": str(descriptor),
+                "descriptorSha256": "a" * 64,
+            },
+        )
+
+        assert report["schema"] == "kaminos.source-plate-render-report.v0"
+        assert report["status"] == "failed"
+        assert report["failurePhase"] == "source-freshness"
+        assert report["lastTrustworthyEvidence"]["descriptorSha256"] == "a" * 64
+        assert report["requested"]["descriptorPath"] == str(descriptor)
+        assert report["requested"]["outputDirectory"] == str(root)
+        assert report["error"] == {"type": "RuntimeError", "message": "wrong source"}
+
+
+def test_blender_adapter_never_saves_the_loaded_source():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert "save_as_mainfile" not in adapter
+    assert "save_mainfile" not in adapter
+
+
+if __name__ == "__main__":
+    test_four_channel_paths_are_unique_and_caller_addressed()
+    test_failure_report_preserves_phase_and_last_trustworthy_identity()
+    test_blender_adapter_never_saves_the_loaded_source()
