@@ -1343,7 +1343,10 @@ function sourceShapedCandidateRoute(route) {
   const centerlineCandidates = Array.isArray(centerlineField.candidates)
     ? centerlineField.candidates
     : [];
-  const centerlineValue = centerlineField.selected?.value ?? centerlineCandidates[0]?.value;
+  const centerlineValue = candidateValuesAgree(
+    centerlineField,
+    `${constructionId} centerline`,
+  );
   const samples = centerlineValue?.resampledSamples;
   if (!Array.isArray(samples) || samples.length < 4) {
     throw new Error(`${constructionId} centerline candidate requires at least four resampled samples`);
