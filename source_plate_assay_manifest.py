@@ -35,7 +35,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", required=True, help="Caller-owned output manifest path")
     parser.add_argument("--plate", required=True, help="Caller-owned output experiment-plate HTML path")
     parser.add_argument("--report", required=True, help="Caller-owned durable terminal report path")
-    parser.add_argument("--external-images", action="store_true", help="Link verified image paths instead of embedding bytes")
     return parser
 
 
@@ -50,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     plate_path = Path(requested_plate).resolve()
     report_path = Path(requested_report).resolve()
     input_sha256 = None
+    manifest = None
+    manifest_durably_written = False
     failure_phase = "input-read"
     try:
         input_bytes = input_path.read_bytes()
@@ -60,8 +61,9 @@ def main(argv: list[str] | None = None) -> int:
         manifest = build_experiment_manifest(spec)
         failure_phase = "manifest-write"
         write_experiment_manifest(manifest_path, manifest)
+        manifest_durably_written = True
         failure_phase = "plate-write"
-        write_experiment_plate(plate_path, manifest, embed_images=not args.external_images)
+        write_experiment_plate(plate_path, manifest)
         _write_json(report_path, {
             "schema": REPORT_SCHEMA,
             "status": "complete",
@@ -76,7 +78,12 @@ def main(argv: list[str] | None = None) -> int:
             "requestedReportPath": requested_report,
             "effectiveReportPath": str(report_path),
             "manifestSha256": manifest["manifestSha256"],
-            "lastTrustworthyEvidence": {"inputSha256": input_sha256, "manifestSha256": manifest["manifestSha256"]},
+            "manifestDurablyWritten": manifest_durably_written,
+            "lastTrustworthyEvidence": {
+                "inputSha256": input_sha256,
+                "validatedManifestSha256": manifest["manifestSha256"],
+                "manifestDurablyWritten": manifest_durably_written,
+            },
             "error": None,
         })
         return 0
@@ -95,8 +102,13 @@ def main(argv: list[str] | None = None) -> int:
             "effectivePlatePath": str(plate_path),
             "requestedReportPath": requested_report,
             "effectiveReportPath": str(report_path),
-            "manifestSha256": None,
-            "lastTrustworthyEvidence": {"inputSha256": input_sha256},
+            "manifestSha256": manifest["manifestSha256"] if manifest is not None else None,
+            "manifestDurablyWritten": manifest_durably_written,
+            "lastTrustworthyEvidence": {
+                "inputSha256": input_sha256,
+                "validatedManifestSha256": manifest["manifestSha256"] if manifest is not None else None,
+                "manifestDurablyWritten": manifest_durably_written,
+            },
             "error": str(error),
         })
         print(f"Source-plate assay build failed during {failure_phase}: {error}", file=sys.stderr)

@@ -210,10 +210,26 @@ class SourcePlateAssayContractTests(unittest.TestCase):
             self.assertEqual(manifest["failure"]["phase"], "generation")
             self.assertEqual(manifest["outputs"], [])
 
+    def test_noncomplete_manifest_rejects_output_cards_that_could_look_authoritative(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for status in ("planned", "running", "failed"):
+                spec = _spec(root)
+                spec["status"] = status
+                if status == "failed":
+                    spec["failure"] = {
+                        "phase": "generation",
+                        "message": "worker exited after an untrusted preview",
+                        "lastTrustworthyIdentity": {"sourceSha256": spec["conditioningInputs"][0]["sha256"]},
+                    }
+                with self.subTest(status=status):
+                    with self.assertRaisesRegex(SourcePlateAssayError, "non-complete manifests cannot carry outputs"):
+                        build_experiment_manifest(spec)
+
     def test_visual_plate_embeds_verified_inputs_prompt_settings_and_outputs(self):
         with TemporaryDirectory() as tmp:
             manifest = build_experiment_manifest(_spec(Path(tmp)))
-            html = build_experiment_plate_html(manifest, embed_images=True)
+            html = build_experiment_plate_html(manifest)
 
             self.assertIn(f'data-manifest-sha256="{manifest["manifestSha256"]}"', html)
             self.assertIn("Treat the supplied plate as the authoritative body plan.", html)

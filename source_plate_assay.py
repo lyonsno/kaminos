@@ -194,8 +194,9 @@ def _validate_outputs(manifest: dict[str, Any], *, verify_files: bool) -> None:
             _fail("failed manifest requires failure phase and message", "failure-report")
         if not isinstance(failure.get("lastTrustworthyIdentity"), dict) or not failure["lastTrustworthyIdentity"]:
             _fail("failed manifest requires last trustworthy identity", "failure-report")
-        return
     if manifest["status"] != "complete":
+        if outputs:
+            _fail("non-complete manifests cannot carry outputs", "output-validation")
         return
     by_channel = {record.get("channel"): record for record in outputs if isinstance(record, dict)}
     missing = [channel for channel in requested if channel not in by_channel]
@@ -306,20 +307,20 @@ def _settings_rows(settings: dict[str, Any]) -> str:
     return rows
 
 
-def build_experiment_plate_html(manifest: dict[str, Any], *, embed_images: bool = True) -> str:
+def build_experiment_plate_html(manifest: dict[str, Any]) -> str:
     """Render a self-contained, human-auditable experiment plate."""
 
-    validate_experiment_manifest(manifest, verify_files=embed_images)
+    validate_experiment_manifest(manifest, verify_files=True)
     input_cards = []
     for record in manifest["conditioningInputs"]:
-        src = _image_data_uri(record, label=f"conditioning input slot {record['slot']}") if embed_images else Path(record["effectivePath"]).as_uri()
+        src = _image_data_uri(record, label=f"conditioning input slot {record['slot']}")
         input_cards.append(
             f'<figure><img src="{src}" alt="conditioning input {html.escape(record["role"])}">'
             f'<figcaption>input {record["slot"]} · {html.escape(record["role"])}<br><code>{record["sha256"]}</code></figcaption></figure>'
         )
     output_cards = []
     for record in manifest["outputs"]:
-        src = _image_data_uri(record, label=f"output {record['channel']}") if embed_images else Path(record["path"]).as_uri()
+        src = _image_data_uri(record, label=f"output {record['channel']}")
         output_cards.append(
             f'<figure><img src="{src}" alt="output {html.escape(record["channel"])}">'
             f'<figcaption>output · {html.escape(record["channel"])} · {html.escape(record["status"])}<br><code>{record["sha256"]}</code></figcaption></figure>'
@@ -366,10 +367,10 @@ def write_experiment_manifest(path: Path | str, manifest: dict[str, Any]) -> Pat
     return destination
 
 
-def write_experiment_plate(path: Path | str, manifest: dict[str, Any], *, embed_images: bool = True) -> Path:
+def write_experiment_plate(path: Path | str, manifest: dict[str, Any]) -> Path:
     """Write a validated visual plate to a caller-addressed path."""
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(build_experiment_plate_html(manifest, embed_images=embed_images))
+    destination.write_text(build_experiment_plate_html(manifest))
     return destination
