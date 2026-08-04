@@ -71,7 +71,8 @@ def test_blender_51_uses_the_scene_compositing_node_group():
 def test_blender_51_uses_supported_compositor_node_types():
     adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
 
-    assert 'nodes.new("CompositorNodeIDMask")' in adapter
+    assert 'render_layers.outputs["Alpha"]' in adapter
+    assert 'nodes.new("CompositorNodeIDMask")' not in adapter
     assert 'nodes.new("CompositorNodeComposite")' not in adapter
     assert 'nodes.new("CompositorNodeMath")' not in adapter
 

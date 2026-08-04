@@ -360,12 +360,17 @@ def _apply_presentation(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, An
     }
 
 
-def _configure_compositor(bpy: Any, output_dir: Path) -> None:
+def _configure_compositor(
+    bpy: Any,
+    output_dir: Path,
+    *,
+    include_silhouette: bool,
+    include_data: bool,
+) -> None:
     scene = bpy.context.scene
     view_layer = bpy.context.view_layer
-    view_layer.use_pass_z = True
-    view_layer.use_pass_normal = True
-    view_layer.use_pass_object_index = True
+    view_layer.use_pass_z = include_data
+    view_layer.use_pass_normal = include_data
     scene.use_nodes = True
     if hasattr(scene, "compositing_node_group"):
         tree = scene.compositing_node_group
@@ -379,33 +384,31 @@ def _configure_compositor(bpy: Any, output_dir: Path) -> None:
     tree.nodes.clear()
     render_layers = tree.nodes.new("CompositorNodeRLayers")
 
-    silhouette = tree.nodes.new("CompositorNodeIDMask")
-    silhouette.inputs["Index"].default_value = 1
-    silhouette.inputs["Anti-Alias"].default_value = True
-    tree.links.new(render_layers.outputs["IndexOB"], silhouette.inputs["ID value"])
-    silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
-    silhouette_output.base_path = str(output_dir)
-    silhouette_output.file_slots[0].path = "silhouette"
-    silhouette_output.format.file_format = "PNG"
-    silhouette_output.format.color_mode = "BW"
-    silhouette_output.format.color_depth = "8"
-    tree.links.new(silhouette.outputs["Alpha"], silhouette_output.inputs[0])
+    if include_silhouette:
+        silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
+        silhouette_output.base_path = str(output_dir)
+        silhouette_output.file_slots[0].path = "silhouette"
+        silhouette_output.format.file_format = "PNG"
+        silhouette_output.format.color_mode = "BW"
+        silhouette_output.format.color_depth = "8"
+        tree.links.new(render_layers.outputs["Alpha"], silhouette_output.inputs[0])
 
-    depth_output = tree.nodes.new("CompositorNodeOutputFile")
-    depth_output.base_path = str(output_dir)
-    depth_output.file_slots[0].path = "depth"
-    depth_output.format.file_format = "OPEN_EXR"
-    depth_output.format.color_mode = "RGB"
-    depth_output.format.color_depth = "32"
-    tree.links.new(render_layers.outputs["Depth"], depth_output.inputs[0])
+    if include_data:
+        depth_output = tree.nodes.new("CompositorNodeOutputFile")
+        depth_output.base_path = str(output_dir)
+        depth_output.file_slots[0].path = "depth"
+        depth_output.format.file_format = "OPEN_EXR"
+        depth_output.format.color_mode = "RGB"
+        depth_output.format.color_depth = "32"
+        tree.links.new(render_layers.outputs["Depth"], depth_output.inputs[0])
 
-    normal_output = tree.nodes.new("CompositorNodeOutputFile")
-    normal_output.base_path = str(output_dir)
-    normal_output.file_slots[0].path = "normal"
-    normal_output.format.file_format = "OPEN_EXR"
-    normal_output.format.color_mode = "RGB"
-    normal_output.format.color_depth = "32"
-    tree.links.new(render_layers.outputs["Normal"], normal_output.inputs[0])
+        normal_output = tree.nodes.new("CompositorNodeOutputFile")
+        normal_output.base_path = str(output_dir)
+        normal_output.file_slots[0].path = "normal"
+        normal_output.format.file_format = "OPEN_EXR"
+        normal_output.format.color_mode = "RGB"
+        normal_output.format.color_depth = "32"
+        tree.links.new(render_layers.outputs["Normal"], normal_output.inputs[0])
 
 
 def _normalize_compositor_output(output_dir: Path, stem: str, extension: str) -> Path:
@@ -507,13 +510,20 @@ def render_descriptor(
             scene.view_settings.look = "AgX - Medium High Contrast"
         except TypeError:
             scene.view_settings.look = "AgX - Medium High Contrast"
-        _configure_compositor(bpy, output_dir)
+        _configure_compositor(
+            bpy, output_dir, include_silhouette=False, include_data=True
+        )
 
         phase = "render"
         bpy.ops.render.render(write_still=True)
-        _normalize_compositor_output(output_dir, "silhouette", "png")
         _normalize_compositor_output(output_dir, "depth", "exr")
         _normalize_compositor_output(output_dir, "normal", "exr")
+        scene.render.film_transparent = True
+        _configure_compositor(
+            bpy, output_dir, include_silhouette=True, include_data=False
+        )
+        bpy.ops.render.render(write_still=False)
+        _normalize_compositor_output(output_dir, "silhouette", "png")
 
         phase = "output-validation"
         output_records = _record_outputs(descriptor, outputs)
