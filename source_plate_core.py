@@ -531,6 +531,8 @@ def validate_complete_outputs(
             "unitVectorSamples",
             "nonzeroVectorSamples",
             "maxUnitLengthError",
+            "decodeFormula",
+            "decodedComponentRange",
         ):
             if evidence_field in record:
                 validated_record[evidence_field] = copy.deepcopy(record[evidence_field])
