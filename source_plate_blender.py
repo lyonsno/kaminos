@@ -386,8 +386,8 @@ def _configure_compositor(
 
     if include_silhouette:
         silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
-        silhouette_output.base_path = str(output_dir)
-        silhouette_output.file_slots[0].path = "silhouette"
+        silhouette_output.directory = str(output_dir)
+        silhouette_output.file_name = "silhouette"
         silhouette_output.format.file_format = "PNG"
         silhouette_output.format.color_mode = "BW"
         silhouette_output.format.color_depth = "8"
@@ -395,16 +395,16 @@ def _configure_compositor(
 
     if include_data:
         depth_output = tree.nodes.new("CompositorNodeOutputFile")
-        depth_output.base_path = str(output_dir)
-        depth_output.file_slots[0].path = "depth"
+        depth_output.directory = str(output_dir)
+        depth_output.file_name = "depth"
         depth_output.format.file_format = "OPEN_EXR"
         depth_output.format.color_mode = "RGB"
         depth_output.format.color_depth = "32"
         tree.links.new(render_layers.outputs["Depth"], depth_output.inputs[0])
 
         normal_output = tree.nodes.new("CompositorNodeOutputFile")
-        normal_output.base_path = str(output_dir)
-        normal_output.file_slots[0].path = "normal"
+        normal_output.directory = str(output_dir)
+        normal_output.file_name = "normal"
         normal_output.format.file_format = "OPEN_EXR"
         normal_output.format.color_mode = "RGB"
         normal_output.format.color_depth = "32"
