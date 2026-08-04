@@ -378,12 +378,9 @@ def _configure_compositor(bpy: Any, output_dir: Path) -> None:
         tree = scene.node_tree
     tree.nodes.clear()
     render_layers = tree.nodes.new("CompositorNodeRLayers")
-    composite = tree.nodes.new("CompositorNodeComposite")
-    tree.links.new(render_layers.outputs["Image"], composite.inputs["Image"])
 
-    silhouette = tree.nodes.new("CompositorNodeMath")
-    silhouette.operation = "GREATER_THAN"
-    silhouette.inputs[1].default_value = 0.5
+    silhouette = tree.nodes.new("CompositorNodeIDMask")
+    silhouette.index = 1
     tree.links.new(render_layers.outputs["IndexOB"], silhouette.inputs[0])
     silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
     silhouette_output.base_path = str(output_dir)
@@ -391,7 +388,7 @@ def _configure_compositor(bpy: Any, output_dir: Path) -> None:
     silhouette_output.format.file_format = "PNG"
     silhouette_output.format.color_mode = "BW"
     silhouette_output.format.color_depth = "8"
-    tree.links.new(silhouette.outputs[0], silhouette_output.inputs[0])
+    tree.links.new(silhouette.outputs["Alpha"], silhouette_output.inputs[0])
 
     depth_output = tree.nodes.new("CompositorNodeOutputFile")
     depth_output.base_path = str(output_dir)
