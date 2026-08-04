@@ -1,0 +1,146 @@
+{
+  "schema": "kaminos.lirm-metaball-target-first-multiview-greenroom-jobs.v0",
+  "carrierKind": "depth",
+  "jobs": [
+    {
+      "cellId": "target-all-slots-seed-80401",
+      "conditionId": "target-all-slots",
+      "seed": 80401,
+      "carrierKind": "depth",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/prompts/target-all-slots.txt",
+      "promptSha256": "sha256:594af4e09355af8e91133608affb5f8c005bdcb935eaa940b9a9a26fad19d7cd",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "b8e9bcbbf918",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/generated/target-all-slots/seed-80401"
+    },
+    {
+      "cellId": "side-last-seed-80401",
+      "conditionId": "side-last",
+      "seed": 80401,
+      "carrierKind": "depth",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/prompts/side-last.txt",
+      "promptSha256": "sha256:06c53f6bbcd9c9d8862831f503bd6d9948449d851cb38e985b180e6f29e6d520",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "fc0a831187f1",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/generated/side-last/seed-80401"
+    },
+    {
+      "cellId": "side-middle-seed-80401",
+      "conditionId": "side-middle",
+      "seed": 80401,
+      "carrierKind": "depth",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/prompts/side-middle.txt",
+      "promptSha256": "sha256:886c82a32581168f2ff9c1c8fbd79e9b36705cbed55fb7867a6f4b8e64851805",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "6917deba1f78",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/generated/side-middle/seed-80401"
+    },
+    {
+      "cellId": "side-first-seed-80401",
+      "conditionId": "side-first",
+      "seed": 80401,
+      "carrierKind": "depth",
+      "references": [
+        {
+          "viewId": "side",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/prompts/side-first.txt",
+      "promptSha256": "sha256:2338797621127a14d0e232fb8494ac6bed182e20888dea5fb81871f1d3831280",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "386c9f380e63",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/generated/side-first/seed-80401"
+    },
+    {
+      "cellId": "front-target-rear-seed-80401",
+      "conditionId": "front-target-rear",
+      "seed": 80401,
+      "carrierKind": "depth",
+      "references": [
+        {
+          "viewId": "front",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/front/front/depth-implicit.png",
+          "sha256": "sha256:088984f865f14219462bec88b7af498cf88f423a2606df16e0e0f1485ac1878a"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "rear-three-quarter",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/rear-three-quarter/rear-three-quarter/depth-implicit.png",
+          "sha256": "sha256:67dd02218c94aa2b68169f70f409375ab0fecabc61acfeaf6da0d49fc91a6025"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/prompts/front-target-rear.txt",
+      "promptSha256": "sha256:6aa795ff42750d691dc1a0f25a2ae2e7b4a1d518dcce9a0a7ed2cb0b5f471419",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "f1b98a680584",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/generated/front-target-rear/seed-80401"
+    }
+  ]
+}
