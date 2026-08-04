@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.authored-muscle-routing-fixture-graph-rebind-candidate.v0",
+  "status": "candidate",
+  "admitted": false,
+  "notAnAuthorityGrant": true,
+  "purpose": "prepare an explicit measurement-preserving graph rebind without assigning source authority",
+  "sourceAsset": {
+    "sha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "byteLength": 549819
+  },
+  "routingFixture": {
+    "path": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
+    "schema": "kaminos.track-m-source-routing-fixture.v0",
+    "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+    "fixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28",
+    "fileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075",
+    "boundGraph": {
+      "requestedAssetPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend",
+      "effectiveAssetPath": "/private/tmp/kaminos-molten-cat-armature-source-0803/source/cat_armature_001.blend",
+      "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+      "graphFileSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+      "geometryAssayFileSha256": "c7fdd24474f965ee92d0131c595129f4f0432bf9930bb8b6eb703ce8cbe850c2"
+    }
+  },
+  "candidateGraph": {
+    "path": "artifacts/authored-muscle-coordinate-export-v0/source-graph.json",
+    "schema": "kaminos.track-m-authored-source-graph.v0",
+    "compilerId": "track-m-source-projection-compiler-v0",
+    "requestedAssetPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "effectiveAssetPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785"
+  },
+  "candidateChange": {
+    "kind": "supersede-fixture-graph-binding-after-source-author-disposition",
+    "fields": [
+      "source.requestedAssetPath",
+      "source.effectiveAssetPath",
+      "source.graphSha256",
+      "source.graphFileSha256",
+      "source.geometryAssayFileSha256",
+      "fixtureSha256"
+    ],
+    "geometryAssayFileSha256": null,
+    "fixtureSha256": null,
+    "reason": "the current graph preserves native path samples and source-surface measurements while the reviewed fixture remains bound to the older graph and assay bytes"
+  },
+  "selectedRouteCorrespondence": [
+    {
+      "constructionId": "muscle-31",
+      "lineageIdMatches": true,
+      "instanceIdMatches": true,
+      "originAssignedHandleInstanceIdMatches": true,
+      "insertionAssignedHandleInstanceIdMatches": true,
+      "surfaceInstanceIdMatches": true,
+      "surfaceGeometrySha256Matches": true,
+      "pathInstanceIdMatches": true,
+      "pathGeometrySha256Matches": true
+    },
+    {
+      "constructionId": "muscle-47",
+      "lineageIdMatches": true,
+      "instanceIdMatches": true,
+      "originAssignedHandleInstanceIdMatches": true,
+      "insertionAssignedHandleInstanceIdMatches": true,
+      "surfaceInstanceIdMatches": true,
+      "surfaceGeometrySha256Matches": true,
+      "pathInstanceIdMatches": true,
+      "pathGeometrySha256Matches": true
+    }
+  ],
+  "unresolvedAuthority": [
+    "matching asset bytes and selected route/component identities do not authorize graph substitution",
+    "the measurement-preserving graph has no source-signed correspondence or supersession decision",
+    "a replacement geometry assay and fixture hash have not been generated or reviewed",
+    "this candidate cannot remove authority-receipt binding conflicts or admit a coordinate carrier"
+  ],
+  "nextAuthorityAction": "the operator/source author selects explicit correspondence or supersession; the fixture owner then regenerates and reviews the assay and fixture against the chosen graph"
+}

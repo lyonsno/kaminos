@@ -1,0 +1,73 @@
+{
+  "acceptedFields": [
+    "source.assetSha256",
+    "source.graphSha256",
+    "source.graphFileSha256",
+    "source.routingFixtureSha256",
+    "muscles[].constructionId",
+    "muscles[].lineageId",
+    "muscles[].instanceId",
+    "muscles[].surfaceInstanceId",
+    "muscles[].surfaceGeometrySha256",
+    "muscles[].pathInstanceId",
+    "muscles[].pathGeometrySha256",
+    "muscles[].attachments.origin",
+    "muscles[].attachments.insertion"
+  ],
+  "admitted": false,
+  "conflictingFields": [],
+  "execution": {
+    "effective": {
+      "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k8/packer-authority-probe.json",
+      "coordinateCarrierFileSha256": "483c42f19f6380cfbe109920f38075c5e136e7089183bffd2032578b4715a4f5",
+      "receipt": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k8/packer-intake-receipt.json",
+      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+    },
+    "lastTrustworthyEvidence": "admission-receipt-constructed",
+    "phase": "admission-complete",
+    "requested": {
+      "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k8/packer-authority-probe.json",
+      "receipt": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k8/packer-intake-receipt.json",
+      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json"
+    }
+  },
+  "input": {
+    "coordinateCarrier": {
+      "effective": {
+        "id": "packer-authority-probe-29afbe80f0419c74",
+        "kind": "authored-coordinate-carrier",
+        "sha256": "483c42f19f6380cfbe109920f38075c5e136e7089183bffd2032578b4715a4f5"
+      },
+      "requested": {
+        "id": "packer-authority-probe-29afbe80f0419c74",
+        "kind": "authored-coordinate-carrier",
+        "sha256": "483c42f19f6380cfbe109920f38075c5e136e7089183bffd2032578b4715a4f5"
+      }
+    },
+    "routingFixture": {
+      "effective": {
+        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "kind": "track-m-routing-fixture",
+        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      },
+      "requested": {
+        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "kind": "track-m-routing-fixture",
+        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      }
+    }
+  },
+  "missingFields": [],
+  "packingSource": null,
+  "reason": "coordinate carrier atlas selected construction ids do not match the routing fixture route set",
+  "receiptSha256": "e09b4ce3eb1654bbe12cb715ae1418b04f5cf697413a672d9b2de91d479d02c6",
+  "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphFileSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+  },
+  "status": "source-identity-mismatch"
+}
