@@ -133,7 +133,7 @@ def _apply_selection(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, Any]:
             "source-selection", "descriptor source.selection is missing"
         )
     requested_collections = selection.get("collections")
-    requested_objects = selection.get("objects")
+    requested_objects = selection.get("objects", [])
     if not isinstance(requested_collections, list) or not all(
         isinstance(name, str) and name for name in requested_collections
     ):
@@ -155,6 +155,11 @@ def _apply_selection(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, Any]:
             f"missing collections={missing_collections}, missing objects={missing_objects}",
         )
     requested_object_set = set(requested_objects)
+    for collection_name in requested_collections:
+        collection = bpy.data.collections[collection_name]
+        requested_object_set.update(
+            obj.name for obj in collection.all_objects if obj.type == "MESH"
+        )
     effective_objects: list[str] = []
     for obj in bpy.context.scene.objects:
         selected = obj.type == "MESH" and obj.name in requested_object_set
@@ -162,7 +167,7 @@ def _apply_selection(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, Any]:
         if selected:
             obj.pass_index = 1
             effective_objects.append(obj.name)
-    if sorted(effective_objects) != sorted(requested_objects):
+    if sorted(effective_objects) != sorted(requested_object_set):
         raise SourcePlateContractError(
             "source-selection", "effective mesh selection differs from the descriptor"
         )
@@ -170,6 +175,7 @@ def _apply_selection(bpy: Any, descriptor: Mapping[str, Any]) -> dict[str, Any]:
         "requestedCollections": requested_collections,
         "effectiveCollections": requested_collections,
         "requestedObjects": requested_objects,
+        "resolvedObjects": sorted(requested_object_set),
         "effectiveObjects": sorted(effective_objects),
     }
 
@@ -372,18 +378,10 @@ def _emission_material(bpy: Any, name: str) -> tuple[Any, Any, Any]:
     return material, tree, emission
 
 
-def _depth_material(bpy: Any, *, clip_start: float, clip_end: float) -> Any:
+def _depth_material(bpy: Any) -> Any:
     material, tree, emission = _emission_material(bpy, "SOURCE_PLATE_DEPTH")
     camera_data = tree.nodes.new("ShaderNodeCameraData")
-    mapper = tree.nodes.new("ShaderNodeMapRange")
-    mapper.data_type = "FLOAT"
-    mapper.clamp = True
-    mapper.inputs["From Min"].default_value = clip_start
-    mapper.inputs["From Max"].default_value = clip_end
-    mapper.inputs["To Min"].default_value = 0.0
-    mapper.inputs["To Max"].default_value = 1.0
-    tree.links.new(camera_data.outputs["View Z Depth"], mapper.inputs["Value"])
-    tree.links.new(mapper.outputs["Result"], emission.inputs["Color"])
+    tree.links.new(camera_data.outputs["View Z Depth"], emission.inputs["Color"])
     return material
 
 
@@ -531,11 +529,7 @@ def render_descriptor(
             1.0,
         )
         scene.world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.0
-        depth_material = _depth_material(
-            bpy,
-            clip_start=float(camera_receipt["clipStart"]),
-            clip_end=float(camera_receipt["clipEnd"]),
-        )
+        depth_material = _depth_material(bpy)
         normal_material = _normal_material(bpy)
         scene.render.image_settings.file_format = "OPEN_EXR"
         scene.render.image_settings.color_mode = "RGB"
