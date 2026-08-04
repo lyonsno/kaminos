@@ -248,6 +248,25 @@ def test_one_artifact_cannot_impersonate_a_complete_channel_set():
             validate_complete_outputs(descriptor, outputs)
 
 
+def test_missing_dimensions_metadata_cannot_complete():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        source = root / "source.blend"
+        source.write_bytes(b"operator-authored-source")
+        descriptor = _descriptor(source)
+        outputs = _output_records(root, descriptor)
+        descriptor["render"].pop("width")
+        descriptor["render"].pop("height")
+        missing_dimensions_identity = descriptor_sha256(descriptor)
+        for record in outputs.values():
+            record.pop("width")
+            record.pop("height")
+            record["descriptorSha256"] = missing_dimensions_identity
+
+        with _raises(SourcePlateContractError, match="positive integer dimensions"):
+            validate_complete_outputs(descriptor, outputs)
+
+
 def test_complete_output_set_returns_identity_bound_receipt():
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -276,4 +295,5 @@ if __name__ == "__main__":
     test_partial_output_set_cannot_complete()
     test_zero_byte_or_cross_descriptor_output_cannot_complete()
     test_one_artifact_cannot_impersonate_a_complete_channel_set()
+    test_missing_dimensions_metadata_cannot_complete()
     test_complete_output_set_returns_identity_bound_receipt()

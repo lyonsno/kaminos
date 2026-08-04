@@ -241,6 +241,15 @@ def validate_complete_outputs(
     descriptor_identity = descriptor_sha256(descriptor)
     expected_width = render.get("width")
     expected_height = render.get("height")
+    if (
+        type(expected_width) is not int
+        or expected_width <= 0
+        or type(expected_height) is not int
+        or expected_height <= 0
+    ):
+        raise SourcePlateContractError(
+            "output-validation", "render requires positive integer dimensions"
+        )
     validated: list[dict[str, Any]] = []
     artifact_owners: dict[Path, str] = {}
     for name in ordered_names:
@@ -261,7 +270,14 @@ def validate_complete_outputs(
             raise SourcePlateContractError(
                 "output-validation", f"output {name} has the wrong encoding"
             )
-        if record.get("width") != expected_width or record.get("height") != expected_height:
+        record_width = record.get("width")
+        record_height = record.get("height")
+        if (
+            type(record_width) is not int
+            or type(record_height) is not int
+            or record_width != expected_width
+            or record_height != expected_height
+        ):
             raise SourcePlateContractError(
                 "output-validation", f"output {name} has the wrong dimensions"
             )
@@ -302,8 +318,8 @@ def validate_complete_outputs(
                 "status": "complete",
                 "path": str(effective_path),
                 "encoding": record["encoding"],
-                "width": record["width"],
-                "height": record["height"],
+                "width": record_width,
+                "height": record_height,
                 "byteLength": byte_length,
                 "sha256": effective_sha256,
                 "descriptorSha256": descriptor_identity,
