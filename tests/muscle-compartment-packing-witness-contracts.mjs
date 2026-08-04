@@ -204,3 +204,64 @@ test('pre-artifact solve failure leaves a durable phase-specific report with no 
   assert.equal(report.route.effective, null);
   assert.equal(report.lastTrustworthyEvidence.phase, 'source-received');
 });
+
+test('structured solver refusal survives witness failure reporting without visual proof substitution', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/immutable-muscle-compartment-conflict';
+  const source = createSyntheticFourMuscleCompartment();
+  source.id = 'operator-authored-witness-fixed-attachment-conflict';
+  source.authority = { kind: 'operator-authored', anatomicalAdmission: 'test-only' };
+  source.input = {
+    requested: {
+      kind: 'operator-authored-test',
+      id: source.id,
+      sha256: 'a'.repeat(64),
+    },
+    effective: {
+      kind: 'operator-authored-test',
+      id: source.id,
+      sha256: 'a'.repeat(64),
+    },
+  };
+  const fixedOrigin = [...source.muscles[0].attachments.origin.position];
+  source.muscles[1].centerline[0].position = [...fixedOrigin];
+  source.muscles[1].attachments.origin.position = [...fixedOrigin];
+
+  await assert.rejects(
+    () => writeMuscleCompartmentPackingWitness({ outDir, source, io: memory.io }),
+    /immutable-constraint-conflict/i,
+  );
+  const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'solve');
+  assert.equal(report.route.effective, null);
+  assert.equal(report.lastTrustworthyEvidence.phase, 'solver-returned-structured-failure');
+  assert.equal(report.result.schema, 'kaminos.muscle-compartment-packing-result.v0');
+  assert.equal(report.result.sourceId, source.id);
+  assert.equal(report.result.status, 'immutable-constraint-conflict');
+  assert.equal(report.result.iterations, 0);
+  assert.deepEqual(report.result.failure, {
+    phase: 'preflight',
+    kind: 'immutable-constraint-conflict',
+    sourceId: source.id,
+    blockingMechanisms: [{
+      kind: 'pairwise-fixed-attachment-penetration',
+      left: {
+        muscleId: source.muscles[0].id,
+        attachment: 'origin',
+        attachmentId: source.muscles[0].attachments.origin.id,
+      },
+      right: {
+        muscleId: source.muscles[1].id,
+        attachment: 'origin',
+        attachmentId: source.muscles[1].attachments.origin.id,
+      },
+      penetration: 0.32,
+    }],
+  });
+  assert.equal(report.result.metrics.packed.endpointDrift, 0);
+  assert.ok(report.result.metrics.packed.pairwisePenetration >= 0.32);
+  assert.ok(!memory.files.has(`${outDir}/source.json`));
+  assert.ok(!memory.files.has(`${outDir}/packed.json`));
+  assert.ok(!memory.files.has(`${outDir}/index.html`));
+});

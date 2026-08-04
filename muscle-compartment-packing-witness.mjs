@@ -225,10 +225,11 @@ export async function writeMuscleCompartmentPackingWitness({
       anatomicalAdmission: source?.authority?.anatomicalAdmission || null,
     },
   };
+  let result = null;
   try {
     await io.mkdir(outputRoot, { recursive:true });
     phase = 'solve';
-    const result = solveMuscleCompartmentPacking(source, config);
+    result = solveMuscleCompartmentPacking(source, config);
     if (result.status !== 'converged') {
       throw new Error(`muscle compartment packing witness requires converged result, got ${result.status}`);
     }
@@ -279,15 +280,35 @@ export async function writeMuscleCompartmentPackingWitness({
     await writeJsonAtomically(io, resolve(outputRoot, 'report.json'), report);
     return { outputRoot, report, source, result };
   } catch (error) {
+    const structuredSolverFailure = result?.status && result.status !== 'converged'
+      ? {
+        schema: result.schema,
+        sourceId: result.sourceId,
+        status: result.status,
+        iterations: result.iterations,
+        config: structuredClone(result.config),
+        clearanceValidation: structuredClone(result.clearanceValidation),
+        metrics: structuredClone(result.metrics),
+        failure: result.failure ? structuredClone(result.failure) : null,
+      }
+      : null;
     const failureReport = {
       ...failureBase,
       failurePhase: phase,
-      lastTrustworthyEvidence: {
-        phase:'source-received',
-        sourceId:source?.id || null,
-        sourceSchema:source?.schema || null,
-        input:source?.input ? structuredClone(source.input) : null,
-      },
+      lastTrustworthyEvidence: structuredSolverFailure
+        ? {
+          phase: 'solver-returned-structured-failure',
+          sourceId: result.sourceId,
+          resultStatus: result.status,
+          iterations: result.iterations,
+        }
+        : {
+          phase: 'source-received',
+          sourceId: source?.id || null,
+          sourceSchema: source?.schema || null,
+          input: source?.input ? structuredClone(source.input) : null,
+        },
+      ...(structuredSolverFailure ? { result: structuredSolverFailure } : {}),
       error: { name:error.name, message:error.message },
     };
     const failureReportPath = phase === 'prepare-output'
