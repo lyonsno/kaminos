@@ -93,6 +93,10 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.equal(written.result.muscles.length, 4);
   assert.deepEqual(written.report.result.formation, written.result.formation);
   assert.deepEqual(
+    written.report.result.pairwiseProjection,
+    written.result.pairwiseProjection,
+  );
+  assert.deepEqual(
     written.report.result.correctionAttribution,
     written.result.correctionAttribution,
   );
@@ -165,6 +169,11 @@ test('eight-carrier density witness refuses the source-relative residual without
   const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
   assert.equal(report.status, 'failed');
   assert.equal(report.result.status, 'pairwise-exclusion-failed');
+  assert.deepEqual(report.result.pairwiseProjection, {
+    requestedUpdate:'sequential',
+    effectiveUpdate:'sequential',
+    fallbackUsed:false,
+  });
   assert.equal(report.result.failure.kind, 'residual-constraint');
   assert.equal(report.result.failure.dominantMechanism.kind, 'pairwise-exclusion-residual');
   assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);

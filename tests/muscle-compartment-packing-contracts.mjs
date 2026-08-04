@@ -303,7 +303,60 @@ test('legacy absolute smoothing cannot converge through source-curvature reversa
   assert.ok(result.metrics.packed.sourceCurvatureReversalCount > 0);
 });
 
+test('reciprocal-batched pairwise projection cuts k8 residual and correction churn without formation regression', () => {
+  const source = createSyntheticMuscleDensityLadder(8);
+  const baseConfig = {
+    maxIterations:960,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+  };
+  const sequential = solveMuscleCompartmentPacking(source, baseConfig);
+  const reciprocal = solveMuscleCompartmentPacking(source, {
+    ...baseConfig,
+    pairwiseUpdate:'reciprocal-batched',
+  });
+  assert.deepEqual(reciprocal.pairwiseProjection, {
+    requestedUpdate:'reciprocal-batched',
+    effectiveUpdate:'reciprocal-batched',
+    fallbackUsed:false,
+  });
+  assert.ok(sequential.metrics.packed.sourceCurvatureReversalCount > 0);
+  assert.ok(
+    reciprocal.metrics.packed.sourceCurvatureReversalCount <=
+      sequential.metrics.packed.sourceCurvatureReversalCount,
+  );
+  assert.ok(
+    reciprocal.metrics.packed.pairwisePenetration <
+      sequential.metrics.packed.pairwisePenetration * 0.5,
+    `reciprocal residual ${reciprocal.metrics.packed.pairwisePenetration} did not halve sequential residual ${sequential.metrics.packed.pairwisePenetration}`,
+  );
+  assert.ok(
+    reciprocal.correctionAttribution.totals.pairwiseExclusion
+      .cumulativeAppliedKnotDisplacement <
+      sequential.correctionAttribution.totals.pairwiseExclusion
+        .cumulativeAppliedKnotDisplacement * 0.5,
+    'reciprocal batching must materially reduce pairwise correction churn',
+  );
+  assert.ok(
+    reciprocal.metrics.packed.minimumPairwiseRelationCosine >
+      sequential.metrics.packed.minimumPairwiseRelationCosine,
+  );
+  assert.equal(reciprocal.metrics.packed.endpointDrift, 0);
+  assert.ok(reciprocal.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(reciprocal.metrics.packed.skeletalPenetration <= baseConfig.convergenceTolerance);
+  assert.ok(reciprocal.metrics.packed.compartmentEscape <= baseConfig.convergenceTolerance);
+});
+
 test('source validation rejects identity collision and non-finite carrier state', () => {
+  assert.throws(
+    () => solveMuscleCompartmentPacking(
+      createSyntheticFourMuscleCompartment(),
+      { pairwiseUpdate:'silent-fallback' },
+    ),
+    /pairwiseUpdate.*sequential.*reciprocal-batched/i,
+  );
   const duplicate = createSyntheticFourMuscleCompartment();
   duplicate.muscles[1].identity.instanceId = duplicate.muscles[0].identity.instanceId;
   assert.throws(
