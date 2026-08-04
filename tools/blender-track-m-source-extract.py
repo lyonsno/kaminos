@@ -81,12 +81,18 @@ def _matrix_world(obj: bpy.types.Object) -> list[float]:
 
 
 def _mesh_geometry(mesh: bpy.types.Mesh) -> dict[str, Any]:
+    vertices = [_vec(vertex.co) for vertex in mesh.vertices]
     content = {
-        "vertices": [_vec(vertex.co) for vertex in mesh.vertices],
+        "vertices": vertices,
         "edges": [list(edge.vertices) for edge in mesh.edges],
         "polygons": [list(polygon.vertices) for polygon in mesh.polygons],
         "shapeKeys": sorted(block.name for block in mesh.shape_keys.key_blocks) if mesh.shape_keys else [],
     }
+    mesh.calc_loop_triangles()
+    signed_volume = 0.0
+    for triangle in mesh.loop_triangles:
+        left, middle, right = (mesh.vertices[index].co for index in triangle.vertices)
+        signed_volume += left.dot(middle.cross(right)) / 6.0
     return {
         "kind": "mesh",
         "contentSha256": _sha256_bytes(_canonical_bytes(content)),
@@ -94,11 +100,16 @@ def _mesh_geometry(mesh: bpy.types.Mesh) -> dict[str, Any]:
         "edgeCount": len(mesh.edges),
         "polygonCount": len(mesh.polygons),
         "shapeKeyCount": len(content["shapeKeys"]),
+        "sourceMeasurements": {
+            "vertexPositions": vertices,
+            "localTargetVolume": _rounded(abs(signed_volume)),
+        },
     }
 
 
 def _curve_geometry(curve: bpy.types.Curve) -> dict[str, Any]:
     splines: list[dict[str, Any]] = []
+    native_splines: list[dict[str, Any]] = []
     point_count = 0
     for spline in curve.splines:
         if spline.type == "BEZIER":
@@ -112,10 +123,34 @@ def _curve_geometry(curve: bpy.types.Curve) -> dict[str, Any]:
                 }
                 for point in spline.bezier_points
             ]
+            native_points = [
+                {
+                    "co": _vec(point.co),
+                    "radius": _rounded(point.radius),
+                    "tilt": _rounded(point.tilt),
+                    "handleLeft": _vec(point.handle_left),
+                    "handleRight": _vec(point.handle_right),
+                    "handleLeftType": point.handle_left_type,
+                    "handleRightType": point.handle_right_type,
+                }
+                for point in spline.bezier_points
+            ]
         else:
             points = [{"co": _vec(point.co)} for point in spline.points]
+            native_points = [
+                {
+                    "co": _vec(point.co),
+                    "radius": _rounded(point.radius),
+                    "tilt": _rounded(point.tilt),
+                    "weight": _rounded(point.weight),
+                }
+                for point in spline.points
+            ]
         point_count += len(points)
         splines.append({"type": spline.type, "cyclic": bool(spline.use_cyclic_u), "points": points})
+        native_splines.append(
+            {"type": spline.type, "cyclic": bool(spline.use_cyclic_u), "points": native_points}
+        )
     content = {
         "dimensions": curve.dimensions,
         "resolutionU": curve.resolution_u,
@@ -128,6 +163,7 @@ def _curve_geometry(curve: bpy.types.Curve) -> dict[str, Any]:
         "contentSha256": _sha256_bytes(_canonical_bytes(content)),
         "splineCount": len(splines),
         "pointCount": point_count,
+        "nativeSplines": native_splines,
     }
 
 

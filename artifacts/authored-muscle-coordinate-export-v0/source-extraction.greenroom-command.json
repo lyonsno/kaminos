@@ -1,0 +1,25 @@
+{
+  "schema": "gpu-greenroom.command.v1",
+  "repo_root": "/private/tmp/kaminos-bytebound-source-export-0803",
+  "cwd": "/private/tmp/kaminos-bytebound-source-export-0803",
+  "env": {},
+  "output_dir": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0",
+  "route_identity": "bytebound-source-extract/a6a4650f/01f3136c/read-only-blender-5.1.2",
+  "argv": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "--python",
+    "/private/tmp/kaminos-bytebound-source-export-0803/tools/blender-track-m-source-extract.py",
+    "--",
+    "--source",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "--out",
+    "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.json",
+    "--failure",
+    "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.failure.json",
+    "--expected-source-sha256",
+    "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3"
+  ],
+  "timeout": null
+}

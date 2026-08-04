@@ -1,0 +1,85 @@
+{
+  "acceptedFields": [
+    "source.assetSha256",
+    "source.graphSha256",
+    "source.graphFileSha256",
+    "source.routingFixtureSha256",
+    "muscles[].constructionId",
+    "muscles[].lineageId",
+    "muscles[].instanceId",
+    "muscles[].surfaceInstanceId",
+    "muscles[].surfaceGeometrySha256",
+    "muscles[].pathInstanceId",
+    "muscles[].pathGeometrySha256",
+    "muscles[].attachments.origin",
+    "muscles[].attachments.insertion"
+  ],
+  "admitted": false,
+  "conflictingFields": [],
+  "execution": {
+    "effective": {
+      "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-authority-probe.json",
+      "coordinateCarrierFileSha256": "cab51a67377ffbf848a301ffc823f361ff96f9c82b58140359f75f72ea426d50",
+      "receipt": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-intake-receipt.json",
+      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json",
+      "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+    },
+    "lastTrustworthyEvidence": "admission-receipt-constructed",
+    "phase": "admission-complete",
+    "requested": {
+      "coordinateCarrier": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-authority-probe.json",
+      "receipt": "artifacts/authored-muscle-coordinate-export-v0/m31-m47/packer-intake-receipt.json",
+      "routingFixture": "fixtures/track-m-routing/m31-m47-routing-fixture.json"
+    }
+  },
+  "input": {
+    "coordinateCarrier": {
+      "effective": {
+        "id": "packer-authority-probe-64d586c0831d4886",
+        "kind": "authored-coordinate-carrier",
+        "sha256": "cab51a67377ffbf848a301ffc823f361ff96f9c82b58140359f75f72ea426d50"
+      },
+      "requested": {
+        "id": "packer-authority-probe-64d586c0831d4886",
+        "kind": "authored-coordinate-carrier",
+        "sha256": "cab51a67377ffbf848a301ffc823f361ff96f9c82b58140359f75f72ea426d50"
+      }
+    },
+    "routingFixture": {
+      "effective": {
+        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "kind": "track-m-routing-fixture",
+        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      },
+      "requested": {
+        "id": "cube002-cube003-m31-m47-routing-sensitivity-v0",
+        "kind": "track-m-routing-fixture",
+        "sha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075"
+      }
+    }
+  },
+  "missingFields": [
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.coordinateSpace.unit",
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.compartment",
+    "coordinateCarrier.derivation.selectionAuthority.sharedFields.obstacles",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-31].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-31].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-31].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-31].requiredFields.volumeAuthority",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-47].state",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-47].requiredFields.centerline",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-47].requiredFields.targetVolume",
+    "coordinateCarrier.derivation.selectionAuthority.rows[muscle-47].requiredFields.volumeAuthority"
+  ],
+  "packingSource": null,
+  "reason": "muscle-31 selected-row authority state candidate is not admitted",
+  "receiptSha256": "a8d54ca43fcb07f51d31f7fc0044dd53fd42b1368104dcc4965c488c5fc9072a",
+  "schema": "kaminos.authored-muscle-packing-intake-receipt.v0",
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphFileSha256": "8fe8eb8c65118102243b75c324638155a814f3c70095af5f8462326f2b4d68f6",
+    "graphSha256": "f11075a8f7afcb913c23190cfa78dd9b73401b840b0a2df8fc96bfaacbcdbcb0",
+    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+  },
+  "status": "authority-incomplete"
+}

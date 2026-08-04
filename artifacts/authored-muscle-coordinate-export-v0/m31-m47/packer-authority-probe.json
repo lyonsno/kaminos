@@ -1,0 +1,373 @@
+{
+  "compartment": null,
+  "coordinateSpace": {
+    "dimension": 3,
+    "kind": "source-world",
+    "unit": "blender-scene-unit"
+  },
+  "derivation": {
+    "atlas": {
+      "id": "coordinate-parent-atlas-3f4c65867a776edf",
+      "sha256": "b9a857559f7d20e1efe18e0a29103ba7cb2347dc3e0b20ac0df409929af6b77b"
+    },
+    "kind": "atlas-route-subset",
+    "selectedConstructionIds": [
+      "muscle-31",
+      "muscle-47"
+    ],
+    "selectionAuthority": {
+      "receipt": {
+        "id": "coordinate-authority-receipt-14f36dc452de3e34",
+        "sha256": "64d586c0831d48868ac51f4b1d519df0dac37073c95ad96047c352542907a490"
+      },
+      "rows": [
+        {
+          "constructionId": "muscle-31",
+          "requiredFields": {
+            "attachments.insertion.position": "admitted",
+            "attachments.origin.position": "admitted",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        },
+        {
+          "constructionId": "muscle-47",
+          "requiredFields": {
+            "attachments.insertion.position": "admitted",
+            "attachments.origin.position": "admitted",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        }
+      ],
+      "sharedFields": {
+        "compartment": "missing",
+        "coordinateSpace.unit": "candidate",
+        "obstacles": "missing"
+      }
+    }
+  },
+  "diagnostic": {
+    "kind": "candidate-authority-consumer-probe",
+    "notAnAdmittedCoordinateCarrier": true,
+    "sourceReceipt": {
+      "id": "coordinate-authority-receipt-14f36dc452de3e34",
+      "sha256": "64d586c0831d48868ac51f4b1d519df0dac37073c95ad96047c352542907a490"
+    }
+  },
+  "id": "packer-authority-probe-64d586c0831d4886",
+  "muscles": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-750005d7-28af-40e0-adbf-ca455aad50b2",
+          "position": [
+            5.658816337585449,
+            10.92640495300293,
+            22.928180694580078
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-172c5d64-554c-4d80-a9d7-f6309d720055",
+          "position": [
+            5.748570919036865,
+            -2.15970516204834,
+            11.065047264099121
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            5.748570919,
+            -2.159705162,
+            11.065047264
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            5.741091252901145,
+            -1.069196263180207,
+            12.053642021723586
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            5.733611584546351,
+            0.02131311034404504,
+            13.042236255788408
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            5.72613191845126,
+            1.1118220096150204,
+            14.030831013014328
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            5.718652726084037,
+            2.2023313849311084,
+            15.019425248703667
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            5.711173060985293,
+            3.292840283754784,
+            16.00802000643041
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            5.703693391630526,
+            4.383349657275061,
+            16.996614240492036
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            5.696213723175531,
+            5.473859138611768,
+            17.985208355629137
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            5.688734529915847,
+            6.56436840606571,
+            18.973802710293416
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            5.68125486896924,
+            7.654876938502197,
+            19.962397872208804
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            5.673775196922685,
+            8.745385989475954,
+            20.95099246204791
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            5.666296005451551,
+            9.835895472157116,
+            21.93958657931057
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            5.658816338,
+            10.926404953,
+            22.928180695
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-31",
+      "instanceId": "instance-cd975deb-0bb7-40ce-bbcf-ef847f537882",
+      "lineageId": "lineage-1fbd216b-6372-4579-b18c-0c5864a1f10f",
+      "pathGeometrySha256": "8952f1c78620090fc3738d7da0667fc889a01dab578d47803c91e8d3937a93c8",
+      "pathInstanceId": "instance-4f1543af-4afe-4446-8d5d-7cd1e935ae3f",
+      "surfaceGeometrySha256": "06ae6eeeb0115fd6e908998439edaed1e7ba5298f0a7a2aceef2c7c2fecf3e9a",
+      "surfaceInstanceId": "instance-88a8fb11-9799-4085-a0e4-867f6490d451",
+      "targetVolume": 60.63820937,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-ce67f544-6e36-49b0-85a3-dd1bccae125e",
+          "position": [
+            7.339146137237549,
+            10.242835998535156,
+            23.82756805419922
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-2413de54-8a83-4504-80a9-c2e194e61b5d",
+          "position": [
+            8.709335327148438,
+            -2.6468515396118164,
+            11.094644546508789
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            8.709335327,
+            -2.64685154,
+            11.094644547
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            8.595152865704785,
+            -1.5727109727032131,
+            12.155721564521537
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            8.480970349340556,
+            -0.4985699763605358,
+            13.216798141788546
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            8.366787885499184,
+            0.5755705754828414,
+            14.277875174679767
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            8.252605373843032,
+            1.6497116165343209,
+            15.338951707194155
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            8.138422912600833,
+            2.7238521833339475,
+            16.400028725224686
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            8.024240444939593,
+            3.7979926905224346,
+            17.461105802909515
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            7.910057977331382,
+            4.872133198207869,
+            18.522182880097404
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            7.795875508728859,
+            5.946273705839808,
+            19.58325995723245
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            7.681693066531436,
+            7.020414450480179,
+            20.644336797282488
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            7.567511073210735,
+            8.094554983682627,
+            21.705413899677062
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            7.45332860460821,
+            9.168695491314567,
+            22.76649097681211
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            7.339146137,
+            10.242835999,
+            23.827568054
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-47",
+      "instanceId": "instance-4531f561-09a0-4d3f-b947-c207387e9250",
+      "lineageId": "lineage-6307e597-56c2-4bd6-89dc-eaa85835d3bf",
+      "pathGeometrySha256": "173de7f6233963b74854f0caeb762e3662b07828ab6ac71231ca780c748d69e3",
+      "pathInstanceId": "instance-55aa05cb-059d-483a-b035-432fc5488410",
+      "surfaceGeometrySha256": "5e07d6b85317b7c404f20932d1d12beaf4e96d9d39ed6ddc800afbc577e9cb53",
+      "surfaceInstanceId": "instance-d22a74b7-c226-4735-83c2-b69b9923235a",
+      "targetVolume": 65.716771464,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    }
+  ],
+  "obstacles": [],
+  "schema": "kaminos.authored-muscle-packing-coordinate-carrier.v0",
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+  }
+}

@@ -1,0 +1,1310 @@
+{
+  "admitted": false,
+  "bindingConflicts": [
+    "routingFixture.source.graphSha256",
+    "routingFixture.source.graphFileSha256"
+  ],
+  "blockers": [
+    "source-to-fixture binding conflict at routingFixture.source.graphSha256",
+    "source-to-fixture binding conflict at routingFixture.source.graphFileSha256",
+    "compartment authority missing: no named source-authority compartment exists",
+    "coordinateSpace.unit authority candidate: Blender unit declaration is not real-world unit authority",
+    "obstacles authority missing: no named source-authority obstacle membership exists",
+    "muscle-31 centerline authority candidate: mechanically derived value is not admitted authority",
+    "muscle-31 targetVolume authority candidate: mechanically derived value is not admitted authority",
+    "muscle-31 volumeAuthority authority candidate: mechanically derived value is not admitted authority",
+    "muscle-47 centerline authority candidate: mechanically derived value is not admitted authority",
+    "muscle-47 targetVolume authority candidate: mechanically derived value is not admitted authority",
+    "muscle-47 volumeAuthority authority candidate: mechanically derived value is not admitted authority"
+  ],
+  "derivation": {
+    "atlas": {
+      "id": "coordinate-parent-atlas-3f4c65867a776edf",
+      "sha256": "b9a857559f7d20e1efe18e0a29103ba7cb2347dc3e0b20ac0df409929af6b77b"
+    },
+    "kind": "atlas-route-subset",
+    "selectedConstructionIds": [
+      "muscle-31",
+      "muscle-47"
+    ]
+  },
+  "id": "coordinate-authority-receipt-14f36dc452de3e34",
+  "packingSelectionAuthority": {
+    "rows": [
+      {
+        "constructionId": "muscle-31",
+        "requiredFields": {
+          "attachments.insertion.position": "admitted",
+          "attachments.origin.position": "admitted",
+          "centerline": "candidate",
+          "targetVolume": "candidate",
+          "volumeAuthority": "candidate"
+        },
+        "state": "candidate"
+      },
+      {
+        "constructionId": "muscle-47",
+        "requiredFields": {
+          "attachments.insertion.position": "admitted",
+          "attachments.origin.position": "admitted",
+          "centerline": "candidate",
+          "targetVolume": "candidate",
+          "volumeAuthority": "candidate"
+        },
+        "state": "candidate"
+      }
+    ],
+    "sharedFields": {
+      "compartment": "missing",
+      "coordinateSpace.unit": "candidate",
+      "obstacles": "missing"
+    }
+  },
+  "receiptSha256": "64d586c0831d48868ac51f4b1d519df0dac37073c95ad96047c352542907a490",
+  "request": {
+    "effectiveConstructionIds": [
+      "muscle-31",
+      "muscle-47"
+    ],
+    "requestedConstructionIds": [
+      "muscle-31",
+      "muscle-47"
+    ]
+  },
+  "rows": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-750005d7-28af-40e0-adbf-ca455aad50b2",
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-172c5d64-554c-4d80-a9d7-f6309d720055",
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "components": {
+        "pathGeometrySha256": "8952f1c78620090fc3738d7da0667fc889a01dab578d47803c91e8d3937a93c8",
+        "pathInstanceId": "instance-4f1543af-4afe-4446-8d5d-7cd1e935ae3f",
+        "surfaceGeometrySha256": "06ae6eeeb0115fd6e908998439edaed1e7ba5298f0a7a2aceef2c7c2fecf3e9a",
+        "surfaceInstanceId": "instance-88a8fb11-9799-4085-a0e4-867f6490d451"
+      },
+      "constructionId": "muscle-31",
+      "fields": {
+        "attachments.insertion.position": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.insertion.matrixWorld"
+              ],
+              "kind": "helper-transform",
+              "method": "component-world-matrix-translation",
+              "value": [
+                5.658816338,
+                10.926404953,
+                22.928180695
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.path.geometry.nativeSplines"
+              ],
+              "kind": "curve-endpoint",
+              "method": "native-path-last-sample",
+              "value": [
+                5.658816338,
+                10.926404953,
+                22.928180695
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.surface.geometry.sourceMeasurements.endpointCandidates.insertion"
+              ],
+              "kind": "visible-surface-endpoint",
+              "method": "source-surface-endpoint-measurement",
+              "value": [
+                5.658816337583333,
+                10.926404953,
+                22.928180694500004
+              ]
+            },
+            {
+              "authority": "admitted",
+              "evidenceLocators": [
+                "routingFixture.conditions.correct.routes[constructionId=muscle-31].insertion"
+              ],
+              "kind": "routing-fixture-endpoint",
+              "method": "reviewed-routing-fixture-selection",
+              "value": [
+                5.658816337585449,
+                10.92640495300293,
+                22.928180694580078
+              ]
+            }
+          ],
+          "reason": null,
+          "selected": {
+            "authority": "admitted",
+            "evidenceLocators": [
+              "routingFixture.conditions.correct.routes[constructionId=muscle-31].insertion"
+            ],
+            "kind": "routing-fixture-endpoint",
+            "method": "reviewed-routing-fixture-selection",
+            "value": [
+              5.658816337585449,
+              10.92640495300293,
+              22.928180694580078
+            ]
+          },
+          "state": "admitted"
+        },
+        "attachments.origin.position": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.origin.matrixWorld"
+              ],
+              "kind": "helper-transform",
+              "method": "component-world-matrix-translation",
+              "value": [
+                5.748570919,
+                -2.159705162,
+                11.065047264
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.path.geometry.nativeSplines"
+              ],
+              "kind": "curve-endpoint",
+              "method": "native-path-first-sample",
+              "value": [
+                5.748570919,
+                -2.159705162,
+                11.065047264
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.surface.geometry.sourceMeasurements.endpointCandidates.origin"
+              ],
+              "kind": "visible-surface-endpoint",
+              "method": "source-surface-endpoint-measurement",
+              "value": [
+                5.748570919083333,
+                -2.159705162,
+                11.065047264166665
+              ]
+            },
+            {
+              "authority": "admitted",
+              "evidenceLocators": [
+                "routingFixture.conditions.correct.routes[constructionId=muscle-31].origin"
+              ],
+              "kind": "routing-fixture-endpoint",
+              "method": "reviewed-routing-fixture-selection",
+              "value": [
+                5.748570919036865,
+                -2.15970516204834,
+                11.065047264099121
+              ]
+            }
+          ],
+          "reason": null,
+          "selected": {
+            "authority": "admitted",
+            "evidenceLocators": [
+              "routingFixture.conditions.correct.routes[constructionId=muscle-31].origin"
+            ],
+            "kind": "routing-fixture-endpoint",
+            "method": "reviewed-routing-fixture-selection",
+            "value": [
+              5.748570919036865,
+              -2.15970516204834,
+              11.065047264099121
+            ]
+          },
+          "state": "admitted"
+        },
+        "centerline": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.path.geometry.nativeSplines"
+              ],
+              "kind": "source-curve-centerline",
+              "method": "world-transform-native-polyline-and-uniform-arc-resample",
+              "value": {
+                "arcLength": 17.663189650471388,
+                "nativeSamples": [
+                  {
+                    "nativeIndex": 0,
+                    "position": [
+                      5.748570919,
+                      -2.159705162,
+                      11.065047264
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 1,
+                    "position": [
+                      5.744831085,
+                      -1.614450574,
+                      11.559344292
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 2,
+                    "position": [
+                      5.741091251,
+                      -1.069195986,
+                      12.053642273
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 3,
+                    "position": [
+                      5.737351418,
+                      -0.523941398,
+                      12.547939301
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 4,
+                    "position": [
+                      5.733611584,
+                      0.02131319,
+                      13.042236328
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 5,
+                    "position": [
+                      5.72987175,
+                      0.566567779,
+                      13.536533356
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 6,
+                    "position": [
+                      5.726131916,
+                      1.111822367,
+                      14.030831337
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 7,
+                    "position": [
+                      5.722392082,
+                      1.657076955,
+                      14.525128365
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 8,
+                    "position": [
+                      5.718652725,
+                      2.202331543,
+                      15.019425392
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 9,
+                    "position": [
+                      5.714912891,
+                      2.74758625,
+                      15.51372242
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 10,
+                    "position": [
+                      5.711173058,
+                      3.292840719,
+                      16.008020401
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 11,
+                    "position": [
+                      5.707433224,
+                      3.838095188,
+                      16.502317429
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 12,
+                    "position": [
+                      5.70369339,
+                      4.383349895,
+                      16.996614456
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 13,
+                    "position": [
+                      5.699953556,
+                      4.928604603,
+                      17.490911484
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 14,
+                    "position": [
+                      5.696213722,
+                      5.47385931,
+                      17.985208511
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 15,
+                    "position": [
+                      5.692473888,
+                      6.019113541,
+                      18.479505539
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 16,
+                    "position": [
+                      5.688734531,
+                      6.564368248,
+                      18.973802567
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 17,
+                    "position": [
+                      5.684994698,
+                      7.109622955,
+                      19.468099594
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 18,
+                    "position": [
+                      5.681254864,
+                      7.654877663,
+                      19.962398529
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 19,
+                    "position": [
+                      5.67751503,
+                      8.20013237,
+                      20.456695557
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 20,
+                    "position": [
+                      5.673775196,
+                      8.745386124,
+                      20.950992584
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 21,
+                    "position": [
+                      5.670035362,
+                      9.290640831,
+                      21.445289612
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 22,
+                    "position": [
+                      5.666296005,
+                      9.835895538,
+                      21.939586639
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 23,
+                    "position": [
+                      5.662556171,
+                      10.381150246,
+                      22.433883667
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 24,
+                    "position": [
+                      5.658816338,
+                      10.926404953,
+                      22.928180695
+                    ],
+                    "radius": 1
+                  }
+                ],
+                "resampledSamples": [
+                  {
+                    "arcFraction": 0,
+                    "position": [
+                      5.748570919,
+                      -2.159705162,
+                      11.065047264
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.08333333333333333,
+                    "position": [
+                      5.741091252901145,
+                      -1.069196263180207,
+                      12.053642021723586
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.16666666666666666,
+                    "position": [
+                      5.733611584546351,
+                      0.02131311034404504,
+                      13.042236255788408
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.25,
+                    "position": [
+                      5.72613191845126,
+                      1.1118220096150204,
+                      14.030831013014328
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.3333333333333333,
+                    "position": [
+                      5.718652726084037,
+                      2.2023313849311084,
+                      15.019425248703667
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.4166666666666667,
+                    "position": [
+                      5.711173060985293,
+                      3.292840283754784,
+                      16.00802000643041
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.5,
+                    "position": [
+                      5.703693391630526,
+                      4.383349657275061,
+                      16.996614240492036
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.5833333333333334,
+                    "position": [
+                      5.696213723175531,
+                      5.473859138611768,
+                      17.985208355629137
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.6666666666666666,
+                    "position": [
+                      5.688734529915847,
+                      6.56436840606571,
+                      18.973802710293416
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.75,
+                    "position": [
+                      5.68125486896924,
+                      7.654876938502197,
+                      19.962397872208804
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.8333333333333334,
+                    "position": [
+                      5.673775196922685,
+                      8.745385989475954,
+                      20.95099246204791
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.9166666666666666,
+                    "position": [
+                      5.666296005451551,
+                      9.835895472157116,
+                      21.93958657931057
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 1,
+                    "position": [
+                      5.658816338,
+                      10.926404953,
+                      22.928180695
+                    ],
+                    "radius": 1
+                  }
+                ],
+                "resamplingResidual": 0,
+                "sourcePathSha256": "8952f1c78620090fc3738d7da0667fc889a01dab578d47803c91e8d3937a93c8"
+              }
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        },
+        "targetVolume": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.surface.geometry.sourceMeasurements.targetVolume"
+              ],
+              "kind": "visible-surface-volume",
+              "method": "source-mesh-volume-measurement",
+              "value": 60.63820937
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        },
+        "volumeAuthority": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-31].components.surface.geometry.sourceMeasurements"
+              ],
+              "kind": "volume-derivation-classification",
+              "method": "classify-source-measurement-without-promotion",
+              "value": "source-visible-surface-measured-candidate"
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        }
+      },
+      "instanceId": "instance-cd975deb-0bb7-40ce-bbcf-ef847f537882",
+      "lineageId": "lineage-1fbd216b-6372-4579-b18c-0c5864a1f10f",
+      "name": "Muscle 31",
+      "reasons": [],
+      "selectedComponentInstanceIds": [
+        "instance-b728a1c5-d93d-49c3-876d-55f8945320ec",
+        "instance-750005d7-28af-40e0-adbf-ca455aad50b2",
+        "instance-172c5d64-554c-4d80-a9d7-f6309d720055",
+        "instance-4f1543af-4afe-4446-8d5d-7cd1e935ae3f",
+        "instance-88a8fb11-9799-4085-a0e4-867f6490d451"
+      ],
+      "selectedConstructionIds": [
+        "muscle-31-belly",
+        "muscle-31-insertion",
+        "muscle-31-origin",
+        "muscle-31-path",
+        "muscle-31-surface"
+      ],
+      "sourceAuthorities": {
+        "insertion": "source_mesh",
+        "origin": "source_mesh"
+      },
+      "state": "candidate"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-ce67f544-6e36-49b0-85a3-dd1bccae125e",
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-2413de54-8a83-4504-80a9-c2e194e61b5d",
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "components": {
+        "pathGeometrySha256": "173de7f6233963b74854f0caeb762e3662b07828ab6ac71231ca780c748d69e3",
+        "pathInstanceId": "instance-55aa05cb-059d-483a-b035-432fc5488410",
+        "surfaceGeometrySha256": "5e07d6b85317b7c404f20932d1d12beaf4e96d9d39ed6ddc800afbc577e9cb53",
+        "surfaceInstanceId": "instance-d22a74b7-c226-4735-83c2-b69b9923235a"
+      },
+      "constructionId": "muscle-47",
+      "fields": {
+        "attachments.insertion.position": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.insertion.matrixWorld"
+              ],
+              "kind": "helper-transform",
+              "method": "component-world-matrix-translation",
+              "value": [
+                7.339146137,
+                10.242835999,
+                23.827568054
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.path.geometry.nativeSplines"
+              ],
+              "kind": "curve-endpoint",
+              "method": "native-path-last-sample",
+              "value": [
+                7.339146137,
+                10.242835999,
+                23.827568054
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.surface.geometry.sourceMeasurements.endpointCandidates.insertion"
+              ],
+              "kind": "visible-surface-endpoint",
+              "method": "source-surface-endpoint-measurement",
+              "value": [
+                7.3391461373333335,
+                10.242835998583335,
+                23.827568054250005
+              ]
+            },
+            {
+              "authority": "admitted",
+              "evidenceLocators": [
+                "routingFixture.conditions.correct.routes[constructionId=muscle-47].insertion"
+              ],
+              "kind": "routing-fixture-endpoint",
+              "method": "reviewed-routing-fixture-selection",
+              "value": [
+                7.339146137237549,
+                10.242835998535156,
+                23.82756805419922
+              ]
+            }
+          ],
+          "reason": null,
+          "selected": {
+            "authority": "admitted",
+            "evidenceLocators": [
+              "routingFixture.conditions.correct.routes[constructionId=muscle-47].insertion"
+            ],
+            "kind": "routing-fixture-endpoint",
+            "method": "reviewed-routing-fixture-selection",
+            "value": [
+              7.339146137237549,
+              10.242835998535156,
+              23.82756805419922
+            ]
+          },
+          "state": "admitted"
+        },
+        "attachments.origin.position": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.origin.matrixWorld"
+              ],
+              "kind": "helper-transform",
+              "method": "component-world-matrix-translation",
+              "value": [
+                8.709335327,
+                -2.64685154,
+                11.094644547
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.path.geometry.nativeSplines"
+              ],
+              "kind": "curve-endpoint",
+              "method": "native-path-first-sample",
+              "value": [
+                8.709335327,
+                -2.64685154,
+                11.094644547
+              ]
+            },
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.surface.geometry.sourceMeasurements.endpointCandidates.origin"
+              ],
+              "kind": "visible-surface-endpoint",
+              "method": "source-surface-endpoint-measurement",
+              "value": [
+                8.709335327083332,
+                -2.6468515395833334,
+                11.0946445465
+              ]
+            },
+            {
+              "authority": "admitted",
+              "evidenceLocators": [
+                "routingFixture.conditions.correct.routes[constructionId=muscle-47].origin"
+              ],
+              "kind": "routing-fixture-endpoint",
+              "method": "reviewed-routing-fixture-selection",
+              "value": [
+                8.709335327148438,
+                -2.6468515396118164,
+                11.094644546508789
+              ]
+            }
+          ],
+          "reason": null,
+          "selected": {
+            "authority": "admitted",
+            "evidenceLocators": [
+              "routingFixture.conditions.correct.routes[constructionId=muscle-47].origin"
+            ],
+            "kind": "routing-fixture-endpoint",
+            "method": "reviewed-routing-fixture-selection",
+            "value": [
+              8.709335327148438,
+              -2.6468515396118164,
+              11.094644546508789
+            ]
+          },
+          "state": "admitted"
+        },
+        "centerline": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.path.geometry.nativeSplines"
+              ],
+              "kind": "source-curve-centerline",
+              "method": "world-transform-native-polyline-and-uniform-arc-resample",
+              "value": {
+                "arcLength": 18.169997366666085,
+                "nativeSamples": [
+                  {
+                    "nativeIndex": 0,
+                    "position": [
+                      8.709335327,
+                      -2.64685154,
+                      11.094644547
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 1,
+                    "position": [
+                      8.652243614,
+                      -2.109781265,
+                      11.625183105
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 2,
+                    "position": [
+                      8.595152855,
+                      -1.572710872,
+                      12.155721664
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 3,
+                    "position": [
+                      8.538061142,
+                      -1.035640597,
+                      12.68625927
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 4,
+                    "position": [
+                      8.480970383,
+                      -0.498570293,
+                      13.216797829
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 5,
+                    "position": [
+                      8.42387867,
+                      0.03850003,
+                      13.747336388
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 6,
+                    "position": [
+                      8.36678791,
+                      0.575570345,
+                      14.277874947
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 7,
+                    "position": [
+                      8.309696198,
+                      1.112640619,
+                      14.808413506
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 8,
+                    "position": [
+                      8.252605438,
+                      1.649711013,
+                      15.338951111
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 9,
+                    "position": [
+                      8.195513725,
+                      2.186781406,
+                      15.86948967
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 10,
+                    "position": [
+                      8.138422966,
+                      2.723851681,
+                      16.400028229
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 11,
+                    "position": [
+                      8.081331253,
+                      3.260921955,
+                      16.930566788
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 12,
+                    "position": [
+                      8.024240494,
+                      3.797992229,
+                      17.461105347
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 13,
+                    "position": [
+                      7.967149258,
+                      4.335062504,
+                      17.991643906
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 14,
+                    "position": [
+                      7.910058022,
+                      4.872132778,
+                      18.522182465
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 15,
+                    "position": [
+                      7.852966785,
+                      5.409203053,
+                      19.052721024
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 16,
+                    "position": [
+                      7.795875549,
+                      5.946273327,
+                      19.583259583
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 17,
+                    "position": [
+                      7.738784313,
+                      6.483343601,
+                      20.113798141
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 18,
+                    "position": [
+                      7.681693077,
+                      7.020414352,
+                      20.6443367
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 19,
+                    "position": [
+                      7.624601841,
+                      7.557484627,
+                      21.174875259
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 20,
+                    "position": [
+                      7.567511082,
+                      8.094554901,
+                      21.705413818
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 21,
+                    "position": [
+                      7.510419846,
+                      8.631625175,
+                      22.235952377
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 22,
+                    "position": [
+                      7.453328609,
+                      9.16869545,
+                      22.766490936
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 23,
+                    "position": [
+                      7.396237373,
+                      9.705765724,
+                      23.297029495
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "nativeIndex": 24,
+                    "position": [
+                      7.339146137,
+                      10.242835999,
+                      23.827568054
+                    ],
+                    "radius": 1
+                  }
+                ],
+                "resampledSamples": [
+                  {
+                    "arcFraction": 0,
+                    "position": [
+                      8.709335327,
+                      -2.64685154,
+                      11.094644547
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.08333333333333333,
+                    "position": [
+                      8.595152865704785,
+                      -1.5727109727032131,
+                      12.155721564521537
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.16666666666666666,
+                    "position": [
+                      8.480970349340556,
+                      -0.4985699763605358,
+                      13.216798141788546
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.25,
+                    "position": [
+                      8.366787885499184,
+                      0.5755705754828414,
+                      14.277875174679767
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.3333333333333333,
+                    "position": [
+                      8.252605373843032,
+                      1.6497116165343209,
+                      15.338951707194155
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.4166666666666667,
+                    "position": [
+                      8.138422912600833,
+                      2.7238521833339475,
+                      16.400028725224686
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.5,
+                    "position": [
+                      8.024240444939593,
+                      3.7979926905224346,
+                      17.461105802909515
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.5833333333333334,
+                    "position": [
+                      7.910057977331382,
+                      4.872133198207869,
+                      18.522182880097404
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.6666666666666666,
+                    "position": [
+                      7.795875508728859,
+                      5.946273705839808,
+                      19.58325995723245
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.75,
+                    "position": [
+                      7.681693066531436,
+                      7.020414450480179,
+                      20.644336797282488
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.8333333333333334,
+                    "position": [
+                      7.567511073210735,
+                      8.094554983682627,
+                      21.705413899677062
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 0.9166666666666666,
+                    "position": [
+                      7.45332860460821,
+                      9.168695491314567,
+                      22.76649097681211
+                    ],
+                    "radius": 1
+                  },
+                  {
+                    "arcFraction": 1,
+                    "position": [
+                      7.339146137,
+                      10.242835999,
+                      23.827568054
+                    ],
+                    "radius": 1
+                  }
+                ],
+                "resamplingResidual": 0,
+                "sourcePathSha256": "173de7f6233963b74854f0caeb762e3662b07828ab6ac71231ca780c748d69e3"
+              }
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        },
+        "targetVolume": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.surface.geometry.sourceMeasurements.targetVolume"
+              ],
+              "kind": "visible-surface-volume",
+              "method": "source-mesh-volume-measurement",
+              "value": 65.716771464
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        },
+        "volumeAuthority": {
+          "candidates": [
+            {
+              "authority": "candidate",
+              "evidenceLocators": [
+                "sourceGraph.muscles[constructionId=muscle-47].components.surface.geometry.sourceMeasurements"
+              ],
+              "kind": "volume-derivation-classification",
+              "method": "classify-source-measurement-without-promotion",
+              "value": "source-visible-surface-measured-candidate"
+            }
+          ],
+          "reason": "mechanically derived value is not admitted authority",
+          "selected": null,
+          "state": "candidate"
+        }
+      },
+      "instanceId": "instance-4531f561-09a0-4d3f-b947-c207387e9250",
+      "lineageId": "lineage-6307e597-56c2-4bd6-89dc-eaa85835d3bf",
+      "name": "Muscle 47",
+      "reasons": [],
+      "selectedComponentInstanceIds": [
+        "instance-d303252c-82d1-4e8e-b24b-9bdc4b7484a2",
+        "instance-ce67f544-6e36-49b0-85a3-dd1bccae125e",
+        "instance-2413de54-8a83-4504-80a9-c2e194e61b5d",
+        "instance-55aa05cb-059d-483a-b035-432fc5488410",
+        "instance-d22a74b7-c226-4735-83c2-b69b9923235a"
+      ],
+      "selectedConstructionIds": [
+        "muscle-47-belly",
+        "muscle-47-insertion",
+        "muscle-47-origin",
+        "muscle-47-path",
+        "muscle-47-surface"
+      ],
+      "sourceAuthorities": {
+        "insertion": "source_mesh",
+        "origin": "source_mesh"
+      },
+      "state": "candidate"
+    }
+  ],
+  "schema": "kaminos.authored-muscle-coordinate-authority-receipt.v0",
+  "sharedFields": {
+    "compartment": {
+      "candidates": [],
+      "reason": "no named source-authority compartment exists",
+      "selected": null,
+      "state": "missing"
+    },
+    "coordinateSpace": {
+      "candidates": [
+        {
+          "authority": "candidate",
+          "evidenceLocators": [
+            "sourceGraph.muscles[].components.*.matrixWorld"
+          ],
+          "kind": "source-world-coordinate-space",
+          "method": "source-object-world-matrices",
+          "value": {
+            "dimension": 3,
+            "kind": "source-world",
+            "unit": "blender-scene-unit"
+          }
+        }
+      ],
+      "reason": "coordinate convention is measured but unit authority is unresolved",
+      "selected": null,
+      "state": "candidate"
+    },
+    "coordinateSpace.unit": {
+      "candidates": [
+        {
+          "authority": "candidate",
+          "evidenceLocators": [
+            "sourceGraph.scene.unitSettings"
+          ],
+          "kind": "blender-scene-unit-declaration",
+          "method": "preserve-blender-unit-declaration",
+          "value": {
+            "lengthUnit": "METERS",
+            "scaleLength": 1,
+            "system": "METRIC"
+          }
+        }
+      ],
+      "reason": "Blender unit declaration is not real-world unit authority",
+      "selected": null,
+      "state": "candidate"
+    },
+    "obstacles": {
+      "candidates": [],
+      "reason": "no named source-authority obstacle membership exists",
+      "selected": null,
+      "state": "missing"
+    }
+  },
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "byteLength": 549819,
+    "effectiveBlendPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "requestedBlendPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "routingFixtureFileSha256": "ed0b95da9cdb7560e877869ab7d1f92423f8ec343712dbf40986ed63e5b48075",
+    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+  },
+  "status": "authority-incomplete"
+}
