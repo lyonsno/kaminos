@@ -7,9 +7,14 @@ fixture and no coordinate carrier.
 The result is intentionally non-admitted:
 `identity-coherent_geometry-unavailable`. Authenticated source and muscle-route
 identities plus byte-bound endpoints survived intake, but source-world
-centerlines, target-volume authority, skeletal-clearance primitives, and local
-compartment bounds were not present. No packing source or packed geometry was
-manufactured.
+centerlines, parent-atlas derivation, target-volume authority,
+skeletal-clearance primitives, and local compartment bounds were not present.
+No packing source or packed geometry was manufactured.
+
+Current receipt identities after the reusable-atlas contract revision:
+
+- file SHA-256: `5c4fe4e6692dd0e0048c77267b7d39e63b19a28c8dacb8230a9ab31716c92404`
+- internal receipt SHA-256: `835471d4e059b8af200f4988216578da55e7a04243788dbaab603c43d4173c08`
 
 Reproduce from the repository root:
 

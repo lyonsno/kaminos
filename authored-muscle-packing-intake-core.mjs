@@ -28,6 +28,7 @@ const ACCEPTED_IDENTITY_FIELDS = Object.freeze([
   'muscles[].attachments.insertion',
 ]);
 const REQUIRED_GEOMETRY_FIELDS = Object.freeze([
+  'coordinateCarrier.derivation',
   'coordinateCarrier.coordinateSpace',
   'coordinateCarrier.compartment',
   'coordinateCarrier.obstacles',
@@ -36,6 +37,7 @@ const REQUIRED_GEOMETRY_FIELDS = Object.freeze([
   'coordinateCarrier.muscles[].volumeAuthority',
 ]);
 const ACCEPTED_COORDINATE_FIELDS = Object.freeze([
+  'coordinateCarrier.derivation',
   'coordinateCarrier.coordinateSpace',
   'coordinateCarrier.compartment',
   'coordinateCarrier.obstacles',
@@ -148,6 +150,19 @@ function validateCoordinateCarrier(routingFixture, routes, coordinateCarrier) {
   if (typeof coordinateCarrier.id !== 'string' || coordinateCarrier.id.length === 0) {
     throw new Error('coordinate carrier id must be a nonempty string');
   }
+  const derivation = coordinateCarrier.derivation;
+  if (
+    derivation?.kind !== 'atlas-route-subset' ||
+    typeof derivation.atlas?.id !== 'string' ||
+    derivation.atlas.id.length === 0
+  ) {
+    throw new Error('coordinate carrier requires atlas-route-subset atlas derivation with a nonempty atlas id');
+  }
+  assertHash(derivation.atlas.sha256, 'coordinate carrier atlas derivation');
+  const routeConstructionIds = routes.map(route => route.constructionId);
+  if (!sameValue(derivation.selectedConstructionIds, routeConstructionIds)) {
+    throw new Error('coordinate carrier atlas selected construction ids do not match the routing fixture route set');
+  }
   compareField(coordinateCarrier.source, sourceIdentity(routingFixture), 'coordinate carrier source identity');
   if (
     coordinateCarrier.coordinateSpace?.kind !== 'source-world' ||
@@ -223,6 +238,7 @@ function buildPackingSource(routingFixture, coordinateCarrier, orderedMuscles, i
     dimension: 3,
     input: structuredClone(input.coordinateCarrier),
     source: sourceIdentity(routingFixture),
+    derivation: structuredClone(coordinateCarrier.derivation),
     coordinateSpace: structuredClone(coordinateCarrier.coordinateSpace),
     compartment: structuredClone(coordinateCarrier.compartment),
     obstacles: structuredClone(coordinateCarrier.obstacles),
@@ -316,7 +332,7 @@ export function admitAuthoredMusclePackingIntake({ routingFixture, coordinateCar
   return receipt({
     status: 'admitted',
     admitted: true,
-    reason: 'routing identities, fixed endpoints, coordinate space, carrier geometry, volume authority, skeletal clearance, and compartment bounds agree',
+    reason: 'routing identities, atlas subset derivation, fixed endpoints, coordinate space, carrier geometry, volume authority, skeletal clearance, and compartment bounds agree',
     input: structuredClone(input),
     source,
     acceptedFields: [...ACCEPTED_IDENTITY_FIELDS, ...ACCEPTED_COORDINATE_FIELDS],
