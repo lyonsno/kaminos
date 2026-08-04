@@ -21,7 +21,7 @@ fields:
 | Field | Contract |
 | --- | --- |
 | `id` | Stable carrier identity used as the effective packer source id. |
-| `derivation` | `{kind:"atlas-route-subset", atlas:{id,sha256}, selectedConstructionIds}`. The byte-bound parent atlas identity is mandatory, and the ordered selected ids must exactly equal the routing fixture's correct-route set. |
+| `derivation` | `{kind:"atlas-route-subset", atlas:{id,sha256}, selectedConstructionIds, selectionAuthority}`. The byte-bound parent atlas identity is mandatory, and the ordered selected ids must exactly equal the routing fixture's correct-route set. |
 | `source.assetSha256` | Exact frozen `.blend` SHA-256 from the routing fixture. |
 | `source.graphSha256` | Canonical authored source graph identity. |
 | `source.graphFileSha256` | Effective serialized source-graph byte identity. |
@@ -48,11 +48,48 @@ The carrier does not grant anatomical admission. Successful intake is marked
 `operator-authored` and `geometric-only`; semantic correspondence and operator
 visual/anatomical admission remain separate consumer gates.
 
+### Candidate-first selection authority
+
+The parent atlas may be incremental. Rows not selected by the current routing
+fixture may remain `candidate`, `missing`, `conflict`, or `excluded` without
+blocking an authority-complete selected subset. The carrier must bind the exact
+selection decision under `derivation.selectionAuthority`:
+
+```json
+{
+  "receipt": {"id": "<nonempty>", "sha256": "<receipt SHA-256>"},
+  "sharedFields": {
+    "coordinateSpace.unit": "admitted",
+    "compartment": "admitted",
+    "obstacles": "admitted"
+  },
+  "rows": [{
+    "constructionId": "<exact ordered selected id>",
+    "state": "admitted",
+    "requiredFields": {
+      "attachments.origin.position": "admitted",
+      "attachments.insertion.position": "admitted",
+      "centerline": "admitted",
+      "targetVolume": "admitted",
+      "volumeAuthority": "admitted"
+    }
+  }]
+}
+```
+
+The row order must exactly equal `selectedConstructionIds` and the routing
+fixture. Every listed state must be `admitted`; a `candidate`, `missing`,
+`conflict`, or `excluded` state remains useful receipt evidence but cannot
+produce a packing source. The intake returns `authority-incomplete` for that
+case and preserves the non-admitted field paths in `missingFields`. A malformed
+or reordered selected-row identity remains `source-identity-mismatch`.
+
 ## Reusable atlas subset contract
 
-The coordinate producer emits one byte-bound complete-route atlas and derives
-fixture-specific carrier files from it. The intake does not consume or reinterpret
-the complete atlas directly. It consumes a selected carrier whose `derivation`
+The coordinate producer emits one byte-bound source-wide parent manifest and
+derives fixture-specific carrier files from it. Full geometry population may
+accumulate incrementally. The intake does not consume or reinterpret the parent
+manifest directly. It consumes a selected carrier whose `derivation`
 preserves the parent atlas id and SHA-256 and whose ordered
 `selectedConstructionIds` exactly match the routing fixture. This prevents a
 carrier that omits atlas derivation from passing as one of its selected
@@ -65,9 +102,10 @@ No muscle name, cat-specific support object, M31/M47 id, or fixed route count is
 part of the intake law. Deterministic contract coverage exercises non-M31/M47
 subsets of two and four routes drawn in different orders from one six-route atlas.
 Both subsets preserve fixed endpoints and pass the unchanged generic 3D packer.
-The only schema delta required before exporter implementation hardens is the
-explicit `derivation` provenance above; geometry, identity, obstacle,
-compartment, and solver-source fields remain unchanged.
+The schema deltas required before exporter implementation hardens are the
+explicit parent `derivation` provenance and the authority-complete selected-row
+receipt above; geometry, identity, obstacle, compartment, and solver-source
+values remain unchanged.
 
 ## Receipt statuses
 
@@ -75,6 +113,7 @@ compartment, and solver-source fields remain unchanged.
 | --- | --- |
 | `admitted` | Identity, route, endpoint, carrier, volume, obstacle, and compartment contracts pass; `packingSource` is populated. |
 | `identity-coherent_geometry-unavailable` | The routing fixture is authenticated, but there is no coordinate carrier. |
+| `authority-incomplete` | A carrier or candidate receipt exists, but one or more selected rows or required solve fields is not authority-complete. |
 | `input-identity-mismatch` | Requested and effective file identities disagree or name a different consumed input. |
 | `source-identity-mismatch` | Carrier source or per-muscle identities disagree with the routing fixture. |
 | `geometry-invalid` | Geometry exists but violates the coordinate/volume/clearance/solver-source contract. |
