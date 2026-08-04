@@ -1,0 +1,16 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "ae349734e542",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "m31-m47.failure.json",
+    "source-extraction.greenroom-command.json",
+    "source-extraction.json",
+    "source-graph.json"
+  ],
+  "created_at": 1785819028.55184,
+  "duration_s": 0.7
+}

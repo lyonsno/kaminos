@@ -1,0 +1,52 @@
+{
+  "job_id": "ae349734e542",
+  "job_type": "command",
+  "status": "done",
+  "input_path": "",
+  "output_dir": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0",
+  "repo_root": "/private/tmp/kaminos-bytebound-source-export-0803",
+  "requested_route": "bytebound-source-extract/a6a4650f/01f3136c/read-only-blender-5.1.2",
+  "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background /Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend --python /private/tmp/kaminos-bytebound-source-export-0803/tools/blender-track-m-source-extract.py -- --source /Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend --out /private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.json --failure /private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.failure.json --expected-source-sha256 a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+  "effective_argv": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "--python",
+    "/private/tmp/kaminos-bytebound-source-export-0803/tools/blender-track-m-source-extract.py",
+    "--",
+    "--source",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+    "--out",
+    "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.json",
+    "--failure",
+    "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/source-extraction.failure.json",
+    "--expected-source-sha256",
+    "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3"
+  ],
+  "effective_cwd": "/private/tmp/kaminos-bytebound-source-export-0803",
+  "effective_env": {},
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {},
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1785819027.852334,
+  "finished_at": 1785819028.55184,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/ae349734e542/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/ae349734e542/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/ae349734e542/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 67407,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}
