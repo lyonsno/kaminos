@@ -210,3 +210,89 @@ test('parent-atlas and candidate disagreements fail before a provisional fixture
     /centerline.*candidate.*disagree/i,
   );
 });
+
+test('endpoint taper is an identity-bound source derivation that preserves attachments and target volume', async () => {
+  assert.equal(
+    typeof packing.deriveEndpointTaperedPackingSource,
+    'function',
+    'current K4 needs an explicit cross-section derivation before belly allocation can be assayed',
+  );
+  const fixture = await atlasFixture();
+  const series = packing.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+  });
+  const parent = series.conditions[0].source;
+  const parentSnapshot = structuredClone(parent);
+  const derived = packing.deriveEndpointTaperedPackingSource(parent, {
+    endpointRadiusMultiplier: 0.26,
+    transitionFraction: 0.2,
+    profile: 'smoothstep-arc-length',
+    volumeCompensation: 'global-radius',
+  });
+
+  assert.deepEqual(parent, parentSnapshot, 'endpoint taper must not mutate its source condition');
+  assert.deepEqual(
+    derived.source.muscles.map(muscle => muscle.identity),
+    parent.muscles.map(muscle => muscle.identity),
+  );
+  assert.deepEqual(
+    derived.source.muscles.map(muscle => muscle.attachments),
+    parent.muscles.map(muscle => muscle.attachments),
+  );
+  assert.deepEqual(derived.receipt.requested, {
+    endpointRadiusMultiplier: 0.26,
+    transitionFraction: 0.2,
+    profile: 'smoothstep-arc-length',
+    volumeCompensation: 'global-radius',
+  });
+  assert.equal(derived.receipt.fallbackUsed, false);
+  assert.deepEqual(derived.source.input.requested, derived.source.input.effective);
+  assert.match(derived.source.input.effective.sha256, /^[0-9a-f]{64}$/);
+  for (const [index, muscle] of derived.source.muscles.entries()) {
+    const parentMuscle = parent.muscles[index];
+    assert.deepEqual(muscle.centerline[0].position, parentMuscle.centerline[0].position);
+    assert.deepEqual(muscle.centerline.at(-1).position, parentMuscle.centerline.at(-1).position);
+    assert.equal(muscle.targetVolume, parentMuscle.targetVolume);
+    assert.ok(muscle.centerline[0].radius < parentMuscle.centerline[0].radius * 0.4);
+    assert.ok(muscle.centerline.at(-1).radius < parentMuscle.centerline.at(-1).radius * 0.4);
+  }
+  const measured = packing.measureMuscleCompartmentPacking(derived.source);
+  assert.ok(measured.maximumRelativeVolumeError <= 1e-12);
+  const result = packing.solveMuscleCompartmentPacking(derived.source, { maxIterations: 1 });
+  assert.notEqual(
+    result.status,
+    'immutable-constraint-conflict',
+    'a strong diagnostic taper must open preflight before allocation is compared',
+  );
+});
+
+test('endpoint taper rejects implicit defaults and unknown mechanism fields', async () => {
+  const fixture = await atlasFixture();
+  const series = packing.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+  });
+  const parent = series.conditions[0].source;
+  assert.throws(
+    () => packing.deriveEndpointTaperedPackingSource(parent, {
+      endpointRadiusMultiplier: 0.26,
+      transitionFraction: 0.2,
+      profile: 'smoothstep-arc-length',
+      volumeCompensation: 'global-radius',
+      silentFallback: true,
+    }),
+    /unknown fields: silentFallback/,
+  );
+  assert.throws(
+    () => packing.deriveEndpointTaperedPackingSource(parent, {
+      endpointRadiusMultiplier: 1,
+      transitionFraction: 0.2,
+      profile: 'smoothstep-arc-length',
+      volumeCompensation: 'global-radius',
+    }),
+    /radius multiplier must be in \(0, 1\)/,
+  );
+});

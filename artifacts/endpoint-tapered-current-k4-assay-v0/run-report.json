@@ -1,0 +1,221 @@
+{
+  "schema": "kaminos.endpoint-tapered-muscle-packing-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+  "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "requestedSolverConfig": {},
+  "effectiveSolverConfig": {
+    "maxIterations": 640,
+    "relaxationStep": 0.18,
+    "smoothnessStep": 0.035,
+    "sampleCount": 25,
+    "convergenceTolerance": 1e-7,
+    "maximumSourceBendEnergyRatio": 1.05,
+    "minimumSourceCurvatureCosine": 0.3,
+    "minimumSourceTangentCosine": 0
+  },
+  "elapsedMilliseconds": 164035,
+  "taper": {
+    "requested": {
+      "endpointRadiusMultiplier": 0.26,
+      "profile": "smoothstep-arc-length",
+      "transitionFraction": 0.2,
+      "volumeCompensation": "global-radius"
+    },
+    "effective": {
+      "endpointRadiusMultiplier": 0.26,
+      "perMuscle": [
+        {
+          "effectiveEndpointRadiusMultiplier": 0.29451781409071615,
+          "effectiveVolume": 64.02550251,
+          "globalRadiusCompensation": 1.1327608234258313,
+          "muscleId": "muscle-34",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 64.02550251
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.29451781409071603,
+          "effectiveVolume": 64.51226816800003,
+          "globalRadiusCompensation": 1.1327608234258308,
+          "muscleId": "muscle-13",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 64.512268168
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.2945178140907162,
+          "effectiveVolume": 76.82655530099998,
+          "globalRadiusCompensation": 1.1327608234258315,
+          "muscleId": "muscle-12",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 76.826555301
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.2945178140907163,
+          "effectiveVolume": 89.302118638,
+          "globalRadiusCompensation": 1.132760823425832,
+          "muscleId": "muscle-45",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 89.302118638
+        }
+      ],
+      "profile": "smoothstep-arc-length",
+      "transitionFraction": 0.2,
+      "volumeCompensation": "global-radius"
+    },
+    "fallbackUsed": false,
+    "parentSource": {
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+      "input": {
+        "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+        "kind": "synthetic-fixture",
+        "sha256": "2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"
+      }
+    },
+    "derivedSource": {
+      "kind": "endpoint-tapered-packing-source",
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0--endpoint-taper-ebe86b74f0c74a70",
+      "sha256": "b22679b545c92c3ffd8891b9a5fc916735d0499eb347603fcf6298b273db2d20"
+    }
+  },
+  "result": {
+    "status": "continuous-clearance-failed",
+    "iterations": 640,
+    "initial": {
+      "pairwisePenetration": 5.660462595456,
+      "skeletalPenetration": 1.012273272329,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3e-12,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "packed": {
+      "pairwisePenetration": 0.008182726482,
+      "skeletalPenetration": 6.276e-9,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 6.148122830117,
+      "maximumSourceKnotDisplacement": 1.945691256023,
+      "rootMeanSquareSourceKnotDisplacement": 0.959441344577,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.985986701573,
+      "sourceCurvatureReversalCount": 20,
+      "minimumSourceTangentCosine": 0.37158077531,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034592218986,
+      "minimumPairwiseRelationCosine": 0.582182119734,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "failure": {
+      "phase": "solve",
+      "kind": "residual-constraint",
+      "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0--endpoint-taper-ebe86b74f0c74a70",
+      "iterations": 640,
+      "dominantMechanism": {
+        "kind": "continuous-clearance-residual",
+        "residual": 0.008182726482
+      },
+      "residuals": {
+        "pairwisePenetration": 0.008182726482,
+        "skeletalPenetration": 6.276e-9,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 6.148122830117,
+        "maximumSourceKnotDisplacement": 1.945691256023,
+        "rootMeanSquareSourceKnotDisplacement": 0.959441344577,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": -0.985986701573,
+        "sourceCurvatureReversalCount": 20,
+        "minimumSourceTangentCosine": 0.37158077531,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1.034592218986,
+        "minimumPairwiseRelationCosine": 0.582182119734,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    }
+  },
+  "outputs": {
+    "authenticatedSource": {
+      "path": "authenticated-source.json",
+      "sha256": "70c7660b12f9e5bea6978fd9540ce02a70144a119f34bbd44103b6d08d8f4239"
+    },
+    "parentPreflightResult": {
+      "path": "parent-preflight-result.json",
+      "sha256": "693adb87d9a4e9d86baba0537307f5fee6654715a4f49a16ab5f5336680cf963"
+    },
+    "derivedSource": {
+      "path": "derived-source.json",
+      "sha256": "586608d8193168469360f18f554122664d04c6b8436a42c499e39c976cc810fe"
+    },
+    "derivationReceipt": {
+      "path": "derivation-receipt.json",
+      "sha256": "b43bdc334f11155acd87155961abb22efd790fb87052b1fe391b3375be0b8600"
+    },
+    "packingResult": {
+      "path": "packing-result.json",
+      "sha256": "e904d2d455f5036a77d59c6b9513b0344d9cef7d15680a54c659debe31e195e9"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "endpoint-tapered-current-k4-orbitable-v0",
+      "effective": "endpoint-tapered-current-k4-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "inspected-anatomical-admission-rejected",
+    "inspectionReceipt": {
+      "path": "visual-inspection.json",
+      "verdict": "useful-cross-section-precursor-with-unconstrained-centerline-allocation-failure"
+    },
+    "portfolio": {
+      "path": "index.html",
+      "sha256": "64c0e8f768da33bcd4ef052b9f0265e7bddd8bb2fd98efbe9ace7ecfda26fef9"
+    },
+    "parentViewer": {
+      "path": "parent/index.html",
+      "sha256": "7f443dd017e9b6993dec5c1b86b42e615600261392260976de03fc2fd837ca08"
+    },
+    "taperedViewer": {
+      "path": "tapered/index.html",
+      "sha256": "d9718ac33eb05bbbe6f574141fe7516c3eaaacc00059cc32e96b2647d09533e8"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "derivedSourceSha256": "b22679b545c92c3ffd8891b9a5fc916735d0499eb347603fcf6298b273db2d20",
+    "resultStatus": "continuous-clearance-failed",
+    "resultIterations": 640
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.endpoint-tapered-muscle-packing-visual-inspection.v0",
+  "observedAt": "2026-08-04T23:43:08Z",
+  "route": {
+    "requested": "endpoint-tapered-current-k4-orbitable-v0",
+    "effective": "endpoint-tapered-current-k4-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "browserKind": "playwright-chromium-headless-shell",
+    "installedStableChrome": false,
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "images": [
+    {
+      "state": "authenticated-constant-radius-source",
+      "path": "parent-before.png",
+      "sha256": "5109118f4be90e0612929c7018cdd7d39f8266e99801e82f679d68d5da3eef2f",
+      "observation": "Four straight constant-radius constructions visibly interpenetrate; red endpoint cages expose the four exact fixed-attachment blockers."
+    },
+    {
+      "state": "endpoint-tapered-source",
+      "path": "tapered-before.png",
+      "sha256": "7c5711b3927cb289a9c494b120fd10e52722c37ddb6641b9f0913e49a6185008",
+      "observation": "The derived carrier removes endpoint cages by narrowing attachments and compensating volume into the bellies, but sparse cross-sections already read as long faceted blades rather than authenticated muscle morphology."
+    },
+    {
+      "state": "packed-candidate",
+      "path": "tapered-packed.png",
+      "sha256": "d106f57b137cfc78c973cd2efd427628960f9347ddd3bb8d88d71a6992baf182",
+      "observation": "The solver creates visibly distinct lanes and clears the skeletal obstacle, but the purple construction hooks near its lower attachment, teal and yellow kink, red is substantially occluded in this view, and the cluster reads as a numerical fan rather than a plausible anatomical compartment."
+    }
+  ],
+  "numericalContext": {
+    "resultStatus": "continuous-clearance-failed",
+    "iterations": 640,
+    "initialPairwisePenetration": 5.660462595456,
+    "packedPairwisePenetration": 0.008182726482,
+    "packedSkeletalPenetration": 6.276e-9,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "maximumSourceKnotDisplacement": 1.945691256023,
+    "minimumSourceCurvatureCosine": -0.985986701573,
+    "sourceCurvatureReversalCount": 20,
+    "minimumPairwiseRelationCosine": 0.582182119734
+  },
+  "verdict": {
+    "preflightOpening": "passed",
+    "visibleSeparation": "materially-improved",
+    "anatomicalAdmission": "rejected",
+    "mechanismClassification": "useful-cross-section-precursor-with-unconstrained-centerline-allocation-failure",
+    "reason": "The same output that nearly eliminates overlap visibly folds and facets centerlines, matching the measured curvature reversals and source displacement."
+  },
+  "nextAssay": {
+    "preserve": [
+      "authenticated construction identity",
+      "fixed attachment coordinates",
+      "target volume",
+      "endpoint taper 0.26 over transition fraction 0.2",
+      "provisional K4 obstacle and compartment"
+    ],
+    "change": "Replace unconstrained Cartesian centerline allocation with a source-frame or curvature-preserving projection and require zero curvature reversals before visual admission.",
+    "firstFalsifier": "Pairwise separation cannot remain material while source curvature reversal count stays zero and the packed candidate loses the visible lower-attachment hook."
+  }
+}

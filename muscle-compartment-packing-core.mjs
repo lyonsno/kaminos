@@ -8,6 +8,8 @@ export const SOURCE_SHAPED_PACKING_PERTURBATION_SERIES_SCHEMA =
   'kaminos.source-shaped-muscle-packing-perturbation-series.v0';
 export const SOURCE_SHAPED_PACKING_PERTURBATION_RESULT_SCHEMA =
   'kaminos.source-shaped-muscle-packing-perturbation-result.v0';
+export const ENDPOINT_TAPERED_PACKING_SOURCE_DERIVATION_SCHEMA =
+  'kaminos.endpoint-tapered-packing-source-derivation.v0';
 
 const DEFAULT_CONFIG = Object.freeze({
   maxIterations: 640,
@@ -1599,6 +1601,126 @@ export function createSourceShapedPackingPerturbationSeries({
     effectiveConstructionIds: routes.map(route => route.constructionId),
     conditions,
   });
+}
+
+function validateEndpointTaperConfig(config) {
+  const allowedKeys = new Set([
+    'endpointRadiusMultiplier',
+    'transitionFraction',
+    'profile',
+    'volumeCompensation',
+  ]);
+  const unexpected = Object.keys(config || {}).filter(key => !allowedKeys.has(key));
+  if (unexpected.length > 0) {
+    throw new Error(`endpoint taper config has unknown fields: ${unexpected.join(', ')}`);
+  }
+  requireFinite(config?.endpointRadiusMultiplier, 'endpoint taper radius multiplier');
+  requireFinite(config?.transitionFraction, 'endpoint taper transition fraction');
+  if (!(config.endpointRadiusMultiplier > 0 && config.endpointRadiusMultiplier < 1)) {
+    throw new Error('endpoint taper radius multiplier must be in (0, 1)');
+  }
+  if (!(config.transitionFraction > 0 && config.transitionFraction <= 0.5)) {
+    throw new Error('endpoint taper transition fraction must be in (0, 0.5]');
+  }
+  if (config.profile !== 'smoothstep-arc-length') {
+    throw new Error('endpoint taper profile must be smoothstep-arc-length');
+  }
+  if (config.volumeCompensation !== 'global-radius') {
+    throw new Error('endpoint taper volume compensation must be global-radius');
+  }
+  return canonical(config);
+}
+
+function endpointTaperProfile(centerline, config) {
+  const cumulative = [0];
+  for (let index = 1; index < centerline.length; index += 1) {
+    cumulative.push(
+      cumulative.at(-1) + distance(centerline[index - 1].position, centerline[index].position),
+    );
+  }
+  const total = cumulative.at(-1);
+  if (!(total > 0)) throw new Error('endpoint taper requires a nondegenerate centerline');
+  return cumulative.map(arcDistance => {
+    const progress = arcDistance / total;
+    const endpointDistance = Math.min(progress, 1 - progress);
+    const normalizedTransition = Math.min(1, endpointDistance / config.transitionFraction);
+    const smoothstep = normalizedTransition ** 2 * (3 - 2 * normalizedTransition);
+    return config.endpointRadiusMultiplier +
+      (1 - config.endpointRadiusMultiplier) * smoothstep;
+  });
+}
+
+export function deriveEndpointTaperedPackingSource(parentSource, requestedConfig) {
+  measureMuscleCompartmentPacking(parentSource);
+  const requested = validateEndpointTaperConfig(requestedConfig);
+  const source = structuredClone(parentSource);
+  const perMuscle = [];
+  for (const muscle of source.muscles) {
+    const parentMuscle = parentSource.muscles.find(candidate => candidate.id === muscle.id);
+    if (!parentMuscle) throw new Error(`endpoint taper parent muscle missing: ${muscle.id}`);
+    const profileMultipliers = endpointTaperProfile(parentMuscle.centerline, requested);
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      knot.radius = parentMuscle.centerline[knotIndex].radius * profileMultipliers[knotIndex];
+    }
+    const taperedVolume = carrierVolume(muscle.centerline);
+    if (!(taperedVolume > 0)) throw new Error(`endpoint taper collapsed ${muscle.id} volume`);
+    const globalRadiusCompensation = Math.sqrt(muscle.targetVolume / taperedVolume);
+    for (const knot of muscle.centerline) knot.radius *= globalRadiusCompensation;
+    perMuscle.push({
+      muscleId: muscle.id,
+      requestedEndpointRadiusMultiplier: requested.endpointRadiusMultiplier,
+      globalRadiusCompensation,
+      effectiveEndpointRadiusMultiplier:
+        requested.endpointRadiusMultiplier * globalRadiusCompensation,
+      targetVolume: muscle.targetVolume,
+      effectiveVolume: carrierVolume(muscle.centerline),
+    });
+  }
+  const parentInput = structuredClone(parentSource.input.effective);
+  const effective = canonical({
+    ...requested,
+    perMuscle,
+  });
+  source.id = `${parentSource.id}--endpoint-taper-${hashJson({ parentInput, effective }).slice(0, 16)}`;
+  source.crossSectionDerivation = {
+    schema: ENDPOINT_TAPERED_PACKING_SOURCE_DERIVATION_SCHEMA,
+    parentSource: {
+      id: parentSource.id,
+      input: parentInput,
+    },
+    requested,
+    effective,
+    fallbackUsed: false,
+  };
+  delete source.input;
+  const sourceSha256 = hashJson(source);
+  source.input = {
+    requested: {
+      kind: 'endpoint-tapered-packing-source',
+      id: source.id,
+      sha256: sourceSha256,
+    },
+    effective: {
+      kind: 'endpoint-tapered-packing-source',
+      id: source.id,
+      sha256: sourceSha256,
+    },
+  };
+  measureMuscleCompartmentPacking(source);
+  return {
+    source,
+    receipt: {
+      schema: ENDPOINT_TAPERED_PACKING_SOURCE_DERIVATION_SCHEMA,
+      parentSource: {
+        id: parentSource.id,
+        input: parentInput,
+      },
+      requested,
+      effective,
+      fallbackUsed: false,
+      derivedSource: structuredClone(source.input.effective),
+    },
+  };
 }
 
 function projectObstacle(point, radius, obstacle, muscleIndex, knotIndex, amount) {
