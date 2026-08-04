@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -16,6 +17,28 @@ const fixturePath = new URL(
 const fixture = JSON.parse(await readFile(fixturePath, 'utf8'));
 const HASH_A = 'a'.repeat(64);
 const HASH_B = 'b'.repeat(64);
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  }
+  if (typeof value === 'number' && Object.is(value, -0)) return 0;
+  return value;
+}
+
+function hashJson(value) {
+  return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+}
+
+function fixturePayload(routingFixture) {
+  const {
+    fixtureSha256: ignoredFixtureIdentity,
+    schema: ignoredEnvelopeSchema,
+    ...payload
+  } = routingFixture;
+  return payload;
+}
 
 function carrierVolume(centerline) {
   let volume = 0;
@@ -36,8 +59,12 @@ function interpolate(left, right, amount) {
   return left.map((value, axis) => value + (right[axis] - value) * amount);
 }
 
-function makeCoordinateCarrier() {
-  const routes = fixture.conditions.correct.routes;
+function makeCoordinateCarrier(routingFixture = fixture, {
+  atlasId = 'cat-armature-001-complete-route-atlas-v0',
+  atlasSha256 = 'c'.repeat(64),
+  carrierId = 'm31-m47-test-coordinate-carrier-v0',
+} = {}) {
+  const routes = routingFixture.conditions.correct.routes;
   const muscles = routes.map((route, routeIndex) => {
     const centerline = [0, 1 / 3, 2 / 3, 1].map((amount, knotIndex) => ({
       position: interpolate(route.origin.point, route.insertion.point, amount).map(
@@ -74,12 +101,20 @@ function makeCoordinateCarrier() {
   });
   return {
     schema: AUTHORED_MUSCLE_PACKING_COORDINATE_CARRIER_SCHEMA,
-    id: 'm31-m47-test-coordinate-carrier-v0',
+    id: carrierId,
+    derivation: {
+      kind: 'atlas-route-subset',
+      atlas: {
+        id: atlasId,
+        sha256: atlasSha256,
+      },
+      selectedConstructionIds: routes.map(route => route.constructionId),
+    },
     source: {
-      assetSha256: fixture.source.assetSha256,
-      graphSha256: fixture.source.graphSha256,
-      graphFileSha256: fixture.source.graphFileSha256,
-      routingFixtureSha256: fixture.fixtureSha256,
+      assetSha256: routingFixture.source.assetSha256,
+      graphSha256: routingFixture.source.graphSha256,
+      graphFileSha256: routingFixture.source.graphFileSha256,
+      routingFixtureSha256: routingFixture.fixtureSha256,
     },
     coordinateSpace: {
       kind: 'source-world',
@@ -106,17 +141,54 @@ function makeCoordinateCarrier() {
   };
 }
 
-function intakeIdentity(coordinateCarrier = null) {
+function intakeIdentity(coordinateCarrier = null, routingFixture = fixture) {
   return {
     routingFixture: {
-      requested: { kind: 'track-m-routing-fixture', id: fixture.selection.id, sha256: HASH_A },
-      effective: { kind: 'track-m-routing-fixture', id: fixture.selection.id, sha256: HASH_A },
+      requested: { kind: 'track-m-routing-fixture', id: routingFixture.selection.id, sha256: HASH_A },
+      effective: { kind: 'track-m-routing-fixture', id: routingFixture.selection.id, sha256: HASH_A },
     },
     coordinateCarrier: coordinateCarrier && {
       requested: { kind: 'authored-coordinate-carrier', id: coordinateCarrier.id, sha256: HASH_B },
       effective: { kind: 'authored-coordinate-carrier', id: coordinateCarrier.id, sha256: HASH_B },
     },
   };
+}
+
+function makeAtlasRoute(index) {
+  const route = structuredClone(fixture.conditions.correct.routes[index % 2]);
+  const suffix = String(index + 1).padStart(2, '0');
+  route.constructionId = `atlas-muscle-${suffix}`;
+  route.lineageId = `atlas-lineage-${suffix}`;
+  route.instanceId = `atlas-instance-${suffix}`;
+  route.name = `Atlas Muscle ${suffix}`;
+  route.components.surfaceInstanceId = `atlas-surface-${suffix}`;
+  route.components.surfaceGeometrySha256 = hashJson(['surface', suffix]);
+  route.components.pathInstanceId = `atlas-path-${suffix}`;
+  route.components.pathGeometrySha256 = hashJson(['path', suffix]);
+  route.origin.assignedFromConstructionId = route.constructionId;
+  route.origin.assignedHandleInstanceId = `atlas-origin-${suffix}`;
+  route.origin.authoredHandleInstanceId = route.origin.assignedHandleInstanceId;
+  route.origin.point = [4 + index * 0.45, -2.5 + index * 0.08, 10 + index * 0.2];
+  route.insertion.assignedFromConstructionId = route.constructionId;
+  route.insertion.assignedHandleInstanceId = `atlas-insertion-${suffix}`;
+  route.insertion.authoredHandleInstanceId = route.insertion.assignedHandleInstanceId;
+  route.insertion.point = [5 + index * 0.5, 10.5 + index * 0.1, 21.5 + index * 0.3];
+  return route;
+}
+
+function makeSubsetFixture(atlasRoutes, selectedIndices, id) {
+  const routingFixture = structuredClone(fixture);
+  const selectedRoutes = selectedIndices.map(index => structuredClone(atlasRoutes[index]));
+  routingFixture.selection = {
+    ...routingFixture.selection,
+    id,
+    correctConstructionId: selectedRoutes[0].constructionId,
+    crossWireDonorConstructionId: selectedRoutes[1].constructionId,
+    nullConstructionIds: [],
+  };
+  routingFixture.conditions.correct.routes = selectedRoutes;
+  routingFixture.fixtureSha256 = hashJson(fixturePayload(routingFixture));
+  return routingFixture;
 }
 
 test('identity-coherent M31/M47 fixture fails loud when packing geometry is unavailable', () => {
@@ -152,6 +224,7 @@ test('identity-coherent M31/M47 fixture fails loud when packing geometry is unav
     'muscles[].attachments.insertion',
   ]);
   assert.deepEqual(receipt.missingFields, [
+    'coordinateCarrier.derivation',
     'coordinateCarrier.coordinateSpace',
     'coordinateCarrier.compartment',
     'coordinateCarrier.obstacles',
@@ -184,6 +257,7 @@ test('complete world-space carrier is admitted only when every route identity re
   assert.deepEqual(receipt.missingFields, []);
   assert.equal(receipt.packingSource.authority.kind, 'operator-authored');
   assert.equal(receipt.packingSource.authority.anatomicalAdmission, 'geometric-only');
+  assert.deepEqual(receipt.packingSource.derivation, coordinateCarrier.derivation);
   assert.equal(receipt.packingSource.muscles.length, 2);
   assert.deepEqual(
     receipt.packingSource.muscles.map(muscle => muscle.identity.constructionId),
@@ -223,6 +297,83 @@ test('requested and effective carrier identity disagreement cannot look admitted
   assert.equal(receipt.admitted, false);
   assert.equal(receipt.packingSource, null);
   assert.match(receipt.reason, /requested.*effective/i);
+});
+
+test('fixture-specific geometry cannot omit reusable atlas derivation provenance', () => {
+  const missingDerivation = makeCoordinateCarrier();
+  delete missingDerivation.derivation;
+  const missingReceipt = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: missingDerivation,
+    input: intakeIdentity(missingDerivation),
+  });
+  assert.equal(missingReceipt.status, 'geometry-invalid');
+  assert.equal(missingReceipt.admitted, false);
+  assert.match(missingReceipt.reason, /atlas.*derivation/i);
+
+  const wrongSubset = makeCoordinateCarrier();
+  wrongSubset.derivation.selectedConstructionIds = ['muscle-47', 'muscle-31'];
+  const wrongSubsetReceipt = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: wrongSubset,
+    input: intakeIdentity(wrongSubset),
+  });
+  assert.equal(wrongSubsetReceipt.status, 'source-identity-mismatch');
+  assert.equal(wrongSubsetReceipt.admitted, false);
+  assert.match(wrongSubsetReceipt.reason, /selected construction ids.*route set/i);
+});
+
+test('two arbitrary non-M31/M47 atlas subsets feed the generic intake deterministically', () => {
+  const atlasRoutes = Array.from({ length: 6 }, (_, index) => makeAtlasRoute(index));
+  const atlasId = 'synthetic-complete-route-atlas-v0';
+  const atlasSha256 = hashJson({ schema: atlasId, routes: atlasRoutes });
+  const subsetCases = [
+    { id: 'atlas-subset-two-v0', selectedIndices: [5, 1] },
+    { id: 'atlas-subset-four-v0', selectedIndices: [2, 0, 4, 3] },
+  ];
+
+  for (const subsetCase of subsetCases) {
+    const routingFixture = makeSubsetFixture(
+      atlasRoutes,
+      subsetCase.selectedIndices,
+      subsetCase.id,
+    );
+    const coordinateCarrier = makeCoordinateCarrier(routingFixture, {
+      atlasId,
+      atlasSha256,
+      carrierId: `${subsetCase.id}-coordinate-carrier`,
+    });
+    const input = intakeIdentity(coordinateCarrier, routingFixture);
+    const admitted = admitAuthoredMusclePackingIntake({
+      routingFixture,
+      coordinateCarrier,
+      input,
+    });
+
+    assert.equal(admitted.status, 'admitted');
+    assert.equal(admitted.admitted, true);
+    assert.deepEqual(admitted.packingSource.derivation, coordinateCarrier.derivation);
+    assert.deepEqual(
+      admitted.packingSource.muscles.map(muscle => muscle.identity.constructionId),
+      routingFixture.conditions.correct.routes.map(route => route.constructionId),
+    );
+    assert.deepEqual(
+      admitted.packingSource.muscles.map(muscle => muscle.attachments.origin.position),
+      routingFixture.conditions.correct.routes.map(route => route.origin.point),
+    );
+    assert.deepEqual(
+      admitAuthoredMusclePackingIntake({ routingFixture, coordinateCarrier, input }),
+      admitted,
+      `${subsetCase.id} must produce a byte-stable intake receipt`,
+    );
+    assert.doesNotThrow(() => solveMuscleCompartmentPacking(admitted.packingSource, {
+      maxIterations: 1,
+      relaxationStep: 0.01,
+      smoothnessStep: 0.001,
+      sampleCount: 5,
+      convergenceTolerance: 1e-7,
+    }));
+  }
 });
 
 test('authored geometry cannot omit the skeletal clearance witness or source-world unit', () => {

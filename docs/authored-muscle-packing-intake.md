@@ -21,6 +21,7 @@ fields:
 | Field | Contract |
 | --- | --- |
 | `id` | Stable carrier identity used as the effective packer source id. |
+| `derivation` | `{kind:"atlas-route-subset", atlas:{id,sha256}, selectedConstructionIds}`. The byte-bound parent atlas identity is mandatory, and the ordered selected ids must exactly equal the routing fixture's correct-route set. |
 | `source.assetSha256` | Exact frozen `.blend` SHA-256 from the routing fixture. |
 | `source.graphSha256` | Canonical authored source graph identity. |
 | `source.graphFileSha256` | Effective serialized source-graph byte identity. |
@@ -46,6 +47,27 @@ endpoints. The carrier adds:
 The carrier does not grant anatomical admission. Successful intake is marked
 `operator-authored` and `geometric-only`; semantic correspondence and operator
 visual/anatomical admission remain separate consumer gates.
+
+## Reusable atlas subset contract
+
+The coordinate producer emits one byte-bound complete-route atlas and derives
+fixture-specific carrier files from it. The intake does not consume or reinterpret
+the complete atlas directly. It consumes a selected carrier whose `derivation`
+preserves the parent atlas id and SHA-256 and whose ordered
+`selectedConstructionIds` exactly match the routing fixture. This prevents a
+carrier that omits atlas derivation from passing as one of its selected
+subsets. The coordinate producer's byte-bound receipt remains responsible for
+proving that the declared atlas SHA-256 names the emitted parent bytes; this
+intake preserves and compares that identity but does not reopen the `.blend` or
+recompute source-authoring truth.
+
+No muscle name, cat-specific support object, M31/M47 id, or fixed route count is
+part of the intake law. Deterministic contract coverage exercises non-M31/M47
+subsets of two and four routes drawn in different orders from one six-route atlas.
+Both subsets preserve fixed endpoints and pass the unchanged generic 3D packer.
+The only schema delta required before exporter implementation hardens is the
+explicit `derivation` provenance above; geometry, identity, obstacle,
+compartment, and solver-source fields remain unchanged.
 
 ## Receipt statuses
 
