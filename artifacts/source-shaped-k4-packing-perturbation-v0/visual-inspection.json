@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.source-shaped-muscle-packing-visual-inspection.v0",
+  "status": "completed-agent-inspection",
+  "disposition": "diagnostic-accepted-packing-rejected",
+  "observedAt": "2026-08-04T23:25:00Z",
+  "url": "http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/",
+  "route": {
+    "requested": "source-shaped-muscle-packing-preflight-orbitable-v0",
+    "effective": "source-shaped-muscle-packing-preflight-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "bindings": {
+    "primaryOutputSha256": "76f997bc14f1c555a0b9aceff0a62d770db492ca8c2df4879270e87c101bd72f",
+    "runReportSha256": "e2f5e2a5f0c8ca435099edbd32c4ae9ed0df76e7311c5080831c162c6958bdff",
+    "portfolioSha256": "bd39cc918c0d44acee8331b4fba0a103607b9bca2cc9c991d356c381d228f765"
+  },
+  "images": [
+    {
+      "condition": "baseline",
+      "state": "before",
+      "path": "baseline-before.png",
+      "sha256": "20eecec58e99a2ca1a673587f6667d444308430c18774a142f96a7bd416e993e",
+      "captureReport": "baseline-before-capture-report.json",
+      "captureReportSha256": "c17ffc1be0f0d1df90177bf0d3af140b5f310ecffe97d14a1f46996dbc88cdef"
+    },
+    {
+      "condition": "baseline",
+      "state": "packed",
+      "path": "baseline-refused.png",
+      "sha256": "a412e3e038c6c9e211c9117daa05a942c24f412df91311326f2b057e04e21dd3",
+      "captureReport": "baseline-refused-capture-report.json",
+      "captureReportSha256": "3e9f5c836c64049f6b66155d64d75ad34b368e73160c0950f7e68333fa448ab4"
+    },
+    {
+      "condition": "mild",
+      "state": "packed",
+      "path": "mild-refused.png",
+      "sha256": "66f5e5ffab92f89d842949ac45f4d9586d76d901e2354a1cb5321aed8c3678a6",
+      "captureReport": "mild-refused-capture-report.json",
+      "captureReportSha256": "f0fdcc808fd25d25e9adafc960d8b3340667a881c1b0ba5decef3aaa2f730114"
+    },
+    {
+      "condition": "moderate",
+      "state": "packed",
+      "path": "moderate-refused.png",
+      "sha256": "5e989260cd1a4a48b862701b418223d4349fb52d16546ec4b98b72367ab7f5dc",
+      "captureReport": "moderate-refused-capture-report.json",
+      "captureReportSha256": "4d95d8a2934c55e7812c140af57bba36c01ea2f0e249acfde17f9eea83725138"
+    }
+  ],
+  "evidence": {
+    "nonblank": true,
+    "sourceScaleAutoFramingLegible": true,
+    "stableMuscleIdentityLegible": true,
+    "fixedAttachmentBlockersLegible": true,
+    "unchangedPreflightRefusalLegible": true,
+    "metricsAndClaimCeilingLegible": true,
+    "installedStableChromeUsed": false,
+    "captureFallbackUsed": false
+  },
+  "judgment": {
+    "candidateFormationPlausibleAsMuscleGeometry": false,
+    "attachmentCrossSectionsPlausible": false,
+    "currentFixtureCanTestBellyAllocation": false,
+    "endpointCrossSectionAssayRequired": true
+  },
+  "notes": "All four constructions are constant-radius rods. Baseline before and refused geometry are intentionally identical because immutable preflight performs zero iterations. Red wireframes expose the exact crowded endpoint neighborhoods; mild and moderate interior perturbation cannot change them."
+}

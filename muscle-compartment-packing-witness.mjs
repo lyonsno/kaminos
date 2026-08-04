@@ -146,6 +146,15 @@ export function renderMuscleCompartmentPackingHtml({
       }];
     return `<span class="cause" data-correction-muscle="${escapeHtml(row.muscleId)}"><i class="swatch" style="background:${muscleColors[index]}"></i>${escapeHtml(row.muscleId)}</span><span>${escapeHtml(correctionLabels[dominantCategory] || dominantCategory)}</span><span class="value">${formatMetric(dominantMeasures.cumulativeAppliedKnotDisplacement)}</span>`;
   }).join('');
+  const fixedAttachmentBlockers = (result.failure?.blockingMechanisms || []).filter(
+    mechanism => mechanism.kind === 'pairwise-fixed-attachment-penetration',
+  );
+  const blockerRows = fixedAttachmentBlockers.map(mechanism => (
+    `<span data-blocking-mechanism="${escapeHtml(mechanism.kind)}">` +
+    `${escapeHtml(mechanism.left.muscleId)} ${escapeHtml(mechanism.left.attachment)} ↔ ` +
+    `${escapeHtml(mechanism.right.muscleId)} ${escapeHtml(mechanism.right.attachment)}</span>` +
+    `<span class="value">${formatMetric(mechanism.penetration)}</span>`
+  )).join('');
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -158,7 +167,7 @@ export function renderMuscleCompartmentPackingHtml({
     body { margin: 0; overflow: hidden; background: #07090d; color: #f4eee3; }
     #viewport { position: fixed; inset: 0; }
     canvas { display: block; width: 100%; height: 100%; }
-    .panel { position: fixed; z-index: 3; top: 18px; left: 18px; width: min(390px, calc(100vw - 36px)); padding: 16px 17px 15px; border: 1px solid #ffffff24; border-radius: 14px; background: #0b1017e8; box-shadow: 0 16px 60px #000a; backdrop-filter: blur(14px); }
+    .panel { position: fixed; z-index: 3; top: 18px; left: 18px; width: min(390px, calc(100vw - 36px)); max-height: calc(100vh - 36px); overflow: auto; padding: 16px 17px 15px; border: 1px solid #ffffff24; border-radius: 14px; background: #0b1017e8; box-shadow: 0 16px 60px #000a; backdrop-filter: blur(14px); }
     h1 { margin: 0 0 4px; font: 650 19px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.03em; }
     .authority { margin: 0 0 7px; color: #e5b77d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
     .solve-status { margin: -1px 0 8px; color: #ffd166; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
@@ -173,6 +182,9 @@ export function renderMuscleCompartmentPackingHtml({
     .attribution-title { margin: 13px 0 5px; color: #8e9baa; font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
     .attribution { display:grid; grid-template-columns:1.05fr 1.4fr .65fr; gap:4px 8px; color:#b9c5d1; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
     .attribution .value { text-align:right; color:#dce6f0; }
+    .blockers-title { margin: 13px 0 5px; color: #ff8b8b; font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .blockers { display:grid; grid-template-columns:1fr auto; gap:4px 10px; color:#ffc2c2; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .blockers .value { text-align:right; color:#ff8b8b; }
     .legend { display: flex; flex-wrap: wrap; gap: 7px 13px; margin-top: 13px; color: #aeb9c6; font-size: 10px; }
     .swatch { display:inline-block; width: 8px; height: 8px; margin-right:5px; border-radius:50%; }
     .hint { position: fixed; z-index:2; right:18px; bottom:16px; max-width:340px; padding:9px 12px; border-radius:9px; background:#080c12c7; color:#aeb8c4; font-size:11px; text-align:right; }
@@ -205,6 +217,7 @@ export function renderMuscleCompartmentPackingHtml({
       <span>tangent cosine</span><span class="value">${formatMetric(initial.minimumSourceTangentCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceTangentCosine)}</span>
       <span>relation cosine</span><span class="value">${formatMetric(initial.minimumPairwiseRelationCosine)}</span><span class="value packed">${formatMetric(packed.minimumPairwiseRelationCosine)}</span>
     </div>
+    ${fixedAttachmentBlockers.length > 0 ? `<p class="blockers-title">Fixed attachment blockers</p><div class="blockers">${blockerRows}</div>` : ''}
     <p class="attribution-title">Dominant algorithmic correction path · not physical force</p>
     <div class="attribution">${attributionRows}</div>
     <div class="legend">
@@ -346,6 +359,58 @@ export function renderMuscleCompartmentPackingHtml({
       addDisplacements(ghosts,muscle,payload.result.muscles[index],index);
     });
     scene.add(beforeGroup,packedGroup,ghosts);
+    const blockerGroup = new THREE.Group();
+    const blockerMaterial = new THREE.MeshBasicMaterial({ color:0xff334f, wireframe:true, transparent:true, opacity:.95, depthTest:false });
+    const endpointMarkerRadius = Math.max(
+      .01,
+      ...payload.source.muscles.flatMap(muscle => muscle.centerline.map(knot => knot.radius)),
+    ) * 1.12;
+    function attachmentPosition(ref) {
+      const muscle = payload.source.muscles.find(candidate => candidate.id === ref.muscleId);
+      return muscle?.attachments?.[ref.attachment]?.position || null;
+    }
+    for (const blocker of payload.result.failure?.blockingMechanisms || []) {
+      if (blocker.kind !== 'pairwise-fixed-attachment-penetration') continue;
+      const left = attachmentPosition(blocker.left), right = attachmentPosition(blocker.right);
+      if (!left || !right) continue;
+      for (const point of [left, right]) {
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(endpointMarkerRadius, 24, 16),
+          blockerMaterial,
+        );
+        marker.position.set(...point); marker.renderOrder = 8; blockerGroup.add(marker);
+      }
+      if (new THREE.Vector3(...left).distanceTo(new THREE.Vector3(...right)) > 1e-9) {
+        const connector = line([left, right], 0xff334f, .95);
+        connector.material.depthTest = false; connector.renderOrder = 8; blockerGroup.add(connector);
+      }
+    }
+    scene.add(blockerGroup);
+    const framingBounds = new THREE.Box3();
+    for (const muscle of payload.source.muscles) {
+      for (const knot of muscle.centerline) framingBounds.expandByPoint(new THREE.Vector3(...knot.position));
+    }
+    for (const obstacle of payload.source.obstacles) {
+      if (obstacle.kind === 'capsule') {
+        framingBounds.expandByPoint(new THREE.Vector3(...obstacle.start));
+        framingBounds.expandByPoint(new THREE.Vector3(...obstacle.end));
+      } else if (obstacle.center) framingBounds.expandByPoint(new THREE.Vector3(...obstacle.center));
+    }
+    const framingCenter = framingBounds.getCenter(new THREE.Vector3());
+    const framingSize = framingBounds.getSize(new THREE.Vector3());
+    const framingRadius = Math.max(.25, framingSize.length() * .5 + endpointMarkerRadius * 2);
+    const framingDistance = framingRadius / Math.tan(THREE.MathUtils.degToRad(camera.fov * .5)) * 1.18;
+    camera.near = Math.max(.001, framingRadius / 500);
+    camera.far = Math.max(100, framingRadius * 30);
+    camera.updateProjectionMatrix();
+    camera.position.copy(framingCenter).add(
+      new THREE.Vector3(1.05, .72, 1.1).normalize().multiplyScalar(framingDistance),
+    );
+    controls.target.copy(framingCenter);
+    controls.minDistance = framingRadius * .45;
+    controls.maxDistance = framingRadius * 10;
+    scene.fog.density = .13 / Math.max(1, framingRadius);
+    controls.update();
     function showState(state) {
       const packed = state === 'packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghosts.visible=packed;
       document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));

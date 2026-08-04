@@ -3,11 +3,13 @@ import test from 'node:test';
 
 import {
   admitMuscleCompartmentPackingVisualInspection,
+  renderMuscleCompartmentPackingHtml,
   writeMuscleCompartmentPackingWitness,
 } from '../muscle-compartment-packing-witness.mjs';
 import {
   createSyntheticFourMuscleCompartment,
   createSyntheticMuscleDensityLadder,
+  solveMuscleCompartmentPacking,
 } from '../muscle-compartment-packing-core.mjs';
 
 function memoryIo() {
@@ -74,6 +76,43 @@ function fixedAttachmentConflictSource() {
   source.muscles[1].attachments.origin.position = [...fixedOrigin];
   return source;
 }
+
+test('orbitable renderer auto-frames source-scale geometry and marks fixed-attachment blockers', () => {
+  const source = fixedAttachmentConflictSource();
+  for (const muscle of source.muscles) {
+    for (const knot of muscle.centerline) knot.position = knot.position.map(value => value + 12);
+    muscle.attachments.origin.position = [...muscle.centerline[0].position];
+    muscle.attachments.insertion.position = [...muscle.centerline.at(-1).position];
+  }
+  source.compartment.minimum = source.compartment.minimum.map(value => value + 12);
+  source.compartment.maximum = source.compartment.maximum.map(value => value + 12);
+  for (const obstacle of source.obstacles) {
+    obstacle.start = obstacle.start.map(value => value + 12);
+    obstacle.end = obstacle.end.map(value => value + 12);
+  }
+  const result = solveMuscleCompartmentPacking(source);
+  assert.equal(result.status, 'immutable-constraint-conflict');
+  const html = renderMuscleCompartmentPackingHtml({
+    source,
+    result,
+    report: {
+      route: {
+        requested: 'muscle-compartment-packing-orbitable-v0',
+        effective: 'muscle-compartment-packing-orbitable-v0',
+        fallbackUsed: false,
+      },
+    },
+    presentation: {
+      packedLabel: 'Refused unchanged source',
+      solveStatus: result.status,
+    },
+  });
+
+  assert.match(html, /data-blocking-mechanism="pairwise-fixed-attachment-penetration"/);
+  assert.match(html, /Fixed attachment blockers/);
+  assert.match(html, /const framingBounds = new THREE\.Box3\(\)/);
+  assert.match(html, /controls\.target\.copy\(framingCenter\)/);
+});
 
 test('witness publishes exact source, result, interactive route, and pending visual gate atomically', async () => {
   const memory = memoryIo();

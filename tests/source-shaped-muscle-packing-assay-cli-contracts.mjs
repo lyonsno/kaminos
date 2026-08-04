@@ -101,6 +101,10 @@ test('assay CLI records effective identity and replays byte-identical primary ou
   assert.deepEqual(secondBytes, firstBytes);
   const report = JSON.parse(await readFile(path.join(firstOutput, 'run-report.json'), 'utf8'));
   assert.equal(report.status, 'completed');
+  assert.equal(
+    report.effectiveParentAtlasPath,
+    'repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json',
+  );
   assert.deepEqual(report.requestedConstructionIds, routes);
   assert.deepEqual(report.effectiveConstructionIds, routes);
   assert.match(report.outputSha256, /^[0-9a-f]{64}$/);
@@ -116,4 +120,21 @@ test('assay CLI records effective identity and replays byte-identical primary ou
     'source-shaped-k4-provisional-environment.v0',
   );
   assert.match(report.conditions[1].assumptions.effective.sha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(report.visual.route, {
+    requested: 'source-shaped-muscle-packing-preflight-orbitable-v0',
+    effective: 'source-shaped-muscle-packing-preflight-orbitable-v0',
+    fallbackUsed: false,
+  });
+  assert.equal(report.visual.status, 'pending-agent-inspection');
+  assert.match(report.visual.portfolioSha256, /^[0-9a-f]{64}$/);
+  const portfolio = await readFile(path.join(firstOutput, 'index.html'), 'utf8');
+  assert.match(portfolio, /Current-graph K4 fixed-attachment preflight/);
+  for (const condition of report.conditions) {
+    assert.equal(condition.visual.role, 'diagnostic-not-admission');
+    assert.match(condition.visual.indexHtmlSha256, /^[0-9a-f]{64}$/);
+    const html = await readFile(path.join(firstOutput, condition.visual.relativeRoot, 'index.html'), 'utf8');
+    assert.match(html, /data-blocking-mechanism="pairwise-fixed-attachment-penetration"/);
+    assert.match(html, /const framingBounds = new THREE\.Box3\(\)/);
+    assert.match(html, /source-shaped-muscle-packing-preflight-orbitable-v0/);
+  }
 });

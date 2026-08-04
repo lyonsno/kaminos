@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Current-graph K4 · baseline · Candidate source / Refused unchanged source</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #07090d; color: #f4eee3; }
+    #viewport { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .panel { position: fixed; z-index: 3; top: 18px; left: 18px; width: min(390px, calc(100vw - 36px)); max-height: calc(100vh - 36px); overflow: auto; padding: 16px 17px 15px; border: 1px solid #ffffff24; border-radius: 14px; background: #0b1017e8; box-shadow: 0 16px 60px #000a; backdrop-filter: blur(14px); }
+    h1 { margin: 0 0 4px; font: 650 19px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.03em; }
+    .authority { margin: 0 0 7px; color: #e5b77d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .solve-status { margin: -1px 0 8px; color: #ffd166; font: 700 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .explanation { margin: 0 0 13px; color: #aeb9c6; font-size: 10px; line-height: 1.35; }
+    .controls { display: flex; gap: 8px; margin-bottom: 13px; }
+    button { flex: 1; padding: 9px 10px; border: 1px solid #ffffff24; border-radius: 9px; color: #dce6f0; background: #111923; cursor: pointer; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    button[aria-pressed="true"] { color: #081016; background: #e7d1a8; border-color: #fff1d0; }
+    .metrics { display: grid; grid-template-columns: 1.35fr .8fr .8fr; column-gap: 9px; row-gap: 5px; font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .metrics .head { color: #8e9baa; text-transform: uppercase; font-size: 9px; letter-spacing: .08em; }
+    .metrics .value { text-align: right; color: #dce6f0; }
+    .metrics .packed { color: #8ce6be; }
+    .attribution-title { margin: 13px 0 5px; color: #8e9baa; font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .attribution { display:grid; grid-template-columns:1.05fr 1.4fr .65fr; gap:4px 8px; color:#b9c5d1; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .attribution .value { text-align:right; color:#dce6f0; }
+    .blockers-title { margin: 13px 0 5px; color: #ff8b8b; font: 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+    .blockers { display:grid; grid-template-columns:1fr auto; gap:4px 10px; color:#ffc2c2; font:10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .blockers .value { text-align:right; color:#ff8b8b; }
+    .legend { display: flex; flex-wrap: wrap; gap: 7px 13px; margin-top: 13px; color: #aeb9c6; font-size: 10px; }
+    .swatch { display:inline-block; width: 8px; height: 8px; margin-right:5px; border-radius:50%; }
+    .hint { position: fixed; z-index:2; right:18px; bottom:16px; max-width:340px; padding:9px 12px; border-radius:9px; background:#080c12c7; color:#aeb8c4; font-size:11px; text-align:right; }
+    @media (max-width: 600px) { .panel { top:10px; left:10px; width:calc(100vw - 20px); padding:12px; } h1 { font-size:16px; } .hint { display:none; } }
+  </style>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+</head>
+<body>
+  <div id="viewport"></div>
+  <section class="panel" aria-label="Packing witness controls and residuals">
+    <h1>Current-graph K4 · baseline</h1>
+    <p class="authority">Experimental source-shaped candidate geometry · no anatomical admission</p>
+    <p class="solve-status">Solver disposition · immutable-constraint-conflict</p>
+    <p class="explanation">Current Packer refused this condition before iteration because 4 fixed-attachment cross-section pairs penetrate. The source and refused output are intentionally identical; red wireframes mark the blocking attachments.</p>
+    <div class="controls">
+      <button data-state="before">Candidate source</button>
+      <button data-state="packed">Refused unchanged source</button>
+    </div>
+    <div class="metrics">
+      <span class="head">residual</span><span class="head value">input</span><span class="head value">resolved</span>
+      <span>pairwise overlap</span><span class="value">5.58172</span><span class="value packed">5.58172</span>
+      <span>skeletal penetration</span><span class="value">0.86261</span><span class="value packed">0.86261</span>
+      <span>compartment escape</span><span class="value">0.00e+0</span><span class="value packed">0.00e+0</span>
+      <span>endpoint drift</span><span class="value">0.00e+0</span><span class="value packed">0.00e+0</span>
+      <span>max volume error</span><span class="value">0.00e+0</span><span class="value packed">0.00e+0</span>
+      <span>source displacement</span><span class="value">0.00e+0</span><span class="value packed">0.00e+0</span>
+      <span>source bend retention</span><span class="value">1.00000</span><span class="value packed">1.00000</span>
+      <span>max bend energy</span><span class="value">3.00e-12</span><span class="value packed">3.00e-12</span>
+      <span>curvature cosine</span><span class="value">1.00000</span><span class="value packed">1.00000</span>
+      <span>tangent cosine</span><span class="value">1.00000</span><span class="value packed">1.00000</span>
+      <span>relation cosine</span><span class="value">1.00000</span><span class="value packed">1.00000</span>
+    </div>
+    <p class="blockers-title">Fixed attachment blockers</p><div class="blockers"><span data-blocking-mechanism="pairwise-fixed-attachment-penetration">muscle-34 insertion ↔ muscle-12 insertion</span><span class="value">1.28037</span><span data-blocking-mechanism="pairwise-fixed-attachment-penetration">muscle-34 insertion ↔ muscle-45 insertion</span><span class="value">1.55508</span><span data-blocking-mechanism="pairwise-fixed-attachment-penetration">muscle-12 origin ↔ muscle-45 origin</span><span class="value">1.28412</span><span data-blocking-mechanism="pairwise-fixed-attachment-penetration">muscle-12 insertion ↔ muscle-45 insertion</span><span class="value">1.49676</span></div>
+    <p class="attribution-title">Dominant algorithmic correction path · not physical force</p>
+    <div class="attribution"><span class="cause" data-correction-muscle="muscle-34"><i class="swatch" style="background:#ff6b6b"></i>muscle-34</span><span>none</span><span class="value">0.00e+0</span><span class="cause" data-correction-muscle="muscle-13"><i class="swatch" style="background:#ffd166"></i>muscle-13</span><span>none</span><span class="value">0.00e+0</span><span class="cause" data-correction-muscle="muscle-12"><i class="swatch" style="background:#4ecdc4"></i>muscle-12</span><span>none</span><span class="value">0.00e+0</span><span class="cause" data-correction-muscle="muscle-45"><i class="swatch" style="background:#8f7cff"></i>muscle-45</span><span>none</span><span class="value">0.00e+0</span></div>
+    <div class="legend">
+      <span><i class="swatch" style="background:#ff6b6b"></i>muscle-34</span><span><i class="swatch" style="background:#ffd166"></i>muscle-13</span><span><i class="swatch" style="background:#4ecdc4"></i>muscle-12</span><span><i class="swatch" style="background:#8f7cff"></i>muscle-45</span>
+      <span><i class="swatch" style="background:#f5f1e8"></i>attachments</span>
+      <span><i class="swatch" style="background:#b9d8ef"></i>skeletal obstacle</span>
+    </div>
+  </section>
+  <div class="hint">Drag to orbit · wheel to zoom · red wireframes are exact preflight blockers</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    const payload = {"source":{"assayProvenance":{"assumptions":{"effective":{"authority":"agent-authored-provisional","compartment":{"clearance":0.0593462031473567,"id":"agent-authored-k4-data-envelope","kind":"box","maximum":[11.586311546367833,14.295522895367833,13.273248878367836],"minimum":[-1.422363248367835,-6.175986972367834,-8.135205474367835]},"compartmentDerivation":"selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin","id":"source-shaped-k4-provisional-environment.v0","obstacleDerivation":"cohort-centroid-middle-thirty-percent-capsule","obstacles":[{"authority":"agent-authored-provisional","clearance":0.0593462031473567,"end":[6.374811029192541,1.5400552383765298,5.005766562299481],"id":"agent-authored-k4-central-pressure-capsule","kind":"capsule","radius":0.1780386094420701,"start":[4.816881333826592,5.7143891565462095,0.5600337402269847]}],"sha256":"ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"},"requested":{"authority":"agent-authored-provisional","compartmentDerivation":"selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin","id":"source-shaped-k4-provisional-environment.v0","obstacleDerivation":"cohort-centroid-middle-thirty-percent-capsule"}},"claimCeiling":"qualitative-route-local-mechanical-response","compartment":{"authority":"agent-authored-provisional","derivation":"selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin"},"effectiveConstructionIds":["muscle-34","muscle-13","muscle-12","muscle-45"],"evidenceTrack":"experimental","obstacle":{"authority":"agent-authored-provisional","derivation":"cohort-centroid-middle-thirty-percent-capsule"},"parentAtlas":{"atlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","fileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","id":"coordinate-parent-atlas-3f4c65867a776edf"},"perturbation":{"crowdingFraction":0,"effective":{"crowdingFraction":0,"endpointPolicy":"fixed-measured-candidates","kind":"interior-samples-toward-cohort-centroid"},"endpointPolicy":"fixed-measured-candidates","id":"baseline","kind":"interior-samples-toward-cohort-centroid","requested":{"crowdingFraction":0,"endpointPolicy":"fixed-measured-candidates","kind":"interior-samples-toward-cohort-centroid"}},"requestedConstructionIds":["muscle-34","muscle-13","muscle-12","muscle-45"]},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"compartment":{"clearance":0.0593462031473567,"id":"agent-authored-k4-data-envelope","kind":"box","maximum":[11.586311546367833,14.295522895367833,13.273248878367836],"minimum":[-1.422363248367835,-6.175986972367834,-8.135205474367835]},"dimension":3,"id":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","input":{"effective":{"id":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","kind":"synthetic-fixture","sha256":"2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"},"requested":{"id":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","kind":"synthetic-fixture","sha256":"2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"}},"muscles":[{"attachments":{"insertion":{"id":"instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7","position":[8.319665909,-2.78211689,8.736489296],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c","position":[4.189600945,8.059602737,-5.167895317],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":0,"sourcePathSha256":"bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6","targetVolumeState":"candidate"},"centerline":[{"position":[4.189600945,8.059602737,-5.167895317],"radius":1.0608537969135066},{"position":[4.533772966134325,7.156125966520925,-4.009196686848691],"radius":1.0608537969135066},{"position":[4.877944946539117,6.252649305584783,-2.850497959184999],"radius":1.0608537969135066},{"position":[5.222117379132663,5.349172709779884,-1.6917993150513546],"radius":1.0608537969135066},{"position":[5.566289435000541,4.44569632774781,-0.5331003923318636],"radius":1.0608537969135066},{"position":[5.910461436244092,3.5422196121084717,0.6255982864880807],"radius":1.0608537969135066},{"position":[6.254633427155846,2.638742923590894,1.7842969895246739],"radius":1.0608537969135066},{"position":[6.598805423634213,1.735266339460525,2.942995772301998],"radius":1.0608537969135066},{"position":[6.942977411147117,0.8317897162401082,4.101694527262536],"radius":1.0608537969135066},{"position":[7.287149441421989,-0.07168701560858208,5.260393184820156],"radius":1.0608537969135066},{"position":[7.631321923749087,-0.9751636829676339,6.419091758388019],"radius":1.0608537969135066},{"position":[7.975493870669011,-1.8786401960035541,7.577790611320626],"radius":1.0608537969135066},{"position":[8.319665909,-2.78211689,8.736489296],"radius":1.0608537969135066}],"id":"muscle-34","identity":{"constructionId":"muscle-34","instanceId":"instance-dfa1e302-587f-4a02-813d-e18b63e1b78d","lineageId":"lineage-452338f8-5611-49e9-913f-d5b62c921b1e","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-34"},"targetVolume":64.02550251,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-76120608-af3c-4aaa-bff2-720daca75154","position":[6.266059875,-2.056589127,10.305938721],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-4b9bc3a6-077d-4209-b940-429804d4944c","position":[1.544946909,9.841607094,-2.553966284],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":1,"sourcePathSha256":"56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843","targetVolumeState":"candidate"},"centerline":[{"position":[1.544946909,9.841607094,-2.553966284],"radius":1.0638253479258508},{"position":[1.9383730156355294,8.850090865988937,-1.4823074286927833],"radius":1.0638253479258508},{"position":[2.3317990455004756,7.858574350935542,-0.41064881077802584],"radius":1.0638253479258508},{"position":[2.725224954275755,6.867057844668868,0.6610098597206651],"radius":1.0638253479258508},{"position":[3.1186511720394186,5.875541636496451,1.7326686925856618],"radius":1.0638253479258508},{"position":[3.512077107359112,4.884025060812062,2.804327289112963],"radius":1.0638253479258508},{"position":[3.905503303178272,3.892508907944407,3.8759861812030687],"radius":1.0638253479258508},{"position":[4.298929279104737,2.9009924679222925,4.947644888339812],"radius":1.0638253479258508},{"position":[4.692355612892896,1.909476330674008,6.019303744230077],"radius":1.0638253479258508},{"position":[5.085781589174454,0.9179598907571769,7.090962451333932],"radius":1.0638253479258508},{"position":[5.479207478255311,-0.07355632787542188,8.16262139518665],"radius":1.0638253479258508},{"position":[5.872633986851445,-1.0650729081967873,9.234279776962879],"radius":1.0638253479258508},{"position":[6.266059875,-2.056589127,10.305938721],"radius":1.0638253479258508}],"id":"muscle-13","identity":{"constructionId":"muscle-13","instanceId":"instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1","lineageId":"lineage-128e590e-d1ca-4373-a030-c619c0ee277f","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-13"},"targetVolume":64.512268168,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9","position":[8.526236534,-2.489732265,9.570702553],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-464ae250-e41f-43fe-ae07-c99ecd39a7af","position":[3.534674406,10.325469971,-3.888942957],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":2,"sourcePathSha256":"28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861","targetVolumeState":"candidate"},"centerline":[{"position":[3.534674406,10.325469971,-3.888942957],"radius":1.1273018439469191},{"position":[3.9506381256544634,9.25753670917098,-2.767305663178186],"radius":1.1273018439469191},{"position":[4.36660143617586,8.18960293113717,-1.6456687091167312],"radius":1.1273018439469191},{"position":[4.782565073431964,7.121669403855293,-0.5240316374801459],"radius":1.1273018439469191},{"position":[5.19852869997509,6.053735905077779,0.5976054652689633],"radius":1.1273018439469191},{"position":[5.614491881794207,4.98580232343618,1.7192426540491406],"radius":1.1273018439469191},{"position":[6.0304555594031575,3.917868928986201,2.840879837192637],"radius":1.1273018439469191},{"position":[6.446419196659252,2.84993540170434,3.962516908829232],"radius":1.1273018439469191},{"position":[6.8623824097390385,1.7820018588047346,5.0841541229033576],"radius":1.1273018439469191},{"position":[7.278346003987788,0.7140684429391182,6.205791316571095],"radius":1.1273018439469191},{"position":[7.694309688673687,-0.3538651786801087,7.327428280797629],"radius":1.1273018439469191},{"position":[8.110273384838322,-1.421798767202057,8.44906527227976],"radius":1.1273018439469191},{"position":[8.526236534,-2.489732265,9.570702553],"radius":1.1273018439469191}],"id":"muscle-12","identity":{"constructionId":"muscle-12","instanceId":"instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10","lineageId":"lineage-27e2fbb3-3732-4933-8793-1bd61236401c","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-12"},"targetVolume":76.826555301,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-62e9f81d-8282-42b1-8514-bde02ff698e1","position":[8.619001389,-3.208676815,9.192866325],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d","position":[3.766583204,11.328212738,-3.9319911],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":3,"sourcePathSha256":"11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a","targetVolumeState":"candidate"},"centerline":[{"position":[3.766583204,11.328212738,-3.9319911],"radius":1.186924062947134},{"position":[4.170951339030872,10.116805157794325,-2.838253093946344],"radius":1.186924062947134},{"position":[4.575319680450884,8.905397674284218,-1.7445150570986199],"radius":1.186924062947134},{"position":[4.979687673891189,7.693990282254728,-0.6507767902761215],"radius":1.186924062947134},{"position":[5.384056028291318,6.482582756862795,0.4429611953851773],"radius":1.186924062947134},{"position":[5.7884240078093505,5.271175406541798,1.5366995135506387],"radius":1.186924062947134},{"position":[6.1927923676881464,4.059767867732745,2.63043748232581],"radius":1.186924062947134},{"position":[6.597160768190308,2.8483604432283123,3.72417556268406],"radius":1.186924062947134},{"position":[7.001528682991114,1.6369530477872685,4.817913854801954],"radius":1.186924062947134},{"position":[7.405897074039865,0.425545594599285,5.911651906885748],"radius":1.186924062947134},{"position":[7.810265025128918,-0.7858619125499553,7.005390061861216],"radius":1.186924062947134},{"position":[8.214633062173144,-1.997269614207529,8.09912796962358],"radius":1.186924062947134},{"position":[8.619001389,-3.208676815,9.192866325],"radius":1.186924062947134}],"id":"muscle-45","identity":{"constructionId":"muscle-45","instanceId":"instance-a4b690df-3a8d-4ccb-be89-3550af103e0e","lineageId":"lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-45"},"targetVolume":89.302118638,"volumeAuthority":"measured-candidate-not-admitted"}],"obstacles":[{"authority":"agent-authored-provisional","clearance":0.0593462031473567,"end":[6.374811029192541,1.5400552383765298,5.005766562299481],"id":"agent-authored-k4-central-pressure-capsule","kind":"capsule","radius":0.1780386094420701,"start":[4.816881333826592,5.7143891565462095,0.5600337402269847]}],"schema":"kaminos.muscle-compartment-packing-source.v0"},"result":{"clearanceValidation":{"centerlineDistance":"nested-convex-golden-section","kind":"conservative-continuous-piecewise-linear","sampledSupplementCount":25,"segmentRadiusBound":"linear-taper-with-lipschitz-search-bound"},"clusterProjection":{"effectiveUpdate":"unconstrained","fallbackUsed":false,"requestedUpdate":"unconstrained"},"compartment":{"clearance":0.0593462031473567,"id":"agent-authored-k4-data-envelope","kind":"box","maximum":[11.586311546367833,14.295522895367833,13.273248878367836],"minimum":[-1.422363248367835,-6.175986972367834,-8.135205474367835]},"config":{"convergenceTolerance":1e-7,"maxIterations":640,"maximumSourceBendEnergyRatio":1.05,"minimumSourceCurvatureCosine":0.3,"minimumSourceTangentCosine":0,"relaxationStep":0.18,"sampleCount":25,"smoothnessStep":0.035},"correctionAttribution":{"aggregation":"sum-of-primitive-applied-deltas","byMuscle":[{"corrections":{"compartmentProjection":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"formationConstraint":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"pairwiseExclusion":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"skeletalClearance":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"sourceSmoothing":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"volumeRestoration":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0}},"muscleId":"muscle-34"},{"corrections":{"compartmentProjection":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"formationConstraint":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"pairwiseExclusion":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"skeletalClearance":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"sourceSmoothing":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"volumeRestoration":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0}},"muscleId":"muscle-13"},{"corrections":{"compartmentProjection":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"formationConstraint":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"pairwiseExclusion":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"skeletalClearance":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"sourceSmoothing":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"volumeRestoration":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0}},"muscleId":"muscle-12"},{"corrections":{"compartmentProjection":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"formationConstraint":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"pairwiseExclusion":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"skeletalClearance":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"sourceSmoothing":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"volumeRestoration":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0}},"muscleId":"muscle-45"}],"categories":["sourceSmoothing","formationConstraint","skeletalClearance","pairwiseExclusion","compartmentProjection","volumeRestoration"],"interpretation":"algorithmic-projection-path-length-not-physical-force","schema":"kaminos.muscle-compartment-packing-correction-attribution.v0","totals":{"compartmentProjection":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"formationConstraint":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"pairwiseExclusion":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"skeletalClearance":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"sourceSmoothing":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0},"volumeRestoration":{"appliedPrimitiveCount":0,"cumulativeAppliedKnotDisplacement":0,"cumulativeAppliedRadiusChange":0}}},"crossSectionProjection":{"effectiveStep":null,"effectiveUpdate":"uniform","fallbackUsed":false,"requestedStep":null,"requestedUpdate":"uniform"},"curvatureProjection":{"effectiveUpdate":"unconstrained","fallbackUsed":false,"requestedUpdate":"unconstrained"},"dimension":3,"failure":{"blockingMechanisms":[{"kind":"pairwise-fixed-attachment-penetration","left":{"attachment":"insertion","attachmentId":"instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7","muscleId":"muscle-34"},"penetration":1.280371552983,"right":{"attachment":"insertion","attachmentId":"instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9","muscleId":"muscle-12"}},{"kind":"pairwise-fixed-attachment-penetration","left":{"attachment":"insertion","attachmentId":"instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7","muscleId":"muscle-34"},"penetration":1.555076559298,"right":{"attachment":"insertion","attachmentId":"instance-62e9f81d-8282-42b1-8514-bde02ff698e1","muscleId":"muscle-45"}},{"kind":"pairwise-fixed-attachment-penetration","left":{"attachment":"origin","attachmentId":"instance-464ae250-e41f-43fe-ae07-c99ecd39a7af","muscleId":"muscle-12"},"penetration":1.284115286632,"right":{"attachment":"origin","attachmentId":"instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d","muscleId":"muscle-45"}},{"kind":"pairwise-fixed-attachment-penetration","left":{"attachment":"insertion","attachmentId":"instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9","muscleId":"muscle-12"},"penetration":1.496762268873,"right":{"attachment":"insertion","attachmentId":"instance-62e9f81d-8282-42b1-8514-bde02ff698e1","muscleId":"muscle-45"}}],"kind":"immutable-constraint-conflict","phase":"preflight","sourceId":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0"},"formation":{"effectiveCenterlineSmoothingReference":"absolute-position","fallbackUsed":false,"requestedCenterlineSmoothingReference":"absolute-position"},"input":{"effective":{"id":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","kind":"synthetic-fixture","sha256":"2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"},"requested":{"id":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","kind":"synthetic-fixture","sha256":"2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"}},"iterationHistory":[],"iterations":0,"metrics":{"initial":{"compartmentEscape":0,"endpointDrift":0,"maximumBendEnergy":3e-12,"maximumRelativeVolumeError":0,"maximumSourceKnotDisplacement":0,"maximumSourceRadiusRatio":1,"minimumPairwiseRelationCosine":1,"minimumSourceBendEnergyRetention":1,"minimumSourceCurvatureCosine":1,"minimumSourceTangentCosine":1,"nonFiniteValueCount":0,"nonPositiveRadiusCount":0,"pairwisePenetration":5.581723846788,"pairwiseRelationReversalCount":0,"rootMeanSquareSourceKnotDisplacement":0,"skeletalPenetration":0.862611751278,"sourceCurvatureReversalCount":0,"sourceTangentReversalCount":0},"packed":{"compartmentEscape":0,"endpointDrift":0,"maximumBendEnergy":3e-12,"maximumRelativeVolumeError":0,"maximumSourceKnotDisplacement":0,"maximumSourceRadiusRatio":1,"minimumPairwiseRelationCosine":1,"minimumSourceBendEnergyRetention":1,"minimumSourceCurvatureCosine":1,"minimumSourceTangentCosine":1,"nonFiniteValueCount":0,"nonPositiveRadiusCount":0,"pairwisePenetration":5.581723846788,"pairwiseRelationReversalCount":0,"rootMeanSquareSourceKnotDisplacement":0,"skeletalPenetration":0.862611751278,"sourceCurvatureReversalCount":0,"sourceTangentReversalCount":0}},"muscles":[{"attachments":{"insertion":{"id":"instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7","position":[8.319665909,-2.78211689,8.736489296],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c","position":[4.189600945,8.059602737,-5.167895317],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":0,"sourcePathSha256":"bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6","targetVolumeState":"candidate"},"centerline":[{"position":[4.189600945,8.059602737,-5.167895317],"radius":1.0608537969135066},{"position":[4.533772966134325,7.156125966520925,-4.009196686848691],"radius":1.0608537969135066},{"position":[4.877944946539117,6.252649305584783,-2.850497959184999],"radius":1.0608537969135066},{"position":[5.222117379132663,5.349172709779884,-1.6917993150513546],"radius":1.0608537969135066},{"position":[5.566289435000541,4.44569632774781,-0.5331003923318636],"radius":1.0608537969135066},{"position":[5.910461436244092,3.5422196121084717,0.6255982864880807],"radius":1.0608537969135066},{"position":[6.254633427155846,2.638742923590894,1.7842969895246739],"radius":1.0608537969135066},{"position":[6.598805423634213,1.735266339460525,2.942995772301998],"radius":1.0608537969135066},{"position":[6.942977411147117,0.8317897162401082,4.101694527262536],"radius":1.0608537969135066},{"position":[7.287149441421989,-0.07168701560858208,5.260393184820156],"radius":1.0608537969135066},{"position":[7.631321923749087,-0.9751636829676339,6.419091758388019],"radius":1.0608537969135066},{"position":[7.975493870669011,-1.8786401960035541,7.577790611320626],"radius":1.0608537969135066},{"position":[8.319665909,-2.78211689,8.736489296],"radius":1.0608537969135066}],"id":"muscle-34","identity":{"constructionId":"muscle-34","instanceId":"instance-dfa1e302-587f-4a02-813d-e18b63e1b78d","lineageId":"lineage-452338f8-5611-49e9-913f-d5b62c921b1e","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-34"},"realizedVolume":64.02550251,"targetVolume":64.02550251,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-76120608-af3c-4aaa-bff2-720daca75154","position":[6.266059875,-2.056589127,10.305938721],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-4b9bc3a6-077d-4209-b940-429804d4944c","position":[1.544946909,9.841607094,-2.553966284],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":1,"sourcePathSha256":"56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843","targetVolumeState":"candidate"},"centerline":[{"position":[1.544946909,9.841607094,-2.553966284],"radius":1.0638253479258508},{"position":[1.9383730156355294,8.850090865988937,-1.4823074286927833],"radius":1.0638253479258508},{"position":[2.3317990455004756,7.858574350935542,-0.41064881077802584],"radius":1.0638253479258508},{"position":[2.725224954275755,6.867057844668868,0.6610098597206651],"radius":1.0638253479258508},{"position":[3.1186511720394186,5.875541636496451,1.7326686925856618],"radius":1.0638253479258508},{"position":[3.512077107359112,4.884025060812062,2.804327289112963],"radius":1.0638253479258508},{"position":[3.905503303178272,3.892508907944407,3.8759861812030687],"radius":1.0638253479258508},{"position":[4.298929279104737,2.9009924679222925,4.947644888339812],"radius":1.0638253479258508},{"position":[4.692355612892896,1.909476330674008,6.019303744230077],"radius":1.0638253479258508},{"position":[5.085781589174454,0.9179598907571769,7.090962451333932],"radius":1.0638253479258508},{"position":[5.479207478255311,-0.07355632787542188,8.16262139518665],"radius":1.0638253479258508},{"position":[5.872633986851445,-1.0650729081967873,9.234279776962879],"radius":1.0638253479258508},{"position":[6.266059875,-2.056589127,10.305938721],"radius":1.0638253479258508}],"id":"muscle-13","identity":{"constructionId":"muscle-13","instanceId":"instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1","lineageId":"lineage-128e590e-d1ca-4373-a030-c619c0ee277f","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-13"},"realizedVolume":64.512268168,"targetVolume":64.512268168,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9","position":[8.526236534,-2.489732265,9.570702553],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-464ae250-e41f-43fe-ae07-c99ecd39a7af","position":[3.534674406,10.325469971,-3.888942957],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":2,"sourcePathSha256":"28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861","targetVolumeState":"candidate"},"centerline":[{"position":[3.534674406,10.325469971,-3.888942957],"radius":1.1273018439469191},{"position":[3.9506381256544634,9.25753670917098,-2.767305663178186],"radius":1.1273018439469191},{"position":[4.36660143617586,8.18960293113717,-1.6456687091167312],"radius":1.1273018439469191},{"position":[4.782565073431964,7.121669403855293,-0.5240316374801459],"radius":1.1273018439469191},{"position":[5.19852869997509,6.053735905077779,0.5976054652689633],"radius":1.1273018439469191},{"position":[5.614491881794207,4.98580232343618,1.7192426540491406],"radius":1.1273018439469191},{"position":[6.0304555594031575,3.917868928986201,2.840879837192637],"radius":1.1273018439469191},{"position":[6.446419196659252,2.84993540170434,3.962516908829232],"radius":1.1273018439469191},{"position":[6.8623824097390385,1.7820018588047346,5.0841541229033576],"radius":1.1273018439469191},{"position":[7.278346003987788,0.7140684429391182,6.205791316571095],"radius":1.1273018439469191},{"position":[7.694309688673687,-0.3538651786801087,7.327428280797629],"radius":1.1273018439469191},{"position":[8.110273384838322,-1.421798767202057,8.44906527227976],"radius":1.1273018439469191},{"position":[8.526236534,-2.489732265,9.570702553],"radius":1.1273018439469191}],"id":"muscle-12","identity":{"constructionId":"muscle-12","instanceId":"instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10","lineageId":"lineage-27e2fbb3-3732-4933-8793-1bd61236401c","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-12"},"realizedVolume":76.826555301,"targetVolume":76.826555301,"volumeAuthority":"measured-candidate-not-admitted"},{"attachments":{"insertion":{"id":"instance-62e9f81d-8282-42b1-8514-bde02ff698e1","position":[8.619001389,-3.208676815,9.192866325],"sourceAuthority":"measured-candidate-not-admitted"},"origin":{"id":"instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d","position":[3.766583204,11.328212738,-3.9319911],"sourceAuthority":"measured-candidate-not-admitted"}},"authority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"candidateEvidence":{"centerlineState":"candidate","parentAtlasFileSha256":"55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71","parentAtlasId":"coordinate-parent-atlas-3f4c65867a776edf","parentAtlasSha256":"a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8","routeIndex":3,"sourcePathSha256":"11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a","targetVolumeState":"candidate"},"centerline":[{"position":[3.766583204,11.328212738,-3.9319911],"radius":1.186924062947134},{"position":[4.170951339030872,10.116805157794325,-2.838253093946344],"radius":1.186924062947134},{"position":[4.575319680450884,8.905397674284218,-1.7445150570986199],"radius":1.186924062947134},{"position":[4.979687673891189,7.693990282254728,-0.6507767902761215],"radius":1.186924062947134},{"position":[5.384056028291318,6.482582756862795,0.4429611953851773],"radius":1.186924062947134},{"position":[5.7884240078093505,5.271175406541798,1.5366995135506387],"radius":1.186924062947134},{"position":[6.1927923676881464,4.059767867732745,2.63043748232581],"radius":1.186924062947134},{"position":[6.597160768190308,2.8483604432283123,3.72417556268406],"radius":1.186924062947134},{"position":[7.001528682991114,1.6369530477872685,4.817913854801954],"radius":1.186924062947134},{"position":[7.405897074039865,0.425545594599285,5.911651906885748],"radius":1.186924062947134},{"position":[7.810265025128918,-0.7858619125499553,7.005390061861216],"radius":1.186924062947134},{"position":[8.214633062173144,-1.997269614207529,8.09912796962358],"radius":1.186924062947134},{"position":[8.619001389,-3.208676815,9.192866325],"radius":1.186924062947134}],"id":"muscle-45","identity":{"constructionId":"muscle-45","instanceId":"instance-a4b690df-3a8d-4ccb-be89-3550af103e0e","lineageId":"lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65","sourceId":"a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-45"},"realizedVolume":89.302118638,"targetVolume":89.302118638,"volumeAuthority":"measured-candidate-not-admitted"}],"obstacles":[{"authority":"agent-authored-provisional","clearance":0.0593462031473567,"end":[6.374811029192541,1.5400552383765298,5.005766562299481],"id":"agent-authored-k4-central-pressure-capsule","kind":"capsule","radius":0.1780386094420701,"start":[4.816881333826592,5.7143891565462095,0.5600337402269847]}],"pairwiseCoordinate":{"effective":"cartesian","fallbackUsed":false,"requested":"cartesian"},"pairwiseProjection":{"effectiveUpdate":"sequential","fallbackUsed":false,"requestedUpdate":"sequential"},"schema":"kaminos.muscle-compartment-packing-result.v0","sourceAuthority":{"anatomicalAdmission":"none","kind":"synthetic-proxy"},"sourceId":"source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0","sourceSchema":"kaminos.muscle-compartment-packing-source.v0","status":"immutable-constraint-conflict"},"route":{"requested":"source-shaped-muscle-packing-preflight-orbitable-v0","effective":"source-shaped-muscle-packing-preflight-orbitable-v0","fallbackUsed":false}};
+    const colors = [0xff6b6b, 0xffd166, 0x4ecdc4, 0x8f7cff, 0x63a4ff, 0xff8fab, 0x72efdd, 0xf4a261];
+    const viewport = document.querySelector('#viewport');
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, preserveDrawingBuffer:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.setClearColor(0x07090d, 1);
+    viewport.append(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x07090d, .13);
+    const camera = new THREE.PerspectiveCamera(38, 1, .01, 100);
+    camera.position.set(3.35, 2.3, 3.45);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 0, 0); controls.enableDamping = true; controls.dampingFactor = .08;
+    controls.minDistance = 2.1; controls.maxDistance = 8;
+    scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x22150f, 2.1));
+    const key = new THREE.DirectionalLight(0xffead1, 4.2); key.position.set(3, 4, 2); scene.add(key);
+    const rim = new THREE.DirectionalLight(0x6e8fff, 2.4); rim.position.set(-3, 1, -4); scene.add(rim);
+
+    function material(color, opacity=1) {
+      return new THREE.MeshPhysicalMaterial({ color, roughness:.39, metalness:.02, clearcoat:.22, transparent:opacity < 1, opacity, depthWrite:opacity >= 1 });
+    }
+    function capsuleBetween(a, b, radius, mat) {
+      const start = new THREE.Vector3(...a), end = new THREE.Vector3(...b);
+      const delta = end.clone().sub(start), length = delta.length();
+      const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, Math.max(.001, length - radius * 2), 8, 18), mat);
+      mesh.position.copy(start).add(end).multiplyScalar(.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), delta.normalize());
+      return mesh;
+    }
+    function line(points, color, opacity=1) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points.map(point => new THREE.Vector3(...point)));
+      return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent:opacity < 1, opacity }));
+    }
+    function carrierSurface(centerline, mat) {
+      const radialSegments = 20;
+      const vertices = [];
+      const indices = [];
+      let previousNormal = null;
+      for (let knotIndex = 0; knotIndex < centerline.length; knotIndex++) {
+        const knot = centerline[knotIndex];
+        const position = new THREE.Vector3(...knot.position);
+        const previous = new THREE.Vector3(...centerline[Math.max(0, knotIndex - 1)].position);
+        const next = new THREE.Vector3(...centerline[Math.min(centerline.length - 1, knotIndex + 1)].position);
+        const tangent = next.sub(previous).normalize();
+        const reference = Math.abs(tangent.y) < .9
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(1, 0, 0);
+        const normal = new THREE.Vector3().crossVectors(tangent, reference).normalize();
+        if (previousNormal && normal.dot(previousNormal) < 0) normal.multiplyScalar(-1);
+        const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
+        previousNormal = normal.clone();
+        for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+          const angle = radialIndex / radialSegments * Math.PI * 2;
+          const vertex = position.clone()
+            .addScaledVector(normal, Math.cos(angle) * knot.radius)
+            .addScaledVector(binormal, Math.sin(angle) * knot.radius);
+          vertices.push(vertex.x, vertex.y, vertex.z);
+        }
+      }
+      for (let knotIndex = 0; knotIndex < centerline.length - 1; knotIndex++) {
+        for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+          const nextRadial = (radialIndex + 1) % radialSegments;
+          const left = knotIndex * radialSegments + radialIndex;
+          const leftNext = knotIndex * radialSegments + nextRadial;
+          const right = (knotIndex + 1) * radialSegments + radialIndex;
+          const rightNext = (knotIndex + 1) * radialSegments + nextRadial;
+          indices.push(left, right, leftNext, leftNext, right, rightNext);
+        }
+      }
+      const startCapCenter = vertices.length / 3;
+      vertices.push(...centerline[0].position);
+      const endCapCenter = vertices.length / 3;
+      vertices.push(...centerline.at(-1).position);
+      const endRing = (centerline.length - 1) * radialSegments;
+      for (let radialIndex = 0; radialIndex < radialSegments; radialIndex++) {
+        const nextRadial = (radialIndex + 1) % radialSegments;
+        indices.push(startCapCenter, radialIndex, nextRadial);
+        indices.push(endCapCenter, endRing + radialIndex, endRing + nextRadial);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return new THREE.Mesh(geometry, mat);
+    }
+    function addMuscle(group, muscle, index, opacity=1) {
+      const mat = material(colors[index], opacity);
+      group.add(carrierSurface(muscle.centerline, mat));
+      group.add(line(muscle.centerline.map(k => k.position), 0xffffff, opacity * .72));
+      for (const endpoint of [muscle.centerline[0], muscle.centerline.at(-1)]) {
+        const handle = new THREE.Mesh(new THREE.SphereGeometry(.035, 16, 12), material(0xf5f1e8, opacity));
+        handle.position.set(...endpoint.position); group.add(handle);
+      }
+    }
+    function addDisplacements(group, before, packed, index) {
+      for (let i=1; i<before.centerline.length-1; i++) {
+        const a=before.centerline[i].position, b=packed.centerline[i].position;
+        group.add(line([a,b], colors[index], .82));
+        const marker=new THREE.Mesh(new THREE.SphereGeometry(.018,10,8), material(colors[index],.9)); marker.position.set(...b); group.add(marker);
+      }
+    }
+    const compartment = payload.source.compartment;
+    const size = compartment.maximum.map((v,i)=>v-compartment.minimum[i]);
+    const center = compartment.maximum.map((v,i)=>(v+compartment.minimum[i])/2);
+    const boxEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)),
+      new THREE.LineDashedMaterial({ color:0x86a6c8, transparent:true, opacity:.28, dashSize:.05, gapSize:.035 }),
+    ); boxEdges.computeLineDistances(); boxEdges.position.set(...center); scene.add(boxEdges);
+    for (const obstacle of payload.source.obstacles) {
+      if (obstacle.kind === 'capsule') {
+        scene.add(capsuleBetween(obstacle.start, obstacle.end, obstacle.radius, material(0xcdd6df,.94)));
+        const xrayMaterial = new THREE.MeshBasicMaterial({ color:0xb9d8ef, wireframe:true, transparent:true, opacity:.32, depthTest:false });
+        const xray = capsuleBetween(obstacle.start, obstacle.end, obstacle.radius * 1.015, xrayMaterial);
+        xray.renderOrder = 5;
+        scene.add(xray);
+      }
+      else { const sphere=new THREE.Mesh(new THREE.SphereGeometry(obstacle.radius,28,20),material(0xcdd6df,.94)); sphere.position.set(...obstacle.center); scene.add(sphere); }
+    }
+    const beforeGroup = new THREE.Group(), packedGroup = new THREE.Group(), ghosts = new THREE.Group();
+    payload.source.muscles.forEach((muscle,index)=>addMuscle(beforeGroup,muscle,index,1));
+    payload.result.muscles.forEach((muscle,index)=>addMuscle(packedGroup,muscle,index,1));
+    payload.source.muscles.forEach((muscle,index)=>{
+      ghosts.add(line(muscle.centerline.map(k=>k.position),colors[index],.22));
+      addDisplacements(ghosts,muscle,payload.result.muscles[index],index);
+    });
+    scene.add(beforeGroup,packedGroup,ghosts);
+    const blockerGroup = new THREE.Group();
+    const blockerMaterial = new THREE.MeshBasicMaterial({ color:0xff334f, wireframe:true, transparent:true, opacity:.95, depthTest:false });
+    const endpointMarkerRadius = Math.max(
+      .01,
+      ...payload.source.muscles.flatMap(muscle => muscle.centerline.map(knot => knot.radius)),
+    ) * 1.12;
+    function attachmentPosition(ref) {
+      const muscle = payload.source.muscles.find(candidate => candidate.id === ref.muscleId);
+      return muscle?.attachments?.[ref.attachment]?.position || null;
+    }
+    for (const blocker of payload.result.failure?.blockingMechanisms || []) {
+      if (blocker.kind !== 'pairwise-fixed-attachment-penetration') continue;
+      const left = attachmentPosition(blocker.left), right = attachmentPosition(blocker.right);
+      if (!left || !right) continue;
+      for (const point of [left, right]) {
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(endpointMarkerRadius, 24, 16),
+          blockerMaterial,
+        );
+        marker.position.set(...point); marker.renderOrder = 8; blockerGroup.add(marker);
+      }
+      if (new THREE.Vector3(...left).distanceTo(new THREE.Vector3(...right)) > 1e-9) {
+        const connector = line([left, right], 0xff334f, .95);
+        connector.material.depthTest = false; connector.renderOrder = 8; blockerGroup.add(connector);
+      }
+    }
+    scene.add(blockerGroup);
+    const framingBounds = new THREE.Box3();
+    for (const muscle of payload.source.muscles) {
+      for (const knot of muscle.centerline) framingBounds.expandByPoint(new THREE.Vector3(...knot.position));
+    }
+    for (const obstacle of payload.source.obstacles) {
+      if (obstacle.kind === 'capsule') {
+        framingBounds.expandByPoint(new THREE.Vector3(...obstacle.start));
+        framingBounds.expandByPoint(new THREE.Vector3(...obstacle.end));
+      } else if (obstacle.center) framingBounds.expandByPoint(new THREE.Vector3(...obstacle.center));
+    }
+    const framingCenter = framingBounds.getCenter(new THREE.Vector3());
+    const framingSize = framingBounds.getSize(new THREE.Vector3());
+    const framingRadius = Math.max(.25, framingSize.length() * .5 + endpointMarkerRadius * 2);
+    const framingDistance = framingRadius / Math.tan(THREE.MathUtils.degToRad(camera.fov * .5)) * 1.18;
+    camera.near = Math.max(.001, framingRadius / 500);
+    camera.far = Math.max(100, framingRadius * 30);
+    camera.updateProjectionMatrix();
+    camera.position.copy(framingCenter).add(
+      new THREE.Vector3(1.05, .72, 1.1).normalize().multiplyScalar(framingDistance),
+    );
+    controls.target.copy(framingCenter);
+    controls.minDistance = framingRadius * .45;
+    controls.maxDistance = framingRadius * 10;
+    scene.fog.density = .13 / Math.max(1, framingRadius);
+    controls.update();
+    function showState(state) {
+      const packed = state === 'packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghosts.visible=packed;
+      document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));
+      document.documentElement.dataset.witnessState=state;
+    }
+    document.querySelectorAll('[data-state]').forEach(button=>button.addEventListener('click',()=>showState(button.dataset.state)));
+    function resize(){const w=Math.max(1,viewport.clientWidth),h=Math.max(1,viewport.clientHeight);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+    new ResizeObserver(resize).observe(viewport); resize();
+    const requested = new URLSearchParams(location.search).get('state'); showState(requested === 'before' ? 'before' : 'packed');
+    renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
+    document.documentElement.dataset.witnessLoaded='true';
+    document.documentElement.dataset.witnessRoute=payload.route.effective;
+  </script>
+</body>
+</html>

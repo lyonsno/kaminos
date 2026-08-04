@@ -99,7 +99,7 @@ test('source-shaped K4 ladder preserves measured identity while declaring every 
   }
 });
 
-test('ordered route selection is caller-addressed and the ladder produces deterministic ordered pressure', async () => {
+test('ordered route selection is caller-addressed and current Packer refuses exact fixed-attachment conflicts', async () => {
   const api = assayApi();
   const fixture = await atlasFixture();
   const alternateIds = ['muscle-13', 'muscle-12', 'muscle-45', 'muscle-18'];
@@ -135,9 +135,29 @@ test('ordered route selection is caller-addressed and the ladder produces determ
   assert.ok(initialPenetrations[0] < initialPenetrations[1]);
   assert.ok(initialPenetrations[1] < initialPenetrations[2]);
   assert.ok(first.conditions.every(condition => condition.result.metrics.packed.endpointDrift === 0));
-  assert.ok(first.conditions.every(
-    condition => condition.result.metrics.packed.maximumRelativeVolumeError <= 1e-9,
-  ));
+  assert.ok(first.conditions.every(condition => (
+    condition.result.status === 'immutable-constraint-conflict'
+      && condition.result.failure?.phase === 'preflight'
+      && condition.result.failure?.blockingMechanisms.length === 4
+      && condition.result.failure.blockingMechanisms.every(
+        mechanism => mechanism.kind === 'pairwise-fixed-attachment-penetration',
+      )
+  )));
+  assert.deepEqual(
+    first.conditions.map(condition => Math.max(
+      ...condition.result.failure.blockingMechanisms.map(mechanism => mechanism.penetration),
+    )),
+    [1.555076559298, 1.555076559298, 1.555076559298],
+    'interior crowding must not change the exact fixed-attachment blocker',
+  );
+  assert.ok(first.conditions.every(condition => (
+    condition.result.metrics.packed.pairwisePenetration
+      === condition.result.metrics.initial.pairwisePenetration
+      && condition.result.metrics.packed.maximumRelativeVolumeError
+        === condition.result.metrics.initial.maximumRelativeVolumeError
+  )), 'preflight refusal must return the unmutated source instead of a partial packing result');
+  assert.equal(first.interpretationChecks.fixedEndpointsPreserved, true);
+  assert.equal(first.interpretationChecks.targetVolumesPreserved, false);
 });
 
 test('parent-atlas and candidate disagreements fail before a provisional fixture can launder them', async () => {

@@ -3,7 +3,7 @@
   "status": "completed",
   "failurePhase": null,
   "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
-  "effectiveParentAtlasPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
   "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
   "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
   "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
@@ -26,6 +26,9 @@
       "config": {
         "convergenceTolerance": 1e-7,
         "maxIterations": 640,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
         "relaxationStep": 0.18,
         "sampleCount": 25,
         "smoothnessStep": 0.035
@@ -36,6 +39,9 @@
       "config": {
         "convergenceTolerance": 1e-7,
         "maxIterations": 640,
+        "maximumSourceBendEnergyRatio": 1.05,
+        "minimumSourceCurvatureCosine": 0.3,
+        "minimumSourceTangentCosine": 0,
         "relaxationStep": 0.18,
         "sampleCount": 25,
         "smoothnessStep": 0.035
@@ -47,7 +53,7 @@
     "fixedEndpointsPreserved": true,
     "initialPairwisePenetrationStrictlyIncreasing": true,
     "maximumInteriorDisplacementNondecreasing": true,
-    "targetVolumesPreserved": true
+    "targetVolumesPreserved": false
   },
   "conditions": [
     {
@@ -130,32 +136,63 @@
           "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
         }
       },
-      "status": "iteration-limit",
-      "iterations": 640,
+      "status": "immutable-constraint-conflict",
+      "iterations": 0,
       "initial": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
         "maximumBendEnergy": 3e-12,
         "maximumRelativeVolumeError": 0,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
         "pairwisePenetration": 5.581723846788,
-        "skeletalPenetration": 0.862611751278
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.862611751278,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "packed": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
-        "maximumBendEnergy": 1.833505573084,
+        "maximumBendEnergy": 3e-12,
         "maximumRelativeVolumeError": 0,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
-        "pairwisePenetration": 4.445160916104,
-        "skeletalPenetration": 0.183025363698
+        "pairwisePenetration": 5.581723846788,
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.862611751278,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "response": {
         "interiorSampleCount": 44,
-        "maximumInteriorDisplacement": 1.263100583311,
-        "meanInteriorDisplacement": 0.67878300871
+        "maximumInteriorDisplacement": 0,
+        "meanInteriorDisplacement": 0
+      },
+      "visual": {
+        "id": "baseline",
+        "status": "immutable-constraint-conflict",
+        "role": "diagnostic-not-admission",
+        "relativeRoot": "conditions/baseline",
+        "blockerCount": 4,
+        "maximumFixedAttachmentPenetration": 1.555076559298,
+        "sourceJsonSha256": "70c7660b12f9e5bea6978fd9540ce02a70144a119f34bbd44103b6d08d8f4239",
+        "resultJsonSha256": "899fedc672e2fe6e5653fbef1458633171b3b066c24fe36a3d3f2fe2ddf76075",
+        "indexHtmlSha256": "0ee0a09576aa79d190f95d64b58940bf03372538ad2e7928e5b1b4539db76dab"
       }
     },
     {
@@ -238,32 +275,63 @@
           "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
         }
       },
-      "status": "iteration-limit",
-      "iterations": 640,
+      "status": "immutable-constraint-conflict",
+      "iterations": 0,
       "initial": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
         "maximumBendEnergy": 0.123194664416,
         "maximumRelativeVolumeError": 0.002199818934,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
         "pairwisePenetration": 5.772364512578,
-        "skeletalPenetration": 0.922930635725
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.922930635725,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "packed": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
-        "maximumBendEnergy": 1.811810628378,
-        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 0.123194664416,
+        "maximumRelativeVolumeError": 0.002199818934,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
-        "pairwisePenetration": 4.448398812615,
-        "skeletalPenetration": 0.175651672059
+        "pairwisePenetration": 5.772364512578,
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.922930635725,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "response": {
         "interiorSampleCount": 44,
-        "maximumInteriorDisplacement": 1.328059698368,
-        "meanInteriorDisplacement": 0.775468177007
+        "maximumInteriorDisplacement": 0,
+        "meanInteriorDisplacement": 0
+      },
+      "visual": {
+        "id": "mild",
+        "status": "immutable-constraint-conflict",
+        "role": "diagnostic-not-admission",
+        "relativeRoot": "conditions/mild",
+        "blockerCount": 4,
+        "maximumFixedAttachmentPenetration": 1.555076559298,
+        "sourceJsonSha256": "187df0499c1e2d10586244abe90c78b1da63b4ff874d986c06c474d8082dd926",
+        "resultJsonSha256": "506944088fb1f3ad7d992618bd12890f22935c21f64f639c059eb6dcb025c795",
+        "indexHtmlSha256": "2acf129fb7d6ea55d2e13125a4cce7e2899f655eeb5a5c994d30cbbe87524fc7"
       }
     },
     {
@@ -346,37 +414,78 @@
           "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
         }
       },
-      "status": "iteration-limit",
-      "iterations": 640,
+      "status": "immutable-constraint-conflict",
+      "iterations": 0,
       "initial": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
         "maximumBendEnergy": 0.492777912542,
         "maximumRelativeVolumeError": 0.008848741491,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
         "pairwisePenetration": 6.459445559318,
-        "skeletalPenetration": 0.983230936648
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.983230936648,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "packed": {
         "compartmentEscape": 0,
         "endpointDrift": 0,
-        "maximumBendEnergy": 1.800613015852,
-        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 0.492777912542,
+        "maximumRelativeVolumeError": 0.008848741491,
+        "maximumSourceKnotDisplacement": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "minimumSourceTangentCosine": 1,
         "nonFiniteValueCount": 0,
         "nonPositiveRadiusCount": 0,
-        "pairwisePenetration": 4.46190996936,
-        "skeletalPenetration": 0.176866736698
+        "pairwisePenetration": 6.459445559318,
+        "pairwiseRelationReversalCount": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "skeletalPenetration": 0.983230936648,
+        "sourceCurvatureReversalCount": 0,
+        "sourceTangentReversalCount": 0
       },
       "response": {
         "interiorSampleCount": 44,
-        "maximumInteriorDisplacement": 1.38135255422,
-        "meanInteriorDisplacement": 0.874635292847
+        "maximumInteriorDisplacement": 0,
+        "meanInteriorDisplacement": 0
+      },
+      "visual": {
+        "id": "moderate",
+        "status": "immutable-constraint-conflict",
+        "role": "diagnostic-not-admission",
+        "relativeRoot": "conditions/moderate",
+        "blockerCount": 4,
+        "maximumFixedAttachmentPenetration": 1.555076559298,
+        "sourceJsonSha256": "58a655a2b18b34b1dcac4884a8c6c109da790fdc45148ce1448c66369368d62f",
+        "resultJsonSha256": "7215ac41c926948060a1ce40007cf8928b3a34884e4ad244e7912246da479676",
+        "indexHtmlSha256": "9248a2c8ad4473655fc7e3f27cdbfa7f55c9851b7076aa35770b03209992391f"
       }
     }
   ],
+  "visual": {
+    "route": {
+      "requested": "source-shaped-muscle-packing-preflight-orbitable-v0",
+      "effective": "source-shaped-muscle-packing-preflight-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "pending-agent-inspection",
+    "portfolio": "index.html",
+    "portfolioSha256": "bd39cc918c0d44acee8331b4fba0a103607b9bca2cc9c991d356c381d228f765"
+  },
   "primaryOutput": "perturbation-result.json",
-  "outputSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b",
+  "outputSha256": "76f997bc14f1c555a0b9aceff0a62d770db492ca8c2df4879270e87c101bd72f",
   "lastTrustworthyEvidence": {
     "phase": "primary-output-written",
     "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",

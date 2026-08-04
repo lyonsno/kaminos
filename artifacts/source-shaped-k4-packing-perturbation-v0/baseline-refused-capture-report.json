@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/conditions/baseline/?state=packed",
+    "outputPath": "repo://artifacts/source-shaped-k4-packing-perturbation-v0/baseline-refused.png",
+    "reportPath": "repo://artifacts/source-shaped-k4-packing-perturbation-v0/baseline-refused-capture-report.json",
+    "viewport": {
+      "width": 1600,
+      "height": 1000
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 15519,
+    "processGroupId": 15519,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 15519,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2336,
+    "retainedBytes": 2336,
+    "truncated": false,
+    "tail": "[0804/191721.942085:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/191722.123421:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/191724.052529:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/conditions/baseline/?state=packed (0)\n[0804/191724.052590:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/conditions/baseline/?state=packed (0)\n[0804/191724.066367:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/191724.379355:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/conditions/baseline/?state=packed (0)\n[0804/191724.387923:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/191724.512359:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/source-shaped-k4-packing-perturbation-v0/conditions/baseline/?state=packed (0)\n[0804/191724.515116:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n267354 bytes written to file repo://artifacts/source-shaped-k4-packing-perturbation-v0/baseline-refused.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/source-shaped-k4-packing-perturbation-v0/baseline-refused.png",
+    "sizeBytes": 267354,
+    "sha256": "a412e3e038c6c9e211c9117daa05a942c24f412df91311326f2b057e04e21dd3",
+    "png": {
+      "width": 1600,
+      "height": 1000,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 69,
+      "idatBytes": 266505
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/source-shaped-k4-packing-perturbation-v0/baseline-refused.png",
+      "sizeBytes": 267354,
+      "sha256": "a412e3e038c6c9e211c9117daa05a942c24f412df91311326f2b057e04e21dd3",
+      "png": {
+        "width": 1600,
+        "height": 1000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 69,
+        "idatBytes": 266505
+      }
+    }
+  }
+}
