@@ -1,7 +1,9 @@
 import copy
 import hashlib
 import json
+import struct
 import unittest
+import zlib
 from subprocess import CompletedProcess
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,11 +20,26 @@ from source_plate_projection_sentinel_results import (
     build_public_projection_sentinel_result,
     build_projection_sentinel_result,
     build_projection_sentinel_result_html,
+    result_sha256,
 )
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _png_bytes() -> bytes:
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
+    raw_scanline = b"\x00\xff\x00\x00\x00\xff\x00"
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw_scanline)) + chunk(b"IEND", b"")
 
 
 def _plan(root: Path) -> dict:
@@ -114,7 +131,7 @@ def _terminal_inputs(root: Path, plan: dict) -> tuple[dict, dict, dict]:
         output_dir = root / "generated" / cell_id
         output_dir.mkdir(parents=True, exist_ok=True)
         output = output_dir / "output.png"
-        output.write_bytes(b"\x89PNG\r\n\x1a\n" + (f"credible-{cell_id}-pixels".encode() * 8))
+        output.write_bytes(_png_bytes())
         input_paths = [plan["source"]["images"][role]["path"] for role in cell["carrierRoles"]]
         job_type = cell["requestedRoute"].removeprefix("gpu-greenroom/")
         job_id = f"job-{index}"
@@ -333,6 +350,67 @@ class ProjectionSentinelContracts(unittest.TestCase):
             findings["normal"]["status"] = "pending"
             with self.assertRaisesRegex(ProjectionSentinelResultError, "human visual inspection"):
                 build_projection_sentinel_result(plan, jobs=jobs, receipt_paths=receipts, visual_findings=findings)
+
+    def test_terminal_result_rejects_job_inputs_not_derived_from_plan(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = _plan(root)
+            jobs, receipts, findings = _terminal_inputs(root, plan)
+            forged = root / "other-clay.png"
+            forged.write_bytes(b"other conditioning pixels")
+            jobs["jobs"][0]["inputPaths"] = [str(forged)]
+            receipt = json.loads(receipts["clay"].read_text())
+            input_index = receipt["effective_argv"].index("--image-paths") + 1
+            receipt["effective_argv"][input_index] = str(forged)
+            receipts["clay"].write_text(json.dumps(receipt))
+
+            with self.assertRaisesRegex(ProjectionSentinelResultError, "plan-derived conditioning inputs"):
+                build_projection_sentinel_result(
+                    plan, jobs=jobs, receipt_paths=receipts, visual_findings=findings
+                )
+
+    def test_terminal_result_rejects_signature_padded_or_truncated_png(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = _plan(root)
+            for corrupt in (
+                b"\x89PNG\r\n\x1a\n" + b"padding" * 20,
+                _png_bytes()[:-12],
+            ):
+                jobs, receipts, findings = _terminal_inputs(root, plan)
+                Path(jobs["jobs"][0]["outputDir"], "output.png").write_bytes(corrupt)
+                with self.subTest(byte_length=len(corrupt)):
+                    with self.assertRaisesRegex(ProjectionSentinelResultError, "PNG"):
+                        build_projection_sentinel_result(
+                            plan, jobs=jobs, receipt_paths=receipts, visual_findings=findings
+                        )
+
+    def test_public_result_rejects_host_coordinates_in_freeform_payloads(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            plan = _plan(root)
+            jobs, receipts, findings = _terminal_inputs(root, plan)
+            baseline = build_projection_sentinel_result(
+                plan, jobs=jobs, receipt_paths=receipts, visual_findings=findings
+            )
+            mutations = (
+                lambda result: result["cells"][0]["visualInspection"].update(
+                    description="inspected at /Users/example/private/output.png"
+                ),
+                lambda result: result["cells"][0]["receipt"].update(
+                    warnings=["file:///Users/example/private/output.png"]
+                ),
+                lambda result: result["cells"][0]["receipt"]["worker"].update(
+                    capabilities=["read:/Volumes/private-run/output.png"]
+                ),
+            )
+            for mutate in mutations:
+                result = copy.deepcopy(baseline)
+                mutate(result)
+                result["resultSha256"] = result_sha256(result)
+                with self.subTest(payload=result["cells"][0]):
+                    with self.assertRaisesRegex(ProjectionSentinelResultError, "host coordinate"):
+                        build_public_projection_sentinel_result(result)
 
 
 if __name__ == "__main__":
