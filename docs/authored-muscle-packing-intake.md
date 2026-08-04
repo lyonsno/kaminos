@@ -78,11 +78,13 @@ selection decision under `derivation.selectionAuthority`:
 ```
 
 The row order must exactly equal `selectedConstructionIds` and the routing
-fixture. Every listed state must be `admitted`; a `candidate`, `missing`,
-`conflict`, or `excluded` state remains useful receipt evidence but cannot
-produce a packing source. The intake returns `authority-incomplete` for that
-case and preserves the non-admitted field paths in `missingFields`. A malformed
-or reordered selected-row identity remains `source-identity-mismatch`.
+fixture. Every listed state must be `admitted`. A `candidate`, `missing`, or
+`excluded` selected state remains useful receipt evidence but cannot produce a
+packing source; the intake returns `authority-incomplete` and preserves those
+field paths in `missingFields`. A `conflict` is stronger: it returns
+`source-to-carrier-binding-invalid` and preserves every contradictory field path
+in `conflictingFields`. A malformed or reordered selected-row identity remains
+`source-identity-mismatch`.
 
 ## Reusable atlas subset contract
 
@@ -114,6 +116,7 @@ values remain unchanged.
 | `admitted` | Identity, route, endpoint, carrier, volume, obstacle, and compartment contracts pass; `packingSource` is populated. |
 | `identity-coherent_geometry-unavailable` | The routing fixture is authenticated, but there is no coordinate carrier. |
 | `authority-incomplete` | A carrier or candidate receipt exists, but one or more selected rows or required solve fields is not authority-complete. |
+| `source-to-carrier-binding-invalid` | One or more selected authority fields is explicitly conflicting; the exact field paths are preserved in `conflictingFields`. |
 | `input-identity-mismatch` | Requested and effective file identities disagree or name a different consumed input. |
 | `source-identity-mismatch` | Carrier source or per-muscle identities disagree with the routing fixture. |
 | `geometry-invalid` | Geometry exists but violates the coordinate/volume/clearance/solver-source contract. |

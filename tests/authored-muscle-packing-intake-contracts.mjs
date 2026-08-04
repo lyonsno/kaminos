@@ -393,8 +393,27 @@ test('selected-row admission requires a byte-bound receipt and every required so
     coordinateCarrier: conflictingCompartment,
     input: intakeIdentity(conflictingCompartment),
   });
-  assert.equal(conflictingCompartmentResult.status, 'authority-incomplete');
+  assert.equal(conflictingCompartmentResult.status, 'source-to-carrier-binding-invalid');
+  assert.equal(conflictingCompartmentResult.admitted, false);
+  assert.equal(conflictingCompartmentResult.packingSource, null);
   assert.match(conflictingCompartmentResult.reason, /compartment.*conflict/i);
+  assert.deepEqual(conflictingCompartmentResult.conflictingFields, [
+    'coordinateCarrier.derivation.selectionAuthority.sharedFields.compartment',
+  ]);
+
+  const conflictingCenterline = makeCoordinateCarrier();
+  conflictingCenterline.derivation.selectionAuthority.rows[0]
+    .requiredFields.centerline = 'conflict';
+  const conflictingCenterlineResult = admitAuthoredMusclePackingIntake({
+    routingFixture: fixture,
+    coordinateCarrier: conflictingCenterline,
+    input: intakeIdentity(conflictingCenterline),
+  });
+  assert.equal(conflictingCenterlineResult.status, 'source-to-carrier-binding-invalid');
+  assert.match(conflictingCenterlineResult.reason, /muscle-31.*centerline.*conflict/i);
+  assert.deepEqual(conflictingCenterlineResult.conflictingFields, [
+    'coordinateCarrier.derivation.selectionAuthority.rows[muscle-31].requiredFields.centerline',
+  ]);
 });
 
 test('selected-row authority receipt preserves exact fixture route order', () => {
