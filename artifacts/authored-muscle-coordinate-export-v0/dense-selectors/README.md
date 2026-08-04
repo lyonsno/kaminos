@@ -37,9 +37,9 @@ Reviewed fixture `fixtures/track-m-routing/m34-m13-m12-m45-k4-selected-route-fix
 - parent atlas internal SHA-256 `a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8`, file SHA-256 `55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71`;
 - authority receipt internal SHA-256 `d69f4b846645191338c4ac8d444142ee7753af35baa57fa5839a3b64c19cb619`, file SHA-256 `78b925bcf333a1ba71cf7c6e2ff767f78cfb624804f6b96a2fb7b8726cc938bd`;
 - Packer probe file SHA-256 `ee0c392d09e9449baa60caddf52ec953cfdfd453675b0811e20e234eeacf7f2c`;
-- Packer receipt internal SHA-256 `880a76eb75c82d76b534a6ff5e40408502dbbd2ff22bbd73686e99a0fc63a231`, file SHA-256 `e7868ab7eb234b81d3f0fae66a1988f0b4ee4533d35efc0c75706c867560c108`.
+- Packer receipt internal SHA-256 `174d2086d992c83e23d00797cee550c1f0a5d0e8e82b340f923c62f81d81f9f5`, file SHA-256 `55b2bb1201702d530049b7bc32f5ebb1ac16e2325e6bb910c7663e183b82c4f1`.
 
-The authority receipt has zero binding conflicts. Packer accepts source, graph, fixture, selected construction/component identities, and attachment identity envelopes, but not attachment positions. It returns `authority-incomplete` with exactly twenty-seven missing/candidate authority paths: three shared paths (`coordinateSpace.unit`, `compartment`, `obstacles`) and four route rows whose row state plus both attachment positions, centerline, target volume, and volume authority are not admitted. `conflictingFields` is empty and `packingSource` remains null. Two full exporter-plus-Packer executions produced byte-identical files.
+The authority receipt has zero binding conflicts. Packer reaches candidate selected-row refusal before later source/carrier comparison can establish any accepted field, so `acceptedFields` is empty. It returns `authority-incomplete` with exactly twenty-seven missing/candidate authority paths: three shared paths (`coordinateSpace.unit`, `compartment`, `obstacles`) and four route rows whose row state plus both attachment positions, centerline, target volume, and volume authority are not admitted. `conflictingFields` is empty and `packingSource` remains null. The authority-ceiling artifacts remain byte-identical to the prior corrected replay; this receipt was regenerated once after composing Packer's accepted empty-field catch path.
 
 ## Consumer boundary
 
