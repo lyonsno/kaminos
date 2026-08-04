@@ -97,6 +97,10 @@ test('witness publishes exact source, result, interactive route, and pending vis
     written.result.pairwiseProjection,
   );
   assert.deepEqual(
+    written.report.result.pairwiseCoordinate,
+    written.result.pairwiseCoordinate,
+  );
+  assert.deepEqual(
     written.report.result.crossSectionProjection,
     written.result.crossSectionProjection,
   );
@@ -185,8 +189,51 @@ test('eight-carrier density witness refuses the source-relative residual without
     effectiveStep:null,
     fallbackUsed:false,
   });
+  assert.deepEqual(report.result.pairwiseCoordinate, {
+    requested:'cartesian',
+    effective:'cartesian',
+    fallbackUsed:false,
+  });
   assert.equal(report.result.failure.kind, 'residual-constraint');
   assert.equal(report.result.failure.dominantMechanism.kind, 'pairwise-exclusion-residual');
+  assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
+  assert.ok(!memory.files.has(`${outDir}/index.html`));
+});
+
+test('source-normal dense witness preserves exact coordinate receipt while refusing the remaining fold', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/muscle-compartment-packing-density-eight-source-normal';
+  const source = createSyntheticMuscleDensityLadder(8);
+  await assert.rejects(
+    () => writeMuscleCompartmentPackingWitness({
+      outDir,
+      source,
+      config: {
+        maxIterations:960,
+        relaxationStep:0.35,
+        smoothnessStep:0.035,
+        sampleCount:25,
+        convergenceTolerance:1e-7,
+        pairwiseUpdate:'reciprocal-batched',
+        pairwiseCoordinate:'source-normal',
+        crossSectionUpdate:'contact-redistributed',
+        crossSectionStep:0.01,
+      },
+      io:memory.io,
+    }),
+    /source-formation-failed/i,
+  );
+  const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.result.status, 'source-formation-failed');
+  assert.deepEqual(report.result.pairwiseCoordinate, {
+    requested:'source-normal',
+    effective:'source-normal',
+    fallbackUsed:false,
+  });
+  assert.equal(report.result.failure.kind, 'source-formation-constraint');
+  assert.equal(report.result.failure.dominantMechanism.kind, 'source-curvature-reversal');
+  assert.ok(report.result.metrics.packed.pairwisePenetration <= 1e-7);
   assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
   assert.ok(!memory.files.has(`${outDir}/index.html`));
 });

@@ -389,6 +389,47 @@ test('contact-redistributed cross-sections trade local radius for reciprocal k8 
   assert.equal(redistributed.metrics.packed.nonPositiveRadiusCount, 0);
 });
 
+test('source-normal pairwise coordinates reduce dense folding without surrendering relieved contact', () => {
+  const source = createSyntheticMuscleDensityLadder(8);
+  const baseConfig = {
+    maxIterations:960,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+    pairwiseUpdate:'reciprocal-batched',
+    crossSectionUpdate:'contact-redistributed',
+    crossSectionStep:0.01,
+  };
+  const cartesian = solveMuscleCompartmentPacking(source, baseConfig);
+  const sourceNormal = solveMuscleCompartmentPacking(source, {
+    ...baseConfig,
+    pairwiseCoordinate:'source-normal',
+  });
+  assert.deepEqual(sourceNormal.pairwiseCoordinate, {
+    requested:'source-normal',
+    effective:'source-normal',
+    fallbackUsed:false,
+  });
+  assert.ok(
+    sourceNormal.metrics.packed.sourceCurvatureReversalCount <
+      cartesian.metrics.packed.sourceCurvatureReversalCount,
+    `source-normal reversals ${sourceNormal.metrics.packed.sourceCurvatureReversalCount} did not improve cartesian reversals ${cartesian.metrics.packed.sourceCurvatureReversalCount}`,
+  );
+  assert.ok(
+    sourceNormal.metrics.packed.pairwisePenetration <= baseConfig.convergenceTolerance,
+    `source-normal coordinates did not clear pairwise residual ${sourceNormal.metrics.packed.pairwisePenetration}`,
+  );
+  assert.equal(sourceNormal.status, 'source-formation-failed');
+  assert.equal(sourceNormal.failure?.kind, 'source-formation-constraint');
+  assert.equal(sourceNormal.failure?.dominantMechanism?.kind, 'source-curvature-reversal');
+  assert.ok(sourceNormal.metrics.packed.maximumSourceRadiusRatio <= 1.5);
+  assert.equal(sourceNormal.metrics.packed.endpointDrift, 0);
+  assert.ok(sourceNormal.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(sourceNormal.metrics.packed.skeletalPenetration <= baseConfig.convergenceTolerance);
+  assert.ok(sourceNormal.metrics.packed.compartmentEscape <= baseConfig.convergenceTolerance);
+});
+
 test('source validation rejects identity collision and non-finite carrier state', () => {
   assert.throws(
     () => solveMuscleCompartmentPacking(
@@ -396,6 +437,13 @@ test('source validation rejects identity collision and non-finite carrier state'
       { pairwiseUpdate:'silent-fallback' },
     ),
     /pairwiseUpdate.*sequential.*reciprocal-batched/i,
+  );
+  assert.throws(
+    () => solveMuscleCompartmentPacking(
+      createSyntheticFourMuscleCompartment(),
+      { pairwiseCoordinate:'silent-fallback' },
+    ),
+    /pairwiseCoordinate.*cartesian.*source-normal/i,
   );
   const duplicate = createSyntheticFourMuscleCompartment();
   duplicate.muscles[1].identity.instanceId = duplicate.muscles[0].identity.instanceId;

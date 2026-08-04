@@ -554,6 +554,12 @@ function validateConfig(config) {
     throw new Error('muscle packing pairwiseUpdate must be sequential or reciprocal-batched');
   }
   if (
+    config.pairwiseCoordinate !== undefined &&
+    !['cartesian', 'source-normal'].includes(config.pairwiseCoordinate)
+  ) {
+    throw new Error('muscle packing pairwiseCoordinate must be cartesian or source-normal');
+  }
+  if (
     config.crossSectionUpdate !== undefined &&
     !['uniform', 'contact-redistributed'].includes(config.crossSectionUpdate)
   ) {
@@ -716,6 +722,15 @@ function pairwiseProjectionReceipt(config) {
   return {
     requestedUpdate: update,
     effectiveUpdate: update,
+    fallbackUsed: false,
+  };
+}
+
+function pairwiseCoordinateReceipt(config) {
+  const coordinate = config.pairwiseCoordinate || 'cartesian';
+  return {
+    requested: coordinate,
+    effective: coordinate,
     fallbackUsed: false,
   };
 }
@@ -1076,10 +1091,37 @@ function emptyPositionDeltas(muscles) {
   return muscles.map(muscle => muscle.centerline.map(() => [0, 0, 0]));
 }
 
-function applyPositionDeltas(muscles, deltas, attribution, category) {
+function pairwiseCoordinateDelta(source, muscleIndex, knotIndex, delta, coordinate) {
+  if (coordinate !== 'source-normal') return delta;
+  const centerline = source.muscles[muscleIndex].centerline;
+  const priorIndex = Math.max(0, knotIndex - 1);
+  const nextIndex = Math.min(centerline.length - 1, knotIndex + 1);
+  const tangentVector = subtract(
+    centerline[nextIndex].position,
+    centerline[priorIndex].position,
+  );
+  const tangentLength = length(tangentVector);
+  if (tangentLength <= 1e-12) {
+    throw new Error(
+      `muscle ${source.muscles[muscleIndex].id} source tangent is undefined at knot ${knotIndex}`,
+    );
+  }
+  const tangent = scale(tangentVector, 1 / tangentLength);
+  return subtract(delta, scale(tangent, dot(delta, tangent)));
+}
+
+function applyPositionDeltas(source, muscles, deltas, attribution, category, coordinate) {
   for (const [muscleIndex, muscleDeltas] of deltas.entries()) {
     for (const [knotIndex, delta] of muscleDeltas.entries()) {
       if (length(delta) <= 0) continue;
+      const coordinateDelta = pairwiseCoordinateDelta(
+        source,
+        muscleIndex,
+        knotIndex,
+        delta,
+        coordinate,
+      );
+      if (length(coordinateDelta) <= 0) continue;
       const knot = muscles[muscleIndex].centerline[knotIndex];
       applyAttributedPosition(
         attribution,
@@ -1087,13 +1129,13 @@ function applyPositionDeltas(muscles, deltas, attribution, category) {
         muscles,
         muscleIndex,
         knotIndex,
-        add(knot.position, delta),
+        add(knot.position, coordinateDelta),
       );
     }
   }
 }
 
-function projectPairwise(muscles, amount, attribution, category, update) {
+function projectPairwise(source, muscles, amount, attribution, category, update, coordinate) {
   const knotCount = muscles[0].centerline.length;
   const batched = update === 'reciprocal-batched';
   const centerlines = batched
@@ -1130,13 +1172,20 @@ function projectPairwise(muscles, amount, attribution, category, update) {
                 correction,
               );
             } else {
+              const coordinateCorrection = pairwiseCoordinateDelta(
+                source,
+                leftIndex,
+                leftKnotIndex,
+                correction,
+                coordinate,
+              );
               applyAttributedPosition(
                 attribution,
                 category,
                 muscles,
                 leftIndex,
                 leftKnotIndex,
-                add(left.position, correction),
+                add(left.position, coordinateCorrection),
               );
             }
           }
@@ -1147,13 +1196,20 @@ function projectPairwise(muscles, amount, attribution, category, update) {
                 correction,
               );
             } else {
+              const coordinateCorrection = pairwiseCoordinateDelta(
+                source,
+                rightIndex,
+                rightKnotIndex,
+                scale(correction, -1),
+                coordinate,
+              );
               applyAttributedPosition(
                 attribution,
                 category,
                 muscles,
                 rightIndex,
                 rightKnotIndex,
-                subtract(right.position, correction),
+                add(right.position, coordinateCorrection),
               );
             }
           }
@@ -1161,7 +1217,9 @@ function projectPairwise(muscles, amount, attribution, category, update) {
       }
     }
   }
-  if (batched) applyPositionDeltas(muscles, deltas, attribution, category);
+  if (batched) {
+    applyPositionDeltas(source, muscles, deltas, attribution, category, coordinate);
+  }
 }
 
 function segmentPointMutableResponse(centerline, segmentIndex, segmentT) {
@@ -1177,6 +1235,7 @@ function segmentPointMutableResponse(centerline, segmentIndex, segmentT) {
 }
 
 function moveSegmentPoint(
+  source,
   muscles,
   muscleIndex,
   segmentIndex,
@@ -1184,6 +1243,7 @@ function moveSegmentPoint(
   displacement,
   attribution,
   category,
+  coordinate = 'cartesian',
 ) {
   const centerline = muscles[muscleIndex].centerline;
   const weights = [1 - segmentT, segmentT];
@@ -1196,6 +1256,14 @@ function moveSegmentPoint(
   for (let endpoint = 0; endpoint < 2; endpoint += 1) {
     if (!mutable[endpoint]) continue;
     const knot = centerline[segmentIndex + endpoint];
+    const knotIndex = segmentIndex + endpoint;
+    const coordinateDisplacement = pairwiseCoordinateDelta(
+      source,
+      muscleIndex,
+      knotIndex,
+      scale(displacement, weights[endpoint]),
+      coordinate,
+    );
     // Do not divide by the response. Near a fixed attachment that would turn
     // an infinitesimal contact weight into unbounded interior-knot motion.
     applyAttributedPosition(
@@ -1203,8 +1271,8 @@ function moveSegmentPoint(
       category,
       muscles,
       muscleIndex,
-      segmentIndex + endpoint,
-      add(knot.position, scale(displacement, weights[endpoint])),
+      knotIndex,
+      add(knot.position, coordinateDisplacement),
     );
   }
   return true;
@@ -1286,6 +1354,7 @@ function projectSegmentObstacles(source, muscles, amount, attribution, category)
           obstacleIndex,
         );
         moveSegmentPoint(
+          source,
           muscles,
           muscleIndex,
           segmentIndex,
@@ -1299,7 +1368,15 @@ function projectSegmentObstacles(source, muscles, amount, attribution, category)
   }
 }
 
-function projectSegmentPairwise(muscles, amount, attribution, category, update) {
+function projectSegmentPairwise(
+  source,
+  muscles,
+  amount,
+  attribution,
+  category,
+  update,
+  coordinate,
+) {
   const batched = update === 'reciprocal-batched';
   const centerlines = batched
     ? muscles.map(muscle => structuredClone(muscle.centerline))
@@ -1385,6 +1462,7 @@ function projectSegmentPairwise(muscles, amount, attribution, category, update) 
               );
             } else {
               moveSegmentPoint(
+                source,
                 muscles,
                 leftIndex,
                 leftSegment,
@@ -1392,6 +1470,7 @@ function projectSegmentPairwise(muscles, amount, attribution, category, update) 
                 scale(direction, correction),
                 attribution,
                 category,
+                coordinate,
               );
             }
           }
@@ -1407,6 +1486,7 @@ function projectSegmentPairwise(muscles, amount, attribution, category, update) 
               );
             } else {
               moveSegmentPoint(
+                source,
                 muscles,
                 rightIndex,
                 rightSegment,
@@ -1414,6 +1494,7 @@ function projectSegmentPairwise(muscles, amount, attribution, category, update) 
                 scale(direction, -correction),
                 attribution,
                 category,
+                coordinate,
               );
             }
           }
@@ -1421,7 +1502,9 @@ function projectSegmentPairwise(muscles, amount, attribution, category, update) 
       }
     }
   }
-  if (batched) applyPositionDeltas(muscles, deltas, attribution, category);
+  if (batched) {
+    applyPositionDeltas(source, muscles, deltas, attribution, category, coordinate);
+  }
 }
 
 function restoreTargetVolumes(muscles, attribution, category) {
@@ -1709,6 +1792,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       dimension: 3,
       formation: formationReceipt(source),
       pairwiseProjection: pairwiseProjectionReceipt(config),
+      pairwiseCoordinate: pairwiseCoordinateReceipt(config),
       crossSectionProjection: crossSectionProjectionReceipt(config),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
@@ -1792,18 +1876,22 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       'skeletalClearance',
     );
     projectPairwise(
+      source,
       muscles,
       config.relaxationStep,
       correctionAttribution,
       'pairwiseExclusion',
       config.pairwiseUpdate || 'sequential',
+      config.pairwiseCoordinate || 'cartesian',
     );
     projectSegmentPairwise(
+      source,
       muscles,
       config.relaxationStep,
       correctionAttribution,
       'pairwiseExclusion',
       config.pairwiseUpdate || 'sequential',
+      config.pairwiseCoordinate || 'cartesian',
     );
     projectObstacles(
       source,
@@ -1843,18 +1931,22 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       'compartmentProjection',
     );
     projectPairwise(
+      source,
       muscles,
       config.relaxationStep,
       correctionAttribution,
       'pairwiseExclusion',
       config.pairwiseUpdate || 'sequential',
+      config.pairwiseCoordinate || 'cartesian',
     );
     projectSegmentPairwise(
+      source,
       muscles,
       config.relaxationStep,
       correctionAttribution,
       'pairwiseExclusion',
       config.pairwiseUpdate || 'sequential',
+      config.pairwiseCoordinate || 'cartesian',
     );
     projectObstacles(
       source,
@@ -1946,6 +2038,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     dimension: 3,
     formation: formationReceipt(source),
     pairwiseProjection: pairwiseProjectionReceipt(config),
+    pairwiseCoordinate: pairwiseCoordinateReceipt(config),
     crossSectionProjection: crossSectionProjectionReceipt(config),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
