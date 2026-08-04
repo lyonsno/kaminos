@@ -1,0 +1,137 @@
+{
+  "schema": "kaminos.shape-bearing-collar-witness-report.v0",
+  "status": "complete",
+  "route": {
+    "requested": "analytical-elbow-collar-failure-witness",
+    "effective": "analytical-elbow-collar-failure-witness",
+    "fallbackUsed": false
+  },
+  "source": {
+    "id": "synthetic-mammalian-elbow-v0",
+    "schema": "kaminos.analytical-elbow-descriptor.v0",
+    "requestedRoute": "analytical-cage",
+    "effectiveRoute": "analytical-cage",
+    "fallbackUsed": false,
+    "authority": {
+      "kind": "synthetic-proxy",
+      "anatomicalAdmission": "structural-hypothesis"
+    }
+  },
+  "thresholds": {
+    "maximumEdgeStretchRatio": 1.15,
+    "maximumAreaStretchRatio": 1.3,
+    "maximumRelativeVolumeDrift": 0.15,
+    "maximumRigidZoneError": 1e-12,
+    "minimumRigidZoneSampleCount": 25
+  },
+  "visualContract": {
+    "startsPaused": true,
+    "animationActive": false,
+    "heatThresholdLogStrain": 0.13976194237515863,
+    "cameraPresets": [
+      "profile",
+      "three-quarter"
+    ],
+    "comparisonCases": [
+      {
+        "flexionDegrees": 35,
+        "collarHalfWidth": 0
+      },
+      {
+        "flexionDegrees": 35,
+        "collarHalfWidth": 0.72
+      },
+      {
+        "flexionDegrees": 80,
+        "collarHalfWidth": 0
+      },
+      {
+        "flexionDegrees": 80,
+        "collarHalfWidth": 0.72
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "flexion-35-collar-0",
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0,
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 1.437123158645674,
+        "maximumAbsoluteLogAreaStrain": 2.5271787288302603,
+        "relativeVolumeDrift": 0.007416514109193019,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 529,
+        "childRigidSampleCount": 457,
+        "invertedTriangleCount": 18,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "id": "flexion-35-collar-0.72",
+      "flexionDegrees": 35,
+      "collarHalfWidth": 0.72,
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.2382771074683381,
+        "maximumAbsoluteLogAreaStrain": 0.23834023515158728,
+        "relativeVolumeDrift": 0.0003826626704251153,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 241,
+        "childRigidSampleCount": 193,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "id": "flexion-80-collar-0",
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0,
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 2.014346220046643,
+        "maximumAbsoluteLogAreaStrain": 2.0114517372596183,
+        "relativeVolumeDrift": 0.033888411541036396,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 529,
+        "childRigidSampleCount": 457,
+        "invertedTriangleCount": 22,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    },
+    {
+      "id": "flexion-80-collar-0.72",
+      "flexionDegrees": 80,
+      "collarHalfWidth": 0.72,
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "qualifies": false,
+      "metrics": {
+        "maximumAbsoluteLogEdgeStrain": 0.6631764980434747,
+        "maximumAbsoluteLogAreaStrain": 0.6633857538960244,
+        "relativeVolumeDrift": 0.0019983203654098183,
+        "maximumParentRigidError": 0,
+        "maximumChildRigidError": 0,
+        "parentRigidSampleCount": 241,
+        "childRigidSampleCount": 193,
+        "invertedTriangleCount": 0,
+        "openBoundaryEdgeCount": 0,
+        "nonFiniteVertexCount": 0
+      }
+    }
+  ],
+  "claimCeiling": "diagnostic visualization of the reviewed synthetic sleeve control failure; no creature, corrective-cage, anatomical, or production claim"
+}
