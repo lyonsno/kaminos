@@ -86,6 +86,13 @@ def test_blender_51_uses_file_output_directory_and_name_fields():
     assert ".file_slots[0].path = " not in adapter
 
 
+def test_blender_51_uses_supported_multilayer_exr_file_outputs():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert adapter.count('file_format = "OPEN_EXR_MULTILAYER"') == 2
+    assert 'file_format = "OPEN_EXR"' not in adapter
+
+
 if __name__ == "__main__":
     test_four_channel_paths_are_unique_and_caller_addressed()
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
@@ -94,3 +101,4 @@ if __name__ == "__main__":
     test_blender_51_uses_the_scene_compositing_node_group()
     test_blender_51_uses_supported_compositor_node_types()
     test_blender_51_uses_file_output_directory_and_name_fields()
+    test_blender_51_uses_supported_multilayer_exr_file_outputs()
