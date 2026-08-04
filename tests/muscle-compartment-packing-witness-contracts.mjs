@@ -143,7 +143,7 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.match(String(memory.files.get(`${outDir}/index.html`)), /OrbitControls/);
 });
 
-test('eight-carrier density witness refuses curvature-reversing packed geometry', async () => {
+test('eight-carrier density witness refuses the source-relative residual without publishing folded geometry', async () => {
   const memory = memoryIo();
   const outDir = '/virtual/muscle-compartment-packing-density-eight';
   const source = createSyntheticMuscleDensityLadder(8);
@@ -160,12 +160,13 @@ test('eight-carrier density witness refuses curvature-reversing packed geometry'
       },
       io:memory.io,
     }),
-    /source-formation-failed/i,
+    /pairwise-exclusion-failed/i,
   );
   const report = JSON.parse(String(memory.files.get(`${outDir}/report.json`)));
   assert.equal(report.status, 'failed');
-  assert.equal(report.result.status, 'source-formation-failed');
-  assert.equal(report.result.failure.kind, 'source-formation-constraint');
+  assert.equal(report.result.status, 'pairwise-exclusion-failed');
+  assert.equal(report.result.failure.kind, 'residual-constraint');
+  assert.equal(report.result.failure.dominantMechanism.kind, 'pairwise-exclusion-residual');
   assert.ok(report.result.metrics.packed.sourceCurvatureReversalCount > 0);
   assert.ok(!memory.files.has(`${outDir}/index.html`));
 });

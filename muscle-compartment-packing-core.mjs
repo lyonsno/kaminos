@@ -833,6 +833,9 @@ export function createSyntheticMuscleDensityLadder(muscleCount) {
       anatomicalAdmission:'none',
     },
     dimension:3,
+    formation: {
+      centerlineSmoothingReference:'source-displacement',
+    },
     compartment: {
       id:'local-muscle-compartment',
       kind:'box',

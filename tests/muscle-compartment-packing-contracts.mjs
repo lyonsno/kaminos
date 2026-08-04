@@ -218,7 +218,7 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
   );
 });
 
-test('nested density rungs preserve identity and cannot converge through source-curvature reversal', () => {
+test('nested density rungs use source-relative formation and expose the remaining dense residual', () => {
   const config = {
     maxIterations: 960,
     relaxationStep: 0.35,
@@ -229,6 +229,9 @@ test('nested density rungs preserve identity and cannot converge through source-
   let priorSource = null;
   for (const muscleCount of [4, 6, 8]) {
     const source = createSyntheticMuscleDensityLadder(muscleCount);
+    assert.deepEqual(source.formation, {
+      centerlineSmoothingReference: 'source-displacement',
+    });
     if (priorSource) {
       assert.deepEqual(
         source.muscles.slice(0, priorSource.muscles.length),
@@ -244,23 +247,30 @@ test('nested density rungs preserve identity and cannot converge through source-
         `four-carrier baseline failed: ${JSON.stringify(result.metrics.packed)}`,
       );
       assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
-    } else {
+    } else if (muscleCount === 6) {
       assert.equal(
         result.status,
-        'source-formation-failed',
-        `${muscleCount}-carrier rung must not launder curvature reversal into convergence`,
+        'pairwise-exclusion-failed',
+        'source-relative smoothing must prefer a small overlap residual to folded convergence',
       );
-      assert.equal(result.failure?.kind, 'source-formation-constraint');
-      assert.equal(result.failure?.dominantMechanism?.kind, 'source-curvature-reversal');
+      assert.equal(result.failure?.dominantMechanism?.kind, 'pairwise-exclusion-residual');
+      assert.equal(result.metrics.packed.sourceCurvatureReversalCount, 0);
+    } else {
+      assert.equal(result.status, 'pairwise-exclusion-failed');
+      assert.equal(result.failure?.dominantMechanism?.kind, 'pairwise-exclusion-residual');
       assert.ok(result.metrics.packed.sourceCurvatureReversalCount > 0);
     }
     assert.equal(result.muscles.length, muscleCount);
     assert.ok(result.metrics.initial.pairwisePenetration > 0.2);
     assert.ok(result.metrics.initial.skeletalPenetration > 0.2);
-    assert.ok(
-      result.metrics.packed.pairwisePenetration <= config.convergenceTolerance,
-      `${muscleCount}-carrier overlap remained ${result.metrics.packed.pairwisePenetration}`,
-    );
+    if (muscleCount === 4) {
+      assert.ok(result.metrics.packed.pairwisePenetration <= config.convergenceTolerance);
+    } else {
+      assert.ok(
+        result.metrics.packed.pairwisePenetration < result.metrics.initial.pairwisePenetration * 0.05,
+        `${muscleCount}-carrier source-relative solve did not materially reduce overlap`,
+      );
+    }
     assert.ok(result.metrics.packed.skeletalPenetration <= config.convergenceTolerance);
     assert.ok(result.metrics.packed.compartmentEscape <= config.convergenceTolerance);
     assert.equal(result.metrics.packed.endpointDrift, 0);
@@ -270,6 +280,27 @@ test('nested density rungs preserve identity and cannot converge through source-
     assert.deepEqual(solveMuscleCompartmentPacking(source, config), result);
     priorSource = source;
   }
+});
+
+test('legacy absolute smoothing cannot converge through source-curvature reversal', () => {
+  const source = createSyntheticMuscleDensityLadder(6);
+  delete source.formation;
+  source.id = `${source.id}-legacy-absolute-smoothing`;
+  source.input = {
+    requested: { kind:'test-fixture', id:source.id, sha256:'f'.repeat(64) },
+    effective: { kind:'test-fixture', id:source.id, sha256:'f'.repeat(64) },
+  };
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations:960,
+    relaxationStep:0.35,
+    smoothnessStep:0.035,
+    sampleCount:25,
+    convergenceTolerance:1e-7,
+  });
+  assert.equal(result.status, 'source-formation-failed');
+  assert.equal(result.failure?.kind, 'source-formation-constraint');
+  assert.equal(result.failure?.dominantMechanism?.kind, 'source-curvature-reversal');
+  assert.ok(result.metrics.packed.sourceCurvatureReversalCount > 0);
 });
 
 test('source validation rejects identity collision and non-finite carrier state', () => {
