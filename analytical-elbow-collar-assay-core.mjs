@@ -5,6 +5,8 @@ import {
 } from './analytical-elbow-core.mjs';
 
 export const COLLAR_ASSAY_SCHEMA = 'kaminos.shape-bearing-collar-assay.v0';
+export const COLLAR_WITNESS_DATA_SCHEMA =
+  'kaminos.shape-bearing-collar-witness-data.v0';
 
 const ROUTE = 'analytical-elbow-graded-collar';
 const EPSILON = 1e-12;
@@ -221,6 +223,42 @@ function measure(mesh, vertices, flexionDegrees, collarHalfWidth) {
   };
 }
 
+function measureTriangle(vertices, triangle, flexionDegrees) {
+  let maximumAbsoluteLogEdgeStrain = 0;
+  for (let index = 0; index < 3; index += 1) {
+    const a = triangle[index];
+    const b = triangle[(index + 1) % 3];
+    const restLength = distance(vertices[a].rest, vertices[b].rest);
+    const posedLength = distance(vertices[a].posed, vertices[b].posed);
+    maximumAbsoluteLogEdgeStrain = Math.max(
+      maximumAbsoluteLogEdgeStrain,
+      Math.abs(Math.log(posedLength / restLength)),
+    );
+  }
+  const restArea = triangleArea(vertices, triangle, 'rest');
+  const posedArea = triangleArea(vertices, triangle, 'posed');
+  const [a, b, c] = triangle;
+  const restNormal = cross(
+    subtract(vertices[b].rest, vertices[a].rest),
+    subtract(vertices[c].rest, vertices[a].rest),
+  );
+  const posedNormal = cross(
+    subtract(vertices[b].posed, vertices[a].posed),
+    subtract(vertices[c].posed, vertices[a].posed),
+  );
+  const transportedNormal = rotateAroundZ(
+    restNormal,
+    flexionDegrees * Math.PI / 180 *
+      (vertices[a].weight + vertices[b].weight + vertices[c].weight) / 3,
+  );
+  return {
+    indices: [...triangle],
+    maximumAbsoluteLogEdgeStrain,
+    absoluteLogAreaStrain: Math.abs(Math.log(posedArea / restArea)),
+    inverted: dot(transportedNormal, posedNormal) <= 0,
+  };
+}
+
 function validateSource(source) {
   if (!source || source.effectiveRoute !== 'analytical-cage') {
     throw new Error('shape-bearing collar assay requires effective analytical-cage source route');
@@ -334,5 +372,82 @@ export function runShapeBearingCollarAssay({ source, collarHalfWidths }) {
       : 'PROMOTE_VOLUMETRIC_OR_CORRECTIVE_CAGE',
     survivingWidths,
     claimCeiling: 'provisional-clean-topology-shape-bearing-collar-mechanism',
+  };
+}
+
+export function createShapeBearingCollarWitnessDataset({ source }) {
+  const collarHalfWidths = [0, 0.72];
+  const assay = runShapeBearingCollarAssay({ source, collarHalfWidths });
+  const requestedCases = [
+    [35, 0],
+    [35, 0.72],
+    [80, 0],
+    [80, 0.72],
+  ];
+  const availablePoses = new Set(
+    source.poses.map(pose => pose.effectiveFlexionDegrees),
+  );
+  for (const [flexionDegrees] of requestedCases) {
+    if (!availablePoses.has(flexionDegrees)) {
+      throw new Error(
+        `shape-bearing collar witness requires source pose ${flexionDegrees}`,
+      );
+    }
+  }
+
+  const mesh = createSleeve();
+  const cases = requestedCases.map(([flexionDegrees, collarHalfWidth]) => {
+    const vertices = deformSleeve(mesh, flexionDegrees, collarHalfWidth);
+    const row = assay.rows.find(candidate =>
+      candidate.flexionDegrees === flexionDegrees &&
+      candidate.collarHalfWidth === collarHalfWidth
+    );
+    return {
+      id: `flexion-${flexionDegrees}-collar-${collarHalfWidth}`,
+      flexionDegrees,
+      collarHalfWidth,
+      qualifies: row.qualifies,
+      metrics: structuredClone(row.metrics),
+      vertices: vertices.map((vertex, index) => ({
+        id: vertex.id,
+        index,
+        axial: vertex.axial,
+        rest: [...vertex.rest],
+        posed: [...vertex.posed],
+        weight: vertex.weight,
+        region: collarHalfWidth > 0 && Math.abs(vertex.axial) < collarHalfWidth
+          ? 'collar'
+          : vertex.axial >= collarHalfWidth
+            ? 'parent-rigid'
+            : 'child-rigid',
+      })),
+      triangles: mesh.triangles.map(triangle =>
+        measureTriangle(vertices, triangle, flexionDegrees)
+      ),
+    };
+  });
+
+  return {
+    schema: COLLAR_WITNESS_DATA_SCHEMA,
+    status: 'complete',
+    requestedRoute: 'analytical-elbow-collar-failure-witness',
+    effectiveRoute: 'analytical-elbow-collar-failure-witness',
+    fallbackUsed: false,
+    source: structuredClone(assay.source),
+    thresholds: structuredClone(assay.thresholds),
+    visualContract: {
+      startsPaused: true,
+      animationActive: false,
+      heatThresholdLogStrain: Math.log(MAXIMUM_EDGE_STRETCH_RATIO),
+      cameraPresets: ['profile', 'three-quarter'],
+      comparisonCases: requestedCases.map(([flexionDegrees, collarHalfWidth]) => ({
+        flexionDegrees,
+        collarHalfWidth,
+      })),
+    },
+    assay,
+    cases,
+    claimCeiling:
+      'diagnostic visualization of the reviewed synthetic sleeve control failure; no creature, corrective-cage, anatomical, or production claim',
   };
 }
