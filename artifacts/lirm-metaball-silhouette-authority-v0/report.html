@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Metaball silhouette authority · tranche 01</title>
+<style>
+  :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #101412; color: #edf1eb; }
+  .mast { position: sticky; top: 0; z-index: 2; padding: 16px 24px; background: #151a17f2; border-bottom: 1px solid #4c5b51; }
+  h1 { margin: 0 0 8px; font-size: 20px; letter-spacing: 0; }
+  .config, .prompt { margin: 4px 0; color: #bac5bc; font-size: 13px; line-height: 1.45; }
+  .config strong { color: #f1c965; }
+  .prompt strong { color: #69d2b4; }
+  main { padding: 0 24px 32px; }
+  .assay-row { padding: 18px 0 22px; border-bottom: 1px solid #344039; }
+  .assay-row header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
+  .assay-row header p { margin: 0; color: #95a59a; font-size: 12px; }
+  .tiles { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); gap: 8px; }
+  .tile { min-width: 0; margin: 0; overflow: hidden; border: 1px solid #3a463f; border-radius: 4px; background: #0a0d0b; aspect-ratio: 1 / 1.1; }
+  figcaption { height: 28px; padding: 6px 8px; background: #202722; color: #d8ded9; font-size: 11px; }
+  figcaption span { float: right; color: #849288; }
+  .tile img { display: block; width: 100%; height: calc(100% - 28px); object-fit: contain; }
+  .source { border-color: #287969; }
+  .output { border-color: #906b25; }
+  .pending { display: grid; grid-template-rows: 28px 1fr; color: #7e8a82; }
+  .pending div { display: grid; place-items: center; font-size: 12px; }
+  @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(3, minmax(150px, 1fr)); } }
+</style>
+</head>
+<body>
+<header class="mast">
+  <h1>Metaball silhouette authority · tranche 01 · 21/21 outputs present</h1>
+  <p class="config"><strong>fixed generator</strong> flux2-klein-9b · q4 · 512×512 · 8 steps · guidance 1.0 · clay/depth/normal · matched seeds 80401, 80402, 80403</p>
+  <p class="prompt"><strong>prompt</strong> Complete the supplied smooth creature construction as one healthy, aesthetically pleasing living animal. Keep the exact source camera, outer silhouette, body proportions, support placement, and major mass distribution authoritative. Elaborate coherent anatomical transitions, surface structure, material, and gentle character within that authored outline. Present one intact healthy quadruped with a continuous closed outer surface and four load-bearing supports on a clean pale studio background.</p>
+</header>
+<main>
+<section class="assay-row">
+  <header><h2>baseline</h2><p>baseline</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/baseline/baseline/clay-implicit.png" alt="baseline clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/baseline/baseline/depth-implicit.png" alt="baseline depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/baseline/baseline/normal-implicit.png" alt="baseline normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>ea48196ba486 · 107.9s</span></figcaption>
+    <img src="generated/baseline/seed-80401/output.png" alt="baseline generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>4be3fb16019a · 104.4s</span></figcaption>
+    <img src="generated/baseline/seed-80402/output.png" alt="baseline generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>b0f80911357c · 120.7s</span></figcaption>
+    <img src="generated/baseline/seed-80403/output.png" alt="baseline generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>body-long</h2><p>bodyLength: 1.05 → 1.28</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/body-long/body-long/clay-implicit.png" alt="body-long clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/body-long/body-long/depth-implicit.png" alt="body-long depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/body-long/body-long/normal-implicit.png" alt="body-long normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>975b418ec7c2 · 118.0s</span></figcaption>
+    <img src="generated/body-long/seed-80401/output.png" alt="body-long generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>b6cc07a0fa79 · 106.5s</span></figcaption>
+    <img src="generated/body-long/seed-80402/output.png" alt="body-long generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>f6c196db91be · 122.1s</span></figcaption>
+    <img src="generated/body-long/seed-80403/output.png" alt="body-long generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>body-deep</h2><p>bodyDepth: 0.36 → 0.48</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/body-deep/body-deep/clay-implicit.png" alt="body-deep clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/body-deep/body-deep/depth-implicit.png" alt="body-deep depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/body-deep/body-deep/normal-implicit.png" alt="body-deep normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>5a50184edee9 · 108.8s</span></figcaption>
+    <img src="generated/body-deep/seed-80401/output.png" alt="body-deep generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>18ef3103f685 · 112.0s</span></figcaption>
+    <img src="generated/body-deep/seed-80402/output.png" alt="body-deep generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>8a331114022c · 116.9s</span></figcaption>
+    <img src="generated/body-deep/seed-80403/output.png" alt="body-deep generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>dorsal-arched</h2><p>dorsalArch: 0.03 → 0.2</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/dorsal-arched/dorsal-arched/clay-implicit.png" alt="dorsal-arched clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/dorsal-arched/dorsal-arched/depth-implicit.png" alt="dorsal-arched depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/dorsal-arched/dorsal-arched/normal-implicit.png" alt="dorsal-arched normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>d4cf2df84a17 · 101.1s</span></figcaption>
+    <img src="generated/dorsal-arched/seed-80401/output.png" alt="dorsal-arched generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>62f8b467fc0d · 133.3s</span></figcaption>
+    <img src="generated/dorsal-arched/seed-80402/output.png" alt="dorsal-arched generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>982afcfa5deb · 130.0s</span></figcaption>
+    <img src="generated/dorsal-arched/seed-80403/output.png" alt="dorsal-arched generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>posterior-heavy</h2><p>posteriorMass: 0.85 → 1.3</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/posterior-heavy/posterior-heavy/clay-implicit.png" alt="posterior-heavy clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/posterior-heavy/posterior-heavy/depth-implicit.png" alt="posterior-heavy depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/posterior-heavy/posterior-heavy/normal-implicit.png" alt="posterior-heavy normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>42c1c9ed986a · 111.5s</span></figcaption>
+    <img src="generated/posterior-heavy/seed-80401/output.png" alt="posterior-heavy generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>ef28231c2c9e · 113.1s</span></figcaption>
+    <img src="generated/posterior-heavy/seed-80402/output.png" alt="posterior-heavy generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>b5815105e178 · 102.1s</span></figcaption>
+    <img src="generated/posterior-heavy/seed-80403/output.png" alt="posterior-heavy generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>supports-wide</h2><p>supportSpacing: 0.52 → 0.72</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/supports-wide/supports-wide/clay-implicit.png" alt="supports-wide clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/supports-wide/supports-wide/depth-implicit.png" alt="supports-wide depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/supports-wide/supports-wide/normal-implicit.png" alt="supports-wide normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>34649e255709 · 110.3s</span></figcaption>
+    <img src="generated/supports-wide/seed-80401/output.png" alt="supports-wide generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>63cc02a1d3dd · 137.6s</span></figcaption>
+    <img src="generated/supports-wide/seed-80402/output.png" alt="supports-wide generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>070a368d06af · 154.9s</span></figcaption>
+    <img src="generated/supports-wide/seed-80403/output.png" alt="supports-wide generated seed 80403">
+  </figure>
+  </div>
+</section>
+<section class="assay-row">
+  <header><h2>supports-long</h2><p>supportLength: 0.32 → 0.5</p></header>
+  <div class="tiles">
+    
+  <figure class="tile source">
+    <figcaption>clay</figcaption>
+    <img src="controls/supports-long/supports-long/clay-implicit.png" alt="supports-long clay conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>depth</figcaption>
+    <img src="controls/supports-long/supports-long/depth-implicit.png" alt="supports-long depth conditioning">
+  </figure>
+    
+  <figure class="tile source">
+    <figcaption>normal</figcaption>
+    <img src="controls/supports-long/supports-long/normal-implicit.png" alt="supports-long normal conditioning">
+  </figure>
+    
+  <figure class="tile output">
+    <figcaption>seed 80401 <span>353cdb02dfc5 · 116.5s</span></figcaption>
+    <img src="generated/supports-long/seed-80401/output.png" alt="supports-long generated seed 80401">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80402 <span>454de64c0c90 · 108.3s</span></figcaption>
+    <img src="generated/supports-long/seed-80402/output.png" alt="supports-long generated seed 80402">
+  </figure>
+  <figure class="tile output">
+    <figcaption>seed 80403 <span>32655d96977e · 121.9s</span></figcaption>
+    <img src="generated/supports-long/seed-80403/output.png" alt="supports-long generated seed 80403">
+  </figure>
+  </div>
+</section></main>
+</body>
+</html>

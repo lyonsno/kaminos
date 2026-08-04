@@ -1,0 +1,375 @@
+{
+  "schema": "kaminos.lirm-metaball-silhouette-authority-tranche.v0",
+  "status": "sources-complete",
+  "baselineId": "baseline",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "min": 0.75,
+        "max": 1.4
+      },
+      {
+        "id": "bodyDepth",
+        "semanticRole": "ventralDorsalMass",
+        "min": 0.25,
+        "max": 0.62
+      },
+      {
+        "id": "dorsalArch",
+        "semanticRole": "dorsalProfile",
+        "min": -0.04,
+        "max": 0.28
+      },
+      {
+        "id": "posteriorMass",
+        "semanticRole": "posteriorMass",
+        "min": 0.65,
+        "max": 1.45
+      },
+      {
+        "id": "supportSpacing",
+        "semanticRole": "contactFootprint",
+        "min": 0.38,
+        "max": 0.82
+      },
+      {
+        "id": "supportLength",
+        "semanticRole": "contactLimb",
+        "min": 0.22,
+        "max": 0.58
+      }
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic"
+  },
+  "fixedGenerator": {
+    "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seeds": [
+      80401,
+      80402,
+      80403
+    ],
+    "prompt": "Complete the supplied smooth creature construction as one healthy, aesthetically pleasing living animal. Keep the exact source camera, outer silhouette, body proportions, support placement, and major mass distribution authoritative. Elaborate coherent anatomical transitions, surface structure, material, and gentle character within that authored outline. Present one intact healthy quadruped with a continuous closed outer surface and four load-bearing supports on a clean pale studio background.",
+    "sourceImageOrder": [
+      "clay",
+      "depth",
+      "normal"
+    ]
+  },
+  "rows": [
+    {
+      "id": "baseline",
+      "axis": {
+        "parameterId": null,
+        "from": null,
+        "to": null
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/baseline/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/clay-implicit.png",
+          "byteSize": 24623,
+          "sha256": "sha256:0cdf52dc5a862afd11a29a8b5fd141b4f621a83fad61c8949252fc460b0a1a55",
+          "relativePath": "controls/baseline/baseline/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/depth-implicit.png",
+          "byteSize": 14823,
+          "sha256": "sha256:cc39a97d3ac7bde94bc13ad9d31363025e646fbad49c50dc2d72b6ac372b33b0",
+          "relativePath": "controls/baseline/baseline/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/normal-implicit.png",
+          "byteSize": 31563,
+          "sha256": "sha256:07474fe27b80666670fcb1c794c25ee473059032d7eca8e5c63f114a1ba9e0c6",
+          "relativePath": "controls/baseline/baseline/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/baseline/baseline/trellis-source.png",
+        "byteSize": 85296,
+        "sha256": "sha256:0da60d9083abcdef4fa875585f6ca31b0307e1e2bee208fd8f01cc55a72d9e95",
+        "relativePath": "controls/baseline/baseline/trellis-source.png"
+      }
+    },
+    {
+      "id": "body-long",
+      "axis": {
+        "parameterId": "bodyLength",
+        "from": 1.05,
+        "to": 1.28
+      },
+      "parameters": {
+        "bodyLength": 1.28,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/body-long/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/clay-implicit.png",
+          "byteSize": 26197,
+          "sha256": "sha256:4325deb6126b220ca1b5383fd8b4cad367b9e7937d03aec39051dd661ac600a7",
+          "relativePath": "controls/body-long/body-long/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/depth-implicit.png",
+          "byteSize": 15692,
+          "sha256": "sha256:c5145779d2ac43f46a1fc9d4d74226721632c2dfda2a20740bcff5630f0e17f8",
+          "relativePath": "controls/body-long/body-long/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/normal-implicit.png",
+          "byteSize": 33832,
+          "sha256": "sha256:b940531524fda75ba21bae0f19e8fc5d384f018290fedc1beb1f3a66ab75d6c2",
+          "relativePath": "controls/body-long/body-long/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/trellis-source.png",
+        "byteSize": 101850,
+        "sha256": "sha256:1e4c285426623217e0ec9348bd8d60fd8683e92cf2d99f798cd75d9f0061f763",
+        "relativePath": "controls/body-long/body-long/trellis-source.png"
+      }
+    },
+    {
+      "id": "body-deep",
+      "axis": {
+        "parameterId": "bodyDepth",
+        "from": 0.36,
+        "to": 0.48
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.48,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/body-deep/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-deep/body-deep/clay-implicit.png",
+          "byteSize": 28704,
+          "sha256": "sha256:5feb64127e1c54df1cd7f0823c9f8e7e07f7bb3c9845e1b95fb983e5b57bff8f",
+          "relativePath": "controls/body-deep/body-deep/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-deep/body-deep/depth-implicit.png",
+          "byteSize": 16490,
+          "sha256": "sha256:65b3963b52b5b492fb600ba47bf454a4f747e11e8a96007ff16c3fd37c84708e",
+          "relativePath": "controls/body-deep/body-deep/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-deep/body-deep/normal-implicit.png",
+          "byteSize": 36070,
+          "sha256": "sha256:faff6c1ecaf2906dc55875fe83a3ed0d157c6cbfe6cfebe5876f918110af57d6",
+          "relativePath": "controls/body-deep/body-deep/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/body-deep/body-deep/trellis-source.png",
+        "byteSize": 107356,
+        "sha256": "sha256:2716fdb0f0018ccbf852246458ae2860ec31319312b930022cfc57c3f0c037da",
+        "relativePath": "controls/body-deep/body-deep/trellis-source.png"
+      }
+    },
+    {
+      "id": "dorsal-arched",
+      "axis": {
+        "parameterId": "dorsalArch",
+        "from": 0.03,
+        "to": 0.2
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.2,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/dorsal-arched/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/dorsal-arched/dorsal-arched/clay-implicit.png",
+          "byteSize": 28052,
+          "sha256": "sha256:1665b48f15a588c9478714cefbf081989299b8ff716b06dfdd88dbe550a939f0",
+          "relativePath": "controls/dorsal-arched/dorsal-arched/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/dorsal-arched/dorsal-arched/depth-implicit.png",
+          "byteSize": 16462,
+          "sha256": "sha256:d938ce657e68c369eb9197022518e676dc52d587bf82ce2599aabcf25005b492",
+          "relativePath": "controls/dorsal-arched/dorsal-arched/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/dorsal-arched/dorsal-arched/normal-implicit.png",
+          "byteSize": 35806,
+          "sha256": "sha256:3aee31da5306e7126942ac1094b01ae246a06e862615849dd731120008d9b9a9",
+          "relativePath": "controls/dorsal-arched/dorsal-arched/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/dorsal-arched/dorsal-arched/trellis-source.png",
+        "byteSize": 98511,
+        "sha256": "sha256:5f51eb3bae2a7ce6af24390af4bf4381b1b5fb4b126c1a677e3587326147c9de",
+        "relativePath": "controls/dorsal-arched/dorsal-arched/trellis-source.png"
+      }
+    },
+    {
+      "id": "posterior-heavy",
+      "axis": {
+        "parameterId": "posteriorMass",
+        "from": 0.85,
+        "to": 1.3
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 1.3,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/posterior-heavy/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/posterior-heavy/posterior-heavy/clay-implicit.png",
+          "byteSize": 26768,
+          "sha256": "sha256:6211b4d2491a1108722844c8a56808079be1c8586f1e7adc3622ead5c6f43860",
+          "relativePath": "controls/posterior-heavy/posterior-heavy/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/posterior-heavy/posterior-heavy/depth-implicit.png",
+          "byteSize": 15695,
+          "sha256": "sha256:94641bd45a264d906bd5327b67677cfaa08278739de60c34a9258d1ddf69c278",
+          "relativePath": "controls/posterior-heavy/posterior-heavy/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/posterior-heavy/posterior-heavy/normal-implicit.png",
+          "byteSize": 34483,
+          "sha256": "sha256:d43e838b3b297154cc8b3c74ce3bf0fbc832505e9cca8d094f93fd5957ccff9c",
+          "relativePath": "controls/posterior-heavy/posterior-heavy/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/posterior-heavy/posterior-heavy/trellis-source.png",
+        "byteSize": 93149,
+        "sha256": "sha256:2684eb461a92cc678c37d72061fa643ec357b21742b4ba96e9ce15de9b726fbd",
+        "relativePath": "controls/posterior-heavy/posterior-heavy/trellis-source.png"
+      }
+    },
+    {
+      "id": "supports-wide",
+      "axis": {
+        "parameterId": "supportSpacing",
+        "from": 0.52,
+        "to": 0.72
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.72,
+        "supportLength": 0.32
+      },
+      "witnessReceiptPath": "controls/supports-wide/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-wide/supports-wide/clay-implicit.png",
+          "byteSize": 24235,
+          "sha256": "sha256:c42f53c926328482180531e977034ab137314ad39317f68a5a0b0efe093b1c16",
+          "relativePath": "controls/supports-wide/supports-wide/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-wide/supports-wide/depth-implicit.png",
+          "byteSize": 14455,
+          "sha256": "sha256:cc775296feb67bf15ff227ab7ee284a33fde80015889274698428770291f9698",
+          "relativePath": "controls/supports-wide/supports-wide/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-wide/supports-wide/normal-implicit.png",
+          "byteSize": 30906,
+          "sha256": "sha256:4dec651e301cc9b40182ea263875344eb9565d3f0429f17b94710e962489db8a",
+          "relativePath": "controls/supports-wide/supports-wide/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-wide/supports-wide/trellis-source.png",
+        "byteSize": 90311,
+        "sha256": "sha256:b1e040681cf73f3e37d23c75dd144b8bf2fdf2f1f997fb2fdcbb755de180046c",
+        "relativePath": "controls/supports-wide/supports-wide/trellis-source.png"
+      }
+    },
+    {
+      "id": "supports-long",
+      "axis": {
+        "parameterId": "supportLength",
+        "from": 0.32,
+        "to": 0.5
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.5
+      },
+      "witnessReceiptPath": "controls/supports-long/receipt.json",
+      "sourceImages": {
+        "clay": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-long/supports-long/clay-implicit.png",
+          "byteSize": 29024,
+          "sha256": "sha256:a92ad41c5b8e64350466d8b9418954f371b749651ae3c80dfbe7f70c70a04775",
+          "relativePath": "controls/supports-long/supports-long/clay-implicit.png"
+        },
+        "depth": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-long/supports-long/depth-implicit.png",
+          "byteSize": 17228,
+          "sha256": "sha256:f65cb6c6a00ff42775f341841af0b7a5ae09877060fa270b182a280bd7aa2d98",
+          "relativePath": "controls/supports-long/supports-long/depth-implicit.png"
+        },
+        "normal": {
+          "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-long/supports-long/normal-implicit.png",
+          "byteSize": 37393,
+          "sha256": "sha256:3cad376e0667bd0b255735b38bf12760f128cf0cc3e7dbc2c6c3b74d454af05c",
+          "relativePath": "controls/supports-long/supports-long/normal-implicit.png"
+        }
+      },
+      "trellisSource": {
+        "path": "artifacts/lirm-metaball-silhouette-authority-v0/controls/supports-long/supports-long/trellis-source.png",
+        "byteSize": 105952,
+        "sha256": "sha256:658897f7c528450a78bf69538c8debff7aca37c25c2ec803f1412e5397830651",
+        "relativePath": "controls/supports-long/supports-long/trellis-source.png"
+      }
+    }
+  ]
+}

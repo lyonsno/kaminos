@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.lirm-metaball-silhouette-authority-retry.v0",
+  "cellId": "dorsal-arched-seed-80401",
+  "failedJobId": "d4cf2df84a17",
+  "failurePhase": "stale_recovery",
+  "replacementJobId": "daf740e917be",
+  "replacementStatus": "done",
+  "replacementDurationS": 101.143132,
+  "replacementExitCode": 0,
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+  "commandManifest": "retry-dorsal-arched-seed-80401.command.json"
+}

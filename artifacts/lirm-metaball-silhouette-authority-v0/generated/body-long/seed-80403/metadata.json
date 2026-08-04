@@ -1,0 +1,27 @@
+{
+  "name": "clay-implicit",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "f6c196db91be",
+  "input_path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/clay-implicit.png",
+  "input_name": "clay-implicit.png",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/depth-implicit.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-silhouette-authority-v0/controls/body-long/body-long/normal-implicit.png",
+    "prompt_file": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-silhouette-authority-v0/prompt.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "80403",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/Users/noahlyons/dev/mlx-openai-server"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785875479.545015,
+  "duration_s": 122.1
+}

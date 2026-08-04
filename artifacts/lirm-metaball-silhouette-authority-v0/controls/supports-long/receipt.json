@@ -1,0 +1,191 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "supports-long",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 192,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "supports-long/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "supports-long/clay-implicit.svg",
+        "rasterPath": "supports-long/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "supports-long/depth-implicit.svg",
+        "rasterPath": "supports-long/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "supports-long/normal-implicit.svg",
+        "rasterPath": "supports-long/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "supports-long/mask-implicit.svg",
+        "rasterPath": "supports-long/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "supports-long/semantic-implicit.svg",
+        "rasterPath": "supports-long/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "supports-long/trellis-source.svg",
+      "rasterPath": "supports-long/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "supports-long/bundle.json",
+      "byteSize": 8395,
+      "sha256": "sha256:08948503f4372ffd873fcde2dfaa2aa7e83a8764a634a813621383e363963c1b"
+    },
+    {
+      "path": "supports-long/clay-implicit.svg",
+      "byteSize": 613418,
+      "sha256": "sha256:c33fb90d359bbb4206d5a6e482e13b40981ad7160e6af74bbe1f04ada1010a76"
+    },
+    {
+      "path": "supports-long/clay-implicit.png",
+      "byteSize": 29024,
+      "sha256": "sha256:a92ad41c5b8e64350466d8b9418954f371b749651ae3c80dfbe7f70c70a04775"
+    },
+    {
+      "path": "supports-long/depth-implicit.svg",
+      "byteSize": 630014,
+      "sha256": "sha256:12fe7c6ebee3cebdcfc0b8cc093579860f7087e8efc16585160b3108ccf87b7d"
+    },
+    {
+      "path": "supports-long/depth-implicit.png",
+      "byteSize": 17228,
+      "sha256": "sha256:f65cb6c6a00ff42775f341841af0b7a5ae09877060fa270b182a280bd7aa2d98"
+    },
+    {
+      "path": "supports-long/normal-implicit.svg",
+      "byteSize": 619429,
+      "sha256": "sha256:c56b1ce78005195a1e30cacf98ace22791ddd66ce74d5d332f1e86c54f6d60f5"
+    },
+    {
+      "path": "supports-long/normal-implicit.png",
+      "byteSize": 37393,
+      "sha256": "sha256:3cad376e0667bd0b255735b38bf12760f128cf0cc3e7dbc2c6c3b74d454af05c"
+    },
+    {
+      "path": "supports-long/mask-implicit.svg",
+      "byteSize": 629970,
+      "sha256": "sha256:59d5989ba947039d3e1748d179c8a758c94a4724f48aa95ea79f6dda65a9f358"
+    },
+    {
+      "path": "supports-long/mask-implicit.png",
+      "byteSize": 6381,
+      "sha256": "sha256:a77a802e93f440cb9b5b1ea0757e8b39cbd42592e06472f0e60542c136f18919"
+    },
+    {
+      "path": "supports-long/semantic-implicit.svg",
+      "byteSize": 680617,
+      "sha256": "sha256:c39d716bcd04bb0b3ce3172a85a6da9a77aa122b9fd19f7a0652645a822d4abe"
+    },
+    {
+      "path": "supports-long/semantic-implicit.png",
+      "byteSize": 7533,
+      "sha256": "sha256:90583fd1c428c4faa871664b0c839345b64f0895f382e16e17e680ec29f8d1d0"
+    },
+    {
+      "path": "supports-long/trellis-source.svg",
+      "byteSize": 613179,
+      "sha256": "sha256:92a577df28004ac5fe49e4cee0a9d4b539444b3e5a94ce4871ac989135dd94d1"
+    },
+    {
+      "path": "supports-long/trellis-source.png",
+      "byteSize": 105952,
+      "sha256": "sha256:658897f7c528450a78bf69538c8debff7aca37c25c2ec803f1412e5397830651"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "min": 0.75,
+        "max": 1.4
+      },
+      {
+        "id": "bodyDepth",
+        "semanticRole": "ventralDorsalMass",
+        "min": 0.25,
+        "max": 0.62
+      },
+      {
+        "id": "dorsalArch",
+        "semanticRole": "dorsalProfile",
+        "min": -0.04,
+        "max": 0.28
+      },
+      {
+        "id": "posteriorMass",
+        "semanticRole": "posteriorMass",
+        "min": 0.65,
+        "max": 1.45
+      },
+      {
+        "id": "supportSpacing",
+        "semanticRole": "contactFootprint",
+        "min": 0.38,
+        "max": 0.82
+      },
+      {
+        "id": "supportLength",
+        "semanticRole": "contactLimb",
+        "min": 0.22,
+        "max": 0.58
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 1.05,
+    "bodyDepth": 0.36,
+    "dorsalArch": 0.03,
+    "posteriorMass": 0.85,
+    "supportSpacing": 0.52,
+    "supportLength": 0.5
+  },
+  "implicitPrimitiveCount": 16,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "facialLandmark",
+    "contactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}
