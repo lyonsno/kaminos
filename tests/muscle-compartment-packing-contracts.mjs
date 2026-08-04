@@ -103,6 +103,11 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     result.correctionAttribution.interpretation,
     'algorithmic-projection-path-length-not-physical-force',
   );
+  assert.equal(
+    result.correctionAttribution.aggregation,
+    'sum-of-primitive-applied-deltas',
+    'path length must sum every primitive delta instead of netting a whole correction pass',
+  );
   assert.deepEqual(
     result.correctionAttribution.categories,
     [
@@ -125,6 +130,16 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     result.correctionAttribution.totals.pairwiseExclusion
       .cumulativeAppliedKnotDisplacement > 0,
   );
+  assert.ok(
+    result.correctionAttribution.totals.skeletalClearance
+      .cumulativeAppliedKnotDisplacement > 1.894284013762,
+    'primitive-delta path must retain opposing skeletal corrections lost by the pre-fix pass-net ledger',
+  );
+  assert.ok(
+    result.correctionAttribution.totals.pairwiseExclusion
+      .cumulativeAppliedKnotDisplacement > 0.010776889858,
+    'primitive-delta path must retain opposing pairwise corrections lost by the pre-fix pass-net ledger',
+  );
   assert.equal(
     result.correctionAttribution.totals.volumeRestoration
       .cumulativeAppliedKnotDisplacement,
@@ -139,6 +154,8 @@ test('four endpoint-fixed swept muscles pack around rigid anatomy without identi
     for (const correction of Object.values(row.corrections)) {
       assert.ok(correction.cumulativeAppliedKnotDisplacement >= 0);
       assert.ok(correction.cumulativeAppliedRadiusChange >= 0);
+      assert.ok(Number.isInteger(correction.appliedPrimitiveCount));
+      assert.ok(correction.appliedPrimitiveCount >= 0);
     }
   }
   assert.equal(result.muscles.length, 4);

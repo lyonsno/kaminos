@@ -18,6 +18,24 @@ const SUCCESS_ARTIFACT_PATHS = Object.freeze(['source.json', 'packed.json', 'ind
 const VISUAL_ADMISSION_ARTIFACT_PATHS = Object.freeze([
   'visual-inspection.json',
   'visual-inspection-input.json',
+  'before.png',
+  'packed.png',
+  'capture-before-report.json',
+  'capture-packed-report.json',
+]);
+const REQUIRED_VISUAL_VERDICT_KEYS = Object.freeze([
+  'nonblank',
+  'orbitable',
+  'movementLegible',
+  'stableMuscleIdentityLegible',
+  'attachmentHandlesLegible',
+  'skeletonAndCompartmentLegible',
+  'metricsLegible',
+  'textContained',
+  'sourceFormationRetainedLegible',
+  'packingSemanticsNotInverted',
+  'dominantCorrectionCauseLegible',
+  'correctionAttributionNotPresentedAsPhysicalForce',
 ]);
 
 function sha256(bytes) {
@@ -469,6 +487,20 @@ export async function admitMuscleCompartmentPackingVisualInspection({
 } = {}) {
   const outputRoot = resolve(outDir);
   const io = { ...DEFAULT_IO, ...ioOverrides };
+  const verdictKeys = Object.keys(inspection?.verdict || {});
+  const missingVerdictKeys = REQUIRED_VISUAL_VERDICT_KEYS.filter(
+    key => !verdictKeys.includes(key),
+  );
+  const unexpectedVerdictKeys = verdictKeys.filter(
+    key => !REQUIRED_VISUAL_VERDICT_KEYS.includes(key),
+  );
+  if (missingVerdictKeys.length > 0 || unexpectedVerdictKeys.length > 0) {
+    throw new Error(
+      'muscle packing visual admission required visual inspection verdict mismatch; ' +
+      `missing: ${missingVerdictKeys.join(', ') || 'none'}; ` +
+      `unexpected: ${unexpectedVerdictKeys.join(', ') || 'none'}`,
+    );
+  }
   if (
     typeof inspection?.observedAt !== 'string' || inspection.observedAt.length === 0 ||
     !Array.isArray(inspection.images) || inspection.images.length === 0 ||

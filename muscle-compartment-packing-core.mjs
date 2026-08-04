@@ -890,33 +890,42 @@ function projectCompartment(point, radius, compartment, amount) {
   });
 }
 
-function projectObstacles(source, muscles, amount) {
+function projectObstacles(source, muscles, amount, attribution, category) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
       const knot = muscle.centerline[knotIndex];
       for (const obstacle of source.obstacles) {
-        knot.position = projectObstacle(
-          knot.position,
-          knot.radius,
-          obstacle,
+        applyAttributedPosition(
+          attribution,
+          category,
+          muscles,
           muscleIndex,
           knotIndex,
-          amount,
+          projectObstacle(
+            knot.position,
+            knot.radius,
+            obstacle,
+            muscleIndex,
+            knotIndex,
+            amount,
+          ),
         );
       }
     }
   }
 }
 
-function projectBounds(source, muscles, amount) {
-  for (const muscle of muscles) {
+function projectBounds(source, muscles, amount, attribution, category) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
     for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
       const knot = muscle.centerline[knotIndex];
-      knot.position = projectCompartment(
-        knot.position,
-        knot.radius,
-        source.compartment,
-        amount,
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        projectCompartment(knot.position, knot.radius, source.compartment, amount),
       );
     }
   }
@@ -926,6 +935,7 @@ function emptyCorrectionMeasures() {
   return {
     cumulativeAppliedKnotDisplacement: 0,
     cumulativeAppliedRadiusChange: 0,
+    appliedPrimitiveCount: 0,
   };
 }
 
@@ -938,19 +948,32 @@ function createCorrectionAttribution(muscles) {
   }));
 }
 
-function applyAttributedCorrection(attribution, category, muscles, correction) {
-  const before = muscles.map(muscle => muscle.centerline.map(knot => ({
-    position: [...knot.position],
-    radius: knot.radius,
-  })));
-  correction();
-  for (const [muscleIndex, muscle] of muscles.entries()) {
+function applyAttributedPosition(
+  attribution,
+  category,
+  muscles,
+  muscleIndex,
+  knotIndex,
+  nextPosition,
+) {
+  const knot = muscles[muscleIndex].centerline[knotIndex];
+  const appliedDelta = distance(knot.position, nextPosition);
+  knot.position = nextPosition;
+  if (appliedDelta > 0) {
     const measures = attribution[muscleIndex].corrections[category];
-    for (const [knotIndex, knot] of muscle.centerline.entries()) {
-      const prior = before[muscleIndex][knotIndex];
-      measures.cumulativeAppliedKnotDisplacement += distance(knot.position, prior.position);
-      measures.cumulativeAppliedRadiusChange += Math.abs(knot.radius - prior.radius);
-    }
+    measures.cumulativeAppliedKnotDisplacement += appliedDelta;
+    measures.appliedPrimitiveCount += 1;
+  }
+}
+
+function applyAttributedRadius(attribution, category, muscles, muscleIndex, knotIndex, radius) {
+  const knot = muscles[muscleIndex].centerline[knotIndex];
+  const appliedDelta = Math.abs(knot.radius - radius);
+  knot.radius = radius;
+  if (appliedDelta > 0) {
+    const measures = attribution[muscleIndex].corrections[category];
+    measures.cumulativeAppliedRadiusChange += appliedDelta;
+    measures.appliedPrimitiveCount += 1;
   }
 }
 
@@ -966,17 +989,20 @@ function correctionAttributionReceipt(attribution) {
         measures.cumulativeAppliedKnotDisplacement;
       totals[category].cumulativeAppliedRadiusChange +=
         measures.cumulativeAppliedRadiusChange;
+      totals[category].appliedPrimitiveCount += measures.appliedPrimitiveCount;
       return [category, {
         cumulativeAppliedKnotDisplacement: rounded(
           measures.cumulativeAppliedKnotDisplacement,
         ),
         cumulativeAppliedRadiusChange: rounded(measures.cumulativeAppliedRadiusChange),
+        appliedPrimitiveCount: measures.appliedPrimitiveCount,
       }];
     })),
   }));
   return {
     schema: CORRECTION_ATTRIBUTION_SCHEMA,
     interpretation: 'algorithmic-projection-path-length-not-physical-force',
+    aggregation: 'sum-of-primitive-applied-deltas',
     categories: [...CORRECTION_CATEGORIES],
     byMuscle,
     totals: Object.fromEntries(CORRECTION_CATEGORIES.map(category => [category, {
@@ -984,11 +1010,12 @@ function correctionAttributionReceipt(attribution) {
         totals[category].cumulativeAppliedKnotDisplacement,
       ),
       cumulativeAppliedRadiusChange: rounded(totals[category].cumulativeAppliedRadiusChange),
+      appliedPrimitiveCount: totals[category].appliedPrimitiveCount,
     }])),
   };
 }
 
-function projectPairwise(muscles, amount) {
+function projectPairwise(muscles, amount, attribution, category) {
   const knotCount = muscles[0].centerline.length;
   for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
@@ -1013,8 +1040,26 @@ function projectPairwise(muscles, amount) {
             direction,
             (required - separation) * amount / movableCount,
           );
-          if (leftMovable) left.position = add(left.position, correction);
-          if (rightMovable) right.position = subtract(right.position, correction);
+          if (leftMovable) {
+            applyAttributedPosition(
+              attribution,
+              category,
+              muscles,
+              leftIndex,
+              leftKnotIndex,
+              add(left.position, correction),
+            );
+          }
+          if (rightMovable) {
+            applyAttributedPosition(
+              attribution,
+              category,
+              muscles,
+              rightIndex,
+              rightKnotIndex,
+              subtract(right.position, correction),
+            );
+          }
         }
       }
     }
@@ -1033,7 +1078,16 @@ function segmentPointMutableResponse(centerline, segmentIndex, segmentT) {
   );
 }
 
-function moveSegmentPoint(centerline, segmentIndex, segmentT, displacement) {
+function moveSegmentPoint(
+  muscles,
+  muscleIndex,
+  segmentIndex,
+  segmentT,
+  displacement,
+  attribution,
+  category,
+) {
+  const centerline = muscles[muscleIndex].centerline;
   const weights = [1 - segmentT, segmentT];
   const mutable = [
     segmentIndex > 0,
@@ -1046,15 +1100,19 @@ function moveSegmentPoint(centerline, segmentIndex, segmentT, displacement) {
     const knot = centerline[segmentIndex + endpoint];
     // Do not divide by the response. Near a fixed attachment that would turn
     // an infinitesimal contact weight into unbounded interior-knot motion.
-    knot.position = add(
-      knot.position,
-      scale(displacement, weights[endpoint]),
+    applyAttributedPosition(
+      attribution,
+      category,
+      muscles,
+      muscleIndex,
+      segmentIndex + endpoint,
+      add(knot.position, scale(displacement, weights[endpoint])),
     );
   }
   return true;
 }
 
-function projectSegmentObstacles(source, muscles, amount) {
+function projectSegmentObstacles(source, muscles, amount, attribution, category) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     for (let segmentIndex = 0; segmentIndex < muscle.centerline.length - 1; segmentIndex += 1) {
       const segmentStart = muscle.centerline[segmentIndex];
@@ -1109,17 +1167,20 @@ function projectSegmentObstacles(source, muscles, amount) {
           obstacleIndex,
         );
         moveSegmentPoint(
-          muscle.centerline,
+          muscles,
+          muscleIndex,
           segmentIndex,
           leftT,
           scale(direction, -gap * amount),
+          attribution,
+          category,
         );
       }
     }
   }
 }
 
-function projectSegmentPairwise(muscles, amount) {
+function projectSegmentPairwise(muscles, amount, attribution, category) {
   for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
     const leftCenterline = muscles[leftIndex].centerline;
     for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
@@ -1190,18 +1251,24 @@ function projectSegmentPairwise(muscles, amount) {
           const correction = overlap * amount / movableSideCount;
           if (leftCanMove) {
             moveSegmentPoint(
-              leftCenterline,
+              muscles,
+              leftIndex,
               leftSegment,
               leftT,
               scale(direction, correction),
+              attribution,
+              category,
             );
           }
           if (rightCanMove) {
             moveSegmentPoint(
-              rightCenterline,
+              muscles,
+              rightIndex,
               rightSegment,
               rightT,
               scale(direction, -correction),
+              attribution,
+              category,
             );
           }
         }
@@ -1210,18 +1277,27 @@ function projectSegmentPairwise(muscles, amount) {
   }
 }
 
-function restoreTargetVolumes(muscles) {
-  for (const muscle of muscles) {
+function restoreTargetVolumes(muscles, attribution, category) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
     const currentVolume = carrierVolume(muscle.centerline);
     if (!Number.isFinite(currentVolume) || currentVolume <= 0) {
       throw new Error(`muscle ${muscle.id} produced invalid carrier volume`);
     }
     const radiusScale = Math.sqrt(muscle.targetVolume / currentVolume);
-    for (const knot of muscle.centerline) knot.radius *= radiusScale;
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      applyAttributedRadius(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        knot.radius * radiusScale,
+      );
+    }
   }
 }
 
-function smoothInteriorDisplacement(source, muscles, amount) {
+function smoothInteriorDisplacement(source, muscles, amount, attribution, category) {
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
     const prior = muscle.centerline.map(knot => [...knot.position]);
@@ -1232,22 +1308,33 @@ function smoothInteriorDisplacement(source, muscles, amount) {
         add(priorDisplacements[index - 1], priorDisplacements[index + 1]),
         0.5,
       );
-      muscle.centerline[index].position = add(
-        prior[index],
-        scale(subtract(midpointDisplacement, priorDisplacements[index]), amount),
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        index,
+        add(prior[index], scale(
+          subtract(midpointDisplacement, priorDisplacements[index]),
+          amount,
+        )),
       );
     }
   }
 }
 
-function smoothInteriorAbsolute(muscles, amount) {
-  for (const muscle of muscles) {
+function smoothInteriorAbsolute(muscles, amount, attribution, category) {
+  for (const [muscleIndex, muscle] of muscles.entries()) {
     const prior = muscle.centerline.map(knot => [...knot.position]);
     for (let index = 1; index < muscle.centerline.length - 1; index += 1) {
       const midpoint = scale(add(prior[index - 1], prior[index + 1]), 0.5);
-      muscle.centerline[index].position = add(
-        prior[index],
-        scale(subtract(midpoint, prior[index]), amount),
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        index,
+        add(prior[index], scale(subtract(midpoint, prior[index]), amount)),
       );
     }
   }
@@ -1473,58 +1560,111 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       1 - iteration / smoothingHorizon,
     );
     const smoothingAmount = config.smoothnessStep * smoothingProgress ** 2;
-    applyAttributedCorrection(correctionAttribution, 'sourceSmoothing', muscles, () => {
-      if (preservesSourceFormation) {
-        smoothInteriorDisplacement(source, muscles, smoothingAmount);
-      } else {
-        smoothInteriorAbsolute(muscles, smoothingAmount);
-      }
-    });
-    applyAttributedCorrection(correctionAttribution, 'skeletalClearance', muscles, () => {
-      projectObstacles(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'compartmentProjection', muscles, () => {
-      projectBounds(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'skeletalClearance', muscles, () => {
-      projectSegmentObstacles(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'pairwiseExclusion', muscles, () => {
-      projectPairwise(muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'pairwiseExclusion', muscles, () => {
-      projectSegmentPairwise(muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'skeletalClearance', muscles, () => {
-      projectObstacles(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'compartmentProjection', muscles, () => {
-      projectBounds(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'volumeRestoration', muscles, () => {
-      restoreTargetVolumes(muscles);
-    });
-    applyAttributedCorrection(correctionAttribution, 'skeletalClearance', muscles, () => {
-      projectObstacles(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'compartmentProjection', muscles, () => {
-      projectBounds(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'pairwiseExclusion', muscles, () => {
-      projectPairwise(muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'pairwiseExclusion', muscles, () => {
-      projectSegmentPairwise(muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'skeletalClearance', muscles, () => {
-      projectObstacles(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'compartmentProjection', muscles, () => {
-      projectBounds(source, muscles, config.relaxationStep);
-    });
-    applyAttributedCorrection(correctionAttribution, 'volumeRestoration', muscles, () => {
-      restoreTargetVolumes(muscles);
-    });
+    if (preservesSourceFormation) {
+      smoothInteriorDisplacement(
+        source,
+        muscles,
+        smoothingAmount,
+        correctionAttribution,
+        'sourceSmoothing',
+      );
+    } else {
+      smoothInteriorAbsolute(
+        muscles,
+        smoothingAmount,
+        correctionAttribution,
+        'sourceSmoothing',
+      );
+    }
+    projectObstacles(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'skeletalClearance',
+    );
+    projectBounds(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'compartmentProjection',
+    );
+    projectSegmentObstacles(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'skeletalClearance',
+    );
+    projectPairwise(
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'pairwiseExclusion',
+    );
+    projectSegmentPairwise(
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'pairwiseExclusion',
+    );
+    projectObstacles(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'skeletalClearance',
+    );
+    projectBounds(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'compartmentProjection',
+    );
+    restoreTargetVolumes(muscles, correctionAttribution, 'volumeRestoration');
+    projectObstacles(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'skeletalClearance',
+    );
+    projectBounds(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'compartmentProjection',
+    );
+    projectPairwise(
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'pairwiseExclusion',
+    );
+    projectSegmentPairwise(
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'pairwiseExclusion',
+    );
+    projectObstacles(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'skeletalClearance',
+    );
+    projectBounds(
+      source,
+      muscles,
+      config.relaxationStep,
+      correctionAttribution,
+      'compartmentProjection',
+    );
+    restoreTargetVolumes(muscles, correctionAttribution, 'volumeRestoration');
 
     packed = measureState(source, muscles, config.sampleCount, false);
     iterations = iteration;

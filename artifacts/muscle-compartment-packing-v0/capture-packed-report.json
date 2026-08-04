@@ -9,14 +9,14 @@
   "browser": {
     "schema": "kaminos.headless-browser-resolution.v0",
     "request": {
-      "source": "independent-default",
-      "executable": null
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
     },
     "effective": {
       "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
       "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
       "kind": "playwright-chromium-headless-shell",
-      "playwrightRevision": 1234,
+      "playwrightRevision": null,
       "installedStableChrome": false,
       "fileIdentity": {
         "device": 16777231,
@@ -25,7 +25,7 @@
         "modifiedMs": 1785793228817.7512
       }
     },
-    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
     "rejectedCandidates": []
   },
   "invocation": {
@@ -41,8 +41,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 7661,
-    "processGroupId": 7661,
+    "pid": 62732,
+    "processGroupId": 62732,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -51,7 +51,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 7661,
+      "processGroupId": 62732,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -68,12 +68,12 @@
     "totalBytes": 2470,
     "retainedBytes": 2470,
     "truncated": false,
-    "tail": "[0804/023825.127477:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/023825.199287:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.618491:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/023825.618576:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/023825.619815:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.657177:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/023825.658721:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/023825.673571:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/023825.674638:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/023825.715478:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n239721 bytes written to file repo://artifacts/muscle-compartment-packing-v0/packed.png\n"
+    "tail": "[0804/025909.906488:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/025909.958319:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/025910.364168:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/025910.364270:INFO:CONSOLE:0] \"[.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/025910.365356:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/025910.399259:INFO:CONSOLE:0] \"[.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/025910.400846:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/025910.411836:INFO:CONSOLE:0] \"[.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n[0804/025910.412804:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/025910.424245:INFO:CONSOLE:0] \"[.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed (0)\n239794 bytes written to file repo://artifacts/muscle-compartment-packing-v0/packed.png\n"
   },
   "primaryOutput": {
     "path": "repo://artifacts/muscle-compartment-packing-v0/packed.png",
-    "sizeBytes": 239721,
-    "sha256": "c1018c15b1319bd3786e82fb2fda476807a6addb139ebe6b2a0c994055805adc",
+    "sizeBytes": 239794,
+    "sha256": "7fd1783ed44c6d05d29561545ac94ee03890599db18944a32acb5a520c6b4326",
     "png": {
       "width": 1400,
       "height": 900,
@@ -83,7 +83,7 @@
       "filter": 0,
       "interlace": 0,
       "chunkCount": 62,
-      "idatBytes": 238956
+      "idatBytes": 239029
     }
   },
   "interruption": null,
@@ -94,14 +94,14 @@
     "browser": {
       "schema": "kaminos.headless-browser-resolution.v0",
       "request": {
-        "source": "independent-default",
-        "executable": null
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
       },
       "effective": {
         "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
         "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
         "kind": "playwright-chromium-headless-shell",
-        "playwrightRevision": 1234,
+        "playwrightRevision": null,
         "installedStableChrome": false,
         "fileIdentity": {
           "device": 16777231,
@@ -110,13 +110,13 @@
           "modifiedMs": 1785793228817.7512
         }
       },
-      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
       "rejectedCandidates": []
     },
     "primaryOutput": {
       "path": "repo://artifacts/muscle-compartment-packing-v0/packed.png",
-      "sizeBytes": 239721,
-      "sha256": "c1018c15b1319bd3786e82fb2fda476807a6addb139ebe6b2a0c994055805adc",
+      "sizeBytes": 239794,
+      "sha256": "7fd1783ed44c6d05d29561545ac94ee03890599db18944a32acb5a520c6b4326",
       "png": {
         "width": 1400,
         "height": 900,
@@ -126,7 +126,7 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 62,
-        "idatBytes": 238956
+        "idatBytes": 239029
       }
     }
   }

@@ -38,6 +38,21 @@ function memoryIo() {
   };
 }
 
+const completeVisualVerdict = Object.freeze({
+  nonblank: true,
+  orbitable: true,
+  movementLegible: true,
+  stableMuscleIdentityLegible: true,
+  attachmentHandlesLegible: true,
+  skeletonAndCompartmentLegible: true,
+  metricsLegible: true,
+  textContained: true,
+  sourceFormationRetainedLegible: true,
+  packingSemanticsNotInverted: true,
+  dominantCorrectionCauseLegible: true,
+  correctionAttributionNotPresentedAsPhysicalForce: true,
+});
+
 function fixedAttachmentConflictSource() {
   const source = createSyntheticFourMuscleCompartment();
   source.id = 'operator-authored-witness-fixed-attachment-conflict';
@@ -84,7 +99,14 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.equal(written.report.visualInspection.status, 'pending-agent-inspection');
   assert.deepEqual(written.report.visualInspection.staleAdmissionCleanup, {
     status: 'cleared',
-    paths: ['visual-inspection.json', 'visual-inspection-input.json'],
+    paths: [
+      'visual-inspection.json',
+      'visual-inspection-input.json',
+      'before.png',
+      'packed.png',
+      'capture-before-report.json',
+      'capture-packed-report.json',
+    ],
   });
   assert.equal(written.report.claims.anatomicalCorrectness, 'unassayed');
   assert.ok(memory.files.has(`${outDir}/source.json`));
@@ -161,7 +183,7 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
           { path: 'before.png', viewport: [1400, 900], state: 'before' },
           { path: 'packed.png', viewport: [1400, 900], state: 'packed' },
         ],
-        verdict: { nonblank: true, orbitable: true, movementLegible: true },
+        verdict: completeVisualVerdict,
       },
       io: memory.io,
     }),
@@ -172,16 +194,7 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
   memory.files.set(`${outDir}/packed.png`, Buffer.from('packed-pixels'));
   const commonInspection = {
     observedAt: '2026-08-03T20:00:00Z',
-    verdict: {
-      nonblank: true,
-      orbitable: true,
-      movementLegible: true,
-      stableMuscleIdentityLegible: true,
-      attachmentHandlesLegible: true,
-      skeletonAndCompartmentLegible: true,
-      metricsLegible: true,
-      textContained: true,
-    },
+    verdict: completeVisualVerdict,
   };
   for (const images of [
     [{ path: 'before.png', viewport: [1400, 900], state: 'before' }],
@@ -246,6 +259,67 @@ test('visual admission rejects blank captures and binds admitted pixels to curre
   assert.match(admitted.receipt.bindings.pendingReportSha256, /^[a-f0-9]{64}$/);
   assert.equal(admitted.receipt.images.length, 2);
   assert.ok(admitted.receipt.images.every(image => /^[a-f0-9]{64}$/.test(image.sha256)));
+});
+
+test('witness regeneration clears stale capture evidence before visual admission', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/muscle-compartment-packing-stale-captures';
+  for (const path of [
+    'before.png',
+    'packed.png',
+    'capture-before-report.json',
+    'capture-packed-report.json',
+  ]) {
+    memory.files.set(`${outDir}/${path}`, Buffer.from(`stale-${path}`));
+  }
+
+  const written = await writeMuscleCompartmentPackingWitness({ outDir, io: memory.io });
+
+  assert.deepEqual(written.report.visualInspection.staleAdmissionCleanup, {
+    status: 'cleared',
+    paths: [
+      'visual-inspection.json',
+      'visual-inspection-input.json',
+      'before.png',
+      'packed.png',
+      'capture-before-report.json',
+      'capture-packed-report.json',
+    ],
+  });
+  for (const path of [
+    'before.png',
+    'packed.png',
+    'capture-before-report.json',
+    'capture-packed-report.json',
+  ]) {
+    assert.ok(!memory.files.has(`${outDir}/${path}`), `${path} must not survive regeneration`);
+  }
+});
+
+test('visual admission requires every attribution-specific inspection verdict', async () => {
+  const memory = memoryIo();
+  const outDir = '/virtual/muscle-compartment-packing-verdict-keys';
+  await writeMuscleCompartmentPackingWitness({ outDir, io: memory.io });
+  memory.files.set(`${outDir}/before.png`, Buffer.from('fresh-before'));
+  memory.files.set(`${outDir}/packed.png`, Buffer.from('fresh-packed'));
+
+  const incompleteVerdict = { ...completeVisualVerdict };
+  delete incompleteVerdict.dominantCorrectionCauseLegible;
+  await assert.rejects(
+    () => admitMuscleCompartmentPackingVisualInspection({
+      outDir,
+      inspection: {
+        observedAt: '2026-08-04T06:52:00Z',
+        images: [
+          { path: 'before.png', viewport: [1400, 900], state: 'before' },
+          { path: 'packed.png', viewport: [1400, 900], state: 'packed' },
+        ],
+        verdict: incompleteVerdict,
+      },
+      io: memory.io,
+    }),
+    /required visual inspection verdict.*dominantCorrectionCauseLegible/i,
+  );
 });
 
 test('pre-artifact solve failure leaves a durable phase-specific report with no effective route', async () => {

@@ -1,5 +1,5 @@
 {
-  "observedAt": "2026-08-04T06:38:39Z",
+  "observedAt": "2026-08-04T06:59:32Z",
   "url": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/",
   "backend": {
     "browser": "Playwright chrome-headless-shell revision 1234",
@@ -15,8 +15,8 @@
     "serverPort": 8765,
     "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",
     "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed",
-    "beforeSha256": "364421ba601717ffc26be970e058cc73f4fc50836814f9b1ce5e199d7e72c082",
-    "packedSha256": "c1018c15b1319bd3786e82fb2fda476807a6addb139ebe6b2a0c994055805adc"
+    "beforeSha256": "8c253a63b517c06bac35dc88134225fc62ab7b2949ae939417573c6a5030eefd",
+    "packedSha256": "7fd1783ed44c6d05d29561545ac94ee03890599db18944a32acb5a520c6b4326"
   },
   "images": [
     {

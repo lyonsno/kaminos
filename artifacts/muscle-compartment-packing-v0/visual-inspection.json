@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.muscle-compartment-packing-visual-inspection.v0",
   "status": "passed-agent-inspection",
-  "observedAt": "2026-08-04T06:38:39Z",
+  "observedAt": "2026-08-04T06:59:32Z",
   "route": {
     "requested": "muscle-compartment-packing-orbitable-v0",
     "effective": "muscle-compartment-packing-orbitable-v0",
@@ -22,14 +22,14 @@
     "serverPort": 8765,
     "beforeUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=before",
     "packedUrl": "http://127.0.0.1:8765/artifacts/muscle-compartment-packing-v0/?state=packed",
-    "beforeSha256": "364421ba601717ffc26be970e058cc73f4fc50836814f9b1ce5e199d7e72c082",
-    "packedSha256": "c1018c15b1319bd3786e82fb2fda476807a6addb139ebe6b2a0c994055805adc"
+    "beforeSha256": "8c253a63b517c06bac35dc88134225fc62ab7b2949ae939417573c6a5030eefd",
+    "packedSha256": "7fd1783ed44c6d05d29561545ac94ee03890599db18944a32acb5a520c6b4326"
   },
   "bindings": {
-    "indexHtmlSha256": "e15e0ccf516355f9b80f59960226ab5769cc433313754a931ce5d2e9174c89e8",
+    "indexHtmlSha256": "abc5f21403aa36267ae571b7e6881d52e7c3afa23aa6d3f8021ec4569e6351ff",
     "sourceJsonSha256": "fb8722c2567ecde9e06f105b4db5437c92a596e782792ab255fca6590071484d",
-    "packedJsonSha256": "bf0bdb7a657054d1f0b68dcf571c7def0d79eee38f1a46c3278700aa5b5839e1",
-    "pendingReportSha256": "6e3ffb6761350fba56e92908b50f98ac55fd361e5c3b93240d9dc267dd3f8e8f"
+    "packedJsonSha256": "3af95798caaad51d1617b77b38793fab11e5114670f79c3a6f578496249f42d4",
+    "pendingReportSha256": "4f733f963c7327462c5ff3b0510b97c7b948e518ab4facfa37fb8574a09432cb"
   },
   "images": [
     {
@@ -39,8 +39,8 @@
         900
       ],
       "state": "before",
-      "byteLength": 228256,
-      "sha256": "364421ba601717ffc26be970e058cc73f4fc50836814f9b1ce5e199d7e72c082"
+      "byteLength": 228425,
+      "sha256": "8c253a63b517c06bac35dc88134225fc62ab7b2949ae939417573c6a5030eefd"
     },
     {
       "path": "packed.png",
@@ -49,8 +49,8 @@
         900
       ],
       "state": "packed",
-      "byteLength": 239721,
-      "sha256": "c1018c15b1319bd3786e82fb2fda476807a6addb139ebe6b2a0c994055805adc"
+      "byteLength": 239794,
+      "sha256": "7fd1783ed44c6d05d29561545ac94ee03890599db18944a32acb5a520c6b4326"
     }
   ],
   "verdict": {
