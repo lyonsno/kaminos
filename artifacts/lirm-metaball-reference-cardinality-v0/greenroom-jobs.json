@@ -1,0 +1,88 @@
+{
+  "schema": "kaminos.lirm-metaball-reference-cardinality-greenroom-jobs.v0",
+  "jobs": [
+    {
+      "cellId": "target-one-seed-80401",
+      "conditionId": "target-one",
+      "seed": 80401,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/prompts/target-one.txt",
+      "promptSha256": "sha256:78d2f19836eb4124dea2484d8acd27d20d8e2e9b79b807f732495f32ff5e27a1",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "09ea3686813e",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/generated/target-one/seed-80401"
+    },
+    {
+      "cellId": "target-double-seed-80401",
+      "conditionId": "target-double",
+      "seed": 80401,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/prompts/target-double.txt",
+      "promptSha256": "sha256:bc2437be1d9e784b80854299f3a80160af60378baa0914c3b6d70eb29b43907a",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "jobId": "b10b0e5835ec",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/generated/target-double/seed-80401"
+    },
+    {
+      "cellId": "target-side-seed-80401",
+      "conditionId": "target-side",
+      "seed": 80401,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/prompts/target-side.txt",
+      "promptSha256": "sha256:5914c895cfd54a625ff37566057d5140fa0fc1a779b8e64c62a9ed379ce8250c",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "jobId": "8c726eed1165",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/generated/target-side/seed-80401"
+    },
+    {
+      "cellId": "side-target-seed-80401",
+      "conditionId": "side-target",
+      "seed": 80401,
+      "references": [
+        {
+          "viewId": "side",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/prompts/side-target.txt",
+      "promptSha256": "sha256:c7618281ae8e2fd7bdcdb38499ef4c17b06c5f22089b426789bbeaefb5b60215",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+      "jobId": "98dd26d9ac89",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-reference-cardinality-v0/generated/side-target/seed-80401"
+    }
+  ]
+}
