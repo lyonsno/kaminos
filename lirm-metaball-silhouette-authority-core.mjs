@@ -167,6 +167,13 @@ const REFERENCE_CARDINALITY_CONDITIONS = Object.freeze([
   }),
 ]);
 
+const MULTIVIEW_TOPOLOGY_CONDITIONS = Object.freeze([
+  Object.freeze({ id: 'depth-control', referenceKinds: Object.freeze(['depth', 'depth', 'depth']), reuseConditionId: 'side-middle' }),
+  Object.freeze({ id: 'clay-target', referenceKinds: Object.freeze(['clay', 'depth', 'depth']) }),
+  Object.freeze({ id: 'normal-target', referenceKinds: Object.freeze(['normal', 'depth', 'depth']) }),
+  Object.freeze({ id: 'clay-normal-target', referenceKinds: Object.freeze(['clay', 'depth', 'normal']) }),
+]);
+
 function createReferenceCardinalityPrompt(condition) {
   let authority;
   if (condition.referenceViewIds.length === 1) {
@@ -387,6 +394,34 @@ export function createMetaballReferenceCardinalityTranche() {
   };
 }
 
+export function createMetaballMultiviewTopologyTranche() {
+  return {
+    schema: 'kaminos.lirm-metaball-multiview-topology.v0',
+    status: 'source-contract-frozen',
+    conditions: MULTIVIEW_TOPOLOGY_CONDITIONS.map(condition => ({
+      ...condition,
+      referenceKinds: [...condition.referenceKinds],
+      referenceViewIds: ['target-three-quarter', 'side', 'target-three-quarter'],
+      authoritativeReferenceIndices: [1, 3],
+      promptSourceConditionId: 'side-middle',
+      requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+    })),
+    fixedGenerator: {
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seeds: [80401],
+    },
+    claimCeiling: [
+      'Experimental evidence for target-channel modality effects under one fixed target/side/target view topology.',
+      'No general modality ranking, exact target projection, multiview geometric consistency, or reconstructed-volume claim.',
+    ].join(' '),
+  };
+}
+
 async function sha256(path) {
   const bytes = await readFile(path);
   return {
@@ -600,6 +635,85 @@ export async function writeMetaballReferenceCardinalitySources({
     sourceArtifact: relative(process.cwd(), sourceArtifactRoot),
     sourceSchema: sourceManifest.schema,
     sourceRasterPolicy: sourceManifest.effectiveConfig.sourceRasterPolicy,
+    conditions,
+    fixedGenerator: tranche.fixedGenerator,
+    claimCeiling: tranche.claimCeiling,
+  };
+  const manifestPath = join(outDir, 'manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
+}
+
+export async function writeMetaballMultiviewTopologySources({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-multiview-topology-v0'),
+  sourceArtifactRoot = join(
+    process.cwd(),
+    'artifacts',
+    'lirm-metaball-target-first-multiview-v0',
+  ),
+} = {}) {
+  const tranche = createMetaballMultiviewTopologyTranche();
+  const sourceManifest = JSON.parse(await readFile(join(sourceArtifactRoot, 'manifest.json'), 'utf8'));
+  const sourceJobs = JSON.parse(await readFile(join(sourceArtifactRoot, 'greenroom-jobs.json'), 'utf8'));
+  const viewsById = new Map(sourceManifest.views.map(view => [view.id, view]));
+  const jobsByCondition = new Map(sourceJobs.jobs.map(job => [job.conditionId, job]));
+  const promptSource = sourceManifest.conditions.find(condition => condition.id === 'side-middle');
+  if (!promptSource?.promptPath || !promptSource?.promptSha256) {
+    throw new Error('missing frozen side-middle prompt source');
+  }
+  await mkdir(outDir, { recursive: true });
+  const promptDir = join(outDir, 'prompts');
+  await mkdir(promptDir, { recursive: true });
+  const prompt = await readFile(join(sourceArtifactRoot, promptSource.promptPath), 'utf8');
+  const promptPath = join(promptDir, 'target-side-target.txt');
+  await writeFile(promptPath, prompt);
+  const promptIdentity = await sha256(promptPath);
+  if (promptIdentity.sha256 !== promptSource.promptSha256) {
+    throw new Error('frozen topology prompt identity changed during copy');
+  }
+
+  const conditions = tranche.conditions.map(condition => {
+    const references = condition.referenceViewIds.map((viewId, index) => {
+      const kind = condition.referenceKinds[index];
+      const source = viewsById.get(viewId)?.sourceImages?.[kind];
+      if (!source?.relativePath || !source?.sha256) {
+        throw new Error(`missing ${kind} source for view ${viewId}`);
+      }
+      return {
+        viewId,
+        kind,
+        path: relative(process.cwd(), join(sourceArtifactRoot, source.relativePath)),
+        sha256: source.sha256,
+      };
+    });
+    const persisted = {
+      ...condition,
+      references,
+      prompt: prompt.trim(),
+      promptPath: relative(outDir, promptPath),
+      promptSha256: promptIdentity.sha256,
+    };
+    if (condition.reuseConditionId) {
+      const reused = jobsByCondition.get(condition.reuseConditionId);
+      if (!reused?.jobId) throw new Error(`missing reusable job for ${condition.reuseConditionId}`);
+      persisted.reuseJobId = reused.jobId;
+      persisted.reuseOutputPath = relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'generated', condition.reuseConditionId, 'seed-80401', 'output.png'),
+      );
+      persisted.reuseReceiptPath = relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'receipts', `${condition.reuseConditionId}.json`),
+      );
+    }
+    return persisted;
+  });
+
+  const manifest = {
+    schema: tranche.schema,
+    status: 'sources-complete',
+    sourceArtifact: relative(process.cwd(), sourceArtifactRoot),
+    sourceSchema: sourceManifest.schema,
     conditions,
     fixedGenerator: tranche.fixedGenerator,
     claimCeiling: tranche.claimCeiling,

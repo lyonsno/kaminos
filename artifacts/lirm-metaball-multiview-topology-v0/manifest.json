@@ -1,0 +1,192 @@
+{
+  "schema": "kaminos.lirm-metaball-multiview-topology.v0",
+  "status": "sources-complete",
+  "sourceArtifact": "artifacts/lirm-metaball-target-first-multiview-v0",
+  "sourceSchema": "kaminos.lirm-metaball-target-first-multiview.v0",
+  "conditions": [
+    {
+      "id": "depth-control",
+      "referenceKinds": [
+        "depth",
+        "depth",
+        "depth"
+      ],
+      "reuseConditionId": "side-middle",
+      "referenceViewIds": [
+        "target-three-quarter",
+        "side",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        3
+      ],
+      "promptSourceConditionId": "side-middle",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "prompt": "Every supplied reference image shows the same authored organism from a different camera unless explicitly described as a repeated view. Reference images 1 and 3 are repeated the authoritative target view: preserve that view's exact camera, outer silhouette, body proportions, support placement, and major mass distribution. Use every other reference image only to resolve occluded three-dimensional structure belonging to that same organism. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "promptPath": "prompts/target-side-target.txt",
+      "promptSha256": "sha256:886c82a32581168f2ff9c1c8fbd79e9b36705cbed55fb7867a6f4b8e64851805",
+      "reuseJobId": "6917deba1f78",
+      "reuseOutputPath": "artifacts/lirm-metaball-target-first-multiview-v0/generated/side-middle/seed-80401/output.png",
+      "reuseReceiptPath": "artifacts/lirm-metaball-target-first-multiview-v0/receipts/side-middle.json"
+    },
+    {
+      "id": "clay-target",
+      "referenceKinds": [
+        "clay",
+        "depth",
+        "depth"
+      ],
+      "referenceViewIds": [
+        "target-three-quarter",
+        "side",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        3
+      ],
+      "promptSourceConditionId": "side-middle",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "clay",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/clay-implicit.png",
+          "sha256": "sha256:590c401807ec7cac435ebeb09606c8b89dc78929db2eb84395e2938dcd9cabb5"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "prompt": "Every supplied reference image shows the same authored organism from a different camera unless explicitly described as a repeated view. Reference images 1 and 3 are repeated the authoritative target view: preserve that view's exact camera, outer silhouette, body proportions, support placement, and major mass distribution. Use every other reference image only to resolve occluded three-dimensional structure belonging to that same organism. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "promptPath": "prompts/target-side-target.txt",
+      "promptSha256": "sha256:886c82a32581168f2ff9c1c8fbd79e9b36705cbed55fb7867a6f4b8e64851805"
+    },
+    {
+      "id": "normal-target",
+      "referenceKinds": [
+        "normal",
+        "depth",
+        "depth"
+      ],
+      "referenceViewIds": [
+        "target-three-quarter",
+        "side",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        3
+      ],
+      "promptSourceConditionId": "side-middle",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "normal",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/normal-implicit.png",
+          "sha256": "sha256:07678eec89a12ad5f73dc37fd3b6a95181abf1763fcdb3cdffb9a0e0d5562a3c"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "prompt": "Every supplied reference image shows the same authored organism from a different camera unless explicitly described as a repeated view. Reference images 1 and 3 are repeated the authoritative target view: preserve that view's exact camera, outer silhouette, body proportions, support placement, and major mass distribution. Use every other reference image only to resolve occluded three-dimensional structure belonging to that same organism. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "promptPath": "prompts/target-side-target.txt",
+      "promptSha256": "sha256:886c82a32581168f2ff9c1c8fbd79e9b36705cbed55fb7867a6f4b8e64851805"
+    },
+    {
+      "id": "clay-normal-target",
+      "referenceKinds": [
+        "clay",
+        "depth",
+        "normal"
+      ],
+      "referenceViewIds": [
+        "target-three-quarter",
+        "side",
+        "target-three-quarter"
+      ],
+      "authoritativeReferenceIndices": [
+        1,
+        3
+      ],
+      "promptSourceConditionId": "side-middle",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "clay",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/clay-implicit.png",
+          "sha256": "sha256:590c401807ec7cac435ebeb09606c8b89dc78929db2eb84395e2938dcd9cabb5"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "normal",
+          "path": "artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/normal-implicit.png",
+          "sha256": "sha256:07678eec89a12ad5f73dc37fd3b6a95181abf1763fcdb3cdffb9a0e0d5562a3c"
+        }
+      ],
+      "prompt": "Every supplied reference image shows the same authored organism from a different camera unless explicitly described as a repeated view. Reference images 1 and 3 are repeated the authoritative target view: preserve that view's exact camera, outer silhouette, body proportions, support placement, and major mass distribution. Use every other reference image only to resolve occluded three-dimensional structure belonging to that same organism. Complete one healthy, aesthetically pleasing living quadruped with coherent anatomical transitions, surface structure, material, and gentle character within the authoritative target-view outline.",
+      "promptPath": "prompts/target-side-target.txt",
+      "promptSha256": "sha256:886c82a32581168f2ff9c1c8fbd79e9b36705cbed55fb7867a6f4b8e64851805"
+    }
+  ],
+  "fixedGenerator": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "seeds": [
+      80401
+    ]
+  },
+  "claimCeiling": "Experimental evidence for target-channel modality effects under one fixed target/side/target view topology. No general modality ranking, exact target projection, multiview geometric consistency, or reconstructed-volume claim."
+}
