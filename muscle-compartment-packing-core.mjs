@@ -945,6 +945,103 @@ function residualMaximum(metrics) {
   );
 }
 
+function immutableFixedAttachmentConflicts(source) {
+  const blockingMechanisms = [];
+  const endpoints = ['origin', 'insertion'];
+  for (let leftIndex = 0; leftIndex < source.muscles.length; leftIndex += 1) {
+    const leftMuscle = source.muscles[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < source.muscles.length; rightIndex += 1) {
+      const rightMuscle = source.muscles[rightIndex];
+      for (const leftEndpoint of endpoints) {
+        const leftKnot = leftEndpoint === 'origin'
+          ? leftMuscle.centerline[0]
+          : leftMuscle.centerline.at(-1);
+        for (const rightEndpoint of endpoints) {
+          const rightKnot = rightEndpoint === 'origin'
+            ? rightMuscle.centerline[0]
+            : rightMuscle.centerline.at(-1);
+          const penetration = rounded(
+            leftKnot.radius + rightKnot.radius -
+              distance(leftKnot.position, rightKnot.position),
+          );
+          if (penetration <= 0) continue;
+          blockingMechanisms.push({
+            kind: 'pairwise-fixed-attachment-penetration',
+            left: {
+              muscleId: leftMuscle.id,
+              attachment: leftEndpoint,
+              attachmentId: leftMuscle.attachments[leftEndpoint].id,
+            },
+            right: {
+              muscleId: rightMuscle.id,
+              attachment: rightEndpoint,
+              attachmentId: rightMuscle.attachments[rightEndpoint].id,
+            },
+            penetration,
+          });
+        }
+      }
+    }
+  }
+  const axisNames = ['x', 'y', 'z'];
+  for (const muscle of source.muscles) {
+    for (const endpoint of endpoints) {
+      const knot = endpoint === 'origin'
+        ? muscle.centerline[0]
+        : muscle.centerline.at(-1);
+      const attachment = muscle.attachments[endpoint];
+      for (const obstacle of source.obstacles) {
+        const nearest = closestPointOnObstacle(knot.position, obstacle);
+        const penetration = rounded(
+          knot.radius + obstacleRadius(obstacle) - distance(knot.position, nearest),
+        );
+        if (penetration <= 0) continue;
+        blockingMechanisms.push({
+          kind: 'fixed-attachment-skeletal-penetration',
+          muscleId: muscle.id,
+          attachment: endpoint,
+          attachmentId: attachment.id,
+          obstacleId: obstacle.id,
+          penetration,
+        });
+      }
+      for (let axis = 0; axis < 3; axis += 1) {
+        const minimum = source.compartment.minimum[axis] +
+          source.compartment.clearance + knot.radius;
+        const maximum = source.compartment.maximum[axis] -
+          source.compartment.clearance - knot.radius;
+        const minimumEscape = rounded(minimum - knot.position[axis]);
+        const maximumEscape = rounded(knot.position[axis] - maximum);
+        if (minimumEscape > 0) {
+          blockingMechanisms.push({
+            kind: 'fixed-attachment-compartment-escape',
+            muscleId: muscle.id,
+            attachment: endpoint,
+            attachmentId: attachment.id,
+            axis: axisNames[axis],
+            side: 'minimum',
+            effectiveBound: rounded(minimum),
+            escape: minimumEscape,
+          });
+        }
+        if (maximumEscape > 0) {
+          blockingMechanisms.push({
+            kind: 'fixed-attachment-compartment-escape',
+            muscleId: muscle.id,
+            attachment: endpoint,
+            attachmentId: attachment.id,
+            axis: axisNames[axis],
+            side: 'maximum',
+            effectiveBound: rounded(maximum),
+            escape: maximumEscape,
+          });
+        }
+      }
+    }
+  }
+  return blockingMechanisms;
+}
+
 export function measureMuscleCompartmentPacking(source, muscles = source.muscles, sampleCount = 25) {
   validateSource(source);
   return measureState(source, muscles, sampleCount, true);
@@ -958,6 +1055,40 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
   validateConfig(config);
   const muscles = structuredClone(source.muscles);
   const initial = measureState(source, muscles, config.sampleCount, true);
+  const blockingMechanisms = immutableFixedAttachmentConflicts(source);
+  if (blockingMechanisms.length > 0) {
+    return {
+      schema: MUSCLE_COMPARTMENT_PACKING_RESULT_SCHEMA,
+      sourceSchema: source.schema,
+      sourceId: source.id,
+      sourceAuthority: structuredClone(source.authority),
+      dimension: 3,
+      clearanceValidation: {
+        kind: 'conservative-continuous-piecewise-linear',
+        centerlineDistance: 'nested-convex-golden-section',
+        segmentRadiusBound: 'linear-taper-with-lipschitz-search-bound',
+        sampledSupplementCount: config.sampleCount,
+      },
+      status: 'immutable-constraint-conflict',
+      iterations: 0,
+      input: structuredClone(source.input),
+      config,
+      compartment: structuredClone(source.compartment),
+      obstacles: structuredClone(source.obstacles),
+      muscles: muscles.map(muscle => ({
+        ...structuredClone(muscle),
+        realizedVolume: rounded(carrierVolume(muscle.centerline)),
+      })),
+      metrics: { initial, packed: structuredClone(initial) },
+      iterationHistory: [],
+      failure: {
+        phase: 'preflight',
+        kind: 'immutable-constraint-conflict',
+        sourceId: source.id,
+        blockingMechanisms,
+      },
+    };
+  }
   const iterationHistory = [];
   let packed = initial;
   let status = 'iteration-limit';

@@ -228,7 +228,25 @@ test('pairwise exclusion cannot launder colliding fixed attachments into converg
     convergenceTolerance: 1e-7,
   });
 
-  assert.notEqual(result.status, 'converged');
+  assert.equal(result.status, 'immutable-constraint-conflict');
+  assert.equal(result.iterations, 0);
+  assert.equal(result.failure.phase, 'preflight');
+  assert.equal(result.failure.kind, 'immutable-constraint-conflict');
+  assert.equal(result.failure.sourceId, source.id);
+  assert.deepEqual(result.failure.blockingMechanisms, [{
+    kind: 'pairwise-fixed-attachment-penetration',
+    left: {
+      muscleId: source.muscles[0].id,
+      attachment: 'origin',
+      attachmentId: source.muscles[0].attachments.origin.id,
+    },
+    right: {
+      muscleId: source.muscles[1].id,
+      attachment: 'origin',
+      attachmentId: source.muscles[1].attachments.origin.id,
+    },
+    penetration: 0.24,
+  }]);
   assert.equal(result.metrics.packed.endpointDrift, 0);
   assert.ok(result.metrics.packed.pairwisePenetration >= 0.24);
   assert.equal(result.metrics.packed.maximumRelativeVolumeError, 0);
@@ -236,4 +254,75 @@ test('pairwise exclusion cannot launder colliding fixed attachments into converg
   assert.equal(result.metrics.packed.nonPositiveRadiusCount, 0);
   assert.deepEqual(result.muscles[0].centerline[0].position, fixedOrigin);
   assert.deepEqual(result.muscles[1].centerline[0].position, fixedOrigin);
+});
+
+test('fixed attachment inside skeletal clearance fails at preflight with exact obstacle receipt', () => {
+  const source = createInterSegmentCrossingSource();
+  const origin = source.muscles[0].attachments.origin;
+  source.id = 'operator-authored-fixed-attachment-skeletal-conflict';
+  source.input.requested.id = source.id;
+  source.input.effective.id = source.id;
+  source.obstacles = [{
+    id: 'authored-skeletal-process',
+    kind: 'sphere',
+    center: [...origin.position],
+    radius: 0.2,
+    clearance: 0.03,
+  }];
+
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 64,
+    relaxationStep: 0.35,
+    smoothnessStep: 0.035,
+    sampleCount: 25,
+    convergenceTolerance: 1e-7,
+  });
+
+  assert.equal(result.status, 'immutable-constraint-conflict');
+  assert.equal(result.iterations, 0);
+  assert.deepEqual(result.failure.blockingMechanisms, [{
+    kind: 'fixed-attachment-skeletal-penetration',
+    muscleId: source.muscles[0].id,
+    attachment: 'origin',
+    attachmentId: origin.id,
+    obstacleId: 'authored-skeletal-process',
+    penetration: 0.35,
+  }]);
+  assert.ok(result.metrics.packed.skeletalPenetration >= 0.35);
+  assert.ok(result.metrics.packed.skeletalPenetration < 0.351);
+  assert.equal(result.metrics.packed.endpointDrift, 0);
+});
+
+test('fixed attachment outside compartment fails at preflight with exact boundary receipt', () => {
+  const source = createInterSegmentCrossingSource();
+  const muscle = source.muscles[0];
+  source.id = 'operator-authored-fixed-attachment-compartment-conflict';
+  source.input.requested.id = source.id;
+  source.input.effective.id = source.id;
+  muscle.centerline[0].position = [-2.2, 0, 0];
+  muscle.attachments.origin.position = [-2.2, 0, 0];
+  muscle.targetVolume = carrierVolume(muscle.centerline);
+
+  const result = solveMuscleCompartmentPacking(source, {
+    maxIterations: 64,
+    relaxationStep: 0.35,
+    smoothnessStep: 0.035,
+    sampleCount: 25,
+    convergenceTolerance: 1e-7,
+  });
+
+  assert.equal(result.status, 'immutable-constraint-conflict');
+  assert.equal(result.iterations, 0);
+  assert.deepEqual(result.failure.blockingMechanisms, [{
+    kind: 'fixed-attachment-compartment-escape',
+    muscleId: muscle.id,
+    attachment: 'origin',
+    attachmentId: muscle.attachments.origin.id,
+    axis: 'x',
+    side: 'minimum',
+    effectiveBound: -1.88,
+    escape: 0.32,
+  }]);
+  assert.equal(result.metrics.packed.compartmentEscape, 0.32);
+  assert.equal(result.metrics.packed.endpointDrift, 0);
 });
