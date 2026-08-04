@@ -380,8 +380,9 @@ def _configure_compositor(bpy: Any, output_dir: Path) -> None:
     render_layers = tree.nodes.new("CompositorNodeRLayers")
 
     silhouette = tree.nodes.new("CompositorNodeIDMask")
-    silhouette.index = 1
-    tree.links.new(render_layers.outputs["IndexOB"], silhouette.inputs[0])
+    silhouette.inputs["Index"].default_value = 1
+    silhouette.inputs["Anti-Alias"].default_value = True
+    tree.links.new(render_layers.outputs["IndexOB"], silhouette.inputs["ID value"])
     silhouette_output = tree.nodes.new("CompositorNodeOutputFile")
     silhouette_output.base_path = str(output_dir)
     silhouette_output.file_slots[0].path = "silhouette"
