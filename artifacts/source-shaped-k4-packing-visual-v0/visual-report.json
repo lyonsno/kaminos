@@ -1,0 +1,55 @@
+{
+  "schema": "kaminos.source-shaped-k4-packing-visual-report.v0",
+  "status": "agent-inspected-operator-inspection-open",
+  "observedAt": "2026-08-04T23:27:07Z",
+  "route": {
+    "requested": "source-shaped-k4-packing-visual-v0",
+    "effective": "source-shaped-k4-packing-visual-v0",
+    "fallbackUsed": false
+  },
+  "sourceResult": {
+    "path": "../source-shaped-k4-packing-perturbation-v0/perturbation-result.json",
+    "sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b",
+    "constructionIds": ["muscle-34", "muscle-13", "muscle-12", "muscle-45"],
+    "authority": "candidate source geometry in an agent-authored provisional environment; no anatomical admission"
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "viewport": {"width": 1400, "height": 900}
+  },
+  "captures": [
+    {"condition": "baseline", "state": "before", "path": "baseline-before.png", "sha256": "bc34a770f9061aed48cdfb4a6b3a8e1d029241787644a1c9b0e9b4a7c8392bd4", "sizeBytes": 289287},
+    {"condition": "baseline", "state": "packed", "path": "baseline-packed.png", "sha256": "e29a2f45525830493c97feedcc00625c2d0edce4c7cfa6b1d5f06804c903f55d", "sizeBytes": 297010},
+    {"condition": "mild", "state": "before", "path": "mild-before.png", "sha256": "f66a8254b86b93874a3574c54d2c5471cb7341ad063d5816f383eaeee62fcbb7", "sizeBytes": 283172},
+    {"condition": "mild", "state": "packed", "path": "mild-packed.png", "sha256": "1be2544286bb199e98142bfdbd22ad49de8866bbb3a431edaccd819df1511a38", "sizeBytes": 295415},
+    {"condition": "moderate", "state": "before", "path": "moderate-before.png", "sha256": "00abaee82ab853849ab4ef6cbef15b026dc8dbc4bd1dddd257164da67ba6518e", "sizeBytes": 276938},
+    {"condition": "moderate", "state": "packed", "path": "moderate-packed.png", "sha256": "cf83b835111b9b5b47d0e1baf2da3417761dba02283311f9dc2085e7b4bf0d1e", "sizeBytes": 293198}
+  ],
+  "contactSheet": {
+    "path": "contact-sheet.png",
+    "sha256": "903549ff6ebf055acb76348fe68ff6483afe151c05ae5cff89be87fde7d05b09",
+    "layout": "columns baseline/mild/moderate; rows input/packed"
+  },
+  "visualVerdict": {
+    "classification": "ordered-response-with-large-residual-overlap",
+    "observations": [
+      "The four candidate muscles begin as nearly parallel, strongly overlapping large-radius tubes.",
+      "Packing visibly displaces and bends the central cyan construction, with smaller changes in the other constructions, while preserving endpoints and remaining inside the provisional compartment.",
+      "Substantial interpenetration remains visible at every pressure rung, consistent with the high packed pairwise residual near 4.45.",
+      "The mild and moderate perturbations preserve the same qualitative response rather than producing a new crossing, inversion, or catastrophic bifurcation."
+    ],
+    "claim": "This is useful evidence that the current mechanism responds consistently to ordered source-shaped perturbations, but it is a visual rejection of packing convergence or plausible final occupancy.",
+    "recommendedNextMechanism": "Explicit per-construction azimuthal and radial occupancy allocation before another solver-only iteration campaign."
+  },
+  "falseClosureIncident": {
+    "observed": true,
+    "description": "One first-pass moderate-input capture reported a structurally valid PNG before the page completed exact-byte verification.",
+    "disposition": "The incomplete frame was rejected during visual inspection, recaptured, and excluded from this report. Capture-route structural success alone is not treated as viewer-state success."
+  },
+  "operatorInspection": {
+    "status": "open",
+    "question": "Does the packed state look like a coherent four-member response worth extending, or does the persistent central overlap make azimuthal/radial allocation the obvious next move?"
+  }
+}

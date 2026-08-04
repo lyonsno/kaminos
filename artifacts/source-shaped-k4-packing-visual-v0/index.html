@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Source-shaped K4 packing visual witness</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #080b10; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #panel {
+      position: fixed; z-index: 2; top: 18px; left: 18px; width: min(385px, calc(100vw - 36px));
+      padding: 18px; border: 1px solid rgba(255,255,255,.16); border-radius: 14px;
+      background: rgba(11,15,22,.90); box-shadow: 0 12px 38px rgba(0,0,0,.42); backdrop-filter: blur(14px);
+    }
+    h1 { margin: 0 0 5px; font-size: 18px; line-height: 1.2; letter-spacing: .01em; }
+    .claim { color: #ffcc75; font-size: 12px; line-height: 1.4; margin-bottom: 13px; }
+    .row { display: flex; gap: 7px; margin: 8px 0; }
+    button {
+      flex: 1; border: 1px solid rgba(255,255,255,.17); border-radius: 8px; padding: 7px 8px;
+      color: #d9e1ec; background: #151b25; font: inherit; font-size: 12px; cursor: pointer;
+    }
+    button[aria-pressed="true"] { color: #091018; background: #93c8ff; border-color: #b9dcff; font-weight: 700; }
+    .eyebrow { margin-top: 11px; color: #8e9bac; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
+    .metrics { display: grid; grid-template-columns: 1fr auto auto; gap: 5px 12px; margin-top: 7px; font-size: 11px; }
+    .metrics .head { color: #8694a6; }
+    .metrics .value { text-align: right; font-variant-numeric: tabular-nums; }
+    .metrics .improve { color: #81ddb7; }
+    .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 8px; font-size: 11px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .swatch { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
+    .fine { margin-top: 10px; color: #8793a3; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+    .status { margin-top: 9px; padding-top: 9px; border-top: 1px solid rgba(255,255,255,.12); color: #b8c3d2; font-size: 11px; }
+    .error { color: #ff8d8d; }
+    #hint { position: fixed; right: 18px; bottom: 14px; color: rgba(225,235,246,.62); font-size: 11px; }
+    @media (max-width: 700px) { #panel { max-height: calc(100vh - 60px); overflow: auto; } #hint { display: none; } }
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <section id="panel" aria-label="K4 visual witness controls">
+    <h1>Current K4 packing response</h1>
+    <div class="claim">Experimental qualitative evidence only — candidate geometry, agent-authored environment, and no anatomical admission.</div>
+    <div class="eyebrow">Pressure rung</div>
+    <div class="row" id="conditions">
+      <button data-condition="baseline">Baseline · 0%</button>
+      <button data-condition="mild">Mild · 12%</button>
+      <button data-condition="moderate">Moderate · 24%</button>
+    </div>
+    <div class="eyebrow">Comparison state</div>
+    <div class="row" id="states">
+      <button data-state="before">Input</button>
+      <button data-state="packed">Packed</button>
+    </div>
+    <div class="eyebrow">Penetration ledger</div>
+    <div class="metrics" id="metrics"></div>
+    <div class="eyebrow">Stable construction identity</div>
+    <div class="legend" id="legend"></div>
+    <div class="status" id="status">Verifying exact result bytes…</div>
+    <div class="fine" id="identity"></div>
+  </section>
+  <div id="hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const ROUTE_ID = 'source-shaped-k4-packing-visual-v0';
+    const RESULT_PATH = '../source-shaped-k4-packing-perturbation-v0/perturbation-result.json';
+    const EXPECTED_RESULT_SHA256 = 'ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b';
+    const EXPECTED_SCHEMA = 'kaminos.source-shaped-muscle-packing-perturbation-result.v0';
+    const EXPECTED_IDS = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
+    const EXPECTED_CONDITIONS = ['baseline', 'mild', 'moderate'];
+    const route = { requested: ROUTE_ID, effective: ROUTE_ID, fallbackUsed: false };
+    const colors = new Map([
+      ['muscle-34', 0xf05a67], ['muscle-13', 0xf4c95d],
+      ['muscle-12', 0x38c6b5], ['muscle-45', 0xa786f4],
+    ]);
+    const statusNode = document.querySelector('#status');
+    const identityNode = document.querySelector('#identity');
+    const metricsNode = document.querySelector('#metrics');
+    const legendNode = document.querySelector('#legend');
+    let dataset;
+    let conditionId = new URLSearchParams(location.search).get('condition') || 'baseline';
+    let stateId = new URLSearchParams(location.search).get('state') || 'packed';
+
+    function sameIds(actual, expected) {
+      return actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+    }
+
+    async function loadExactResult() {
+      const response = await fetch(RESULT_PATH, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`result fetch failed: HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const sha256 = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      if (sha256 !== EXPECTED_RESULT_SHA256) throw new Error(`result SHA mismatch: ${sha256}`);
+      const parsed = JSON.parse(new TextDecoder().decode(bytes));
+      if (parsed.schema !== EXPECTED_SCHEMA) throw new Error(`result schema mismatch: ${parsed.schema}`);
+      if (!sameIds(parsed.requestedConstructionIds, EXPECTED_IDS)) throw new Error('requested construction order mismatch');
+      if (!sameIds(parsed.effectiveConstructionIds, EXPECTED_IDS)) throw new Error('effective construction order mismatch');
+      if (!sameIds(parsed.conditions.map(condition => condition.id), EXPECTED_CONDITIONS)) throw new Error('condition order mismatch');
+      for (const condition of parsed.conditions) {
+        if (!sameIds(condition.source.muscles.map(muscle => muscle.id), EXPECTED_IDS)) throw new Error(`${condition.id} source order mismatch`);
+        if (!sameIds(condition.result.muscles.map(muscle => muscle.id), EXPECTED_IDS)) throw new Error(`${condition.id} packed order mismatch`);
+      }
+      return parsed;
+    }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x080b10);
+    scene.fog = new THREE.FogExp2(0x080b10, 0.010);
+    const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.02, 400);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    document.body.prepend(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    const hemi = new THREE.HemisphereLight(0xe2efff, 0x243347, 2.0);
+    scene.add(hemi);
+    const key = new THREE.DirectionalLight(0xffffff, 2.7);
+    key.position.set(8, 14, 10);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x7dafff, 1.5);
+    rim.position.set(-10, 3, -8);
+    scene.add(rim);
+    let content = new THREE.Group();
+    scene.add(content);
+
+    function material(color, opacity = 1, wireframe = false) {
+      return new THREE.MeshStandardMaterial({
+        color, roughness: .38, metalness: .05, transparent: opacity < 1,
+        opacity, depthWrite: opacity > .6, wireframe,
+      });
+    }
+
+    function addSegment(group, a, b, radius, mat, radialSegments = 14) {
+      const start = new THREE.Vector3(...a);
+      const end = new THREE.Vector3(...b);
+      const delta = end.clone().sub(start);
+      const length = delta.length();
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, radialSegments, 1, false), mat);
+      mesh.position.copy(start).add(end).multiplyScalar(.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+      group.add(mesh);
+    }
+
+    function addMuscle(group, muscle, color, opacity = .92) {
+      const mat = material(color, opacity);
+      const points = muscle.centerline;
+      for (let i = 1; i < points.length; i += 1) {
+        const radius = (points[i - 1].radius + points[i].radius) / 2;
+        addSegment(group, points[i - 1].position, points[i].position, radius, mat);
+      }
+      const knotGeometry = new THREE.SphereGeometry(1, 14, 9);
+      points.forEach((point, index) => {
+        const knot = new THREE.Mesh(knotGeometry, mat);
+        knot.position.set(...point.position);
+        knot.scale.setScalar(point.radius);
+        group.add(knot);
+        if (index === 0 || index === points.length - 1) {
+          const marker = new THREE.Mesh(
+            new THREE.SphereGeometry(point.radius * .28, 14, 9),
+            material(index === 0 ? 0xf6f8fb : 0x85d7ff),
+          );
+          marker.position.set(...point.position);
+          group.add(marker);
+        }
+      });
+    }
+
+    function addGhostCenterline(group, muscle, color) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(muscle.centerline.map(p => new THREE.Vector3(...p.position)));
+      group.add(new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: .32 })));
+    }
+
+    function addDisplacements(group, source, packed, color) {
+      const positions = [];
+      for (let i = 1; i < source.centerline.length - 1; i += 1) {
+        positions.push(...source.centerline[i].position, ...packed.centerline[i].position);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      group.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: .25 })));
+    }
+
+    function addEnvironment(group, source) {
+      const obstacle = source.obstacles[0];
+      const obstacleMat = material(0xffa85c, .58, true);
+      obstacleMat.depthTest = false;
+      obstacleMat.depthWrite = false;
+      addSegment(group, obstacle.start, obstacle.end, obstacle.radius + obstacle.clearance, obstacleMat, 18);
+      for (const point of [obstacle.start, obstacle.end]) {
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(obstacle.radius + obstacle.clearance, 16, 10), obstacleMat);
+        cap.position.set(...point);
+        group.add(cap);
+      }
+      const box = new THREE.Box3(new THREE.Vector3(...source.compartment.minimum), new THREE.Vector3(...source.compartment.maximum));
+      group.add(new THREE.Box3Helper(box, new THREE.Color(0x57708f)));
+      const grid = new THREE.GridHelper(42, 21, 0x314257, 0x182231);
+      grid.position.y = source.compartment.minimum[1];
+      group.add(grid);
+    }
+
+    function renderMetrics(condition) {
+      const initial = condition.result.metrics.initial;
+      const packed = condition.result.metrics.packed;
+      const rows = [
+        ['Pairwise', initial.pairwisePenetration, packed.pairwisePenetration],
+        ['Skeletal', initial.skeletalPenetration, packed.skeletalPenetration],
+        ['Endpoint drift', initial.endpointDrift, packed.endpointDrift],
+        ['Compartment escape', initial.compartmentEscape, packed.compartmentEscape],
+      ];
+      metricsNode.innerHTML = '<div class="head">metric</div><div class="head">input</div><div class="head">packed</div>' + rows.map(([label, before, after]) =>
+        `<div>${label}</div><div class="value">${before.toFixed(3)}</div><div class="value ${after < before ? 'improve' : ''}">${after.toFixed(3)}</div>`
+      ).join('');
+    }
+
+    function frameAllConditions() {
+      const box = new THREE.Box3();
+      dataset.conditions.forEach(condition => {
+        [...condition.source.muscles, ...condition.result.muscles].forEach(muscle => {
+          muscle.centerline.forEach(point => box.expandByPoint(new THREE.Vector3(...point.position)));
+        });
+      });
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const distance = Math.max(size.x, size.y, size.z) * 1.55;
+      camera.position.copy(center).add(new THREE.Vector3(distance * .78, distance * .42, distance));
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function renderState() {
+      const condition = dataset.conditions.find(item => item.id === conditionId);
+      if (!condition) throw new Error(`unknown condition: ${conditionId}`);
+      if (!['before', 'packed'].includes(stateId)) throw new Error(`unknown state: ${stateId}`);
+      scene.remove(content);
+      content.traverse(node => {
+        if (node.geometry) node.geometry.dispose();
+        if (node.material) node.material.dispose();
+      });
+      content = new THREE.Group();
+      scene.add(content);
+      addEnvironment(content, condition.source);
+      const selected = stateId === 'before' ? condition.source.muscles : condition.result.muscles;
+      selected.forEach((muscle, index) => {
+        const color = colors.get(muscle.id);
+        addMuscle(content, muscle, color);
+        if (stateId === 'packed') {
+          addGhostCenterline(content, condition.source.muscles[index], color);
+          addDisplacements(content, condition.source.muscles[index], muscle, color);
+        }
+      });
+      document.querySelectorAll('[data-condition]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.condition === conditionId)));
+      document.querySelectorAll('[data-state]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.state === stateId)));
+      renderMetrics(condition);
+      statusNode.textContent = `${condition.id} · ${Math.round(condition.crowdingFraction * 100)}% pressure · ${stateId === 'before' ? 'input candidate' : `packed (${condition.result.status}, ${condition.result.iterations} iterations)`}`;
+      const params = new URLSearchParams(location.search);
+      params.set('condition', conditionId);
+      params.set('state', stateId);
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+      document.documentElement.dataset.condition = conditionId;
+      document.documentElement.dataset.state = stateId;
+      document.documentElement.dataset.witnessLoaded = 'true';
+    }
+
+    document.querySelectorAll('[data-condition]').forEach(button => button.addEventListener('click', () => { conditionId = button.dataset.condition; renderState(); }));
+    document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => { stateId = button.dataset.state; renderState(); }));
+
+    function animate() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    try {
+      dataset = await loadExactResult();
+      legendNode.innerHTML = EXPECTED_IDS.map(id => `<span><i class="swatch" style="background:#${colors.get(id).toString(16).padStart(6, '0')}"></i>${id}</span>`).join('');
+      identityNode.textContent = `route ${route.effective} · fallback ${route.fallbackUsed} · result ${EXPECTED_RESULT_SHA256.slice(0, 12)}… · order ${EXPECTED_IDS.join(' → ')}`;
+      document.documentElement.dataset.requestedRoute = route.requested;
+      document.documentElement.dataset.effectiveRoute = route.effective;
+      document.documentElement.dataset.fallbackUsed = String(route.fallbackUsed);
+      document.documentElement.dataset.resultSha256 = EXPECTED_RESULT_SHA256;
+      frameAllConditions();
+      renderState();
+      animate();
+    } catch (error) {
+      statusNode.classList.add('error');
+      statusNode.textContent = `Witness refused to render: ${error.message}`;
+      document.documentElement.dataset.witnessFailed = 'true';
+      console.error(error);
+    }
+  </script>
+</body>
+</html>
