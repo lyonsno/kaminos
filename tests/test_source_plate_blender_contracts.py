@@ -56,7 +56,14 @@ def test_blender_adapter_never_saves_the_loaded_source():
     assert "save_mainfile" not in adapter
 
 
+def test_blender_bootstraps_its_script_directory_before_importing_the_core():
+    adapter = (Path(__file__).resolve().parents[1] / "source_plate_blender.py").read_text()
+
+    assert adapter.index("sys.path.insert") < adapter.index("from source_plate_core import")
+
+
 if __name__ == "__main__":
     test_four_channel_paths_are_unique_and_caller_addressed()
     test_failure_report_preserves_phase_and_last_trustworthy_identity()
     test_blender_adapter_never_saves_the_loaded_source()
+    test_blender_bootstraps_its_script_directory_before_importing_the_core()

@@ -20,6 +20,8 @@ import tempfile
 import traceback
 from typing import Any, Mapping
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from source_plate_core import (
     SourcePlateContractError,
     descriptor_sha256,
