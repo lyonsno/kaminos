@@ -1,0 +1,697 @@
+{
+  "compartment": null,
+  "coordinateSpace": {
+    "dimension": 3,
+    "kind": "source-world",
+    "unit": "blender-scene-unit"
+  },
+  "derivation": {
+    "atlas": {
+      "id": "coordinate-parent-atlas-3f4c65867a776edf",
+      "sha256": "b9a857559f7d20e1efe18e0a29103ba7cb2347dc3e0b20ac0df409929af6b77b"
+    },
+    "kind": "atlas-route-subset",
+    "selectedConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ],
+    "selectionAuthority": {
+      "receipt": {
+        "id": "coordinate-authority-receipt-aa7c51c7734808f0",
+        "sha256": "8c4b618c95f42c0eb2c657ca7dd3fc42c978de2d6e77a056b42ecceee320aa66"
+      },
+      "rows": [
+        {
+          "constructionId": "muscle-34",
+          "requiredFields": {
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        },
+        {
+          "constructionId": "muscle-13",
+          "requiredFields": {
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        },
+        {
+          "constructionId": "muscle-12",
+          "requiredFields": {
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        },
+        {
+          "constructionId": "muscle-45",
+          "requiredFields": {
+            "attachments.insertion.position": "candidate",
+            "attachments.origin.position": "candidate",
+            "centerline": "candidate",
+            "targetVolume": "candidate",
+            "volumeAuthority": "candidate"
+          },
+          "state": "candidate"
+        }
+      ],
+      "sharedFields": {
+        "compartment": "missing",
+        "coordinateSpace.unit": "candidate",
+        "obstacles": "missing"
+      }
+    }
+  },
+  "diagnostic": {
+    "kind": "candidate-authority-consumer-probe",
+    "notAnAdmittedCoordinateCarrier": true,
+    "sourceReceipt": {
+      "id": "coordinate-authority-receipt-aa7c51c7734808f0",
+      "sha256": "8c4b618c95f42c0eb2c657ca7dd3fc42c978de2d6e77a056b42ecceee320aa66"
+    }
+  },
+  "id": "packer-authority-probe-8c4b618c95f42c0e",
+  "muscles": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            4.533772966134325,
+            7.156125966520925,
+            -4.009196686848691
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            4.877944946539117,
+            6.252649305584783,
+            -2.850497959184999
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            5.222117379132663,
+            5.349172709779884,
+            -1.6917993150513546
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            5.566289435000541,
+            4.44569632774781,
+            -0.5331003923318636
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            5.910461436244092,
+            3.5422196121084717,
+            0.6255982864880807
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            6.254633427155846,
+            2.638742923590894,
+            1.7842969895246739
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            6.598805423634213,
+            1.735266339460525,
+            2.942995772301998
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            6.942977411147117,
+            0.8317897162401082,
+            4.101694527262536
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            7.287149441421989,
+            -0.07168701560858208,
+            5.260393184820156
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            7.631321923749087,
+            -0.9751636829676339,
+            6.419091758388019
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            7.975493870669011,
+            -1.8786401960035541,
+            7.577790611320626
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-34",
+      "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+      "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+      "pathGeometrySha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "pathInstanceId": "instance-a9b5e1a5-d219-404b-aa95-5a6e087e7783",
+      "surfaceGeometrySha256": "b8795bd26a24cc9506def18ca1bdf2645ff82b4499253a015c472500edbf4dac",
+      "surfaceInstanceId": "instance-25a5fbea-a3dc-4c43-92a2-d4d9c977746e",
+      "targetVolume": 64.02550251,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            1.9383730156355294,
+            8.850090865988937,
+            -1.4823074286927833
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            2.3317990455004756,
+            7.858574350935542,
+            -0.41064881077802584
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            2.725224954275755,
+            6.867057844668868,
+            0.6610098597206651
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            3.1186511720394186,
+            5.875541636496451,
+            1.7326686925856618
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            3.512077107359112,
+            4.884025060812062,
+            2.804327289112963
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            3.905503303178272,
+            3.892508907944407,
+            3.8759861812030687
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            4.298929279104737,
+            2.9009924679222925,
+            4.947644888339812
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            4.692355612892896,
+            1.909476330674008,
+            6.019303744230077
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            5.085781589174454,
+            0.9179598907571769,
+            7.090962451333932
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            5.479207478255311,
+            -0.07355632787542188,
+            8.16262139518665
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            5.872633986851445,
+            -1.0650729081967873,
+            9.234279776962879
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-13",
+      "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+      "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+      "pathGeometrySha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "pathInstanceId": "instance-173e65f0-0ffc-4678-ad5b-461ba87204b1",
+      "surfaceGeometrySha256": "41afac51a52007866e49e533224734b77588341baaec5cb2cf5654ece89e5dce",
+      "surfaceInstanceId": "instance-182a0783-9dc7-4283-9189-3460f8e36fba",
+      "targetVolume": 64.512268168,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af",
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            3.9506381256544634,
+            9.25753670917098,
+            -2.767305663178186
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            4.36660143617586,
+            8.18960293113717,
+            -1.6456687091167312
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            4.782565073431964,
+            7.121669403855293,
+            -0.5240316374801459
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            5.19852869997509,
+            6.053735905077779,
+            0.5976054652689633
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            5.614491881794207,
+            4.98580232343618,
+            1.7192426540491406
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            6.0304555594031575,
+            3.917868928986201,
+            2.840879837192637
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            6.446419196659252,
+            2.84993540170434,
+            3.962516908829232
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            6.8623824097390385,
+            1.7820018588047346,
+            5.0841541229033576
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            7.278346003987788,
+            0.7140684429391182,
+            6.205791316571095
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            7.694309688673687,
+            -0.3538651786801087,
+            7.327428280797629
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            8.110273384838322,
+            -1.421798767202057,
+            8.44906527227976
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-12",
+      "instanceId": "instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10",
+      "lineageId": "lineage-27e2fbb3-3732-4933-8793-1bd61236401c",
+      "pathGeometrySha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "pathInstanceId": "instance-f33b883b-b9d6-44ce-8bc8-ffff286d0679",
+      "surfaceGeometrySha256": "a6bce4c9392df064bb52dd8a938e07ad2de50e313cd84659c0a519fcf33d4e8c",
+      "surfaceInstanceId": "instance-98512e35-ef80-4f99-8390-8836bb30a39b",
+      "targetVolume": 76.826555301,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "sourceAuthority": "source_mesh"
+        },
+        "origin": {
+          "id": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d",
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "sourceAuthority": "source_mesh"
+        }
+      },
+      "centerline": [
+        {
+          "arcFraction": 0,
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.08333333333333333,
+          "position": [
+            4.170951339030872,
+            10.116805157794325,
+            -2.838253093946344
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.16666666666666666,
+          "position": [
+            4.575319680450884,
+            8.905397674284218,
+            -1.7445150570986199
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.25,
+          "position": [
+            4.979687673891189,
+            7.693990282254728,
+            -0.6507767902761215
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.3333333333333333,
+          "position": [
+            5.384056028291318,
+            6.482582756862795,
+            0.4429611953851773
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.4166666666666667,
+          "position": [
+            5.7884240078093505,
+            5.271175406541798,
+            1.5366995135506387
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5,
+          "position": [
+            6.1927923676881464,
+            4.059767867732745,
+            2.63043748232581
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.5833333333333334,
+          "position": [
+            6.597160768190308,
+            2.8483604432283123,
+            3.72417556268406
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.6666666666666666,
+          "position": [
+            7.001528682991114,
+            1.6369530477872685,
+            4.817913854801954
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.75,
+          "position": [
+            7.405897074039865,
+            0.425545594599285,
+            5.911651906885748
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.8333333333333334,
+          "position": [
+            7.810265025128918,
+            -0.7858619125499553,
+            7.005390061861216
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 0.9166666666666666,
+          "position": [
+            8.214633062173144,
+            -1.997269614207529,
+            8.09912796962358
+          ],
+          "radius": 1
+        },
+        {
+          "arcFraction": 1,
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "radius": 1
+        }
+      ],
+      "constructionId": "muscle-45",
+      "instanceId": "instance-a4b690df-3a8d-4ccb-be89-3550af103e0e",
+      "lineageId": "lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65",
+      "pathGeometrySha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "pathInstanceId": "instance-536c6dd1-888d-4108-99c0-10523e04b4da",
+      "surfaceGeometrySha256": "2f915e81e25314df1948cc7472d0b1a51b3cccac1f5d6d80681961a50e8644a2",
+      "surfaceInstanceId": "instance-93412ca6-0ee3-456c-99aa-ed2205a9a73f",
+      "targetVolume": 89.302118638,
+      "volumeAuthority": "source-visible-surface-measured-candidate"
+    }
+  ],
+  "obstacles": [],
+  "schema": "kaminos.authored-muscle-packing-coordinate-carrier.v0",
+  "source": {
+    "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+    "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+    "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+    "routingFixtureSha256": "1414edfd845300d5590ed4cd885e35a19430edeca682a14aee5f4bcebb828e28"
+  }
+}
