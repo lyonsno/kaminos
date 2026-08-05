@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.analytical-elbow-positive-volume-c-p0-witness-report.v0",
+  "status": "complete",
+  "failurePhase": null,
+  "route": {
+    "requested": "analytical-elbow-positive-volume-c-p0-witness",
+    "effective": "analytical-elbow-positive-volume-c-p0-witness",
+    "fallbackUsed": false
+  },
+  "source": {
+    "id": "synthetic-mammalian-elbow-v0:sleeve-40x24",
+    "semanticHash": "e1e29e69f31834c1445ece5b5f851e0aab3790dc891ac6af21a2f26c69db747f",
+    "candidateRoute": "analytical-elbow-positive-volume-c-p0",
+    "scalarControlRoute": "analytical-elbow-collar-failure-witness",
+    "candidateArtifactPath": "artifacts/analytical-elbow-positive-volume-c-p0-v0/c-p0.json",
+    "candidateArtifactSha256": "4facc5ba2d018fce24d749966f46c4041ee95279cd5d31e642024a0ad90f4005"
+  },
+  "comparison": {
+    "status": "NUMERICAL_CANDIDATE",
+    "candidateInitialization": "w-derived",
+    "candidateQ95AbsoluteLogEdgeStrain": 0.10567458674815311,
+    "scalarControlQ95AbsoluteLogEdgeStrain": 0.1348103998679601,
+    "improvement": 0.02913581311980698
+  },
+  "visualContract": {
+    "startsPaused": true,
+    "animationActive": false,
+    "cameraPresets": [
+      "profile",
+      "three-quarter"
+    ],
+    "heatThresholdLogStrain": 0.13976194237515863,
+    "decisionPredicate": "candidate retains authored transition shape without flattening, pinching, or erasure"
+  },
+  "primaryOutput": "analytical-elbow-positive-volume-c-p0-witness-v0",
+  "claimCeiling": "visual consumer candidate on one synthetic 35-degree sleeve; no transfer, anatomy, production, or product claim"
+}
