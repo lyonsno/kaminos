@@ -124,9 +124,46 @@ def _encode_rgb_png(width: int, height: int, pixels: bytes | bytearray) -> bytes
 
 def read_png_dimensions(path: Path | str) -> tuple[int, int]:
     payload = Path(path).read_bytes()
-    if len(payload) < 24 or payload[:8] != b"\x89PNG\r\n\x1a\n" or payload[12:16] != b"IHDR":
-        _fail(f"{path} is not a valid PNG header", "output-freshness")
-    return struct.unpack(">II", payload[16:24])
+    if len(payload) < 8 or payload[:8] != b"\x89PNG\r\n\x1a\n":
+        _fail(f"{path} is not a PNG", "output-freshness")
+    offset = 8
+    chunk_index = 0
+    dimensions: tuple[int, int] | None = None
+    saw_idat = False
+    saw_iend = False
+    while offset < len(payload):
+        if offset + 12 > len(payload):
+            _fail(f"{path} has a truncated PNG chunk header", "output-freshness")
+        length = struct.unpack(">I", payload[offset : offset + 4])[0]
+        chunk_type = payload[offset + 4 : offset + 8]
+        chunk_end = offset + 12 + length
+        if chunk_end > len(payload):
+            _fail(f"{path} has a truncated {chunk_type!r} chunk", "output-freshness")
+        chunk_data = payload[offset + 8 : offset + 8 + length]
+        recorded_crc = struct.unpack(">I", payload[offset + 8 + length : chunk_end])[0]
+        measured_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if recorded_crc != measured_crc:
+            _fail(f"{path} has a corrupt {chunk_type!r} chunk", "output-freshness")
+        if chunk_index == 0:
+            if chunk_type != b"IHDR" or length != 13:
+                _fail(f"{path} does not begin with a valid IHDR", "output-freshness")
+            dimensions = struct.unpack(">II", chunk_data[:8])
+            if dimensions[0] <= 0 or dimensions[1] <= 0:
+                _fail(f"{path} has invalid PNG dimensions", "output-freshness")
+        elif chunk_type == b"IHDR":
+            _fail(f"{path} has a duplicate IHDR", "output-freshness")
+        if chunk_type == b"IDAT":
+            saw_idat = True
+        if chunk_type == b"IEND":
+            if length != 0 or chunk_end != len(payload):
+                _fail(f"{path} has malformed or trailing IEND data", "output-freshness")
+            saw_iend = True
+            break
+        offset = chunk_end
+        chunk_index += 1
+    if dimensions is None or not saw_idat or not saw_iend:
+        _fail(f"{path} is an incomplete PNG stream", "output-freshness")
+    return dimensions
 
 
 def _ellipse_depth(
@@ -362,6 +399,35 @@ def _landmark_record(size: int, point: tuple[int, int]) -> dict[str, Any]:
     }
 
 
+def _expected_visible_claims() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "head-marker-side",
+            "kind": "categorical-landmark",
+            "sourceValue": "image-right",
+            "evidenceSource": "pixel-measurement",
+            "measurementArtifact": OUTPUT_FILENAMES["landmark-overlay"],
+            "predeclared": True,
+        },
+        {
+            "id": "support-order",
+            "kind": "categorical-order",
+            "sourceValue": list(SUPPORT_ORDER),
+            "evidenceSource": "pixel-measurement",
+            "measurementArtifact": OUTPUT_FILENAMES["silhouette"],
+            "predeclared": True,
+        },
+        {
+            "id": "protected-contour",
+            "kind": "binary-mask",
+            "sourceValue": OUTPUT_FILENAMES["protected-contour"],
+            "evidenceSource": "pixel-measurement",
+            "measurementArtifact": OUTPUT_FILENAMES["protected-contour"],
+            "predeclared": True,
+        },
+    ]
+
+
 def _visible_evidence_ledger(size: int) -> dict[str, Any]:
     return {
         "schema": LEDGER_SCHEMA,
@@ -376,32 +442,7 @@ def _visible_evidence_ledger(size: int) -> dict[str, Any]:
         "landmarks": {
             name: _landmark_record(size, point) for name, point in LANDMARKS.items()
         },
-        "visibleClaims": [
-            {
-                "id": "head-marker-side",
-                "kind": "categorical-landmark",
-                "sourceValue": "image-right",
-                "evidenceSource": "pixel-measurement",
-                "measurementArtifact": OUTPUT_FILENAMES["landmark-overlay"],
-                "predeclared": True,
-            },
-            {
-                "id": "support-order",
-                "kind": "categorical-order",
-                "sourceValue": list(SUPPORT_ORDER),
-                "evidenceSource": "pixel-measurement",
-                "measurementArtifact": OUTPUT_FILENAMES["silhouette"],
-                "predeclared": True,
-            },
-            {
-                "id": "protected-contour",
-                "kind": "binary-mask",
-                "sourceValue": OUTPUT_FILENAMES["protected-contour"],
-                "evidenceSource": "pixel-measurement",
-                "measurementArtifact": OUTPUT_FILENAMES["protected-contour"],
-                "predeclared": True,
-            },
-        ],
+        "visibleClaims": _expected_visible_claims(),
         "descriptorOnlyClaims": [
             {
                 "id": "primitive-role-head",
@@ -440,6 +481,11 @@ def validate_visible_evidence_ledger(ledger: dict[str, Any]) -> dict[str, Any]:
             )
         if not claim.get("predeclared") or not isinstance(claim.get("measurementArtifact"), str):
             _fail("visible claims must be predeclared and measured", "visible-evidence-authority")
+    if claims != _expected_visible_claims():
+        _fail(
+            "visible claims do not match the exact pixel evidence contract",
+            "visible-evidence-authority",
+        )
     descriptor_claims = ledger.get("descriptorOnlyClaims")
     if not isinstance(descriptor_claims, list) or any(
         not isinstance(claim, dict) or claim.get("mayAdjudicateVisibleProjection") is not False
@@ -596,6 +642,15 @@ def validate_visible_sentinel_manifest(manifest_path: Path | str) -> dict[str, A
         record = outputs[name]
         if not isinstance(record, dict) or record.get("dimensions") != [512, 512]:
             _fail(f"{name} output dimensions are not native-square", "output-freshness")
+        expected_state = {
+            "path": OUTPUT_FILENAMES[name],
+            "mediaType": "image/png",
+            "complete": True,
+            "fresh": True,
+            "cached": False,
+        }
+        if any(record.get(key) != value for key, value in expected_state.items()):
+            _fail(f"{name} output authority state is not exact", "output-freshness")
         output_path = path.parent / str(record.get("path", ""))
         if not output_path.is_file():
             _fail(f"{name} output is missing", "output-freshness")
@@ -621,13 +676,22 @@ def validate_visible_sentinel_manifest(manifest_path: Path | str) -> dict[str, A
             _fail(f"{label} SHA-256 mismatch", "source-freshness")
     ledger = json.loads((path.parent / manifest["visibleEvidenceLedger"]["path"]).read_text())
     validate_visible_evidence_ledger(ledger)
+    claim_outputs = {
+        "head-marker-side": "landmark-overlay",
+        "support-order": "silhouette",
+        "protected-contour": "protected-contour",
+    }
+    for claim in ledger["visibleClaims"]:
+        output = outputs[claim_outputs[claim["id"]]]
+        if claim["measurementArtifact"] != output["path"]:
+            _fail(
+                f"visible claim {claim['id']} is not bound to its pixel output",
+                "visible-evidence-authority",
+            )
     if manifest.get("manifestSha256") != _manifest_sha256(manifest):
         _fail("manifest SHA-256 does not bind the bundle", "manifest-identity")
     plan = manifest.get("consumerExercise")
-    if not isinstance(plan, dict) or [cell.get("id") for cell in plan.get("cells", [])] != [
-        "depth-only",
-        "depth-plus-clay-appearance",
-    ]:
+    if plan != _consumer_plan(outputs):
         _fail("consumer exercise topology is incomplete", "consumer-contract")
     return {
         "ok": True,
@@ -690,8 +754,11 @@ def build_visible_sentinel_bundle(
     report_path = root / "build-report.json"
     completed: list[str] = []
     output_sha256: dict[str, str] = {}
-    phase = "render-source"
+    phase = "clear-stale-terminal"
     try:
+        for terminal_name in ("manifest.json", "index.html"):
+            (root / terminal_name).unlink(missing_ok=True)
+        phase = "render-source"
         if size != 512:
             _fail("sentinel A dimensions are fixed at 512x512", "preprocessing-identity")
         channels = _render_channels(size)
@@ -797,6 +864,8 @@ def build_visible_sentinel_bundle(
                 "outputSha256": output_sha256,
             },
         }
+        for terminal_name in ("manifest.json", "index.html"):
+            (root / terminal_name).unlink(missing_ok=True)
         _write_json(report_path, report)
         raise stable
 
