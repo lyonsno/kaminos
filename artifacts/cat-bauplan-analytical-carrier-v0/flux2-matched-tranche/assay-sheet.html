@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cat bauplan matched FLUX.2 tranche</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #171a19; color: #f5f1e8; font: 16px/1.35 Arial, sans-serif; }
+    header { padding: 22px 26px 18px; border-bottom: 1px solid #47504c; }
+    h1 { margin: 0 0 12px; font-size: 24px; letter-spacing: 0; }
+    .prompt { margin: 0; max-width: 1900px; color: #dedbd2; }
+    .settings { margin: 14px 0 0; color: #9ad9c8; font-weight: 700; }
+    main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: #47504c; }
+    figure { margin: 0; background: #1d211f; min-width: 0; }
+    figcaption { min-height: 58px; padding: 12px 14px; color: #f2c879; font-weight: 700; }
+    img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #202522; }
+    .sub { display: block; margin-top: 3px; color: #b7bcb9; font-size: 13px; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Completed cat ecorche: fixed-input, fixed-prompt seed tranche</h1>
+    <p class="prompt">Use the supplied operator-authored anatomy as a strong ancestral structure seed for one newly discovered friendly ground creature. Retain the distinctive pelvis and folded hind-limb event, the long muscle trajectories, the rear support spacing, and the source's direction of travel. Let biological plausibility invent a coherent missing forebody, head, support anatomy, and outer surface wherever the partial construction leaves them open. Favor a compact rounded whole-body silhouette, four sturdy supports, softly integrated masses, a simple expressive head, small calm eyes, and gentle curious character. The result should feel discovered from the anatomy: one healthy, aesthetically pleasing, softly stylized living animal with convincing weight. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+    <p class="settings">FLUX.2 Klein 9B | 512x512 | 8 steps | guidance 1.0 | quantize 4 | identical input and prompt; seed only varies</p>
+  </header>
+  <main>
+    <figure>
+      <figcaption>Exact source plate<span class="sub">blend 9453608... | plate 92ad03e...</span></figcaption>
+      <img src="../source-preview/right-sagittal.png" alt="Exact operator-authored cat ecorche source plate">
+    </figure>
+    <figure>
+      <figcaption>Seed 80301<span class="sub">anatomy-literal completion</span></figcaption>
+      <img src="seed-80301/output.png" alt="FLUX completion for seed 80301">
+    </figure>
+    <figure>
+      <figcaption>Seed 80413<span class="sub">rounded stylized completion</span></figcaption>
+      <img src="seed-80413/output.png" alt="FLUX completion for seed 80413">
+    </figure>
+    <figure>
+      <figcaption>Seed 80505<span class="sub">soft fur completion</span></figcaption>
+      <img src="seed-80505/output.png" alt="FLUX completion for seed 80505">
+    </figure>
+  </main>
+</body>
+</html>

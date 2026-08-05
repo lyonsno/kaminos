@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.flux2-cat-bauplan-matched-tranche.v0",
+  "status": "completed",
+  "campaignQuestion": "Does the completed operator-authored cat ecorche enter the previously admitted friendly whole-creature basin while retaining source-level anatomical organization?",
+  "input": {
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview/right-sagittal.png",
+    "sha256": "92ad03e4b55b94cd219eeee73afffba52e1a16955a949d2b65e2aad0279a26fc",
+    "byteLength": 891282,
+    "sourceBlendSha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "prompt": {
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/flux2-matched-tranche/prior-led-friendly-completion.txt",
+    "sha256": "a9c279e9a7cd0ba17f124024652de42a717a61ec4da4287ead973f0259843f01"
+  },
+  "effectiveCell": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "quantize": 4,
+    "mlxCacheLimitGb": 48
+  },
+  "jobs": [
+    {
+      "seed": 80301,
+      "jobId": "99341018f649",
+      "durationSeconds": 33.7,
+      "outputDirectory": "seed-80301",
+      "outputSha256": "fa767c042c0ac6eb27fd4ec282f917ba840fa153b038e5b5961f35c728a30288",
+      "visualAdmission": "happy_safe",
+      "interpretation": "Anatomy-literal completion preserving the exposed axial bridge, folded hindquarter, shoulder separation, forward skull placement, and four-support organization."
+    },
+    {
+      "seed": 80413,
+      "jobId": "f7d4908e6f50",
+      "durationSeconds": 30.9,
+      "outputDirectory": "seed-80413",
+      "outputSha256": "123926ddc52e2ecfc5631a8afd38f865eabcfcf57617f89fa739df46f1b5f90d",
+      "visualAdmission": "happy_safe",
+      "interpretation": "Rounded stylized completion retaining the two major body masses, enlarged hindquarter, forward head, and planted support rhythm while compressing the exposed spinal bridge."
+    },
+    {
+      "seed": 80505,
+      "jobId": "fb3f4a14735d",
+      "durationSeconds": 31.5,
+      "outputDirectory": "seed-80505",
+      "outputSha256": "001cbdab9438d9ca97f3623d14a45795dccad8f80b8cc3020a98edbc8b1cd555",
+      "visualAdmission": "happy_safe",
+      "interpretation": "Softly furred bear-like completion retaining the front-heavy stance, substantial hindquarter, compact forward head, and four planted supports."
+    }
+  ],
+  "assaySheet": {
+    "htmlPath": "assay-sheet.html",
+    "htmlSha256": "e9058c46066b2a1f26cf9aa0b834fabe605b82cd0fff52761ce342e985fe6398",
+    "previewPath": "quicklook/assay-sheet.html.png",
+    "previewSha256": "711d273fff221efc5775b30682c8c95c579e1aa5f1deed53f34a0f3c10ad8671"
+  },
+  "result": "All three matched seeds produced aesthetically admitted coherent whole-creature completions. Seed variation changed surface style and anatomical literalness substantially while preserving the source's major axial, massing, and support organization.",
+  "claimCeiling": "This exact completed ecorche repeatedly reaches aesthetically admitted coherent creature basins under one matched prompt and route. The tranche does not establish pixel-local correspondence, 3D consistency, reconstructability, general prompt robustness, or that every authored structure survives every seed."
+}

@@ -1,0 +1,17 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "91ecbbab7eee",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "dorsal.png",
+    "front-three-quarter.png",
+    "manifest.json",
+    "render-command.json",
+    "right-sagittal.png"
+  ],
+  "created_at": 1785915658.108178,
+  "duration_s": 0.8
+}

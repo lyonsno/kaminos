@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import bpy
+from mathutils import Vector
 
 
 SCHEMA = "kaminos.track-m-blender-extraction.v0"
@@ -80,6 +81,17 @@ def _matrix_world(obj: bpy.types.Object) -> list[float]:
     return [_rounded(obj.matrix_world[row][column]) for row in range(4) for column in range(4)]
 
 
+def _world_bounds(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph) -> dict[str, list[float]] | None:
+    if obj.type not in {"MESH", "CURVE", "FONT", "SURFACE", "META"}:
+        return None
+    evaluated = obj.evaluated_get(depsgraph)
+    corners = [evaluated.matrix_world @ Vector(corner) for corner in evaluated.bound_box]
+    return {
+        "min": [_rounded(min(corner[axis] for corner in corners)) for axis in range(3)],
+        "max": [_rounded(max(corner[axis] for corner in corners)) for axis in range(3)],
+    }
+
+
 def _mesh_geometry(mesh: bpy.types.Mesh) -> dict[str, Any]:
     content = {
         "vertices": [_vec(vertex.co) for vertex in mesh.vertices],
@@ -145,7 +157,12 @@ def _collection_paths(scene: bpy.types.Scene) -> dict[bpy.types.Collection, str]
     return paths
 
 
-def _object_record(obj: bpy.types.Object, collection_paths: dict[bpy.types.Collection, str]) -> dict[str, Any]:
+def _object_record(
+    obj: bpy.types.Object,
+    collection_paths: dict[bpy.types.Collection, str],
+    depsgraph: bpy.types.Depsgraph,
+    view_layer: bpy.types.ViewLayer,
+) -> dict[str, Any]:
     geometry = None
     if obj.type == "MESH":
         geometry = _mesh_geometry(obj.data)
@@ -178,6 +195,13 @@ def _object_record(obj: bpy.types.Object, collection_paths: dict[bpy.types.Colle
         "parent": obj.parent.name if obj.parent else None,
         "collections": sorted(collection_paths.get(collection, collection.name) for collection in obj.users_collection),
         "matrixWorld": _matrix_world(obj),
+        "visibility": {
+            "hideViewport": bool(obj.hide_viewport),
+            "hideRender": bool(obj.hide_render),
+            "hiddenInViewLayer": bool(obj.hide_get(view_layer=view_layer)),
+            "visibleInViewLayer": bool(obj.visible_get(view_layer=view_layer)),
+        },
+        "worldBounds": _world_bounds(obj, depsgraph),
         "customProperties": _properties(obj),
         "geometry": geometry,
         "modifiers": modifiers,
@@ -195,6 +219,8 @@ def main() -> int:
     if source_sha256 != args.expected_source_sha256:
         raise ValueError("source SHA-256 mismatch")
     scene = bpy.context.scene
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    view_layer = bpy.context.view_layer
     collection_paths = _collection_paths(scene)
     extraction = {
         "schema": SCHEMA,
@@ -217,7 +243,7 @@ def main() -> int:
             },
         },
         "objects": [
-            _object_record(obj, collection_paths)
+            _object_record(obj, collection_paths, depsgraph, view_layer)
             for obj in sorted(scene.objects, key=lambda item: item.name)
         ],
     }

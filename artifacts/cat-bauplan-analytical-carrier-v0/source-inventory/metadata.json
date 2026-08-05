@@ -1,0 +1,14 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "2f746326760a",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "extraction-command.json",
+    "extraction.json"
+  ],
+  "created_at": 1785914681.801692,
+  "duration_s": 0.5
+}
