@@ -15,6 +15,16 @@
       "vertexIds": [
         "surface:a"
       ],
+      "vertexPositions": [
+        {
+          "id": "surface:a",
+          "rest": [
+            0.3,
+            0.28,
+            0.28
+          ]
+        }
+      ],
       "triangleIds": []
     },
     "requestedRoute": "positive-volume-cage-preflight",
@@ -135,7 +145,7 @@
         "topology": "8aeeafc6232a49f662be8a91e90b837eba53cd3dbbf63de0190ec43c4745a6fd",
         "constraints": "b7b487623435f984114e3743c6f23d275e1de901e086eb0779559cf819b72761",
         "embedding": "7dcade49faba602581fc5cb21bf02894fea7e72f21c56f1150a2b611761351f3",
-        "source": "a4c810ac317a8d68ab58c1e96716177a36bd6a21ff17a9bde1228b9a49ccda7a"
+        "source": "ca9789b30c2fa657634425c5367ada8e6d1ac39592b545241e032e87a9591879"
       }
     },
     "primaryOutput": null,
