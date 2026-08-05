@@ -186,6 +186,11 @@ test('witness publishes exact source, result, interactive route, and pending vis
   assert.match(witnessHtml, /tangent cosine/);
   assert.match(witnessHtml, /max bend energy/);
   assert.match(witnessHtml, /relation cosine/);
+  assert.doesNotMatch(
+    witnessHtml,
+    /^[\t ]+$/m,
+    'optional blocker markup must not leave whitespace-only lines in generated evidence',
+  );
   assert.match(witnessHtml, /function carrierSurface/);
   assert.match(witnessHtml, /startCapCenter/);
   assert.match(witnessHtml, /endCapCenter/);

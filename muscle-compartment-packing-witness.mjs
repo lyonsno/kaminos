@@ -197,7 +197,7 @@ export function renderMuscleCompartmentPackingHtml({
   <section class="panel" aria-label="Packing witness controls and residuals">
     <h1>${escapeHtml(title)}</h1>
     <p class="authority">${escapeHtml(authorityLabel)}</p>
-    ${solveStatus ? `<p class="solve-status">Solver disposition · ${escapeHtml(solveStatus)}</p>` : ''}
+${solveStatus ? `    <p class="solve-status">Solver disposition · ${escapeHtml(solveStatus)}</p>` : ''}
     <p class="explanation">${escapeHtml(explanation)}</p>
     <div class="controls">
       <button data-state="before">${escapeHtml(beforeLabel)}</button>
@@ -217,7 +217,7 @@ export function renderMuscleCompartmentPackingHtml({
       <span>tangent cosine</span><span class="value">${formatMetric(initial.minimumSourceTangentCosine)}</span><span class="value packed">${formatMetric(packed.minimumSourceTangentCosine)}</span>
       <span>relation cosine</span><span class="value">${formatMetric(initial.minimumPairwiseRelationCosine)}</span><span class="value packed">${formatMetric(packed.minimumPairwiseRelationCosine)}</span>
     </div>
-    ${fixedAttachmentBlockers.length > 0 ? `<p class="blockers-title">Fixed attachment blockers</p><div class="blockers">${blockerRows}</div>` : ''}
+${fixedAttachmentBlockers.length > 0 ? `    <p class="blockers-title">Fixed attachment blockers</p><div class="blockers">${blockerRows}</div>` : ''}
     <p class="attribution-title">Dominant algorithmic correction path · not physical force</p>
     <div class="attribution">${attributionRows}</div>
     <div class="legend">

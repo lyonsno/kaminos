@@ -483,7 +483,7 @@
     },
     "viewer": {
       "path": "index.html",
-      "sha256": "8bb20229b34475d79af425acae8e3ee082948e69a2ef6dd9198d4c1221264bfd"
+      "sha256": "65662d081d651340173d288f256d800a4c62b975c976a2d61bfe382e72f8f69a"
     }
   },
   "visual": {
@@ -495,7 +495,7 @@
     "status": "agent-inspected-terminal-residual-rejected",
     "viewer": {
       "path": "index.html",
-      "sha256": "8bb20229b34475d79af425acae8e3ee082948e69a2ef6dd9198d4c1221264bfd"
+      "sha256": "65662d081d651340173d288f256d800a4c62b975c976a2d61bfe382e72f8f69a"
     },
     "expectedCaptures": [
       "baseline-source.png",
