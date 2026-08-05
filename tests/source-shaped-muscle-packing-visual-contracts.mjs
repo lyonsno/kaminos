@@ -39,13 +39,19 @@ test('source-shaped K4 visual route binds both exact profiles and all comparison
 
 test('profile comparison keeps the visual claim below convergence and anatomy', async () => {
   const report = JSON.parse(await readFile(PROFILE_REPORT, 'utf8'));
-  assert.equal(report.status, 'agent-inspected-operator-inspection-open');
+  assert.equal(report.status, 'operator-inspected-experimental-comparison-accepted');
   assert.equal(report.captureEvidence.captureCount, 12);
   assert.equal(report.captureEvidence.allExactViewerStatesVerified, true);
+  assert.equal(report.captureEvidence.allScenePixelsVerified, true);
+  assert.match(report.captureEvidence.route, /dom-and-scene-pixel-verified/);
+  assert.equal(report.captureEvidence.allCapturesCarryWarmCyanPurpleFamilies, true);
+  assert.match(report.captureEvidence.postOutputTimeouts.disposition, /exact DOM[\s\S]*scene-pixel validation/i);
   assert.equal(report.profiles.belly.shapeProfile.authority, 'agent-authored-provisional');
   assert.match(report.sharedIdentity.claimCeiling, /qualitative[\s\S]*no anatomical admission/i);
   assert.match(report.visualVerdict.claim, /materially different contact regime[\s\S]*does not remove[\s\S]*occupancy/i);
   assert.match(report.visualVerdict.nextComparison, /occupancy[\s\S]*tube and belly[\s\S]*before.*tendon/i);
+  assert.equal(report.operatorInspection.status, 'accepted-for-next-comparison');
+  assert.match(report.operatorInspection.claimLimit, /not anatomical correctness[\s\S]*source authority/i);
 });
 
 test('source-shaped K4 visual report preserves six inspected states and the false-closure incident', async () => {

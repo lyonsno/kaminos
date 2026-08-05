@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.source-shaped-k4-packing-profile-comparison-report.v0",
-  "status": "agent-inspected-operator-inspection-open",
-  "observedAt": "2026-08-05T00:03:25Z",
+  "status": "operator-inspected-experimental-comparison-accepted",
+  "observedAt": "2026-08-05T00:33:32Z",
   "viewerRoute": {
     "requested": "source-shaped-k4-packing-visual-v0",
     "effective": "source-shaped-k4-packing-visual-v0",
@@ -55,18 +55,29 @@
     "report": "capture-report.json",
     "status": "complete",
     "captureCount": 12,
-    "route": "chromium-virtual-time-dom-verified-screenshot-v0",
+    "route": "chromium-virtual-time-dom-and-scene-pixel-verified-screenshot-v1",
+    "reportSha256": "da73e5ed9cff7854c1c25f076d439ffe6ede2a47d8d10b0ed233ee2ea7e26a61",
     "allExactViewerStatesVerified": true,
+    "allScenePixelsVerified": true,
+    "minimumOccupiedScenePixels": 142634,
+    "minimumChromaticScenePixels": 125169,
+    "allCapturesCarryWarmCyanPurpleFamilies": true,
+    "postOutputTimeouts": {
+      "count": 12,
+      "disposition": "accepted only after fresh-output deletion, exit-status-zero observation, exact DOM validation, complete PNG decode, and scene-pixel validation; retained per frame as an acquisition anomaly"
+    },
     "failedAttemptsPreserved": true,
     "priorFailedReports": [
       "capture-report.failed-profile-contention.json",
       "capture-report.failed-sequential-timeout.json",
-      "capture-report.failed-belly-mild-packed-timeout.json"
+      "capture-report.failed-belly-mild-packed-timeout.json",
+      "capture-report.failed-pixel-validator-timeout.json",
+      "capture-report.failed-pixel-validator-long-timeout.json"
     ]
   },
   "contactSheet": {
     "path": "contact-sheet.png",
-    "sha256": "ada710dc109b8b7fd525170339fa7f778d7c9d5a354b1890b35c8b9cc17f5a98",
+    "sha256": "67dee8319b2c8beb9ea1d53eac61707087c9ed36a71534dd98fb76c071b1cf63",
     "layout": "columns baseline/mild/moderate; rows tube-input/tube-packed/belly-input/belly-packed"
   },
   "visualVerdict": {
@@ -82,7 +93,9 @@
     "nextComparison": "Compose Packer's explicit azimuthal/radial occupancy result against both tube and belly profiles before adding passive tendon or attachment mechanics."
   },
   "operatorInspection": {
-    "status": "open",
-    "question": "Does the packed belly response look like a meaningful improvement in four-member organization, or does the remaining central overlap indicate that occupancy allocation must dominate the next shape decision?"
+    "status": "accepted-for-next-comparison",
+    "observation": "The operator judged the displayed result good and approved proceeding with the belly comparison.",
+    "decision": "Retain the belly profile as an experimental geometry toggle and compose occupancy against both profiles before adding passive tendon or attachment mechanics.",
+    "claimLimit": "This accepts the assay direction and visual usefulness, not anatomical correctness, convergence, or source authority."
   }
 }

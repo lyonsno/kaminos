@@ -1,0 +1,90 @@
+{
+  "schema": "kaminos.source-shaped-k4-profile-comparison-capture.v0",
+  "status": "failed",
+  "route": {
+    "requested": "chromium-virtual-time-dom-verified-screenshot-v0",
+    "effective": null,
+    "fallbackUsed": false
+  },
+  "viewerRoute": {
+    "requested": "source-shaped-k4-packing-visual-v0",
+    "effective": null,
+    "fallbackUsed": false
+  },
+  "invocation": {
+    "baseUrl": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html",
+    "outputDirectory": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0",
+    "reportPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "virtualTimeBudgetMs": 5000,
+    "captureTimeoutMs": 30000,
+    "maxCaptureAttempts": 3,
+    "resumeReportPath": null
+  },
+  "requestedProfiles": {
+    "tube": {
+      "resultSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+    },
+    "belly": {
+      "resultSha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+    }
+  },
+  "captures": [],
+  "primaryOutput": null,
+  "failurePhase": "capture-tube-baseline-before",
+  "error": "Error: tube/baseline/before exhausted 3 capture attempts: browser capture failed: spawnSync /Applications/Google Chrome.app/Contents/MacOS/Google Chrome ETIMEDOUT",
+  "currentCapture": {
+    "profile": "tube",
+    "condition": "baseline",
+    "state": "before",
+    "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before",
+    "outputPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-before.png",
+    "attempt": 3,
+    "attempts": [
+      {
+        "attempt": 1,
+        "status": "failed",
+        "error": "browser capture failed: spawnSync /Applications/Google Chrome.app/Contents/MacOS/Google Chrome ETIMEDOUT",
+        "stderr": {
+          "totalBytes": 161,
+          "retainedBytes": 161,
+          "truncated": false,
+          "tail": "288245 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-before.png\n"
+        }
+      },
+      {
+        "attempt": 2,
+        "status": "failed",
+        "error": "browser capture failed: spawnSync /Applications/Google Chrome.app/Contents/MacOS/Google Chrome ETIMEDOUT",
+        "stderr": {
+          "totalBytes": 484,
+          "retainedBytes": 484,
+          "truncated": false,
+          "tail": "288245 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-before.png\n[27801:76768158:0804/202252.078747:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (ipc/send) invalid destination port (0x10000003)\n[27801:76768158:0804/202252.078758:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (ipc/send) invalid destination port (0x10000003)\n"
+        }
+      },
+      {
+        "attempt": 3,
+        "status": "failed",
+        "error": "browser capture failed: spawnSync /Applications/Google Chrome.app/Contents/MacOS/Google Chrome ETIMEDOUT",
+        "stderr": {
+          "totalBytes": 448,
+          "retainedBytes": 448,
+          "truncated": false,
+          "tail": "288245 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-before.png\n[30804:76778594:0804/202322.840564:ERROR:base/process/process_mac.cc:53] task_policy_set TASK_CATEGORY_POLICY: (os/kern) invalid argument (4)\n[30804:76778594:0804/202322.840580:ERROR:base/process/process_mac.cc:98] task_policy_set TASK_SUPPRESSION_POLICY: (os/kern) invalid argument (4)\n"
+        }
+      }
+    ]
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "browser-identity-bound",
+    "browser": {
+      "executable": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "sha256": "a1d93d90e7ebb90245d225d70334ca6b37b1cbf65ba2f37dd01d3eba0fdd8331",
+      "sizeBytes": 367696
+    }
+  }
+}
