@@ -1,0 +1,487 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-ramp-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-ramp-frontier-v0.json",
+      "sha256": "e85b5de213f88959012e3e43057ddeecc65069c188dd58408ad353c37f7205bf"
+    }
+  },
+  "requestedCandidateIds": [
+    "ramp-a092-a096-repay-789",
+    "ramp-a092-a096-repay-6789",
+    "ramp-a090-a095-repay-789",
+    "ramp-a090-a095-repay-6789",
+    "ramp-a090-a094-repay-789",
+    "ramp-a090-a094-repay-6789",
+    "ramp-a090-a094-a098-repay-5678"
+  ],
+  "selectedReference": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    }
+  },
+  "sharedContract": {
+    "constructionId": "muscle-45",
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10,
+    "maximumSkeletalPenetrationIncrease": 1e-12
+  },
+  "candidates": [
+    {
+      "id": "ramp-a092-a096-repay-789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a092-a096-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.16054859504254,
+        "pairwiseMovableMaximumPenetration": 0.3107719543429947,
+        "pairwiseFixedTotalPenetration": 3.633980935817309,
+        "pairwiseFixedMaximumPenetration": 0.4513168004272448,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 1.3131905829496045e-11,
+        "repaymentAreaScale": 1.0171848531812429,
+        "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a092-a096-repay-789-packed-carrier.json",
+        "sha256": "6b0c78f62915b837172205123e492d94c6324f27c7f0ca087de3aa5afc893764"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a092-a096-repay-789-residual-ledger.json",
+        "sha256": "fd36a2da0242de1ca8371dbf6218e609e2752fdb87436114d769304a8296ac4d"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a092-a096-repay-789-ramp-application.json",
+        "sha256": "b400ee08be605685088fe344a7ce40d02c70faeab749d635c523d5b673da88a0"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a092-a096-repay-6789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a092-a096-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.160643259939079,
+        "pairwiseMovableMaximumPenetration": 0.3107719543429947,
+        "pairwiseFixedTotalPenetration": 3.633980935817309,
+        "pairwiseFixedMaximumPenetration": 0.4513168004272448,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 3.608824002717108e-11,
+        "repaymentAreaScale": 1.0123002797365188,
+        "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a092-a096-repay-6789-packed-carrier.json",
+        "sha256": "d35f3f5d2098bb2dd0eee5f90337f872c164174799e46bc61dc3c7f373c044e7"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a092-a096-repay-6789-residual-ledger.json",
+        "sha256": "1ddcdf8bc8ce57f1c2c6c3bb3e183c7a65ed976d2240fbbaddbbe6a967d2efe9"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a092-a096-repay-6789-ramp-application.json",
+        "sha256": "f47d3a04ba51622585375eb2e772d5470deeef73c65abd3bfd27e6c2db98619f"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a095-repay-789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a090-a095-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.95
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.172807708399139,
+        "pairwiseMovableMaximumPenetration": 0.3027361607563542,
+        "pairwiseFixedTotalPenetration": 3.605154653882535,
+        "pairwiseFixedMaximumPenetration": 0.44880099688202013,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 3.485417978340783e-11,
+        "repaymentAreaScale": 1.0215027585625651,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a095-repay-789-packed-carrier.json",
+        "sha256": "a8449091396093170849470f2273acb4cc4a32010baa449920553e78061399a4"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a095-repay-789-residual-ledger.json",
+        "sha256": "54919657bc6a2735e6273b9fc7ab47a2a1c9eed12d9195acce48cd64bef4bafd"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a090-a095-repay-789-ramp-application.json",
+        "sha256": "fa3cf4da7bffefdae5162d63da607acc7d41084ccf5138b85662537470b7a0ad"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a095-repay-6789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a090-a095-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.95
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.168669586686732,
+        "pairwiseMovableMaximumPenetration": 0.3027361607563542,
+        "pairwiseFixedTotalPenetration": 3.605154653882535,
+        "pairwiseFixedMaximumPenetration": 0.44880099688202013,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 3.8851162916979946e-11,
+        "repaymentAreaScale": 1.0153891798108816,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a095-repay-6789-packed-carrier.json",
+        "sha256": "08e975795185e0d90fe8de8a2e70f1d34c4a6064176d9e195eec65d3c1f674f5"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a095-repay-6789-residual-ledger.json",
+        "sha256": "a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a090-a095-repay-6789-ramp-application.json",
+        "sha256": "c4e1484df8c03f924eb38f9c6e4c2fda1ce6d737ec8e650acf1d64520831c3aa"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-repay-789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a090-a094-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.16902651383942,
+        "pairwiseMovableMaximumPenetration": 0.3027361607563542,
+        "pairwiseFixedTotalPenetration": 3.605154653882535,
+        "pairwiseFixedMaximumPenetration": 0.44880099688202013,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 5.843094262931789e-12,
+        "repaymentAreaScale": 1.0234898336231708,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-repay-789-packed-carrier.json",
+        "sha256": "4f4c5f767f7fc45f9bb809fa9ee558be496ed6684ef643b2d56ff47f9fa9358a"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-repay-789-residual-ledger.json",
+        "sha256": "cd3fe6edae5539c419804053a0be83009c46247fdeeac425b1941880427a5fdc"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a090-a094-repay-789-ramp-application.json",
+        "sha256": "fa5a1b29c76d2a96ef9402d7a9ec99c430bf499f896a9491bb056c8c095d9e3a"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789",
+      "status": "admissible",
+      "requested": {
+        "id": "ramp-a090-a094-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.163438955167186,
+        "pairwiseMovableMaximumPenetration": 0.3027361607563542,
+        "pairwiseFixedTotalPenetration": 3.605154653882535,
+        "pairwiseFixedMaximumPenetration": 0.44880099688202013,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 5.4584759223240345e-11,
+        "repaymentAreaScale": 1.0168099287897348,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-repay-6789-packed-carrier.json",
+        "sha256": "e1f30d933a5a78ee10a106d89090497dfdfb74e5f3807d6548787d75dd99fe83"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-repay-6789-residual-ledger.json",
+        "sha256": "565bd90bdab4310b1376630a1dda80f2bc4018cc5cd3563be59bbc622e5163f8"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a090-a094-repay-6789-ramp-application.json",
+        "sha256": "3bcdcdd1f2e9fcd939c2fbe95332849cae76b7c8ed21fb7e730b3fce456dd35a"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-a098-repay-5678",
+      "status": "measured-refused",
+      "requested": {
+        "id": "ramp-a090-a094-a098-repay-5678",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0009",
+            "areaScale": 0.98
+          },
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0005",
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008"
+        ]
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.233143410147322,
+        "pairwiseMovableMaximumPenetration": 0.3027361607563542,
+        "pairwiseFixedTotalPenetration": 3.605154653882535,
+        "pairwiseFixedMaximumPenetration": 0.44880099688202013,
+        "skeletalTotalPenetration": 0.06437920842994571,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 3.2818699604217447e-12,
+        "repaymentAreaScale": 1.0193260177969927,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "skeletalPenetrationIncrease": 0.01935870777822546
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-a098-repay-5678-packed-carrier.json",
+        "sha256": "431cad7d4910c5de1b76b18a1ba6669011e9d93ab59bd611970ac336c37e5e0a"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-a098-repay-5678-residual-ledger.json",
+        "sha256": "61f9b8c655d63e29000e9108025cadfd0405e84786828d1950b805dfad38ecd4"
+      },
+      "rampApplication": {
+        "path": "candidates/ramp-a090-a094-a098-repay-5678-ramp-application.json",
+        "sha256": "5b0869e1b75e0911b56c90dcdaa5eae81f5738b4bd70047e774e141642301fdd"
+      },
+      "refusalReasons": [
+        "skeletal-penetration-increase"
+      ],
+      "error": null
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "ramp-a092-a096-repay-789",
+    "ramp-a090-a094-repay-6789"
+  ],
+  "visual": {
+    "status": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "ramp-a092-a096-repay-789",
+      "ramp-a092-a096-repay-6789",
+      "ramp-a090-a095-repay-789",
+      "ramp-a090-a095-repay-6789",
+      "ramp-a090-a094-repay-789",
+      "ramp-a090-a094-repay-6789",
+      "ramp-a090-a094-a098-repay-5678"
+    ],
+    "nondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789",
+      "ramp-a090-a094-repay-6789"
+    ],
+    "disposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+    "decision": {
+      "selectedCandidateId": null,
+      "retainedNondominatedCandidateIds": [
+        "ramp-a092-a096-repay-789",
+        "ramp-a090-a094-repay-6789"
+      ],
+      "earliestBlockingMechanism": "pure area scaling changes contact magnitude without enough directional surface displacement to make the crowded four-construction relationship materially more legible",
+      "redirectAssay": "carry the two retained longitudinal profiles forward as volume and smoothness envelopes, apply contact-normal-aligned determinant-one cross-section redistribution at sections 10 and 11, and compare exact residuals plus the same identity-bound close-view pixels"
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "108d84e2c2821bbe5c0fd28b2304d162b2a937f33f59caca944d8aa16ce72b1f",
+      "sizeBytes": 962018,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 238,
+        "idatBytes": 959141
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "170c768fe0fccf13f51a759ed4bcaf9649279cedcdba8d6d73c209c91c1afc14",
+      "manifestIdentitySha256": "19a295e7ff85a752d70a4d94dde6e8064386761c51658e3c6124e4e2b8501362"
+    }
+  },
+  "resultStatus": "smooth-ramp-frontier-retained-scalar-advance-no-visual-selection"
+}

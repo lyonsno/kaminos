@@ -1,0 +1,101 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-ramp-frontier-config.v0",
+  "candidates": [
+    {
+      "id": "ramp-a092-a096-repay-789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.96 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.92 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a092-a096-repay-6789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.96 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.92 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0006",
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a090-a095-repay-789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.95 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.90 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a090-a095-repay-6789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.95 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.90 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0006",
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a090-a094-repay-789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.94 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.90 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.94 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.90 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0006",
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ]
+    },
+    {
+      "id": "ramp-a090-a094-a098-repay-5678",
+      "compressionSections": [
+        { "sectionId": "muscle-45:section:0009", "areaScale": 0.98 },
+        { "sectionId": "muscle-45:section:0010", "areaScale": 0.94 },
+        { "sectionId": "muscle-45:section:0011", "areaScale": 0.90 }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0005",
+        "muscle-45:section:0006",
+        "muscle-45:section:0007",
+        "muscle-45:section:0008"
+      ]
+    }
+  ],
+  "shared": {
+    "constructionId": "muscle-45",
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10,
+    "maximumSkeletalPenetrationIncrease": 1e-12
+  }
+}

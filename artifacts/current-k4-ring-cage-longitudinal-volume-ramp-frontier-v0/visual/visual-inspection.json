@@ -1,0 +1,75 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-visual-inspection.v0",
+  "status": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+  "visualDisposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "manifestIdentitySha256": "19a295e7ff85a752d70a4d94dde6e8064386761c51658e3c6124e4e2b8501362",
+  "manifestFileSha256": "f8263a12d4a59fb7571a5546caeef678d27883430a9f208a19c96d1f11672040",
+  "frontierResultSha256": "170c768fe0fccf13f51a759ed4bcaf9649279cedcdba8d6d73c209c91c1afc14",
+  "captures": [
+    {
+      "id": "selected-reference",
+      "reportSha256": "f86c2f058d0e2a3b413f2882e7c37c6acdedb3d6b59390ac36483ee7e44e3a57",
+      "sha256": "dc11bb80d6ab68610af1ead2c02fb9ec3a4240e407e6f2a0211f35f22bb941f8"
+    },
+    {
+      "id": "ramp-a092-a096-repay-789",
+      "reportSha256": "c216dcfaeac342c0ca71b393e4f5f32c9afbbeb0c44b14a5d96ae8261c151907",
+      "sha256": "39cc126b631b18c309dbb6c0fae537d46c3e1d569fc329a34a64a337d5c55e81"
+    },
+    {
+      "id": "ramp-a092-a096-repay-6789",
+      "reportSha256": "dd51dccaf717f3c5862e3ece65db0cdf5f533e996ee4154966e27730cf6b519e",
+      "sha256": "d1733352b9d2d54664c8151d772f91ab8e78a59447af6abe0e6176a6abeb18e1"
+    },
+    {
+      "id": "ramp-a090-a095-repay-789",
+      "reportSha256": "7548d7a95e72990d4e4b7ba60201459f177f997f827cca11177305ca330ac252",
+      "sha256": "bcf74598aaa07fac3dbfbe021dad8b2f1c6a05cf7374ce153de56826547d4466"
+    },
+    {
+      "id": "ramp-a090-a095-repay-6789",
+      "reportSha256": "185ca35fd1572d6620a86bb839c54e1d7153d7f2c1a360d318f6e89ef338c733",
+      "sha256": "010b907451f84c7242caceefac795894e9a58c7992750957235244617b6cf41b"
+    },
+    {
+      "id": "ramp-a090-a094-repay-789",
+      "reportSha256": "46d760b1b56665133820db26ca63d4fa3e918b4cae9eec63927ae6a486cee9b5",
+      "sha256": "db6f279e4a9645146b600595e9fc23ce2ff79f70a374207d56b48b9bc9862b52"
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789",
+      "reportSha256": "85685f1ae44d7b073c417173eb2cc7f64191f4db3d1a4ec72cf61eeb9db9e70d",
+      "sha256": "25cc370c1122d1364dd483a7ab8ef6677735a9b50044fac056c1c8dc9af05b37"
+    },
+    {
+      "id": "ramp-a090-a094-a098-repay-5678",
+      "reportSha256": "58eeccdf180aa717a6885b4d68a2b7bc5f5e6fee847d0fdcb9f2abb297c4ac7f",
+      "sha256": "4de449927a5ac91211c84fb98ad8d6eb25a67972c7fc4ba02da6486f80166561"
+    }
+  ],
+  "contactSheet": {
+    "reportSha256": "3930fae92b1809ea8fff38c88f417a6cc736954afe1bb40e96dd4f83930f16f9",
+    "sha256": "108d84e2c2821bbe5c0fd28b2304d162b2a937f33f59caca944d8aa16ce72b1f",
+    "viewport": {
+      "width": 1600,
+      "height": 3000
+    }
+  },
+  "observations": [
+    "All six admissible proposals preserve the smooth attachment-to-attachment centerline, fixed attachment handles, neighboring constructions, and skeletal-contact count; no fold, hard kink, attachment jump, or compartment escape is visible.",
+    "The two-section ramps make the M45 section-10/11 scale transition more gradual than the rejected single-section family, but the actual purple carrier silhouette remains only subtly different from the reference at this contact-close view.",
+    "The orange movable-pressure markers expose the reduced section-11 contact magnitude more clearly than the solid carrier surface exposes a formation change, so the metric improvement is not sufficient visual selection evidence.",
+    "The three-section ramp-a090-a094-a098-repay-5678 negative control is visibly coherent but is correctly measured-refused: its repayment placement raises skeletal total penetration from 0.04502050065172025 to 0.06437920842994571 and adds a third skeletal contact row.",
+    "The admissible ramp-a090-a094-repay-6789 improves movable total, movable maximum, fixed total, and fixed maximum while holding skeletal total exact, but it is not materially more legible than the milder nondominated ramp-a092-a096-repay-789."
+  ],
+  "decision": {
+    "selectedCandidateId": null,
+    "retainedNondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789",
+      "ramp-a090-a094-repay-6789"
+    ],
+    "earliestBlockingMechanism": "pure area scaling changes contact magnitude without enough directional surface displacement to make the crowded four-construction relationship materially more legible",
+    "redirectAssay": "carry the two retained longitudinal profiles forward as volume and smoothness envelopes, apply contact-normal-aligned determinant-one cross-section redistribution at sections 10 and 11, and compare exact residuals plus the same identity-bound close-view pixels"
+  }
+}

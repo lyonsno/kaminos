@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-finalization-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "resultStatus": "smooth-ramp-frontier-retained-scalar-advance-no-visual-selection",
+  "visualStatus": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+  "visualDisposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+  "outputs": {
+    "frontierResult": {
+      "path": "../frontier-result.json",
+      "sha256": "eece98001252d849f9ae34b05357dab742a318abc4680a03d9be84c920322743"
+    },
+    "frontierRunReport": {
+      "path": "../run-report.json",
+      "sha256": "4e00955549d9149daeeff5f50e2f437b17c597ca64de7c202ca22e58dae2057b"
+    },
+    "captureRouteVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb"
+    },
+    "visualInspection": {
+      "path": "visual-inspection.json",
+      "sha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "smooth-ramp-frontier-retained-scalar-advance-no-visual-selection",
+    "visualStatus": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+    "visualDisposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+    "originalFrontierSha256": "170c768fe0fccf13f51a759ed4bcaf9649279cedcdba8d6d73c209c91c1afc14",
+    "finalizedFrontierSha256": "eece98001252d849f9ae34b05357dab742a318abc4680a03d9be84c920322743",
+    "visualInspectionSha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906",
+    "captureRouteVerificationSha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb"
+  }
+}

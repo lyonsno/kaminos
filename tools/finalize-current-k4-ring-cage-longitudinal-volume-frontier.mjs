@@ -5,10 +5,14 @@ import { readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-const FRONTIER_SCHEMA =
+const AMPLITUDE_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-amplitude-frontier-result.v0';
-const FRONTIER_REPORT_SCHEMA =
+const AMPLITUDE_FRONTIER_REPORT_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-amplitude-frontier-run-report.v0';
+const RAMP_FRONTIER_SCHEMA =
+  'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-result.v0';
+const RAMP_FRONTIER_REPORT_SCHEMA =
+  'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-run-report.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const VISUAL_REPORT_SCHEMA =
@@ -19,8 +23,16 @@ const VERIFICATION_SCHEMA =
   'kaminos.current-k4-longitudinal-volume-frontier-capture-verification.v0';
 const FINALIZATION_SCHEMA =
   'kaminos.current-k4-longitudinal-volume-frontier-finalization-report.v0';
-const FINAL_RESULT_STATUS =
-  'single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound';
+const RESULT_STATUS_BY_FRONTIER_SCHEMA = Object.freeze({
+  [AMPLITUDE_FRONTIER_SCHEMA]:
+    'single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound',
+  [RAMP_FRONTIER_SCHEMA]:
+    'smooth-ramp-frontier-retained-scalar-advance-no-visual-selection',
+});
+const REPORT_SCHEMA_BY_FRONTIER_SCHEMA = Object.freeze({
+  [AMPLITUDE_FRONTIER_SCHEMA]: AMPLITUDE_FRONTIER_REPORT_SCHEMA,
+  [RAMP_FRONTIER_SCHEMA]: RAMP_FRONTIER_REPORT_SCHEMA,
+});
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -100,8 +112,9 @@ async function main() {
     ].map(key => [key, JSON.parse(bytes[key])]));
     const { frontier, frontierReport, manifest, visualReport, inspection } = values;
     phase = 'verify-primary-custody';
-    if (frontier?.schema !== FRONTIER_SCHEMA || frontier.status !== 'completed' ||
-        frontierReport?.schema !== FRONTIER_REPORT_SCHEMA ||
+    const finalResultStatus = RESULT_STATUS_BY_FRONTIER_SCHEMA[frontier?.schema];
+    if (!finalResultStatus || frontier.status !== 'completed' ||
+        frontierReport?.schema !== REPORT_SCHEMA_BY_FRONTIER_SCHEMA[frontier.schema] ||
         frontierReport.status !== 'completed' ||
         manifest?.schema !== MANIFEST_SCHEMA ||
         visualReport?.schema !== VISUAL_REPORT_SCHEMA ||
@@ -118,7 +131,7 @@ async function main() {
         visualReport.inputs?.frontier?.sha256 !== inspection.frontierResultSha256) {
       throw new Error('frontier finalization manifest or source-frontier identity mismatch');
     }
-    const alreadyFinalized = frontier.resultStatus === FINAL_RESULT_STATUS;
+    const alreadyFinalized = frontier.resultStatus === finalResultStatus;
     if (alreadyFinalized) {
       if (frontier.visual?.finalization?.originalFrontierSha256 !==
           inspection.frontierResultSha256 ||
@@ -129,7 +142,7 @@ async function main() {
         frontierReport.outputs?.frontierResult?.sha256 !== inspection.frontierResultSha256) {
       throw new Error('frontier finalization source primary identity mismatch');
     }
-    if (!equal(manifest.candidateIds, frontier.nondominatedCandidateIds) ||
+    if (!equal(manifest.candidateIds, frontier.visual.candidateIds) ||
         !equal(inspection.decision?.retainedNondominatedCandidateIds,
           frontier.nondominatedCandidateIds)) {
       throw new Error('frontier finalization candidate set mismatch');
@@ -215,7 +228,7 @@ async function main() {
     const verificationSha256 = sha256(verificationBytes);
     const inspectionSha256 = sha256(bytes.inspection);
     const finalizedFrontier = structuredClone(frontier);
-    finalizedFrontier.resultStatus = FINAL_RESULT_STATUS;
+    finalizedFrontier.resultStatus = finalResultStatus;
     finalizedFrontier.visual = {
       ...finalizedFrontier.visual,
       status: inspection.status,
@@ -238,7 +251,7 @@ async function main() {
     };
     const finalizedFrontierBytes = jsonBytes(finalizedFrontier);
     const finalizedReport = structuredClone(frontierReport);
-    finalizedReport.resultStatus = FINAL_RESULT_STATUS;
+    finalizedReport.resultStatus = finalResultStatus;
     finalizedReport.visual = finalizedFrontier.visual;
     finalizedReport.outputs = {
       ...finalizedReport.outputs,
@@ -252,7 +265,7 @@ async function main() {
     };
     finalizedReport.lastTrustworthyEvidence = {
       phase: 'visual-frontier-finalized',
-      resultStatus: FINAL_RESULT_STATUS,
+      resultStatus: finalResultStatus,
       visualStatus: inspection.status,
       visualDisposition: inspection.visualDisposition,
       originalFrontierSha256: inspection.frontierResultSha256,
@@ -265,7 +278,7 @@ async function main() {
       schema: FINALIZATION_SCHEMA,
       status: 'completed',
       failurePhase: null,
-      resultStatus: FINAL_RESULT_STATUS,
+      resultStatus: finalResultStatus,
       visualStatus: inspection.status,
       visualDisposition: inspection.visualDisposition,
       outputs: {

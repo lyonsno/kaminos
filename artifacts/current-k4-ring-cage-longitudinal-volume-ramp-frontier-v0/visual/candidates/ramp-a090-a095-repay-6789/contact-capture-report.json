@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+    "outputPath": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/contact.png",
+    "reportPath": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/contact-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 13714,
+    "processGroupId": 13714,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 13714,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 5238,
+    "retainedBytes": 5238,
+    "truncated": false,
+    "tail": "[0805/185404.932113:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0805/185405.009820:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/185405.525379:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact (0)\n[0805/185405.525451:INFO:CONSOLE:0] \"[.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact (0)\n[0805/185405.527635:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/185405.574073:INFO:CONSOLE:0] \"[.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact (0)\n[0805/185405.576166:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/185405.613142:INFO:CONSOLE:0] \"[.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact (0)\n[0805/185405.614363:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0805/185405.661106:INFO:CONSOLE:0] \"[.WebGL-0x10c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/index.html?bundle=8b47769998e8ee11df92c4ce8d29ed8b45841643bae5544da77bb0abe1d1288f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=7a9391dc8eed8ffba7bff25373ece71fbc84181530ae427c3aa6371fc6126247&ledger=a926228dad00e64fe2808e247efcb56203385dcea1225167bf1abfb4aa438214&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact (0)\n282285 bytes written to file repo://artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/contact.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/contact.png",
+    "sizeBytes": 282285,
+    "sha256": "010b907451f84c7242caceefac795894e9a58c7992750957235244617b6cf41b",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 72,
+      "idatBytes": 281400
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-ramp-frontier-v0/visual/candidates/ramp-a090-a095-repay-6789/contact.png",
+      "sizeBytes": 282285,
+      "sha256": "010b907451f84c7242caceefac795894e9a58c7992750957235244617b6cf41b",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 72,
+        "idatBytes": 281400
+      }
+    }
+  }
+}

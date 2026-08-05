@@ -1,0 +1,418 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-ramp-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-ramp-frontier-v0.json",
+      "sha256": "e85b5de213f88959012e3e43057ddeecc65069c188dd58408ad353c37f7205bf",
+      "requested": {
+        "schema": "kaminos.current-k4-longitudinal-volume-ramp-frontier-config.v0",
+        "candidates": [
+          {
+            "id": "ramp-a092-a096-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a092-a096-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a095-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.95
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a095-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.95
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-a098-repay-5678",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0009",
+                "areaScale": 0.98
+              },
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0005",
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008"
+            ]
+          }
+        ],
+        "shared": {
+          "constructionId": "muscle-45",
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10,
+          "maximumSkeletalPenetrationIncrease": 1e-12
+        }
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-longitudinal-volume-ramp-frontier-config.v0",
+        "candidates": [
+          {
+            "id": "ramp-a092-a096-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a092-a096-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a095-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.95
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a095-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.95
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-a098-repay-5678",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0009",
+                "areaScale": 0.98
+              },
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0005",
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008"
+            ]
+          }
+        ],
+        "shared": {
+          "constructionId": "muscle-45",
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10,
+          "maximumSkeletalPenetrationIncrease": 1e-12
+        }
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 7,
+  "effectiveCandidateCount": 7,
+  "candidateCapApplied": false,
+  "outputs": {
+    "frontierResult": {
+      "path": "frontier-result.json",
+      "sha256": "eece98001252d849f9ae34b05357dab742a318abc4680a03d9be84c920322743"
+    },
+    "visualInspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906"
+    },
+    "captureRouteVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "108d84e2c2821bbe5c0fd28b2304d162b2a937f33f59caca944d8aa16ce72b1f",
+      "sizeBytes": 962018,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 238,
+        "idatBytes": 959141
+      }
+    }
+  },
+  "visual": {
+    "status": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "ramp-a092-a096-repay-789",
+      "ramp-a092-a096-repay-6789",
+      "ramp-a090-a095-repay-789",
+      "ramp-a090-a095-repay-6789",
+      "ramp-a090-a094-repay-789",
+      "ramp-a090-a094-repay-6789",
+      "ramp-a090-a094-a098-repay-5678"
+    ],
+    "nondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789",
+      "ramp-a090-a094-repay-6789"
+    ],
+    "disposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+    "decision": {
+      "selectedCandidateId": null,
+      "retainedNondominatedCandidateIds": [
+        "ramp-a092-a096-repay-789",
+        "ramp-a090-a094-repay-6789"
+      ],
+      "earliestBlockingMechanism": "pure area scaling changes contact magnitude without enough directional surface displacement to make the crowded four-construction relationship materially more legible",
+      "redirectAssay": "carry the two retained longitudinal profiles forward as volume and smoothness envelopes, apply contact-normal-aligned determinant-one cross-section redistribution at sections 10 and 11, and compare exact residuals plus the same identity-bound close-view pixels"
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "108d84e2c2821bbe5c0fd28b2304d162b2a937f33f59caca944d8aa16ce72b1f",
+      "sizeBytes": 962018,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 238,
+        "idatBytes": 959141
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "170c768fe0fccf13f51a759ed4bcaf9649279cedcdba8d6d73c209c91c1afc14",
+      "manifestIdentitySha256": "19a295e7ff85a752d70a4d94dde6e8064386761c51658e3c6124e4e2b8501362"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "smooth-ramp-frontier-retained-scalar-advance-no-visual-selection",
+    "visualStatus": "agent-inspected-ramp-frontier-coherent-scalar-advance-visually-subtle",
+    "visualDisposition": "retain-two-nondominated-ramps-reject-visual-selection-redirect-to-contact-normal-cross-section-ramp",
+    "originalFrontierSha256": "170c768fe0fccf13f51a759ed4bcaf9649279cedcdba8d6d73c209c91c1afc14",
+    "finalizedFrontierSha256": "eece98001252d849f9ae34b05357dab742a318abc4680a03d9be84c920322743",
+    "visualInspectionSha256": "cd029b91a0f254a4a4f5ee02bb35ffbbcb75305cebdaa539927f29af30da2906",
+    "captureRouteVerificationSha256": "d32cbbfbce0145c45286d042d7666d8954f4717ef9bc0fe5a5f697900f1b41fb"
+  },
+  "resultStatus": "smooth-ramp-frontier-retained-scalar-advance-no-visual-selection"
+}
