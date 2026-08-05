@@ -10084,10 +10084,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
     const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
     const selectiveCompositionDefinition = selectiveCompositionRequest.definition;
+    const sourceBasisRaymarchFireAuthority = nonRidgeSourceBasisControlsActive
+      ? 1
+      : selectiveCompositionDefinition.raymarchFireAuthority;
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
-    uniforms[316] = 1 - selectiveCompositionDefinition.raymarchFireAuthority;
+    uniforms[316] = 1 - sourceBasisRaymarchFireAuthority;
     uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;
@@ -13927,6 +13930,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       'ridge.cut': uniforms[297],
       'tip.breakup': uniforms[298],
       'topology.erosion': uniforms[299],
+      'optics.raymarchFireAuthority': 1 - uniforms[316],
     };
   }
 
@@ -13987,7 +13991,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ? []
         : [{ name: field.name, requested: Number(requested[field.name]), effective: gpuEffectiveControls[field.name] }]
     ));
-    const applicationOk = controlSubstitutions.length === 0 && gpuControlSubstitutions.length === 0;
+    const captureOpticalAuthoritySubstitutions = gpuEffectiveControls['optics.raymarchFireAuthority'] === 1
+      ? []
+      : [{
+          name: 'optics.raymarchFireAuthority',
+          requested: 1,
+          effective: gpuEffectiveControls['optics.raymarchFireAuthority'],
+          reason: 'nonridge-source-basis-capture-fire-authority-substitution',
+        }];
+    const applicationOk = controlSubstitutions.length === 0
+      && gpuControlSubstitutions.length === 0
+      && captureOpticalAuthoritySubstitutions.length === 0;
     nonRidgeSourceBasisControlApplication = applicationOk ? {
       identity: 'capture-owned-cpu-and-shader-control-application-v0',
       effectiveControls: { ...effectiveControls },
@@ -14004,13 +14018,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       gpuEffectiveControls,
       controlSubstitutions,
       gpuControlSubstitutions,
+      captureOpticalAuthoritySubstitutions,
       boundaryControlUniformAuthority: state.boundaryControlUniformAuthority,
       rendererPaused: true,
       simulationAdvanced: false,
       simulationReset: false,
       fallbackReason: controlSubstitutions.length
         ? 'renderer-control-substitution'
-        : (gpuControlSubstitutions.length ? 'shader-uniform-control-substitution' : null),
+        : (gpuControlSubstitutions.length
+            ? 'shader-uniform-control-substitution'
+            : (captureOpticalAuthoritySubstitutions.length
+                ? 'nonridge-source-basis-capture-fire-authority-substitution'
+                : null)),
     };
   }
 
@@ -14077,9 +14096,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             captureEffective: gpuEffectiveControls[field.name],
           }]
     ));
+    const captureOpticalAuthoritySubstitutions = gpuEffectiveControls['optics.raymarchFireAuthority'] === 1
+      ? []
+      : [{
+          name: 'optics.raymarchFireAuthority',
+          applied: 1,
+          captureEffective: gpuEffectiveControls['optics.raymarchFireAuthority'],
+        }];
     const boundaryControlUniformAuthority = state.boundaryControlUniformAuthority;
     const ok = cpuControlSubstitutions.length === 0
       && gpuControlSubstitutions.length === 0
+      && captureOpticalAuthoritySubstitutions.length === 0
       && boundaryControlUniformAuthority === 'nonridge-source-basis-capture-controls-v0';
     return {
       ok,
@@ -14089,6 +14116,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       gpuEffectiveControls,
       cpuControlSubstitutions,
       gpuControlSubstitutions,
+      captureOpticalAuthoritySubstitutions,
       boundaryControlUniformAuthority,
     };
   }
