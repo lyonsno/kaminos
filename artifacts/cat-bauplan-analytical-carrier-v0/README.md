@@ -6,7 +6,7 @@ The newly completed operator-authored cat ecorche is already a viable generator-
 
 The result is stronger than generic creature completion. Across anatomical clay, rounded stylization, and soft fur, the outputs retain the source's large folded hindquarter, long axial organization, forward head, separated shoulder event, and four-support rhythm. Surface style is seed-sensitive, but the major structural grammar is source-sensitive.
 
-![Exact input, prompt/settings, and three matched outputs](flux2-matched-tranche/quicklook/assay-sheet.html.png)
+![Complete source, prompt/settings, matched outputs, execution ledger, and interpretation](flux2-matched-tranche/full-page-assay-sheet.png)
 
 ## What Changed
 
@@ -37,4 +37,5 @@ Not established: pixel-local correspondence, multi-view identity, 3D consistency
 - Source plate SHA-256: `92ad03e4b55b94cd219eeee73afffba52e1a16955a949d2b65e2aad0279a26fc`
 - Generator jobs: `99341018f649`, `f7d4908e6f50`, `fb3f4a14735d`
 - Exact settings and output identities: `flux2-matched-tranche/campaign.json`
-- Operator-readable adjacent sheet: `flux2-matched-tranche/assay-sheet.html`
+- Complete operator dossier: `flux2-matched-tranche/assay-sheet.html`
+- Full-page static dossier: `flux2-matched-tranche/full-page-assay-sheet.png`

@@ -3,44 +3,164 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cat bauplan matched FLUX.2 tranche</title>
+  <title>Completed cat bauplan FLUX.2 assay dossier</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; background: #171a19; color: #f5f1e8; font: 16px/1.35 Arial, sans-serif; }
-    header { padding: 22px 26px 18px; border-bottom: 1px solid #47504c; }
-    h1 { margin: 0 0 12px; font-size: 24px; letter-spacing: 0; }
-    .prompt { margin: 0; max-width: 1900px; color: #dedbd2; }
-    .settings { margin: 14px 0 0; color: #9ad9c8; font-weight: 700; }
-    main { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: #47504c; }
-    figure { margin: 0; background: #1d211f; min-width: 0; }
-    figcaption { min-height: 58px; padding: 12px 14px; color: #f2c879; font-weight: 700; }
+    body {
+      margin: 0;
+      background: #161918;
+      color: #f4f0e7;
+      font: 16px/1.45 Arial, sans-serif;
+      letter-spacing: 0;
+    }
+    header, section { padding: 24px 28px; }
+    header { border-bottom: 1px solid #47504c; }
+    section { border-bottom: 1px solid #39413d; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 12px; font-size: 28px; }
+    h2 { margin-bottom: 6px; font-size: 21px; color: #f2c879; }
+    h3 { margin-bottom: 8px; font-size: 17px; }
+    .lede { max-width: 1500px; margin-bottom: 16px; color: #d8d7d0; }
+    .status-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .status {
+      padding: 5px 9px;
+      border: 1px solid #49796d;
+      background: #1c2b27;
+      color: #9fe1d0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .section-note { margin-bottom: 16px; color: #b9bfbc; }
+    .grid { display: grid; gap: 1px; background: #46504b; }
+    .source-grid, .output-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    figure { margin: 0; min-width: 0; background: #1d211f; }
+    figcaption { min-height: 76px; padding: 12px 14px; color: #f2c879; font-weight: 700; }
+    .sub { display: block; margin-top: 4px; color: #b7bcb9; font-size: 13px; font-weight: 400; }
     img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #202522; }
-    .sub { display: block; margin-top: 3px; color: #b7bcb9; font-size: 13px; font-weight: 400; }
+    .output-grid img { background: #f2efe5; }
+    .prompt {
+      max-width: 1700px;
+      padding: 16px;
+      border-left: 3px solid #9ad9c8;
+      background: #1c211f;
+      color: #e0ddd4;
+    }
+    .settings {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(110px, 1fr));
+      gap: 1px;
+      margin-top: 16px;
+      background: #46504b;
+    }
+    .setting { min-width: 0; padding: 10px 12px; background: #1d211f; }
+    .label { display: block; color: #a5aaa7; font-size: 12px; text-transform: uppercase; }
+    .value { display: block; margin-top: 3px; color: #9ad9c8; font-weight: 700; overflow-wrap: anywhere; }
+    .ledger { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ledger th, .ledger td { padding: 10px 12px; border: 1px solid #46504b; text-align: left; vertical-align: top; }
+    .ledger th { color: #f2c879; background: #1d211f; }
+    .ledger td { color: #d1d3cf; }
+    code { color: #a9ddcf; font: 12px/1.4 Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    .interpretation { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .interpretation article { padding: 16px; background: #1d211f; }
+    .positive { color: #a9ddcf; }
+    .ceiling { color: #d7b487; }
+    @media (max-width: 980px) {
+      .source-grid, .output-grid, .interpretation { grid-template-columns: 1fr; }
+      .settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Completed cat ecorche: fixed-input, fixed-prompt seed tranche</h1>
-    <p class="prompt">Use the supplied operator-authored anatomy as a strong ancestral structure seed for one newly discovered friendly ground creature. Retain the distinctive pelvis and folded hind-limb event, the long muscle trajectories, the rear support spacing, and the source's direction of travel. Let biological plausibility invent a coherent missing forebody, head, support anatomy, and outer surface wherever the partial construction leaves them open. Favor a compact rounded whole-body silhouette, four sturdy supports, softly integrated masses, a simple expressive head, small calm eyes, and gentle curious character. The result should feel discovered from the anatomy: one healthy, aesthetically pleasing, softly stylized living animal with convincing weight. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
-    <p class="settings">FLUX.2 Klein 9B | 512x512 | 8 steps | guidance 1.0 | quantize 4 | identical input and prompt; seed only varies</p>
+    <p class="lede">Complete operator dossier for the first generative pass over the saved cat bauplan. Every generated output is included below. The three source projections are diagnostic views of one exact Blender source, not separate conditioning inputs; only the right-sagittal plate entered FLUX.</p>
+    <div class="status-row">
+      <span class="status">3 of 3 generator outputs shown</span>
+      <span class="status">all outputs visually screened happy / safe</span>
+      <span class="status">one exact source and prompt</span>
+      <span class="status">seed is the only varied control</span>
+    </div>
   </header>
-  <main>
-    <figure>
-      <figcaption>Exact source plate<span class="sub">blend 9453608... | plate 92ad03e...</span></figcaption>
-      <img src="../source-preview/right-sagittal.png" alt="Exact operator-authored cat ecorche source plate">
-    </figure>
-    <figure>
-      <figcaption>Seed 80301<span class="sub">anatomy-literal completion</span></figcaption>
-      <img src="seed-80301/output.png" alt="FLUX completion for seed 80301">
-    </figure>
-    <figure>
-      <figcaption>Seed 80413<span class="sub">rounded stylized completion</span></figcaption>
-      <img src="seed-80413/output.png" alt="FLUX completion for seed 80413">
-    </figure>
-    <figure>
-      <figcaption>Seed 80505<span class="sub">soft fur completion</span></figcaption>
-      <img src="seed-80505/output.png" alt="FLUX completion for seed 80505">
-    </figure>
-  </main>
+
+  <section>
+    <h2>1. Exact source evidence</h2>
+    <p class="section-note">Source SHA-256 <code>9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c</code>. Classifier admitted 94 visible anatomical surfaces: 37 authored meshes and 57 muscle surfaces. It rejected 510 nonmesh controls, 19 semantic-control meshes, 2 construction-paint meshes, and 1 hidden mesh. The Blender file was read and rendered without mutation.</p>
+    <div class="grid source-grid">
+      <figure>
+        <figcaption>Right sagittal conditioning plate<span class="sub">The only image supplied to FLUX | SHA-256 92ad03e4b55b94cd219eeee73afffba52e1a16955a949d2b65e2aad0279a26fc</span></figcaption>
+        <img src="../source-preview/right-sagittal.png" alt="Exact right sagittal conditioning view of the operator-authored cat ecorche">
+      </figure>
+      <figure>
+        <figcaption>Front three-quarter diagnostic<span class="sub">Source inspection only; not supplied to FLUX</span></figcaption>
+        <img src="../source-preview/front-three-quarter.png" alt="Front three-quarter diagnostic view of the operator-authored cat ecorche">
+      </figure>
+      <figure>
+        <figcaption>Dorsal diagnostic<span class="sub">Source inspection only; not supplied to FLUX</span></figcaption>
+        <img src="../source-preview/dorsal.png" alt="Dorsal diagnostic view of the operator-authored cat ecorche">
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Exact text conditioning and effective settings</h2>
+    <p class="prompt">Use the supplied operator-authored anatomy as a strong ancestral structure seed for one newly discovered friendly ground creature. Retain the distinctive pelvis and folded hind-limb event, the long muscle trajectories, the rear support spacing, and the source's direction of travel. Let biological plausibility invent a coherent missing forebody, head, support anatomy, and outer surface wherever the partial construction leaves them open. Favor a compact rounded whole-body silhouette, four sturdy supports, softly integrated masses, a simple expressive head, small calm eyes, and gentle curious character. The result should feel discovered from the anatomy: one healthy, aesthetically pleasing, softly stylized living animal with convincing weight. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+    <p class="section-note">Prompt SHA-256 <code>a9c279e9a7cd0ba17f124024652de42a717a61ec4da4287ead973f0259843f01</code></p>
+    <div class="settings">
+      <div class="setting"><span class="label">Job type</span><span class="value">mflux_flux2_edit_promptfile</span></div>
+      <div class="setting"><span class="label">Model</span><span class="value">flux2-klein-9b</span></div>
+      <div class="setting"><span class="label">Resolution</span><span class="value">512 x 512</span></div>
+      <div class="setting"><span class="label">Steps</span><span class="value">8</span></div>
+      <div class="setting"><span class="label">Guidance</span><span class="value">1.0</span></div>
+      <div class="setting"><span class="label">Quantize</span><span class="value">4</span></div>
+      <div class="setting"><span class="label">MLX cache limit</span><span class="value">48 GB</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Complete generated tranche</h2>
+    <p class="section-note">All three cells use the exact right-sagittal source plate, prompt, model, and settings above. Seed alone changes.</p>
+    <div class="grid output-grid">
+      <figure>
+        <figcaption>Seed 80301<span class="sub">Anatomy-literal completion: strongest retention of the axial bridge, folded hindquarter, shoulder separation, forward skull placement, and four-support organization.</span></figcaption>
+        <img src="seed-80301/output.png" alt="FLUX anatomy-literal completion for seed 80301">
+      </figure>
+      <figure>
+        <figcaption>Seed 80413<span class="sub">Rounded stylized completion: retains two major body masses, enlarged hindquarter, forward head, and planted support rhythm while compressing the exposed spine.</span></figcaption>
+        <img src="seed-80413/output.png" alt="FLUX rounded stylized completion for seed 80413">
+      </figure>
+      <figure>
+        <figcaption>Seed 80505<span class="sub">Soft-fur completion: retains the front-heavy stance, substantial hindquarter, compact forward head, and four planted supports.</span></figcaption>
+        <img src="seed-80505/output.png" alt="FLUX soft-fur completion for seed 80505">
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>4. Effective execution ledger</h2>
+    <table class="ledger">
+      <thead>
+        <tr><th>Seed</th><th>Greenroom job</th><th>Duration</th><th>Output SHA-256</th><th>Visual admission</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>80301</td><td><code>99341018f649</code></td><td>33.7 s</td><td><code>fa767c042c0ac6eb27fd4ec282f917ba840fa153b038e5b5961f35c728a30288</code></td><td class="positive">happy / safe</td></tr>
+        <tr><td>80413</td><td><code>f7d4908e6f50</code></td><td>30.9 s</td><td><code>123926ddc52e2ecfc5631a8afd38f865eabcfcf57617f89fa739df46f1b5f90d</code></td><td class="positive">happy / safe</td></tr>
+        <tr><td>80505</td><td><code>fb3f4a14735d</code></td><td>31.5 s</td><td><code>001cbdab9438d9ca97f3623d14a45795dccad8f80b8cc3020a98edbc8b1cd555</code></td><td class="positive">happy / safe</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>5. Research interpretation</h2>
+    <div class="interpretation">
+      <article>
+        <h3 class="positive">What changed</h3>
+        <p>All three seeds produced coherent whole creatures while preserving the source's major axial, massing, and support organization. Seed strongly changes surface style and anatomical literalness; the source remains visibly authoritative over the large structural event.</p>
+      </article>
+      <article>
+        <h3 class="ceiling">Claim ceiling</h3>
+        <p>This exact completed ecorche repeatedly reaches happy, coherent creature basins under one matched prompt and route. This does not establish pixel-local correspondence, multi-view identity, 3D consistency, reconstruction quality, general prompt robustness, or universal preservation of every authored component.</p>
+      </article>
+    </div>
+  </section>
 </body>
 </html>

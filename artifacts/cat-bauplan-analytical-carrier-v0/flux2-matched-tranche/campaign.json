@@ -53,9 +53,12 @@
   ],
   "assaySheet": {
     "htmlPath": "assay-sheet.html",
-    "htmlSha256": "e9058c46066b2a1f26cf9aa0b834fabe605b82cd0fff52761ce342e985fe6398",
+    "htmlSha256": "68aa961c1327c1c3ed97c03e52ed96e15c0ddf6cce0c2fd64c0797362eaa1e0b",
     "previewPath": "quicklook/assay-sheet.html.png",
-    "previewSha256": "711d273fff221efc5775b30682c8c95c579e1aa5f1deed53f34a0f3c10ad8671"
+    "previewSha256": "d1d7f5daa79be46bcc5a72852ee3d9ce52d67a2e91982d09231212edf5eaa762",
+    "fullPagePath": "full-page-assay-sheet.png",
+    "fullPageSha256": "56b2c3ebadf42ce8385e516a87a3cd89decaf9281c1b2e8f92e835f314cc6dbd",
+    "scope": "All three generator outputs, all three diagnostic source projections, exact prompt and effective settings, source admission counts, job receipts, visual admission, and bounded interpretation"
   },
   "result": "All three matched seeds produced aesthetically admitted coherent whole-creature completions. Seed variation changed surface style and anatomical literalness substantially while preserving the source's major axial, massing, and support organization.",
   "claimCeiling": "This exact completed ecorche repeatedly reaches aesthetically admitted coherent creature basins under one matched prompt and route. The tranche does not establish pixel-local correspondence, 3D consistency, reconstructability, general prompt robustness, or that every authored structure survives every seed."
