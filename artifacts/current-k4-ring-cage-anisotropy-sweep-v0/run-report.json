@@ -1,0 +1,153 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-sweep-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "solverCarrier": {
+      "requestedPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "fileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+      "identitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
+    },
+    "selectedCarrier": {
+      "requestedPath": "artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "fileSha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609",
+      "identitySha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98"
+    },
+    "source": {
+      "requestedPath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "fileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "inputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d"
+    },
+    "config": {
+      "requestedPath": "fixtures/current-k4-packing/current-k4-anisotropy-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-anisotropy-frontier-v0.json",
+      "fileSha256": "43af76de94475b81baf1a7b37c10c5a20c1e8dcff3e90ba7a49356e361cda35f",
+      "requested": {
+        "schema": "kaminos.current-k4-anisotropy-frontier-config.v0",
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015
+        },
+        "centerlineCheckpoints": [
+          60,
+          66,
+          72
+        ],
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45"
+        },
+        "compressionScales": [
+          0.92,
+          0.94,
+          0.96
+        ]
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-anisotropy-frontier-config.v0",
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015
+        },
+        "centerlineCheckpoints": [
+          60,
+          66,
+          72
+        ],
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45"
+        },
+        "compressionScales": [
+          0.92,
+          0.94,
+          0.96
+        ]
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 9,
+  "effectiveCandidateCount": 9,
+  "candidateCapApplied": false,
+  "admissibleCandidateCount": 6,
+  "refusedCandidateCount": 3,
+  "nondominatedCandidateIds": [
+    "c12-i060-s092",
+    "c12-i060-s094",
+    "c12-i060-s096",
+    "c12-i066-s094",
+    "c12-i066-s096",
+    "c12-i072-s096"
+  ],
+  "outputs": {
+    "sweepResult": {
+      "path": "sweep-result.json",
+      "sha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a"
+    }
+  },
+  "visual": {
+    "status": "agent-inspected-rejected-no-admissible-frontier-opening",
+    "requestedCandidateIds": [
+      "c12-i060-s092",
+      "c12-i060-s094",
+      "c12-i060-s096",
+      "c12-i066-s094",
+      "c12-i066-s096",
+      "c12-i072-s096"
+    ],
+    "route": {
+      "requested": "current-k4-ring-cage-anisotropy-frontier-contact-sheet-v0",
+      "effective": "current-k4-ring-cage-anisotropy-frontier-contact-sheet-v0",
+      "fallbackUsed": false
+    },
+    "visualDisposition": "reject-constant-area-anisotropy-for-current-k4",
+    "candidateIds": [
+      "c12-i060-s092",
+      "c12-i060-s094",
+      "c12-i060-s096",
+      "c12-i066-s094",
+      "c12-i066-s096",
+      "c12-i072-s096"
+    ],
+    "manifest": {
+      "path": "visual/visual-manifest.json",
+      "sha256": "49a0d7805e3c782f8ead159b3657216790c6005097d4927a7527a67c0b522b24",
+      "identitySha256": "1453e6c1f1c20509b6034390062879488b8a7152653b512c878186dc9f2f327b"
+    },
+    "verification": {
+      "path": "visual/capture-verification.json",
+      "sha256": "3f0bee3820a83126ab07b904dd816b7a2da507e26cf27284759f4981240114b1"
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "4a2040a7499f552f47899c59eaa7f9550c1ae0687de75ec41d9bccf006e0ab15",
+      "disposition": "reject-constant-area-anisotropy-for-current-k4"
+    },
+    "viewerRoute": {
+      "requested": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+      "effective": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+      "fallbackUsed": false
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-inspection-finalized",
+    "preparedManifestIdentitySha256": "7b7b2fc1d480fdd2ee11740f8ff328a8372e7aa505bd33b15219bd845ff4c59b",
+    "sweepResultSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+    "disposition": "reject-constant-area-anisotropy-for-current-k4"
+  },
+  "resultStatus": "reject-constant-area-anisotropy-for-current-k4"
+}

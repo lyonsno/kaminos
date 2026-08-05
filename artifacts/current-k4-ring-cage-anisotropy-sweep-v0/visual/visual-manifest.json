@@ -1,0 +1,345 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-manifest.v0",
+  "status": "agent-inspected-rejected-no-admissible-frontier-opening",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "sweep": {
+      "path": "repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/sweep-result.json",
+      "sha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a"
+    },
+    "source": {
+      "path": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "route": {
+    "requested": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+    "effective": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "candidateIds": [
+    "c12-i060-s092",
+    "c12-i060-s094",
+    "c12-i060-s096",
+    "c12-i066-s094",
+    "c12-i066-s096",
+    "c12-i072-s096"
+  ],
+  "selectedReference": {
+    "carrierIdentitySha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148,
+      "nonPositiveCellCount": 0,
+      "compartmentMaximumEscape": 0
+    },
+    "bundleIdentity": {
+      "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+      "candidateId": "selected-reference",
+      "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+      "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "packedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "residualLedgerSha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d",
+      "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+      "sha256": "a72527fccdc296c2333ac211d70d5cd0ac9f75b190ef23c7c9e7e08e153a11c9"
+    },
+    "viewer": {
+      "path": "selected-reference/index.html",
+      "sha256": "c87f41ab4f5d86b9f78a0f3b30ea43e57153e74fe4a2f5fa2dc23cde2b3a741f"
+    },
+    "captureUrls": {
+      "primary": "selected-reference/index.html?bundle=a72527fccdc296c2333ac211d70d5cd0ac9f75b190ef23c7c9e7e08e153a11c9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&ledger=8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "side": "selected-reference/index.html?bundle=a72527fccdc296c2333ac211d70d5cd0ac9f75b190ef23c7c9e7e08e153a11c9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&ledger=8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+    }
+  },
+  "candidates": [
+    {
+      "id": "c12-i060-s092",
+      "status": "admissible",
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.92,
+      "packedCarrierIdentitySha256": "480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 11.310263333078996,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.6894567359651687,
+        "skeletalTotalPenetration": 0.04635509046606898,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 8.20460040165356e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01477348589540745,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": false,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i060-s092",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "70380c04d5e3a5be25038b8790841b9d68a9ec2351b9c2b47fac2488394701e9"
+      },
+      "viewer": {
+        "path": "candidates/c12-i060-s092/index.html",
+        "sha256": "1761b4fc7de074bd1a5956d21f700023f349bb4f50e3e953b1c70ffb464ee72a"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i060-s092/index.html?bundle=70380c04d5e3a5be25038b8790841b9d68a9ec2351b9c2b47fac2488394701e9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e&ledger=12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i060-s092/index.html?bundle=70380c04d5e3a5be25038b8790841b9d68a9ec2351b9c2b47fac2488394701e9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e&ledger=12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    },
+    {
+      "id": "c12-i060-s094",
+      "status": "admissible",
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.94,
+      "packedCarrierIdentitySha256": "0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.8310084679658,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.6999616625695815,
+        "skeletalTotalPenetration": 0.041778009233166075,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 1.025575050206695e-15,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013804367703663084,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i060-s094",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "22acc3d2f2e44242121ad36afe336007c18927f7dd58e52f9f56fac1e42fe1dc"
+      },
+      "viewer": {
+        "path": "candidates/c12-i060-s094/index.html",
+        "sha256": "e1ffa3c8dda1d4ab82a669f09804c4b5be245fc618b1d559272fd5ce50f44be9"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i060-s094/index.html?bundle=22acc3d2f2e44242121ad36afe336007c18927f7dd58e52f9f56fac1e42fe1dc&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636&ledger=b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i060-s094/index.html?bundle=22acc3d2f2e44242121ad36afe336007c18927f7dd58e52f9f56fac1e42fe1dc&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636&ledger=b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    },
+    {
+      "id": "c12-i060-s096",
+      "status": "admissible",
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.96,
+      "packedCarrierIdentitySha256": "fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.671343611325662,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.710209210063864,
+        "skeletalTotalPenetration": 0.041778009233166075,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.15345030124017e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013134781129931264,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i060-s096",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "a0e0150e87d63e409092cca596b82dd7290fe9234c335dbccb5e33ef0754d545"
+      },
+      "viewer": {
+        "path": "candidates/c12-i060-s096/index.html",
+        "sha256": "3f9ca3c5f35777887e883ae3d22eade31656f5c8aa278301addab9ab3b1ecf7b"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i060-s096/index.html?bundle=a0e0150e87d63e409092cca596b82dd7290fe9234c335dbccb5e33ef0754d545&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a&ledger=d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i060-s096/index.html?bundle=a0e0150e87d63e409092cca596b82dd7290fe9234c335dbccb5e33ef0754d545&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a&ledger=d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    },
+    {
+      "id": "c12-i066-s094",
+      "status": "admissible",
+      "centerlineCheckpoint": 66,
+      "compressionScale": 0.94,
+      "packedCarrierIdentitySha256": "79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.493825388010803,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.7048819150485968,
+        "skeletalTotalPenetration": 0.041889744811811264,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.153450301240164e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.014565815215198683,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i066-s094",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "5ce1d0c9237ed18471c7d47d3c03a69f4f41fd5a0d3fe7ee0b491da5bf884134"
+      },
+      "viewer": {
+        "path": "candidates/c12-i066-s094/index.html",
+        "sha256": "20d9364b9a3c72f72e119aaa8d23d8dad2f47fca669e9f4e829287e6222730b9"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i066-s094/index.html?bundle=5ce1d0c9237ed18471c7d47d3c03a69f4f41fd5a0d3fe7ee0b491da5bf884134&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08&ledger=6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i066-s094/index.html?bundle=5ce1d0c9237ed18471c7d47d3c03a69f4f41fd5a0d3fe7ee0b491da5bf884134&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08&ledger=6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    },
+    {
+      "id": "c12-i066-s096",
+      "status": "admissible",
+      "centerlineCheckpoint": 66,
+      "compressionScale": 0.96,
+      "packedCarrierIdentitySha256": "2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.323872174505482,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.715145967195421,
+        "skeletalTotalPenetration": 0.041889744811811264,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.153450301240164e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013925438732033604,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i066-s096",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "9612eea36e4a530a03aee42c655284f7aa3b953fa5f2ad8a583c504cc4d19ae0"
+      },
+      "viewer": {
+        "path": "candidates/c12-i066-s096/index.html",
+        "sha256": "f5b88647d898092e1f0e6a8b160892a21582f6a3c9624847165b068a18739871"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i066-s096/index.html?bundle=9612eea36e4a530a03aee42c655284f7aa3b953fa5f2ad8a583c504cc4d19ae0&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b&ledger=dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i066-s096/index.html?bundle=9612eea36e4a530a03aee42c655284f7aa3b953fa5f2ad8a583c504cc4d19ae0&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b&ledger=dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    },
+    {
+      "id": "c12-i072-s096",
+      "status": "admissible",
+      "centerlineCheckpoint": 72,
+      "compressionScale": 0.96,
+      "packedCarrierIdentitySha256": "e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.031586497873061,
+        "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+        "pairwiseFixedTotalPenetration": 3.7202071192890536,
+        "skeletalTotalPenetration": 0.04343091516325526,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 5.669690972463759e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01471100035906291,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": true,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      },
+      "bundleIdentity": {
+        "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-bundle.v0",
+        "candidateId": "c12-i072-s096",
+        "route": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50",
+        "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+        "sha256": "a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64"
+      },
+      "viewer": {
+        "path": "candidates/c12-i072-s096/index.html",
+        "sha256": "c731cfd27e119511307434e3c9ac90e10f2ebcf98f103eeccd83923620d4c177"
+      },
+      "captureUrls": {
+        "primary": "candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+        "side": "candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side"
+      }
+    }
+  ],
+  "preparedIdentitySha256": "7b7b2fc1d480fdd2ee11740f8ff328a8372e7aa505bd33b15219bd845ff4c59b",
+  "visualDisposition": "reject-constant-area-anisotropy-for-current-k4",
+  "captureVerification": {
+    "path": "capture-verification.json",
+    "sha256": "3f0bee3820a83126ab07b904dd816b7a2da507e26cf27284759f4981240114b1"
+  },
+  "inspection": {
+    "path": "visual-inspection.json",
+    "sha256": "4a2040a7499f552f47899c59eaa7f9550c1ae0687de75ec41d9bccf006e0ab15"
+  },
+  "identity": {
+    "sha256": "1453e6c1f1c20509b6034390062879488b8a7152653b512c878186dc9f2f327b"
+  }
+}

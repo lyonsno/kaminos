@@ -1,0 +1,161 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-capture-verification.v0",
+  "status": "verified",
+  "preparedManifestIdentitySha256": "7b7b2fc1d480fdd2ee11740f8ff328a8372e7aa505bd33b15219bd845ff4c59b",
+  "sweepSha256": "589b80288d7d4299f4803981ee3f1a55483a532ad45d36d094325e89f4ab554a",
+  "baseUrl": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/",
+  "candidateIds": [
+    "c12-i060-s092",
+    "c12-i060-s094",
+    "c12-i060-s096",
+    "c12-i066-s094",
+    "c12-i066-s096",
+    "c12-i072-s096"
+  ],
+  "captures": [
+    {
+      "key": "selected-reference:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/selected-reference/index.html?bundle=a72527fccdc296c2333ac211d70d5cd0ac9f75b190ef23c7c9e7e08e153a11c9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&ledger=8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "d679d3dc14a718216d7c163a378946c22ea0aa3ed0235c773cb1a8239145ae39",
+      "reportSha256": "8720719f77127f03ff58249f4ff36d7206dba071267fba1224738efe7d5fec3d",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "selected-reference:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/selected-reference/index.html?bundle=a72527fccdc296c2333ac211d70d5cd0ac9f75b190ef23c7c9e7e08e153a11c9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&ledger=8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "5d1f6adb52bb4a353e86eccccfb7b3c1fae607cde0bc41fcc63f592f10fe74b6",
+      "reportSha256": "e741150eed6150e3d4ef3189b8251a6561dceed876078fbcbe67090e361db2e3",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s092:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s092/index.html?bundle=70380c04d5e3a5be25038b8790841b9d68a9ec2351b9c2b47fac2488394701e9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e&ledger=12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "4faad6ad9e5f296928b6292d9506c75e25c86ea2d9fc186014f3ab4dac0509bb",
+      "reportSha256": "7748d8095039e757b904546e73f2d2a50bdc94a8d9ad2598ace8a52cf733b004",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s092:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s092/index.html?bundle=70380c04d5e3a5be25038b8790841b9d68a9ec2351b9c2b47fac2488394701e9&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e&ledger=12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "474518d05f34cbc61fbdf3bec40f87fc4c08823df45fac35329b6d35657dac8e",
+      "reportSha256": "9056439c838b6e481a7800911089c3c080ca4520629c4561c6681cb12c1e478a",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s094:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s094/index.html?bundle=22acc3d2f2e44242121ad36afe336007c18927f7dd58e52f9f56fac1e42fe1dc&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636&ledger=b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "19b7881edfa3c8c61259648e684a5f6869428922bd1b49a8ef60d2f6b4433789",
+      "reportSha256": "6d594f5de6f3aa39b41ba2f782cab9d582c8a0a23182a7ad38db61d195516740",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s094:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s094/index.html?bundle=22acc3d2f2e44242121ad36afe336007c18927f7dd58e52f9f56fac1e42fe1dc&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636&ledger=b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "9c180e9fec2b68e8b30f5fe4e31f83c20f910e65bf85b1eb6a983bdbcc040560",
+      "reportSha256": "dbcb6c1ec2afd26050fb958e81b690764abd01382386e14f0ecaa6413392d8a7",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s096:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s096/index.html?bundle=a0e0150e87d63e409092cca596b82dd7290fe9234c335dbccb5e33ef0754d545&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a&ledger=d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "fcfcbfc5f40de7813bd8928239837c892348dfba3891d603f4bde59e9ab3f08e",
+      "reportSha256": "a25fb19b0c29e3ccc33c4ef3dabb406ca66453c964f555a123edd4d17352845e",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i060-s096:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i060-s096/index.html?bundle=a0e0150e87d63e409092cca596b82dd7290fe9234c335dbccb5e33ef0754d545&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a&ledger=d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "9549bf5a8b26c44cb9867a929aaebbf9f47aa243df84deda798f3af67674f0d7",
+      "reportSha256": "8e1e363fc70556ac4aa39fba15773217f17d2c673471396d6eabad626975dc30",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i066-s094:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i066-s094/index.html?bundle=5ce1d0c9237ed18471c7d47d3c03a69f4f41fd5a0d3fe7ee0b491da5bf884134&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08&ledger=6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "ef00faf061fb6e6ccfbfb676783f1f0066090b4491ee5ed1c6f00107c2acc5bf",
+      "reportSha256": "a7d4bef2cf5cfe8aa427ca790108c49af8fb48f157d85f11ebb99042bec2b798",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i066-s094:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i066-s094/index.html?bundle=5ce1d0c9237ed18471c7d47d3c03a69f4f41fd5a0d3fe7ee0b491da5bf884134&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08&ledger=6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "efd02f67c1be67fd52fec7815863d86e5d31eb83e5edf4c8985d4c2527c110ab",
+      "reportSha256": "1f2ed7c0637f4e45ee70d5676b29dabf7ee7ba3f33686cad8dc60fa4bb3ca994",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i066-s096:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i066-s096/index.html?bundle=9612eea36e4a530a03aee42c655284f7aa3b953fa5f2ad8a583c504cc4d19ae0&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b&ledger=dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "87daf16ed9c957b066c84817d7abe1278775df897bb0735ec36283fa0ce131ab",
+      "reportSha256": "26798d7e83e1af26deea440e5e466ee70642d3129793cc0ec9a3de7f82023990",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i066-s096:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i066-s096/index.html?bundle=9612eea36e4a530a03aee42c655284f7aa3b953fa5f2ad8a583c504cc4d19ae0&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b&ledger=dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "4ebbdb35d7be9a71863a2c431aca52f2cfa169a69c47dcfea14c85035d7a552c",
+      "reportSha256": "9433e24841ca8e00a9ef619286b52ccef6e6b3d9d1f23e3716740c88129b0fdd",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i072-s096:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+      "sha256": "5e54ccd2207e604f12edbc7d24c49ce5793ef04690efc38e134c5725952b418a",
+      "reportSha256": "3e5f521c4f81f7d452c4b2beeb1cb3b6169a712f6cf5f77fce205eb468e4f5e6",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "c12-i072-s096:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed&view=side",
+      "sha256": "2b8502566c50a1e6f6c5ba91659da77f88b275aa7d8032f5a5be4d190ecb2ce2",
+      "reportSha256": "fccffd0510a38d709c29c37e9ea29820a94c8cd057c279de3401f80289664595",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "contact-sheet:primary",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/contact-sheet.html",
+      "sha256": "2a9e24a053d1a816d27329d904e4c19d5a910f70ceca4b61eedf43d8da086766",
+      "reportSha256": "3365c45dcab841a54edc5c7e428d3c980ddf112f9627deda44d00def2d322a13",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "key": "contact-sheet:side",
+      "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/contact-sheet-side.html",
+      "sha256": "c022e883fc301993d6d67763d225b2758fb12ca70733228111d05242042e1d9e",
+      "reportSha256": "c9885e624c4fe856b1c2270db859f0db387bd5f7b7d218e0bc75afc90b6ca4fd",
+      "installedStableChrome": false,
+      "fallbackUsed": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ]
+}

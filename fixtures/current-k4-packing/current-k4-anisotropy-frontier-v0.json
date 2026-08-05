@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.current-k4-anisotropy-frontier-config.v0",
+  "centerline": {
+    "curvatureRegularization": 12,
+    "maximumLocalTurningAngleChange": 0.25,
+    "relaxationStep": 0.32,
+    "maximumTotalTurningAngleChange": 1.25,
+    "convergenceTolerance": 0.0001,
+    "maximumRelativeVolumeError": 0.015
+  },
+  "centerlineCheckpoints": [60, 66, 72],
+  "anisotropy": {
+    "subjectConstructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45"
+  },
+  "compressionScales": [0.92, 0.94, 0.96]
+}

@@ -1,0 +1,18 @@
+{
+  "preparedManifestIdentitySha256": "7b7b2fc1d480fdd2ee11740f8ff328a8372e7aa505bd33b15219bd845ff4c59b",
+  "status": "agent-inspected-rejected-no-admissible-frontier-opening",
+  "visualDisposition": "reject-constant-area-anisotropy-for-current-k4",
+  "inspectedArtifacts": [
+    "contact-sheet.png",
+    "contact-sheet-side.png",
+    "selected-reference/primary.png",
+    "candidates/c12-i060-s092/primary.png",
+    "candidates/c12-i072-s096/primary.png"
+  ],
+  "sourceProposalSemantics": "The selected c12 reference is the crowded baseline for this frontier; every candidate frame is the provisional coupled centerline-plus-anisotropy proposal. The before/packed meaning is not inverted.",
+  "visibleDeltaAgainstAcceptedDirection": "No candidate opens a clean compartment lane in either three-quarter or side view. The high-amplitude iteration-60 candidate makes M12 visibly interdigitate more broadly through the M45 region while the worst local movable penetration rises from 0.3421 to 0.4072. The only total-overlap improvement, iteration 72 at scale 0.96, remains nearly indistinguishable from the selected reference while worsening the local maximum to 0.3614. Pressure remains distributed and no admitted candidate materially advances plausible separation.",
+  "retainedPositiveEvidence": "All six rendered rows retain stable construction colors, fixed attachment handles, smooth centerlines, positive cells, bounded compartment custody, exact per-section area, and no visible fold or hard ellipse transition.",
+  "scalarDisposition": "Three stronger grid cells are volume-refused. All six carrier-admissible rows worsen the selected reference movable maximum; none satisfies the predeclared no-worse maximum, skeletal, volume, and cell trade required for visual selection.",
+  "nextMechanism": "longitudinally-redistributed-total-volume-accommodation",
+  "nextMechanismReason": "Uniform per-section determinant-one compression repays area by expanding the same crowded cross-section orthogonally. The next assay should compress high-pressure sections and repay total muscle volume smoothly into low-pressure neighboring sections, preserving attachments, centerline identity, positive cells, and a bounded longitudinal scale gradient."
+}

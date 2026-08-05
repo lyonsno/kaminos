@@ -1,0 +1,131 @@
+{
+  "schema": "kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0",
+  "status": "completed",
+  "sourceCarrierSha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750",
+  "residualLedgerSha256": "fdd6785c82b672073d7ddda3ed2bb03d938dd81646d53d37891aa70837b38d26",
+  "requested": {
+    "subjectConstructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45",
+    "compressionScale": 0.92
+  },
+  "effective": {
+    "subjectConstructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45",
+    "compressionScale": 0.92
+  },
+  "fallbackUsed": false,
+  "contactCount": 112,
+  "totalPenetration": 9.186915202227727,
+  "adjustments": [
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0001",
+      "pressureDirection": [
+        0.48011921018830617,
+        0.7173168580426001,
+        0.5049178835969759
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0002",
+      "pressureDirection": [
+        -0.8356697152890258,
+        0.20827202789488042,
+        0.5082114612494615
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0003",
+      "pressureDirection": [
+        -0.6538352868944403,
+        -0.6541103863694072,
+        -0.38031437003527724
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0004",
+      "pressureDirection": [
+        -0.706479059249771,
+        0.3629554507593818,
+        0.6075777148691457
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0005",
+      "pressureDirection": [
+        0.7740246985464628,
+        -0.28977667669898627,
+        -0.5629522570177232
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0006",
+      "pressureDirection": [
+        0.9632997293487676,
+        0.23019750809676287,
+        -0.1380678771569704
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0007",
+      "pressureDirection": [
+        0.744017653282658,
+        0.5995491874116139,
+        0.2949211818059867
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "pressureDirection": [
+        0.3871042356380018,
+        0.7352024118034884,
+        0.5564420225229689
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "pressureDirection": [
+        0.184148555364531,
+        0.7450499127323778,
+        0.641084968701211
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "pressureDirection": [
+        0.5807031466238091,
+        0.6862358415236833,
+        0.43802308764434894
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "pressureDirection": [
+        0.09376108923696244,
+        -0.7034461181344935,
+        -0.7045370231766465
+      ],
+      "compressionScale": 0.92
+    }
+  ]
+}

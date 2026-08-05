@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed",
+    "outputPath": "repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/primary.png",
+    "reportPath": "repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/primary-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 74686,
+    "processGroupId": 74686,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 74686,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 4909,
+    "retainedBytes": 4909,
+    "truncated": false,
+    "tail": "[0805/172908.971502:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0805/172909.057615:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/172909.678573:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed (0)\n[0805/172909.678648:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed (0)\n[0805/172909.681495:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/172909.715747:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed (0)\n[0805/172909.717918:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/172909.745275:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed (0)\n[0805/172909.746640:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0805/172909.798319:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8780/artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/index.html?bundle=a28967d00715a117b3613ad6e0513bf625d2c7e8a9b08a328592806eb4121e64&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-anisotropy-frontier-orbitable-v0&state=packed (0)\n236051 bytes written to file repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/primary.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/primary.png",
+    "sizeBytes": 236051,
+    "sha256": "5e54ccd2207e604f12edbc7d24c49ce5793ef04690efc38e134c5725952b418a",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 61,
+      "idatBytes": 235298
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-ring-cage-anisotropy-sweep-v0/visual/candidates/c12-i072-s096/primary.png",
+      "sizeBytes": 236051,
+      "sha256": "5e54ccd2207e604f12edbc7d24c49ce5793ef04690efc38e134c5725952b418a",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 61,
+        "idatBytes": 235298
+      }
+    }
+  }
+}

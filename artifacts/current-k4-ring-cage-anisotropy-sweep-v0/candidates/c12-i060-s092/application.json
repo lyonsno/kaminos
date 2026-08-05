@@ -1,0 +1,444 @@
+{
+  "schema": "kaminos.muscle-compartment-ring-cage-section-anisotropy.v0",
+  "status": "completed",
+  "sourceCarrierSha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750",
+  "outputCarrierSha256": "480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e",
+  "requested": [
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0001",
+      "pressureDirection": [
+        0.48011921018830617,
+        0.7173168580426001,
+        0.5049178835969759
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0002",
+      "pressureDirection": [
+        -0.8356697152890258,
+        0.20827202789488042,
+        0.5082114612494615
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0003",
+      "pressureDirection": [
+        -0.6538352868944403,
+        -0.6541103863694072,
+        -0.38031437003527724
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0004",
+      "pressureDirection": [
+        -0.706479059249771,
+        0.3629554507593818,
+        0.6075777148691457
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0005",
+      "pressureDirection": [
+        0.7740246985464628,
+        -0.28977667669898627,
+        -0.5629522570177232
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0006",
+      "pressureDirection": [
+        0.9632997293487676,
+        0.23019750809676287,
+        -0.1380678771569704
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0007",
+      "pressureDirection": [
+        0.744017653282658,
+        0.5995491874116139,
+        0.2949211818059867
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "pressureDirection": [
+        0.3871042356380018,
+        0.7352024118034884,
+        0.5564420225229689
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "pressureDirection": [
+        0.184148555364531,
+        0.7450499127323778,
+        0.641084968701211
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "pressureDirection": [
+        0.5807031466238091,
+        0.6862358415236833,
+        0.43802308764434894
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "pressureDirection": [
+        0.09376108923696244,
+        -0.7034461181344935,
+        -0.7045370231766465
+      ],
+      "compressionScale": 0.92
+    }
+  ],
+  "effective": [
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0001",
+      "pressureDirection": [
+        0.48011921018830617,
+        0.7173168580426001,
+        0.5049178835969759
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0002",
+      "pressureDirection": [
+        -0.8356697152890258,
+        0.20827202789488042,
+        0.5082114612494615
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0003",
+      "pressureDirection": [
+        -0.6538352868944403,
+        -0.6541103863694072,
+        -0.38031437003527724
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0004",
+      "pressureDirection": [
+        -0.706479059249771,
+        0.3629554507593818,
+        0.6075777148691457
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0005",
+      "pressureDirection": [
+        0.7740246985464628,
+        -0.28977667669898627,
+        -0.5629522570177232
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0006",
+      "pressureDirection": [
+        0.9632997293487676,
+        0.23019750809676287,
+        -0.1380678771569704
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0007",
+      "pressureDirection": [
+        0.744017653282658,
+        0.5995491874116139,
+        0.2949211818059867
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "pressureDirection": [
+        0.3871042356380018,
+        0.7352024118034884,
+        0.5564420225229689
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "pressureDirection": [
+        0.184148555364531,
+        0.7450499127323778,
+        0.641084968701211
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "pressureDirection": [
+        0.5807031466238091,
+        0.6862358415236833,
+        0.43802308764434894
+      ],
+      "compressionScale": 0.92
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "pressureDirection": [
+        0.09376108923696244,
+        -0.7034461181344935,
+        -0.7045370231766465
+      ],
+      "compressionScale": 0.92
+    }
+  ],
+  "fallbackUsed": false,
+  "centerlineMaximumDrift": 0,
+  "fixedNodeMaximumDrift": 0,
+  "sectionReceipts": [
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0001",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.4801192101883063,
+        0.7173168580426003,
+        0.504917883596976
+      ],
+      "effectiveExpansionAxis": [
+        -0.8379747545952789,
+        0.20484489177593004,
+        0.5058032037999457
+      ],
+      "areaBefore": 1.8814118937161441,
+      "areaAfter": 1.8814118937161437,
+      "relativeAreaError": 2.360403967537924e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0002",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        -0.8356697152890258,
+        0.2082720278948804,
+        0.5082114612494615
+      ],
+      "effectiveExpansionAxis": [
+        -0.48412011485570844,
+        -0.7163292236654853,
+        -0.5024939379882097
+      ],
+      "areaBefore": 3.133075238187693,
+      "areaAfter": 3.133075238187694,
+      "relativeAreaError": 2.8348454862318794e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0003",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        -0.6538352868944403,
+        -0.6541103863694072,
+        -0.3803143700352773
+      ],
+      "effectiveExpansionAxis": [
+        0.7107851469698527,
+        -0.3586704792630914,
+        -0.6050950025840812
+      ],
+      "areaBefore": 4.330148337370163,
+      "areaAfter": 4.330148337370162,
+      "relativeAreaError": 2.0511501004132902e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0004",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        -0.7064790592497708,
+        0.3629554507593817,
+        0.6075777148691456
+      ],
+      "effectiveExpansionAxis": [
+        -0.6584857781696618,
+        -0.6517424556068988,
+        -0.3763352913397635
+      ],
+      "areaBefore": 5.321989173903411,
+      "areaAfter": 5.321989173903412,
+      "relativeAreaError": 1.6688843037399323e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0005",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.7740246985464628,
+        -0.2897766766989862,
+        -0.5629522570177232
+      ],
+      "effectiveExpansionAxis": [
+        0.5775828416687013,
+        0.687411382392843,
+        0.44029950302795984
+      ],
+      "areaBefore": 5.9767378055983515,
+      "areaAfter": 5.976737805598353,
+      "relativeAreaError": 2.9721177290667735e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0006",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.9632997293487674,
+        0.23019750809676282,
+        -0.13806787715697036
+      ],
+      "effectiveExpansionAxis": [
+        -0.06906323709302417,
+        0.7095872468151369,
+        0.7012247916606675
+      ],
+      "areaBefore": 6.205438003288432,
+      "areaAfter": 6.205438003288431,
+      "relativeAreaError": 1.431290457223898e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0007",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.7440176532826581,
+        0.599549187411614,
+        0.2949211818059867
+      ],
+      "effectiveExpansionAxis": [
+        -0.615754745028004,
+        0.443898258390438,
+        0.6509995623450399
+      ],
+      "areaBefore": 5.976737805598287,
+      "areaAfter": 5.976737805598288,
+      "relativeAreaError": 1.486058864533403e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.3871042356380018,
+        0.7352024118034884,
+        0.5564420225229689
+      ],
+      "effectiveExpansionAxis": [
+        -0.8847974299965353,
+        0.12642132682285537,
+        0.44849878037278423
+      ],
+      "areaBefore": 5.321989173903294,
+      "areaAfter": 5.321989173903295,
+      "relativeAreaError": 1.668884303739969e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.18414855536453104,
+        0.7450499127323776,
+        0.6410849687012111
+      ],
+      "effectiveExpansionAxis": [
+        -0.948053487230667,
+        -0.03749043936560831,
+        0.3158940523434169
+      ],
+      "areaBefore": 4.330148337369953,
+      "areaAfter": 4.330148337369956,
+      "relativeAreaError": 8.20460040165356e-16
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.5807031466238091,
+        0.6862358415236833,
+        0.438023087644349
+      ],
+      "effectiveExpansionAxis": [
+        -0.7716864286152418,
+        0.2925494891694471,
+        0.5647254662911431
+      ],
+      "areaBefore": 3.1330752381874856,
+      "areaAfter": 3.1330752381874856,
+      "relativeAreaError": 0
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "requestedCompressionScale": 0.92,
+      "effectiveCompressionScale": 0.92,
+      "effectiveCompressionAxis": [
+        0.09376108923696244,
+        -0.7034461181344935,
+        -0.7045370231766465
+      ],
+      "effectiveExpansionAxis": [
+        0.9612101920891912,
+        0.24833131922372964,
+        -0.12002717407513092
+      ],
+      "areaBefore": 1.8814118937160103,
+      "areaAfter": 1.8814118937160094,
+      "relativeAreaError": 4.720807935076185e-16
+    }
+  ]
+}

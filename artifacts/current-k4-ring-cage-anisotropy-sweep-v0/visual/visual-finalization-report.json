@@ -1,0 +1,9 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-frontier-visual-finalization.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "disposition": "reject-constant-area-anisotropy-for-current-k4",
+  "finalizedManifestIdentitySha256": "1453e6c1f1c20509b6034390062879488b8a7152653b512c878186dc9f2f327b",
+  "captureVerificationSha256": "3f0bee3820a83126ab07b904dd816b7a2da507e26cf27284759f4981240114b1",
+  "visualInspectionSha256": "4a2040a7499f552f47899c59eaa7f9550c1ae0687de75ec41d9bccf006e0ab15"
+}

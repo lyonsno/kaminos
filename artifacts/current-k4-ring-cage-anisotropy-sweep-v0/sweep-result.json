@@ -1,0 +1,1085 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-sweep-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "solverCarrier": {
+      "requestedPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "fileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+      "identitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
+    },
+    "selectedCarrier": {
+      "requestedPath": "artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "fileSha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609",
+      "identitySha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98"
+    },
+    "source": {
+      "requestedPath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "fileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "inputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d"
+    },
+    "config": {
+      "requestedPath": "fixtures/current-k4-packing/current-k4-anisotropy-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-anisotropy-frontier-v0.json",
+      "fileSha256": "43af76de94475b81baf1a7b37c10c5a20c1e8dcff3e90ba7a49356e361cda35f",
+      "requested": {
+        "schema": "kaminos.current-k4-anisotropy-frontier-config.v0",
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015
+        },
+        "centerlineCheckpoints": [
+          60,
+          66,
+          72
+        ],
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45"
+        },
+        "compressionScales": [
+          0.92,
+          0.94,
+          0.96
+        ]
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-anisotropy-frontier-config.v0",
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015
+        },
+        "centerlineCheckpoints": [
+          60,
+          66,
+          72
+        ],
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45"
+        },
+        "compressionScales": [
+          0.92,
+          0.94,
+          0.96
+        ]
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedGrid": {
+    "centerlineCheckpoints": [
+      60,
+      66,
+      72
+    ],
+    "compressionScales": [
+      0.92,
+      0.94,
+      0.96
+    ]
+  },
+  "requestedCandidateCount": 9,
+  "effectiveCandidateCount": 9,
+  "candidateCapApplied": false,
+  "selectedReference": {
+    "carrierIdentitySha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148,
+      "nonPositiveCellCount": 0,
+      "compartmentMaximumEscape": 0
+    }
+  },
+  "checkpoints": [
+    {
+      "iterations": 60,
+      "config": {
+        "requested": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 60
+        },
+        "effective": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 60
+        },
+        "fallbackUsed": false
+      },
+      "termination": {
+        "reason": "iteration-limit",
+        "attemptedIteration": null,
+        "lineSearchAttempts": []
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 11.106638539514467,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.7299203668766436,
+        "skeletalTotalPenetration": 0.041778009233166075,
+        "maximumRelativeVolumeError": 0.01261935188616167
+      },
+      "carrier": {
+        "path": "checkpoints/i060/carrier.json",
+        "sha256": "bd819632210bf2befaad3f551b37bc332c0b697b01480d62b068d59c92e24110",
+        "identitySha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750"
+      },
+      "residualLedger": {
+        "path": "checkpoints/i060/residual-ledger.json",
+        "sha256": "13dcebdcfccbe48ad8bd22e8cda5be2fb2662f870dd8a8c2a320d655ab0d66b8"
+      }
+    },
+    {
+      "iterations": 66,
+      "config": {
+        "requested": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 66
+        },
+        "effective": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 66
+        },
+        "fallbackUsed": false
+      },
+      "termination": {
+        "reason": "iteration-limit",
+        "attemptedIteration": null,
+        "lineSearchAttempts": []
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.746779682308144,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.7348887852037964,
+        "skeletalTotalPenetration": 0.041889744811811264,
+        "maximumRelativeVolumeError": 0.013432494138425214
+      },
+      "carrier": {
+        "path": "checkpoints/i066/carrier.json",
+        "sha256": "81b13bbc42efe7941396e8648c3d472be7748771c31b617d1c8de5978fcc7139",
+        "identitySha256": "6c3951946a23b27c647bbc31c0d8b025740f2bcca4f96de5ae661565f5a2ba68"
+      },
+      "residualLedger": {
+        "path": "checkpoints/i066/residual-ledger.json",
+        "sha256": "f5c743989d05166e82f2c865c3133913b89a11f91f1f806c4f43b8279a8cedec"
+      }
+    },
+    {
+      "iterations": 72,
+      "config": {
+        "requested": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 72
+        },
+        "effective": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 72
+        },
+        "fallbackUsed": false
+      },
+      "termination": {
+        "reason": "iteration-limit",
+        "attemptedIteration": null,
+        "lineSearchAttempts": []
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.427448360493859,
+        "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+        "pairwiseFixedTotalPenetration": 3.7400302157904157,
+        "skeletalTotalPenetration": 0.04343091516325526,
+        "maximumRelativeVolumeError": 0.014245519597650896
+      },
+      "carrier": {
+        "path": "checkpoints/i072/carrier.json",
+        "sha256": "d26406d8eeecf1fe1443c2888bec5cfcb3606ea5dc2ecedd0aebd1b206a0378a",
+        "identitySha256": "101ea4a9bf25a542e83006283f783e2ac4330cd10e6eea9d78a0360ba92967d5"
+      },
+      "residualLedger": {
+        "path": "checkpoints/i072/residual-ledger.json",
+        "sha256": "93cfb7c0c3db0d49cbf13a619b6e876e430a7f8b6aa590f5790ff93bd9661458"
+      }
+    }
+  ],
+  "candidates": [
+    {
+      "id": "c12-i060-s092",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.92,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 60
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750",
+      "selection": {
+        "path": "candidates/c12-i060-s092/selection.json",
+        "sha256": "ebc15a8b816a0b875e23f7f7ef220817747d1e69e9830d41b7bda04dbdd5919e",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i060-s092/application.json",
+        "sha256": "6419ed886e63a7981e7a3da23ff6ee57e3e7424ff1e7b4206ecbcc0a543da15b"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i060-s092/residual-ledger.json",
+        "sha256": "12e487ea9da55e1c32f0d0fbdad64187c681e5a2f4d7631d44b5fa9a639eef63"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i060-s092/packed-carrier.json",
+        "sha256": "1707acc437059ae152f8235c93ddde96092e5ebf11fede35cdf1dac7807ea800",
+        "identitySha256": "480df25b16339c02010414059c827528c4fe2b3d029bd794016325233d50780e"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 11.310263333078996,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.6894567359651687,
+        "skeletalTotalPenetration": 0.04635509046606898,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 8.20460040165356e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01477348589540745,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": false,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    },
+    {
+      "id": "c12-i060-s094",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.94,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 60
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750",
+      "selection": {
+        "path": "candidates/c12-i060-s094/selection.json",
+        "sha256": "222c23b10e5b1e301dd94505f51fb65fec921dc29f561a363879f3d7178715d9",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i060-s094/application.json",
+        "sha256": "2ab076e938686e5e0e7ff37c0278cf9af5eb186bf5ae90b37d51f0de8b2393f5"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i060-s094/residual-ledger.json",
+        "sha256": "b0dc81b9c74469532946c191932020b546236a015417c86186fb9d3be7c8c657"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i060-s094/packed-carrier.json",
+        "sha256": "97c02a2afcdd7b6387c2b4768ed6c84d9f257b5b00fee9163021296c58fef0ee",
+        "identitySha256": "0618d6904c5d32d1e578e3cec820036da2bffb4f014f356a784c0e5ab738d636"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.8310084679658,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.6999616625695815,
+        "skeletalTotalPenetration": 0.041778009233166075,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 1.025575050206695e-15,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013804367703663084,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    },
+    {
+      "id": "c12-i060-s096",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 60,
+      "compressionScale": 0.96,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 60
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 60
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "85e2c60a60ece5578bd76817521c7059bc72458470f701894f7bcfb37c344750",
+      "selection": {
+        "path": "candidates/c12-i060-s096/selection.json",
+        "sha256": "c965f723a97ae7148772247afbf1845f6819dda7e82665933fcce15d2f28ff4a",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i060-s096/application.json",
+        "sha256": "5f057b2e8e48c29a127350c7d16c18db13d48781555dce57ddd5674a4262d2ca"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i060-s096/residual-ledger.json",
+        "sha256": "d052a40e2f29214c96b19f907faff25949949f2d524836f6c440722400a748da"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i060-s096/packed-carrier.json",
+        "sha256": "faa2eb22d33bef5d3716a921c63e7a672b886fc2b1e21c1c21f97e21495b503a",
+        "identitySha256": "fb378e42d7ae6a5f269682d3652bc7fbbb25cc31f29f04e5888b4c7d3b68fc6a"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.671343611325662,
+        "pairwiseMovableMaximumPenetration": 0.40721238026275464,
+        "pairwiseFixedTotalPenetration": 3.710209210063864,
+        "skeletalTotalPenetration": 0.041778009233166075,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.15345030124017e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013134781129931264,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    },
+    {
+      "id": "c12-i066-s092",
+      "status": "refused",
+      "refusalReasons": [
+        "relative-volume-error"
+      ],
+      "centerlineCheckpoint": 66,
+      "compressionScale": 0.92,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 66
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "6c3951946a23b27c647bbc31c0d8b025740f2bcca4f96de5ae661565f5a2ba68",
+      "selection": {
+        "path": "candidates/c12-i066-s092/selection.json",
+        "sha256": "4e3a6e4451f78f5044b993a2e52f76a88abe9fe0a57d73935cff0050fce1fef0",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i066-s092/application.json",
+        "sha256": "3ff89ac9e65ccfd98e42e58c912c7eb14d81be38b3d6adc23b9587a9404db0f7"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i066-s092/residual-ledger.json",
+        "sha256": "402c6633c56585a262b0379d151846631a7d73643fc35e6fe0e68b419f8660cd"
+      },
+      "packedCarrier": null,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 11.01175513638924,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.6943599862844008,
+        "skeletalTotalPenetration": 0.047520220087688025,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 4.458176593600211e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.015492655308430978,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": false,
+        "didNotWorsenMaximumRelativeVolumeError": false
+      }
+    },
+    {
+      "id": "c12-i066-s094",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 66,
+      "compressionScale": 0.94,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 66
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "6c3951946a23b27c647bbc31c0d8b025740f2bcca4f96de5ae661565f5a2ba68",
+      "selection": {
+        "path": "candidates/c12-i066-s094/selection.json",
+        "sha256": "b62eb79cadc574f691eafab63cf168e1c18844d3b59f497e0cacc9644fc6aa56",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i066-s094/application.json",
+        "sha256": "90ce08ee41070e4668c5b6eae484b3a1d87cb511bd2c71ced1fb25efc50a6bff"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i066-s094/residual-ledger.json",
+        "sha256": "6748c4468a58814da426d6b400a680afc6064ebf5a01d20e9c402dbccbfe4350"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i066-s094/packed-carrier.json",
+        "sha256": "1d1c2ebf99679f038bedbc03564c860e6ffc5af9eb8da7d25d0b6807843bcd3d",
+        "identitySha256": "79698c316d2c433e215df8280b32ebafc8699daff0da1e166e9df5045c38ab08"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.493825388010803,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.7048819150485968,
+        "skeletalTotalPenetration": 0.041889744811811264,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.153450301240164e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.014565815215198683,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    },
+    {
+      "id": "c12-i066-s096",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 66,
+      "compressionScale": 0.96,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 66
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 66
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "6c3951946a23b27c647bbc31c0d8b025740f2bcca4f96de5ae661565f5a2ba68",
+      "selection": {
+        "path": "candidates/c12-i066-s096/selection.json",
+        "sha256": "322d8d53ca287cb80b31bfeb410b5701aebacc3fca0360cb537d9b461cdbc344",
+        "contactCount": 112,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i066-s096/application.json",
+        "sha256": "ba9a639bbfc5f6904b0d839302f410f4e7d6a6eda81aa569dc2d754d2483161d"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i066-s096/residual-ledger.json",
+        "sha256": "dcc21cd512fac1cc65ff447847c66817d887097189578ad531c0a55d40f90489"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i066-s096/packed-carrier.json",
+        "sha256": "0b432a4e49a478ff1fefc596af6348a6a620a0823ffd7e2be17908cc8bca68f5",
+        "identitySha256": "2027d2471fca9dc4360650fad98774e6109aa3d59159e5379831d44cd2aec10b"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.323872174505482,
+        "pairwiseMovableMaximumPenetration": 0.38458030684650346,
+        "pairwiseFixedTotalPenetration": 3.715145967195421,
+        "skeletalTotalPenetration": 0.041889744811811264,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 6.153450301240164e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.013925438732033604,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    },
+    {
+      "id": "c12-i072-s092",
+      "status": "refused",
+      "refusalReasons": [
+        "relative-volume-error"
+      ],
+      "centerlineCheckpoint": 72,
+      "compressionScale": 0.92,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 72
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.92
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "101ea4a9bf25a542e83006283f783e2ac4330cd10e6eea9d78a0360ba92967d5",
+      "selection": {
+        "path": "candidates/c12-i072-s092/selection.json",
+        "sha256": "7308901bc9c5dd5378d93cb2b7c78899401eac584b12d45419d674f991f9f264",
+        "contactCount": 113,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i072-s092/application.json",
+        "sha256": "6ea18e6c403c13a53d9e43e5430e5294d3f68e48632d91d670cf16c7ff3ab280"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i072-s092/residual-ledger.json",
+        "sha256": "dd036398fb695f8bd1de4a0aa058bacc2e4469a977e01da442d0f0b09cafa8fd"
+      },
+      "packedCarrier": null,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.73699620933144,
+        "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+        "pairwiseFixedTotalPenetration": 3.699339083327919,
+        "skeletalTotalPenetration": 0.05283533075275895,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 4.458176593600162e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01619089779142003,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": false,
+        "didNotWorsenMaximumRelativeVolumeError": false
+      }
+    },
+    {
+      "id": "c12-i072-s094",
+      "status": "refused",
+      "refusalReasons": [
+        "relative-volume-error"
+      ],
+      "centerlineCheckpoint": 72,
+      "compressionScale": 0.94,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 72
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.94
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "101ea4a9bf25a542e83006283f783e2ac4330cd10e6eea9d78a0360ba92967d5",
+      "selection": {
+        "path": "candidates/c12-i072-s094/selection.json",
+        "sha256": "cd1eebac2863e7b24c7b87ad2e5a2cd93a2a547d492abaf80738de7c215a9672",
+        "contactCount": 113,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i072-s094/application.json",
+        "sha256": "c217d5f25dda85ea6af11eb1b45ef3b4f411e77f388711e9722f8cd0c7c87b63"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i072-s094/residual-ledger.json",
+        "sha256": "db1933c5e4b796ad58ca92398fdfb9a7a9ed35f4b76f1505120b5c41840884f5"
+      },
+      "packedCarrier": null,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.20612971495347,
+        "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+        "pairwiseFixedTotalPenetration": 3.7099022182320267,
+        "skeletalTotalPenetration": 0.04343091516325526,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 5.669690972463759e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01531569822746867,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": false,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": false
+      }
+    },
+    {
+      "id": "c12-i072-s096",
+      "status": "admissible",
+      "refusalReasons": [],
+      "centerlineCheckpoint": 72,
+      "compressionScale": 0.96,
+      "requested": {
+        "centerline": {
+          "curvatureRegularization": 12,
+          "maximumLocalTurningAngleChange": 0.25,
+          "relaxationStep": 0.32,
+          "maximumTotalTurningAngleChange": 1.25,
+          "convergenceTolerance": 0.0001,
+          "maximumRelativeVolumeError": 0.015,
+          "maxIterations": 72
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "effective": {
+        "centerline": {
+          "requested": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "effective": {
+            "curvatureRegularization": 12,
+            "maximumLocalTurningAngleChange": 0.25,
+            "relaxationStep": 0.32,
+            "maximumTotalTurningAngleChange": 1.25,
+            "convergenceTolerance": 0.0001,
+            "maximumRelativeVolumeError": 0.015,
+            "maxIterations": 72
+          },
+          "fallbackUsed": false
+        },
+        "anisotropy": {
+          "subjectConstructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "compressionScale": 0.96
+        }
+      },
+      "fallbackUsed": false,
+      "checkpointCarrierIdentitySha256": "101ea4a9bf25a542e83006283f783e2ac4330cd10e6eea9d78a0360ba92967d5",
+      "selection": {
+        "path": "candidates/c12-i072-s096/selection.json",
+        "sha256": "d34b3929db64f9774083b93d58663c22fc8c5be391bef23252de9fd3833e8674",
+        "contactCount": 113,
+        "sectionCount": 11
+      },
+      "application": {
+        "path": "candidates/c12-i072-s096/application.json",
+        "sha256": "4e2b327120b09880a78e1a143b31f5407a99f41338d7b580c4c162acbd4836df"
+      },
+      "residualLedger": {
+        "path": "candidates/c12-i072-s096/residual-ledger.json",
+        "sha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50"
+      },
+      "packedCarrier": {
+        "path": "candidates/c12-i072-s096/packed-carrier.json",
+        "sha256": "580abc3cdf3332b0b1f334e2091b0b46af09747642937704f5b7cbce15d22263",
+        "identitySha256": "e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.031586497873061,
+        "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+        "pairwiseFixedTotalPenetration": 3.7202071192890536,
+        "skeletalTotalPenetration": 0.04343091516325526,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "maximumSectionAreaRelativeError": 5.669690972463759e-16,
+        "nonPositiveCellCount": 0,
+        "maximumRelativeVolumeError": 0.01471100035906291,
+        "compartmentMaximumEscape": 0
+      },
+      "comparisonToSelected": {
+        "improvedMovableTotal": true,
+        "didNotWorsenMovableMaximum": false,
+        "didNotWorsenFixed": true,
+        "didNotWorsenSkeletal": true,
+        "didNotWorsenMaximumRelativeVolumeError": true
+      }
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "c12-i060-s092",
+    "c12-i060-s094",
+    "c12-i060-s096",
+    "c12-i066-s094",
+    "c12-i066-s096",
+    "c12-i072-s096"
+  ],
+  "visual": {
+    "status": "pending-agent-inspection",
+    "requestedCandidateIds": [
+      "c12-i060-s092",
+      "c12-i060-s094",
+      "c12-i060-s096",
+      "c12-i066-s094",
+      "c12-i066-s096",
+      "c12-i072-s096"
+    ],
+    "route": {
+      "requested": "current-k4-ring-cage-anisotropy-frontier-contact-sheet-v0",
+      "effective": null,
+      "fallbackUsed": null
+    }
+  }
+}
