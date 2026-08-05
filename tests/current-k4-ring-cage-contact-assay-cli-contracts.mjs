@@ -95,7 +95,7 @@ test('ring-cage contact assay writes a deterministic residual proposal and non-i
   }
   const viewer = await readFile(path.join(output, report.outputs.viewer.path), 'utf8');
   assert.match(viewer, /Source crowded input/);
-  assert.match(viewer, /Contact-relieved proposal · residual remains/);
+  assert.match(viewer, /Curvature-bearing proposal · residual remains/);
   assert.match(viewer, /The source state is the squeezed, crowded construction/);
   assert.match(viewer, /dataset\.witnessBundle/);
   assert.match(viewer, /dataset\.sourceCarrier/);

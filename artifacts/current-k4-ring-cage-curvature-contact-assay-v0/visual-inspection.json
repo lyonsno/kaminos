@@ -1,0 +1,50 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-inspection.v0",
+  "status": "inspected-mechanism-advance",
+  "inspectedAt": "2026-08-05T18:43:17Z",
+  "inspector": "codex-gpt-5.5-owning-lane",
+  "bundleIdentitySha256": "bd6d0cb9051302c7caf9e600e1c996c222a8406e09362c1c533e51dd3c288666",
+  "routeVerification": {
+    "path": "capture-route-verification.json",
+    "status": "verified",
+    "servedViewerSha256": "f4445a2955c61860eb65d67b289a9b5d3a2ae890b8488ae8b38eadcae7e6c10f"
+  },
+  "captures": [
+    {
+      "state": "source",
+      "view": "three-quarter",
+      "path": "source-crowded.png",
+      "sha256": "ce0ae6bc20be7796cda5ef7b6f9cc21e6b433196aa46bffb06a800c41eb68537"
+    },
+    {
+      "state": "proposal",
+      "view": "three-quarter",
+      "path": "contact-relieved.png",
+      "sha256": "7fb87e530e1e6b020e229a3f9e313fa669ee895cf398b22cab903d0f0072560a"
+    },
+    {
+      "state": "source",
+      "view": "side",
+      "path": "source-crowded-side.png",
+      "sha256": "0c4d1f5d5ca3fb1173a2a03bb6b4ddb974a717cd09d06b08657c825bfae14000"
+    },
+    {
+      "state": "proposal",
+      "view": "side",
+      "path": "contact-relieved-side.png",
+      "sha256": "1b94b1b54125319d8e7a33d1cd1fbc403fb02c1d5719f102c1b2fed7ff0a18a5"
+    }
+  ],
+  "observations": [
+    "The source remains the visibly crowded construction and its state label is unambiguous.",
+    "The curvature-bearing proposal materially separates the movable cage bodies from one another and from the skeletal capsule.",
+    "The red and purple hard elbows from the rejected section-local proposal are absent; displacement is distributed as smooth attachment-to-attachment bowing.",
+    "The cyan cage no longer shows the same abrupt section-scale faceting, and the side view confirms the improvement is three-dimensional rather than a camera artifact.",
+    "Fixed attachment handles remain coincident with source locations and fixed pairwise penetration is effectively flat rather than materially worsened.",
+    "Residual pairwise contact remains visible and measurable, so this is a transfer-mechanism advance rather than a packed or anatomical result."
+  ],
+  "verdict": "MECHANISM_ADVANCE",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "reason": "Whole-centerline second-difference regularization preserves smooth muscle-like bowing while retaining most of the section-local mechanism's contact relief; the visible failure that caused the prior rejection is materially removed, but residual contact still blocks packing admission.",
+  "nextFalsifier": "Sweep explicit curvature regularization and bend budgets under the same source, contact, obstacle, compartment, route, and four-view comparison to find the residual-versus-shape Pareto frontier without reintroducing local elbows."
+}

@@ -103,10 +103,10 @@ export function renderMuscleCompartmentRingCageContactHtml({
     <h1>Current-K4 cage-level contact</h1>
     <p class="authority">Agent-authored provisional assay · no packing or anatomical admission</p>
     <p class="status">Solver disposition · ${escapeHtml(result.status)}</p>
-    <p class="explanation">The source state is the squeezed, crowded construction. The proposal is the same identity-bound tetrahedral cages after reciprocal section contact relief; fixed attachments remain fixed and visible residuals remain binding.</p>
+    <p class="explanation">The source state is the squeezed, crowded construction. The proposal is the same identity-bound tetrahedral cages after whole-centerline curvature-regularized contact relief; fixed attachments remain fixed and visible residuals remain binding.</p>
     <div class="controls">
       <button data-state="before">Source crowded input</button>
-      <button data-state="packed">Contact-relieved proposal · residual remains</button>
+      <button data-state="packed">Curvature-bearing proposal · residual remains</button>
     </div>
     <div class="metrics">
       <span class="head">measurement</span><span class="head value">source</span><span class="head value">proposal</span>
@@ -115,6 +115,8 @@ export function renderMuscleCompartmentRingCageContactHtml({
       <span>fixed pairwise total</span><span class="value">${formatMetric(initial.pairwise.fixedTotalPenetration)}</span><span class="value proposal">${formatMetric(packed.pairwise.fixedTotalPenetration)}</span>
       <span>movable skeletal total</span><span class="value">${formatMetric(initial.skeletal.movableTotalPenetration)}</span><span class="value proposal">${formatMetric(packed.skeletal.movableTotalPenetration)}</span>
       <span>movable skeletal max</span><span class="value">${formatMetric(initial.skeletal.movableMaximumPenetration)}</span><span class="value proposal">${formatMetric(packed.skeletal.movableMaximumPenetration)}</span>
+      <span>maximum local turn</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.centerline.maximumTurningAngle)))}</span><span class="value proposal">${formatMetric(Math.max(...packed.cages.map(row => row.centerline.maximumTurningAngle)))}</span>
+      <span>maximum total turn</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.centerline.totalTurningAngle)))}</span><span class="value proposal">${formatMetric(Math.max(...packed.cages.map(row => row.centerline.totalTurningAngle)))}</span>
       <span>compartment escape</span><span class="value">${formatMetric(initial.compartment.maximumEscape)}</span><span class="value proposal">${formatMetric(packed.compartment.maximumEscape)}</span>
       <span>maximum volume error</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.relativeVolumeError)))}</span><span class="value proposal">${formatMetric(maxVolumeError)}</span>
       <span>fixed-node drift</span><span class="value">0.0000</span><span class="value proposal">${formatMetric(result.fixedNodeMaximumDrift)}</span>

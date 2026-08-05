@@ -13,6 +13,31 @@ import {
 
 const REPO_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
+function centerlineShape(cage) {
+  const axis = cage.manifest.nodes
+    .filter(node => node.id.endsWith(':axis'))
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map(node => node.currentPosition);
+  const turningAngles = [];
+  for (let index = 1; index < axis.length - 1; index += 1) {
+    const incoming = axis[index].map((value, coordinate) =>
+      value - axis[index - 1][coordinate]);
+    const outgoing = axis[index + 1].map((value, coordinate) =>
+      value - axis[index][coordinate]);
+    const incomingLength = Math.hypot(...incoming);
+    const outgoingLength = Math.hypot(...outgoing);
+    const cosine = incoming.reduce(
+      (sum, value, coordinate) => sum + value * outgoing[coordinate],
+      0,
+    ) / (incomingLength * outgoingLength);
+    turningAngles.push(Math.acos(Math.max(-1, Math.min(1, cosine))));
+  }
+  return {
+    maximumTurningAngle: Math.max(0, ...turningAngles),
+    totalTurningAngle: turningAngles.reduce((sum, value) => sum + value, 0),
+  };
+}
+
 async function fixture() {
   return {
     carrier: JSON.parse(await readFile(path.join(
@@ -106,9 +131,11 @@ test('contact measurement rejects a re-signed or reordered carrier/source mismat
 test('reciprocal section contact materially reduces movable residuals without drifting fixed nodes', async () => {
   const { carrier, source } = await fixture();
   const requestedConfig = {
+    curvatureRegularization: 12,
     maxIterations: 24,
+    maximumLocalTurningAngleChange: 0.25,
     relaxationStep: 0.32,
-    smoothness: 0.18,
+    maximumTotalTurningAngleChange: 1.25,
     convergenceTolerance: 1e-4,
     maximumRelativeVolumeError: 0.015,
   };
@@ -137,6 +164,15 @@ test('reciprocal section contact materially reduces movable residuals without dr
   assert.ok(result.metrics.packed.cages.every(
     cage => cage.relativeVolumeError <= requestedConfig.maximumRelativeVolumeError,
   ));
+  const packedShape = result.packedCarrier.cages.map(centerlineShape);
+  assert.ok(
+    packedShape.every(shape => shape.maximumTurningAngle <= 0.25),
+    `packed centerlines must not contain section-local hard elbows: ${JSON.stringify(packedShape)}`,
+  );
+  assert.ok(
+    packedShape.every(shape => shape.totalTurningAngle <= 1.25),
+    `packed centerlines must distribute bending instead of accumulating zig-zags: ${JSON.stringify(packedShape)}`,
+  );
   assert.ok(result.iterations > 0 && result.iterations <= requestedConfig.maxIterations);
   assert.deepEqual(
     solveMuscleCompartmentRingCageContact(carrier, source, requestedConfig),

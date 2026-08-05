@@ -18,10 +18,12 @@ const VISUAL_BUNDLE_SCHEMA = 'kaminos.current-k4-ring-cage-contact-visual-bundle
 const VISUAL_ROUTE = 'current-k4-ring-cage-contact-orbitable-v0';
 const CONFIG = Object.freeze({
   convergenceTolerance: 1e-4,
+  curvatureRegularization: 12,
   maxIterations: 24,
+  maximumLocalTurningAngleChange: 0.25,
   maximumRelativeVolumeError: 0.015,
+  maximumTotalTurningAngleChange: 1.25,
   relaxationStep: 0.32,
-  smoothness: 0.18,
 });
 const OWNED_RELATIVE_PATHS = Object.freeze([
   'assay-result.json',
@@ -296,7 +298,7 @@ try {
       ],
       stateLabels: {
         source: 'Source crowded input',
-        proposal: 'Contact-relieved proposal · residual remains',
+        proposal: 'Curvature-bearing proposal · residual remains',
       },
     },
     lastTrustworthyEvidence: {

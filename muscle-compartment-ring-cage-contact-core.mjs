@@ -455,6 +455,7 @@ export function measureMuscleCompartmentRingCageContactState(solverCarrier, sour
         boundaryFaceCount: cage.boundary.faceCount,
         boundaryNodeCount: cage.boundary.boundaryNodeIds.length,
         fixedBoundaryNodeCount: cage.boundary.fixedBoundaryNodeIds.length,
+        centerline: measureCenterlineShape(cage),
         referenceVolume,
         currentVolume,
         relativeVolumeError: Math.abs(currentVolume - referenceVolume) / referenceVolume,
@@ -495,6 +496,30 @@ function sectionRows(cage) {
     if (!row.axisNodeId) throw new Error(`ring cage section ${row.sectionId} lacks axis node`);
   }
   return rows;
+}
+
+function measureCenterlineShape(cage) {
+  const rows = [...sectionRows(cage).values()]
+    .sort((left, right) => left.sectionId.localeCompare(right.sectionId));
+  const axis = rows.map(row => cage.nodeById.get(row.axisNodeId).currentPosition);
+  const turningAngles = [];
+  for (let index = 1; index < axis.length - 1; index += 1) {
+    const incoming = subtract(axis[index], axis[index - 1]);
+    const outgoing = subtract(axis[index + 1], axis[index]);
+    const incomingLength = length(incoming);
+    const outgoingLength = length(outgoing);
+    if (!(incomingLength > EPSILON) || !(outgoingLength > EPSILON)) {
+      throw new Error(`ring cage ${cage.cageId} has a collapsed centerline segment`);
+    }
+    const cosine = dot(incoming, outgoing) / (incomingLength * outgoingLength);
+    turningAngles.push(Math.acos(Math.max(-1, Math.min(1, cosine))));
+  }
+  return {
+    turningAngles,
+    maximumTurningAngle: Math.max(0, ...turningAngles),
+    totalTurningAngle: turningAngles.reduce((sum, value) => sum + value, 0),
+    bendingEnergy: turningAngles.reduce((sum, value) => sum + value * value, 0),
+  };
 }
 
 function closestBoundaryPoint(point, cage) {
@@ -617,7 +642,72 @@ function compartmentSectionCorrections(cages, source, accumulators) {
   }
 }
 
-function sectionContactDeltas(cages, source, smoothness) {
+function solveLinearSystem(matrix, rightHandSide) {
+  const size = matrix.length;
+  const augmented = matrix.map((row, index) => [...row, rightHandSide[index]]);
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivot][column])) {
+        pivot = row;
+      }
+    }
+    if (!(Math.abs(augmented[pivot][column]) > EPSILON)) {
+      throw new Error('ring cage curvature system is singular');
+    }
+    [augmented[column], augmented[pivot]] = [augmented[pivot], augmented[column]];
+    const pivotValue = augmented[column][column];
+    for (let entry = column; entry <= size; entry += 1) {
+      augmented[column][entry] /= pivotValue;
+    }
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue;
+      const factor = augmented[row][column];
+      if (Math.abs(factor) <= EPSILON) continue;
+      for (let entry = column; entry <= size; entry += 1) {
+        augmented[row][entry] -= factor * augmented[column][entry];
+      }
+    }
+  }
+  return augmented.map(row => row[size]);
+}
+
+function curvatureRegularizedSectionDeltas(sections, ordered, raw, regularization) {
+  const size = ordered.length;
+  const matrix = Array.from({ length: size }, (_, row) =>
+    Array.from({ length: size }, (_, column) => row === column ? 1 : 0));
+  for (let index = 1; index < size - 1; index += 1) {
+    const indices = [index - 1, index, index + 1];
+    const coefficients = [1, -2, 1];
+    for (let left = 0; left < indices.length; left += 1) {
+      for (let right = 0; right < indices.length; right += 1) {
+        matrix[indices[left]][indices[right]] +=
+          regularization * coefficients[left] * coefficients[right];
+      }
+    }
+  }
+  const fixedIndices = new Set(ordered
+    .map((sectionId, index) => sections.get(sectionId).fixed ? index : -1)
+    .filter(index => index >= 0));
+  for (const fixedIndex of fixedIndices) {
+    for (let index = 0; index < size; index += 1) {
+      matrix[fixedIndex][index] = 0;
+      matrix[index][fixedIndex] = 0;
+    }
+    matrix[fixedIndex][fixedIndex] = 1;
+  }
+  const coordinates = [0, 1, 2].map(coordinate => {
+    const rightHandSide = ordered.map((sectionId, index) =>
+      fixedIndices.has(index) ? 0 : raw.get(sectionId)[coordinate]);
+    return solveLinearSystem(matrix, rightHandSide);
+  });
+  return new Map(ordered.map((sectionId, index) => [
+    sectionId,
+    coordinates.map(values => values[index]),
+  ]));
+}
+
+function sectionContactDeltas(cages, source, curvatureRegularization) {
   const accumulators = cages.map(() => new Map());
   pairwiseSectionCorrections(cages, accumulators);
   skeletalSectionCorrections(cages, source, accumulators);
@@ -631,16 +721,24 @@ function sectionContactDeltas(cages, source, smoothness) {
         ? [0, 0, 0]
         : scale(accumulated.sum, 1 / accumulated.weight)];
     }));
-    return new Map(ordered.map((sectionId, index) => {
-      if (sections.get(sectionId).fixed) return [sectionId, [0, 0, 0]];
-      const own = raw.get(sectionId);
-      const prior = raw.get(ordered[Math.max(0, index - 1)]);
-      const next = raw.get(ordered[Math.min(ordered.length - 1, index + 1)]);
-      return [sectionId, add(
-        scale(own, 1 - smoothness),
-        scale(add(prior, next), smoothness * 0.5),
-      )];
-    }));
+    return curvatureRegularizedSectionDeltas(
+      sections,
+      ordered,
+      raw,
+      curvatureRegularization,
+    );
+  });
+}
+
+function centerlineShapeWithinBudget(measurement, reference, config) {
+  return measurement.cages.every((cage, cageIndex) => {
+    const referenceAngles = reference.cages[cageIndex].centerline.turningAngles;
+    const candidateAngles = cage.centerline.turningAngles;
+    const changes = candidateAngles.map((angle, index) =>
+      Math.abs(angle - referenceAngles[index]));
+    return Math.max(0, ...changes) <= config.maximumLocalTurningAngleChange &&
+      changes.reduce((sum, value) => sum + value, 0) <=
+        config.maximumTotalTurningAngleChange;
   });
 }
 
@@ -695,10 +793,12 @@ export function solveMuscleCompartmentRingCageContact(
   validateInputs(solverCarrier, source);
   const configKeys = [
     'convergenceTolerance',
+    'curvatureRegularization',
     'maxIterations',
+    'maximumLocalTurningAngleChange',
     'maximumRelativeVolumeError',
+    'maximumTotalTurningAngleChange',
     'relaxationStep',
-    'smoothness',
   ];
   if (!requestedConfig || typeof requestedConfig !== 'object' ||
       Array.isArray(requestedConfig) ||
@@ -708,8 +808,12 @@ export function solveMuscleCompartmentRingCageContact(
   if (!Number.isInteger(requestedConfig.maxIterations) || requestedConfig.maxIterations <= 0 ||
       !Number.isFinite(requestedConfig.relaxationStep) ||
       !(requestedConfig.relaxationStep > 0 && requestedConfig.relaxationStep <= 1) ||
-      !Number.isFinite(requestedConfig.smoothness) ||
-      !(requestedConfig.smoothness >= 0 && requestedConfig.smoothness <= 1) ||
+      !Number.isFinite(requestedConfig.curvatureRegularization) ||
+      !(requestedConfig.curvatureRegularization > 0) ||
+      !Number.isFinite(requestedConfig.maximumLocalTurningAngleChange) ||
+      !(requestedConfig.maximumLocalTurningAngleChange > 0) ||
+      !Number.isFinite(requestedConfig.maximumTotalTurningAngleChange) ||
+      !(requestedConfig.maximumTotalTurningAngleChange > 0) ||
       !Number.isFinite(requestedConfig.convergenceTolerance) ||
       !(requestedConfig.convergenceTolerance > 0) ||
       !Number.isFinite(requestedConfig.maximumRelativeVolumeError) ||
@@ -725,7 +829,11 @@ export function solveMuscleCompartmentRingCageContact(
   let iterations = 0;
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
     const prepared = packedCarrier.cages.map(prepareCage);
-    const deltas = sectionContactDeltas(prepared, source, config.smoothness);
+    const deltas = sectionContactDeltas(
+      prepared,
+      source,
+      config.curvatureRegularization,
+    );
     const maximumRequestedDelta = Math.max(
       0,
       ...deltas.flatMap(rows => [...rows.values()].map(row => length(row))),
@@ -744,6 +852,7 @@ export function solveMuscleCompartmentRingCageContact(
       );
       if (measurement.cages.every(cage => cage.nonPositiveCellCount === 0) &&
           maximumVolumeError <= config.maximumRelativeVolumeError &&
+          centerlineShapeWithinBudget(measurement, initial, config) &&
           measurement.compartment.maximumEscape <= config.convergenceTolerance) {
         acceptedCarrier = candidate;
         acceptedMeasurement = measurement;
