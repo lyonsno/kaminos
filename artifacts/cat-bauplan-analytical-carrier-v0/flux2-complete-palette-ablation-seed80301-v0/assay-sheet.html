@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Complete Cat Palette Ablation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: #111411;
+      color: #e9ede7;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111411; }
+    header { padding: 24px 28px 20px; border-bottom: 1px solid #465048; }
+    h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: 0; }
+    h2 { margin: 0 0 8px; font-size: 18px; color: #f0c96d; letter-spacing: 0; }
+    p { max-width: 1050px; margin: 7px 0; line-height: 1.5; color: #cbd2cb; }
+    .verdict { color: #9dd8b7; font-weight: 700; }
+    .warning { color: #f0c96d; }
+    .assay { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(330px, 0.9fr) minmax(280px, 1fr); border-bottom: 1px solid #465048; }
+    .cell { min-width: 0; padding: 20px; border-right: 1px solid #465048; }
+    .cell:last-child { border-right: 0; }
+    img { display: block; width: 100%; height: auto; background: #202520; border: 1px solid #5a655d; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.45; color: #d7ddd7; }
+    dl { margin: 14px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 12px; }
+    dt { color: #8f9a91; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .observation { margin-top: 14px; padding-top: 12px; border-top: 1px solid #465048; color: #b9dfc8; }
+    footer { padding: 20px 28px 28px; color: #aab3ab; line-height: 1.5; }
+    @media (max-width: 980px) {
+      .assay { grid-template-columns: 1fr; }
+      .cell { border-right: 0; border-bottom: 1px solid #465048; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Complete Cat Palette Ablation, Seed 80301</h1>
+    <p class="verdict">Palette controls inferred anatomical role; uniform white does not independently induce skin completion.</p>
+    <p class="warning">Historical correction: the earlier Flux input omitted long limb bones. The old panel labeled front-three-quarter was not supplied to Flux. These rows use repaired complete geometry from commit a6056702.</p>
+  </header>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Ecorche Role Palette</h2>
+      <img src="../source-preview-r2-complete/ecorche/right-sagittal.png" alt="Complete right sagittal cat ecorche source with gray bones and red muscles">
+      <dl>
+        <dt>Input SHA</dt><dd>43e7f5038c6a3f56f7da4e9741336636dc75ce54c276a58622eab17384b8896f</dd>
+        <dt>Admission</dt><dd>112 surfaces: 55 authored meshes, 57 muscle surfaces</dd>
+        <dt>Recovered</dt><dd>18 source-bound anatomical meshes</dd>
+      </dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</pre>
+      <dl>
+        <dt>Seed</dt><dd>80301</dd>
+        <dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd>
+        <dt>Steps</dt><dd>8</dd>
+        <dt>Guidance</dt><dd>1.0</dd>
+        <dt>Output</dt><dd>512 x 512</dd>
+        <dt>Job</dt><dd>ab52bade93a0</dd>
+        <dt>Route</dt><dd>mflux-generate-flux2-edit</dd>
+      </dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Ecorche Preserved</h2>
+      <img src="ecorche/output.png" alt="Flux output preserving red muscle and gray bone roles">
+      <p class="observation">Flux repairs feet, head, stance, and local cat anatomy while preserving exposed muscle and bone roles. It does not synthesize continuous outer skin.</p>
+    </div>
+  </section>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Uniform White Clay</h2>
+      <img src="../source-preview-r2-complete/white-clay/right-sagittal.png" alt="Identical complete right sagittal cat geometry in uniform white clay">
+      <dl>
+        <dt>Input SHA</dt><dd>3c8ca62cd1c06bc35fed6fdb88f6ae02bd85d9e5afe981bea2514dacc46c3b5e</dd>
+        <dt>Geometry</dt><dd>Identical admitted object set and camera</dd>
+        <dt>Variable</dt><dd>Palette only</dd>
+      </dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</pre>
+      <dl>
+        <dt>Seed</dt><dd>80301</dd>
+        <dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd>
+        <dt>Steps</dt><dd>8</dd>
+        <dt>Guidance</dt><dd>1.0</dd>
+        <dt>Output</dt><dd>512 x 512</dd>
+        <dt>Job</dt><dd>d8453d40bd64</dd>
+        <dt>Route</dt><dd>mflux-generate-flux2-edit</dd>
+      </dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Skeletal Reinterpretation</h2>
+      <img src="white-clay/output.png" alt="Flux output reinterpreting the uniform source as a pale skeletal specimen">
+      <p class="observation">Flux adds ribs and reinterprets muscle-like carriers as bone-like anatomy. It remains externally incomplete rather than synthesizing continuous skin.</p>
+    </div>
+  </section>
+
+  <footer>
+    Claim ceiling: one fixed seed proves a causal difference between these two palettes on this exact complete geometry. It does not establish behavior across seeds, prompts, views, or a genuinely low-frequency analytical outer skin. The next informative assay is exposed ecorche versus analytical skin over the same authored structure, with a neutral prompt-only plate as baseline.
+  </footer>
+</body>
+</html>

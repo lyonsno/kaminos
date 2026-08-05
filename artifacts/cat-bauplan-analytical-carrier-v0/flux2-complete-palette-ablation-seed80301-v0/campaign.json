@@ -1,0 +1,54 @@
+{
+  "schema": "kaminos.flux2-matched-image-ablation.v0",
+  "status": "completed",
+  "assayId": "cat-bauplan-complete-palette-ablation-seed80301-v0",
+  "question": "Does removing red muscle-role color from the same complete ecorche geometry cause Flux to infer a continuous outer skin?",
+  "fixedVariables": {
+    "promptPath": "../flux2-prompt-switch-seed80301-v0/cat.txt",
+    "promptSha256": "9d562d7e44171c0a0479b11fd271a143f9496434e2db08d88a50748f23998f59",
+    "seed": 80301,
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "steps": 8,
+    "guidance": 1.0,
+    "width": 512,
+    "height": 512,
+    "mlxCacheLimitGb": 48,
+    "effectiveRouteBinary": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+  },
+  "sourceCorrection": {
+    "historicalFluxInputOmittedLongLimbBones": true,
+    "historicalDiagnosticFrontThreeQuarterWasSuppliedToFlux": false,
+    "repairedSourceCommit": "a6056702",
+    "repairedAdmissionCount": 112,
+    "recoveredSourceBoundAnatomyCount": 18
+  },
+  "cells": [
+    {
+      "id": "ecorche",
+      "variable": "bone-gray plus muscle-red role palette",
+      "inputPath": "../source-preview-r2-complete/ecorche/right-sagittal.png",
+      "inputSha256": "43e7f5038c6a3f56f7da4e9741336636dc75ce54c276a58622eab17384b8896f",
+      "jobId": "ab52bade93a0",
+      "outputPath": "ecorche/output.png",
+      "outputSha256": "9051d888d77621dba165703398b7a0e06651a1c44e75ab4efe6157b7f3115066",
+      "observation": "Flux preserves exposed muscle and bone roles while repairing local cat anatomy, feet, head, and stance. It does not synthesize a continuous outer skin."
+    },
+    {
+      "id": "white-clay",
+      "variable": "uniform white-clay palette over identical admitted geometry",
+      "inputPath": "../source-preview-r2-complete/white-clay/right-sagittal.png",
+      "inputSha256": "3c8ca62cd1c06bc35fed6fdb88f6ae02bd85d9e5afe981bea2514dacc46c3b5e",
+      "jobId": "d8453d40bd64",
+      "outputPath": "white-clay/output.png",
+      "outputSha256": "1798f9c7ba0231c54a6141453eb132e880d3290be5d196047039ef07c71e10fd",
+      "observation": "Flux reinterprets the uniform source as a coherent pale skeletal specimen, adding ribs and bone-like structure. It does not synthesize a continuous outer skin."
+    }
+  ],
+  "result": {
+    "verdict": "PALETTE_CONTROLS_ANATOMICAL_ROLE_NOT_SKIN_COMPLETION",
+    "meaning": "At seed 80301, chromatic role separation materially governs how Flux assigns anatomical semantics. Removing it does not reduce source literalism into skin; it changes the inferred anatomical category.",
+    "claimCeiling": "One fixed seed establishes a causal difference between these two palettes on this exact complete geometry. It does not establish generality across seeds, prompts, views, or analytical skin representations.",
+    "nextAssay": "Compare this exact exposed ecorche against a genuinely low-frequency analytical outer skin compiled over the same authored structure, then add a prompt-only neutral plate baseline."
+  }
+}
