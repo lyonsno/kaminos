@@ -4,6 +4,7 @@
   "worktree": "/private/tmp/kaminos-mushfinger-shape-bearing-collar-assay-0804",
   "branch": "cc/mushfinger-shape-bearing-collar-assay-0804",
   "implementationCommit": "0ec784520131ce953fe51390f5ecf46158b23f2e",
+  "reviewCorrectionCommit": "7b1b26936f7af23999c7131e72536a65c0c92fce",
   "source": {
     "id": "synthetic-mammalian-elbow-v0",
     "requestedRoute": "analytical-cage",
