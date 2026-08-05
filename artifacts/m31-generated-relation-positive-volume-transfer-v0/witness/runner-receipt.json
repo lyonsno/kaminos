@@ -10,18 +10,18 @@
     "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-transfer-witness.py",
     "--",
     "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json",
-    "/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e"
+    "/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337"
   ],
   "fallbackUsed": false,
   "childExitCode": 0,
   "childSignal": null,
-  "witnessPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/witness.json",
+  "witnessPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/witness.json",
   "witnessStatus": "complete",
   "witnessOutputCount": 4,
   "failurePhase": null,
   "lastTrustworthyEvidence": "Blender exited zero and a complete four-frame witness manifest was parsed",
   "witnessError": null,
-  "stdout": "00:00.584  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/m31-profile-0deg.png'\n00:00.793  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/m31-profile-24deg.png'\n00:00.974  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/m31-three-quarter-0deg.png'\n00:01.158  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/m31-three-quarter-24deg.png'\nBlender 5.1.2 (hash ec6e62d40fa9 built 2026-05-19 01:30:33)\n\nBlender quit\n",
+  "stdout": "00:00.656  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/m31-profile-0deg.png'\n00:00.872  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/m31-profile-24deg.png'\n00:01.078  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/m31-three-quarter-0deg.png'\n00:01.218  render           | Saved: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/m31-three-quarter-24deg.png'\nBlender 5.1.2 (hash ec6e62d40fa9 built 2026-05-19 01:30:33)\n\nBlender quit\n",
   "stderr": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-transfer-witness.py:25: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0\n  value.use_nodes = True\n",
-  "primaryOutput": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e/witness.json"
+  "primaryOutput": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/892809668337/witness.json"
 }

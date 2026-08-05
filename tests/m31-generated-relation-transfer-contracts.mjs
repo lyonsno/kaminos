@@ -109,6 +109,23 @@ const sourceFixture = syntheticSourceFixture();
 const bundle = createM31GeneratedRelationTransfer(sourceFixture);
 
 assert.equal(bundle.status, 'M31_TRANSFER_COMPLETE');
+
+const originalDateNow = Date.now;
+let earlierReplay;
+let laterReplay;
+try {
+  Date.now = () => Date.parse('2026-08-05T20:00:00.000Z');
+  earlierReplay = createM31GeneratedRelationTransfer(sourceFixture);
+  Date.now = () => Date.parse('2026-08-05T21:00:00.000Z');
+  laterReplay = createM31GeneratedRelationTransfer(sourceFixture);
+} finally {
+  Date.now = originalDateNow;
+}
+assert.notEqual(earlierReplay.producerEnvelope.transfer_requested_at,
+  laterReplay.producerEnvelope.transfer_requested_at);
+assert.equal(earlierReplay.producerEnvelope.transfer_hash,
+  laterReplay.producerEnvelope.transfer_hash,
+  'transfer identity must remain stable when only the replay timestamp changes');
 assert.equal(bundle.requestedRoute, ROUTE);
 assert.equal(bundle.effectiveRoute, ROUTE);
 assert.equal(bundle.fallbackUsed, false);

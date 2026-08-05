@@ -676,8 +676,8 @@ function producerEnvelope(sourceFixture, manifest, identityMap, semanticMembersh
   const plus24GeometryHash = semanticHash(geometryRecord(poses[1]));
   const membershipHash = semanticHash(semanticMemberships);
   const transferIdentity = {
+    schema: 'm31-generated-relation-transfer-identity.v1',
     selectionReceiptHash,
-    transferRequestedAt,
     sourceAssetSha256: sourceFixture.source.assetSha256,
     sourceGraphIdentity: sourceFixture.source.graphIdentity,
     requestedRoute: ROUTE,
