@@ -1,0 +1,119 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0",
+  "status": "verified",
+  "bundleIdentity": {
+    "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+    "route": "current-k4-ring-cage-contact-orbitable-v0",
+    "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+    "packedCarrierSha256": "8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701",
+    "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+    "residualLedgerSha256": "6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c",
+    "sha256": "235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d"
+  },
+  "residualLedger": {
+    "path": "residual-ledger.json",
+    "sha256": "6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c"
+  },
+  "witnessRoute": {
+    "requested": "current-k4-ring-cage-contact-orbitable-v0",
+    "effective": "current-k4-ring-cage-contact-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "servedViewer": {
+    "requestedUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html",
+    "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html",
+    "sha256": "4ae6745e5c699241a819332f69a603b960531f81ceb06d7f2558da5e6e1c2211",
+    "expectedSha256": "4ae6745e5c699241a819332f69a603b960531f81ceb06d7f2558da5e6e1c2211",
+    "fallbackUsed": false,
+    "observedVisibleIdentity": {
+      "residualLedgerSha256": "6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c",
+      "routeRequested": "current-k4-ring-cage-contact-orbitable-v0",
+      "routeEffective": "current-k4-ring-cage-contact-orbitable-v0"
+    }
+  },
+  "captures": [
+    {
+      "requestedUrl": "index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before",
+      "sha256": "16b5d7e62ce93d4f1a1375ec9dbe57c17a204326be3479c339bc814a104fddc2",
+      "sizeBytes": 223384,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 58,
+        "idatBytes": 222667
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed",
+      "sha256": "49d7174251b12cfcf7fdaa7bd9502e0781fcf0b73190ce6021d48ea8b2682e97",
+      "sizeBytes": 229154,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 59,
+        "idatBytes": 228425
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before&view=side",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&view=side&state=before",
+      "sha256": "632deed380cc295e51ea255f0e7c0c24db113d1c97724d6b0b4e17d6a1c2c891",
+      "sizeBytes": 229257,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 59,
+        "idatBytes": 228528
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/index.html?bundle=235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=8f62b221306c209d6f65dc88ec2d829a86db5a4dd641f91fda057f8ef5ccc701&ledger=6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&view=side&state=packed",
+      "sha256": "a7a73ed5bcf57fe7d46dfdd23b2e9aa354a19dc2b724559b627ddb606f961588",
+      "sizeBytes": 243473,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 63,
+        "idatBytes": 242696
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ],
+  "failurePhase": null,
+  "receiptPaths": [
+    "source-crowded-capture-report.json",
+    "contact-relieved-capture-report.json",
+    "source-crowded-side-capture-report.json",
+    "contact-relieved-side-capture-report.json"
+  ]
+}

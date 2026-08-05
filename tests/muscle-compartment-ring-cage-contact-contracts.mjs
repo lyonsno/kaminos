@@ -221,6 +221,64 @@ test('long-horizon current K4 contact fails loud on the exact line-search custod
     attempt.nonPositiveCellCount === 0 && attempt.compartmentMaximumEscape === 0));
 });
 
+test('curvature-6 challenger changes only regularization inside the extended-horizon comparison class', async () => {
+  const selected = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'fixtures/current-k4-packing/current-k4-curvature-contact-volume-bound-v0.json',
+  ), 'utf8'));
+  const challenger = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'fixtures/current-k4-packing/current-k4-curvature-6-contact-volume-bound-v0.json',
+  ), 'utf8'));
+  const {
+    curvatureRegularization: selectedRegularization,
+    ...selectedComparisonClass
+  } = selected;
+  const {
+    curvatureRegularization: challengerRegularization,
+    ...challengerComparisonClass
+  } = challenger;
+
+  assert.equal(selectedRegularization, 12);
+  assert.equal(challengerRegularization, 6);
+  assert.deepEqual(challengerComparisonClass, selectedComparisonClass);
+});
+
+test('curvature challenger receipt binds the persistent dominant residual family to the anisotropy redirect', async () => {
+  const comparison = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'artifacts/current-k4-curvature-6-contact-volume-bound-assay-v0/curvature-comparison.json',
+  ), 'utf8'));
+
+  assert.equal(comparison.schema, 'kaminos.current-k4-curvature-challenger-comparison.v0');
+  assert.equal(comparison.status, 'completed');
+  assert.equal(comparison.selected.curvatureRegularization, 12);
+  assert.equal(comparison.challenger.curvatureRegularization, 6);
+  assert.equal(comparison.comparisonClass.onlyRegularizationChanged, true);
+  assert.equal(comparison.comparisonClass.sameSourceInputIdentity, true);
+  assert.equal(comparison.comparisonClass.sameConstructionOrder, true);
+  assert.equal(comparison.residualFamily.sameDominantMovableDirectedPair, true);
+  assert.equal(comparison.residualFamily.selected.dominantMovableDirectedPair.pair,
+    'muscle-12->muscle-45');
+  assert.equal(comparison.residualFamily.challenger.dominantMovableDirectedPair.pair,
+    'muscle-12->muscle-45');
+  assert.equal(comparison.residualFamily.sameDominantFixedDirectedPair, true);
+  assert.equal(comparison.residualFamily.selected.dominantFixedDirectedPair.pair,
+    'muscle-34->muscle-45');
+  assert.equal(comparison.residualFamily.challenger.dominantFixedDirectedPair.pair,
+    'muscle-34->muscle-45');
+  assert.equal(comparison.residualFamily.sameSkeletalContactCount, true);
+  assert.equal(comparison.visual.selected.routeVerificationStatus, 'verified');
+  assert.equal(comparison.visual.challenger.routeVerificationStatus, 'verified');
+  assert.equal(comparison.visual.selected.inspectionStatus,
+    'inspected-volume-bound-pressure-localization');
+  assert.equal(comparison.visual.challenger.inspectionStatus, 'agent-inspected');
+  assert.equal(comparison.decision.classification,
+    'dominant-residual-family-persists-under-curvature-challenger');
+  assert.equal(comparison.decision.nextAssay,
+    'constant-area-cross-section-anisotropy');
+});
+
 test('selected current K4 carrier exposes an exact source-linked residual contact ledger', async () => {
   const { source } = await fixture();
   const carrier = JSON.parse(await readFile(path.join(

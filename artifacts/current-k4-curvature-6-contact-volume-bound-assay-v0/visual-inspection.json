@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-inspection.v0",
+  "status": "agent-inspected",
+  "inspectionMode": "original-resolution-four-view-comparison",
+  "inspectedAt": "2026-08-05",
+  "bundleIdentitySha256": "235651bcb2b7174819589c0dcb37985d90bfd380c3658279b5caa41d1148388d",
+  "residualLedgerSha256": "6dd80373a90cd636fb5c79ccaddae52a4c9b93cc73620cf081c95ea11e55080c",
+  "captureRouteVerificationSha256": "c3fa7b84dec8a4eb57d8c437020b5af03cdfc01f4afc046b9c83ddd310f65b2e",
+  "captures": [
+    {
+      "path": "source-crowded.png",
+      "sha256": "16b5d7e62ce93d4f1a1375ec9dbe57c17a204326be3479c339bc814a104fddc2",
+      "view": "source-three-quarter"
+    },
+    {
+      "path": "contact-relieved.png",
+      "sha256": "49d7174251b12cfcf7fdaa7bd9502e0781fcf0b73190ce6021d48ea8b2682e97",
+      "view": "proposal-three-quarter"
+    },
+    {
+      "path": "source-crowded-side.png",
+      "sha256": "632deed380cc295e51ea255f0e7c0c24db113d1c97724d6b0b4e17d6a1c2c891",
+      "view": "source-side"
+    },
+    {
+      "path": "contact-relieved-side.png",
+      "sha256": "a7a73ed5bcf57fe7d46dfdd23b2e9aa354a19dc2b724559b627ddb606f961588",
+      "view": "proposal-side"
+    }
+  ],
+  "observations": [
+    "Source and proposal labels correctly preserve source-before and packed-proposal semantics; the proposal is the de-crowded state, not an inverted before/after presentation.",
+    "The proposal materially separates the red construction and relieves the central skeletal overlap while retaining all four stable construction colors and both fixed attachment fans.",
+    "Orange movable-pressure marks remain distributed longitudinally across the overlapping yellow and purple bodies in both proposal views rather than collapsing into one endpoint or one isolated section.",
+    "White fixed-pressure marks remain concentrated near the lower shared insertion, matching the fixed muscle-34 to muscle-45 residual cluster in the exact ledger.",
+    "Only two cyan skeletal-pressure marks remain and are visually sparse relative to the initial skeletal crowding.",
+    "The curvature-6 proposal is visibly the same dominant residual family as curvature 12: this declared reduction in regularization does not create visible lateral accommodation between the yellow and purple cross-sections.",
+    "Bundle, source, proposal, ledger, requested route, and effective route identities are visible and legible in every captured frame."
+  ],
+  "visibleDeltaAgainstAcceptedDirection": "The challenger preserves the meaningful de-crowding and skeletal relief already achieved by curvature 12, but it does not materially improve the dominant yellow-purple body-interface appearance. Its value is a narrow negative result: this exact declared increase in centerline freedom does not visibly converge further on a packed anatomical relation.",
+  "claimCeiling": "Agent-inspected provisional current-graph K4 mechanism comparison; no anatomical or operator visual admission."
+}

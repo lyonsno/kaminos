@@ -1,0 +1,9 @@
+{
+  "convergenceTolerance": 0.0001,
+  "curvatureRegularization": 6,
+  "maxIterations": 96,
+  "maximumLocalTurningAngleChange": 0.25,
+  "maximumRelativeVolumeError": 0.015,
+  "maximumTotalTurningAngleChange": 1.25,
+  "relaxationStep": 0.32
+}
