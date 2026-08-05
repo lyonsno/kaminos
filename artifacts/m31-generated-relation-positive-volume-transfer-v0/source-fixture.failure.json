@@ -1,0 +1,19 @@
+{
+  "schema": "kaminos.m31-generated-relation-source-failure.v0",
+  "status": "complete",
+  "requestedRoute": "m31-generated-relation-positive-volume-c-p0-transfer",
+  "effectiveRoute": "m31-generated-relation-positive-volume-c-p0-transfer",
+  "fallbackUsed": false,
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "authenticated M31 selection, ordered source mesh, supports, and hinge serialized",
+  "sourceRequested": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/source-route.json",
+  "sourceDescriptor": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/source-route.json",
+  "primaryOutput": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/2652fe61152f/source-fixture.json",
+  "sourceEffective": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+  "sourceByteLength": 549819,
+  "sourceSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+  "blenderVersion": "5.1.2",
+  "selectedConstructionId": "muscle-31",
+  "surfaceVertexCount": 300,
+  "surfaceTriangleCount": 596
+}

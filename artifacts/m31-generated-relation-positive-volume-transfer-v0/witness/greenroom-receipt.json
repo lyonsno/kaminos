@@ -1,0 +1,40 @@
+{
+  "job_id": "041fbc500e8e",
+  "job_type": "mushfinger_m31_transfer_witness_0805",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/run-blender-m31-transfer-witness.mjs /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json /Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e",
+  "effective_argv": [
+    "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/run-blender-m31-transfer-witness.mjs",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json",
+    "/Users/noahlyons/.local/state/gpu-greenroom/outputs/041fbc500e8e"
+  ],
+  "effective_cwd": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805",
+  "effective_env": null,
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {},
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1785962018.92589,
+  "finished_at": 1785962020.335941,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": null,
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/041fbc500e8e/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/041fbc500e8e/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/041fbc500e8e/stderr.log",
+  "worker": {
+    "source_root": "/private/tmp/gpu-greenroom-molten-cat-command-runner-0805",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 76595,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

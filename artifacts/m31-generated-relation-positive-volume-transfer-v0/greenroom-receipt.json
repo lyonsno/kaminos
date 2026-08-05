@@ -1,0 +1,44 @@
+{
+  "job_id": "2652fe61152f",
+  "job_type": "mushfinger_m31_source_fixture_0805",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/source-route.json",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/2652fe61152f",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-generated-relation-source.py -- /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/source-route.json /Users/noahlyons/.local/state/gpu-greenroom/outputs/2652fe61152f/source-fixture.json",
+  "effective_argv": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "--factory-startup",
+    "--python",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-generated-relation-source.py",
+    "--",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/source-route.json",
+    "/Users/noahlyons/.local/state/gpu-greenroom/outputs/2652fe61152f/source-fixture.json"
+  ],
+  "effective_cwd": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805",
+  "effective_env": null,
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {},
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1785961538.086538,
+  "finished_at": 1785961538.527594,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": null,
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/2652fe61152f/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/2652fe61152f/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/2652fe61152f/stderr.log",
+  "worker": {
+    "source_root": "/private/tmp/gpu-greenroom-molten-cat-command-runner-0805",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 76595,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.m31-transfer-visual-witness.v0",
+  "status": "complete",
+  "requestedTransfer": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json",
+  "effectiveTransfer": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-positive-volume-transfer-v0/transfer.json",
+  "transferHash": "9fab02ca928e7f3fd4f14b0dc4e79e693087db8eee96e35f7c2261c5b6228640",
+  "requestedRoute": "blender-eevee-locked-orthographic",
+  "effectiveRoute": "blender-eevee-locked-orthographic",
+  "fallbackUsed": false,
+  "outputs": [
+    {
+      "view": "profile",
+      "angleDegrees": 0,
+      "path": "m31-profile-0deg.png",
+      "cameraType": "orthographic",
+      "cameraDirection": [
+        -0.9946561455726624,
+        -0.001499078469350934,
+        0.10323206335306168
+      ],
+      "orthographicScale": 16.203798209221496
+    },
+    {
+      "view": "profile",
+      "angleDegrees": 24,
+      "path": "m31-profile-24deg.png",
+      "cameraType": "orthographic",
+      "cameraDirection": [
+        -0.9946561455726624,
+        -0.001499078469350934,
+        0.10323206335306168
+      ],
+      "orthographicScale": 16.203798209221496
+    },
+    {
+      "view": "three-quarter",
+      "angleDegrees": 0,
+      "path": "m31-three-quarter-0deg.png",
+      "cameraType": "orthographic",
+      "cameraDirection": [
+        -0.5576346516609192,
+        -0.4442117214202881,
+        0.7012272477149963
+      ],
+      "orthographicScale": 17.408233529031275
+    },
+    {
+      "view": "three-quarter",
+      "angleDegrees": 24,
+      "path": "m31-three-quarter-24deg.png",
+      "cameraType": "orthographic",
+      "cameraDirection": [
+        -0.5576346516609192,
+        -0.4442117214202881,
+        0.7012272477149963
+      ],
+      "orthographicScale": 17.408233529031275
+    }
+  ],
+  "failurePhase": null,
+  "primaryOutput": "witness.json"
+}
