@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.m31-transfer-visual-witness-runner.v0",
+  "status": "complete",
+  "requestedRoute": "exact-blender-binary-background-python",
+  "effectiveRoute": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "--factory-startup",
+    "--python",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-transfer-witness.py",
+    "--",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/crossover.json",
+    "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness"
+  ],
+  "fallbackUsed": false,
+  "childExitCode": 0,
+  "childSignal": null,
+  "witnessPath": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/witness.json",
+  "witnessStatus": "complete",
+  "witnessOutputCount": 4,
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "Blender exited zero and a complete four-frame witness manifest was parsed",
+  "witnessError": null,
+  "stdout": "00:00.735  render           | Saved: '/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/m31-profile-0deg.png'\n00:00.969  render           | Saved: '/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/m31-profile-35deg.png'\n00:01.180  render           | Saved: '/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/m31-three-quarter-0deg.png'\n00:01.429  render           | Saved: '/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/m31-three-quarter-35deg.png'\nBlender 5.1.2 (hash ec6e62d40fa9 built 2026-05-19 01:30:33)\n\nBlender quit\n",
+  "stderr": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/blender-m31-transfer-witness.py:25: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0\n  value.use_nodes = True\n",
+  "primaryOutput": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness/witness.json"
+}

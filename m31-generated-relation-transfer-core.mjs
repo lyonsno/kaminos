@@ -5,6 +5,8 @@ import { trianglesIntersect } from './analytical-elbow-positive-volume-row-w-cor
 
 export const M31_GENERATED_RELATION_TRANSFER_SCHEMA =
   'kaminos.m31-generated-relation-transfer.v0';
+export const M31_GENERATED_RELATION_CROSSOVER_SCHEMA =
+  'kaminos.m31-generated-relation-crossover.v0';
 export const M31_GENERATED_RELATION_SOURCE_SCHEMA =
   'kaminos.m31-generated-relation-source-fixture.v0';
 
@@ -28,6 +30,9 @@ const COMPONENT_INSTANCE_IDS = {
   insertionHandle: 'instance-750005d7-28af-40e0-adbf-ca455aad50b2',
 };
 const TRANSFER_ANGLES = [0, 24];
+const CROSSOVER_ANGLES = [0, 35];
+const PREDECESSOR_TRANSFER_HASH =
+  '2dbda39c73f1026c04440fd1e3c83b6b22f6d5562d5e1a6172a86e492c47fbac';
 const EPSILON = 1e-9;
 
 function stableValue(value) {
@@ -229,7 +234,7 @@ function selectedSectionIndices(sectionCount) {
   return [...new Set(indices)];
 }
 
-function buildCageManifest(sourceFixture) {
+function buildCageManifest(sourceFixture, poseAngles = TRANSFER_ANGLES) {
   const vertexById = new Map(sourceFixture.vertices.map(vertex => [vertex.id, vertex]));
   const sectionIndices = selectedSectionIndices(sourceFixture.sections.length);
   const profileSides = sourceFixture.profileSideCount;
@@ -367,7 +372,7 @@ function buildCageManifest(sourceFixture) {
       cageSectionIndices: [sectionIndices.length - 2, sectionIndices.length - 1],
     },
   };
-  const targetTransforms = TRANSFER_ANGLES.map(angleDegrees => ({
+  const targetTransforms = poseAngles.map(angleDegrees => ({
     id: `m31:pose:${angleDegrees}`,
     angleDegrees,
     fixedSupport: sourceFixture.identities.fixedSupport,
@@ -768,6 +773,155 @@ function producerEnvelope(sourceFixture, manifest, identityMap, semanticMembersh
   };
 }
 
+function buildTransferState(sourceFixture, poseAngles) {
+  let manifest;
+  try {
+    manifest = buildCageManifest(sourceFixture, poseAngles);
+  } catch (error) {
+    return {
+      failureReceipt: failure(sourceFixture, 'generated-fixture-construction', error.message,
+        'generated-fixture-invalid'),
+    };
+  }
+  const cP0Config = createAnalyticalElbowCP0Input().effectiveConfig;
+  const vertexMap = sourceFixture.vertices.map(vertex => ({
+    sourceVertexId: vertex.id,
+    outputVertexId: `m31:transfer:output:${vertex.id}`,
+  }));
+  const triangleMap = sourceFixture.triangles.map(triangle => ({
+    sourceTriangleId: triangle.id,
+    outputTriangleId: `m31:transfer:output:${triangle.id}`,
+  }));
+  const identityMap = {
+    sourceVertexIds: vertexMap.map(entry => entry.sourceVertexId),
+    outputVertexIds: vertexMap.map(entry => entry.outputVertexId),
+    sourceTriangleIds: triangleMap.map(entry => entry.sourceTriangleId),
+    outputTriangleIds: triangleMap.map(entry => entry.outputTriangleId),
+    vertexMap,
+    triangleMap,
+    total: true,
+    bijective: true,
+  };
+  const semanticMemberships = memberships(sourceFixture, manifest, identityMap);
+  const poses = poseAngles.map(angleDegrees => {
+    const solution = solvePose(manifest, sourceFixture, angleDegrees, cP0Config);
+    const diagnostics = poseDiagnostics(sourceFixture, manifest, solution, angleDegrees);
+    return {
+      id: `m31:transfer:pose:${angleDegrees}`,
+      angleDegrees,
+      requestedRoute: ROUTE,
+      effectiveRoute: ROUTE,
+      fallbackUsed: false,
+      outputVertices: diagnostics.outputPositions.map((position, index) => ({
+        id: identityMap.outputVertexIds[index],
+        sourceVertexId: identityMap.sourceVertexIds[index],
+        position,
+      })),
+      outputTriangles: sourceFixture.triangles.map((triangle, index) => ({
+        id: identityMap.outputTriangleIds[index],
+        sourceTriangleId: triangle.id,
+        vertexIndices: [...triangle.vertexIndices],
+        vertexIds: triangle.vertexIndices.map(vertexIndex =>
+          identityMap.outputVertexIds[vertexIndex]),
+      })),
+      posedCageNodes: solution.posedNodes,
+      iterationHistory: solution.iterationHistory,
+      cellJacobians: diagnostics.cellJacobians,
+      surfaceInversions: diagnostics.surfaceInversions,
+      selfIntersections: diagnostics.selfIntersections,
+      rigidLeakage: diagnostics.rigidLeakage,
+      matchedDistortion: diagnostics.matchedDistortion,
+      hardVetoes: diagnostics.hardVetoes,
+      semanticMemberships: structuredClone(semanticMemberships),
+    };
+  });
+  const allHardVetoesPass = poses.every(pose =>
+    Object.values(pose.hardVetoes).every(veto => veto.pass === true));
+  const coreIdentity = {
+    cP0ArtifactSha256: C_P0_SHA256,
+    requestedConfig: structuredClone(cP0Config),
+    effectiveConfig: structuredClone(cP0Config),
+    configSemanticHash: semanticHash(cP0Config),
+    solver: cP0Config.solver,
+    objective: cP0Config.objective,
+  };
+  return {
+    manifest,
+    cP0Config,
+    identityMap,
+    semanticMemberships,
+    poses,
+    allHardVetoesPass,
+    coreIdentity,
+  };
+}
+
+function crossoverProducerEnvelope(sourceFixture, state) {
+  const geometryRecord = pose => ({
+    outputVertices: pose.outputVertices,
+    outputTriangles: pose.outputTriangles,
+  });
+  const neutralGeometryHash = semanticHash(geometryRecord(state.poses[0]));
+  const plus35GeometryHash = semanticHash(geometryRecord(state.poses[1]));
+  const identity = {
+    schema: 'm31-generated-relation-crossover-identity.v1',
+    predecessorTransferHash: PREDECESSOR_TRANSFER_HASH,
+    sourceAssetSha256: sourceFixture.source.assetSha256,
+    sourceGraphIdentity: sourceFixture.source.graphIdentity,
+    requestedRoute: ROUTE,
+    effectiveRoute: ROUTE,
+    requestedAngleDegrees: 35,
+    effectiveAngleDegrees: 35,
+    cageManifestHash: state.manifest.semanticHash,
+    identityMapHash: semanticHash(state.identityMap),
+    semanticMembershipHash: semanticHash(state.semanticMemberships),
+    neutralGeometryHash,
+    plus35GeometryHash,
+  };
+  const transferHash = semanticHash(identity);
+  const selectionObservedAtMs = Date.parse(sourceFixture.selection.observedAt);
+  return {
+    schema: 'm31_generated_relation_plus35_crossover_producer.v1',
+    transfer_id: `m31-plus35-crossover:${transferHash}`,
+    transfer_hash: transferHash,
+    transfer_requested_at: new Date(Math.max(Date.now(), selectionObservedAtMs + 1))
+      .toISOString(),
+    predecessor_transfer_hash: PREDECESSOR_TRANSFER_HASH,
+    source_fixture_schema: sourceFixture.source.fixtureContractSchema,
+    extracted_source_fixture_schema: sourceFixture.schema,
+    source_asset_sha256: sourceFixture.source.assetSha256,
+    source_graph_identity: sourceFixture.source.graphIdentity,
+    source_graph_file_sha256: sourceFixture.source.graphFileSha256,
+    selected_construction_id: sourceFixture.selection.constructionId,
+    selected_path_instance_id: sourceFixture.componentInstanceIds.path,
+    selected_surface_instance_id: sourceFixture.componentInstanceIds.surface,
+    origin_support_id: sourceFixture.identities.fixedSupport,
+    insertion_support_id: sourceFixture.identities.movingSupport,
+    requested_deformation_route: ROUTE,
+    effective_deformation_route: ROUTE,
+    requested_angle_degrees: 35,
+    effective_angle_degrees: 35,
+    fallback_used: false,
+    fixture_builder_identity: 'm31-generated-relation-transfer-core.mjs:buildCageManifest@v0',
+    deformation_core_identity:
+      'analytical-elbow-positive-volume-c-p0-core.mjs:createAnalyticalElbowCP0Input',
+    deformation_core_commit: C_P0_COMMIT,
+    cage_manifest_hash: state.manifest.semanticHash,
+    embedding_manifest_hash: state.manifest.semanticHashes.embedding,
+    boundary_role_manifest_hash: state.manifest.semanticHashes.boundaryRoles,
+    target_transform_manifest_hash: state.manifest.semanticHashes.targetTransforms,
+    identity_map_hash: semanticHash(state.identityMap),
+    semantic_membership_hash: semanticHash(state.semanticMemberships),
+    neutral_output_geometry_ref: 'crossover.json#/poses/0',
+    neutral_output_geometry_hash: neutralGeometryHash,
+    plus35_output_geometry_ref: 'crossover.json#/poses/1',
+    plus35_output_geometry_hash: plus35GeometryHash,
+    failure_phase: state.allHardVetoesPass ? null : 'final-hard-veto-evaluation',
+    last_trustworthy_evidence:
+      'authenticated source, frozen selection, untuned +35 target, total maps, memberships, and geometry vetoes evaluated',
+  };
+}
+
 export function validateM31GeneratedRelationTransfer(bundle) {
   const invalid = phase => ({
     schema: M31_GENERATED_RELATION_TRANSFER_SCHEMA,
@@ -806,102 +960,42 @@ export function validateM31GeneratedRelationTransfer(bundle) {
   };
 }
 
-export function createM31GeneratedRelationTransfer(sourceFixture) {
+export function createM31GeneratedRelationTransfer(sourceFixture, options = {}) {
+  if (options.crossoverAngleDegrees !== undefined) {
+    if (options.crossoverAngleDegrees !== 35) {
+      throw new Error('only the frozen +35 crossover is admitted');
+    }
+    return createM31GeneratedRelationCrossover(sourceFixture);
+  }
   const sourceFailure = validateSourceFixture(sourceFixture);
   if (sourceFailure) return sourceFailure;
-  let manifest;
-  try {
-    manifest = buildCageManifest(sourceFixture);
-  } catch (error) {
-    return failure(sourceFixture, 'generated-fixture-construction', error.message,
-      'generated-fixture-invalid');
-  }
-  const cP0Config = createAnalyticalElbowCP0Input().effectiveConfig;
-  const vertexMap = sourceFixture.vertices.map(vertex => ({
-    sourceVertexId: vertex.id,
-    outputVertexId: `m31:transfer:output:${vertex.id}`,
-  }));
-  const triangleMap = sourceFixture.triangles.map(triangle => ({
-    sourceTriangleId: triangle.id,
-    outputTriangleId: `m31:transfer:output:${triangle.id}`,
-  }));
-  const identityMap = {
-    sourceVertexIds: vertexMap.map(entry => entry.sourceVertexId),
-    outputVertexIds: vertexMap.map(entry => entry.outputVertexId),
-    sourceTriangleIds: triangleMap.map(entry => entry.sourceTriangleId),
-    outputTriangleIds: triangleMap.map(entry => entry.outputTriangleId),
-    vertexMap,
-    triangleMap,
-    total: true,
-    bijective: true,
-  };
-  const semanticMemberships = memberships(sourceFixture, manifest, identityMap);
-  const poses = TRANSFER_ANGLES.map(angleDegrees => {
-    const solution = solvePose(manifest, sourceFixture, angleDegrees, cP0Config);
-    const diagnostics = poseDiagnostics(sourceFixture, manifest, solution, angleDegrees);
-    return {
-      id: `m31:transfer:pose:${angleDegrees}`,
-      angleDegrees,
-      requestedRoute: ROUTE,
-      effectiveRoute: ROUTE,
-      fallbackUsed: false,
-      outputVertices: diagnostics.outputPositions.map((position, index) => ({
-        id: identityMap.outputVertexIds[index],
-        sourceVertexId: identityMap.sourceVertexIds[index],
-        position,
-      })),
-      outputTriangles: sourceFixture.triangles.map((triangle, index) => ({
-        id: identityMap.outputTriangleIds[index],
-        sourceTriangleId: triangle.id,
-        vertexIndices: [...triangle.vertexIndices],
-        vertexIds: triangle.vertexIndices.map(vertexIndex =>
-          identityMap.outputVertexIds[vertexIndex]),
-      })),
-      posedCageNodes: solution.posedNodes,
-      iterationHistory: solution.iterationHistory,
-      cellJacobians: diagnostics.cellJacobians,
-      surfaceInversions: diagnostics.surfaceInversions,
-      selfIntersections: diagnostics.selfIntersections,
-      rigidLeakage: diagnostics.rigidLeakage,
-      matchedDistortion: diagnostics.matchedDistortion,
-      hardVetoes: diagnostics.hardVetoes,
-      semanticMemberships: structuredClone(semanticMemberships),
-    };
-  });
-  const allHardVetoesPass = poses.every(pose =>
-    Object.values(pose.hardVetoes).every(veto => veto.pass === true));
-  const consumerEnvelope = producerEnvelope(sourceFixture, manifest, identityMap,
-    semanticMemberships, poses, allHardVetoesPass);
+  const state = buildTransferState(sourceFixture, TRANSFER_ANGLES);
+  if (state.failureReceipt) return state.failureReceipt;
+  const consumerEnvelope = producerEnvelope(sourceFixture, state.manifest, state.identityMap,
+    state.semanticMemberships, state.poses, state.allHardVetoesPass);
   const bundle = {
     schema: M31_GENERATED_RELATION_TRANSFER_SCHEMA,
     id: 'm31-generated-relation-positive-volume-c-p0-transfer-v0',
-    status: allHardVetoesPass ? 'M31_TRANSFER_COMPLETE' : 'M31_TRANSFER_HARD_VETO',
+    status: state.allHardVetoesPass ? 'M31_TRANSFER_COMPLETE' : 'M31_TRANSFER_HARD_VETO',
     requestedRoute: ROUTE,
     effectiveRoute: ROUTE,
     fallbackUsed: false,
-    failurePhase: allHardVetoesPass ? null : 'final-hard-veto-evaluation',
+    failurePhase: state.allHardVetoesPass ? null : 'final-hard-veto-evaluation',
     lastTrustworthyEvidence:
       'source identity, frozen selection, cage, embedding, map, memberships, poses, and hard vetoes evaluated',
     source: structuredClone(sourceFixture.source),
     selection: structuredClone(sourceFixture.selection),
     identities: structuredClone(sourceFixture.identities),
-    coreIdentity: {
-      cP0ArtifactSha256: C_P0_SHA256,
-      requestedConfig: structuredClone(cP0Config),
-      effectiveConfig: structuredClone(cP0Config),
-      configSemanticHash: semanticHash(cP0Config),
-      solver: cP0Config.solver,
-      objective: cP0Config.objective,
-    },
-    manifest,
-    identityMap,
-    semanticMemberships,
-    poses,
+    coreIdentity: state.coreIdentity,
+    manifest: state.manifest,
+    identityMap: state.identityMap,
+    semanticMemberships: state.semanticMemberships,
+    poses: state.poses,
     producerEnvelope: consumerEnvelope,
-    primaryOutput: allHardVetoesPass
+    primaryOutput: state.allHardVetoesPass
       ? 'm31-generated-relation-positive-volume-c-p0-transfer-v0'
       : null,
-    error: allHardVetoesPass ? null : { code: 'm31-transfer-hard-veto' },
+    error: state.allHardVetoesPass ? null : { code: 'm31-transfer-hard-veto' },
     claimCeiling:
       'experimental shape retention and identity-preserving semantic carry-through on one preselected relation',
   };
@@ -911,4 +1005,57 @@ export function createM31GeneratedRelationTransfer(sourceFixture) {
       'post-build transfer validation rejected the bundle', 'transfer-validation-failed');
   }
   return bundle;
+}
+
+export function createM31GeneratedRelationCrossover(sourceFixture) {
+  const sourceFailure = validateSourceFixture(sourceFixture);
+  if (sourceFailure) return sourceFailure;
+  const state = buildTransferState(sourceFixture, CROSSOVER_ANGLES);
+  if (state.failureReceipt) return state.failureReceipt;
+  const posed = state.poses[1];
+  const cP0Q95 = posed.matchedDistortion.q95AbsoluteLogEdgeStrain;
+  const scalarQ95 = posed.matchedDistortion.scalarControlQ95AbsoluteLogEdgeStrain;
+  const numericalClassification = !state.allHardVetoesPass
+    ? 'EARLIEST_TRANSFER_RANGE_FAILURE'
+    : cP0Q95 < scalarQ95
+      ? 'ANGLE_DEPENDENT_CROSSOVER'
+      : 'GEOMETRY_SPECIFIC_SYNTHETIC_ADVANTAGE';
+  const consumerEnvelope = crossoverProducerEnvelope(sourceFixture, state);
+  return {
+    schema: M31_GENERATED_RELATION_CROSSOVER_SCHEMA,
+    id: 'm31-generated-relation-positive-volume-c-p0-plus35-crossover-v0',
+    status: state.allHardVetoesPass ? 'M31_TRANSFER_COMPLETE' : 'M31_TRANSFER_HARD_VETO',
+    requestedRoute: ROUTE,
+    effectiveRoute: ROUTE,
+    fallbackUsed: false,
+    failurePhase: state.allHardVetoesPass ? null : 'final-hard-veto-evaluation',
+    lastTrustworthyEvidence:
+      'authenticated source, frozen untuned +35 cell, map, memberships, numerical comparison, and hard vetoes evaluated',
+    predecessorTransferHash: PREDECESSOR_TRANSFER_HASH,
+    source: structuredClone(sourceFixture.source),
+    selection: structuredClone(sourceFixture.selection),
+    identities: structuredClone(sourceFixture.identities),
+    coreIdentity: state.coreIdentity,
+    manifest: state.manifest,
+    identityMap: state.identityMap,
+    semanticMemberships: state.semanticMemberships,
+    poses: state.poses,
+    producerEnvelope: consumerEnvelope,
+    numericalClassification,
+    finalClassification: null,
+    classificationPredicate: {
+      requestedAngleDegrees: 35,
+      effectiveAngleDegrees: 35,
+      allHardVetoesPass: state.allHardVetoesPass,
+      cP0Q95AbsoluteLogEdgeStrain: cP0Q95,
+      scalarControlQ95AbsoluteLogEdgeStrain: scalarQ95,
+      visibleRetentionPass: null,
+    },
+    primaryOutput: state.allHardVetoesPass
+      ? 'm31-generated-relation-positive-volume-c-p0-plus35-crossover-v0'
+      : null,
+    error: state.allHardVetoesPass ? null : { code: 'm31-plus35-crossover-hard-veto' },
+    claimCeiling:
+      'one untuned M31 +35 crossover cell under the accepted experimental geometric-transfer contract',
+  };
 }

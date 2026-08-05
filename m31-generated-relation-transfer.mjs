@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { createM31GeneratedRelationTransfer } from './m31-generated-relation-transfer-core.mjs';
 
 function parseArguments(argv) {
-  const options = { sourceFixture: null, output: null };
+  const options = { sourceFixture: null, output: null, crossoverAngleDegrees: null };
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--source-fixture') {
       options.sourceFixture = argv[++index];
@@ -15,13 +15,21 @@ function parseArguments(argv) {
     } else if (argv[index] === '--output') {
       options.output = argv[++index];
       if (!options.output) throw new Error('--output requires a path');
+    } else if (argv[index] === '--crossover-angle') {
+      const angle = Number(argv[++index]);
+      if (angle !== 35) throw new Error('only --crossover-angle 35 is admitted');
+      options.crossoverAngleDegrees = angle;
     } else {
       throw new Error(`unknown transfer argument ${argv[index]}`);
     }
   }
   if (!options.sourceFixture) throw new Error('--source-fixture requires a path');
   if (!options.output) throw new Error('--output requires a path');
-  return { sourceFixture: resolve(options.sourceFixture), output: resolve(options.output) };
+  return {
+    sourceFixture: resolve(options.sourceFixture),
+    output: resolve(options.output),
+    crossoverAngleDegrees: options.crossoverAngleDegrees,
+  };
 }
 
 async function writeJsonAtomically(path, value) {
@@ -51,7 +59,10 @@ export async function runM31GeneratedRelationTransferCli(argv) {
     await writeJsonAtomically(options.output, receipt);
     return receipt;
   }
-  const receipt = createM31GeneratedRelationTransfer(sourceFixture);
+  const receipt = createM31GeneratedRelationTransfer(sourceFixture,
+    options.crossoverAngleDegrees === null
+      ? {}
+      : { crossoverAngleDegrees: options.crossoverAngleDegrees });
   await writeJsonAtomically(options.output, receipt);
   return receipt;
 }

@@ -1,0 +1,21 @@
+{
+  "job_id": "0450010d03d8",
+  "job_type": "mushfinger_m31_transfer_witness_0805",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/crossover.json",
+  "output_dir": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness",
+  "effective_route": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/tools/run-blender-m31-transfer-witness.mjs /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/crossover.json /private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/witness",
+  "effective_cwd": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805",
+  "effective_env": null,
+  "effective_defaults": {},
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1785965081.9560041,
+  "finished_at": 1785965083.627455,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

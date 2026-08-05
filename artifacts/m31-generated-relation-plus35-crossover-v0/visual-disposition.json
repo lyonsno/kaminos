@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos.m31-generated-relation-crossover-visual-disposition.v0",
+  "status": "complete",
+  "transferHash": "6166ca7911d5dc01aab097f2bd9c0ba6abb5cc10253482212b30ed0371da0feb",
+  "predecessorTransferHash": "2dbda39c73f1026c04440fd1e3c83b6b22f6d5562d5e1a6172a86e492c47fbac",
+  "greenroomJobId": "0450010d03d8",
+  "requestedRoute": "mushfinger_m31_transfer_witness_0805",
+  "effectiveRoute": "exact-blender-binary-background-python",
+  "fallbackUsed": false,
+  "witnessManifestSha256": "97982f77c59f3bffa8ec9cfdd46f5a3712e27c2bc24782db006d2bb22cd6ef83",
+  "runnerReceiptSha256": "4ed78b29b2088bd8004086f40e44bcaeee36c0f918c0d2bcdbe4cdd06a696ca2",
+  "inspectedOutputs": [
+    {
+      "path": "witness/m31-profile-0deg.png",
+      "sha256": "5e6c2be5c33182a1a75aa7512a85515ddffb873ac3470e8cd3c55f1b910ee289"
+    },
+    {
+      "path": "witness/m31-profile-35deg.png",
+      "sha256": "ee87d85a73acd4bc53c4a072bab7a1ecf97ce35dd06a8cbc8fcba6abe51fb8cc"
+    },
+    {
+      "path": "witness/m31-three-quarter-0deg.png",
+      "sha256": "aa75c10ee6a387e5dd6c1d2dda5d1eb55e833dd21b11a3bb6ea8a940812f8993"
+    },
+    {
+      "path": "witness/m31-three-quarter-35deg.png",
+      "sha256": "79dfbccc0a31c1dc8055009e06dcaed98eca85b38a96e271d79a0b71ce851858"
+    }
+  ],
+  "visibleRetentionPass": true,
+  "visibleObservations": [
+    "one connected belly remains visible in both locked views",
+    "origin and insertion attachment caps remain present and connected",
+    "support transitions remain continuous at +35 degrees",
+    "no visible tear, detached segment, collapse, or inverted patch appears"
+  ],
+  "numericalClassification": "GEOMETRY_SPECIFIC_SYNTHETIC_ADVANTAGE",
+  "finalClassification": "GEOMETRY_SPECIFIC_SYNTHETIC_ADVANTAGE",
+  "claimCeiling": "one untuned M31 +35 crossover cell under the accepted experimental geometric-transfer contract"
+}

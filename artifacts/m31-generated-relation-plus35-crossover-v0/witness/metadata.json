@@ -1,0 +1,19 @@
+{
+  "name": "crossover",
+  "job_type": "mushfinger_m31_transfer_witness_0805",
+  "job_id": "0450010d03d8",
+  "input_path": "/private/tmp/kaminos-mushfinger-golden-generated-transfer-0805/artifacts/m31-generated-relation-plus35-crossover-v0/crossover.json",
+  "input_name": "crossover.json",
+  "params": {},
+  "output_files": [
+    "m31-profile-0deg.png",
+    "m31-profile-35deg.png",
+    "m31-three-quarter-0deg.png",
+    "m31-three-quarter-35deg.png",
+    "runner-receipt.json",
+    "witness.failure.json",
+    "witness.json"
+  ],
+  "created_at": 1785965083.627455,
+  "duration_s": 1.7
+}
