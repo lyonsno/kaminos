@@ -1,0 +1,275 @@
+{
+  "schema": "kaminos.lirm-metaball-contour-embellishment-greenroom-jobs.v0",
+  "jobs": [
+    {
+      "cellId": "restrained-completion-seed-80411",
+      "conditionId": "restrained-completion",
+      "seed": 80411,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/restrained-completion.txt",
+      "promptSha256": "sha256:01d68583094846e5972f1fd4a9c9af2b6ab3b2b75551b989a654e616d4a94121",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "02cfdb870ab9",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/restrained-completion/seed-80411"
+    },
+    {
+      "cellId": "restrained-completion-seed-80412",
+      "conditionId": "restrained-completion",
+      "seed": 80412,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/restrained-completion.txt",
+      "promptSha256": "sha256:01d68583094846e5972f1fd4a9c9af2b6ab3b2b75551b989a654e616d4a94121",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "0420bce85617",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/restrained-completion/seed-80412"
+    },
+    {
+      "cellId": "restrained-completion-seed-80413",
+      "conditionId": "restrained-completion",
+      "seed": 80413,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/restrained-completion.txt",
+      "promptSha256": "sha256:01d68583094846e5972f1fd4a9c9af2b6ab3b2b75551b989a654e616d4a94121",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "f5b8e4423f6e",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/restrained-completion/seed-80413"
+    },
+    {
+      "cellId": "organismal-elaboration-seed-80411",
+      "conditionId": "organismal-elaboration",
+      "seed": 80411,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/organismal-elaboration.txt",
+      "promptSha256": "sha256:500ad8e9bd9abc8497d9ae1adfcce0036a83dc1dca5923cd32731328ea67c66d",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "b2a04bb66c3d",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/organismal-elaboration/seed-80411"
+    },
+    {
+      "cellId": "organismal-elaboration-seed-80412",
+      "conditionId": "organismal-elaboration",
+      "seed": 80412,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/organismal-elaboration.txt",
+      "promptSha256": "sha256:500ad8e9bd9abc8497d9ae1adfcce0036a83dc1dca5923cd32731328ea67c66d",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "827b48274b62",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/organismal-elaboration/seed-80412"
+    },
+    {
+      "cellId": "organismal-elaboration-seed-80413",
+      "conditionId": "organismal-elaboration",
+      "seed": 80413,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/organismal-elaboration.txt",
+      "promptSha256": "sha256:500ad8e9bd9abc8497d9ae1adfcce0036a83dc1dca5923cd32731328ea67c66d",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "4f6a33e7794a",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/organismal-elaboration/seed-80413"
+    },
+    {
+      "cellId": "maximum-contour-bound-invention-seed-80411",
+      "conditionId": "maximum-contour-bound-invention",
+      "seed": 80411,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/maximum-contour-bound-invention.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "1abc9adc920b",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/maximum-contour-bound-invention/seed-80411"
+    },
+    {
+      "cellId": "maximum-contour-bound-invention-seed-80412",
+      "conditionId": "maximum-contour-bound-invention",
+      "seed": 80412,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/maximum-contour-bound-invention.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "858d1480a951",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/maximum-contour-bound-invention/seed-80412"
+    },
+    {
+      "cellId": "maximum-contour-bound-invention-seed-80413",
+      "conditionId": "maximum-contour-bound-invention",
+      "seed": 80413,
+      "references": [
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/side/side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-target-first-multiview-v0/views/target-three-quarter/target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/prompts/maximum-contour-bound-invention.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "bf64eab82b3d",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-contour-embellishment-v0/generated/maximum-contour-bound-invention/seed-80413"
+    }
+  ]
+}

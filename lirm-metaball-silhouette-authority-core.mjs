@@ -174,6 +174,33 @@ const MULTIVIEW_TOPOLOGY_CONDITIONS = Object.freeze([
   Object.freeze({ id: 'clay-normal-target', referenceKinds: Object.freeze(['clay', 'depth', 'normal']) }),
 ]);
 
+const CONTOUR_EMBELLISHMENT_CONDITIONS = Object.freeze([
+  Object.freeze({
+    id: 'restrained-completion',
+    prompt: [
+      'Every supplied reference image shows the same authored organism from a different camera, with references 1 and 3 repeating the target view.',
+      'Preserve the target camera, outer silhouette, body proportions, support count and placement, and major mass distribution.',
+      'Complete one healthy, aesthetically pleasing living quadruped using coherent skin, restrained material variation, gentle facial cues, and smooth anatomical transitions contained within the authored outline.',
+    ].join(' '),
+  }),
+  Object.freeze({
+    id: 'organismal-elaboration',
+    prompt: [
+      'Every supplied reference image shows the same authored organism from a different camera, with references 1 and 3 repeating the target view.',
+      'Preserve the target camera, outer silhouette, body proportions, support count and placement, and major mass distribution.',
+      'Complete one healthy, aesthetically pleasing living quadruped with legible joints and attachment transitions, a coherent friendly face, weight-bearing support anatomy, regional skin or fur structure, and material differentiation contained within the authored outline.',
+    ].join(' '),
+  }),
+  Object.freeze({
+    id: 'maximum-contour-bound-invention',
+    prompt: [
+      'Every supplied reference image shows the same authored organism from a different camera, with references 1 and 3 repeating the target view.',
+      'Preserve the target camera, outer silhouette, body proportions, support count and placement, and major mass distribution.',
+      'Complete one healthy, aesthetically pleasing living quadruped with rich species-specific anatomy, an expressive friendly face, articulated support transitions, strongly resolved skin or fur and materials, and abundant coherent regional detail contained within the authored outline.',
+    ].join(' '),
+  }),
+]);
+
 function createReferenceCardinalityPrompt(condition) {
   let authority;
   if (condition.referenceViewIds.length === 1) {
@@ -418,6 +445,33 @@ export function createMetaballMultiviewTopologyTranche() {
     claimCeiling: [
       'Experimental evidence for target-channel modality effects under one fixed target/side/target view topology.',
       'No general modality ranking, exact target projection, multiview geometric consistency, or reconstructed-volume claim.',
+    ].join(' '),
+  };
+}
+
+export function createMetaballContourEmbellishmentTranche() {
+  return {
+    schema: 'kaminos.lirm-metaball-contour-embellishment.v0',
+    status: 'source-contract-frozen',
+    conditions: CONTOUR_EMBELLISHMENT_CONDITIONS.map(condition => ({
+      ...condition,
+      referenceKinds: ['depth', 'depth', 'depth'],
+      referenceViewIds: ['target-three-quarter', 'side', 'target-three-quarter'],
+      authoritativeReferenceIndices: [1, 3],
+      requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+    })),
+    fixedGenerator: {
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seeds: [80411, 80412, 80413],
+    },
+    claimCeiling: [
+      'Experimental evidence for prompt-conditioned elaboration under one fixed all-depth target/side/target Bowplan carrier.',
+      'No exact contour preservation, directional anatomy, multiview geometric consistency, reconstructed-volume, or production-admission claim.',
     ].join(' '),
   };
 }
@@ -714,6 +768,85 @@ export async function writeMetaballMultiviewTopologySources({
     status: 'sources-complete',
     sourceArtifact: relative(process.cwd(), sourceArtifactRoot),
     sourceSchema: sourceManifest.schema,
+    conditions,
+    fixedGenerator: tranche.fixedGenerator,
+    claimCeiling: tranche.claimCeiling,
+  };
+  const manifestPath = join(outDir, 'manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
+}
+
+export async function writeMetaballContourEmbellishmentSources({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-contour-embellishment-v0'),
+  sourceArtifactRoot = join(
+    process.cwd(),
+    'artifacts',
+    'lirm-metaball-target-first-multiview-v0',
+  ),
+} = {}) {
+  const tranche = createMetaballContourEmbellishmentTranche();
+  const sourceManifest = JSON.parse(await readFile(join(sourceArtifactRoot, 'manifest.json'), 'utf8'));
+  const sourceJobs = JSON.parse(await readFile(join(sourceArtifactRoot, 'greenroom-jobs.json'), 'utf8'));
+  const viewsById = new Map(sourceManifest.views.map(view => [view.id, view]));
+  const baselineJob = sourceJobs.jobs.find(job => job.conditionId === 'side-middle');
+  const baselineCondition = sourceManifest.conditions.find(condition => condition.id === 'side-middle');
+  if (!baselineJob?.jobId) throw new Error('missing reusable all-depth side-middle baseline job');
+  if (!baselineCondition?.prompt || !baselineCondition?.promptSha256) {
+    throw new Error('missing reusable all-depth side-middle baseline prompt');
+  }
+
+  await mkdir(outDir, { recursive: true });
+  const promptDir = join(outDir, 'prompts');
+  await mkdir(promptDir, { recursive: true });
+
+  const conditions = [];
+  for (const condition of tranche.conditions) {
+    const promptPath = join(promptDir, `${condition.id}.txt`);
+    await writeFile(promptPath, `${condition.prompt}\n`);
+    const promptIdentity = await sha256(promptPath);
+    const references = condition.referenceViewIds.map(viewId => {
+      const source = viewsById.get(viewId)?.sourceImages?.depth;
+      if (!source?.relativePath || !source?.sha256) {
+        throw new Error(`missing depth source for view ${viewId}`);
+      }
+      return {
+        viewId,
+        kind: 'depth',
+        path: relative(process.cwd(), join(sourceArtifactRoot, source.relativePath)),
+        sha256: source.sha256,
+      };
+    });
+    conditions.push({
+      ...condition,
+      references,
+      promptPath: relative(outDir, promptPath),
+      promptSha256: promptIdentity.sha256,
+    });
+  }
+
+  const manifest = {
+    schema: tranche.schema,
+    status: 'sources-complete',
+    sourceArtifact: relative(process.cwd(), sourceArtifactRoot),
+    sourceSchema: sourceManifest.schema,
+    baseline: {
+      label: 'prior-all-depth-furred-organismal-completion',
+      reuseJobId: baselineJob.jobId,
+      seed: 80401,
+      references: conditions[0].references,
+      prompt: baselineCondition.prompt,
+      promptSha256: baselineCondition.promptSha256,
+      outputPath: relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'generated', 'side-middle', 'seed-80401', 'output.png'),
+      ),
+      receiptPath: relative(
+        process.cwd(),
+        join(sourceArtifactRoot, 'receipts', 'side-middle.json'),
+      ),
+      fixedGenerator: sourceManifest.fixedGenerator,
+    },
     conditions,
     fixedGenerator: tranche.fixedGenerator,
     claimCeiling: tranche.claimCeiling,
