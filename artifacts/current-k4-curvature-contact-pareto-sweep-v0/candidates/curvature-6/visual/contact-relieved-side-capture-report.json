@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side",
+    "outputPath": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/contact-relieved-side.png",
+    "reportPath": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/contact-relieved-side-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 56678,
+    "processGroupId": 56678,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 56678,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3935,
+    "retainedBytes": 3935,
+    "truncated": false,
+    "tail": "[0805/151447.675036:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0805/151447.756910:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/151448.287728:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side (0)\n[0805/151448.287801:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side (0)\n[0805/151448.289642:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/151448.310994:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side (0)\n[0805/151448.313047:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0805/151448.332818:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side (0)\n[0805/151448.333955:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0805/151448.376852:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side (0)\n216239 bytes written to file repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/contact-relieved-side.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/contact-relieved-side.png",
+    "sizeBytes": 216239,
+    "sha256": "52efcbdd9da57ba494dd1466d5a85e0800744b7f162b55fe0eec075e24da7b38",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 56,
+      "idatBytes": 215546
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/contact-relieved-side.png",
+      "sizeBytes": 216239,
+      "sha256": "52efcbdd9da57ba494dd1466d5a85e0800744b7f162b55fe0eec075e24da7b38",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 56,
+        "idatBytes": 215546
+      }
+    }
+  }
+}

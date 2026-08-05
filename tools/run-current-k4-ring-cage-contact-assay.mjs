@@ -16,15 +16,6 @@ const RUN_REPORT_SCHEMA = 'kaminos.current-k4-ring-cage-contact-assay-run-report
 const ASSAY_RESULT_SCHEMA = 'kaminos.current-k4-ring-cage-contact-assay-result.v0';
 const VISUAL_BUNDLE_SCHEMA = 'kaminos.current-k4-ring-cage-contact-visual-bundle.v0';
 const VISUAL_ROUTE = 'current-k4-ring-cage-contact-orbitable-v0';
-const CONFIG = Object.freeze({
-  convergenceTolerance: 1e-4,
-  curvatureRegularization: 12,
-  maxIterations: 24,
-  maximumLocalTurningAngleChange: 0.25,
-  maximumRelativeVolumeError: 0.015,
-  maximumTotalTurningAngleChange: 1.25,
-  relaxationStep: 0.32,
-});
 const OWNED_RELATIVE_PATHS = Object.freeze([
   'assay-result.json',
   'source-carrier.json',
@@ -44,7 +35,7 @@ const OWNED_RELATIVE_PATHS = Object.freeze([
 ]);
 
 function parseArguments(argv) {
-  const supported = new Set(['--solver-carrier', '--source', '--output']);
+  const supported = new Set(['--solver-carrier', '--source', '--config', '--output']);
   const parsed = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -54,12 +45,13 @@ function parseArguments(argv) {
     parsed[argument.slice(2)] = value;
     index += 1;
   }
-  for (const key of ['solver-carrier', 'source', 'output']) {
+  for (const key of ['solver-carrier', 'source', 'config', 'output']) {
     if (!parsed[key]) throw new Error(`--${key} is required`);
   }
   return {
     requestedSolverCarrierPath: parsed['solver-carrier'],
     requestedSourcePath: parsed.source,
+    requestedConfigPath: parsed.config,
     outputDirectory: path.resolve(parsed.output),
   };
 }
@@ -144,6 +136,7 @@ async function assertInputsDoNotAliasOutputs(args) {
   const inputs = [
     await realpath(path.resolve(args.requestedSolverCarrierPath)),
     await realpath(path.resolve(args.requestedSourcePath)),
+    await realpath(path.resolve(args.requestedConfigPath)),
   ];
   for (const relative of [...OWNED_RELATIVE_PATHS, 'run-report.json']) {
     const target = path.join(outputDirectory, relative);
@@ -166,8 +159,10 @@ let args;
 let reportPath = null;
 let effectiveSolverCarrierPath = null;
 let effectiveSourcePath = null;
+let effectiveConfigPath = null;
 let solverCarrierFileSha256 = null;
 let sourceFileSha256 = null;
+let configFileSha256 = null;
 
 try {
   args = parseArguments(rawArguments);
@@ -181,17 +176,25 @@ try {
   phase = 'read-inputs';
   effectiveSolverCarrierPath = await realpath(path.resolve(args.requestedSolverCarrierPath));
   effectiveSourcePath = await realpath(path.resolve(args.requestedSourcePath));
-  const [solverCarrierBytes, sourceBytes] = await Promise.all([
+  effectiveConfigPath = await realpath(path.resolve(args.requestedConfigPath));
+  const [solverCarrierBytes, sourceBytes, configBytes] = await Promise.all([
     readFile(effectiveSolverCarrierPath),
     readFile(effectiveSourcePath),
+    readFile(effectiveConfigPath),
   ]);
   solverCarrierFileSha256 = sha256(solverCarrierBytes);
   sourceFileSha256 = sha256(sourceBytes);
+  configFileSha256 = sha256(configBytes);
   const solverCarrier = JSON.parse(solverCarrierBytes);
   const source = JSON.parse(sourceBytes);
+  const requestedConfig = JSON.parse(configBytes);
 
   phase = 'solve-contact';
-  const result = solveMuscleCompartmentRingCageContact(solverCarrier, source, CONFIG);
+  const result = solveMuscleCompartmentRingCageContact(
+    solverCarrier,
+    source,
+    requestedConfig,
+  );
   if (result.status !== 'residual-constraint') {
     throw new Error(`exact K4 assay requires an explicit residual proposal, got ${result.status}`);
   }
@@ -232,6 +235,11 @@ try {
         effectivePath: receiptPath(effectiveSourcePath),
         fileSha256: sourceFileSha256,
         inputSha256: source.input.effective.sha256,
+      },
+      config: {
+        requestedPath: args.requestedConfigPath,
+        effectivePath: receiptPath(effectiveConfigPath),
+        fileSha256: configFileSha256,
       },
     },
     config: result.config,
@@ -279,6 +287,9 @@ try {
     effectiveSourcePath: receiptPath(effectiveSourcePath),
     sourceFileSha256,
     sourceInputSha256: source.input.effective.sha256,
+    requestedConfigPath: args.requestedConfigPath,
+    effectiveConfigPath: receiptPath(effectiveConfigPath),
+    configFileSha256,
     config: result.config,
     iterations: result.iterations,
     fixedNodeMaximumDrift: result.fixedNodeMaximumDrift,
@@ -338,14 +349,18 @@ try {
       requestedSourcePath: args?.requestedSourcePath || null,
       effectiveSourcePath: effectiveSourcePath ? receiptPath(effectiveSourcePath) : null,
       sourceFileSha256,
+      requestedConfigPath: args?.requestedConfigPath || null,
+      effectiveConfigPath: effectiveConfigPath ? receiptPath(effectiveConfigPath) : null,
+      configFileSha256,
       outputs: null,
       visual: null,
       lastTrustworthyEvidence: {
-        phase: solverCarrierFileSha256 && sourceFileSha256
+        phase: solverCarrierFileSha256 && sourceFileSha256 && configFileSha256
           ? 'inputs-read-and-hashed'
           : 'raw-arguments-captured',
         solverCarrierFileSha256,
         sourceFileSha256,
+        configFileSha256,
       },
     }));
   }

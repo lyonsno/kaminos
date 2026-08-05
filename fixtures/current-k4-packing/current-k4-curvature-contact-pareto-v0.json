@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-pareto-matrix.v0",
+  "candidates": [
+    {
+      "id": "curvature-1p5",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 1.5,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    },
+    {
+      "id": "curvature-3",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 3,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    },
+    {
+      "id": "curvature-6",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 6,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    },
+    {
+      "id": "curvature-12",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 12,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    },
+    {
+      "id": "curvature-24",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 24,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    },
+    {
+      "id": "curvature-48",
+      "config": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 48,
+        "maxIterations": 24,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      }
+    }
+  ]
+}

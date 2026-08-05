@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet.html",
+    "outputPath": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet.png",
+    "reportPath": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet-capture-report.json",
+    "viewport": {
+      "width": 2100,
+      "height": 940
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 62260,
+    "processGroupId": 62260,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 62260,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 162,
+    "retainedBytes": 162,
+    "truncated": false,
+    "tail": "423940 bytes written to file repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet.png",
+    "sizeBytes": 423940,
+    "sha256": "7cb0aa5e8f7e294d21fdfbf12e8e3370fd47c0d6fbad16301b3b1a7b33238f81",
+    "png": {
+      "width": 2100,
+      "height": 940,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 107,
+      "idatBytes": 422635
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/pareto-contact-sheet.png",
+      "sizeBytes": 423940,
+      "sha256": "7cb0aa5e8f7e294d21fdfbf12e8e3370fd47c0d6fbad16301b3b1a7b33238f81",
+      "png": {
+        "width": 2100,
+        "height": 940,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 107,
+        "idatBytes": 422635
+      }
+    }
+  }
+}

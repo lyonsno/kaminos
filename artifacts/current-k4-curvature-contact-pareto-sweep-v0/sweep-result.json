@@ -1,0 +1,355 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-pareto-result.v0",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "inputs": {
+    "solverCarrier": {
+      "requestedPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "fileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+      "identitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
+    },
+    "source": {
+      "requestedPath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "fileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "inputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d"
+    },
+    "matrix": {
+      "requestedPath": "fixtures/current-k4-packing/current-k4-curvature-contact-pareto-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-curvature-contact-pareto-v0.json",
+      "fileSha256": "1343fbc3f7f4112dd8478b522ceede55e89c4afbe12734a227611851188a7c12",
+      "schema": "kaminos.current-k4-ring-cage-contact-pareto-matrix.v0"
+    }
+  },
+  "requestedCandidateCount": 6,
+  "effectiveCandidateCount": 6,
+  "candidateCapApplied": false,
+  "objectives": [
+    "contactResidual",
+    "maximumLocalTurningAngleChange"
+  ],
+  "candidates": [
+    {
+      "id": "curvature-1p5",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 1.5,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 1.5,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 16.891681368595208,
+        "maximumLocalTurningAngleChange": 0.16293013935186104
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 13.507463157764537,
+        "pairwiseMovableMaximumPenetration": 0.4778181191447843,
+        "skeletalMovableTotalPenetration": 3.3842182108306713,
+        "skeletalMovableMaximumPenetration": 0.22259299036133914,
+        "maximumRelativeVolumeError": 0.01135639915334645,
+        "maximumLocalTurningAngleChange": 0.16293013935186104,
+        "maximumTotalTurningAngleChange": 1.1255585220370548,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-1p5/packed-carrier.json",
+        "sha256": "e093e9de7b0172a0e45c9b08ca278e9cfa5dbf1c4ee48a1a9df32191fda9340d",
+        "identitySha256": "d068f5f6a1b861a4639282657c16394ffbe53e89181103a5d597af65062f6a0d"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-1p5/config.json",
+        "sha256": "218527081a198dcc5f7fd40daeee09934d803f9ca0ad075482b1922de527407d"
+      }
+    },
+    {
+      "id": "curvature-3",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 3,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 3,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 17.466328851484306,
+        "maximumLocalTurningAngleChange": 0.11955178368651166
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 13.727021636034298,
+        "pairwiseMovableMaximumPenetration": 0.5097750537235757,
+        "skeletalMovableTotalPenetration": 3.739307215450009,
+        "skeletalMovableMaximumPenetration": 0.22090953847690992,
+        "maximumRelativeVolumeError": 0.010698848144315551,
+        "maximumLocalTurningAngleChange": 0.11955178368651166,
+        "maximumTotalTurningAngleChange": 0.8907042775543347,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-3/packed-carrier.json",
+        "sha256": "2a5e5251dd0214941a4e309fcbd22e1718430151b94f65a1eb4dc4fcc4e2b4a8",
+        "identitySha256": "e7c85eed3a885332acbd66e48be04a96f7080328a49ff85a3a68321992807942"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-3/config.json",
+        "sha256": "f61571c5213726bb5294b8cdf064f8b955bdfb173cc691e175967c7e1357778a"
+      }
+    },
+    {
+      "id": "curvature-6",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 6,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 6,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 19.375147969818897,
+        "maximumLocalTurningAngleChange": 0.098600487356593
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 14.597947852479695,
+        "pairwiseMovableMaximumPenetration": 0.5278925200396613,
+        "skeletalMovableTotalPenetration": 4.7772001173392,
+        "skeletalMovableMaximumPenetration": 0.2240727210873142,
+        "maximumRelativeVolumeError": 0.00965852835550029,
+        "maximumLocalTurningAngleChange": 0.098600487356593,
+        "maximumTotalTurningAngleChange": 0.6928521743724927,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-6/packed-carrier.json",
+        "sha256": "d49d46aad62ad401c75f9eae48c11917c9f75951b381d13dec9a7973be63b108",
+        "identitySha256": "bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-6/config.json",
+        "sha256": "0ab84c75f9c44a72d63992495362b014efbc8223228abe8c4dcbb8fd9efb8123"
+      }
+    },
+    {
+      "id": "curvature-12",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 21.485920652516782,
+        "maximumLocalTurningAngleChange": 0.08232034964201616
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 15.575577781697522,
+        "pairwiseMovableMaximumPenetration": 0.5618896332754225,
+        "skeletalMovableTotalPenetration": 5.910342870819259,
+        "skeletalMovableMaximumPenetration": 0.22552213461099493,
+        "maximumRelativeVolumeError": 0.007412353875895281,
+        "maximumLocalTurningAngleChange": 0.08232034964201616,
+        "maximumTotalTurningAngleChange": 0.5371399286049119,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-12/packed-carrier.json",
+        "sha256": "641fa7b9cd29078d80b9ce206c86b1e32567cda20deb8746db7a7ee7c7da01b9",
+        "identitySha256": "223c3c704e688620cf8e6efa7da01279e0bfe9cc041acb827e2700e46a53c6fa"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-12/config.json",
+        "sha256": "af6d54ccb8d014bdc08e7e26388975d3de45c939e7f05d81c2339af46ff7219e"
+      }
+    },
+    {
+      "id": "curvature-24",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 24,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 24,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 24.74208890703938,
+        "maximumLocalTurningAngleChange": 0.07202502924785355
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 16.96302948551546,
+        "pairwiseMovableMaximumPenetration": 0.5929703868507371,
+        "skeletalMovableTotalPenetration": 7.7790594215239235,
+        "skeletalMovableMaximumPenetration": 0.23310066860497386,
+        "maximumRelativeVolumeError": 0.005034240321566569,
+        "maximumLocalTurningAngleChange": 0.07202502924785355,
+        "maximumTotalTurningAngleChange": 0.41222847985311506,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-24/packed-carrier.json",
+        "sha256": "5ce5282d9dc59c0aa8fad210c2bc7494527bb665c2ece755d1fd9bc1217fe60f",
+        "identitySha256": "aa94fddfac86b5423fa3e1dea5bb365a08fa41318858a05fe6f723bd36e912bb"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-24/config.json",
+        "sha256": "eb0a16234ef5f92fedcf4ac2fec164e4877466efdcc18cd64fbade2e9278c3b8"
+      }
+    },
+    {
+      "id": "curvature-48",
+      "status": "residual-constraint",
+      "config": {
+        "requested": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 48,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "effective": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 48,
+          "maxIterations": 24,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "fallbackUsed": false
+      },
+      "iterations": 24,
+      "fixedNodeMaximumDrift": 0,
+      "feasible": true,
+      "objectives": {
+        "contactResidual": 30.722667591250598,
+        "maximumLocalTurningAngleChange": 0.058740000701260425
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 19.486450093935733,
+        "pairwiseMovableMaximumPenetration": 0.655697057045532,
+        "skeletalMovableTotalPenetration": 11.236217497314865,
+        "skeletalMovableMaximumPenetration": 0.2553236598135144,
+        "maximumRelativeVolumeError": 0.003270816951713893,
+        "maximumLocalTurningAngleChange": 0.058740000701260425,
+        "maximumTotalTurningAngleChange": 0.34428074046702123,
+        "compartmentMaximumEscape": 0,
+        "nonPositiveCellCount": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/curvature-48/packed-carrier.json",
+        "sha256": "7fefa3cb5bf89a7cbe968e96fca1020b78fb56da70891035e1cf34b72de205c2",
+        "identitySha256": "d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e"
+      },
+      "configArtifact": {
+        "path": "candidates/curvature-48/config.json",
+        "sha256": "fc692d48b9019c7c80af919120f95b116b0a6ec1286f86d0f3b56fdaa307985f"
+      }
+    }
+  ],
+  "paretoCandidateIds": [
+    "curvature-1p5",
+    "curvature-3",
+    "curvature-6",
+    "curvature-12",
+    "curvature-24",
+    "curvature-48"
+  ],
+  "visualStatus": "pending-agent-inspection"
+}

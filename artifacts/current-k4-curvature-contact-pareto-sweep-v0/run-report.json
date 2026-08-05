@@ -1,0 +1,48 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-pareto-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "requestedSolverCarrierPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+  "effectiveSolverCarrierPath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+  "solverCarrierFileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+  "solverCarrierIdentitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+  "requestedSourcePath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+  "effectiveSourcePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+  "sourceFileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+  "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+  "requestedMatrixPath": "fixtures/current-k4-packing/current-k4-curvature-contact-pareto-v0.json",
+  "effectiveMatrixPath": "repo://fixtures/current-k4-packing/current-k4-curvature-contact-pareto-v0.json",
+  "matrixFileSha256": "1343fbc3f7f4112dd8478b522ceede55e89c4afbe12734a227611851188a7c12",
+  "requestedCandidateCount": 6,
+  "effectiveCandidateCount": 6,
+  "candidateCapApplied": false,
+  "paretoCandidateIds": [
+    "curvature-1p5",
+    "curvature-3",
+    "curvature-6",
+    "curvature-12",
+    "curvature-24",
+    "curvature-48"
+  ],
+  "outputs": {
+    "sweepResult": {
+      "path": "sweep-result.json",
+      "sha256": "0c58d75bd21d37e1413e421d38b07283adc146d7cf7f17025fa8b293560b0cd2"
+    }
+  },
+  "visualStatus": "pending-agent-inspection",
+  "lastTrustworthyEvidence": {
+    "phase": "sweep-result-written",
+    "effectiveCandidateCount": 6,
+    "paretoCandidateIds": [
+      "curvature-1p5",
+      "curvature-3",
+      "curvature-6",
+      "curvature-12",
+      "curvature-24",
+      "curvature-48"
+    ]
+  }
+}

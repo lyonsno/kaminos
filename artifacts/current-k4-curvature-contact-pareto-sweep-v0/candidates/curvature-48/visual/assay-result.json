@@ -1,0 +1,594 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-assay-result.v0",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "status": "residual-constraint",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "inputs": {
+    "solverCarrier": {
+      "requestedPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+      "fileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+      "identitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
+    },
+    "source": {
+      "requestedPath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "fileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "inputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d"
+    },
+    "config": {
+      "requestedPath": "artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-48/config.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-48/config.json",
+      "fileSha256": "fc692d48b9019c7c80af919120f95b116b0a6ec1286f86d0f3b56fdaa307985f"
+    }
+  },
+  "config": {
+    "requested": {
+      "convergenceTolerance": 0.0001,
+      "curvatureRegularization": 48,
+      "maxIterations": 24,
+      "maximumLocalTurningAngleChange": 0.25,
+      "maximumRelativeVolumeError": 0.015,
+      "maximumTotalTurningAngleChange": 1.25,
+      "relaxationStep": 0.32
+    },
+    "effective": {
+      "convergenceTolerance": 0.0001,
+      "curvatureRegularization": 48,
+      "maxIterations": 24,
+      "maximumLocalTurningAngleChange": 0.25,
+      "maximumRelativeVolumeError": 0.015,
+      "maximumTotalTurningAngleChange": 1.25,
+      "relaxationStep": 0.32
+    },
+    "fallbackUsed": false
+  },
+  "iterations": 24,
+  "fixedNodeMaximumDrift": 0,
+  "metrics": {
+    "initial": {
+      "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+      "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "orderedConstructionIds": [
+        "muscle-34",
+        "muscle-13",
+        "muscle-12",
+        "muscle-45"
+      ],
+      "cages": [
+        {
+          "cageId": "muscle-34:cage",
+          "constructionId": "muscle-34",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              1.0106459234841571e-7,
+              3.0719530773294546e-7,
+              3.4142849556772876e-7,
+              2.7637536810325784e-7,
+              2.9802322387695312e-8,
+              8.560065398421929e-8,
+              3.332000937312528e-8,
+              1.0106459234841571e-7,
+              3.0719530773294546e-7,
+              4.129530924722885e-7,
+              1.7441362009524762e-7
+            ],
+            "maximumTurningAngle": 4.129530924722885e-7,
+            "totalTurningAngle": 0.0000021704133621462847,
+            "bendingEnergy": 6.123990203832421e-13
+          },
+          "referenceVolume": 64.0255025100002,
+          "currentVolume": 64.0255025100002,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-13:cage",
+          "constructionId": "muscle-13",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              2.5067633153886743e-7,
+              8.560065398421929e-8,
+              3.035597322503245e-7,
+              3.4466485697687966e-7,
+              3.8223729546012693e-7,
+              2.686345037418604e-7,
+              3.2510495527493244e-7,
+              3.2510495527493244e-7,
+              2.2202230134235873e-7,
+              6.030829651608577e-7,
+              6.030829651608577e-7
+            ],
+            "maximumTurningAngle": 6.030829651608577e-7,
+            "totalTurningAngle": 0.000003713771516166217,
+            "bendingEnergy": 1.4874768083928132e-12
+          },
+          "referenceVolume": 64.51226816799996,
+          "currentVolume": 64.51226816799996,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-12:cage",
+          "constructionId": "muscle-12",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              4.6193599700928147e-7,
+              2.6656007498500305e-7,
+              3.332000937312528e-8,
+              2.874031889734563e-7,
+              3.3085947202406254e-7,
+              1.1151007970493862e-7,
+              2.7877519926234735e-7,
+              2.5067633153886743e-7,
+              1.9936394930272808e-7,
+              2.580956827951785e-8,
+              3.8971593471235343e-7
+            ],
+            "maximumTurningAngle": 4.6193599700928147e-7,
+            "totalTurningAngle": 0.000002635929805165681,
+            "bendingEnergy": 8.228973058521747e-13
+          },
+          "referenceVolume": 76.82655530099983,
+          "currentVolume": 76.82655530099983,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-45:cage",
+          "constructionId": "muscle-45",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              1.3818768405162858e-7,
+              2.541947679107193e-7,
+              2.831220626831064e-7,
+              3.161013638317066e-7,
+              3.268079787412495e-7,
+              9.65705618025044e-8,
+              3.153981341200592e-7,
+              3.188987755631326e-7,
+              2.706930357901008e-7,
+              1.9314112360500902e-7,
+              4.357156609658468e-7
+            ],
+            "maximumTurningAngle": 4.357156609658468e-7,
+            "totalTurningAngle": 0.000002948831149065063,
+            "bendingEnergy": 8.815170815523822e-13
+          },
+          "referenceVolume": 89.30211863800002,
+          "currentVolume": 89.30211863800002,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        }
+      ],
+      "pairwise": {
+        "penetratingBoundaryNodeCount": 279,
+        "fixedPenetratingBoundaryNodeCount": 22,
+        "maximumPenetration": 1.1305487723476673,
+        "totalPenetration": 89.90644623635409,
+        "movableMaximumPenetration": 1.1305487723476673,
+        "movableTotalPenetration": 86.23573655489952,
+        "fixedMaximumPenetration": 0.4453953341744688,
+        "fixedTotalPenetration": 3.6707096814545745
+      },
+      "skeletal": {
+        "penetratingBoundaryNodeCount": 82,
+        "fixedPenetratingBoundaryNodeCount": 0,
+        "maximumPenetration": 1.1015725705834436,
+        "totalPenetration": 68.01110485718644,
+        "movableMaximumPenetration": 1.1015725705834436,
+        "movableTotalPenetration": 68.01110485718644,
+        "fixedMaximumPenetration": 0,
+        "fixedTotalPenetration": 0,
+        "penetratingAxisSampleCount": 82,
+        "axisSampleCount": 132
+      },
+      "compartment": {
+        "escapingBoundaryNodeCount": 0,
+        "fixedEscapingBoundaryNodeCount": 0,
+        "maximumEscape": 0
+      }
+    },
+    "packed": {
+      "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+      "sourceCarrierSha256": "d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "orderedConstructionIds": [
+        "muscle-34",
+        "muscle-13",
+        "muscle-12",
+        "muscle-45"
+      ],
+      "cages": [
+        {
+          "cageId": "muscle-34:cage",
+          "constructionId": "muscle-34",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              0.0021163466673176467,
+              0.0018674712917350332,
+              0.0033970133947238005,
+              0.014829367206362264,
+              0.029286621274082023,
+              0.043074987195894525,
+              0.053608107536061954,
+              0.05874010176585277,
+              0.05667445221593356,
+              0.04582630097763661,
+              0.024762801273463902
+            ],
+            "maximumTurningAngle": 0.05874010176585277,
+            "totalTurningAngle": 0.3341835707990641,
+            "bendingEnergy": 0.015202045382803639
+          },
+          "referenceVolume": 64.0255025100002,
+          "currentVolume": 64.046215877127,
+          "relativeVolumeError": 0.00032351744718547517,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-13:cage",
+          "constructionId": "muscle-13",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              0.0002652481924963692,
+              0.00095358202897055,
+              0.0024920023031818803,
+              0.005202299320142061,
+              0.00778286570591281,
+              0.008682841907821613,
+              0.007392944374318035,
+              0.004810148733451022,
+              0.002172264603092226,
+              0.0007630860266362883,
+              0.0001804043064005928
+            ],
+            "maximumTurningAngle": 0.008682841907821613,
+            "totalTurningAngle": 0.04069768750242345,
+            "bendingEnergy": 0.00025334514804085354
+          },
+          "referenceVolume": 64.51226816799996,
+          "currentVolume": 64.5176620507715,
+          "relativeVolumeError": 0.00008361018647641139,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-12:cage",
+          "constructionId": "muscle-12",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              0.02513895694037487,
+              0.04025829340239388,
+              0.04476637664029678,
+              0.04768327155047843,
+              0.04546003895662648,
+              0.040498843017593905,
+              0.03361115684741115,
+              0.025404878620921674,
+              0.01725171941765338,
+              0.014828666046884167,
+              0.009381174956191661
+            ],
+            "maximumTurningAngle": 0.04768327155047843,
+            "totalTurningAngle": 0.3442833763968264,
+            "bendingEnergy": 0.012617826960201708
+          },
+          "referenceVolume": 76.82655530099983,
+          "currentVolume": 77.06865386950474,
+          "relativeVolumeError": 0.0031512355012715755,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-45:cage",
+          "constructionId": "muscle-45",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "centerline": {
+            "turningAngles": [
+              0.015458513743331681,
+              0.020402651936083746,
+              0.010098669255123878,
+              0.017599372226406496,
+              0.039189859988159874,
+              0.050545887170187924,
+              0.05116034494636137,
+              0.04365348102034843,
+              0.032210975618504605,
+              0.024454291341271167,
+              0.013114471915526093
+            ],
+            "maximumTurningAngle": 0.05116034494636137,
+            "totalTurningAngle": 0.3178885191613053,
+            "bendingEnergy": 0.011488242701526086
+          },
+          "referenceVolume": 89.30211863800002,
+          "currentVolume": 89.59420952146516,
+          "relativeVolumeError": 0.003270816951713893,
+          "nonPositiveCellCount": 0
+        }
+      ],
+      "pairwise": {
+        "penetratingBoundaryNodeCount": 153,
+        "fixedPenetratingBoundaryNodeCount": 19,
+        "maximumPenetration": 0.655697057045532,
+        "totalPenetration": 22.934113960925767,
+        "movableMaximumPenetration": 0.655697057045532,
+        "movableTotalPenetration": 19.486450093935733,
+        "fixedMaximumPenetration": 0.39802897898986644,
+        "fixedTotalPenetration": 3.447663866990033
+      },
+      "skeletal": {
+        "penetratingBoundaryNodeCount": 68,
+        "fixedPenetratingBoundaryNodeCount": 0,
+        "maximumPenetration": 0.2553236598135144,
+        "totalPenetration": 11.236217497314865,
+        "movableMaximumPenetration": 0.2553236598135144,
+        "movableTotalPenetration": 11.236217497314865,
+        "fixedMaximumPenetration": 0,
+        "fixedTotalPenetration": 0,
+        "penetratingAxisSampleCount": 66,
+        "axisSampleCount": 132
+      },
+      "compartment": {
+        "escapingBoundaryNodeCount": 0,
+        "fixedEscapingBoundaryNodeCount": 0,
+        "maximumEscape": 0
+      }
+    }
+  },
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.20377247988183064,
+      "pairwiseMovableTotalPenetration": 80.8781797091278,
+      "skeletalMovableTotalPenetration": 64.48049903609046,
+      "maximumRelativeVolumeError": 0.000297623832321538
+    },
+    {
+      "iteration": 2,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.21988530289388458,
+      "pairwiseMovableTotalPenetration": 75.64035972561321,
+      "skeletalMovableTotalPenetration": 61.016749421801485,
+      "maximumRelativeVolumeError": 0.0005842544695228299
+    },
+    {
+      "iteration": 3,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.2069238753210802,
+      "pairwiseMovableTotalPenetration": 70.49294321363223,
+      "skeletalMovableTotalPenetration": 57.85767331613453,
+      "maximumRelativeVolumeError": 0.0008474380054520395
+    },
+    {
+      "iteration": 4,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.22338578293428593,
+      "pairwiseMovableTotalPenetration": 65.44263420522387,
+      "skeletalMovableTotalPenetration": 55.16531442791265,
+      "maximumRelativeVolumeError": 0.001087458647787418
+    },
+    {
+      "iteration": 5,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.22857321092029578,
+      "pairwiseMovableTotalPenetration": 60.42008249962223,
+      "skeletalMovableTotalPenetration": 52.4234134416489,
+      "maximumRelativeVolumeError": 0.001352518887929717
+    },
+    {
+      "iteration": 6,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.23191847496963466,
+      "pairwiseMovableTotalPenetration": 55.52543189435937,
+      "skeletalMovableTotalPenetration": 49.753542082676034,
+      "maximumRelativeVolumeError": 0.001604615370978395
+    },
+    {
+      "iteration": 7,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.22171306918221356,
+      "pairwiseMovableTotalPenetration": 51.04171412441381,
+      "skeletalMovableTotalPenetration": 47.158547637009136,
+      "maximumRelativeVolumeError": 0.0018483639295333195
+    },
+    {
+      "iteration": 8,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.22978945842328785,
+      "pairwiseMovableTotalPenetration": 46.525535808678256,
+      "skeletalMovableTotalPenetration": 44.66273586154855,
+      "maximumRelativeVolumeError": 0.0020640034314373663
+    },
+    {
+      "iteration": 9,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.20807750201330555,
+      "pairwiseMovableTotalPenetration": 42.29655665865174,
+      "skeletalMovableTotalPenetration": 41.99202398652186,
+      "maximumRelativeVolumeError": 0.0022637287024232793
+    },
+    {
+      "iteration": 10,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.17456597593779966,
+      "pairwiseMovableTotalPenetration": 38.716580290419394,
+      "skeletalMovableTotalPenetration": 39.20711451700706,
+      "maximumRelativeVolumeError": 0.0024324400686287244
+    },
+    {
+      "iteration": 11,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.16349595211521054,
+      "pairwiseMovableTotalPenetration": 35.57610943503407,
+      "skeletalMovableTotalPenetration": 36.655040122520106,
+      "maximumRelativeVolumeError": 0.0025731516859593016
+    },
+    {
+      "iteration": 12,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.15881987771702755,
+      "pairwiseMovableTotalPenetration": 33.01805869909717,
+      "skeletalMovableTotalPenetration": 34.02013684240475,
+      "maximumRelativeVolumeError": 0.0027011695397521837
+    },
+    {
+      "iteration": 13,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.14078556622118016,
+      "pairwiseMovableTotalPenetration": 30.7926506856096,
+      "skeletalMovableTotalPenetration": 31.58345488001825,
+      "maximumRelativeVolumeError": 0.0027921080058927908
+    },
+    {
+      "iteration": 14,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.15100806974265352,
+      "pairwiseMovableTotalPenetration": 28.910018549737167,
+      "skeletalMovableTotalPenetration": 29.088935733259515,
+      "maximumRelativeVolumeError": 0.0028623385942124066
+    },
+    {
+      "iteration": 15,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.13639645513499263,
+      "pairwiseMovableTotalPenetration": 27.310616009256215,
+      "skeletalMovableTotalPenetration": 26.77510164757252,
+      "maximumRelativeVolumeError": 0.0029250497203624024
+    },
+    {
+      "iteration": 16,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.11885571405921812,
+      "pairwiseMovableTotalPenetration": 25.911765483222915,
+      "skeletalMovableTotalPenetration": 24.645972591846807,
+      "maximumRelativeVolumeError": 0.002972546668374375
+    },
+    {
+      "iteration": 17,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.10460412413501025,
+      "pairwiseMovableTotalPenetration": 24.659495791364073,
+      "skeletalMovableTotalPenetration": 22.704006123068783,
+      "maximumRelativeVolumeError": 0.0030145415563371507
+    },
+    {
+      "iteration": 18,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.109712578122409,
+      "pairwiseMovableTotalPenetration": 23.647658083098595,
+      "skeletalMovableTotalPenetration": 20.760799042587063,
+      "maximumRelativeVolumeError": 0.0030519558748825144
+    },
+    {
+      "iteration": 19,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.10361700484165265,
+      "pairwiseMovableTotalPenetration": 22.73274046271449,
+      "skeletalMovableTotalPenetration": 18.934298070031193,
+      "maximumRelativeVolumeError": 0.003087379363802826
+    },
+    {
+      "iteration": 20,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.09292776355540161,
+      "pairwiseMovableTotalPenetration": 21.899556075765588,
+      "skeletalMovableTotalPenetration": 17.216264130032094,
+      "maximumRelativeVolumeError": 0.003121612558546446
+    },
+    {
+      "iteration": 21,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.0871904470740777,
+      "pairwiseMovableTotalPenetration": 21.197617637725404,
+      "skeletalMovableTotalPenetration": 15.575189250862714,
+      "maximumRelativeVolumeError": 0.0031621621887273597
+    },
+    {
+      "iteration": 22,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.08083139255610028,
+      "pairwiseMovableTotalPenetration": 20.53335758991279,
+      "skeletalMovableTotalPenetration": 14.054328969864573,
+      "maximumRelativeVolumeError": 0.0032017429383308523
+    },
+    {
+      "iteration": 23,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.0794624829756376,
+      "pairwiseMovableTotalPenetration": 20.01257977829953,
+      "skeletalMovableTotalPenetration": 12.594896614593852,
+      "maximumRelativeVolumeError": 0.0032365938851915644
+    },
+    {
+      "iteration": 24,
+      "lineSearchScale": 0.32,
+      "maximumRequestedDelta": 0.07320698671249948,
+      "pairwiseMovableTotalPenetration": 19.486450093935733,
+      "skeletalMovableTotalPenetration": 11.236217497314865,
+      "maximumRelativeVolumeError": 0.003270816951713893
+    }
+  ],
+  "packedCarrierIdentity": {
+    "domain": "canonical-json-self-excluding-top-level-identity",
+    "sha256": "d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e"
+  },
+  "visual": {
+    "route": {
+      "requested": "current-k4-ring-cage-contact-orbitable-v0",
+      "effective": "current-k4-ring-cage-contact-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "pending-agent-inspection",
+    "bundleIdentity": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-contact-orbitable-v0",
+      "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+      "packedCarrierSha256": "d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "sha256": "c8964f963040ec3df7dc62639118298e0c858d6db989f40c1ac049e32e81ece8"
+    },
+    "captureUrls": [
+      "index.html?bundle=c8964f963040ec3df7dc62639118298e0c858d6db989f40c1ac049e32e81ece8&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e&state=before",
+      "index.html?bundle=c8964f963040ec3df7dc62639118298e0c858d6db989f40c1ac049e32e81ece8&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e&state=packed",
+      "index.html?bundle=c8964f963040ec3df7dc62639118298e0c858d6db989f40c1ac049e32e81ece8&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e&state=before&view=side",
+      "index.html?bundle=c8964f963040ec3df7dc62639118298e0c858d6db989f40c1ac049e32e81ece8&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=d6c71565f823f8e59e5d8cded3254dffa304b15444ea2191d0d75bf3d8b04a9e&state=packed&view=side"
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-pareto-visual-inspection.v0",
+  "status": "inspected-mechanism-selection",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "sweepResult": {
+    "path": "sweep-result.json",
+    "sha256": "0c58d75bd21d37e1413e421d38b07283adc146d7cf7f17025fa8b293560b0cd2"
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "installedStableChrome": false,
+    "candidateCaptureCount": 24,
+    "contactSheetCaptureCount": 2
+  },
+  "inspectedArtifacts": [
+    {
+      "path": "pareto-contact-sheet.png",
+      "sha256": "7cb0aa5e8f7e294d21fdfbf12e8e3370fd47c0d6fbad16301b3b1a7b33238f81",
+      "view": "three-quarter"
+    },
+    {
+      "path": "pareto-contact-sheet-side.png",
+      "sha256": "1480d84baf7a04007d8e6fd84a46cb2a88a6f7949b01a36866d4912595c1d368",
+      "view": "side"
+    },
+    {
+      "path": "candidates/curvature-1p5/visual/source-crowded.png",
+      "sha256": "d953fa18cf30041ecc892282f83343d76deece95c7d01cf97e0e2ea300070572",
+      "view": "source-crowded-reference"
+    }
+  ],
+  "observations": [
+    "The source-crowded frame visibly interpenetrates and buries the cyan and purple constructions inside the central cluster; every proposal materially opens that cluster without moving fixed attachments.",
+    "Curvature 1.5 and 3 produce the strongest visible fanning and the lowest contact residual, but the side view also shows the largest red and cyan centerline bowing.",
+    "Curvature 24 and 48 retain the straightest centerline character but visibly concede more pairwise and skeletal relief.",
+    "Curvature 6 and 12 form the useful visual transition band; neither reintroduces the old section-local red or purple hard elbow.",
+    "Curvature 12 retains smooth attachment-to-attachment arcs in both inspected views while remaining materially less crowded than the source state."
+  ],
+  "normalization": {
+    "method": "Euclidean distance to the independently normalized minimum of contactResidual and maximumLocalTurningAngleChange across the exact six-candidate matrix",
+    "selectedCandidate": "curvature-12",
+    "selectedDistance": 0.40194258216889955,
+    "runnerUpCandidate": "curvature-6",
+    "runnerUpDistance": 0.4226160895048092
+  },
+  "selection": {
+    "candidateId": "curvature-12",
+    "curvatureRegularization": 12,
+    "contactResidual": 21.485920652516782,
+    "maximumLocalTurningAngleChange": 0.08232034964201616,
+    "maximumTotalTurningAngleChange": 0.5371399286049119,
+    "maximumRelativeVolumeError": 0.007412353875895281,
+    "fixedNodeMaximumDrift": 0,
+    "compartmentMaximumEscape": 0,
+    "nonPositiveCellCount": 0
+  },
+  "verdict": "MECHANISM_SELECTION_CURVATURE_12",
+  "admission": "The selected carrier may advance as the provisional contact-transfer mechanism. It does not establish authored anatomical correctness, full packing, or production admission."
+}

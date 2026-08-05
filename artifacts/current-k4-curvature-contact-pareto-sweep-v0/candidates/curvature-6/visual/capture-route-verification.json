@@ -1,0 +1,104 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0",
+  "status": "verified",
+  "bundleIdentity": {
+    "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+    "route": "current-k4-ring-cage-contact-orbitable-v0",
+    "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+    "packedCarrierSha256": "bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673",
+    "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+    "sha256": "528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d"
+  },
+  "servedViewer": {
+    "requestedUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html",
+    "effectiveUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html",
+    "sha256": "242ed3b761edf7e9d28275d24e72847f93c5bdec57a595c613c7ef47959d2482",
+    "expectedSha256": "242ed3b761edf7e9d28275d24e72847f93c5bdec57a595c613c7ef47959d2482",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "requestedUrl": "index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=before",
+      "effectiveUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=before",
+      "sha256": "bccb8c39a163c50263cf72f5d2d209575ac1640e22c4f2df977479b736733569",
+      "sizeBytes": 199964,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 52,
+        "idatBytes": 199319
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed",
+      "sha256": "14890fb40e31ae8e020a92184ed70da8c27a41384a81eae8856e7949f3fcb421",
+      "sizeBytes": 201871,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 53,
+        "idatBytes": 201214
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=before&view=side",
+      "effectiveUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=before&view=side",
+      "sha256": "4d6fc6a8966f596b26fe9c0bac011e810b608c6212c0652ef7224874a419dfb6",
+      "sizeBytes": 206081,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 54,
+        "idatBytes": 205412
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8775/artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-6/visual/index.html?bundle=528da6b452534f748e02908c9cc90208179f6e03610a0a2f50d74d5e88d92a8d&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=bf7101693940887fc64061690c440acd41942f5e6f5632f496d79745fb991673&state=packed&view=side",
+      "sha256": "52efcbdd9da57ba494dd1466d5a85e0800744b7f162b55fe0eec075e24da7b38",
+      "sizeBytes": 216239,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 56,
+        "idatBytes": 215546
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ],
+  "failurePhase": null,
+  "receiptPaths": [
+    "source-crowded-capture-report.json",
+    "contact-relieved-capture-report.json",
+    "source-crowded-side-capture-report.json",
+    "contact-relieved-side-capture-report.json"
+  ]
+}

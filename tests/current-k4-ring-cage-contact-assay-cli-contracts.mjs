@@ -16,6 +16,10 @@ const SOURCE = path.join(
   REPO_ROOT,
   'artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json',
 );
+const CONFIG = path.join(
+  REPO_ROOT,
+  'fixtures/current-k4-packing/current-k4-curvature-contact-v0.json',
+);
 const IDS = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
 const STALE_PRIMARY = [
   'assay-result.json',
@@ -39,11 +43,12 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function run(output, extra = []) {
+function run(output, extra = [], config = CONFIG) {
   return spawnSync(process.execPath, [
     TOOL,
     '--solver-carrier', SOLVER_CARRIER,
     '--source', SOURCE,
+    '--config', config,
     '--output', output,
     ...extra,
   ], { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -58,6 +63,13 @@ test('ring-cage contact assay writes a deterministic residual proposal and non-i
   assert.equal(report.schema, 'kaminos.current-k4-ring-cage-contact-assay-run-report.v0');
   assert.equal(report.status, 'completed');
   assert.equal(report.resultStatus, 'residual-constraint');
+  assert.equal(report.requestedConfigPath, CONFIG);
+  assert.equal(report.effectiveConfigPath,
+    'repo://fixtures/current-k4-packing/current-k4-curvature-contact-v0.json');
+  assert.equal(report.configFileSha256, sha256(await readFile(CONFIG)));
+  assert.deepEqual(report.config.requested, JSON.parse(await readFile(CONFIG, 'utf8')));
+  assert.deepEqual(report.config.effective, report.config.requested);
+  assert.equal(report.config.fallbackUsed, false);
   assert.deepEqual(report.requestedConstructionIds, IDS);
   assert.deepEqual(report.effectiveConstructionIds, IDS);
   assert.deepEqual(report.visual.route, {
@@ -122,4 +134,22 @@ test('failed reused-root ring-cage assay clears stale evidence and writes a term
   for (const relative of STALE_PRIMARY) {
     await assert.rejects(access(path.join(output, relative)), { code: 'ENOENT' });
   }
+});
+
+test('ring-cage contact assay rejects a config that aliases an output-owned path', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-contact-alias-'));
+  const aliasedConfig = path.join(output, 'assay-result.json');
+  await writeFile(aliasedConfig, await readFile(CONFIG));
+
+  const failed = run(output, [], aliasedConfig);
+  assert.notEqual(failed.status, 0);
+
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'validate-path-custody');
+  assert.match(report.error, /output path aliases an input: assay-result\.json/);
+  assert.equal(report.requestedConfigPath, aliasedConfig);
+  assert.equal(report.outputs, null);
+  assert.equal(report.visual, null);
+  await assert.rejects(access(aliasedConfig), { code: 'ENOENT' });
 });
