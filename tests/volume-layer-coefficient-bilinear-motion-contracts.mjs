@@ -47,6 +47,18 @@ assert.match(exactCapture, /sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*incl
 assert.ok(exactCapture.includes("'exact-target-sample-failed:' + (sample?.reason || 'unknown')"), 'target capture distinguishes an unavailable readback from a genuinely blank image');
 assert.match(exactCapture, /exact-target-rgba-missing/, 'target capture rejects missing pixel payloads');
 assert.match(exactCapture, /exact-target-blank-image/, 'target capture rejects genuinely blank pixel payloads');
+assert.match(capture, /isExactTargetBlankImageError/, 'visible-canvas recovery is restricted to the exact native blank-image failure');
+assert.match(capture, /renderExactTargetFrameToVisibleCanvas\.toString\(\)/, 'fallback uses the executable exact frozen visible-canvas helper');
+assert.match(capture, /Page\.captureScreenshot/, 'fallback captures the just-rendered visible canvas through CDP');
+assert.match(capture, /hideExactTargetCaptureOverlays/, 'fallback suppresses route UI that overlaps the renderer canvas');
+assert.match(capture, /restoreExactTargetCaptureOverlays/, 'fallback restores route UI after the canvas screenshot');
+assert.match(capture, /finally\s*\{[\s\S]*restoreExactTargetCaptureOverlays/, 'overlay restoration survives screenshot or inspection failure');
+assert.match(capture, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'fallback records weaker but explicit visible-canvas image authority');
+assert.match(capture, /nativeReadbackFailure/, 'fallback preserves the native readback defect instead of laundering it');
+assert.match(capture, /overlayIsolationReceipt/, 'capture report preserves visible-canvas overlay isolation authority');
+assert.match(capture, /overlayRestorationReceipt/, 'capture report proves the hidden route UI was restored');
+assert.match(capture, /exact-target-visible-canvas-blank-image/, 'fallback rejects blank visible-canvas pixels');
+assert.match(exactCapture, /boundarySplatComposition:\s*['"]raymarch-only-v0['"]/, 'fallback forbids splat contamination of the exact raymarch target');
 assert.match(exactCapture, /finally\s*\{[\s\S]*setAppearanceDecompositionMode\(priorAppearanceMode\)[\s\S]*setRaymarchSmokePresentationMode\(priorSmokeMode\)[\s\S]*raySteps:\s*priorRaySteps/, 'target capture restores transient renderer controls even when readback fails');
 assert.match(capture, /fixed-held-camera-across-consecutive-states-v0/, 'camera authority is fixed across the sequence');
 assert.match(capture, /readFlowKernelDescriptorCaptureProjectionChunk/, 'witness drains only the compact descriptor geometry required by the renderer');

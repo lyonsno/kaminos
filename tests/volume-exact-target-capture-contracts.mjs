@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { captureExactTargetFrame } from '../volume-exact-target-capture.mjs';
+import {
+  captureExactTargetFrame,
+  hideExactTargetCaptureOverlays,
+  isExactTargetBlankImageError,
+  renderExactTargetFrameToVisibleCanvas,
+  restoreExactTargetCaptureOverlays,
+} from '../volume-exact-target-capture.mjs';
 
 function makeHarness(sample) {
   const state = {
@@ -34,6 +40,23 @@ function makeHarness(sample) {
     async sampleFrame(options) {
       calls.push(['sampleFrame', options]);
       return sample;
+    },
+    async renderFrozenScaleToCanvas(options) {
+      calls.push(['renderFrozenScaleToCanvas', options]);
+      return {
+        ok: true,
+        sampleAuthority: 'render-only-frozen-sim-state',
+        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        boundarySplatCompositionRequestedRaw: options.boundarySplatComposition,
+        boundarySplatCompositionEffective: options.boundarySplatComposition,
+        raymarchApplied: true,
+        splatApplied: false,
+        frameCount: options.baseFrameCount,
+        simStepCount: options.baseSimStepCount,
+        effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+        backend: 'WebGPU:apple',
+        canvasCssRect: { x: 10, y: 20, width: 900, height: 960 },
+      };
     },
   };
   const basinWindow = {
@@ -152,5 +175,83 @@ for (const failure of [
   assert.equal(harness.state.appearanceMode, 'off', `${failure.label} restores appearance mode`);
   assert.equal(harness.state.smokeMode, 'on', `${failure.label} restores smoke mode`);
 }
+
+assert.equal(isExactTargetBlankImageError(new Error('exact-target-blank-image:{"litPixels":0}')), true);
+assert.equal(isExactTargetBlankImageError(new Error('exact-target-rgba-missing:{}')), false);
+assert.equal(isExactTargetBlankImageError(new Error('exact-target-sample-failed:inactive:{}')), false);
+
+const visibleHarness = makeHarness({ ok: true });
+const visible = await renderExactTargetFrameToVisibleCanvas({
+  prototype: visibleHarness.prototype,
+  basinWindow: visibleHarness.basinWindow,
+  fixedCameraPose: { position: [1, 2, 3], target: [0, 0, 0] },
+  targetRaySteps: 160,
+  targetMode: 'shared-transmittance-contribution-sum',
+  stateId: 'coefficient-state-098',
+  exactStateTimeMs: 1000,
+  baseFrameCount: 44,
+  baseSimStepCount: 98,
+});
+assert.equal(visible.render.sampleAuthority, 'render-only-frozen-sim-state');
+assert.equal(visible.render.imageAuthority, 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state');
+assert.equal(visible.render.boundarySplatCompositionEffective, 'raymarch-only-v0');
+assert.equal(visible.render.raymarchApplied, true);
+assert.equal(visible.render.splatApplied, false);
+assert.equal(visible.render.frameCount, 44);
+assert.equal(visible.render.simStepCount, 98);
+assert.equal(visibleHarness.state.raySteps, 24);
+assert.equal(visibleHarness.state.appearanceMode, 'off');
+assert.equal(visibleHarness.state.smokeMode, 'on');
+const visibleRenderCall = visibleHarness.calls.find(([name]) => name === 'renderFrozenScaleToCanvas');
+assert.deepEqual(visibleRenderCall[1], {
+  renderScale: 1,
+  boundarySplatComposition: 'raymarch-only-v0',
+  includeRgba: false,
+  now: 1000,
+  sameStateCaptureId: 'coefficient-state-098',
+  baseFrameCount: 44,
+  baseSimStepCount: 98,
+  restoreControls: true,
+  resumeRenderLoop: false,
+});
+
+const toolbarStyle = {
+  visibility: 'visible',
+  priority: '',
+  getPropertyValue(property) {
+    assert.equal(property, 'visibility');
+    return this.visibility;
+  },
+  getPropertyPriority(property) {
+    assert.equal(property, 'visibility');
+    return this.priority;
+  },
+  setProperty(property, value, priority = '') {
+    assert.equal(property, 'visibility');
+    this.visibility = value;
+    this.priority = priority;
+  },
+};
+const overlayEnvironment = {
+  document: {
+    querySelector(selector) {
+      assert.equal(selector, '#toolbar');
+      return { style: toolbarStyle };
+    },
+  },
+};
+const overlayReceipt = hideExactTargetCaptureOverlays(overlayEnvironment);
+assert.equal(toolbarStyle.visibility, 'hidden');
+assert.equal(toolbarStyle.priority, 'important');
+assert.deepEqual(overlayReceipt, {
+  identity: 'exact-target-visible-canvas-overlay-isolation-v0',
+  entries: [{ selector: '#toolbar', present: true, priorVisibility: 'visible', priorPriority: '' }],
+});
+const overlayRestore = restoreExactTargetCaptureOverlays(overlayReceipt, overlayEnvironment);
+assert.equal(toolbarStyle.visibility, 'visible');
+assert.equal(toolbarStyle.priority, '');
+assert.equal(overlayRestore.restored, true);
+assert.equal(overlayRestore.expectedCount, 1);
+assert.equal(overlayRestore.restoredCount, 1);
 
 console.log('volume exact target capture contracts passed');

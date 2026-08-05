@@ -31,7 +31,13 @@ import {
   FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY,
   FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS,
 } from './flow-kernel-descriptor-socket.mjs';
-import { captureExactTargetFrame } from './volume-exact-target-capture.mjs';
+import {
+  captureExactTargetFrame,
+  hideExactTargetCaptureOverlays,
+  isExactTargetBlankImageError,
+  renderExactTargetFrameToVisibleCanvas,
+  restoreExactTargetCaptureOverlays,
+} from './volume-exact-target-capture.mjs';
 
 const WITNESS_IDENTITY = 'single-browser-multi-state-layer-coefficient-capture-v0';
 const TRAINING_SCHEMA = 'kaminos.volume.layer-coefficient-training-manifest.v0';
@@ -482,21 +488,33 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
 
 async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs }) {
   failurePhase = `${stateId}:exact-target`;
-  const capture = await evaluate(socket, `(async () => {
-    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
-    const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
-    return (${captureExactTargetFrame.toString()})({
-      prototype,
-      basinWindow,
-      fixedCameraPose: ${JSON.stringify(fixedCameraPose)},
-      targetRaySteps: ${targetRaySteps},
-      targetMode: '${MOTION_TARGET_MODE}',
-      stateId: ${JSON.stringify(stateId)},
-      exactStateTimeMs: ${Number(exactStateTimeMs)},
-      baseFrameCount: ${Number(frozen.frameCount)},
-      baseSimStepCount: ${Number(frozen.simStepCount)},
+  let capture = null;
+  try {
+    capture = await evaluate(socket, `(async () => {
+      const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+      const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
+      return (${captureExactTargetFrame.toString()})({
+        prototype,
+        basinWindow,
+        fixedCameraPose: ${JSON.stringify(fixedCameraPose)},
+        targetRaySteps: ${targetRaySteps},
+        targetMode: '${MOTION_TARGET_MODE}',
+        stateId: ${JSON.stringify(stateId)},
+        exactStateTimeMs: ${Number(exactStateTimeMs)},
+        baseFrameCount: ${Number(frozen.frameCount)},
+        baseSimStepCount: ${Number(frozen.simStepCount)},
+      });
+    })()`);
+  } catch (error) {
+    if (!isExactTargetBlankImageError(error)) throw error;
+    capture = await captureVisibleMotionTarget({
+      stateId,
+      fixedCameraPose,
+      frozen,
+      exactStateTimeMs,
+      nativeReadbackFailure: error.message,
     });
-  })()`);
+  }
   assert.equal(capture.frameCount, frozen.frameCount, `${stateId} exact target frame advanced`);
   assert.equal(capture.simStepCount, frozen.simStepCount, `${stateId} exact target simulation advanced`);
   assert.equal(capture.appearance?.effectiveMode, MOTION_TARGET_MODE, `${stateId} exact target mode substituted`);
@@ -522,6 +540,8 @@ async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStat
   return {
     identity: MOTION_TARGET_IDENTITY,
     mode: MOTION_TARGET_MODE,
+    imageAuthority: capture.imageAuthority,
+    nativeReadbackFailure: capture.nativeReadbackFailure,
     path,
     bytes: statSync(path).size,
     sha256: sha256(readFileSync(path)),
@@ -537,6 +557,137 @@ async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStat
     appearanceReceipt: capture.appearance,
     smokeReceipt: capture.smoke,
     restorationReceipt: capture.restoration,
+    overlayIsolationReceipt: capture.overlayReceipt ?? null,
+    overlayRestorationReceipt: capture.overlayRestoration ?? null,
+  };
+}
+
+async function captureVisibleMotionTarget({
+  stateId,
+  fixedCameraPose,
+  frozen,
+  exactStateTimeMs,
+  nativeReadbackFailure,
+}) {
+  failurePhase = `${stateId}:exact-target-visible-canvas-render`;
+  const visible = await evaluate(socket, `(async () => {
+    const basinWindow = document.querySelector('#basin')?.contentWindow || window;
+    const prototype = ${VOLUME_PROTOTYPE_EXPRESSION};
+    return (${renderExactTargetFrameToVisibleCanvas.toString()})({
+      prototype,
+      basinWindow,
+      fixedCameraPose: ${JSON.stringify(fixedCameraPose)},
+      targetRaySteps: ${targetRaySteps},
+      targetMode: '${MOTION_TARGET_MODE}',
+      stateId: ${JSON.stringify(stateId)},
+      exactStateTimeMs: ${Number(exactStateTimeMs)},
+      baseFrameCount: ${Number(frozen.frameCount)},
+      baseSimStepCount: ${Number(frozen.simStepCount)},
+    });
+  })()`);
+  const render = visible?.render;
+  assert.equal(render?.ok, true, `${stateId} exact target visible-canvas render failed: ${JSON.stringify(render)}`);
+  assert.equal(render.sampleAuthority, 'render-only-frozen-sim-state', `${stateId} visible target advanced the simulation`);
+  assert.equal(
+    render.imageAuthority,
+    'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+    `${stateId} visible target image authority drifted`,
+  );
+  assert.equal(render.boundarySplatCompositionRequestedRaw, 'raymarch-only-v0', `${stateId} visible target requested splat composition`);
+  assert.equal(render.boundarySplatCompositionEffective, 'raymarch-only-v0', `${stateId} visible target applied splat composition`);
+  assert.equal(render.raymarchApplied, true, `${stateId} visible target omitted the raymarch`);
+  assert.equal(render.splatApplied, false, `${stateId} visible target was contaminated by splats`);
+  assert.equal(render.frameCount, frozen.frameCount, `${stateId} visible target frame advanced`);
+  assert.equal(render.simStepCount, frozen.simStepCount, `${stateId} visible target simulation advanced`);
+  assert.equal(render.effectiveRoute, runtimeIdentity.effectiveRoute, `${stateId} visible target route drifted`);
+  assert.equal(render.backend, runtimeIdentity.backend, `${stateId} visible target backend drifted`);
+
+  failurePhase = `${stateId}:exact-target-visible-canvas-screenshot`;
+  let overlayReceipt = null;
+  let overlayRestoration = null;
+  let screenshot = null;
+  let pixels = null;
+  try {
+    overlayReceipt = await evaluate(socket, `(${hideExactTargetCaptureOverlays.toString()})()`);
+    assert.equal(overlayReceipt?.entries?.[0]?.present, true, `${stateId} exact target route toolbar is missing`);
+    await evaluate(socket, `new Promise(resolve => requestAnimationFrame(() => resolve(true)))`);
+    screenshot = await socket.call('Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      clip: clipFromCanvas(render.canvasCssRect),
+    });
+    assert.ok(screenshot?.data, `${stateId} exact target visible-canvas screenshot is missing`);
+    pixels = await inspectPngBase64(screenshot.data);
+  } finally {
+    if (overlayReceipt) {
+      overlayRestoration = await evaluate(
+        socket,
+        `(${restoreExactTargetCaptureOverlays.toString()})(${JSON.stringify(overlayReceipt)})`,
+      );
+    }
+  }
+  assert.equal(overlayRestoration?.restored, true, `${stateId} exact target route toolbar was not restored`);
+  if (pixels.litPixels <= 64) {
+    throw new Error(`exact-target-visible-canvas-blank-image:${JSON.stringify(pixels)}`);
+  }
+  return {
+    stateId,
+    imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+    nativeReadbackFailure,
+    frameCount: render.frameCount,
+    simStepCount: render.simStepCount,
+    width: pixels.width,
+    height: pixels.height,
+    litPixels: pixels.litPixels,
+    targetPixelSha256: pixels.targetPixelSha256,
+    pngDataUrl: `data:image/png;base64,${screenshot.data}`,
+    cameraPose: visible.cameraPose,
+    appearance: visible.appearance,
+    smoke: visible.smoke,
+    restoration: visible.restoration,
+    overlayReceipt,
+    overlayRestoration,
+    effectiveRoute: render.effectiveRoute,
+    backend: render.backend,
+    effectiveRaySteps: visible.effectiveRaySteps,
+  };
+}
+
+async function inspectPngBase64(base64) {
+  return evaluate(socket, `(async () => {
+    const binary = atob(${JSON.stringify(base64)});
+    const png = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) png[index] = binary.charCodeAt(index);
+    const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }));
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const rgba = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let litPixels = 0;
+    for (let index = 0; index < rgba.length; index += 4) {
+      if (0.2126 * rgba[index] + 0.7152 * rgba[index + 1] + 0.0722 * rgba[index + 2] > 8) litPixels += 1;
+    }
+    const hash = await crypto.subtle.digest('SHA-256', rgba);
+    return {
+      width: canvas.width,
+      height: canvas.height,
+      pixelCount: rgba.length / 4,
+      litPixels,
+      targetPixelSha256: [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join(''),
+    };
+  })()`);
+}
+
+function clipFromCanvas(rect = {}) {
+  return {
+    x: Math.max(0, Number(rect.x) || 0),
+    y: Math.max(0, Number(rect.y) || 0),
+    width: Math.max(2, Number(rect.width) || 0),
+    height: Math.max(2, Number(rect.height) || 0),
+    scale: 1,
   };
 }
 
