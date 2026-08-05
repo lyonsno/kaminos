@@ -1,0 +1,518 @@
+{
+  "schema": "kaminos.current-k4-fixed-contact-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "exact-fixed-contact-mechanism-response",
+  "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+  "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "shapeProfile": {
+    "effective": {
+      "authority": "agent-authored-provisional",
+      "bellyExponent": 0.8,
+      "endpointRadiusFraction": 0.32,
+      "id": "volume-preserving-tapered-belly.v0",
+      "parameterization": "normalized-candidate-centerline-arc-length",
+      "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+    },
+    "requested": {
+      "id": "volume-preserving-tapered-belly.v0"
+    }
+  },
+  "requestedMaxIterations": 64,
+  "requestedOccupancyEnvelope": "normalized-sine",
+  "requestedAllocationSchedule": [
+    {
+      "muscleId": "muscle-34",
+      "azimuthRadians": -1.2,
+      "radialDistance": 1.8,
+      "axialOffset": 0
+    },
+    {
+      "muscleId": "muscle-13",
+      "azimuthRadians": 2.65,
+      "radialDistance": 2.2,
+      "axialOffset": 0
+    },
+    {
+      "muscleId": "muscle-12",
+      "azimuthRadians": 0.75,
+      "radialDistance": 1.4,
+      "axialOffset": -0.25
+    },
+    {
+      "muscleId": "muscle-45",
+      "azimuthRadians": 0.05,
+      "radialDistance": 1.8,
+      "axialOffset": 0.25
+    }
+  ],
+  "strictPreflight": {
+    "status": "immutable-constraint-conflict",
+    "iterations": 0,
+    "blockerCount": 2,
+    "blockingMechanisms": [
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-34",
+          "attachment": "insertion",
+          "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "penetration": 0.204054995089
+      },
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-12",
+          "attachment": "insertion",
+          "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "penetration": 0.105802263217
+      }
+    ],
+    "metrics": {
+      "initial": {
+        "pairwisePenetration": 5.939877925286,
+        "skeletalPenetration": 1.118640209394,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 3e-12,
+        "maximumSourceKnotDisplacement": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": 1,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      },
+      "packed": {
+        "pairwisePenetration": 5.939877925286,
+        "skeletalPenetration": 1.118640209394,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 3e-12,
+        "maximumSourceKnotDisplacement": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": 1,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    }
+  },
+  "contactAdmission": {
+    "requested": [
+      {
+        "id": "current-k4-m34-m45-shared-insertion-contact",
+        "authority": "agent-authored-provisional",
+        "left": {
+          "muscleId": "muscle-34",
+          "attachment": "insertion",
+          "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "scope": {
+          "kind": "exact-fixed-endpoint",
+          "maximumPathFraction": 0
+        }
+      },
+      {
+        "id": "current-k4-m12-m45-shared-insertion-contact",
+        "authority": "agent-authored-provisional",
+        "left": {
+          "muscleId": "muscle-12",
+          "attachment": "insertion",
+          "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "scope": {
+          "kind": "exact-fixed-endpoint",
+          "maximumPathFraction": 0
+        }
+      }
+    ],
+    "effective": [
+      {
+        "authority": "agent-authored-provisional",
+        "id": "current-k4-m34-m45-shared-insertion-contact",
+        "left": {
+          "attachment": "insertion",
+          "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "muscleId": "muscle-34"
+        },
+        "right": {
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "muscleId": "muscle-45"
+        },
+        "scope": {
+          "kind": "exact-fixed-endpoint",
+          "maximumPathFraction": 0
+        }
+      },
+      {
+        "authority": "agent-authored-provisional",
+        "id": "current-k4-m12-m45-shared-insertion-contact",
+        "left": {
+          "attachment": "insertion",
+          "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+          "muscleId": "muscle-12"
+        },
+        "right": {
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "muscleId": "muscle-45"
+        },
+        "scope": {
+          "kind": "exact-fixed-endpoint",
+          "maximumPathFraction": 0
+        }
+      }
+    ],
+    "fallbackUsed": false
+  },
+  "contactAdmittedResult": {
+    "status": "pairwise-exclusion-failed",
+    "iterations": 64,
+    "failure": {
+      "phase": "solve",
+      "kind": "residual-constraint",
+      "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+      "iterations": 64,
+      "dominantMechanism": {
+        "kind": "pairwise-exclusion-residual",
+        "residual": 0.341683068967
+      },
+      "residuals": {
+        "pairwisePenetration": 0.341683068967,
+        "skeletalPenetration": 0.000049671291,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 10.448805077054,
+        "maximumSourceKnotDisplacement": 2.113241182984,
+        "rootMeanSquareSourceKnotDisplacement": 0.968188573242,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": -0.99998189037,
+        "sourceCurvatureReversalCount": 19,
+        "minimumSourceTangentCosine": 0.327926861142,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1.033574638884,
+        "minimumPairwiseRelationCosine": 0.337122454171,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    },
+    "metrics": {
+      "initial": {
+        "pairwisePenetration": 5.939877925286,
+        "skeletalPenetration": 1.118640209394,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 3e-12,
+        "maximumSourceKnotDisplacement": 0,
+        "rootMeanSquareSourceKnotDisplacement": 0,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": 1,
+        "sourceCurvatureReversalCount": 0,
+        "minimumSourceTangentCosine": 1,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1,
+        "minimumPairwiseRelationCosine": 1,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      },
+      "packed": {
+        "pairwisePenetration": 0.341683068967,
+        "skeletalPenetration": 0.000049671291,
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumRelativeVolumeError": 0,
+        "maximumBendEnergy": 10.448805077054,
+        "maximumSourceKnotDisplacement": 2.113241182984,
+        "rootMeanSquareSourceKnotDisplacement": 0.968188573242,
+        "minimumSourceBendEnergyRetention": 1,
+        "minimumSourceCurvatureCosine": -0.99998189037,
+        "sourceCurvatureReversalCount": 19,
+        "minimumSourceTangentCosine": 0.327926861142,
+        "sourceTangentReversalCount": 0,
+        "maximumSourceRadiusRatio": 1.033574638884,
+        "minimumPairwiseRelationCosine": 0.337122454171,
+        "pairwiseRelationReversalCount": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0
+      }
+    },
+    "clusterProjection": {
+      "requestedUpdate": "capsule-axis-occupancy-allocation",
+      "effectiveUpdate": "capsule-axis-occupancy-allocation",
+      "obstacleId": "agent-authored-k4-central-pressure-capsule",
+      "referenceDirection": [
+        1,
+        0,
+        0
+      ],
+      "effectiveReferenceDirection": [
+        0.9688830546939377,
+        0.16942786907506863,
+        -0.18044340804702647
+      ],
+      "allocationSchedule": [
+        {
+          "muscleId": "muscle-34",
+          "azimuthRadians": -1.2,
+          "radialDistance": 1.8,
+          "axialOffset": 0
+        },
+        {
+          "muscleId": "muscle-13",
+          "azimuthRadians": 2.65,
+          "radialDistance": 2.2,
+          "axialOffset": 0
+        },
+        {
+          "muscleId": "muscle-12",
+          "azimuthRadians": 0.75,
+          "radialDistance": 1.4,
+          "axialOffset": -0.25
+        },
+        {
+          "muscleId": "muscle-45",
+          "azimuthRadians": 0.05,
+          "radialDistance": 1.8,
+          "axialOffset": 0.25
+        }
+      ],
+      "requestedEnvelopeProfile": "normalized-sine",
+      "effectiveEnvelopeProfile": "normalized-sine",
+      "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-zero-at-attachments",
+      "fallbackUsed": false
+    },
+    "fixedAttachmentContact": {
+      "policy": "exact-source-linked-endpoint-only",
+      "requested": [
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m34-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "muscleId": "muscle-34"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          }
+        },
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m12-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+            "muscleId": "muscle-12"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          }
+        }
+      ],
+      "effective": [
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m34-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "muscleId": "muscle-34"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          },
+          "penetration": 0.204054995089
+        },
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m12-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+            "muscleId": "muscle-12"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          },
+          "penetration": 0.105802263217
+        }
+      ],
+      "admittedResiduals": [
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m34-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+            "muscleId": "muscle-34"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          },
+          "penetration": 0.204054995089
+        },
+        {
+          "authority": "agent-authored-provisional",
+          "id": "current-k4-m12-m45-shared-insertion-contact",
+          "left": {
+            "attachment": "insertion",
+            "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+            "muscleId": "muscle-12"
+          },
+          "right": {
+            "attachment": "insertion",
+            "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+            "muscleId": "muscle-45"
+          },
+          "scope": {
+            "kind": "exact-fixed-endpoint",
+            "maximumPathFraction": 0
+          },
+          "penetration": 0.105802263217
+        }
+      ],
+      "fallbackUsed": false
+    }
+  },
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "824bf5985214ebecf2e6dd6b9f5c6e9dcfa51424a2c58ff6444d1a237917a836"
+    },
+    "source": {
+      "path": "source.json",
+      "sha256": "8d1aaa6bb333e11c79ab6bf220ddd084f2157b0aae66d65c840e11bd585327e4"
+    },
+    "strictPreflightResult": {
+      "path": "strict-preflight-result.json",
+      "sha256": "0052a0fe1be07b5b60e920d53be793091795d9a91eb8fa0d12d71a3df5bf2bf7"
+    },
+    "contactAdmittedSource": {
+      "path": "contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "contactAdmittedResult": {
+      "path": "contact-admitted-result.json",
+      "sha256": "a6d6a921aa49643e53ba2a5260b03adb1e50cb96387c4760b863ceb2f04aa9aa"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "8bb20229b34475d79af425acae8e3ee082948e69a2ef6dd9198d4c1221264bfd"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "current-k4-fixed-contact-orbitable-v0",
+      "effective": "current-k4-fixed-contact-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "agent-inspected-terminal-residual-rejected",
+    "viewer": {
+      "path": "index.html",
+      "sha256": "8bb20229b34475d79af425acae8e3ee082948e69a2ef6dd9198d4c1221264bfd"
+    },
+    "expectedCaptures": [
+      "baseline-source.png",
+      "baseline-contact-admitted-result.png"
+    ],
+    "inspection": {
+      "path": "visual-inspection.json",
+      "verdict": "fixed-contact-boundary-accepted-anatomical-result-rejected"
+    },
+    "interpretation": {
+      "path": "interpretation.md"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "strictStatus": "immutable-constraint-conflict",
+    "admittedStatus": "pairwise-exclusion-failed",
+    "admittedIterations": 64
+  }
+}

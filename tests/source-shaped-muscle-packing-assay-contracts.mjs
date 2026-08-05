@@ -285,6 +285,114 @@ test('Bytebound tapered belly profile composes without changing tube identity or
   );
 });
 
+test('source-linked exact attachment contact opens belly negotiation without hiding its fixed residual', async () => {
+  const api = assayApi();
+  const fixture = await atlasFixture();
+  const unadmitted = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+    shapeProfileId: BELLY_PROFILE_ID,
+  });
+  const baseline = unadmitted.conditions[0].source;
+  const attachment = (muscleId, endpoint) => {
+    const muscle = baseline.muscles.find(candidate => candidate.id === muscleId);
+    return {
+      muscleId,
+      attachment: endpoint,
+      attachmentId: muscle.attachments[endpoint].id,
+    };
+  };
+  const contacts = [
+    {
+      id: 'current-k4-m34-m45-shared-insertion-contact',
+      authority: 'agent-authored-provisional',
+      left: attachment('muscle-34', 'insertion'),
+      right: attachment('muscle-45', 'insertion'),
+      scope: { kind: 'exact-fixed-endpoint', maximumPathFraction: 0 },
+    },
+    {
+      id: 'current-k4-m12-m45-shared-insertion-contact',
+      authority: 'agent-authored-provisional',
+      left: attachment('muscle-12', 'insertion'),
+      right: attachment('muscle-45', 'insertion'),
+      scope: { kind: 'exact-fixed-endpoint', maximumPathFraction: 0 },
+    },
+  ];
+  const admitted = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+    shapeProfileId: BELLY_PROFILE_ID,
+    fixedAttachmentContacts: contacts,
+  });
+  const source = admitted.conditions[0].source;
+  const schedule = [
+    { muscleId: 'muscle-34', azimuthRadians: -1.2, radialDistance: 1.8, axialOffset: 0 },
+    { muscleId: 'muscle-13', azimuthRadians: 2.65, radialDistance: 2.2, axialOffset: 0 },
+    { muscleId: 'muscle-12', azimuthRadians: 0.75, radialDistance: 1.4, axialOffset: -0.25 },
+    { muscleId: 'muscle-45', azimuthRadians: 0.05, radialDistance: 1.8, axialOffset: 0.25 },
+  ];
+  const config = {
+    maxIterations: 2,
+    clusterUpdate: 'capsule-axis-occupancy-allocation',
+    clusterObstacleId: source.obstacles[0].id,
+    clusterOccupancyReferenceDirection: [1, 0, 0],
+    clusterAllocationSchedule: schedule,
+    clusterOccupancyEnvelope: 'normalized-sine',
+  };
+  const sourceBefore = structuredClone(source);
+  const result = api.solveMuscleCompartmentPacking(source, config);
+
+  assert.deepEqual(source.fixedAttachmentContacts, contacts);
+  assert.deepEqual(source.assayProvenance.fixedAttachmentContacts.requested, contacts);
+  assert.deepEqual(source.assayProvenance.fixedAttachmentContacts.effective, contacts);
+  assert.notEqual(result.status, 'immutable-constraint-conflict');
+  assert.ok(result.iterations > 0, 'the exact admitted endpoint contacts must open belly negotiation');
+  assert.equal(result.fixedAttachmentContact.policy, 'exact-source-linked-endpoint-only');
+  assert.deepEqual(result.fixedAttachmentContact.requested, contacts);
+  assert.equal(result.fixedAttachmentContact.effective.length, 2);
+  assert.equal(result.fixedAttachmentContact.admittedResiduals.length, 2);
+  assert.deepEqual(
+    result.fixedAttachmentContact.admittedResiduals.map(row => row.penetration),
+    [0.204054995089, 0.105802263217],
+  );
+  assert.ok(
+    result.metrics.packed.pairwisePenetration >= 0.204054995089,
+    'admitted fixed contact remains in the full pairwise residual instead of disappearing',
+  );
+  assert.equal(result.metrics.packed.endpointDrift, 0);
+  assert.deepEqual(source, sourceBefore, 'contact admission must not mutate the source fixture');
+
+  const partial = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+    shapeProfileId: BELLY_PROFILE_ID,
+    fixedAttachmentContacts: contacts.slice(0, 1),
+  }).conditions[0].source;
+  const partialResult = api.solveMuscleCompartmentPacking(partial, {
+    ...config,
+    clusterObstacleId: partial.obstacles[0].id,
+  });
+  assert.equal(partialResult.status, 'immutable-constraint-conflict');
+  assert.equal(partialResult.failure.blockingMechanisms.length, 1);
+  assert.equal(partialResult.failure.blockingMechanisms[0].left.muscleId, 'muscle-12');
+  assert.equal(partialResult.failure.blockingMechanisms[0].right.muscleId, 'muscle-45');
+  assert.equal(partialResult.fixedAttachmentContact.admittedResiduals.length, 1);
+
+  assert.throws(
+    () => api.createSourceShapedPackingPerturbationSeries({
+      ...fixture,
+      requestedConstructionIds: K4_IDS,
+      levels: LEVELS,
+      shapeProfileId: BELLY_PROFILE_ID,
+      fixedAttachmentContacts: [{ ...contacts[0], authority: 'anatomical-fact' }],
+    }),
+    /fixed attachment contact.*authority|authority.*fixed attachment contact/i,
+  );
+});
+
 test('parent-atlas and candidate disagreements fail before a provisional fixture can launder them', async () => {
   const api = assayApi();
   const fixture = await atlasFixture();

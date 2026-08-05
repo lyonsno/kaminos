@@ -362,6 +362,121 @@ function applySourceShapedShapeProfile(centerline, targetVolume, shapeProfile) {
   return profiled;
 }
 
+function endpointContactDescriptorKey(endpoint) {
+  return `${endpoint.muscleId}\u0000${endpoint.attachment}\u0000${endpoint.attachmentId}`;
+}
+
+function fixedAttachmentContactPairKey(left, right) {
+  return [endpointContactDescriptorKey(left), endpointContactDescriptorKey(right)]
+    .sort()
+    .join('\u0001');
+}
+
+function resolveFixedAttachmentContacts(requested, muscles) {
+  if (requested === undefined || requested === null) return [];
+  if (!Array.isArray(requested) || requested.length === 0) {
+    throw new Error('fixed attachment contacts must be a nonempty array when specified');
+  }
+  const muscleById = new Map(muscles.map(muscle => [muscle.id, muscle]));
+  const ids = new Set();
+  const pairs = new Set();
+  return requested.map((contact, index) => {
+    const label = `fixed attachment contact[${index}]`;
+    if (contact === null || typeof contact !== 'object' || Array.isArray(contact)) {
+      throw new Error(`${label} must be an object`);
+    }
+    const allowedKeys = new Set(['id', 'authority', 'left', 'right', 'scope']);
+    const unexpected = Object.keys(contact).filter(key => !allowedKeys.has(key));
+    if (unexpected.length > 0) throw new Error(`${label} has unknown fields: ${unexpected.join(', ')}`);
+    requireString(contact.id, `${label} id`);
+    if (ids.has(contact.id)) throw new Error(`fixed attachment contacts contain duplicate id ${contact.id}`);
+    ids.add(contact.id);
+    if (contact.authority !== 'agent-authored-provisional') {
+      throw new Error(`${label} authority must be agent-authored-provisional`);
+    }
+    for (const side of ['left', 'right']) {
+      const endpoint = contact[side];
+      if (endpoint === null || typeof endpoint !== 'object' || Array.isArray(endpoint)) {
+        throw new Error(`${label} ${side} must be an endpoint object`);
+      }
+      const descriptorKeys = Object.keys(endpoint);
+      if (
+        descriptorKeys.length !== 3 ||
+        !['muscleId', 'attachment', 'attachmentId'].every(key => descriptorKeys.includes(key))
+      ) {
+        throw new Error(`${label} ${side} must name only muscleId, attachment, and attachmentId`);
+      }
+      requireString(endpoint.muscleId, `${label} ${side} muscleId`);
+      if (!['origin', 'insertion'].includes(endpoint.attachment)) {
+        throw new Error(`${label} ${side} attachment must be origin or insertion`);
+      }
+      requireString(endpoint.attachmentId, `${label} ${side} attachmentId`);
+      const muscle = muscleById.get(endpoint.muscleId);
+      if (!muscle) throw new Error(`${label} ${side} names unknown muscle ${endpoint.muscleId}`);
+      if (muscle.attachments[endpoint.attachment].id !== endpoint.attachmentId) {
+        throw new Error(`${label} ${side} attachmentId does not match the source attachment`);
+      }
+    }
+    if (contact.left.muscleId === contact.right.muscleId) {
+      throw new Error(`${label} must bind two different muscles`);
+    }
+    if (
+      contact.scope?.kind !== 'exact-fixed-endpoint' ||
+      contact.scope?.maximumPathFraction !== 0 ||
+      Object.keys(contact.scope || {}).length !== 2
+    ) {
+      throw new Error(
+        `${label} scope must be exact-fixed-endpoint with maximumPathFraction 0`,
+      );
+    }
+    const pairKey = fixedAttachmentContactPairKey(contact.left, contact.right);
+    if (pairs.has(pairKey)) throw new Error(`${label} duplicates an admitted endpoint pair`);
+    pairs.add(pairKey);
+    const knotFor = endpoint => {
+      const centerline = muscleById.get(endpoint.muscleId).centerline;
+      return endpoint.attachment === 'origin' ? centerline[0] : centerline.at(-1);
+    };
+    const leftKnot = knotFor(contact.left);
+    const rightKnot = knotFor(contact.right);
+    const penetration = leftKnot.radius + rightKnot.radius -
+      distance(leftKnot.position, rightKnot.position);
+    if (!(penetration > 0)) {
+      throw new Error(`${label} does not name an existing fixed attachment penetration`);
+    }
+    return structuredClone(contact);
+  });
+}
+
+function fixedAttachmentContactReceipt(source) {
+  if (source.fixedAttachmentContacts === undefined) return null;
+  const requested = resolveFixedAttachmentContacts(
+    source.fixedAttachmentContacts,
+    source.muscles,
+  );
+  const muscleById = new Map(source.muscles.map(muscle => [muscle.id, muscle]));
+  const effective = requested.map(contact => {
+    const knotFor = endpoint => {
+      const centerline = muscleById.get(endpoint.muscleId).centerline;
+      return endpoint.attachment === 'origin' ? centerline[0] : centerline.at(-1);
+    };
+    const leftKnot = knotFor(contact.left);
+    const rightKnot = knotFor(contact.right);
+    return {
+      ...structuredClone(contact),
+      penetration: rounded(
+        leftKnot.radius + rightKnot.radius - distance(leftKnot.position, rightKnot.position),
+      ),
+    };
+  });
+  return {
+    policy: 'exact-source-linked-endpoint-only',
+    requested,
+    effective,
+    admittedResiduals: effective.filter(contact => contact.penetration > 0),
+    fallbackUsed: false,
+  };
+}
+
 function sampleCarrier(muscle, count) {
   const segmentCount = muscle.centerline.length - 1;
   const samples = [];
@@ -1059,6 +1174,7 @@ function validateSource(source) {
     requireFinite(muscle.targetVolume, `${muscle.id} target volume`);
     if (muscle.targetVolume <= 0) throw new Error(`${muscle.id} target volume must be positive`);
   }
+  resolveFixedAttachmentContacts(source.fixedAttachmentContacts, source.muscles);
   if (source.input.effective.kind === 'synthetic-fixture') {
     const { input, ...fixtureCore } = source;
     const effectiveHash = hashJson(fixtureCore);
@@ -1603,6 +1719,7 @@ function provisionalSourceForLevel({
   environment,
   level,
   shapeProfile,
+  fixedAttachmentContacts,
 }) {
   const requestedPerturbation = {
     kind: 'interior-samples-toward-cohort-centroid',
@@ -1671,6 +1788,10 @@ function provisionalSourceForLevel({
       ...(shapeProfile ? { shapeProfile: structuredClone(shapeProfile.effective) } : {}),
     };
   });
+  const effectiveFixedAttachmentContacts = resolveFixedAttachmentContacts(
+    fixedAttachmentContacts,
+    muscles,
+  );
   const core = {
     schema: MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
     id: `source-shaped-${requestedConstructionIds.join('-')}-${level.id}-v0`,
@@ -1682,6 +1803,9 @@ function provisionalSourceForLevel({
     compartment: structuredClone(environment.compartment),
     obstacles: [structuredClone(environment.obstacle)],
     muscles,
+    ...(effectiveFixedAttachmentContacts.length > 0
+      ? { fixedAttachmentContacts: effectiveFixedAttachmentContacts }
+      : {}),
     assayProvenance: {
       evidenceTrack: 'experimental',
       claimCeiling: 'qualitative-route-local-mechanical-response',
@@ -1715,6 +1839,12 @@ function provisionalSourceForLevel({
         },
       },
       ...(shapeProfile ? { shapeProfile: structuredClone(shapeProfile) } : {}),
+      ...(effectiveFixedAttachmentContacts.length > 0 ? {
+        fixedAttachmentContacts: {
+          requested: structuredClone(fixedAttachmentContacts),
+          effective: structuredClone(effectiveFixedAttachmentContacts),
+        },
+      } : {}),
     },
   };
   const sha256 = hashJson(core);
@@ -1733,6 +1863,7 @@ export function createSourceShapedPackingPerturbationSeries({
   requestedConstructionIds,
   levels,
   shapeProfileId,
+  fixedAttachmentContacts,
 }) {
   validateSourceShapedAtlas(parentAtlas, parentAtlasFileSha256);
   validatePerturbationLevels(levels);
@@ -1753,6 +1884,7 @@ export function createSourceShapedPackingPerturbationSeries({
       environment,
       level,
       shapeProfile,
+      fixedAttachmentContacts,
     }),
   }));
   return canonical({
@@ -3111,8 +3243,12 @@ function classifySourceFormationRetention(initial, packed, config) {
   };
 }
 
-function immutableFixedAttachmentConflicts(source) {
+function immutableFixedAttachmentConflicts(source, fixedContactReceipt = null) {
   const blockingMechanisms = [];
+  const admittedPairKeys = new Set(
+    (fixedContactReceipt?.effective || []).map(contact =>
+      fixedAttachmentContactPairKey(contact.left, contact.right)),
+  );
   const endpoints = ['origin', 'insertion'];
   for (let leftIndex = 0; leftIndex < source.muscles.length; leftIndex += 1) {
     const leftMuscle = source.muscles[leftIndex];
@@ -3131,18 +3267,23 @@ function immutableFixedAttachmentConflicts(source) {
               distance(leftKnot.position, rightKnot.position),
           );
           if (penetration <= 0) continue;
+          const leftDescriptor = {
+            muscleId: leftMuscle.id,
+            attachment: leftEndpoint,
+            attachmentId: leftMuscle.attachments[leftEndpoint].id,
+          };
+          const rightDescriptor = {
+            muscleId: rightMuscle.id,
+            attachment: rightEndpoint,
+            attachmentId: rightMuscle.attachments[rightEndpoint].id,
+          };
+          if (admittedPairKeys.has(fixedAttachmentContactPairKey(leftDescriptor, rightDescriptor))) {
+            continue;
+          }
           blockingMechanisms.push({
             kind: 'pairwise-fixed-attachment-penetration',
-            left: {
-              muscleId: leftMuscle.id,
-              attachment: leftEndpoint,
-              attachmentId: leftMuscle.attachments[leftEndpoint].id,
-            },
-            right: {
-              muscleId: rightMuscle.id,
-              attachment: rightEndpoint,
-              attachmentId: rightMuscle.attachments[rightEndpoint].id,
-            },
+            left: leftDescriptor,
+            right: rightDescriptor,
             penetration,
           });
         }
@@ -3223,7 +3364,8 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
   const muscles = structuredClone(source.muscles);
   const correctionAttribution = createCorrectionAttribution(muscles);
   const initial = measureState(source, muscles, config.sampleCount, true);
-  const blockingMechanisms = immutableFixedAttachmentConflicts(source);
+  const fixedAttachmentContact = fixedAttachmentContactReceipt(source);
+  const blockingMechanisms = immutableFixedAttachmentConflicts(source, fixedAttachmentContact);
   if (blockingMechanisms.length > 0) {
     return {
       schema: MUSCLE_COMPARTMENT_PACKING_RESULT_SCHEMA,
@@ -3237,6 +3379,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       curvatureProjection: curvatureProjectionReceipt(config),
       crossSectionProjection: crossSectionProjectionReceipt(config),
       clusterProjection: clusterProjectionReceipt(config, source),
+      ...(fixedAttachmentContact ? { fixedAttachmentContact } : {}),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
         centerlineDistance: 'nested-convex-golden-section',
@@ -3517,6 +3660,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     curvatureProjection: curvatureProjectionReceipt(config),
     crossSectionProjection: crossSectionProjectionReceipt(config),
     clusterProjection: clusterProjectionReceipt(config, source),
+    ...(fixedAttachmentContact ? { fixedAttachmentContact } : {}),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
       centerlineDistance: 'nested-convex-golden-section',
@@ -3575,6 +3719,7 @@ export function runSourceShapedPackingPerturbationSeries({
   levels,
   solverConfig = {},
   shapeProfileId,
+  fixedAttachmentContacts,
 }) {
   const requestedMechanismConfig = Object.keys(solverConfig).length === 0
     ? { ...DEFAULT_CONFIG }
@@ -3585,6 +3730,7 @@ export function runSourceShapedPackingPerturbationSeries({
     requestedConstructionIds,
     levels,
     shapeProfileId,
+    fixedAttachmentContacts,
   });
   const conditions = series.conditions.map(condition => {
     const result = solveMuscleCompartmentPacking(condition.source, requestedMechanismConfig);

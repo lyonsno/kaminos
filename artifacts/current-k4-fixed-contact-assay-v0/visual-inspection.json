@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.current-k4-fixed-contact-assay-visual-inspection.v0",
+  "observedAt": "2026-08-05T01:35:40Z",
+  "route": {
+    "requested": "current-k4-fixed-contact-orbitable-v0",
+    "effective": "current-k4-fixed-contact-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "browserKind": "playwright-chromium-headless-shell",
+    "installedStableChrome": false,
+    "captureCount": 2,
+    "allReportsComplete": true,
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "images": [
+    {
+      "condition": "baseline",
+      "state": "strict-source",
+      "path": "baseline-source.png",
+      "sha256": "e1fa75b28974682bf7e93b80bc5cad99cc24d5d12cc71edb41fb0d01e564b4fa"
+    },
+    {
+      "condition": "baseline",
+      "state": "contact-admitted-terminal-residual",
+      "path": "baseline-contact-admitted-result.png",
+      "sha256": "7158b21e0a38efe0f3448892d884aafcf52a4b9ff68c93731f0f5eac9a17cae4"
+    }
+  ],
+  "observations": {
+    "source": "The strict source is a tight, nearly parallel four-carrier bundle. Broad cyan, purple, and red overlap is visible through the central and lower insertion-side neighborhood; yellow is offset but still participates in the crowded cluster.",
+    "contactResponse": "Admitting only the two exact measured insertion contacts opens a differentiated solve rather than producing an evenly spaced geometric display. Yellow remains close to its source course, cyan translates outward, and purple takes a large curved correction with a pronounced lower hook. Red remains partly occluded behind cyan and purple, so the single canonical view cannot establish a clean four-carrier ordering.",
+    "remainingFailure": "The result is visibly less crowded but not packed anatomy. Cyan and purple still overlap substantially, the purple lower hook is mechanically suspicious, red occlusion prevents a clean contact read, and the witness reports a terminal pairwise residual of 0.341683068967. The fixed endpoints do not drift and the two admitted endpoint penetrations remain named rather than disappearing from the ledger.",
+    "labelIntegrity": "The selected-state controls say 'strict refusal' and 'contact admitted · occupancy attempted · residual remains'. The title and footer explicitly call the frame an agent-authored provisional mechanism assay with no anatomical admission; neither state is labeled as a successful packing result."
+  },
+  "numericalContext": {
+    "initialPairwisePenetration": 5.939877925286,
+    "terminalPairwisePenetration": 0.341683068967,
+    "initialSkeletalPenetration": 1.118640209394,
+    "terminalSkeletalPenetration": 0.000049671291,
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0,
+    "maximumSourceKnotDisplacement": 2.113241182984,
+    "minimumSourceTangentCosine": 0.327926861142,
+    "sourceTangentReversalCount": 0,
+    "sourceCurvatureReversalCount": 19,
+    "minimumPairwiseRelationCosine": 0.337122454171,
+    "pairwiseRelationReversalCount": 0,
+    "admittedFixedResiduals": [
+      0.204054995089,
+      0.105802263217
+    ]
+  },
+  "verdict": {
+    "fixedContactMechanism": "accepted-as-preflight-boundary-only",
+    "bellyNegotiation": "exercised-and-materially-differentiated",
+    "visibleSeparation": "material-but-incomplete",
+    "anatomicalAdmission": "rejected",
+    "pressureRungExpansion": "deferred",
+    "failureCertificate": "Exact fixed-contact admission lawfully opens belly negotiation and removes most pairwise and skeletal penetration, but the provisional occupancy carrier still terminates with visible cyan/purple overlap, a suspicious purple insertion-side hook, partial red occlusion, 19 curvature reversals, and 0.341683068967 pairwise residual.",
+    "earliestBlockingMechanism": "the normalized-sine free-belly occupancy update can distribute carriers around the obstacle, but it has no shared compartment material or section-order model to prevent hook-shaped local corrections and unresolved inter-carrier overlap"
+  },
+  "nextAssay": {
+    "id": "shared-cage-carrier-competitive-fixture.v0",
+    "preserve": [
+      "current-graph K4 identities and exact measured fixed attachments",
+      "Bytebound volume-preserving-tapered-belly.v0 target volumes",
+      "the exact source-linked fixed-contact receipt and admitted residual ledger",
+      "the same provisional skeletal obstacle and compartment bounds",
+      "source/result stable colors, centerlines, handles, and residual labels"
+    ],
+    "compare": [
+      "current affine-section/free-belly control",
+      "source-seedable shared ring-cage carrier",
+      "hard radial fan only as a negative control"
+    ],
+    "falsifier": "The shared cage is rejected if it merely makes a cleaner fan, launders either admitted fixed residual, increases endpoint drift or volume error, permits skeletal penetration, or cannot produce a visibly coherent cross-section/order improvement over this terminal-residual control."
+  }
+}
