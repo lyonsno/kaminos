@@ -1,0 +1,44 @@
+{
+  "schema": "kaminos.analytical-elbow-positive-volume-c-p0-live-smoke.v0",
+  "status": "captured",
+  "failurePhase": null,
+  "requestedUrl": "http://127.0.0.1:4187/artifacts/analytical-elbow-positive-volume-c-p0-witness-v0/index.html?camera=profile",
+  "effectiveRoute": "analytical-elbow-positive-volume-c-p0-witness",
+  "fallbackUsed": false,
+  "sourceArtifactSha256": "4facc5ba2d018fce24d749966f46c4041ee95279cd5d31e642024a0ad90f4005",
+  "cameraPreset": "profile",
+  "paused": true,
+  "animationActive": false,
+  "panels": [
+    {
+      "id": "scalar-control-35-collar-0.72",
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "drawCount": 4
+    },
+    {
+      "id": "c-p0-w-derived-35",
+      "vertexCount": 986,
+      "triangleCount": 1968,
+      "drawCount": 4
+    }
+  ],
+  "canvasPixels": [
+    {
+      "width": 720,
+      "height": 405,
+      "sampledPixels": 291600,
+      "coloredPixels": 24539
+    },
+    {
+      "width": 720,
+      "height": 405,
+      "sampledPixels": 291600,
+      "coloredPixels": 24107
+    }
+  ],
+  "screenshot": "/private/tmp/kaminos-golden-cp0-visual-consumer-0805/artifacts/analytical-elbow-positive-volume-c-p0-witness-v0/smoke/source-bound-profile.png",
+  "screenshotSha256": "7f18d292adb69ceb865bed16b127a12a85d4837d3a6a83146c07a2ddc65fef33",
+  "primaryOutput": "/private/tmp/kaminos-golden-cp0-visual-consumer-0805/artifacts/analytical-elbow-positive-volume-c-p0-witness-v0/smoke/source-bound-profile.png",
+  "claimCeiling": "route, source, geometry, paused-state, and nonblank-pixel witness only; visual admission remains a human-readable judgment"
+}

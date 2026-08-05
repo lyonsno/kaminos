@@ -251,7 +251,7 @@ function renderHtml(dataset) {
 <script type="module">
 import * as THREE from 'three'; import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const data=JSON.parse(document.querySelector('#c-p0-witness-data').textContent); const params=new URLSearchParams(location.search); let cameraPreset=data.visualContract.cameraPresets.includes(params.get('camera'))?params.get('camera'):'profile'; const overlays={regions:params.get('regions')!=='0',wireframe:params.get('wire')==='1',rest:params.get('rest')==='1'}; const panels=[];
-window.__KAMINOS_C_P0_WITNESS__={status:'loading',paused:true,animationActive:false,requestedRoute:data.requestedRoute,effectiveRoute:data.effectiveRoute,fallbackUsed:data.fallbackUsed,cameraPreset,overlays:{...overlays},panels:[]};
+window.__KAMINOS_C_P0_WITNESS__={status:'loading',paused:true,animationActive:false,requestedRoute:data.requestedRoute,effectiveRoute:data.effectiveRoute,fallbackUsed:data.fallbackUsed,sourceArtifactSha256:data.source.candidateArtifactSha256,cameraPreset,overlays:{...overlays},panels:[]};
 function heat(v,inverted){if(inverted)return new THREE.Color(0xd92967);const t=Math.min(1,v/(data.visualContract.heatThresholdLogStrain*2.2));const stops=[[0,0x248e8a],[.5,0xd5bd4d],[.75,0xef6a43],[1,0xd92967]];for(let i=1;i<stops.length;i++){if(t<=stops[i][0])return new THREE.Color(stops[i-1][1]).lerp(new THREE.Color(stops[i][1]),(t-stops[i-1][0])/(stops[i][0]-stops[i-1][0]));}return new THREE.Color(stops.at(-1)[1]);}
 function surface(entry,field,options={}){const positions=[],colors=[];for(const triangle of entry.triangles){const color=field==='posed'?heat(triangle.maximumAbsoluteLogEdgeStrain,triangle.inverted):new THREE.Color(0xc8d0ca);for(const index of triangle.indices){positions.push(...entry.vertices[index][field]);colors.push(color.r,color.g,color.b);}}const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();return new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.68,side:THREE.DoubleSide,...options}));}
 function camera(panel){panel.camera.position.set(...(cameraPreset==='profile'?[0,0,5.2]:[3.5,1.8,4.2]));panel.controls.target.set(0,.08,0);panel.controls.update();}
@@ -285,6 +285,8 @@ export async function writeAnalyticalElbowCP0Witness({
       effectiveBundle = JSON.parse(bytes.toString('utf8'));
     }
     const dataset = createAnalyticalElbowCP0WitnessDataset({ bundle:effectiveBundle });
+    dataset.source.candidateArtifactPath = bundle === null ? bundlePath : null;
+    dataset.source.candidateArtifactSha256 = candidateArtifactSha256;
     const report = {
       schema:REPORT_SCHEMA,
       status:'complete',
