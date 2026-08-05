@@ -1,0 +1,119 @@
+{
+  "schema": "kaminos.current-k4-occupancy-clamped-assay-visual-inspection.v0",
+  "observedAt": "2026-08-05T00:53:18Z",
+  "route": {
+    "requested": "current-k4-occupancy-orbitable-v0",
+    "effective": "current-k4-occupancy-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "browserKind": "playwright-chromium-headless-shell",
+    "installedStableChrome": false,
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "comparisonBaseline": {
+    "commit": "e36f82c64ec10b574d68b91bfc46fb76190ca933",
+    "artifact": "artifacts/current-k4-occupancy-assay-v0/visual-inspection.json",
+    "envelope": "normalized-sine",
+    "visualVerdict": "deterministic-radial-role-allocation-with-visible-hard-fan-and-attachment-hook"
+  },
+  "images": [
+    {
+      "condition": "baseline",
+      "state": "tapered-source",
+      "path": "baseline-tapered-source.png",
+      "sha256": "f06eb4b333b73e1fbcd8089254a95d5cd03e480ff4eddd45d4de15ada0cb1ce0"
+    },
+    {
+      "condition": "baseline",
+      "state": "clamped-occupied-result",
+      "path": "baseline-occupied-result.png",
+      "sha256": "483012eb926dfbbf6e0900b9f8a60f8dd10487f9dd17593485c64ed4370ee532",
+      "observation": "The zero-slope result remains a broad hard fan. The purple lower attachment is marginally less acute by metric but retains a plainly visible hook; red remains substantially occluded."
+    },
+    {
+      "condition": "mild",
+      "state": "tapered-source",
+      "path": "mild-tapered-source.png",
+      "sha256": "cb0a7f6d6b1eee8cc116f237ee7964ddd456a47fc97f75251aaa0606d8dc8dc3"
+    },
+    {
+      "condition": "mild",
+      "state": "clamped-occupied-result",
+      "path": "mild-occupied-result.png",
+      "sha256": "9efaa680f14a9cb351440822b7c0fa20219da2277f2ba54243dd4e6f367f3684",
+      "observation": "The clamped result is stable under mild crowding but is visually almost indistinguishable from the reviewed sine result; the scheduled fan and lower hook remain."
+    },
+    {
+      "condition": "moderate",
+      "state": "tapered-source",
+      "path": "moderate-tapered-source.png",
+      "sha256": "b5508dde3d6feedcb9c2870245095649e3bbe90e930ed8d612fff6190958660b"
+    },
+    {
+      "condition": "moderate",
+      "state": "clamped-occupied-result",
+      "path": "moderate-occupied-result.png",
+      "sha256": "8977e072f0270b4d4c0d9ecba22f05ecfc2e5b3426bf8341d2f9dd144e7657ee",
+      "observation": "Moderate crowding preserves the same geometric organization. The visible delta against sine is not material even though the worst tangent cosine improves."
+    }
+  ],
+  "mechanicalComparison": [
+    {
+      "condition": "baseline",
+      "sinePairwise": 0.082990533159,
+      "clampedPairwise": 0.083970520927,
+      "sineSkeletal": 0.000553081267,
+      "clampedSkeletal": 0.001982074564,
+      "sineWorstTangentCosine": 0.551977774273,
+      "clampedWorstTangentCosine": 0.582849911152,
+      "sineCurvatureReversals": 20,
+      "clampedCurvatureReversals": 25
+    },
+    {
+      "condition": "mild",
+      "sinePairwise": 0.085444847182,
+      "clampedPairwise": 0.087810304619,
+      "sineSkeletal": 0.000736661685,
+      "clampedSkeletal": 0.001781268989,
+      "sineWorstTangentCosine": 0.517396197165,
+      "clampedWorstTangentCosine": 0.552888841711,
+      "sineCurvatureReversals": 17,
+      "clampedCurvatureReversals": 19
+    },
+    {
+      "condition": "moderate",
+      "sinePairwise": 0.087590719199,
+      "clampedPairwise": 0.092487930219,
+      "sineSkeletal": 0.000801205114,
+      "clampedSkeletal": 0.001687914534,
+      "sineWorstTangentCosine": 0.484362523241,
+      "clampedWorstTangentCosine": 0.52663838124,
+      "sineCurvatureReversals": 16,
+      "clampedCurvatureReversals": 16
+    }
+  ],
+  "verdict": {
+    "mechanismContract": "accepted",
+    "endpointTangentEffect": "measured-positive",
+    "visibleDeltaAgainstSine": "not-material",
+    "continuousClearanceContract": "failed",
+    "anatomicalAdmission": "rejected",
+    "mechanismClassification": "zero-slope-envelope-improves-tangent-metric-without-removing-hard-fan-or-hook",
+    "reason": "The explicit clamped profile is deterministic and preserves the useful overlap relief, but the same absolute belly roles still dominate the visible result. Envelope shape is not the earliest remaining blocking mechanism."
+  },
+  "nextAssay": {
+    "preserve": [
+      "review-clean identity-bound role schedule",
+      "normalized-sine-squared transition profile",
+      "fixed attachments and exact target volume",
+      "baseline, mild, and moderate source conditions",
+      "explicit source/result labels and isolated capture route"
+    ],
+    "change": "Add an explicit bounded occupancy strength so the same role schedule acts as a soft compactness target instead of absolute belly placement, and sweep the visible separation-versus-fan Pareto surface.",
+    "firstFalsifier": "Reject the strength mechanism if no setting materially reduces fan spread and lower-hook severity while retaining at least 90 percent of the reviewed sine mechanism's pairwise improvement and zero endpoint, volume, tangent-reversal, and pairwise-relation-reversal violations."
+  }
+}

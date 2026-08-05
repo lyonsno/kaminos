@@ -28,7 +28,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function run(output, extra = []) {
+function run(output, extra = [], occupancyEnvelope = 'normalized-sine-squared') {
   return spawnSync(process.execPath, [
     TOOL,
     '--parent-atlas', ATLAS,
@@ -37,6 +37,7 @@ function run(output, extra = []) {
     '--endpoint-radius-multiplier', '0.26',
     '--transition-fraction', '0.2',
     '--max-iterations', '2',
+    '--occupancy-envelope', occupancyEnvelope,
     ...extra,
   ], { cwd: REPO_ROOT, encoding: 'utf8' });
 }
@@ -51,6 +52,7 @@ test('current-K4 occupancy assay emits identity-bound three-rung data and orbita
   assert.equal(report.status, 'completed');
   assert.deepEqual(report.requestedConstructionIds, IDS);
   assert.deepEqual(report.effectiveConstructionIds, IDS);
+  assert.equal(report.requestedOccupancyEnvelope, 'normalized-sine-squared');
   assert.deepEqual(report.conditions.map(condition => condition.id), [
     'baseline',
     'mild',
@@ -71,6 +73,14 @@ test('current-K4 occupancy assay emits identity-bound three-rung data and orbita
     assert.ok(condition.occupiedResult.packed.maximumRelativeVolumeError <= 1e-9);
     assert.equal(condition.occupiedResult.packed.sourceTangentReversalCount, 0);
     assert.equal(condition.occupiedResult.packed.pairwiseRelationReversalCount, 0);
+    assert.equal(
+      condition.occupancy.effective.requestedEnvelopeProfile,
+      'normalized-sine-squared',
+    );
+    assert.equal(
+      condition.occupancy.effective.effectiveEnvelopeProfile,
+      'normalized-sine-squared',
+    );
     for (const artifact of Object.values(condition.outputs)) {
       const bytes = await readFile(path.join(output, artifact.path));
       assert.equal(sha256(bytes), artifact.sha256);

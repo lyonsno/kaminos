@@ -1,0 +1,2519 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-result.v0",
+  "sourceSchema": "kaminos.muscle-compartment-packing-source.v0",
+  "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+  "sourceAuthority": {
+    "anatomicalAdmission": "none",
+    "kind": "synthetic-proxy"
+  },
+  "dimension": 3,
+  "formation": {
+    "requestedCenterlineSmoothingReference": "absolute-position",
+    "effectiveCenterlineSmoothingReference": "absolute-position",
+    "fallbackUsed": false
+  },
+  "pairwiseProjection": {
+    "requestedUpdate": "sequential",
+    "effectiveUpdate": "sequential",
+    "fallbackUsed": false
+  },
+  "pairwiseCoordinate": {
+    "requested": "cartesian",
+    "effective": "cartesian",
+    "fallbackUsed": false
+  },
+  "curvatureProjection": {
+    "requestedUpdate": "unconstrained",
+    "effectiveUpdate": "unconstrained",
+    "fallbackUsed": false
+  },
+  "crossSectionProjection": {
+    "requestedUpdate": "uniform",
+    "effectiveUpdate": "uniform",
+    "requestedStep": null,
+    "effectiveStep": null,
+    "fallbackUsed": false
+  },
+  "clusterProjection": {
+    "requestedUpdate": "capsule-axis-occupancy-allocation",
+    "effectiveUpdate": "capsule-axis-occupancy-allocation",
+    "obstacleId": "agent-authored-k4-central-pressure-capsule",
+    "referenceDirection": [
+      1,
+      0,
+      0
+    ],
+    "effectiveReferenceDirection": [
+      0.9688830546939377,
+      0.16942786907506863,
+      -0.18044340804702647
+    ],
+    "allocationSchedule": [
+      {
+        "muscleId": "muscle-34",
+        "azimuthRadians": -1.2,
+        "radialDistance": 1.8,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-13",
+        "azimuthRadians": 2.65,
+        "radialDistance": 2.2,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-12",
+        "azimuthRadians": 0.75,
+        "radialDistance": 1.4,
+        "axialOffset": -0.25
+      },
+      {
+        "muscleId": "muscle-45",
+        "azimuthRadians": 0.05,
+        "radialDistance": 1.8,
+        "axialOffset": 0.25
+      }
+    ],
+    "requestedEnvelopeProfile": "normalized-sine-squared",
+    "effectiveEnvelopeProfile": "normalized-sine-squared",
+    "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-squared-zero-at-attachments",
+    "fallbackUsed": false
+  },
+  "clearanceValidation": {
+    "kind": "conservative-continuous-piecewise-linear",
+    "centerlineDistance": "nested-convex-golden-section",
+    "segmentRadiusBound": "linear-taper-with-lipschitz-search-bound",
+    "sampledSupplementCount": 25
+  },
+  "status": "continuous-clearance-failed",
+  "iterations": 64,
+  "correctionAttribution": {
+    "schema": "kaminos.muscle-compartment-packing-correction-attribution.v0",
+    "interpretation": "algorithmic-projection-path-length-not-physical-force",
+    "aggregation": "sum-of-primitive-applied-deltas",
+    "categories": [
+      "sourceSmoothing",
+      "formationConstraint",
+      "skeletalClearance",
+      "pairwiseExclusion",
+      "compartmentProjection",
+      "volumeRestoration"
+    ],
+    "byMuscle": [
+      {
+        "muscleId": "muscle-34",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.592602325813,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 561
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 2.692262422746,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 11
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.00050618777,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 2
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 4.988143626049,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 1271
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.036368810662,
+            "appliedPrimitiveCount": 1248
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-13",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0.623079340272,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 561
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 2.522144116038,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 11
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 2.114058084308,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 1531
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.057018941367,
+            "appliedPrimitiveCount": 1664
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-12",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 1.080263020533,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 561
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 5.931078562649,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 11
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 1.414622290623,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 181
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 13.598885834765,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 3808
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.299397789111,
+            "appliedPrimitiveCount": 1664
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-45",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 1.131970020389,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 561
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 7.363360226892,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 11
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0.052041374694,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 4
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 15.891514215717,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 2674
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0.521321468351,
+            "appliedPrimitiveCount": 1664
+          }
+        }
+      }
+    ],
+    "totals": {
+      "sourceSmoothing": {
+        "cumulativeAppliedKnotDisplacement": 3.427914707007,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 2244
+      },
+      "formationConstraint": {
+        "cumulativeAppliedKnotDisplacement": 18.508845328325,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 44
+      },
+      "skeletalClearance": {
+        "cumulativeAppliedKnotDisplacement": 1.467169853088,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 187
+      },
+      "pairwiseExclusion": {
+        "cumulativeAppliedKnotDisplacement": 36.592601760839,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 9284
+      },
+      "compartmentProjection": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "volumeRestoration": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0.91410700949,
+        "appliedPrimitiveCount": 6240
+      }
+    }
+  },
+  "input": {
+    "requested": {
+      "kind": "endpoint-tapered-packing-source",
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+      "sha256": "df731d0a47fa0fc2426ad5adaeb6c928a6eb7d65b80d6a6119604b2430a7cc9b"
+    },
+    "effective": {
+      "kind": "endpoint-tapered-packing-source",
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+      "sha256": "df731d0a47fa0fc2426ad5adaeb6c928a6eb7d65b80d6a6119604b2430a7cc9b"
+    }
+  },
+  "config": {
+    "maxIterations": 64,
+    "relaxationStep": 0.18,
+    "smoothnessStep": 0.035,
+    "sampleCount": 25,
+    "convergenceTolerance": 1e-7,
+    "maximumSourceBendEnergyRatio": 1.05,
+    "minimumSourceCurvatureCosine": 0.3,
+    "minimumSourceTangentCosine": 0,
+    "clusterUpdate": "capsule-axis-occupancy-allocation",
+    "clusterObstacleId": "agent-authored-k4-central-pressure-capsule",
+    "clusterOccupancyReferenceDirection": [
+      1,
+      0,
+      0
+    ],
+    "clusterAllocationSchedule": [
+      {
+        "muscleId": "muscle-34",
+        "azimuthRadians": -1.2,
+        "radialDistance": 1.8,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-13",
+        "azimuthRadians": 2.65,
+        "radialDistance": 2.2,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-12",
+        "azimuthRadians": 0.75,
+        "radialDistance": 1.4,
+        "axialOffset": -0.25
+      },
+      {
+        "muscleId": "muscle-45",
+        "azimuthRadians": 0.05,
+        "radialDistance": 1.8,
+        "axialOffset": 0.25
+      }
+    ],
+    "clusterOccupancyEnvelope": "normalized-sine-squared"
+  },
+  "compartment": {
+    "clearance": 0.0593462031473567,
+    "id": "agent-authored-k4-data-envelope",
+    "kind": "box",
+    "maximum": [
+      11.586311546367833,
+      14.295522895367833,
+      13.273248878367836
+    ],
+    "minimum": [
+      -1.422363248367835,
+      -6.175986972367834,
+      -8.135205474367835
+    ]
+  },
+  "obstacles": [
+    {
+      "authority": "agent-authored-provisional",
+      "clearance": 0.0593462031473567,
+      "end": [
+        6.374811029192541,
+        1.5400552383765298,
+        5.005766562299481
+      ],
+      "id": "agent-authored-k4-central-pressure-capsule",
+      "kind": "capsule",
+      "radius": 0.1780386094420701,
+      "start": [
+        4.816881333826592,
+        5.7143891565462095,
+        0.5600337402269847
+      ]
+    }
+  ],
+  "muscles": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 0,
+        "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "radius": 0.3123897517690323
+        },
+        {
+          "position": [
+            4.478688149790176,
+            7.232742479321435,
+            -3.959981566254007
+          ],
+          "radius": 0.6433999385230227
+        },
+        {
+          "position": [
+            4.88825526031888,
+            6.1468826292781555,
+            -2.945445866142399
+          ],
+          "radius": 1.1346127048747958
+        },
+        {
+          "position": [
+            5.197703634835229,
+            5.246074111475212,
+            -1.797641890653744
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            5.5168744981946025,
+            4.33255241470816,
+            -0.6586714286510391
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            5.832922750272371,
+            3.3367487267150153,
+            0.42404806131276385
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            6.092966258969646,
+            2.3172543796748175,
+            1.4964595731492738
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            6.304570288947795,
+            1.3260175345649698,
+            2.59149889839196
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            6.4987542678731005,
+            0.3506936657005792,
+            3.7015453269488288
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            6.705699343694344,
+            -0.6518399705013852,
+            4.7949085057401595
+          ],
+          "radius": 1.2014990452655077
+        },
+        {
+          "position": [
+            6.984162352217073,
+            -1.5861624794349978,
+            5.972965237142607
+          ],
+          "radius": 1.1289934508429167
+        },
+        {
+          "position": [
+            7.547255888533021,
+            -2.234376292954682,
+            7.3778661176602975
+          ],
+          "radius": 0.6338420261427504
+        },
+        {
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "radius": 0.3123897517690323
+        }
+      ],
+      "id": "muscle-34",
+      "identity": {
+        "constructionId": "muscle-34",
+        "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+        "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-34"
+      },
+      "targetVolume": 64.02550251,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 64.02550251
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 1,
+        "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "radius": 0.3123987791729946
+        },
+        {
+          "position": [
+            1.9646125452494991,
+            8.861665474988854,
+            -1.5383241709247188
+          ],
+          "radius": 0.6333751447631486
+        },
+        {
+          "position": [
+            1.9325127122349246,
+            7.895029623453115,
+            -0.29273253800416815
+          ],
+          "radius": 1.1286096600321147
+        },
+        {
+          "position": [
+            2.190042322117221,
+            6.840502672092711,
+            0.8292573697862152
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            2.792340577979895,
+            5.841425492176743,
+            1.8204366581417202
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            3.3255772331778446,
+            4.9126443088721325,
+            2.8707851622433878
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            3.7579911280707696,
+            3.944357254763677,
+            3.9483042160029522
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            4.18016094691565,
+            2.9457829484310802,
+            5.0118758057919655
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            4.607250597366667,
+            1.9266179394241105,
+            6.056540719177657
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            4.971082938933223,
+            0.8780710154531983,
+            7.096008740444687
+          ],
+          "radius": 1.2015337660499787
+        },
+        {
+          "position": [
+            5.384594135374579,
+            -0.15058436688238014,
+            8.127317357831565
+          ],
+          "radius": 1.1360074788564878
+        },
+        {
+          "position": [
+            5.954885735993614,
+            -1.1126369076821647,
+            9.173988218642029
+          ],
+          "radius": 0.6460036832406222
+        },
+        {
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "radius": 0.3123987791729946
+        }
+      ],
+      "id": "muscle-13",
+      "identity": {
+        "constructionId": "muscle-13",
+        "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+        "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-13"
+      },
+      "targetVolume": 64.512268168,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 64.512268168
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af",
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 2,
+        "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "radius": 0.3266917357925438
+        },
+        {
+          "position": [
+            3.7155896274750355,
+            9.014364672742849,
+            -2.8715378057612257
+          ],
+          "radius": 0.6848309651443593
+        },
+        {
+          "position": [
+            3.9051658389356376,
+            7.862636307445975,
+            -1.7199630884129693
+          ],
+          "radius": 1.1915888424500387
+        },
+        {
+          "position": [
+            4.401903286949306,
+            7.306609910571477,
+            -0.3557450498714211
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            4.883623544944626,
+            7.138403398406495,
+            1.2652747146997139
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            5.519015012462992,
+            5.988319886990597,
+            2.4409361270820473
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            6.0359806912828455,
+            4.934197329923405,
+            3.531721243101853
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            6.525109349904239,
+            3.871926205740929,
+            4.6219188966709295
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            6.958338068744508,
+            2.7936903777213056,
+            5.736592855436081
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            7.287499051246932,
+            1.6891528455617006,
+            6.866785914198192
+          ],
+          "radius": 1.2565066761251689
+        },
+        {
+          "position": [
+            7.619941979609152,
+            0.48242295218168274,
+            8.013481440299007
+          ],
+          "radius": 1.189791594076378
+        },
+        {
+          "position": [
+            7.9862153821755655,
+            -1.074505822681517,
+            8.802426910343927
+          ],
+          "radius": 0.6816133626167568
+        },
+        {
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "radius": 0.3266917357925438
+        }
+      ],
+      "id": "muscle-12",
+      "identity": {
+        "constructionId": "muscle-12",
+        "instanceId": "instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10",
+        "lineageId": "lineage-27e2fbb3-3732-4933-8793-1bd61236401c",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-12"
+      },
+      "targetVolume": 76.826555301,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 76.826555301
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d",
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 3,
+        "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "radius": 0.33741769742341726
+        },
+        {
+          "position": [
+            4.485856322486568,
+            10.388772961335913,
+            -2.7071976249058394
+          ],
+          "radius": 0.735036665494656
+        },
+        {
+          "position": [
+            5.604593460380552,
+            9.658782756517525,
+            -1.568568932403984
+          ],
+          "radius": 1.2434691037199401
+        },
+        {
+          "position": [
+            6.787142236638392,
+            8.387831340088796,
+            -0.7268950500484537
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            7.346387063253751,
+            6.680159373131289,
+            0.1075496558158699
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            7.590986080571581,
+            5.166920404365662,
+            1.1240243517824493
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            7.971970695111063,
+            3.8702449138347954,
+            2.1733620701462137
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            8.345372771273189,
+            2.633647979227264,
+            3.241526515563482
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            8.671967772616357,
+            1.4208776380601578,
+            4.354223850989453
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            8.950769663604872,
+            0.23472061663108895,
+            5.525177990240294
+          ],
+          "radius": 1.2977603747054514
+        },
+        {
+          "position": [
+            9.173479442134923,
+            -0.934933036001774,
+            6.755763136104944
+          ],
+          "radius": 1.2311881324329672
+        },
+        {
+          "position": [
+            9.840115605625313,
+            -2.0834005240858717,
+            8.273964504325662
+          ],
+          "radius": 0.7117085381574603
+        },
+        {
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "radius": 0.33741769742341726
+        }
+      ],
+      "id": "muscle-45",
+      "identity": {
+        "constructionId": "muscle-45",
+        "instanceId": "instance-a4b690df-3a8d-4ccb-be89-3550af103e0e",
+        "lineageId": "lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-45"
+      },
+      "targetVolume": 89.302118638,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 89.302118638
+    }
+  ],
+  "metrics": {
+    "initial": {
+      "pairwisePenetration": 6.445148925627,
+      "skeletalPenetration": 1.072290987526,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 0.123194664416,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "packed": {
+      "pairwisePenetration": 0.087810304619,
+      "skeletalPenetration": 0.001781268989,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.637230735634,
+      "maximumSourceKnotDisplacement": 2.08052274663,
+      "rootMeanSquareSourceKnotDisplacement": 0.998182254233,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.552888841711,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.035191291853,
+      "minimumPairwiseRelationCosine": 0.323527832455,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    }
+  },
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 1.54021969002,
+      "pairwisePenetration": 1.54021969002,
+      "skeletalPenetration": 0.214551951891,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 1.923791605418,
+      "maximumSourceKnotDisplacement": 1.784462469679,
+      "rootMeanSquareSourceKnotDisplacement": 0.837489669343,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.986313864328,
+      "sourceCurvatureReversalCount": 16,
+      "minimumSourceTangentCosine": 0.838728737725,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.022578873449,
+      "minimumPairwiseRelationCosine": 0.357695346831,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 2,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.977116110241,
+      "pairwisePenetration": 0.977116110241,
+      "skeletalPenetration": 0.1645532009,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.763535463826,
+      "maximumSourceKnotDisplacement": 1.883030513524,
+      "rootMeanSquareSourceKnotDisplacement": 0.917211714044,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996676645544,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.785012718351,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.026725414843,
+      "minimumPairwiseRelationCosine": 0.329829964931,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 3,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.733708833591,
+      "pairwisePenetration": 0.733708833591,
+      "skeletalPenetration": 0.141064097867,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.887726524103,
+      "maximumSourceKnotDisplacement": 1.915580259742,
+      "rootMeanSquareSourceKnotDisplacement": 0.941929513645,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996261361524,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.776789704746,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.027930733099,
+      "minimumPairwiseRelationCosine": 0.324458365896,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 4,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.610455506641,
+      "pairwisePenetration": 0.610455506641,
+      "skeletalPenetration": 0.129653174746,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.849667753465,
+      "maximumSourceKnotDisplacement": 1.946055334274,
+      "rootMeanSquareSourceKnotDisplacement": 0.951731206081,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.994744464499,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.777211585,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028289787459,
+      "minimumPairwiseRelationCosine": 0.325524673469,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 5,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.538210805265,
+      "pairwisePenetration": 0.538210805265,
+      "skeletalPenetration": 0.122258327839,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.784541136582,
+      "maximumSourceKnotDisplacement": 1.964600558202,
+      "rootMeanSquareSourceKnotDisplacement": 0.956778774576,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.993957454961,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.779142103742,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028407872531,
+      "minimumPairwiseRelationCosine": 0.327792885621,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 6,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.484856485935,
+      "pairwisePenetration": 0.484856485935,
+      "skeletalPenetration": 0.115012528742,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.713763406475,
+      "maximumSourceKnotDisplacement": 1.978122381643,
+      "rootMeanSquareSourceKnotDisplacement": 0.960026380614,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99344550263,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.78169783124,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028451273247,
+      "minimumPairwiseRelationCosine": 0.329641429973,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 7,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.444936631204,
+      "pairwisePenetration": 0.444936631204,
+      "skeletalPenetration": 0.107826701155,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.644084238705,
+      "maximumSourceKnotDisplacement": 1.988849094533,
+      "rootMeanSquareSourceKnotDisplacement": 0.962453336935,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.993011085185,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.784583172914,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028481361462,
+      "minimumPairwiseRelationCosine": 0.331228104101,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 8,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.411043553393,
+      "pairwisePenetration": 0.411043553393,
+      "skeletalPenetration": 0.100787087253,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.580475544945,
+      "maximumSourceKnotDisplacement": 1.99801081156,
+      "rootMeanSquareSourceKnotDisplacement": 0.964434595658,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.992601490076,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.787515336704,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028518363347,
+      "minimumPairwiseRelationCosine": 0.332625872155,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 9,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.381318403519,
+      "pairwisePenetration": 0.381318403519,
+      "skeletalPenetration": 0.093989200379,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.523358671335,
+      "maximumSourceKnotDisplacement": 2.005906779163,
+      "rootMeanSquareSourceKnotDisplacement": 0.966140169356,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.992218561557,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.790323114458,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028567101431,
+      "minimumPairwiseRelationCosine": 0.333797588268,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 10,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.354688540003,
+      "pairwisePenetration": 0.354688540003,
+      "skeletalPenetration": 0.087388241779,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.473079429619,
+      "maximumSourceKnotDisplacement": 2.012762528101,
+      "rootMeanSquareSourceKnotDisplacement": 0.967670184518,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.991865414167,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.792914493953,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028623973177,
+      "minimumPairwiseRelationCosine": 0.334702457341,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 11,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.330584633395,
+      "pairwisePenetration": 0.330584633395,
+      "skeletalPenetration": 0.081028212486,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.428784198372,
+      "maximumSourceKnotDisplacement": 2.018757841265,
+      "rootMeanSquareSourceKnotDisplacement": 0.969079798428,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.992845035503,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.795287734756,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028686375273,
+      "minimumPairwiseRelationCosine": 0.335391267575,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 12,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.310209872707,
+      "pairwisePenetration": 0.310209872707,
+      "skeletalPenetration": 0.07494135281,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.389564593885,
+      "maximumSourceKnotDisplacement": 2.024036158271,
+      "rootMeanSquareSourceKnotDisplacement": 0.970377862662,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.993731319059,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.797462685092,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.02875471573,
+      "minimumPairwiseRelationCosine": 0.335912670535,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 13,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.291845762436,
+      "pairwisePenetration": 0.291845762436,
+      "skeletalPenetration": 0.069139584302,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.354795520589,
+      "maximumSourceKnotDisplacement": 2.0287148836,
+      "rootMeanSquareSourceKnotDisplacement": 0.971574500763,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.994464335227,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.799456920271,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028829045609,
+      "minimumPairwiseRelationCosine": 0.336301787338,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 14,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.274934659503,
+      "pairwisePenetration": 0.274934659503,
+      "skeletalPenetration": 0.063649229303,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.368565321438,
+      "maximumSourceKnotDisplacement": 2.032925117582,
+      "rootMeanSquareSourceKnotDisplacement": 0.972689947601,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.995066543124,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.793130917899,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028910904054,
+      "minimumPairwiseRelationCosine": 0.336589510922,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 15,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.259192625651,
+      "pairwisePenetration": 0.259192625651,
+      "skeletalPenetration": 0.058461347687,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.412395095199,
+      "maximumSourceKnotDisplacement": 2.036729510212,
+      "rootMeanSquareSourceKnotDisplacement": 0.973734011015,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99555669043,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.785413272011,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.028999219886,
+      "minimumPairwiseRelationCosine": 0.336793684215,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 16,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.244406583602,
+      "pairwisePenetration": 0.244406583602,
+      "skeletalPenetration": 0.053576914249,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.458896484134,
+      "maximumSourceKnotDisplacement": 2.040209678935,
+      "rootMeanSquareSourceKnotDisplacement": 0.974723039169,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.995952744113,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.777973817726,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029094453085,
+      "minimumPairwiseRelationCosine": 0.336929652349,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 17,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.230408092021,
+      "pairwisePenetration": 0.230408092021,
+      "skeletalPenetration": 0.048957084945,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.507758413002,
+      "maximumSourceKnotDisplacement": 2.043403139673,
+      "rootMeanSquareSourceKnotDisplacement": 0.975668834522,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996275888386,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.770786499258,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029196044111,
+      "minimumPairwiseRelationCosine": 0.336993495282,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 18,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.217090321657,
+      "pairwisePenetration": 0.217090321657,
+      "skeletalPenetration": 0.044578576344,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.558632914438,
+      "maximumSourceKnotDisplacement": 2.046337902877,
+      "rootMeanSquareSourceKnotDisplacement": 0.976575617854,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996540462806,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.763829793877,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029303085512,
+      "minimumPairwiseRelationCosine": 0.336990813208,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 19,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.204373731141,
+      "pairwisePenetration": 0.204373731141,
+      "skeletalPenetration": 0.040425070065,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.611285176416,
+      "maximumSourceKnotDisplacement": 2.049036974249,
+      "rootMeanSquareSourceKnotDisplacement": 0.977446046019,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996756371992,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.757081827509,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029414719027,
+      "minimumPairwiseRelationCosine": 0.336928168283,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 20,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.192210610011,
+      "pairwisePenetration": 0.192210610011,
+      "skeletalPenetration": 0.036481135088,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.66551636884,
+      "maximumSourceKnotDisplacement": 2.051522506876,
+      "rootMeanSquareSourceKnotDisplacement": 0.97828386403,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.996933606587,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.750524790214,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029530398933,
+      "minimumPairwiseRelationCosine": 0.336811635573,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 21,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.180557213261,
+      "pairwisePenetration": 0.180557213261,
+      "skeletalPenetration": 0.032732498284,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.721250154763,
+      "maximumSourceKnotDisplacement": 2.053815807205,
+      "rootMeanSquareSourceKnotDisplacement": 0.979091933405,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99708077159,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.744141297574,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029649763803,
+      "minimumPairwiseRelationCosine": 0.336647758711,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 22,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.16935782943,
+      "pairwisePenetration": 0.16935782943,
+      "skeletalPenetration": 0.029167712362,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.778395043717,
+      "maximumSourceKnotDisplacement": 2.055933157836,
+      "rootMeanSquareSourceKnotDisplacement": 0.979871640109,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997205426469,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.737914631989,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.029772323775,
+      "minimumPairwiseRelationCosine": 0.336441898405,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 23,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.158576351252,
+      "pairwisePenetration": 0.158576351252,
+      "skeletalPenetration": 0.025776726204,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.83684527553,
+      "maximumSourceKnotDisplacement": 2.057890123848,
+      "rootMeanSquareSourceKnotDisplacement": 0.980625404533,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997308780434,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.731831389044,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.02989773051,
+      "minimumPairwiseRelationCosine": 0.336198511952,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 24,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.148190395286,
+      "pairwisePenetration": 0.148190395286,
+      "skeletalPenetration": 0.022547733965,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.896611265129,
+      "maximumSourceKnotDisplacement": 2.059701453152,
+      "rootMeanSquareSourceKnotDisplacement": 0.981357186259,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997392844621,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.725880779326,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030025987884,
+      "minimumPairwiseRelationCosine": 0.335921994201,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 25,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.138158415782,
+      "pairwisePenetration": 0.138158415782,
+      "skeletalPenetration": 0.019472319991,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 2.957691669224,
+      "maximumSourceKnotDisplacement": 2.061379224904,
+      "rootMeanSquareSourceKnotDisplacement": 0.982067322733,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997462416082,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.720049383462,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030156765559,
+      "minimumPairwiseRelationCosine": 0.335616405024,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 26,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.128460568788,
+      "pairwisePenetration": 0.128460568788,
+      "skeletalPenetration": 0.016542041657,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.019971642643,
+      "maximumSourceKnotDisplacement": 2.062935090967,
+      "rootMeanSquareSourceKnotDisplacement": 0.982756104289,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997521292589,
+      "sourceCurvatureReversalCount": 18,
+      "minimumSourceTangentCosine": 0.714330348167,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030289780467,
+      "minimumPairwiseRelationCosine": 0.335285200761,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 27,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.119063297937,
+      "pairwisePenetration": 0.119063297937,
+      "skeletalPenetration": 0.01375060026,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.083435183129,
+      "maximumSourceKnotDisplacement": 2.064379203978,
+      "rootMeanSquareSourceKnotDisplacement": 0.983425177564,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997572499711,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.708711334217,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030424759259,
+      "minimumPairwiseRelationCosine": 0.334931795411,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 28,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.109947768681,
+      "pairwisePenetration": 0.109947768681,
+      "skeletalPenetration": 0.011091380875,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.147947388543,
+      "maximumSourceKnotDisplacement": 2.065720613209,
+      "rootMeanSquareSourceKnotDisplacement": 0.984075592824,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997618398205,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.703186763386,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030561454868,
+      "minimumPairwiseRelationCosine": 0.33455897238,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 29,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.101090876836,
+      "pairwisePenetration": 0.101090876836,
+      "skeletalPenetration": 0.008558604615,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.213454424602,
+      "maximumSourceKnotDisplacement": 2.066967938738,
+      "rootMeanSquareSourceKnotDisplacement": 0.984708044071,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997660294287,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.697750335144,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030699668022,
+      "minimumPairwiseRelationCosine": 0.334169779062,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 30,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.092471918063,
+      "pairwisePenetration": 0.092471918063,
+      "skeletalPenetration": 0.00614719316,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.279939772618,
+      "maximumSourceKnotDisplacement": 2.068128484065,
+      "rootMeanSquareSourceKnotDisplacement": 0.985323222996,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997699169131,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.69239565645,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030839233303,
+      "minimumPairwiseRelationCosine": 0.333766587517,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 31,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.084080021786,
+      "pairwisePenetration": 0.084080021786,
+      "skeletalPenetration": 0.003851548981,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.347422219876,
+      "maximumSourceKnotDisplacement": 2.069208392992,
+      "rootMeanSquareSourceKnotDisplacement": 0.98592133979,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997735903942,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.687117015254,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.030980013837,
+      "minimumPairwiseRelationCosine": 0.333351734903,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 32,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.075910291586,
+      "pairwisePenetration": 0.075910291586,
+      "skeletalPenetration": 0.001666317331,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.415868204491,
+      "maximumSourceKnotDisplacement": 2.070213340818,
+      "rootMeanSquareSourceKnotDisplacement": 0.986502587266,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997771458854,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.681911275556,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031121853494,
+      "minimumPairwiseRelationCosine": 0.332927515796,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 33,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.067953276617,
+      "pairwisePenetration": 0.067953276617,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.485248216747,
+      "maximumSourceKnotDisplacement": 2.071148595769,
+      "rootMeanSquareSourceKnotDisplacement": 0.987068112698,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997806659197,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.676774544086,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031264608003,
+      "minimumPairwiseRelationCosine": 0.332495841,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 34,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.060202617747,
+      "pairwisePenetration": 0.060202617747,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.555524680398,
+      "maximumSourceKnotDisplacement": 2.072018346348,
+      "rootMeanSquareSourceKnotDisplacement": 0.987618057446,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99784223308,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.671704579105,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031408116917,
+      "minimumPairwiseRelationCosine": 0.332058733502,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 35,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.052647219385,
+      "pairwisePenetration": 0.052647219385,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.626682642642,
+      "maximumSourceKnotDisplacement": 2.072826915884,
+      "rootMeanSquareSourceKnotDisplacement": 0.988153543714,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997876833399,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.666697555498,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031552241648,
+      "minimumPairwiseRelationCosine": 0.331618083254,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 36,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.045285911239,
+      "pairwisePenetration": 0.045285911239,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.698646995089,
+      "maximumSourceKnotDisplacement": 2.073578032244,
+      "rootMeanSquareSourceKnotDisplacement": 0.98867450042,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997908091345,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.661753671053,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031696801697,
+      "minimumPairwiseRelationCosine": 0.331175719005,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 37,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.038113424963,
+      "pairwisePenetration": 0.038113424963,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.771372155885,
+      "maximumSourceKnotDisplacement": 2.074274959025,
+      "rootMeanSquareSourceKnotDisplacement": 0.989181163798,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997933864198,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.656871802713,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031841636945,
+      "minimumPairwiseRelationCosine": 0.330733474606,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 38,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.031123845823,
+      "pairwisePenetration": 0.031123845823,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.844820783908,
+      "maximumSourceKnotDisplacement": 2.074920723079,
+      "rootMeanSquareSourceKnotDisplacement": 0.989673659438,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997955008319,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.652050456149,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.031986581722,
+      "minimumPairwiseRelationCosine": 0.33029301035,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 39,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.024314916591,
+      "pairwisePenetration": 0.024314916591,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.91889826634,
+      "maximumSourceKnotDisplacement": 2.075518044367,
+      "rootMeanSquareSourceKnotDisplacement": 0.990151950779,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997972258552,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.647290759439,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032131442809,
+      "minimumPairwiseRelationCosine": 0.329856298232,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 40,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.017683852587,
+      "pairwisePenetration": 0.017683852587,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 3.993530956258,
+      "maximumSourceKnotDisplacement": 2.07606963823,
+      "rootMeanSquareSourceKnotDisplacement": 0.990616173765,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997986236759,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.64259278652,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032276031878,
+      "minimumPairwiseRelationCosine": 0.329424933971,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 41,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.011229948065,
+      "pairwisePenetration": 0.011229948065,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.068609831583,
+      "maximumSourceKnotDisplacement": 2.076577634062,
+      "rootMeanSquareSourceKnotDisplacement": 0.991066525882,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.997997469831,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.637958348345,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032420139068,
+      "minimumPairwiseRelationCosine": 0.329000794329,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 42,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.006611989756,
+      "pairwisePenetration": 0.006611989756,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.144057975943,
+      "maximumSourceKnotDisplacement": 2.077044171222,
+      "rootMeanSquareSourceKnotDisplacement": 0.991503641238,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998006402151,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.633387037397,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032563570427,
+      "minimumPairwiseRelationCosine": 0.32858557605,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 43,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.005190900006,
+      "pairwisePenetration": 0.005190900006,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.219723848069,
+      "maximumSourceKnotDisplacement": 2.077471300889,
+      "rootMeanSquareSourceKnotDisplacement": 0.991928024972,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998013409531,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.628881265288,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032706089962,
+      "minimumPairwiseRelationCosine": 0.328180472544,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 44,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.003833217644,
+      "pairwisePenetration": 0.003833217644,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.295447568552,
+      "maximumSourceKnotDisplacement": 2.077862276475,
+      "rootMeanSquareSourceKnotDisplacement": 0.99234026723,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99801881324,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.624444750707,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.03284748007,
+      "minimumPairwiseRelationCosine": 0.327783711798,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 45,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.002935197453,
+      "pairwisePenetration": 0.002935197453,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.371137700032,
+      "maximumSourceKnotDisplacement": 2.078220153243,
+      "rootMeanSquareSourceKnotDisplacement": 0.992740586742,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998022892121,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.620078425631,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.032987578644,
+      "minimumPairwiseRelationCosine": 0.32739795533,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 46,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.002452898289,
+      "pairwisePenetration": 0.002452898289,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.446632966476,
+      "maximumSourceKnotDisplacement": 2.078546835327,
+      "rootMeanSquareSourceKnotDisplacement": 0.993128680077,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998025869646,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.615785781746,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033126140157,
+      "minimumPairwiseRelationCosine": 0.327025704705,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 47,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.001983039737,
+      "pairwisePenetration": 0.001983039737,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.521745863203,
+      "maximumSourceKnotDisplacement": 2.078843684419,
+      "rootMeanSquareSourceKnotDisplacement": 0.993504579415,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998027881714,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.611570743516,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033262897602,
+      "minimumPairwiseRelationCosine": 0.326669259472,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 48,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.001535466635,
+      "pairwisePenetration": 0.001535466635,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.596289339678,
+      "maximumSourceKnotDisplacement": 2.079111448367,
+      "rootMeanSquareSourceKnotDisplacement": 0.993868603115,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029045745,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.607436376943,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033397573478,
+      "minimumPairwiseRelationCosine": 0.32633080202,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 49,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.001117579574,
+      "pairwisePenetration": 0.001117579574,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.670055241406,
+      "maximumSourceKnotDisplacement": 2.079350588826,
+      "rootMeanSquareSourceKnotDisplacement": 0.994220208917,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.99802959494,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.60338730574,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033529858567,
+      "minimumPairwiseRelationCosine": 0.32601252991,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 50,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.000734791109,
+      "pairwisePenetration": 0.000734791109,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.742864760892,
+      "maximumSourceKnotDisplacement": 2.079561365734,
+      "rootMeanSquareSourceKnotDisplacement": 0.994558844624,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029758221,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.599426832301,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033659465902,
+      "minimumPairwiseRelationCosine": 0.325716442835,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 51,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.000391177003,
+      "pairwisePenetration": 0.000391177003,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.814475697436,
+      "maximumSourceKnotDisplacement": 2.079743937069,
+      "rootMeanSquareSourceKnotDisplacement": 0.994883719209,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.595560613522,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.033786054431,
+      "minimumPairwiseRelationCosine": 0.325444657617,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 52,
+      "validationKind": "sampled-supplement",
+      "residualMaximum": 0.000087825104,
+      "pairwisePenetration": 0.000087825104,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.884749917108,
+      "maximumSourceKnotDisplacement": 2.07989955766,
+      "rootMeanSquareSourceKnotDisplacement": 0.995194765305,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.591790645962,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.03390945972,
+      "minimumPairwiseRelationCosine": 0.325197850776,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 53,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.109049059085,
+      "pairwisePenetration": 0.109049059085,
+      "skeletalPenetration": 0.005775249949,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 4.953717478164,
+      "maximumSourceKnotDisplacement": 2.080031562212,
+      "rootMeanSquareSourceKnotDisplacement": 0.995493070754,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.588113655483,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034029829106,
+      "minimumPairwiseRelationCosine": 0.324973868024,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 54,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.106697976393,
+      "pairwisePenetration": 0.106697976393,
+      "skeletalPenetration": 0.005198161102,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.021439612438,
+      "maximumSourceKnotDisplacement": 2.08014291122,
+      "rootMeanSquareSourceKnotDisplacement": 0.99577980929,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.584525349602,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034147339373,
+      "minimumPairwiseRelationCosine": 0.324770665887,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 55,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.104461244771,
+      "pairwisePenetration": 0.104461244771,
+      "skeletalPenetration": 0.004676621357,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.087960946118,
+      "maximumSourceKnotDisplacement": 2.080236125845,
+      "rootMeanSquareSourceKnotDisplacement": 0.996055965543,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.581022181396,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034262138065,
+      "minimumPairwiseRelationCosine": 0.324586352177,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 56,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.102321939477,
+      "pairwisePenetration": 0.102321939477,
+      "skeletalPenetration": 0.004206040613,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.153297002865,
+      "maximumSourceKnotDisplacement": 2.080313220793,
+      "rootMeanSquareSourceKnotDisplacement": 0.996322558959,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.577602123198,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034374368424,
+      "minimumPairwiseRelationCosine": 0.324419144358,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 57,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.100267031241,
+      "pairwisePenetration": 0.100267031241,
+      "skeletalPenetration": 0.003781861342,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.217500545774,
+      "maximumSourceKnotDisplacement": 2.080375796436,
+      "rootMeanSquareSourceKnotDisplacement": 0.996580488786,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.574261519221,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034484172808,
+      "minimumPairwiseRelationCosine": 0.324267351003,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 58,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.098290178994,
+      "pairwisePenetration": 0.098290178994,
+      "skeletalPenetration": 0.003399572668,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.280603298741,
+      "maximumSourceKnotDisplacement": 2.080425350289,
+      "rootMeanSquareSourceKnotDisplacement": 0.996830293376,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.57099737836,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034591638377,
+      "minimumPairwiseRelationCosine": 0.324129479649,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 59,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.096386209308,
+      "pairwisePenetration": 0.096386209308,
+      "skeletalPenetration": 0.003055020019,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.342619481435,
+      "maximumSourceKnotDisplacement": 2.08046327607,
+      "rootMeanSquareSourceKnotDisplacement": 0.997072410691,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.567807497636,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034696832565,
+      "minimumPairwiseRelationCosine": 0.324004143083,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 60,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.094550636194,
+      "pairwisePenetration": 0.094550636194,
+      "skeletalPenetration": 0.002744528639,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.403563620281,
+      "maximumSourceKnotDisplacement": 2.080490866639,
+      "rootMeanSquareSourceKnotDisplacement": 0.99730724148,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.564689747628,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034799820495,
+      "minimumPairwiseRelationCosine": 0.323890145602,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 61,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.09277920697,
+      "pairwisePenetration": 0.09277920697,
+      "skeletalPenetration": 0.002464745113,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.46345901136,
+      "maximumSourceKnotDisplacement": 2.080509285735,
+      "rootMeanSquareSourceKnotDisplacement": 0.99753519208,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.561641754379,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034900673194,
+      "minimumPairwiseRelationCosine": 0.323786383881,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 62,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.091067473468,
+      "pairwisePenetration": 0.091067473468,
+      "skeletalPenetration": 0.002212655761,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.52235594737,
+      "maximumSourceKnotDisplacement": 2.080519593688,
+      "rootMeanSquareSourceKnotDisplacement": 0.997756742781,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.558660212874,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.034999486354,
+      "minimumPairwiseRelationCosine": 0.323691875916,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 63,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.089412206324,
+      "pairwisePenetration": 0.089412206324,
+      "skeletalPenetration": 0.001985530512,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.580268227626,
+      "maximumSourceKnotDisplacement": 2.08052274663,
+      "rootMeanSquareSourceKnotDisplacement": 0.997972205553,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.555743292023,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.035096316209,
+      "minimumPairwiseRelationCosine": 0.323605728674,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    {
+      "iteration": 64,
+      "validationKind": "conservative-continuous",
+      "residualMaximum": 0.087810304619,
+      "pairwisePenetration": 0.087810304619,
+      "skeletalPenetration": 0.001781268989,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.637230735634,
+      "maximumSourceKnotDisplacement": 2.08052274663,
+      "rootMeanSquareSourceKnotDisplacement": 0.998182254233,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.552888841711,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.035191291853,
+      "minimumPairwiseRelationCosine": 0.323527832455,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    }
+  ],
+  "failure": {
+    "phase": "solve",
+    "kind": "residual-constraint",
+    "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+    "iterations": 64,
+    "dominantMechanism": {
+      "kind": "continuous-clearance-residual",
+      "residual": 0.087810304619
+    },
+    "residuals": {
+      "pairwisePenetration": 0.087810304619,
+      "skeletalPenetration": 0.001781268989,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 5.637230735634,
+      "maximumSourceKnotDisplacement": 2.08052274663,
+      "rootMeanSquareSourceKnotDisplacement": 0.998182254233,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": -0.998029762756,
+      "sourceCurvatureReversalCount": 19,
+      "minimumSourceTangentCosine": 0.552888841711,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.035191291853,
+      "minimumPairwiseRelationCosine": 0.323527832455,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    }
+  }
+}

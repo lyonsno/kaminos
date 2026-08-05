@@ -1,0 +1,1327 @@
+{
+  "schema": "kaminos.current-k4-occupancy-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "qualitative-route-local-mechanism-selection",
+  "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+  "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "requestedTaper": {
+    "endpointRadiusMultiplier": 0.26,
+    "transitionFraction": 0.2,
+    "profile": "smoothstep-arc-length",
+    "volumeCompensation": "global-radius"
+  },
+  "requestedMaxIterations": 64,
+  "requestedOccupancyEnvelope": "normalized-sine-squared",
+  "requestedAllocationSchedule": [
+    {
+      "muscleId": "muscle-34",
+      "azimuthRadians": -1.2,
+      "radialDistance": 1.8,
+      "axialOffset": 0
+    },
+    {
+      "muscleId": "muscle-13",
+      "azimuthRadians": 2.65,
+      "radialDistance": 2.2,
+      "axialOffset": 0
+    },
+    {
+      "muscleId": "muscle-12",
+      "azimuthRadians": 0.75,
+      "radialDistance": 1.4,
+      "axialOffset": -0.25
+    },
+    {
+      "muscleId": "muscle-45",
+      "azimuthRadians": 0.05,
+      "radialDistance": 1.8,
+      "axialOffset": 0.25
+    }
+  ],
+  "conditions": [
+    {
+      "id": "baseline",
+      "crowdingFraction": 0,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "2b5ee25fba9b51a16f1cfc42a7dac8523091cd1f02bcf257a0d1e7f31b905cf7"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0,
+        "effective": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "baseline",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "taper": {
+        "requested": {
+          "endpointRadiusMultiplier": 0.26,
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "effective": {
+          "endpointRadiusMultiplier": 0.26,
+          "perMuscle": [
+            {
+              "effectiveEndpointRadiusMultiplier": 0.29451781409071615,
+              "effectiveVolume": 64.02550251,
+              "globalRadiusCompensation": 1.1327608234258313,
+              "muscleId": "muscle-34",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.02550251
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.29451781409071603,
+              "effectiveVolume": 64.51226816800003,
+              "globalRadiusCompensation": 1.1327608234258308,
+              "muscleId": "muscle-13",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.512268168
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2945178140907162,
+              "effectiveVolume": 76.82655530099998,
+              "globalRadiusCompensation": 1.1327608234258315,
+              "muscleId": "muscle-12",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 76.826555301
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2945178140907163,
+              "effectiveVolume": 89.302118638,
+              "globalRadiusCompensation": 1.132760823425832,
+              "muscleId": "muscle-45",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 89.302118638
+            }
+          ],
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "fallbackUsed": false
+      },
+      "occupancy": {
+        "requested": {
+          "maxIterations": 64,
+          "clusterUpdate": "capsule-axis-occupancy-allocation",
+          "clusterObstacleId": "agent-authored-k4-central-pressure-capsule",
+          "clusterOccupancyReferenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "clusterAllocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "clusterOccupancyEnvelope": "normalized-sine-squared"
+        },
+        "effective": {
+          "requestedUpdate": "capsule-axis-occupancy-allocation",
+          "effectiveUpdate": "capsule-axis-occupancy-allocation",
+          "obstacleId": "agent-authored-k4-central-pressure-capsule",
+          "referenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "effectiveReferenceDirection": [
+            0.9688830546939377,
+            0.16942786907506863,
+            -0.18044340804702647
+          ],
+          "allocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "requestedEnvelopeProfile": "normalized-sine-squared",
+          "effectiveEnvelopeProfile": "normalized-sine-squared",
+          "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-squared-zero-at-attachments",
+          "fallbackUsed": false
+        },
+        "fallbackUsed": false
+      },
+      "parentPreflight": {
+        "status": "immutable-constraint-conflict",
+        "blockerCount": 4,
+        "blockingMechanisms": [
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "penetration": 1.280371552983
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.555076559298
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "origin",
+              "attachmentId": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "origin",
+              "attachmentId": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d"
+            },
+            "penetration": 1.284115286632
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.496762268873
+          }
+        ]
+      },
+      "occupiedResult": {
+        "status": "pairwise-exclusion-failed",
+        "iterations": 64,
+        "initial": {
+          "pairwisePenetration": 5.660462595456,
+          "skeletalPenetration": 1.012273272329,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 3e-12,
+          "maximumSourceKnotDisplacement": 0,
+          "rootMeanSquareSourceKnotDisplacement": 0,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": 1,
+          "sourceCurvatureReversalCount": 0,
+          "minimumSourceTangentCosine": 1,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1,
+          "minimumPairwiseRelationCosine": 1,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "packed": {
+          "pairwisePenetration": 0.083970520927,
+          "skeletalPenetration": 0.001982074564,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 5.293915592647,
+          "maximumSourceKnotDisplacement": 2.019239448069,
+          "rootMeanSquareSourceKnotDisplacement": 0.936418087887,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": -0.999489236471,
+          "sourceCurvatureReversalCount": 25,
+          "minimumSourceTangentCosine": 0.582849911152,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1.03308287197,
+          "minimumPairwiseRelationCosine": 0.348946311844,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0--endpoint-taper-ebe86b74f0c74a70",
+          "iterations": 64,
+          "dominantMechanism": {
+            "kind": "pairwise-exclusion-residual",
+            "residual": 0.083970520927
+          },
+          "residuals": {
+            "pairwisePenetration": 0.083970520927,
+            "skeletalPenetration": 0.001982074564,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 5.293915592647,
+            "maximumSourceKnotDisplacement": 2.019239448069,
+            "rootMeanSquareSourceKnotDisplacement": 0.936418087887,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": -0.999489236471,
+            "sourceCurvatureReversalCount": 25,
+            "minimumSourceTangentCosine": 0.582849911152,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.03308287197,
+            "minimumPairwiseRelationCosine": 0.348946311844,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "correctionConcentration": {
+          "interpretation": "algorithmic-projection-path-length-not-physical-force",
+          "byMuscle": [
+            {
+              "muscleId": "muscle-34",
+              "cumulativeAppliedKnotDisplacement": 6.595231455955,
+              "share": 0.12422164384561604
+            },
+            {
+              "muscleId": "muscle-13",
+              "cumulativeAppliedKnotDisplacement": 2.923391183113,
+              "share": 0.05506227655470398
+            },
+            {
+              "muscleId": "muscle-12",
+              "cumulativeAppliedKnotDisplacement": 20.239143093021,
+              "share": 0.3812056698588849
+            },
+            {
+              "muscleId": "muscle-45",
+              "cumulativeAppliedKnotDisplacement": 23.334684599284998,
+              "share": 0.4395104097407951
+            }
+          ],
+          "maximumMuscleShare": 0.4395104097407951
+        }
+      },
+      "outputs": {
+        "authenticatedSource": {
+          "path": "conditions/baseline/authenticated-source.json",
+          "sha256": "70c7660b12f9e5bea6978fd9540ce02a70144a119f34bbd44103b6d08d8f4239"
+        },
+        "parentPreflightResult": {
+          "path": "conditions/baseline/parent-preflight-result.json",
+          "sha256": "693adb87d9a4e9d86baba0537307f5fee6654715a4f49a16ab5f5336680cf963"
+        },
+        "taperedSource": {
+          "path": "conditions/baseline/tapered-source.json",
+          "sha256": "586608d8193168469360f18f554122664d04c6b8436a42c499e39c976cc810fe"
+        },
+        "taperReceipt": {
+          "path": "conditions/baseline/taper-receipt.json",
+          "sha256": "b43bdc334f11155acd87155961abb22efd790fb87052b1fe391b3375be0b8600"
+        },
+        "occupiedResult": {
+          "path": "conditions/baseline/occupied-result.json",
+          "sha256": "1be8a22da1fc5d6e2d28817ab347e6a8152581062d94479a19ab7f6731c66bba"
+        },
+        "viewer": {
+          "path": "conditions/baseline/index.html",
+          "sha256": "a6751a55d41af4c5c130cba67d6f435199647665b56a4c6b148d9167a9216160"
+        }
+      }
+    },
+    {
+      "id": "mild",
+      "crowdingFraction": 0.12,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.12,
+        "effective": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "mild",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "taper": {
+        "requested": {
+          "endpointRadiusMultiplier": 0.26,
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "effective": {
+          "endpointRadiusMultiplier": 0.26,
+          "perMuscle": [
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2943429077117733,
+              "effectiveVolume": 64.02550251,
+              "globalRadiusCompensation": 1.1320881065837434,
+              "muscleId": "muscle-34",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.02550251
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2942490947813239,
+              "effectiveVolume": 64.51226816800002,
+              "globalRadiusCompensation": 1.1317272876204765,
+              "muscleId": "muscle-13",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.512268168
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.29444835265426234,
+              "effectiveVolume": 76.826555301,
+              "globalRadiusCompensation": 1.132493664054855,
+              "muscleId": "muscle-12",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 76.826555301
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2942832427058631,
+              "effectiveVolume": 89.30211863799998,
+              "globalRadiusCompensation": 1.131858625791781,
+              "muscleId": "muscle-45",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 89.302118638
+            }
+          ],
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "fallbackUsed": false
+      },
+      "occupancy": {
+        "requested": {
+          "maxIterations": 64,
+          "clusterUpdate": "capsule-axis-occupancy-allocation",
+          "clusterObstacleId": "agent-authored-k4-central-pressure-capsule",
+          "clusterOccupancyReferenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "clusterAllocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "clusterOccupancyEnvelope": "normalized-sine-squared"
+        },
+        "effective": {
+          "requestedUpdate": "capsule-axis-occupancy-allocation",
+          "effectiveUpdate": "capsule-axis-occupancy-allocation",
+          "obstacleId": "agent-authored-k4-central-pressure-capsule",
+          "referenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "effectiveReferenceDirection": [
+            0.9688830546939377,
+            0.16942786907506863,
+            -0.18044340804702647
+          ],
+          "allocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "requestedEnvelopeProfile": "normalized-sine-squared",
+          "effectiveEnvelopeProfile": "normalized-sine-squared",
+          "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-squared-zero-at-attachments",
+          "fallbackUsed": false
+        },
+        "fallbackUsed": false
+      },
+      "parentPreflight": {
+        "status": "immutable-constraint-conflict",
+        "blockerCount": 4,
+        "blockingMechanisms": [
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "penetration": 1.280371552983
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.555076559298
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "origin",
+              "attachmentId": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "origin",
+              "attachmentId": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d"
+            },
+            "penetration": 1.284115286632
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.496762268873
+          }
+        ]
+      },
+      "occupiedResult": {
+        "status": "continuous-clearance-failed",
+        "iterations": 64,
+        "initial": {
+          "pairwisePenetration": 6.445148925627,
+          "skeletalPenetration": 1.072290987526,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 0.123194664416,
+          "maximumSourceKnotDisplacement": 0,
+          "rootMeanSquareSourceKnotDisplacement": 0,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": 1,
+          "sourceCurvatureReversalCount": 0,
+          "minimumSourceTangentCosine": 1,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1,
+          "minimumPairwiseRelationCosine": 1,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "packed": {
+          "pairwisePenetration": 0.087810304619,
+          "skeletalPenetration": 0.001781268989,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 5.637230735634,
+          "maximumSourceKnotDisplacement": 2.08052274663,
+          "rootMeanSquareSourceKnotDisplacement": 0.998182254233,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": -0.998029762756,
+          "sourceCurvatureReversalCount": 19,
+          "minimumSourceTangentCosine": 0.552888841711,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1.035191291853,
+          "minimumPairwiseRelationCosine": 0.323527832455,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+          "iterations": 64,
+          "dominantMechanism": {
+            "kind": "continuous-clearance-residual",
+            "residual": 0.087810304619
+          },
+          "residuals": {
+            "pairwisePenetration": 0.087810304619,
+            "skeletalPenetration": 0.001781268989,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 5.637230735634,
+            "maximumSourceKnotDisplacement": 2.08052274663,
+            "rootMeanSquareSourceKnotDisplacement": 0.998182254233,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": -0.998029762756,
+            "sourceCurvatureReversalCount": 19,
+            "minimumSourceTangentCosine": 0.552888841711,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.035191291853,
+            "minimumPairwiseRelationCosine": 0.323527832455,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "correctionConcentration": {
+          "interpretation": "algorithmic-projection-path-length-not-physical-force",
+          "byMuscle": [
+            {
+              "muscleId": "muscle-34",
+              "cumulativeAppliedKnotDisplacement": 8.273514562378,
+              "share": 0.1378998807921978
+            },
+            {
+              "muscleId": "muscle-13",
+              "cumulativeAppliedKnotDisplacement": 5.259281540618,
+              "share": 0.0876597595901703
+            },
+            {
+              "muscleId": "muscle-12",
+              "cumulativeAppliedKnotDisplacement": 22.02484970857,
+              "share": 0.3671020491205743
+            },
+            {
+              "muscleId": "muscle-45",
+              "cumulativeAppliedKnotDisplacement": 24.438885837692,
+              "share": 0.40733831049705765
+            }
+          ],
+          "maximumMuscleShare": 0.40733831049705765
+        }
+      },
+      "outputs": {
+        "authenticatedSource": {
+          "path": "conditions/mild/authenticated-source.json",
+          "sha256": "187df0499c1e2d10586244abe90c78b1da63b4ff874d986c06c474d8082dd926"
+        },
+        "parentPreflightResult": {
+          "path": "conditions/mild/parent-preflight-result.json",
+          "sha256": "8f2cb767208ba35ec0f78c496f5ce58c53de8892ae82f89863b6a359744b95af"
+        },
+        "taperedSource": {
+          "path": "conditions/mild/tapered-source.json",
+          "sha256": "c23a5ff9e08aff7f90d7626923b2cb8f538cbd1d7df61a9faf7d6de5ef458364"
+        },
+        "taperReceipt": {
+          "path": "conditions/mild/taper-receipt.json",
+          "sha256": "35597301df6665d0f2261adad6b58ecfec6f671990b0dadb530b6f57d0045712"
+        },
+        "occupiedResult": {
+          "path": "conditions/mild/occupied-result.json",
+          "sha256": "d016ca8057a65b896d2498a67b8b8ececb3b9c7e303c9ce217f5d79abac15208"
+        },
+        "viewer": {
+          "path": "conditions/mild/index.html",
+          "sha256": "aeb12f742f460dff44f2e12dd26d3527b42d983c0f5be5c68d446070928f4ddc"
+        }
+      }
+    },
+    {
+      "id": "moderate",
+      "crowdingFraction": 0.24,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "fdeb8d242b5e439a04df219482287001611671161eedb66fa0182b623b1fccc0"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "fdeb8d242b5e439a04df219482287001611671161eedb66fa0182b623b1fccc0"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.24,
+        "effective": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "moderate",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "taper": {
+        "requested": {
+          "endpointRadiusMultiplier": 0.26,
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "effective": {
+          "endpointRadiusMultiplier": 0.26,
+          "perMuscle": [
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2936308515687291,
+              "effectiveVolume": 64.02550250999998,
+              "globalRadiusCompensation": 1.1293494291104964,
+              "muscleId": "muscle-34",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.02550251
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.29324100282432386,
+              "effectiveVolume": 64.51226816799999,
+              "globalRadiusCompensation": 1.127850010862784,
+              "muscleId": "muscle-13",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 64.512268168
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.2943347789493799,
+              "effectiveVolume": 76.82655530099996,
+              "globalRadiusCompensation": 1.1320568421129997,
+              "muscleId": "muscle-12",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 76.826555301
+            },
+            {
+              "effectiveEndpointRadiusMultiplier": 0.29392767414674653,
+              "effectiveVolume": 89.302118638,
+              "globalRadiusCompensation": 1.1304910544105635,
+              "muscleId": "muscle-45",
+              "requestedEndpointRadiusMultiplier": 0.26,
+              "targetVolume": 89.302118638
+            }
+          ],
+          "profile": "smoothstep-arc-length",
+          "transitionFraction": 0.2,
+          "volumeCompensation": "global-radius"
+        },
+        "fallbackUsed": false
+      },
+      "occupancy": {
+        "requested": {
+          "maxIterations": 64,
+          "clusterUpdate": "capsule-axis-occupancy-allocation",
+          "clusterObstacleId": "agent-authored-k4-central-pressure-capsule",
+          "clusterOccupancyReferenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "clusterAllocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "clusterOccupancyEnvelope": "normalized-sine-squared"
+        },
+        "effective": {
+          "requestedUpdate": "capsule-axis-occupancy-allocation",
+          "effectiveUpdate": "capsule-axis-occupancy-allocation",
+          "obstacleId": "agent-authored-k4-central-pressure-capsule",
+          "referenceDirection": [
+            1,
+            0,
+            0
+          ],
+          "effectiveReferenceDirection": [
+            0.9688830546939377,
+            0.16942786907506863,
+            -0.18044340804702647
+          ],
+          "allocationSchedule": [
+            {
+              "muscleId": "muscle-34",
+              "azimuthRadians": -1.2,
+              "radialDistance": 1.8,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-13",
+              "azimuthRadians": 2.65,
+              "radialDistance": 2.2,
+              "axialOffset": 0
+            },
+            {
+              "muscleId": "muscle-12",
+              "azimuthRadians": 0.75,
+              "radialDistance": 1.4,
+              "axialOffset": -0.25
+            },
+            {
+              "muscleId": "muscle-45",
+              "azimuthRadians": 0.05,
+              "radialDistance": 1.8,
+              "axialOffset": 0.25
+            }
+          ],
+          "requestedEnvelopeProfile": "normalized-sine-squared",
+          "effectiveEnvelopeProfile": "normalized-sine-squared",
+          "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-squared-zero-at-attachments",
+          "fallbackUsed": false
+        },
+        "fallbackUsed": false
+      },
+      "parentPreflight": {
+        "status": "immutable-constraint-conflict",
+        "blockerCount": 4,
+        "blockingMechanisms": [
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "penetration": 1.280371552983
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-34",
+              "attachment": "insertion",
+              "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.555076559298
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "origin",
+              "attachmentId": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "origin",
+              "attachmentId": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d"
+            },
+            "penetration": 1.284115286632
+          },
+          {
+            "kind": "pairwise-fixed-attachment-penetration",
+            "left": {
+              "muscleId": "muscle-12",
+              "attachment": "insertion",
+              "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+            },
+            "right": {
+              "muscleId": "muscle-45",
+              "attachment": "insertion",
+              "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+            },
+            "penetration": 1.496762268873
+          }
+        ]
+      },
+      "occupiedResult": {
+        "status": "continuous-clearance-failed",
+        "iterations": 64,
+        "initial": {
+          "pairwisePenetration": 7.350240771938,
+          "skeletalPenetration": 1.132098858268,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 0.492777912542,
+          "maximumSourceKnotDisplacement": 0,
+          "rootMeanSquareSourceKnotDisplacement": 0,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": 1,
+          "sourceCurvatureReversalCount": 0,
+          "minimumSourceTangentCosine": 1,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1,
+          "minimumPairwiseRelationCosine": 1,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "packed": {
+          "pairwisePenetration": 0.092487930219,
+          "skeletalPenetration": 0.001687914534,
+          "compartmentEscape": 0,
+          "endpointDrift": 0,
+          "maximumRelativeVolumeError": 0,
+          "maximumBendEnergy": 6.118170669856,
+          "maximumSourceKnotDisplacement": 2.158480816625,
+          "rootMeanSquareSourceKnotDisplacement": 1.072055284125,
+          "minimumSourceBendEnergyRetention": 1,
+          "minimumSourceCurvatureCosine": -0.983766969021,
+          "sourceCurvatureReversalCount": 16,
+          "minimumSourceTangentCosine": 0.52663838124,
+          "sourceTangentReversalCount": 0,
+          "maximumSourceRadiusRatio": 1.037348865352,
+          "minimumPairwiseRelationCosine": 0.299455805803,
+          "pairwiseRelationReversalCount": 0,
+          "nonFiniteValueCount": 0,
+          "nonPositiveRadiusCount": 0
+        },
+        "failure": {
+          "phase": "solve",
+          "kind": "residual-constraint",
+          "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0--endpoint-taper-49aaf33cee497d7f",
+          "iterations": 64,
+          "dominantMechanism": {
+            "kind": "continuous-clearance-residual",
+            "residual": 0.092487930219
+          },
+          "residuals": {
+            "pairwisePenetration": 0.092487930219,
+            "skeletalPenetration": 0.001687914534,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 6.118170669856,
+            "maximumSourceKnotDisplacement": 2.158480816625,
+            "rootMeanSquareSourceKnotDisplacement": 1.072055284125,
+            "minimumSourceBendEnergyRetention": 1,
+            "minimumSourceCurvatureCosine": -0.983766969021,
+            "sourceCurvatureReversalCount": 16,
+            "minimumSourceTangentCosine": 0.52663838124,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.037348865352,
+            "minimumPairwiseRelationCosine": 0.299455805803,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          }
+        },
+        "correctionConcentration": {
+          "interpretation": "algorithmic-projection-path-length-not-physical-force",
+          "byMuscle": [
+            {
+              "muscleId": "muscle-34",
+              "cumulativeAppliedKnotDisplacement": 10.053706888806001,
+              "share": 0.14971412024511957
+            },
+            {
+              "muscleId": "muscle-13",
+              "cumulativeAppliedKnotDisplacement": 7.573634319293999,
+              "share": 0.11278228137263788
+            },
+            {
+              "muscleId": "muscle-12",
+              "cumulativeAppliedKnotDisplacement": 23.904415122634,
+              "share": 0.35597103830866805
+            },
+            {
+              "muscleId": "muscle-45",
+              "cumulativeAppliedKnotDisplacement": 25.620940237535997,
+              "share": 0.3815325600735746
+            }
+          ],
+          "maximumMuscleShare": 0.3815325600735746
+        }
+      },
+      "outputs": {
+        "authenticatedSource": {
+          "path": "conditions/moderate/authenticated-source.json",
+          "sha256": "58a655a2b18b34b1dcac4884a8c6c109da790fdc45148ce1448c66369368d62f"
+        },
+        "parentPreflightResult": {
+          "path": "conditions/moderate/parent-preflight-result.json",
+          "sha256": "3c574054427089d12d4568fab94f15eee849fdac5fda36acf1e8cdf69acd2f76"
+        },
+        "taperedSource": {
+          "path": "conditions/moderate/tapered-source.json",
+          "sha256": "3ea93bebeed6c5e566326d1d54515bedc8793fef1fc01c0f9628467fa09b9fcf"
+        },
+        "taperReceipt": {
+          "path": "conditions/moderate/taper-receipt.json",
+          "sha256": "220b29eed769c2992e67b09710ae80e5a0cd53bfb2c61a82a80269a3652c2102"
+        },
+        "occupiedResult": {
+          "path": "conditions/moderate/occupied-result.json",
+          "sha256": "23f4afa11d0a162723714410d0bb79c2bbbb902b7c1d23947c448c4247d3a1b4"
+        },
+        "viewer": {
+          "path": "conditions/moderate/index.html",
+          "sha256": "e01fb9da4f17f81cb766fad217b2d9c5f9136ee92b49df43cc52f190353d8e76"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "31d05234feeabc11b5fc48afd47a9a9eebc9fa0d0bb6971c375abfaebf195319"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "current-k4-occupancy-orbitable-v0",
+      "effective": "current-k4-occupancy-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "inspected-clamped-delta-not-material-anatomical-admission-rejected",
+    "inspectionReceipt": {
+      "path": "visual-inspection.json",
+      "verdict": "zero-slope-envelope-improves-tangent-metric-without-removing-hard-fan-or-hook"
+    },
+    "portfolio": {
+      "path": "index.html",
+      "sha256": "5c5fbe8aed861d0832bb3377dc1720e75b809faceece9755aca04365f6edf0e3"
+    },
+    "conditionViewers": [
+      {
+        "path": "conditions/baseline/index.html",
+        "sha256": "a6751a55d41af4c5c130cba67d6f435199647665b56a4c6b148d9167a9216160"
+      },
+      {
+        "path": "conditions/mild/index.html",
+        "sha256": "aeb12f742f460dff44f2e12dd26d3527b42d983c0f5be5c68d446070928f4ddc"
+      },
+      {
+        "path": "conditions/moderate/index.html",
+        "sha256": "e01fb9da4f17f81cb766fad217b2d9c5f9136ee92b49df43cc52f190353d8e76"
+      }
+    ]
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "effectiveConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ],
+    "resultStatuses": [
+      {
+        "id": "baseline",
+        "status": "pairwise-exclusion-failed"
+      },
+      {
+        "id": "mild",
+        "status": "continuous-clearance-failed"
+      },
+      {
+        "id": "moderate",
+        "status": "continuous-clearance-failed"
+      }
+    ]
+  }
+}

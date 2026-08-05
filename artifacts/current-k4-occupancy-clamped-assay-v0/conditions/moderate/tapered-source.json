@@ -1,0 +1,809 @@
+{
+  "assayProvenance": {
+    "assumptions": {
+      "effective": {
+        "authority": "agent-authored-provisional",
+        "compartment": {
+          "clearance": 0.0593462031473567,
+          "id": "agent-authored-k4-data-envelope",
+          "kind": "box",
+          "maximum": [
+            11.586311546367833,
+            14.295522895367833,
+            13.273248878367836
+          ],
+          "minimum": [
+            -1.422363248367835,
+            -6.175986972367834,
+            -8.135205474367835
+          ]
+        },
+        "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+        "id": "source-shaped-k4-provisional-environment.v0",
+        "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+        "obstacles": [
+          {
+            "authority": "agent-authored-provisional",
+            "clearance": 0.0593462031473567,
+            "end": [
+              6.374811029192541,
+              1.5400552383765298,
+              5.005766562299481
+            ],
+            "id": "agent-authored-k4-central-pressure-capsule",
+            "kind": "capsule",
+            "radius": 0.1780386094420701,
+            "start": [
+              4.816881333826592,
+              5.7143891565462095,
+              0.5600337402269847
+            ]
+          }
+        ],
+        "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+      },
+      "requested": {
+        "authority": "agent-authored-provisional",
+        "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+        "id": "source-shaped-k4-provisional-environment.v0",
+        "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+      }
+    },
+    "claimCeiling": "qualitative-route-local-mechanical-response",
+    "compartment": {
+      "authority": "agent-authored-provisional",
+      "derivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin"
+    },
+    "effectiveConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ],
+    "evidenceTrack": "experimental",
+    "obstacle": {
+      "authority": "agent-authored-provisional",
+      "derivation": "cohort-centroid-middle-thirty-percent-capsule"
+    },
+    "parentAtlas": {
+      "atlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+      "fileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+      "id": "coordinate-parent-atlas-3f4c65867a776edf"
+    },
+    "perturbation": {
+      "crowdingFraction": 0.24,
+      "effective": {
+        "crowdingFraction": 0.24,
+        "endpointPolicy": "fixed-measured-candidates",
+        "kind": "interior-samples-toward-cohort-centroid"
+      },
+      "endpointPolicy": "fixed-measured-candidates",
+      "id": "moderate",
+      "kind": "interior-samples-toward-cohort-centroid",
+      "requested": {
+        "crowdingFraction": 0.24,
+        "endpointPolicy": "fixed-measured-candidates",
+        "kind": "interior-samples-toward-cohort-centroid"
+      }
+    },
+    "requestedConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  },
+  "authority": {
+    "anatomicalAdmission": "none",
+    "kind": "synthetic-proxy"
+  },
+  "compartment": {
+    "clearance": 0.0593462031473567,
+    "id": "agent-authored-k4-data-envelope",
+    "kind": "box",
+    "maximum": [
+      11.586311546367833,
+      14.295522895367833,
+      13.273248878367836
+    ],
+    "minimum": [
+      -1.422363248367835,
+      -6.175986972367834,
+      -8.135205474367835
+    ]
+  },
+  "dimension": 3,
+  "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0--endpoint-taper-49aaf33cee497d7f",
+  "muscles": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 0,
+        "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "radius": 0.3114994037776325
+        },
+        {
+          "position": [
+            4.321291581049399,
+            7.561489256524412,
+            -3.7128132543649652
+          ],
+          "radius": 0.6538004377167689
+        },
+        {
+          "position": [
+            4.676338065889709,
+            6.624386927960938,
+            -2.565458281151302
+          ],
+          "radius": 1.1382289968930783
+        },
+        {
+          "position": [
+            5.031384912984718,
+            5.6872846738662375,
+            -1.4181033524242468
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            5.386431490718793,
+            4.750182606659426,
+            -0.27074820051773996
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            5.741477957537915,
+            3.813080249376349,
+            0.8766067623229907
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            6.096524484083968,
+            2.8759779396243346,
+            2.0239617414535234
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            6.451571002017312,
+            1.9388756971289274,
+            3.1713167748788247
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            6.806617479478018,
+            1.0017734415528494,
+            4.318671815671403
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            7.161664021998158,
+            0.0646710828986975,
+            5.466026752039975
+          ],
+          "radius": 1.198074629913971
+        },
+        {
+          "position": [
+            7.516710908997726,
+            -0.8724312251797889,
+            6.613381626148906
+          ],
+          "radius": 1.1185374813077475
+        },
+        {
+          "position": [
+            7.871757399980364,
+            -1.809533438099297,
+            7.760736682414887
+          ],
+          "radius": 0.6202824503873848
+        },
+        {
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "radius": 0.3114994037776325
+        }
+      ],
+      "id": "muscle-34",
+      "identity": {
+        "constructionId": "muscle-34",
+        "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+        "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-34"
+      },
+      "targetVolume": 64.02550251,
+      "volumeAuthority": "measured-candidate-not-admitted"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 1,
+        "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "radius": 0.31195721185571174
+        },
+        {
+          "position": [
+            2.348787618670314,
+            8.848902580120102,
+            -1.7923774181664756
+          ],
+          "radius": 0.632448734380043
+        },
+        {
+          "position": [
+            2.7412671811003415,
+            7.844889962427514,
+            -0.7111729283620021
+          ],
+          "radius": 1.1264215584594575
+        },
+        {
+          "position": [
+            3.133746670093468,
+            6.840877376381867,
+            0.37003162040248805
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            3.52622641086834,
+            5.836865041308394,
+            1.4512363040195793
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            3.918705867585331,
+            4.8328523903910785,
+            2.5324408043179014
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            4.311185589861012,
+            3.8288400877330044,
+            3.6136455271291035
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            4.70366513217491,
+            2.8248275547598705,
+            4.694850103067563
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            5.09614491280481,
+            1.8208152685226133,
+            5.776054820566735
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            5.488624454290031,
+            0.8168027317366743,
+            6.857259394590445
+          ],
+          "radius": 1.1998354302142757
+        },
+        {
+          "position": [
+            5.881103930422456,
+            -0.1872096353097078,
+            7.938464150115864
+          ],
+          "radius": 1.1392684278268772
+        },
+        {
+          "position": [
+            6.273583888279013,
+            -1.1912222993661539,
+            9.019668448302998
+          ],
+          "radius": 0.654747024284337
+        },
+        {
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "radius": 0.31195721185571174
+        }
+      ],
+      "id": "muscle-13",
+      "identity": {
+        "constructionId": "muscle-13",
+        "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+        "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-13"
+      },
+      "targetVolume": 64.512268168,
+      "volumeAuthority": "measured-candidate-not-admitted"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af",
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 2,
+        "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "radius": 0.33180413904734485
+        },
+        {
+          "position": [
+            3.8781091022847036,
+            9.158561420938454,
+            -2.768976076375382
+          ],
+          "radius": 0.7046330676370511
+        },
+        {
+          "position": [
+            4.287716998013634,
+            8.096471683380752,
+            -1.6497880510994183
+          ],
+          "radius": 1.2143624517800489
+        },
+        {
+          "position": [
+            4.697325160652186,
+            7.034382161363549,
+            -0.5305999174701284
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            5.10693333209945,
+            5.972292685430203,
+            0.5885882512588885
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            5.516541096156002,
+            4.910203109985407,
+            1.7077764816693963
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            5.926149304591925,
+            3.848113703724768,
+            2.8269647056811755
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            6.335757469516342,
+            2.7860241844342264,
+            3.9461528386395224
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            6.745365278407879,
+            1.7239346699019655,
+            5.065341108358427
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            7.154973409548164,
+            0.6618452313949497,
+            6.184529332170688
+          ],
+          "radius": 1.2761697655667108
+        },
+        {
+          "position": [
+            7.564581610340421,
+            -0.4002443619212698,
+            7.303717383180209
+          ],
+          "radius": 1.2110134445897984
+        },
+        {
+          "position": [
+            7.97418983074904,
+            -1.4623339522101588,
+            8.422905424743828
+          ],
+          "radius": 0.6984813630526937
+        },
+        {
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "radius": 0.33180413904734485
+        }
+      ],
+      "id": "muscle-12",
+      "identity": {
+        "constructionId": "muscle-12",
+        "instanceId": "instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10",
+        "lineageId": "lineage-27e2fbb3-3732-4933-8793-1bd61236401c",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-12"
+      },
+      "targetVolume": 76.826555301,
+      "volumeAuthority": "measured-candidate-not-admitted"
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d",
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 3,
+        "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "radius": 0.3488698292108577
+        },
+        {
+          "position": [
+            4.045547144450774,
+            9.811605441892196,
+            -2.8228961237591816
+          ],
+          "radius": 0.800678098521846
+        },
+        {
+          "position": [
+            4.446342863662652,
+            8.64047568817251,
+            -1.7249112755656537
+          ],
+          "radius": 1.3019480291714987
+        },
+        {
+          "position": [
+            4.847138337001198,
+            7.46934602894712,
+            -0.6269262335950697
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            5.247934101619784,
+            6.298216292786815,
+            0.47105860614721107
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            5.648729511927512,
+            5.1270866531456765,
+            1.5690436948905349
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            6.049525278888517,
+            3.9559568971721415,
+            2.6670285159823868
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            6.450321063879945,
+            2.784827215992445,
+            3.7650134155691917
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            6.851116446079456,
+            1.6136975735286911,
+            4.862998504601361
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            7.251912222787743,
+            0.44256786665667647,
+            5.960983380809824
+          ],
+          "radius": 1.3418070354263756
+        },
+        {
+          "position": [
+            7.652707666046397,
+            -0.7285618796623532,
+            7.058968336788535
+          ],
+          "radius": 1.2780078209849972
+        },
+        {
+          "position": [
+            8.053503185523505,
+            -1.8996917959343178,
+            8.156953074725132
+          ],
+          "radius": 0.7506585932841465
+        },
+        {
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "radius": 0.3488698292108577
+        }
+      ],
+      "id": "muscle-45",
+      "identity": {
+        "constructionId": "muscle-45",
+        "instanceId": "instance-a4b690df-3a8d-4ccb-be89-3550af103e0e",
+        "lineageId": "lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-45"
+      },
+      "targetVolume": 89.302118638,
+      "volumeAuthority": "measured-candidate-not-admitted"
+    }
+  ],
+  "obstacles": [
+    {
+      "authority": "agent-authored-provisional",
+      "clearance": 0.0593462031473567,
+      "end": [
+        6.374811029192541,
+        1.5400552383765298,
+        5.005766562299481
+      ],
+      "id": "agent-authored-k4-central-pressure-capsule",
+      "kind": "capsule",
+      "radius": 0.1780386094420701,
+      "start": [
+        4.816881333826592,
+        5.7143891565462095,
+        0.5600337402269847
+      ]
+    }
+  ],
+  "schema": "kaminos.muscle-compartment-packing-source.v0",
+  "crossSectionDerivation": {
+    "schema": "kaminos.endpoint-tapered-packing-source-derivation.v0",
+    "parentSource": {
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+      "input": {
+        "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+        "kind": "synthetic-fixture",
+        "sha256": "fdeb8d242b5e439a04df219482287001611671161eedb66fa0182b623b1fccc0"
+      }
+    },
+    "requested": {
+      "endpointRadiusMultiplier": 0.26,
+      "profile": "smoothstep-arc-length",
+      "transitionFraction": 0.2,
+      "volumeCompensation": "global-radius"
+    },
+    "effective": {
+      "endpointRadiusMultiplier": 0.26,
+      "perMuscle": [
+        {
+          "effectiveEndpointRadiusMultiplier": 0.2936308515687291,
+          "effectiveVolume": 64.02550250999998,
+          "globalRadiusCompensation": 1.1293494291104964,
+          "muscleId": "muscle-34",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 64.02550251
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.29324100282432386,
+          "effectiveVolume": 64.51226816799999,
+          "globalRadiusCompensation": 1.127850010862784,
+          "muscleId": "muscle-13",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 64.512268168
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.2943347789493799,
+          "effectiveVolume": 76.82655530099996,
+          "globalRadiusCompensation": 1.1320568421129997,
+          "muscleId": "muscle-12",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 76.826555301
+        },
+        {
+          "effectiveEndpointRadiusMultiplier": 0.29392767414674653,
+          "effectiveVolume": 89.302118638,
+          "globalRadiusCompensation": 1.1304910544105635,
+          "muscleId": "muscle-45",
+          "requestedEndpointRadiusMultiplier": 0.26,
+          "targetVolume": 89.302118638
+        }
+      ],
+      "profile": "smoothstep-arc-length",
+      "transitionFraction": 0.2,
+      "volumeCompensation": "global-radius"
+    },
+    "fallbackUsed": false
+  },
+  "input": {
+    "requested": {
+      "kind": "endpoint-tapered-packing-source",
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0--endpoint-taper-49aaf33cee497d7f",
+      "sha256": "bcc9376569d94a8fef1a1781e314ced1dd0525a9b4c4c2314b100e31ef01e2d9"
+    },
+    "effective": {
+      "kind": "endpoint-tapered-packing-source",
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0--endpoint-taper-49aaf33cee497d7f",
+      "sha256": "bcc9376569d94a8fef1a1781e314ced1dd0525a9b4c4c2314b100e31ef01e2d9"
+    }
+  }
+}

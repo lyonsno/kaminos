@@ -38,6 +38,40 @@ function assayApi() {
   return packing;
 }
 
+function minimumAttachmentTangentCosine(source, result) {
+  let minimum = 1;
+  for (const [muscleIndex, sourceMuscle] of source.muscles.entries()) {
+    const resultMuscle = result.muscles[muscleIndex];
+    for (const [sourceStart, sourceEnd, resultStart, resultEnd] of [
+      [
+        sourceMuscle.centerline[0],
+        sourceMuscle.centerline[1],
+        resultMuscle.centerline[0],
+        resultMuscle.centerline[1],
+      ],
+      [
+        sourceMuscle.centerline.at(-2),
+        sourceMuscle.centerline.at(-1),
+        resultMuscle.centerline.at(-2),
+        resultMuscle.centerline.at(-1),
+      ],
+    ]) {
+      const sourceTangent = sourceEnd.position.map(
+        (value, axis) => value - sourceStart.position[axis],
+      );
+      const resultTangent = resultEnd.position.map(
+        (value, axis) => value - resultStart.position[axis],
+      );
+      const cosine = sourceTangent.reduce(
+        (sum, value, axis) => sum + value * resultTangent[axis],
+        0,
+      ) / (Math.hypot(...sourceTangent) * Math.hypot(...resultTangent));
+      minimum = Math.min(minimum, cosine);
+    }
+  }
+  return minimum;
+}
+
 test('source-shaped K4 ladder preserves measured identity while declaring every added fact provisional', async () => {
   const api = assayApi();
   const fixture = await atlasFixture();
@@ -295,6 +329,35 @@ test('endpoint taper rejects implicit defaults and unknown mechanism fields', as
     }),
     /radius multiplier must be in \(0, 1\)/,
   );
+  const tapered = packing.deriveEndpointTaperedPackingSource(parent, {
+    endpointRadiusMultiplier: 0.26,
+    transitionFraction: 0.2,
+    profile: 'smoothstep-arc-length',
+    volumeCompensation: 'global-radius',
+  }).source;
+  assert.throws(
+    () => packing.solveMuscleCompartmentPacking(tapered, {
+      maxIterations: 1,
+      clusterOccupancyEnvelope: 'normalized-sine-squared',
+    }),
+    /clusterOccupancyEnvelope requires a capsule-axis clusterUpdate/,
+  );
+  assert.throws(
+    () => packing.solveMuscleCompartmentPacking(tapered, {
+      maxIterations: 1,
+      clusterUpdate: 'capsule-axis-occupancy-allocation',
+      clusterObstacleId: tapered.obstacles[0].id,
+      clusterOccupancyReferenceDirection: [1, 0, 0],
+      clusterAllocationSchedule: K4_IDS.map(muscleId => ({
+        muscleId,
+        azimuthRadians: 0,
+        radialDistance: 1,
+        axialOffset: 0,
+      })),
+      clusterOccupancyEnvelope: 'implicit-smoothing',
+    }),
+    /clusterOccupancyEnvelope must be normalized-sine or normalized-sine-squared/,
+  );
 });
 
 test('explicit current-K4 azimuthal and radial roles preserve tube refusal and reach tapered relaxation', async () => {
@@ -347,7 +410,9 @@ test('explicit current-K4 azimuthal and radial roles preserve tube refusal and r
     effectiveReferenceDirection: taperedResult.clusterProjection.effectiveReferenceDirection,
     allocationSchedule,
     allocationReference:
-      'capsule-axis-belly-anchor-absolute-role-preserve-local-shape-sine-zero-at-attachments',
+      'capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-zero-at-attachments',
+    requestedEnvelopeProfile: 'normalized-sine',
+    effectiveEnvelopeProfile: 'normalized-sine',
     fallbackUsed: false,
   });
   assert.equal(taperedResult.clusterProjection.effectiveReferenceDirection.length, 3);
@@ -375,4 +440,66 @@ test('explicit current-K4 azimuthal and radial roles preserve tube refusal and r
     0,
     'the first explicit occupancy carrier must not invert pairwise source relations',
   );
+});
+
+test('clamped current-K4 occupancy transition preserves attachment-near tangent direction', async () => {
+  const fixture = await atlasFixture();
+  const series = packing.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+  });
+  const tapered = packing.deriveEndpointTaperedPackingSource(series.conditions[0].source, {
+    endpointRadiusMultiplier: 0.26,
+    transitionFraction: 0.2,
+    profile: 'smoothstep-arc-length',
+    volumeCompensation: 'global-radius',
+  }).source;
+  const requestedRoles = [
+    { azimuthRadians: -1.2, radialDistance: 1.8, axialOffset: 0 },
+    { azimuthRadians: 2.65, radialDistance: 2.2, axialOffset: 0 },
+    { azimuthRadians: 0.75, radialDistance: 1.4, axialOffset: -0.25 },
+    { azimuthRadians: 0.05, radialDistance: 1.8, axialOffset: 0.25 },
+  ];
+  const common = {
+    maxIterations: 4,
+    clusterUpdate: 'capsule-axis-occupancy-allocation',
+    clusterObstacleId: tapered.obstacles[0].id,
+    clusterOccupancyReferenceDirection: [1, 0, 0],
+    clusterAllocationSchedule: K4_IDS.map((muscleId, index) => ({
+      muscleId,
+      ...requestedRoles[index],
+    })),
+  };
+  const sine = packing.solveMuscleCompartmentPacking(tapered, common);
+  const clamped = packing.solveMuscleCompartmentPacking(tapered, {
+    ...common,
+    clusterOccupancyEnvelope: 'normalized-sine-squared',
+  });
+
+  assert.equal(
+    clamped.clusterProjection.effectiveEnvelopeProfile,
+    'normalized-sine-squared',
+    'the zero-slope transition must be explicit in the effective cluster receipt',
+  );
+  assert.equal(
+    clamped.clusterProjection.requestedEnvelopeProfile,
+    'normalized-sine-squared',
+  );
+  const sineAttachmentTangentCosine = minimumAttachmentTangentCosine(tapered, sine);
+  const clampedAttachmentTangentCosine = minimumAttachmentTangentCosine(tapered, clamped);
+  assert.ok(
+    clampedAttachmentTangentCosine > sineAttachmentTangentCosine + 0.03,
+    'the clamped envelope must materially improve the worst attachment-adjacent tangent: ' +
+      JSON.stringify({ sineAttachmentTangentCosine, clampedAttachmentTangentCosine }),
+  );
+  assert.ok(
+    clamped.metrics.packed.pairwisePenetration <
+      clamped.metrics.initial.pairwisePenetration * 0.2,
+    'clamping the endpoint slope must retain material pairwise relief',
+  );
+  assert.equal(clamped.metrics.packed.endpointDrift, 0);
+  assert.ok(clamped.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.equal(clamped.metrics.packed.sourceTangentReversalCount, 0);
+  assert.equal(clamped.metrics.packed.pairwiseRelationReversalCount, 0);
 });

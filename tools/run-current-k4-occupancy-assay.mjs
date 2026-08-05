@@ -35,6 +35,7 @@ function parseArguments(argv) {
     '--endpoint-radius-multiplier',
     '--transition-fraction',
     '--max-iterations',
+    '--occupancy-envelope',
   ]);
   const parsed = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -52,6 +53,7 @@ function parseArguments(argv) {
     'endpoint-radius-multiplier',
     'transition-fraction',
     'max-iterations',
+    'occupancy-envelope',
   ]) {
     if (!parsed[key]) throw new Error(`--${key} is required`);
   }
@@ -71,6 +73,12 @@ function parseArguments(argv) {
   if (!Number.isInteger(maxIterations) || maxIterations <= 0) {
     throw new Error('--max-iterations must be a positive integer');
   }
+  const occupancyEnvelope = parsed['occupancy-envelope'];
+  if (!['normalized-sine', 'normalized-sine-squared'].includes(occupancyEnvelope)) {
+    throw new Error(
+      '--occupancy-envelope must be normalized-sine or normalized-sine-squared',
+    );
+  }
   return {
     requestedParentAtlasPath: parsed['parent-atlas'],
     requestedConstructionIds,
@@ -82,6 +90,7 @@ function parseArguments(argv) {
       volumeCompensation: 'global-radius',
     },
     maxIterations,
+    occupancyEnvelope,
   };
 }
 
@@ -158,9 +167,9 @@ async function clearPaths(targets) {
   }
 }
 
-function presentation(condition, result) {
+function presentation(condition, result, occupancyEnvelope) {
   return {
-    title: `Current-K4 ${condition.id} · explicit occupancy before local relaxation`,
+    title: `Current-K4 ${condition.id} · ${occupancyEnvelope} occupancy before local relaxation`,
     authorityLabel: 'Agent-authored provisional mechanism · no anatomical or source admission',
     explanation:
       'The constant-radius parent refuses unchanged at fixed attachments. This viewer compares the ' +
@@ -182,7 +191,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-function renderPortfolio(conditions) {
+function renderPortfolio(conditions, occupancyEnvelope) {
   const cards = conditions.map(condition => {
     const root = `conditions/${condition.id}`;
     return `<section><h2>${escapeHtml(condition.id)} · ${escapeHtml(condition.status)}</h2>` +
@@ -195,7 +204,7 @@ function renderPortfolio(conditions) {
       `</section>`;
   }).join('');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Current-K4 explicit occupancy assay</title><style>
-  :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif}body{margin:0;padding:24px;background:#07090d;color:#f4eee3}header{max-width:1280px;margin:0 auto 20px}h1{font-size:24px;margin:0 0 8px}header p,section p{color:#aeb9c6;line-height:1.45}main{display:grid;gap:18px}section{min-width:0;padding:14px;border:1px solid #ffffff24;border-radius:14px;background:#0b1017}h2{font:650 15px/1.2 ui-monospace,monospace;margin:0}h3{font:600 12px/1.2 ui-monospace,monospace;color:#e7d1a8;margin:0 0 8px}.states{display:flex;gap:8px;margin:10px 0}.states a{padding:7px 9px;border-radius:8px;background:#172231;color:#e7d1a8;text-decoration:none;font:600 11px ui-monospace,monospace}.frames{display:grid;grid-template-columns:1fr 1fr;gap:12px}.frames article{min-width:0}iframe{width:100%;height:560px;border:0;border-radius:10px;background:#07090d}@media(max-width:1000px){.frames{grid-template-columns:1fr}}</style></head><body><header><h1>Current-K4 explicit occupancy before local relaxation</h1><p>Exact ordered M34/M13/M12/M45 identities across Bytebound’s baseline, mild, and moderate crowding ladder. Every rung shows the volume-preserving tapered source beside the identity-bound occupied result. The authenticated constant-radius parent still refuses unchanged; this is provisional mechanism evidence, not anatomical admission.</p></header><main>${cards}</main></body></html>`;
+  :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif}body{margin:0;padding:24px;background:#07090d;color:#f4eee3}header{max-width:1280px;margin:0 auto 20px}h1{font-size:24px;margin:0 0 8px}header p,section p{color:#aeb9c6;line-height:1.45}main{display:grid;gap:18px}section{min-width:0;padding:14px;border:1px solid #ffffff24;border-radius:14px;background:#0b1017}h2{font:650 15px/1.2 ui-monospace,monospace;margin:0}h3{font:600 12px/1.2 ui-monospace,monospace;color:#e7d1a8;margin:0 0 8px}.states{display:flex;gap:8px;margin:10px 0}.states a{padding:7px 9px;border-radius:8px;background:#172231;color:#e7d1a8;text-decoration:none;font:600 11px ui-monospace,monospace}.frames{display:grid;grid-template-columns:1fr 1fr;gap:12px}.frames article{min-width:0}iframe{width:100%;height:560px;border:0;border-radius:10px;background:#07090d}@media(max-width:1000px){.frames{grid-template-columns:1fr}}</style></head><body><header><h1>Current-K4 ${escapeHtml(occupancyEnvelope)} occupancy</h1><p>Exact ordered M34/M13/M12/M45 identities across Bytebound’s baseline, mild, and moderate crowding ladder. Every rung shows the volume-preserving tapered source beside the identity-bound occupied result. The authenticated constant-radius parent still refuses unchanged; this is provisional mechanism evidence, not anatomical admission.</p></header><main>${cards}</main></body></html>`;
 }
 
 function outputEntry(relativePath, bytes) {
@@ -269,6 +278,7 @@ try {
       clusterObstacleId: derivation.source.obstacles[0].id,
       clusterOccupancyReferenceDirection: [1, 0, 0],
       clusterAllocationSchedule: schedule,
+      clusterOccupancyEnvelope: args.occupancyEnvelope,
     };
     const occupiedResult = solveMuscleCompartmentPacking(derivation.source, requestedSolverConfig);
     const root = `conditions/${condition.id}`;
@@ -282,7 +292,7 @@ try {
         source: derivation.source,
         result: occupiedResult,
         report: { route: routeReceipt() },
-        presentation: presentation(condition, occupiedResult),
+        presentation: presentation(condition, occupiedResult, args.occupancyEnvelope),
       }))],
     };
     for (const [, [relative, bytes]] of Object.entries(conditionArtifacts)) {
@@ -336,7 +346,7 @@ try {
   }
 
   phase = 'prepare-artifacts';
-  const portfolioBytes = Buffer.from(renderPortfolio(visualConditions));
+  const portfolioBytes = Buffer.from(renderPortfolio(visualConditions, args.occupancyEnvelope));
   artifacts.set('index.html', portfolioBytes);
   const assayResult = {
     schema: ASSAY_RESULT_SCHEMA,
@@ -349,6 +359,7 @@ try {
       fileSha256: parentAtlasFileSha256,
     },
     requestedConstructionIds: args.requestedConstructionIds,
+    requestedOccupancyEnvelope: args.occupancyEnvelope,
     effectiveConstructionIds: series.effectiveConstructionIds,
     levels: LEVELS,
     conditions: resultConditions,
@@ -376,6 +387,7 @@ try {
     effectiveConstructionIds: series.effectiveConstructionIds,
     requestedTaper: args.requestedTaper,
     requestedMaxIterations: args.maxIterations,
+    requestedOccupancyEnvelope: args.occupancyEnvelope,
     requestedAllocationSchedule: schedule,
     conditions: resultConditions,
     outputs: {

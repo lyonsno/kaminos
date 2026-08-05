@@ -692,6 +692,7 @@ function validateConfig(config) {
     'clusterRadialReference',
     'clusterAllocationSchedule',
     'clusterOccupancyReferenceDirection',
+    'clusterOccupancyEnvelope',
   ];
   if (config.clusterUpdate === 'capsule-axis-belly-turn') {
     if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
@@ -758,6 +759,11 @@ function validateConfig(config) {
         'clusterOccupancyReferenceDirection requires capsule-axis-occupancy-allocation',
       );
     }
+    if (config.clusterOccupancyEnvelope !== undefined) {
+      throw new Error(
+        'clusterOccupancyEnvelope requires capsule-axis-occupancy-allocation',
+      );
+    }
     if (
       config.curvatureUpdate !== undefined &&
       !['unconstrained', 'source-sign-halfspace'].includes(config.curvatureUpdate)
@@ -776,6 +782,16 @@ function validateConfig(config) {
       throw new Error(
         'capsule-axis-occupancy-allocation requires a finite 3D ' +
         'clusterOccupancyReferenceDirection',
+      );
+    }
+    if (
+      config.clusterOccupancyEnvelope !== undefined &&
+      !['normalized-sine', 'normalized-sine-squared'].includes(
+        config.clusterOccupancyEnvelope,
+      )
+    ) {
+      throw new Error(
+        'clusterOccupancyEnvelope must be normalized-sine or normalized-sine-squared',
       );
     }
     if (
@@ -1083,12 +1099,16 @@ function clusterProjectionReceipt(config, source) {
         'capsule-axis-source-position-sine-zero-at-attachments';
     }
   } else if (update === 'capsule-axis-occupancy-allocation') {
+    const envelopeProfile = config.clusterOccupancyEnvelope || 'normalized-sine';
     receipt.obstacleId = config.clusterObstacleId;
     receipt.referenceDirection = structuredClone(config.clusterOccupancyReferenceDirection);
     receipt.effectiveReferenceDirection = effectiveOccupancyReferenceDirection(source, config);
     receipt.allocationSchedule = structuredClone(config.clusterAllocationSchedule);
+    receipt.requestedEnvelopeProfile = envelopeProfile;
+    receipt.effectiveEnvelopeProfile = envelopeProfile;
     receipt.allocationReference =
-      'capsule-axis-belly-anchor-absolute-role-preserve-local-shape-sine-zero-at-attachments';
+      `capsule-axis-belly-anchor-absolute-role-preserve-local-shape-${envelopeProfile}` +
+      '-zero-at-attachments';
   }
   receipt.fallbackUsed = false;
   return receipt;
@@ -2833,6 +2853,11 @@ function projectCapsuleAxisOccupancyAllocation(
   const allocationByMuscleId = new Map(
     config.clusterAllocationSchedule.map(allocation => [allocation.muscleId, allocation]),
   );
+  const envelopeProfile = config.clusterOccupancyEnvelope || 'normalized-sine';
+  const envelopeAt = progress => {
+    const sine = Math.sin(Math.PI * progress);
+    return envelopeProfile === 'normalized-sine-squared' ? sine ** 2 : sine;
+  };
   for (const [muscleIndex, muscle] of muscles.entries()) {
     const sourceCenterline = source.muscles[muscleIndex].centerline;
     const allocation = allocationByMuscleId.get(muscle.id);
@@ -2858,7 +2883,7 @@ function projectCapsuleAxisOccupancyAllocation(
     const radialOffset = allocation.radialDistance - anchorRadialLength;
     const envelopeMaximum = Math.max(
       ...sourceCenterline.slice(1, -1).map((_, interiorIndex) =>
-        Math.sin(Math.PI * (interiorIndex + 1) / (sourceCenterline.length - 1))),
+        envelopeAt((interiorIndex + 1) / (sourceCenterline.length - 1))),
     );
     for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
       const sourcePosition = sourceCenterline[knotIndex].position;
@@ -2874,7 +2899,7 @@ function projectCapsuleAxisOccupancyAllocation(
       }
       const sourceDirection = scale(sourceRadial, 1 / sourceRadialLength);
       const progress = knotIndex / (muscle.centerline.length - 1);
-      const envelope = Math.sin(Math.PI * progress) / envelopeMaximum;
+      const envelope = envelopeAt(progress) / envelopeMaximum;
       const allocatedDirection = rotateAroundAxis(
         sourceDirection,
         axis,
