@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.lirm-metaball-fixed-lineage-proportion.inspection.v0",
+  "status": "complete",
+  "operatorAdmission": "happy",
+  "summary": {
+    "cellsInspected": 7,
+    "happyCells": 7,
+    "lineagePreservedCells": 5,
+    "boundaryCrossingCells": 2,
+    "baselineDecodedPixelsReplayExactly": true
+  },
+  "cells": [
+    {
+      "id": "axial-short",
+      "disposition": "in-lineage inheritance",
+      "lineage": "preserved",
+      "directionalInheritance": "present",
+      "targetView": "preserved",
+      "happy": true,
+      "observation": "The bear/mustelid lineage becomes visibly shorter and stockier while retaining the same camera, support organization, face family, fur treatment, and ground relationship."
+    },
+    {
+      "id": "baseline",
+      "disposition": "exact decoded-pixel replay",
+      "lineage": "preserved",
+      "directionalInheritance": "baseline",
+      "targetView": "preserved",
+      "happy": true,
+      "observation": "The decoded RGB pixels exactly match the prior maximum-contour-bound-invention seed-80413 output; only PNG file encoding or metadata differs."
+    },
+    {
+      "id": "axial-long",
+      "disposition": "in-lineage inheritance",
+      "lineage": "preserved",
+      "directionalInheritance": "present",
+      "targetView": "preserved",
+      "happy": true,
+      "observation": "The same bear/mustelid lineage receives a longer trunk and more extended horizontal stance without losing the target camera or organismal completion."
+    },
+    {
+      "id": "body-shallow",
+      "disposition": "in-lineage inheritance",
+      "lineage": "preserved",
+      "directionalInheritance": "present",
+      "targetView": "preserved",
+      "happy": true,
+      "observation": "The same lineage becomes shallower and lighter-bodied in the fixed projection envelope while preserving the target view and major regional organization."
+    },
+    {
+      "id": "body-deep",
+      "disposition": "semantic basin boundary",
+      "lineage": "crossed",
+      "directionalInheritance": "not admissible",
+      "targetView": "lost",
+      "happy": true,
+      "observation": "The positive depth excursion reclassifies the source as a frontal seated tabby cat, losing the requested three-quarter arrangement and the original bear/mustelid lineage."
+    },
+    {
+      "id": "supports-short",
+      "disposition": "in-lineage inheritance",
+      "lineage": "preserved",
+      "directionalInheritance": "present",
+      "targetView": "preserved",
+      "happy": true,
+      "observation": "The same lineage receives visibly shorter legs and a lower, more crouched stance while retaining body, face, fur, and camera continuity."
+    },
+    {
+      "id": "supports-long",
+      "disposition": "directional inheritance across a semantic boundary",
+      "lineage": "crossed",
+      "directionalInheritance": "present with reclassification",
+      "targetView": "mostly preserved",
+      "happy": true,
+      "observation": "Longer supports remain visible as taller legs, but the animal reclassifies into a striped cat; the rail is legible even though lineage continuity is lost."
+    }
+  ]
+}

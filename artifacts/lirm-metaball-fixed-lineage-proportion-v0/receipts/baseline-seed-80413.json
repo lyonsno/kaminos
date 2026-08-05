@@ -1,0 +1,75 @@
+{
+  "job_id": "00855ddd51d4",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png",
+  "output_dir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/baseline/seed-80413",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png /private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/side/baseline-side/depth-implicit.png /private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png --prompt-file /private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt --output /private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/baseline/seed-80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+  "effective_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "--image-paths",
+    "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png",
+    "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/side/baseline-side/depth-implicit.png",
+    "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png",
+    "--prompt-file",
+    "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+    "--output",
+    "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/baseline/seed-80413/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "512",
+    "--width",
+    "512",
+    "--steps",
+    "8",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "80413",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+  "effective_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "seed": "42",
+    "steps": "8",
+    "width": "512"
+  },
+  "effective_timeout": 1800,
+  "ignored_params": null,
+  "started_at": 1785895962.789523,
+  "finished_at": 1785896052.589938,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/00855ddd51d4/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/00855ddd51d4/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/00855ddd51d4/stderr.log",
+  "worker": {
+    "source_root": "/private/tmp/gpu-greenroom-handy-durable-command-0725",
+    "commit": "8ac87f5af0c42f8ff329f7d4b98198cd30d03cd3",
+    "git_dirty": false,
+    "pid": 92017,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "depth-implicit",
+  "job_type": "mflux_flux2_edit_promptfile_3ref",
+  "job_id": "105e3676b0a6",
+  "input_path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/target-three-quarter/supports-short-target-three-quarter/depth-implicit.png",
+  "input_name": "depth-implicit.png",
+  "params": {
+    "reference_path_2": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/side/supports-short-side/depth-implicit.png",
+    "reference_path_3": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/target-three-quarter/supports-short-target-three-quarter/depth-implicit.png",
+    "prompt_file": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "80413",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/Users/noahlyons/dev/mlx-openai-server"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785896741.521342,
+  "duration_s": 184.6
+}
