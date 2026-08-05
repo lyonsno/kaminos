@@ -1,0 +1,156 @@
+{
+  "descriptorOnlyClaims": [
+    {
+      "id": "primitive-role-head",
+      "mayAdjudicateVisibleProjection": false,
+      "value": "right-cranial-mass"
+    },
+    {
+      "id": "primitive-role-posterior",
+      "mayAdjudicateVisibleProjection": false,
+      "value": "left-posterior-mass"
+    }
+  ],
+  "landmarks": {
+    "dorsal-offset-tip": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.62890625,
+        0.19921875
+      ],
+      "pixel": [
+        322,
+        102
+      ]
+    },
+    "front-inner-contact": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.640625,
+        0.84960938
+      ],
+      "pixel": [
+        328,
+        435
+      ]
+    },
+    "front-outer-contact": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.80859375,
+        0.91015625
+      ],
+      "pixel": [
+        414,
+        466
+      ]
+    },
+    "head-marker-tip": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.82421875,
+        0.24609375
+      ],
+      "pixel": [
+        422,
+        126
+      ]
+    },
+    "muzzle-tip": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.94335938,
+        0.48046875
+      ],
+      "pixel": [
+        483,
+        246
+      ]
+    },
+    "posterior-extreme": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.09375,
+        0.50390625
+      ],
+      "pixel": [
+        48,
+        258
+      ]
+    },
+    "rear-inner-contact": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.33984375,
+        0.828125
+      ],
+      "pixel": [
+        174,
+        424
+      ]
+    },
+    "rear-outer-contact": {
+      "coordinateConvention": "top-left-origin-pixel-center",
+      "normalized": [
+        0.171875,
+        0.8828125
+      ],
+      "pixel": [
+        88,
+        452
+      ]
+    }
+  },
+  "orientation": {
+    "headSide": "image-right",
+    "markerSide": "image-right",
+    "projectionClass": "orthographic"
+  },
+  "schema": "kaminos.visible-source-evidence-ledger.v0",
+  "sentinelId": "asymmetric-projection-truth-a",
+  "status": "predeclared",
+  "supportOrder": [
+    "rear-outer",
+    "rear-inner",
+    "front-inner",
+    "front-outer"
+  ],
+  "thresholds": {
+    "allowedCompletionRegion": "outside-unobserved-contour-lawful",
+    "categoricalPolicy": "exact",
+    "maxLandmarkDriftFrameDiagonal": 0.05,
+    "minProtectedContourIoU": 0.8,
+    "predeclared": true
+  },
+  "visibleClaims": [
+    {
+      "evidenceSource": "pixel-measurement",
+      "id": "head-marker-side",
+      "kind": "categorical-landmark",
+      "measurementArtifact": "landmark-overlay.png",
+      "predeclared": true,
+      "sourceValue": "image-right"
+    },
+    {
+      "evidenceSource": "pixel-measurement",
+      "id": "support-order",
+      "kind": "categorical-order",
+      "measurementArtifact": "silhouette.png",
+      "predeclared": true,
+      "sourceValue": [
+        "rear-outer",
+        "rear-inner",
+        "front-inner",
+        "front-outer"
+      ]
+    },
+    {
+      "evidenceSource": "pixel-measurement",
+      "id": "protected-contour",
+      "kind": "binary-mask",
+      "measurementArtifact": "protected-contour.png",
+      "predeclared": true,
+      "sourceValue": "protected-contour.png"
+    }
+  ]
+}

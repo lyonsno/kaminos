@@ -1,0 +1,164 @@
+{
+  "consumerExercise": {
+    "allocationAuthority": "generator-program-owner",
+    "cells": [
+      {
+        "id": "depth-only",
+        "references": [
+          {
+            "carrierKind": "depth",
+            "path": "depth.png",
+            "role": "target-projection",
+            "sha256": "f2d8eb0ef7cc83a77afde1634350ec82b5dbbdf6209abda954ae316ec2fcf3d9",
+            "slot": 0
+          }
+        ]
+      },
+      {
+        "id": "depth-plus-clay-appearance",
+        "references": [
+          {
+            "carrierKind": "depth",
+            "path": "depth.png",
+            "role": "target-projection",
+            "sha256": "f2d8eb0ef7cc83a77afde1634350ec82b5dbbdf6209abda954ae316ec2fcf3d9",
+            "slot": 0
+          },
+          {
+            "carrierKind": "clay",
+            "path": "clay.png",
+            "role": "appearance",
+            "sha256": "db3e3103682e43f6149ddc3ecd7e804bd6caedf03b62e2b15555cc2912b86010",
+            "slot": 1
+          }
+        ]
+      }
+    ],
+    "claimCeiling": "Carrier-role comparison on one pixel-falsifiable native-square sentinel; no general carrier ranking, reconstructed-volume, or organic-transfer claim.",
+    "consumer": "morphology-generator-assay"
+  },
+  "descriptor": {
+    "path": "descriptor.json",
+    "sha256": "00449eb4a00038a7ad8ef3cf7ff01d4b9a7e0804509686d376f6261a760f08d2"
+  },
+  "failure": null,
+  "manifestSha256": "31d2f3d62a0ae27ad6c88c2ff0f452572cefa2a37c41fa9e80819644f4826c20",
+  "outputs": {
+    "clay": {
+      "byteLength": 20753,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "clay.png",
+      "sha256": "db3e3103682e43f6149ddc3ecd7e804bd6caedf03b62e2b15555cc2912b86010"
+    },
+    "depth": {
+      "byteLength": 23294,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "depth.png",
+      "sha256": "f2d8eb0ef7cc83a77afde1634350ec82b5dbbdf6209abda954ae316ec2fcf3d9"
+    },
+    "landmark-overlay": {
+      "byteLength": 21630,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "landmark-overlay.png",
+      "sha256": "5d73233a38bf22f782d0ec554475e9c571c4f499f0dea807477596a4c0adf715"
+    },
+    "normal": {
+      "byteLength": 44626,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "normal.png",
+      "sha256": "27f21ce60a751d28d98e70a6107c0c7b54b0c55ae5ce85f0786a698e2d4ae247"
+    },
+    "protected-contour": {
+      "byteLength": 2667,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "protected-contour.png",
+      "sha256": "6974ba76f44a8d5c7e007485bebae36011c1137bad1b16e39c4295efdc52cad1"
+    },
+    "silhouette": {
+      "byteLength": 3174,
+      "cached": false,
+      "complete": true,
+      "dimensions": [
+        512,
+        512
+      ],
+      "fresh": true,
+      "mediaType": "image/png",
+      "path": "silhouette.png",
+      "sha256": "a931778ad9efe10d3862dd6396da8d730304f78c5003a8f97205f645187758de"
+    }
+  },
+  "preprocessing": {
+    "crop": null,
+    "effectivePolicy": "native-square",
+    "encodedDimensions": [
+      512,
+      512
+    ],
+    "pad": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "requestedPolicy": "native-square",
+    "scale": [
+      1.0,
+      1.0
+    ],
+    "sourceDimensions": [
+      512,
+      512
+    ],
+    "transformSha256": "a0418ff02f8b41532ee6b7b27b986289a2fb1ee162819143257d3f1a02651665"
+  },
+  "producerRoute": {
+    "device": "cpu",
+    "effective": "python-stdlib-analytic-raster-v0",
+    "fallbackUsed": false,
+    "renderer": "deterministic-cpu-raster",
+    "requested": "python-stdlib-analytic-raster-v0"
+  },
+  "schema": "kaminos.visible-source-sentinel.v0",
+  "sentinelId": "asymmetric-projection-truth-a",
+  "status": "complete",
+  "visibleEvidenceLedger": {
+    "path": "visible-evidence-ledger.json",
+    "sha256": "5e62f81a763e7174ed65cc048f56e7aaf2e4b6b680367b274d1b52d8a31a433b"
+  }
+}

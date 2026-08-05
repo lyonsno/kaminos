@@ -1,0 +1,35 @@
+{
+  "error": null,
+  "failurePhase": null,
+  "inspectionPath": "index.html",
+  "lastTrustworthyEvidence": {
+    "completedOutputs": [
+      "clay",
+      "depth",
+      "normal",
+      "silhouette",
+      "protected-contour",
+      "landmark-overlay"
+    ],
+    "outputSha256": {
+      "clay": "db3e3103682e43f6149ddc3ecd7e804bd6caedf03b62e2b15555cc2912b86010",
+      "depth": "f2d8eb0ef7cc83a77afde1634350ec82b5dbbdf6209abda954ae316ec2fcf3d9",
+      "landmark-overlay": "5d73233a38bf22f782d0ec554475e9c571c4f499f0dea807477596a4c0adf715",
+      "normal": "27f21ce60a751d28d98e70a6107c0c7b54b0c55ae5ce85f0786a698e2d4ae247",
+      "protected-contour": "6974ba76f44a8d5c7e007485bebae36011c1137bad1b16e39c4295efdc52cad1",
+      "silhouette": "a931778ad9efe10d3862dd6396da8d730304f78c5003a8f97205f645187758de"
+    },
+    "producerRoute": {
+      "device": "cpu",
+      "effective": "python-stdlib-analytic-raster-v0",
+      "fallbackUsed": false,
+      "renderer": "deterministic-cpu-raster",
+      "requested": "python-stdlib-analytic-raster-v0"
+    }
+  },
+  "manifestPath": "manifest.json",
+  "manifestSha256": "31d2f3d62a0ae27ad6c88c2ff0f452572cefa2a37c41fa9e80819644f4826c20",
+  "schema": "kaminos.visible-source-sentinel-build-report.v0",
+  "sentinelId": "asymmetric-projection-truth-a",
+  "status": "complete"
+}
