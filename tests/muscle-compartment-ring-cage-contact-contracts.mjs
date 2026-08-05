@@ -5,9 +5,11 @@ import test from 'node:test';
 
 import {
   MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_MEASUREMENT_SCHEMA,
+  MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA,
   MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESULT_SCHEMA,
   extractMuscleCompartmentRingCageBoundary,
   measureMuscleCompartmentRingCageContactState,
+  measureMuscleCompartmentRingCageContactResidualLedger,
   solveMuscleCompartmentRingCageContact,
 } from '../muscle-compartment-ring-cage-contact-core.mjs';
 
@@ -174,8 +176,129 @@ test('reciprocal section contact materially reduces movable residuals without dr
     `packed centerlines must distribute bending instead of accumulating zig-zags: ${JSON.stringify(packedShape)}`,
   );
   assert.ok(result.iterations > 0 && result.iterations <= requestedConfig.maxIterations);
+  assert.deepEqual(result.termination, {
+    reason: 'iteration-limit',
+    attemptedIteration: null,
+    lineSearchAttempts: [],
+  });
   assert.deepEqual(
     solveMuscleCompartmentRingCageContact(carrier, source, requestedConfig),
     result,
+  );
+});
+
+test('long-horizon current K4 contact fails loud on the exact line-search custody ceiling', async () => {
+  const { carrier, source } = await fixture();
+  const requestedConfig = {
+    curvatureRegularization: 12,
+    maxIterations: 96,
+    maximumLocalTurningAngleChange: 0.25,
+    relaxationStep: 0.32,
+    maximumTotalTurningAngleChange: 1.25,
+    convergenceTolerance: 1e-4,
+    maximumRelativeVolumeError: 0.015,
+  };
+  const result = solveMuscleCompartmentRingCageContact(
+    carrier,
+    source,
+    requestedConfig,
+  );
+
+  assert.equal(result.status, 'residual-constraint');
+  assert.equal(result.iterations, 80);
+  assert.equal(result.termination.reason, 'line-search-exhausted');
+  assert.equal(result.termination.attemptedIteration, 81);
+  assert.equal(result.termination.lineSearchAttempts.length, 9);
+  assert.equal(result.termination.lineSearchAttempts[0].scale, 0.32);
+  assert.equal(result.termination.lineSearchAttempts.at(-1).scale, 0.00125);
+  assert.ok(result.termination.lineSearchAttempts.every(attempt =>
+    attempt.accepted === false && attempt.rejectionReasons.length > 0));
+  assert.ok(result.termination.lineSearchAttempts.every(attempt =>
+    attempt.rejectionReasons.includes('maximum-relative-volume-error')));
+  assert.ok(result.termination.lineSearchAttempts.every(attempt =>
+    attempt.maximumRelativeVolumeError > requestedConfig.maximumRelativeVolumeError));
+  assert.ok(result.termination.lineSearchAttempts.every(attempt =>
+    attempt.nonPositiveCellCount === 0 && attempt.compartmentMaximumEscape === 0));
+});
+
+test('selected current K4 carrier exposes an exact source-linked residual contact ledger', async () => {
+  const { source } = await fixture();
+  const carrier = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'artifacts/current-k4-curvature-contact-pareto-sweep-v0/candidates/curvature-12/packed-carrier.json',
+  ), 'utf8'));
+  const measurement = measureMuscleCompartmentRingCageContactState(carrier, source);
+  const ledger = measureMuscleCompartmentRingCageContactResidualLedger(carrier, source);
+
+  assert.equal(ledger.schema, MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA);
+  assert.equal(ledger.sourceCarrierSha256, carrier.identity.sha256);
+  assert.equal(ledger.sourceInputSha256, source.input.effective.sha256);
+  assert.ok(ledger.pairwise.contacts.length > 0);
+  assert.ok(ledger.skeletal.contacts.length > 0);
+  assert.deepEqual(ledger.orderedConstructionIds, carrier.orderedConstructionIds);
+
+  for (const contact of ledger.pairwise.contacts) {
+    assert.equal(contact.kind, 'pairwise-boundary-inside-cage');
+    assert.match(contact.nodeId, new RegExp(`^${contact.subjectConstructionId}:section:`));
+    assert.match(contact.sectionId, new RegExp(`^${contact.subjectConstructionId}:section:`));
+    assert.ok(carrier.orderedConstructionIds.includes(contact.subjectConstructionId));
+    assert.ok(carrier.orderedConstructionIds.includes(contact.obstacleConstructionId));
+    assert.ok(contact.penetration > 0);
+    assert.equal(contact.point.length, 3);
+    assert.equal(contact.closestObstacleBoundaryPoint.length, 3);
+  }
+  for (const contact of ledger.skeletal.contacts) {
+    assert.ok([
+      'cage-boundary-inside-capsule-clearance',
+      'capsule-axis-inside-cage-clearance',
+    ].includes(contact.kind));
+    assert.equal(contact.obstacleId, 'agent-authored-k4-central-pressure-capsule');
+    assert.ok(contact.penetration > 0);
+  }
+
+  const pairwiseFixed = ledger.pairwise.contacts
+    .filter(contact => contact.fixed)
+    .map(contact => contact.penetration);
+  const pairwiseMovable = ledger.pairwise.contacts
+    .filter(contact => !contact.fixed)
+    .map(contact => contact.penetration);
+  assert.equal(ledger.pairwise.fixedTotalPenetration,
+    pairwiseFixed.reduce((sum, value) => sum + value, 0));
+  assert.equal(ledger.pairwise.fixedMaximumPenetration, Math.max(0, ...pairwiseFixed));
+  assert.equal(ledger.pairwise.movableTotalPenetration,
+    pairwiseMovable.reduce((sum, value) => sum + value, 0));
+  assert.equal(ledger.pairwise.movableMaximumPenetration, Math.max(0, ...pairwiseMovable));
+  assert.equal(ledger.pairwise.fixedTotalPenetration,
+    measurement.pairwise.fixedTotalPenetration);
+  assert.equal(ledger.pairwise.movableTotalPenetration,
+    measurement.pairwise.movableTotalPenetration);
+  assert.equal(ledger.pairwise.movableMaximumPenetration,
+    measurement.pairwise.movableMaximumPenetration);
+
+  const skeletalFixed = ledger.skeletal.contacts
+    .filter(contact => contact.fixed)
+    .map(contact => contact.penetration);
+  const skeletalMovable = ledger.skeletal.contacts
+    .filter(contact => !contact.fixed)
+    .map(contact => contact.penetration);
+  assert.equal(ledger.skeletal.fixedTotalPenetration,
+    skeletalFixed.reduce((sum, value) => sum + value, 0));
+  assert.equal(ledger.skeletal.movableTotalPenetration,
+    skeletalMovable.reduce((sum, value) => sum + value, 0));
+  assert.equal(ledger.skeletal.movableMaximumPenetration,
+    Math.max(0, ...skeletalMovable));
+  assert.equal(ledger.skeletal.fixedTotalPenetration,
+    measurement.skeletal.fixedTotalPenetration);
+  assert.equal(ledger.skeletal.movableTotalPenetration,
+    measurement.skeletal.movableTotalPenetration);
+  assert.equal(ledger.skeletal.movableMaximumPenetration,
+    measurement.skeletal.movableMaximumPenetration);
+
+  assert.deepEqual(
+    measureMuscleCompartmentRingCageContactResidualLedger(
+      structuredClone(carrier),
+      structuredClone(source),
+    ),
+    ledger,
   );
 });

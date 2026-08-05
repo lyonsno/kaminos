@@ -73,7 +73,11 @@ try {
   phase = 'validate-receipts';
   const verification = validateMuscleCompartmentRingCageContactVisualReceipts({
     runReport,
-    servedViewer: { url: viewerUrl, sha256: sha256(viewerBytes) },
+    servedViewer: {
+      url: viewerUrl,
+      sha256: sha256(viewerBytes),
+      html: viewerBytes.toString('utf8'),
+    },
     captureReports,
   });
   await writeAtomic(outputPath, {

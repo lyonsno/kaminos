@@ -6,6 +6,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {
+  measureMuscleCompartmentRingCageContactResidualLedger,
   solveMuscleCompartmentRingCageContact,
 } from '../muscle-compartment-ring-cage-contact-core.mjs';
 import {
@@ -18,6 +19,7 @@ const VISUAL_BUNDLE_SCHEMA = 'kaminos.current-k4-ring-cage-contact-visual-bundle
 const VISUAL_ROUTE = 'current-k4-ring-cage-contact-orbitable-v0';
 const OWNED_RELATIVE_PATHS = Object.freeze([
   'assay-result.json',
+  'residual-ledger.json',
   'source-carrier.json',
   'packed-carrier.json',
   'index.html',
@@ -101,13 +103,14 @@ function outputEntry(relative, bytes) {
   return { path: relative, sha256: sha256(bytes) };
 }
 
-function visualBundleIdentity(solverCarrier, packedCarrier, source) {
+function visualBundleIdentity(solverCarrier, packedCarrier, source, residualLedgerSha256) {
   const domain = {
     schema: VISUAL_BUNDLE_SCHEMA,
     route: VISUAL_ROUTE,
     sourceCarrierSha256: solverCarrier.identity.sha256,
     packedCarrierSha256: packedCarrier.identity.sha256,
     sourceInputSha256: source.input.effective.sha256,
+    residualLedgerSha256,
   };
   return { ...domain, sha256: sha256(Buffer.from(JSON.stringify(domain))) };
 }
@@ -117,6 +120,9 @@ function identityBoundCaptureUrls(bundleIdentity) {
     bundle: bundleIdentity.sha256,
     source: bundleIdentity.sourceCarrierSha256,
     packed: bundleIdentity.packedCarrierSha256,
+    ledger: bundleIdentity.residualLedgerSha256,
+    routeRequested: VISUAL_ROUTE,
+    routeEffective: VISUAL_ROUTE,
   });
   return [
     ['before', null],
@@ -202,10 +208,20 @@ try {
       result.metrics.packed.cages.some(row => row.nonPositiveCellCount !== 0)) {
     throw new Error('ring-cage contact proposal violated fixed-node or positive-cell custody');
   }
+  const residualLedger = measureMuscleCompartmentRingCageContactResidualLedger(
+    result.packedCarrier,
+    source,
+  );
+  const residualLedgerBytes = jsonBytes(residualLedger);
 
   phase = 'prepare-primary-artifacts';
   const route = routeReceipt();
-  const bundleIdentity = visualBundleIdentity(solverCarrier, result.packedCarrier, source);
+  const bundleIdentity = visualBundleIdentity(
+    solverCarrier,
+    result.packedCarrier,
+    source,
+    sha256(residualLedgerBytes),
+  );
   const captureUrls = identityBoundCaptureUrls(bundleIdentity);
   const viewerBytes = Buffer.from(renderMuscleCompartmentRingCageContactHtml({
     sourceCarrier: solverCarrier,
@@ -213,6 +229,7 @@ try {
     source,
     route,
     bundleIdentity,
+    residualLedger,
   }));
   const sourceCarrierBytes = jsonBytes(solverCarrier);
   const packedCarrierBytes = jsonBytes(result.packedCarrier);
@@ -244,6 +261,8 @@ try {
     },
     config: result.config,
     iterations: result.iterations,
+    termination: result.termination,
+    lineSearchHistory: result.lineSearchHistory,
     fixedNodeMaximumDrift: result.fixedNodeMaximumDrift,
     metrics: result.metrics,
     iterationHistory: result.iterationHistory,
@@ -258,6 +277,7 @@ try {
   const assayResultBytes = jsonBytes(assayResult);
   const artifacts = {
     assayResult: ['assay-result.json', assayResultBytes],
+    residualLedger: ['residual-ledger.json', residualLedgerBytes],
     sourceCarrier: ['source-carrier.json', sourceCarrierBytes],
     packedCarrier: ['packed-carrier.json', packedCarrierBytes],
     viewer: ['index.html', viewerBytes],
@@ -292,9 +312,12 @@ try {
     configFileSha256,
     config: result.config,
     iterations: result.iterations,
+    termination: result.termination,
+    lineSearchHistory: result.lineSearchHistory,
     fixedNodeMaximumDrift: result.fixedNodeMaximumDrift,
     metrics: result.metrics,
     outputs,
+    residualLedger: outputs.residualLedger,
     visual: {
       route,
       status: 'pending-agent-inspection',
@@ -316,7 +339,9 @@ try {
       phase: 'primary-artifacts-written',
       resultStatus: result.status,
       iterations: result.iterations,
+      termination: result.termination,
       packedCarrierIdentitySha256: result.packedCarrier.identity.sha256,
+      residualLedgerSha256: outputs.residualLedger.sha256,
     },
   };
   phase = 'write-report';

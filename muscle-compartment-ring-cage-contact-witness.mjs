@@ -45,10 +45,14 @@ export function renderMuscleCompartmentRingCageContactHtml({
   source,
   route,
   bundleIdentity,
+  residualLedger,
 }) {
   if (!bundleIdentity?.sha256 ||
       bundleIdentity.sourceCarrierSha256 !== sourceCarrier.identity.sha256 ||
-      bundleIdentity.packedCarrierSha256 !== result.packedCarrier.identity.sha256) {
+      bundleIdentity.packedCarrierSha256 !== result.packedCarrier.identity.sha256 ||
+      !bundleIdentity.residualLedgerSha256 ||
+      residualLedger?.sourceCarrierSha256 !== result.packedCarrier.identity.sha256 ||
+      residualLedger?.sourceInputSha256 !== source.input.effective.sha256) {
     throw new Error('ring-cage witness requires an exact visual bundle identity');
   }
   const payload = JSON.stringify({
@@ -57,6 +61,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     source,
     route,
     bundleIdentity,
+    residualLedger,
   });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
@@ -120,9 +125,12 @@ export function renderMuscleCompartmentRingCageContactHtml({
       <span>compartment escape</span><span class="value">${formatMetric(initial.compartment.maximumEscape)}</span><span class="value proposal">${formatMetric(packed.compartment.maximumEscape)}</span>
       <span>maximum volume error</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.relativeVolumeError)))}</span><span class="value proposal">${formatMetric(maxVolumeError)}</span>
       <span>fixed-node drift</span><span class="value">0.0000</span><span class="value proposal">${formatMetric(result.fixedNodeMaximumDrift)}</span>
+      <span>pairwise contact rows</span><span class="value">—</span><span class="value proposal">${residualLedger.pairwise.contacts.length}</span>
+      <span>skeletal contact rows</span><span class="value">—</span><span class="value proposal">${residualLedger.skeletal.contacts.length}</span>
+      <span>termination</span><span class="value">—</span><span class="value proposal">${escapeHtml(result.termination?.reason || 'unrecorded')}</span>
     </div>
-    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>skeletal capsule</span></div>
-    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>source ${escapeHtml(bundleIdentity.sourceCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}</p>
+    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>skeletal capsule</span><span><i style="background:#ff8a3d"></i>movable pairwise pressure</span><span><i style="background:#ffffff"></i>fixed pairwise pressure</span><span><i style="background:#48c7ff"></i>skeletal pressure</span></div>
+    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>source ${escapeHtml(bundleIdentity.sourceCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · solid colored surfaces are the actual tetrahedral cage boundary, not a centerline tube reconstruction</div>
   <script type="module">
@@ -148,6 +156,11 @@ export function renderMuscleCompartmentRingCageContactHtml({
     function line(points,color,opacity=1){
       const geometry=new THREE.BufferGeometry().setFromPoints(points.map(point=>new THREE.Vector3(...point)));
       return new THREE.Line(geometry,new THREE.LineBasicMaterial({color,transparent:opacity<1,opacity,depthTest:opacity>.3}));
+    }
+    function pressureLine(points,color){
+      const geometry=new THREE.BufferGeometry().setFromPoints(points.map(point=>new THREE.Vector3(...point)));
+      const visual=new THREE.Line(geometry,new THREE.LineBasicMaterial({color,transparent:true,opacity:.86,depthTest:false,depthWrite:false}));
+      visual.renderOrder=20; return visual;
     }
     function cageMesh(cage,color,opacity){
       const vertices=[];
@@ -179,11 +192,23 @@ export function renderMuscleCompartmentRingCageContactHtml({
     const obstacle=payload.source.obstacles[0]; scene.add(capsuleBetween(obstacle.start,obstacle.end,obstacle.radius+(obstacle.clearance||0)));
     const compartment=payload.source.compartment,size=compartment.maximum.map((v,i)=>v-compartment.minimum[i]),center=compartment.maximum.map((v,i)=>(v+compartment.minimum[i])/2);
     const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)),new THREE.LineDashedMaterial({color:0x86a6c8,transparent:true,opacity:.2,dashSize:.08,gapSize:.05})); box.computeLineDistances(); box.position.set(...center); scene.add(box);
-    const beforeGroup=new THREE.Group(),packedGroup=new THREE.Group(),ghostGroup=new THREE.Group();
+    const beforeGroup=new THREE.Group(),packedGroup=new THREE.Group(),ghostGroup=new THREE.Group(),contactGroup=new THREE.Group();
     payload.sourceCages.forEach((cage,index)=>addCage(beforeGroup,cage,index,.82));
     payload.packedCages.forEach((cage,index)=>addCage(packedGroup,cage,index,.82));
     payload.sourceCages.forEach((cage,index)=>ghostGroup.add(line(cage.axisNodeIndices.map(nodeIndex=>cage.positions[nodeIndex]),colors[index],.2)));
-    scene.add(beforeGroup,packedGroup,ghostGroup);
+    const contacts=[...payload.residualLedger.pairwise.contacts,...payload.residualLedger.skeletal.contacts];
+    const maximumContact=Math.max(1e-9,...contacts.map(contact=>contact.penetration));
+    for(const contact of contacts){
+      const target=contact.closestObstacleBoundaryPoint||contact.closestObstacleAxisPoint||contact.closestCageBoundaryPoint;
+      const color=contact.kind==='pairwise-boundary-inside-cage'
+        ? (contact.fixed?0xffffff:0xff8a3d)
+        : 0x48c7ff;
+      contactGroup.add(pressureLine([contact.point,target],color));
+      const radius=.018+.065*Math.sqrt(contact.penetration/maximumContact);
+      const marker=new THREE.Mesh(new THREE.SphereGeometry(radius,12,8),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.94,depthTest:false,depthWrite:false}));
+      marker.position.set(...contact.point); marker.renderOrder=21; contactGroup.add(marker);
+    }
+    scene.add(beforeGroup,packedGroup,ghostGroup,contactGroup);
     const bounds=new THREE.Box3();
     for(const cage of [...payload.sourceCages,...payload.packedCages]) for(const point of cage.positions) bounds.expandByPoint(new THREE.Vector3(...point));
     bounds.expandByPoint(new THREE.Vector3(...obstacle.start)); bounds.expandByPoint(new THREE.Vector3(...obstacle.end));
@@ -192,8 +217,8 @@ export function renderMuscleCompartmentRingCageContactHtml({
     camera.near=Math.max(.001,framingRadius/500); camera.far=Math.max(100,framingRadius*30); camera.updateProjectionMatrix();
     const query=new URLSearchParams(location.search);
     const expectedIdentity=payload.bundleIdentity;
-    const requestedIdentity={bundle:query.get('bundle'),source:query.get('source'),packed:query.get('packed')};
-    if(requestedIdentity.bundle!==expectedIdentity.sha256||requestedIdentity.source!==expectedIdentity.sourceCarrierSha256||requestedIdentity.packed!==expectedIdentity.packedCarrierSha256){
+    const requestedIdentity={bundle:query.get('bundle'),source:query.get('source'),packed:query.get('packed'),ledger:query.get('ledger'),routeRequested:query.get('routeRequested'),routeEffective:query.get('routeEffective')};
+    if(requestedIdentity.bundle!==expectedIdentity.sha256||requestedIdentity.source!==expectedIdentity.sourceCarrierSha256||requestedIdentity.packed!==expectedIdentity.packedCarrierSha256||requestedIdentity.ledger!==expectedIdentity.residualLedgerSha256||requestedIdentity.routeRequested!==payload.route.requested||requestedIdentity.routeEffective!==payload.route.effective){
       document.body.innerHTML='<pre style="margin:24px;color:#ff8b8b">identity-bound capture route mismatch\\n'+JSON.stringify({requested:requestedIdentity,effective:expectedIdentity},null,2)+'</pre>';
       throw new Error('identity-bound capture route mismatch');
     }
@@ -203,7 +228,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     camera.position.copy(framingCenter).add(viewDirection.normalize().multiplyScalar(framingDistance));
     controls.target.copy(framingCenter); controls.minDistance=framingRadius*.4; controls.maxDistance=framingRadius*10; controls.update();
     function showState(state){
-      const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghostGroup.visible=packed;
+      const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghostGroup.visible=packed; contactGroup.visible=packed;
       document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));
       document.documentElement.dataset.witnessState=state;
     }
@@ -212,10 +237,13 @@ export function renderMuscleCompartmentRingCageContactHtml({
     new ResizeObserver(resize).observe(viewport); resize();
     const requested=query.get('state'); showState(requested==='before'?'before':'packed');
     renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
-    document.documentElement.dataset.witnessLoaded='true'; document.documentElement.dataset.witnessRoute=payload.route.effective;
+    document.documentElement.dataset.witnessLoaded='true';
+    document.documentElement.dataset.witnessRouteRequested=payload.route.requested;
+    document.documentElement.dataset.witnessRouteEffective=payload.route.effective;
     document.documentElement.dataset.witnessBundle=expectedIdentity.sha256;
     document.documentElement.dataset.sourceCarrier=expectedIdentity.sourceCarrierSha256;
     document.documentElement.dataset.packedCarrier=expectedIdentity.packedCarrierSha256;
+    document.documentElement.dataset.residualLedger=expectedIdentity.residualLedgerSha256;
   </script>
 </body>
 </html>`;

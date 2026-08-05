@@ -1,0 +1,106 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-volume-bound-visual-inspection.v0",
+  "status": "inspected-volume-bound-pressure-localization",
+  "inspectedAt": "2026-08-05T20:03:41Z",
+  "inspector": "codex-gpt-5.5-owning-lane",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "bundleIdentitySha256": "79d4445ddc1adcbb32c0dacf5ff91a7b53df294d3cff74e43089a2ee327856b7",
+  "routeVerification": {
+    "path": "capture-route-verification.json",
+    "sha256": "b0501b74dfa14374c8b59e0fb2c43485cb0476888919bcf6b97c3992a74c7ddd",
+    "status": "verified",
+    "captureRequestedRoute": "independent-headless-screenshot-v0",
+    "captureEffectiveRoute": "independent-headless-screenshot-v0",
+    "witnessRequestedRoute": "current-k4-ring-cage-contact-orbitable-v0",
+    "witnessEffectiveRoute": "current-k4-ring-cage-contact-orbitable-v0",
+    "observedVisibleResidualLedgerSha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d",
+    "fallbackUsed": false,
+    "installedStableChrome": false
+  },
+  "inputs": {
+    "runReport": {
+      "path": "run-report.json",
+      "sha256": "aca8cb6196fc095923ff29d077cd030105e120a7b54ca8fd4889a7a59feca6f1"
+    },
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "724e0c8dbf05bce30e0a32f92da6af6bae04c56de4203f05037e79493e79095e"
+    },
+    "residualLedger": {
+      "path": "residual-ledger.json",
+      "sha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "a3a3d07f394844326e7d0b313009554c6c880c1f7b5e66906def04c2e9129b07"
+    }
+  },
+  "captures": [
+    {
+      "state": "source",
+      "view": "three-quarter",
+      "path": "source-crowded.png",
+      "sha256": "6931aa878108911a21bbebc222ca117214247d1dbb28b235dad42095b3d61cd8"
+    },
+    {
+      "state": "proposal",
+      "view": "three-quarter",
+      "path": "contact-relieved.png",
+      "sha256": "d80d81f908ede53be4beefde95fdff6b86abee06da08c6f6b57b67d9842bce49"
+    },
+    {
+      "state": "source",
+      "view": "side",
+      "path": "source-crowded-side.png",
+      "sha256": "18fecc9cf7fdbe34cf87661ee818f4ff902cbb5974bba7898937a260c79f88f2"
+    },
+    {
+      "state": "proposal",
+      "view": "side",
+      "path": "contact-relieved-side.png",
+      "sha256": "8920e0ed73ba6cd1a364e7756629b6d5b7757c53da788dbfb9f804ac1c69a9d7"
+    }
+  ],
+  "termination": {
+    "reason": "line-search-exhausted",
+    "acceptedIterations": 80,
+    "attemptedIteration": 81,
+    "terminalAttemptCount": 9,
+    "terminalRejectionReason": "maximum-relative-volume-error",
+    "maximumRelativeVolumeError": 0.014999833625267148,
+    "configuredMaximumRelativeVolumeError": 0.015
+  },
+  "residualClassification": {
+    "skeletal": {
+      "classification": "effectively-resolved",
+      "contactCount": 2,
+      "totalPenetration": 0.04502050065172025,
+      "maximumPenetration": 0.03038764289015325
+    },
+    "movablePairwise": {
+      "classification": "distributed-muscle-12-muscle-45-interface",
+      "totalPenetration": 10.164116328174828,
+      "maximumPenetration": 0.3420731982757239,
+      "dominantDirectedPairContactCount": 122,
+      "dominantDirectedPairTotalPenetration": 10.076789289230046,
+      "dominantDirectedPairMaximumPenetration": 0.3129634041646115
+    },
+    "fixedPairwise": {
+      "classification": "attachment-locked-muscle-34-section-12-muscle-45-cluster",
+      "totalPenetration": 3.74533272446409,
+      "maximumPenetration": 0.46094852180370144,
+      "dominantDirectedPairFixedTotalPenetration": 2.1611358656731525
+    }
+  },
+  "observations": [
+    "The regenerated three-quarter proposal visibly opens the source-crowded cluster and makes the pressure field legible: orange movable contacts run along the purple/yellow body interface, while white fixed contacts cluster at the lower attachment.",
+    "The regenerated side proposal confirms that the orange Muscle 12-to-45 pressure is longitudinally distributed rather than a single camera-hidden knot or one section-local elbow.",
+    "Only two sparse cyan skeletal contacts remain, agreeing with the measured reduction from 68.01110485718644 source total penetration to 0.04502050065172025.",
+    "The fixed white Muscle 34 section-12 contact cluster remains visible and must stay an explicit attachment-bound residual; moving the authenticated attachment is not an admissible relief mechanism.",
+    "The operator-visible identity block now displays the bundle, source, proposal, residual-ledger, requested witness route, and effective witness route; the independent verifier reconciles those fields against the output receipt and served viewer bytes.",
+    "The packed construction retains smooth centerline arcs and zero compartment escape, but Muscle 12 reaches 0.014999833625267148 relative volume error and prevents any further accepted centerline translation under the preserved 0.015 ceiling."
+  ],
+  "verdict": "VOLUME_CEILING_IS_EARLIEST_BLOCKER_WITH_DISTRIBUTED_M12_M45_AND_FIXED_M34_M45_RESIDUALS",
+  "admission": "The result admits a mechanism redirect toward volume-preserving cross-section redistribution on the movable Muscle 12-to-45 interface and an attachment-bound certificate for the fixed Muscle 34-to-45 cluster. It does not admit packing, anatomy, production, source, or joined-object claims."
+}

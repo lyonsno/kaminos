@@ -26,11 +26,34 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
   require(runReport?.status === 'completed', 'visual receipts require a completed assay run');
   const visual = runReport.visual;
   require(visual?.bundleIdentity?.sha256, 'visual bundle identity is missing');
+  require(SHA256_PATTERN.test(visual.bundleIdentity.residualLedgerSha256 || ''),
+    'residual ledger identity is missing from the visual bundle');
+  require(SHA256_PATTERN.test(runReport.outputs?.residualLedger?.sha256 || ''),
+    'residual ledger output receipt is missing');
+  require(
+    runReport.outputs.residualLedger.sha256 === visual.bundleIdentity.residualLedgerSha256,
+    'residual ledger identity mismatch between output receipt and visual bundle',
+  );
+  require(
+    typeof visual.route?.requested === 'string' && visual.route.requested.length > 0 &&
+      typeof visual.route?.effective === 'string' && visual.route.effective.length > 0 &&
+      visual.route.fallbackUsed === false &&
+      visual.route.requested === visual.route.effective &&
+      visual.route.effective === visual.bundleIdentity.route,
+    'witness route mismatch between requested, effective, and bundle identities',
+  );
   require(SHA256_PATTERN.test(visual.viewer?.sha256 || ''), 'viewer identity is missing');
   require(
     servedViewer?.sha256 === visual.viewer.sha256,
     `served viewer identity mismatch: expected ${visual.viewer.sha256}, got ` +
       `${servedViewer?.sha256 || 'missing'}`,
+  );
+  const visibleIdentity = servedViewer?.html || '';
+  require(
+    visibleIdentity.includes(`ledger ${visual.bundleIdentity.residualLedgerSha256}`) &&
+      visibleIdentity.includes(`route requested ${visual.route.requested}`) &&
+      visibleIdentity.includes(`route effective ${visual.route.effective}`),
+    'served viewer does not visibly expose ledger and requested/effective witness-route identity',
   );
   require(Array.isArray(visual.captureUrls) && visual.captureUrls.length === 4,
     'exactly four identity-bound capture URLs are required');
@@ -75,12 +98,19 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
     schema: MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA,
     status: 'verified',
     bundleIdentity: visual.bundleIdentity,
+    residualLedger: runReport.outputs.residualLedger,
+    witnessRoute: visual.route,
     servedViewer: {
       requestedUrl: servedViewer.url,
       effectiveUrl: servedViewer.url,
       sha256: servedViewer.sha256,
       expectedSha256: visual.viewer.sha256,
       fallbackUsed: false,
+      observedVisibleIdentity: {
+        residualLedgerSha256: visual.bundleIdentity.residualLedgerSha256,
+        routeRequested: visual.route.requested,
+        routeEffective: visual.route.effective,
+      },
     },
     captures,
   };

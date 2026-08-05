@@ -8,6 +8,8 @@ import {
 
 export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_MEASUREMENT_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-contact-measurement.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-contact-residual-ledger.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESULT_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-contact-result.v0';
 
@@ -356,6 +358,110 @@ function measureSkeletal(cages, source) {
   return metrics;
 }
 
+function pairwiseResidualContacts(cages) {
+  const contacts = [];
+  for (let leftIndex = 0; leftIndex < cages.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < cages.length; rightIndex += 1) {
+      for (const [subject, obstacle] of [
+        [cages[leftIndex], cages[rightIndex]],
+        [cages[rightIndex], cages[leftIndex]],
+      ]) {
+        for (const nodeId of subject.boundary.boundaryNodeIds) {
+          const point = subject.nodeById.get(nodeId).currentPosition;
+          if (!pointInsideCage(point, obstacle)) continue;
+          const closest = closestBoundaryPoint(point, obstacle);
+          contacts.push({
+            kind: 'pairwise-boundary-inside-cage',
+            subjectCageId: subject.cageId,
+            subjectConstructionId: subject.constructionId,
+            obstacleCageId: obstacle.cageId,
+            obstacleConstructionId: obstacle.constructionId,
+            nodeId,
+            sectionId: sectionIdForNode(nodeId),
+            fixed: subject.fixedNodeIds.has(nodeId),
+            point: [...point],
+            closestObstacleBoundaryPoint: [...closest.point],
+            penetration: closest.distance,
+          });
+        }
+      }
+    }
+  }
+  return contacts;
+}
+
+function skeletalResidualContacts(cages, source) {
+  const contacts = [];
+  let axisSampleCount = 0;
+  for (const cage of cages) {
+    for (const nodeId of cage.boundary.boundaryNodeIds) {
+      const point = cage.nodeById.get(nodeId).currentPosition;
+      for (const obstacle of source.obstacles || []) {
+        if (obstacle.kind !== 'capsule') {
+          throw new Error(`unsupported skeletal obstacle kind ${obstacle.kind}`);
+        }
+        const closest = closestPointOnSegment(point, obstacle.start, obstacle.end);
+        const required = obstacle.radius + (obstacle.clearance || 0);
+        const penetration = required - distance(point, closest);
+        if (!(penetration > EPSILON)) continue;
+        contacts.push({
+          kind: 'cage-boundary-inside-capsule-clearance',
+          subjectCageId: cage.cageId,
+          subjectConstructionId: cage.constructionId,
+          nodeId,
+          sectionId: sectionIdForNode(nodeId),
+          fixed: cage.fixedNodeIds.has(nodeId),
+          obstacleId: obstacle.id,
+          point: [...point],
+          closestObstacleAxisPoint: [...closest],
+          penetration,
+        });
+      }
+    }
+    for (const obstacle of source.obstacles || []) {
+      if (obstacle.kind !== 'capsule') continue;
+      const required = obstacle.radius + (obstacle.clearance || 0);
+      const sampleCount = 33;
+      for (let index = 0; index < sampleCount; index += 1) {
+        const amount = index / (sampleCount - 1);
+        const point = add(
+          obstacle.start,
+          scale(subtract(obstacle.end, obstacle.start), amount),
+        );
+        const closest = closestBoundaryPoint(point, cage);
+        const penetration = pointInsideCage(point, cage)
+          ? required + closest.distance
+          : required - closest.distance;
+        axisSampleCount += 1;
+        if (!(penetration > EPSILON)) continue;
+        contacts.push({
+          kind: 'capsule-axis-inside-cage-clearance',
+          subjectCageId: cage.cageId,
+          subjectConstructionId: cage.constructionId,
+          nodeId: null,
+          sectionId: null,
+          fixed: false,
+          obstacleId: obstacle.id,
+          axisSampleIndex: index,
+          axisSampleAmount: amount,
+          point: [...point],
+          closestCageBoundaryPoint: [...closest.point],
+          penetration,
+        });
+      }
+    }
+  }
+  return { contacts, axisSampleCount };
+}
+
+function summarizeResidualContacts(contacts, extra = {}) {
+  const metrics = { ...emptyPenetrationMetrics(), ...extra };
+  for (const contact of contacts) {
+    recordPenetration(metrics, contact.penetration, contact.fixed);
+  }
+  return { ...metrics, contacts };
+}
+
 function measureCompartment(cages, source) {
   if (source.compartment?.kind !== 'box') {
     throw new Error('ring cage contact measurement requires a box compartment');
@@ -467,6 +573,29 @@ export function measureMuscleCompartmentRingCageContactState(solverCarrier, sour
     pairwise: measurePairwise(cages),
     skeletal: measureSkeletal(cages, source),
     compartment: measureCompartment(cages, source),
+  };
+}
+
+export function measureMuscleCompartmentRingCageContactResidualLedger(
+  solverCarrier,
+  source,
+) {
+  validateInputs(solverCarrier, source);
+  const cages = solverCarrier.cages.map(prepareCage);
+  const pairwiseContacts = pairwiseResidualContacts(cages);
+  const skeletal = skeletalResidualContacts(cages, source);
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA,
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    sourceInputSha256: source.input.effective.sha256,
+    orderedConstructionIds: [...solverCarrier.orderedConstructionIds],
+    pairwise: summarizeResidualContacts(pairwiseContacts),
+    skeletal: summarizeResidualContacts(skeletal.contacts, {
+      penetratingAxisSampleCount: skeletal.contacts.filter(
+        contact => contact.kind === 'capsule-axis-inside-cage-clearance',
+      ).length,
+      axisSampleCount: skeletal.axisSampleCount,
+    }),
   };
 }
 
@@ -730,16 +859,24 @@ function sectionContactDeltas(cages, source, curvatureRegularization) {
   });
 }
 
-function centerlineShapeWithinBudget(measurement, reference, config) {
-  return measurement.cages.every((cage, cageIndex) => {
+function measureCenterlineShapeChanges(measurement, reference) {
+  let maximumLocalTurningAngleChange = 0;
+  let maximumTotalTurningAngleChange = 0;
+  for (const [cageIndex, cage] of measurement.cages.entries()) {
     const referenceAngles = reference.cages[cageIndex].centerline.turningAngles;
     const candidateAngles = cage.centerline.turningAngles;
     const changes = candidateAngles.map((angle, index) =>
       Math.abs(angle - referenceAngles[index]));
-    return Math.max(0, ...changes) <= config.maximumLocalTurningAngleChange &&
-      changes.reduce((sum, value) => sum + value, 0) <=
-        config.maximumTotalTurningAngleChange;
-  });
+    maximumLocalTurningAngleChange = Math.max(
+      maximumLocalTurningAngleChange,
+      ...changes,
+    );
+    maximumTotalTurningAngleChange = Math.max(
+      maximumTotalTurningAngleChange,
+      changes.reduce((sum, value) => sum + value, 0),
+    );
+  }
+  return { maximumLocalTurningAngleChange, maximumTotalTurningAngleChange };
 }
 
 function applySectionDeltas(carrier, deltas, amount) {
@@ -825,8 +962,10 @@ export function solveMuscleCompartmentRingCageContact(
   const initial = measureMuscleCompartmentRingCageContactState(packedCarrier, source);
   const fixedReference = fixedNodeReference(packedCarrier);
   const iterationHistory = [];
+  const lineSearchHistory = [];
   let packed = initial;
   let iterations = 0;
+  let termination = null;
   for (let iteration = 1; iteration <= config.maxIterations; iteration += 1) {
     const prepared = packedCarrier.cages.map(prepareCage);
     const deltas = sectionContactDeltas(
@@ -838,10 +977,18 @@ export function solveMuscleCompartmentRingCageContact(
       0,
       ...deltas.flatMap(rows => [...rows.values()].map(row => length(row))),
     );
-    if (maximumRequestedDelta <= config.convergenceTolerance) break;
+    if (maximumRequestedDelta <= config.convergenceTolerance) {
+      termination = {
+        reason: 'requested-delta-within-tolerance',
+        attemptedIteration: iteration,
+        lineSearchAttempts: [],
+      };
+      break;
+    }
     let lineSearchScale = config.relaxationStep;
     let acceptedCarrier = null;
     let acceptedMeasurement = null;
+    const lineSearchAttempts = [];
     while (lineSearchScale >= 1 / 1024) {
       const candidate = structuredClone(packedCarrier);
       applySectionDeltas(candidate, deltas, lineSearchScale);
@@ -850,17 +997,56 @@ export function solveMuscleCompartmentRingCageContact(
       const maximumVolumeError = Math.max(
         ...measurement.cages.map(cage => cage.relativeVolumeError),
       );
-      if (measurement.cages.every(cage => cage.nonPositiveCellCount === 0) &&
-          maximumVolumeError <= config.maximumRelativeVolumeError &&
-          centerlineShapeWithinBudget(measurement, initial, config) &&
-          measurement.compartment.maximumEscape <= config.convergenceTolerance) {
+      const nonPositiveCellCount = measurement.cages.reduce(
+        (sum, cage) => sum + cage.nonPositiveCellCount,
+        0,
+      );
+      const shapeChanges = measureCenterlineShapeChanges(measurement, initial);
+      const rejectionReasons = [];
+      if (nonPositiveCellCount !== 0) rejectionReasons.push('non-positive-cell');
+      if (maximumVolumeError > config.maximumRelativeVolumeError) {
+        rejectionReasons.push('maximum-relative-volume-error');
+      }
+      if (shapeChanges.maximumLocalTurningAngleChange >
+          config.maximumLocalTurningAngleChange) {
+        rejectionReasons.push('maximum-local-turning-angle-change');
+      }
+      if (shapeChanges.maximumTotalTurningAngleChange >
+          config.maximumTotalTurningAngleChange) {
+        rejectionReasons.push('maximum-total-turning-angle-change');
+      }
+      if (measurement.compartment.maximumEscape > config.convergenceTolerance) {
+        rejectionReasons.push('compartment-escape');
+      }
+      const attempt = {
+        scale: lineSearchScale,
+        accepted: rejectionReasons.length === 0,
+        rejectionReasons,
+        nonPositiveCellCount,
+        maximumRelativeVolumeError: maximumVolumeError,
+        maximumLocalTurningAngleChange:
+          shapeChanges.maximumLocalTurningAngleChange,
+        maximumTotalTurningAngleChange:
+          shapeChanges.maximumTotalTurningAngleChange,
+        compartmentMaximumEscape: measurement.compartment.maximumEscape,
+      };
+      lineSearchAttempts.push(attempt);
+      if (attempt.accepted) {
         acceptedCarrier = candidate;
         acceptedMeasurement = measurement;
         break;
       }
       lineSearchScale *= 0.5;
     }
-    if (!acceptedCarrier) break;
+    lineSearchHistory.push({ iteration, attempts: lineSearchAttempts });
+    if (!acceptedCarrier) {
+      termination = {
+        reason: 'line-search-exhausted',
+        attemptedIteration: iteration,
+        lineSearchAttempts,
+      };
+      break;
+    }
     packedCarrier.identity = acceptedCarrier.identity;
     packedCarrier.cages = acceptedCarrier.cages;
     packed = acceptedMeasurement;
@@ -878,6 +1064,11 @@ export function solveMuscleCompartmentRingCageContact(
     if (packed.pairwise.movableMaximumPenetration <= config.convergenceTolerance &&
         packed.skeletal.movableMaximumPenetration <= config.convergenceTolerance &&
         packed.compartment.maximumEscape <= config.convergenceTolerance) {
+      termination = {
+        reason: 'converged',
+        attemptedIteration: iteration,
+        lineSearchAttempts,
+      };
       break;
     }
   }
@@ -889,6 +1080,11 @@ export function solveMuscleCompartmentRingCageContact(
     packed.pairwise.movableMaximumPenetration <= config.convergenceTolerance &&
     packed.skeletal.movableMaximumPenetration <= config.convergenceTolerance &&
     packed.compartment.maximumEscape <= config.convergenceTolerance;
+  termination ||= {
+    reason: converged ? 'converged' : 'iteration-limit',
+    attemptedIteration: null,
+    lineSearchAttempts: [],
+  };
   return {
     schema: MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESULT_SCHEMA,
     status: converged ? 'completed' : 'residual-constraint',
@@ -903,6 +1099,8 @@ export function solveMuscleCompartmentRingCageContact(
     fixedNodeMaximumDrift,
     metrics: { initial, packed },
     iterationHistory,
+    lineSearchHistory,
+    termination,
     packedCarrier,
   };
 }

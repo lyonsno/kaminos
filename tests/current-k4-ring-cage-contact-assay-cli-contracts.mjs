@@ -23,6 +23,7 @@ const CONFIG = path.join(
 const IDS = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
 const STALE_PRIMARY = [
   'assay-result.json',
+  'residual-ledger.json',
   'source-carrier.json',
   'packed-carrier.json',
   'index.html',
@@ -85,12 +86,23 @@ test('ring-cage contact assay writes a deterministic residual proposal and non-i
     report.solverCarrierIdentitySha256);
   assert.equal(report.visual.bundleIdentity.packedCarrierSha256,
     report.lastTrustworthyEvidence.packedCarrierIdentitySha256);
+  assert.equal(report.visual.bundleIdentity.residualLedgerSha256,
+    report.outputs.residualLedger.sha256);
+  assert.equal(report.residualLedger.sha256, report.outputs.residualLedger.sha256);
+  assert.deepEqual(report.termination, {
+    reason: 'iteration-limit',
+    attemptedIteration: null,
+    lineSearchAttempts: [],
+  });
   assert.equal(report.visual.captureUrls.length, 4);
   for (const url of report.visual.captureUrls) {
     const parsed = new URL(url, 'http://127.0.0.1');
     assert.equal(parsed.searchParams.get('bundle'), report.visual.bundleIdentity.sha256);
     assert.equal(parsed.searchParams.get('source'), report.visual.bundleIdentity.sourceCarrierSha256);
     assert.equal(parsed.searchParams.get('packed'), report.visual.bundleIdentity.packedCarrierSha256);
+    assert.equal(parsed.searchParams.get('ledger'), report.visual.bundleIdentity.residualLedgerSha256);
+    assert.equal(parsed.searchParams.get('routeRequested'), report.visual.route.requested);
+    assert.equal(parsed.searchParams.get('routeEffective'), report.visual.route.effective);
   }
   assert.equal(report.fixedNodeMaximumDrift, 0);
   assert.ok(report.metrics.packed.pairwise.movableTotalPenetration <
@@ -113,9 +125,16 @@ test('ring-cage contact assay writes a deterministic residual proposal and non-i
   assert.match(viewer, /dataset\.sourceCarrier/);
   assert.match(viewer, /dataset\.packedCarrier/);
   assert.match(viewer, /identity-bound capture route mismatch/);
+  assert.match(viewer, /pairwise contact rows/);
+  assert.match(viewer, /dataset\.residualLedger/);
+  assert.match(viewer, /dataset\.witnessRouteRequested/);
+  assert.match(viewer, /dataset\.witnessRouteEffective/);
   assert.match(viewer, new RegExp(report.visual.bundleIdentity.sha256));
   assert.match(viewer, new RegExp(report.visual.bundleIdentity.sourceCarrierSha256));
   assert.match(viewer, new RegExp(report.visual.bundleIdentity.packedCarrierSha256));
+  assert.match(viewer, new RegExp(report.visual.bundleIdentity.residualLedgerSha256));
+  assert.match(viewer, new RegExp(`route requested ${report.visual.route.requested}`));
+  assert.match(viewer, new RegExp(`route effective ${report.visual.route.effective}`));
   assert.doesNotMatch(viewer, />Before packing</);
   assert.doesNotMatch(viewer, />Packing result</);
 });
