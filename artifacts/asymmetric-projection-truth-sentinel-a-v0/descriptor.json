@@ -1,0 +1,41 @@
+{
+  "authorityBoundary": {
+    "descriptorRolesMayAdjudicateVisibleProjection": false,
+    "pixelLedgerIsVisibleProjectionAuthority": true
+  },
+  "dimensions": [
+    512,
+    512
+  ],
+  "geometrySpec": {
+    "bodyMasses": [
+      "posterior",
+      "trunk",
+      "shoulder",
+      "head",
+      "muzzle"
+    ],
+    "dorsalOffset": "right-of-center",
+    "marker": "right-cranial-geometric-fin",
+    "supportOrder": [
+      "rear-outer",
+      "rear-inner",
+      "front-inner",
+      "front-outer"
+    ]
+  },
+  "geometrySpecSha256": "bd3e6452c8a29497f13097290186059db204db3b6e806048e1491b9cbfbeeb1f",
+  "id": "asymmetric-projection-truth-a",
+  "projection": {
+    "cameraTransform": "analytic-identity",
+    "mode": "orthographic",
+    "view": "right-facing-profile-three-quarter-calibration"
+  },
+  "schema": "kaminos.visible-source-sentinel-descriptor.v0",
+  "sourceMutation": {
+    "operatorBlendLoaded": false,
+    "operatorBlendMutated": false
+  },
+  "sourceType": "deterministic-analytic-raster",
+  "visibleEvidenceLedger": "visible-evidence-ledger.json"
+}
