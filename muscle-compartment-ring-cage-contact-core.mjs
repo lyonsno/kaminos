@@ -16,6 +16,8 @@ export const MUSCLE_COMPARTMENT_RING_CAGE_SECTION_ANISOTROPY_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-section-anisotropy.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_ANISOTROPY_SELECTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_REDISTRIBUTION_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-longitudinal-volume-redistribution.v0';
 
 const EPSILON = 1e-10;
 
@@ -1260,6 +1262,273 @@ export function applyConstantAreaRingCageSectionAnisotropy(
     fixedNodeMaximumDrift,
     sectionReceipts,
     outputCarrier,
+  };
+}
+
+function cageCurrentPositiveVolume(cage) {
+  return cage.cellGeometry.reduce(
+    (sum, cell) => sum + Math.max(0, cell.orientedVolume),
+    0,
+  );
+}
+
+function applyRingCageSectionAreaScales(
+  solverCarrier,
+  cageIndex,
+  areaScaleBySectionId,
+) {
+  const outputCarrier = structuredClone(solverCarrier);
+  const cage = prepareCage(outputCarrier.cages[cageIndex]);
+  const rows = sectionRows(cage);
+  for (const [sectionId, areaScale] of areaScaleBySectionId) {
+    const row = rows.get(sectionId);
+    if (!row) throw new Error(`longitudinal redistribution lacks section ${sectionId}`);
+    const geometry = sectionPlaneGeometry(cage, row);
+    const radialScale = Math.sqrt(areaScale);
+    for (const node of geometry.ringNodes) {
+      node.currentPosition = add(
+        geometry.axis,
+        scale(subtract(node.currentPosition, geometry.axis), radialScale),
+      );
+    }
+  }
+  reidentifySolverCarrier(outputCarrier);
+  const prepared = prepareCage(outputCarrier.cages[cageIndex]);
+  return {
+    outputCarrier,
+    prepared,
+    currentVolume: cageCurrentPositiveVolume(prepared),
+  };
+}
+
+export function applyLongitudinalRingCageSectionVolumeRedistribution(
+  solverCarrier,
+  requestedConfig,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error(
+      'longitudinal redistribution requires the admitted solver carrier schema',
+    );
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `longitudinal redistribution source carrier identity mismatch: recorded ` +
+      `${solverCarrier.identity?.sha256 || 'missing'}, actual ${actualCarrierSha256}`,
+    );
+  }
+  const configKeys = [
+    'compressionAreaScale',
+    'compressionSectionIds',
+    'constructionId',
+    'maximumAdjacentAreaScaleDelta',
+    'maximumRepaymentAreaScale',
+    'repaymentSectionIds',
+    'volumeRelativeTolerance',
+  ];
+  if (!requestedConfig || typeof requestedConfig !== 'object' ||
+      Array.isArray(requestedConfig) ||
+      JSON.stringify(Object.keys(requestedConfig).sort()) !== JSON.stringify(configKeys)) {
+    throw new Error(
+      `longitudinal redistribution config requires exactly ${configKeys.join(', ')}`,
+    );
+  }
+  if (typeof requestedConfig.constructionId !== 'string' ||
+      !Array.isArray(requestedConfig.compressionSectionIds) ||
+      requestedConfig.compressionSectionIds.length === 0 ||
+      !Array.isArray(requestedConfig.repaymentSectionIds) ||
+      requestedConfig.repaymentSectionIds.length === 0 ||
+      !requestedConfig.compressionSectionIds.every(id => typeof id === 'string') ||
+      !requestedConfig.repaymentSectionIds.every(id => typeof id === 'string') ||
+      new Set(requestedConfig.compressionSectionIds).size !==
+        requestedConfig.compressionSectionIds.length ||
+      new Set(requestedConfig.repaymentSectionIds).size !==
+        requestedConfig.repaymentSectionIds.length) {
+    throw new Error(
+      'longitudinal redistribution requires unique compression and repayment section ids',
+    );
+  }
+  if (!Number.isFinite(requestedConfig.compressionAreaScale) ||
+      !(requestedConfig.compressionAreaScale > 0 &&
+        requestedConfig.compressionAreaScale < 1)) {
+    throw new Error('longitudinal redistribution compressionAreaScale must be in (0, 1)');
+  }
+  if (!Number.isFinite(requestedConfig.maximumRepaymentAreaScale) ||
+      !(requestedConfig.maximumRepaymentAreaScale > 1) ||
+      !Number.isFinite(requestedConfig.maximumAdjacentAreaScaleDelta) ||
+      !(requestedConfig.maximumAdjacentAreaScaleDelta > 0) ||
+      !Number.isFinite(requestedConfig.volumeRelativeTolerance) ||
+      !(requestedConfig.volumeRelativeTolerance > 0)) {
+    throw new Error('longitudinal redistribution contains an invalid bound or tolerance');
+  }
+  const compressionIds = new Set(requestedConfig.compressionSectionIds);
+  const repaymentIds = new Set(requestedConfig.repaymentSectionIds);
+  if ([...compressionIds].some(sectionId => repaymentIds.has(sectionId))) {
+    throw new Error('longitudinal redistribution compression and repayment sets overlap');
+  }
+  const cageIndex = solverCarrier.cages.findIndex(
+    cage => cage.constructionId === requestedConfig.constructionId,
+  );
+  if (cageIndex < 0) {
+    throw new Error(
+      `longitudinal redistribution lacks construction ${requestedConfig.constructionId}`,
+    );
+  }
+  const sourcePrepared = prepareCage(solverCarrier.cages[cageIndex]);
+  const rows = sectionRows(sourcePrepared);
+  const orderedSectionIds = [...rows.keys()].sort();
+  for (const sectionId of [...compressionIds, ...repaymentIds]) {
+    const row = rows.get(sectionId);
+    if (!row) throw new Error(`longitudinal redistribution lacks section ${sectionId}`);
+    if (row.fixed) {
+      throw new Error(`longitudinal redistribution refuses fixed section ${sectionId}`);
+    }
+  }
+  const fixedReference = fixedNodeReference(solverCarrier);
+  const axisReference = axisNodeReference(solverCarrier);
+  const sourceVolume = cageCurrentPositiveVolume(sourcePrepared);
+  if (!(sourceVolume > EPSILON)) {
+    throw new Error('longitudinal redistribution source construction has no positive volume');
+  }
+  const sourceAreaBySectionId = new Map(orderedSectionIds.map(sectionId => [
+    sectionId,
+    sectionPlaneGeometry(sourcePrepared, rows.get(sectionId)).area,
+  ]));
+  const areaScaleMap = repaymentAreaScale => new Map(orderedSectionIds.map(sectionId => [
+    sectionId,
+    compressionIds.has(sectionId)
+      ? requestedConfig.compressionAreaScale
+      : repaymentIds.has(sectionId) ? repaymentAreaScale : 1,
+  ]));
+  const compressed = applyRingCageSectionAreaScales(
+    solverCarrier,
+    cageIndex,
+    areaScaleMap(1),
+  );
+  const displacedVolume = sourceVolume - compressed.currentVolume;
+  if (!(displacedVolume > sourceVolume * requestedConfig.volumeRelativeTolerance)) {
+    throw new Error('longitudinal redistribution compression displaced no measurable volume');
+  }
+  const maximum = applyRingCageSectionAreaScales(
+    solverCarrier,
+    cageIndex,
+    areaScaleMap(requestedConfig.maximumRepaymentAreaScale),
+  );
+  if (maximum.currentVolume <
+      sourceVolume * (1 - requestedConfig.volumeRelativeTolerance)) {
+    throw new Error(
+      'longitudinal redistribution cannot repay displaced volume within maximumRepaymentAreaScale',
+    );
+  }
+  let lower = 1;
+  let upper = requestedConfig.maximumRepaymentAreaScale;
+  let solved = maximum;
+  let repaymentAreaScale = upper;
+  let iterationCount = 0;
+  for (; iterationCount < 80; iterationCount += 1) {
+    repaymentAreaScale = (lower + upper) / 2;
+    solved = applyRingCageSectionAreaScales(
+      solverCarrier,
+      cageIndex,
+      areaScaleMap(repaymentAreaScale),
+    );
+    const relativeError = Math.abs(solved.currentVolume - sourceVolume) / sourceVolume;
+    if (relativeError <= requestedConfig.volumeRelativeTolerance) break;
+    if (solved.currentVolume < sourceVolume) lower = repaymentAreaScale;
+    else upper = repaymentAreaScale;
+  }
+  const finalVolumeRelativeError =
+    Math.abs(solved.currentVolume - sourceVolume) / sourceVolume;
+  if (finalVolumeRelativeError > requestedConfig.volumeRelativeTolerance) {
+    throw new Error(
+      `longitudinal redistribution failed volume tolerance: ` +
+      `${finalVolumeRelativeError} > ${requestedConfig.volumeRelativeTolerance}`,
+    );
+  }
+  const effectiveAreaScales = areaScaleMap(repaymentAreaScale);
+  let maximumAdjacentAreaScaleDelta = 0;
+  for (let index = 1; index < orderedSectionIds.length; index += 1) {
+    maximumAdjacentAreaScaleDelta = Math.max(
+      maximumAdjacentAreaScaleDelta,
+      Math.abs(
+        effectiveAreaScales.get(orderedSectionIds[index]) -
+        effectiveAreaScales.get(orderedSectionIds[index - 1]),
+      ),
+    );
+  }
+  if (maximumAdjacentAreaScaleDelta >
+      requestedConfig.maximumAdjacentAreaScaleDelta + EPSILON) {
+    throw new Error(
+      `longitudinal redistribution violates maximumAdjacentAreaScaleDelta: ` +
+      `${maximumAdjacentAreaScaleDelta} > ` +
+      `${requestedConfig.maximumAdjacentAreaScaleDelta}`,
+    );
+  }
+  const fixedNodeMaximumDrift = measureFixedNodeMaximumDrift(
+    solved.outputCarrier,
+    fixedReference,
+  );
+  const centerlineMaximumDrift = measureAxisNodeMaximumDrift(
+    solved.outputCarrier,
+    axisReference,
+  );
+  if (fixedNodeMaximumDrift !== 0 || centerlineMaximumDrift !== 0) {
+    throw new Error(
+      'longitudinal redistribution violated fixed-node or centerline immutability',
+    );
+  }
+  const nonPositiveCellCount = solved.prepared.cellGeometry.filter(
+    cell => !(cell.orientedVolume > EPSILON),
+  ).length;
+  if (nonPositiveCellCount !== 0) {
+    throw new Error(
+      `longitudinal redistribution produced ${nonPositiveCellCount} nonpositive cells`,
+    );
+  }
+  const solvedRows = sectionRows(solved.prepared);
+  const sectionReceipts = orderedSectionIds.map(sectionId => {
+    const areaBefore = sourceAreaBySectionId.get(sectionId);
+    const areaAfter = sectionPlaneGeometry(
+      solved.prepared,
+      solvedRows.get(sectionId),
+    ).area;
+    return {
+      sectionId,
+      role: compressionIds.has(sectionId)
+        ? 'compression'
+        : repaymentIds.has(sectionId) ? 'repayment' : 'unchanged',
+      requestedAreaScale: effectiveAreaScales.get(sectionId),
+      effectiveAreaScale: areaAfter / areaBefore,
+      areaBefore,
+      areaAfter,
+    };
+  });
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_REDISTRIBUTION_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: solved.outputCarrier.identity.sha256,
+    requested: structuredClone(requestedConfig),
+    effective: {
+      ...structuredClone(requestedConfig),
+      repaymentAreaScale,
+    },
+    fallbackUsed: false,
+    sourceVolume,
+    compressedVolume: compressed.currentVolume,
+    finalVolume: solved.currentVolume,
+    displacedVolume,
+    repaidVolume: solved.currentVolume - compressed.currentVolume,
+    finalVolumeRelativeError,
+    maximumAdjacentAreaScaleDelta,
+    fixedNodeMaximumDrift,
+    centerlineMaximumDrift,
+    nonPositiveCellCount,
+    iterationCount,
+    sectionReceipts,
+    outputCarrier: solved.outputCarrier,
   };
 }
 
