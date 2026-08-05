@@ -1,0 +1,104 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0",
+  "status": "verified",
+  "bundleIdentity": {
+    "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+    "route": "current-k4-ring-cage-contact-orbitable-v0",
+    "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+    "packedCarrierSha256": "be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785",
+    "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+    "sha256": "09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb"
+  },
+  "servedViewer": {
+    "requestedUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html",
+    "effectiveUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html",
+    "sha256": "8c8c33fd9bebbae7490acb4b5338d21d5a531e3d4630740cfebd282f447e38a4",
+    "expectedSha256": "8c8c33fd9bebbae7490acb4b5338d21d5a531e3d4630740cfebd282f447e38a4",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "requestedUrl": "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=before",
+      "effectiveUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=before",
+      "sha256": "6153d7176670db9be2dcf287db762587afe1d3238ef18470bb153a051305d35a",
+      "sizeBytes": 193967,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 51,
+        "idatBytes": 193334
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed",
+      "sha256": "cdcc191f618e3561ace486f322fd131157230eff9bc8ba7331ee057b9e7d56a6",
+      "sizeBytes": 196924,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 51,
+        "idatBytes": 196291
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=before&view=side",
+      "effectiveUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&view=side&state=before",
+      "sha256": "76e20533b3e8d053d87276de234ee70f02ea15e3a454cdbf4ca70d330c63aea6",
+      "sizeBytes": 199325,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 52,
+        "idatBytes": 198680
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&view=side&state=packed",
+      "sha256": "f4f7e43a2d5cc93ea92884b60607026befb04ff6e24c2942b7e5e68b22e594be",
+      "sizeBytes": 206033,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 54,
+        "idatBytes": 205364
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ],
+  "failurePhase": null,
+  "receiptPaths": [
+    "source-crowded-capture-report.json",
+    "contact-relieved-capture-report.json",
+    "source-crowded-side-capture-report.json",
+    "contact-relieved-side-capture-report.json"
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed",
+    "outputPath": "repo://artifacts/current-k4-ring-cage-contact-assay-v0/contact-relieved.png",
+    "reportPath": "repo://artifacts/current-k4-ring-cage-contact-assay-v0/contact-relieved-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 65007,
+    "processGroupId": 65007,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 65007,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3145,
+    "retainedBytes": 3145,
+    "truncated": false,
+    "tail": "[0804/233717.842023:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/233717.943550:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/233718.521518:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed (0)\n[0804/233718.521586:INFO:CONSOLE:0] \"[.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed (0)\n[0804/233718.523501:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/233718.604119:INFO:CONSOLE:0] \"[.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed (0)\n[0804/233718.606436:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/233718.658061:INFO:CONSOLE:0] \"[.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8774/artifacts/current-k4-ring-cage-contact-assay-v0/index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed (0)\n[0804/233718.659646:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n196924 bytes written to file repo://artifacts/current-k4-ring-cage-contact-assay-v0/contact-relieved.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-ring-cage-contact-assay-v0/contact-relieved.png",
+    "sizeBytes": 196924,
+    "sha256": "cdcc191f618e3561ace486f322fd131157230eff9bc8ba7331ee057b9e7d56a6",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 51,
+      "idatBytes": 196291
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-ring-cage-contact-assay-v0/contact-relieved.png",
+      "sizeBytes": 196924,
+      "sha256": "cdcc191f618e3561ace486f322fd131157230eff9bc8ba7331ee057b9e7d56a6",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 51,
+        "idatBytes": 196291
+      }
+    }
+  }
+}

@@ -1,0 +1,277 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "resultStatus": "residual-constraint",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "requestedSolverCarrierPath": "artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+  "effectiveSolverCarrierPath": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
+  "solverCarrierFileSha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876",
+  "solverCarrierIdentitySha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+  "requestedSourcePath": "artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+  "effectiveSourcePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+  "sourceFileSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+  "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+  "config": {
+    "requested": {
+      "convergenceTolerance": 0.0001,
+      "maxIterations": 24,
+      "maximumRelativeVolumeError": 0.015,
+      "relaxationStep": 0.32,
+      "smoothness": 0.18
+    },
+    "effective": {
+      "convergenceTolerance": 0.0001,
+      "maxIterations": 24,
+      "maximumRelativeVolumeError": 0.015,
+      "relaxationStep": 0.32,
+      "smoothness": 0.18
+    },
+    "fallbackUsed": false
+  },
+  "iterations": 23,
+  "fixedNodeMaximumDrift": 0,
+  "metrics": {
+    "initial": {
+      "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+      "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "orderedConstructionIds": [
+        "muscle-34",
+        "muscle-13",
+        "muscle-12",
+        "muscle-45"
+      ],
+      "cages": [
+        {
+          "cageId": "muscle-34:cage",
+          "constructionId": "muscle-34",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 64.0255025100002,
+          "currentVolume": 64.0255025100002,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-13:cage",
+          "constructionId": "muscle-13",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 64.51226816799996,
+          "currentVolume": 64.51226816799996,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-12:cage",
+          "constructionId": "muscle-12",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 76.82655530099983,
+          "currentVolume": 76.82655530099983,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-45:cage",
+          "constructionId": "muscle-45",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 89.30211863800002,
+          "currentVolume": 89.30211863800002,
+          "relativeVolumeError": 0,
+          "nonPositiveCellCount": 0
+        }
+      ],
+      "pairwise": {
+        "penetratingBoundaryNodeCount": 279,
+        "fixedPenetratingBoundaryNodeCount": 22,
+        "maximumPenetration": 1.1305487723476673,
+        "totalPenetration": 89.90644623635409,
+        "movableMaximumPenetration": 1.1305487723476673,
+        "movableTotalPenetration": 86.23573655489952,
+        "fixedMaximumPenetration": 0.4453953341744688,
+        "fixedTotalPenetration": 3.6707096814545745
+      },
+      "skeletal": {
+        "penetratingBoundaryNodeCount": 82,
+        "fixedPenetratingBoundaryNodeCount": 0,
+        "maximumPenetration": 1.1015725705834436,
+        "totalPenetration": 68.01110485718644,
+        "movableMaximumPenetration": 1.1015725705834436,
+        "movableTotalPenetration": 68.01110485718644,
+        "fixedMaximumPenetration": 0,
+        "fixedTotalPenetration": 0,
+        "penetratingAxisSampleCount": 82,
+        "axisSampleCount": 132
+      },
+      "compartment": {
+        "escapingBoundaryNodeCount": 0,
+        "fixedEscapingBoundaryNodeCount": 0,
+        "maximumEscape": 0
+      }
+    },
+    "packed": {
+      "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+      "sourceCarrierSha256": "be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "orderedConstructionIds": [
+        "muscle-34",
+        "muscle-13",
+        "muscle-12",
+        "muscle-45"
+      ],
+      "cages": [
+        {
+          "cageId": "muscle-34:cage",
+          "constructionId": "muscle-34",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 64.0255025100002,
+          "currentVolume": 64.93045054726385,
+          "relativeVolumeError": 0.014134180940201233,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-13:cage",
+          "constructionId": "muscle-13",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 64.51226816799996,
+          "currentVolume": 64.52686388087326,
+          "relativeVolumeError": 0.0002262470889303122,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-12:cage",
+          "constructionId": "muscle-12",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 76.82655530099983,
+          "currentVolume": 77.97893937607297,
+          "relativeVolumeError": 0.014999814459443121,
+          "nonPositiveCellCount": 0
+        },
+        {
+          "cageId": "muscle-45:cage",
+          "constructionId": "muscle-45",
+          "boundaryFaceCount": 312,
+          "boundaryNodeCount": 158,
+          "fixedBoundaryNodeCount": 26,
+          "referenceVolume": 89.30211863800002,
+          "currentVolume": 90.3619779619828,
+          "relativeVolumeError": 0.011868243891044532,
+          "nonPositiveCellCount": 0
+        }
+      ],
+      "pairwise": {
+        "penetratingBoundaryNodeCount": 229,
+        "fixedPenetratingBoundaryNodeCount": 25,
+        "maximumPenetration": 0.4213397575518372,
+        "totalPenetration": 21.248534500261524,
+        "movableMaximumPenetration": 0.28069311662818325,
+        "movableTotalPenetration": 16.71379949153013,
+        "fixedMaximumPenetration": 0.4213397575518372,
+        "fixedTotalPenetration": 4.53473500873138
+      },
+      "skeletal": {
+        "penetratingBoundaryNodeCount": 69,
+        "fixedPenetratingBoundaryNodeCount": 0,
+        "maximumPenetration": 0.2367952404202112,
+        "totalPenetration": 6.741364153524899,
+        "movableMaximumPenetration": 0.2367952404202112,
+        "movableTotalPenetration": 6.741364153524899,
+        "fixedMaximumPenetration": 0,
+        "fixedTotalPenetration": 0,
+        "penetratingAxisSampleCount": 66,
+        "axisSampleCount": 132
+      },
+      "compartment": {
+        "escapingBoundaryNodeCount": 0,
+        "fixedEscapingBoundaryNodeCount": 0,
+        "maximumEscape": 0
+      }
+    }
+  },
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "b6295be44248b00136d5fcc1fbcf74bce08445b2602434632222b2b6224dfe9f"
+    },
+    "sourceCarrier": {
+      "path": "source-carrier.json",
+      "sha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876"
+    },
+    "packedCarrier": {
+      "path": "packed-carrier.json",
+      "sha256": "ba9160927703c2ca0d3d508f54e890e0e75b9ebdc4c732b674da62128f667590"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "8c8c33fd9bebbae7490acb4b5338d21d5a531e3d4630740cfebd282f447e38a4"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "current-k4-ring-cage-contact-orbitable-v0",
+      "effective": "current-k4-ring-cage-contact-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "pending-agent-inspection",
+    "viewer": {
+      "path": "index.html",
+      "sha256": "8c8c33fd9bebbae7490acb4b5338d21d5a531e3d4630740cfebd282f447e38a4"
+    },
+    "bundleIdentity": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-contact-orbitable-v0",
+      "sourceCarrierSha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2",
+      "packedCarrierSha256": "be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "sha256": "09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb"
+    },
+    "captureUrls": [
+      "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=before",
+      "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed",
+      "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=before&view=side",
+      "index.html?bundle=09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb&source=80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2&packed=be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785&state=packed&view=side"
+    ],
+    "expectedCaptures": [
+      "source-crowded.png",
+      "contact-relieved.png",
+      "source-crowded-side.png",
+      "contact-relieved-side.png"
+    ],
+    "stateLabels": {
+      "source": "Source crowded input",
+      "proposal": "Contact-relieved proposal · residual remains"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "resultStatus": "residual-constraint",
+    "iterations": 23,
+    "packedCarrierIdentitySha256": "be2e988f6bb1ed9b1b40a2e98092d5bfacc8b0c08c2f07c0ab1ebd1ff6e45785"
+  }
+}

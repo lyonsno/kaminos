@@ -1,0 +1,50 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-inspection.v0",
+  "status": "inspected-mechanism-rejected",
+  "inspectedAt": "2026-08-05T03:39:25Z",
+  "inspector": "codex-gpt-5.5-owning-lane",
+  "bundleIdentitySha256": "09fd7e7b3e79610caa2fd4a4ea26dcdfd62a86cdc6a84ea8bfd1b10f670613bb",
+  "routeVerification": {
+    "path": "capture-route-verification.json",
+    "status": "verified",
+    "servedViewerSha256": "8c8c33fd9bebbae7490acb4b5338d21d5a531e3d4630740cfebd282f447e38a4"
+  },
+  "captures": [
+    {
+      "state": "source",
+      "view": "three-quarter",
+      "path": "source-crowded.png",
+      "sha256": "6153d7176670db9be2dcf287db762587afe1d3238ef18470bb153a051305d35a"
+    },
+    {
+      "state": "proposal",
+      "view": "three-quarter",
+      "path": "contact-relieved.png",
+      "sha256": "cdcc191f618e3561ace486f322fd131157230eff9bc8ba7331ee057b9e7d56a6"
+    },
+    {
+      "state": "source",
+      "view": "side",
+      "path": "source-crowded-side.png",
+      "sha256": "76e20533b3e8d053d87276de234ee70f02ea15e3a454cdbf4ca70d330c63aea6"
+    },
+    {
+      "state": "proposal",
+      "view": "side",
+      "path": "contact-relieved-side.png",
+      "sha256": "f4f7e43a2d5cc93ea92884b60607026befb04ff6e24c2942b7e5e68b22e594be"
+    }
+  ],
+  "observations": [
+    "The source is visibly crowded and smoothly bowed; its state label is no longer inverted.",
+    "The proposal materially separates the movable cage bodies from one another and from the skeletal capsule.",
+    "The proposal introduces hard section-scale elbows in muscle-34 and muscle-45, with additional faceting in muscle-12.",
+    "The side view confirms that the elbows are three-dimensional cage deformation, not a three-quarter-view projection artifact.",
+    "Fixed attachment handles remain coincident with their source locations, but fixed pairwise penetration increases rather than decreases.",
+    "The proposal is visibly less plausible as a muscle construction despite its lower movable penetration totals."
+  ],
+  "verdict": "MECHANISM_REJECT",
+  "claimCeiling": "cage-contact-mechanism-selection-only",
+  "reason": "Independent per-section reciprocal translations buy scalar contact relief by producing visibly false angular centerline and cross-section deformation; the mechanism is not admissible for packing or anatomy.",
+  "nextFalsifier": "Project the same contact corrections through a curvature-bearing centerline regularizer while keeping source identity, fixed nodes, volume limit, obstacle, compartment, route, and four-view inspection unchanged."
+}
