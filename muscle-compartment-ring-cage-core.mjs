@@ -503,7 +503,11 @@ function buildGeometry(muscle, frames, config, radialScale) {
       const b = ringVertexIds[sectionIndex + 1][radialIndex];
       const c = ringVertexIds[sectionIndex + 1][next];
       const d = ringVertexIds[sectionIndex][next];
-      triangles.push([a, c, b], [a, d, c]);
+      // Use the same d-b diagonal exposed by the three-tetrahedron prism
+      // decomposition below. The alternate a-c diagonal encloses the same
+      // volume only while this quad is planar; curved or tapered sections make
+      // the two triangulations describe different polyhedra.
+      triangles.push([a, d, b], [d, c, b]);
     }
   }
   const lastSectionIndex = sections.length - 1;

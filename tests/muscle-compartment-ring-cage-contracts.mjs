@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { createSyntheticFourMuscleCompartment } from '../muscle-compartment-packing-core.mjs';
+import {
+  createSyntheticFourMuscleCompartment,
+  hashMusclePackingCanonicalJson,
+} from '../muscle-compartment-packing-core.mjs';
 import {
   MUSCLE_COMPARTMENT_RING_CAGE_SCHEMA,
   createMuscleCompartmentRingCages,
@@ -60,6 +63,58 @@ function objectKeysDeep(value, keys = []) {
 
 function build(source = createSyntheticFourMuscleCompartment(), config = CONFIG) {
   return createMuscleCompartmentRingCages(source, config);
+}
+
+function curvedTaperedParitySource() {
+  const profiles = [
+    {
+      angles: [-0.25, -0.05, 0.35, 0.55, 0.3, 0.05],
+      radial: [0.62, 0.48, 0.38, 0.4, 0.5, 0.59],
+      y: [-0.9, -0.58, -0.2, 0.2, 0.58, 0.9],
+      radii: [0.14, 0.21, 0.24, 0.24, 0.2, 0.14],
+    },
+    {
+      angles: [2.85, 3.05, 3.4, 3.62, 3.36, 3.1],
+      radial: [0.54, 0.41, 0.28, 0.32, 0.43, 0.57],
+      y: [-0.9, -0.55, -0.17, 0.23, 0.6, 0.9],
+      radii: [0.14, 0.23, 0.255, 0.255, 0.22, 0.14],
+    },
+    {
+      angles: [1.25, 1.45, 1.8, 2.05, 1.82, 1.58],
+      radial: [0.6, 0.45, 0.34, 0.36, 0.46, 0.56],
+      y: [-0.9, -0.6, -0.22, 0.18, 0.56, 0.9],
+      radii: [0.14, 0.21, 0.235, 0.235, 0.21, 0.14],
+    },
+    {
+      angles: [4.35, 4.55, 4.9, 5.15, 4.9, 4.68],
+      radial: [0.55, 0.4, 0.3, 0.34, 0.44, 0.6],
+      y: [-0.9, -0.57, -0.15, 0.25, 0.61, 0.9],
+      radii: [0.14, 0.22, 0.25, 0.25, 0.225, 0.14],
+    },
+  ];
+  const source = createSyntheticFourMuscleCompartment();
+  source.id = 'synthetic-four-muscle-curved-tapered-parity-v0';
+  for (const [index, muscle] of source.muscles.entries()) {
+    const profile = profiles[index];
+    muscle.centerline = profile.angles.map((angle, knotIndex) => ({
+      position: [
+        Math.cos(angle) * profile.radial[knotIndex],
+        profile.y[knotIndex],
+        Math.sin(angle) * profile.radial[knotIndex],
+      ],
+      radius: profile.radii[knotIndex],
+    }));
+    muscle.attachments.origin.position = [...muscle.centerline[0].position];
+    muscle.attachments.insertion.position = [...muscle.centerline.at(-1).position];
+    muscle.targetVolume = carrierVolume(muscle.centerline);
+  }
+  const { input: _priorInput, ...identityCore } = source;
+  const sha256 = hashMusclePackingCanonicalJson(identityCore);
+  source.input.requested.id = source.id;
+  source.input.effective.id = source.id;
+  source.input.requested.sha256 = sha256;
+  source.input.effective.sha256 = sha256;
+  return source;
 }
 
 function referenceGeometry(cage) {
@@ -348,6 +403,19 @@ test('source target authority cannot rescale inconsistent centerline radii', () 
     }),
     /sourceVolumeTolerance.*positive.*finite/i,
   );
+});
+
+test('curved tapered cages use one boundary diagonal for closed-surface and cell volume parity', () => {
+  const document = build(curvedTaperedParitySource());
+  for (const cage of document.cages) {
+    const surfaceVolume = cage.topology.referenceSignedVolume;
+    const cellVolume = cage.volumeAccounting.referenceVolume;
+    assert.ok(
+      Math.abs(surfaceVolume - cellVolume) / cellVolume <= 1e-12,
+      `${cage.constructionId} surface/cell relative disagreement ` +
+        `${Math.abs(surfaceVolume - cellVolume) / cellVolume}`,
+    );
+  }
 });
 
 test('current geometry is recomputed from currentPosition and inversion fails loud', () => {
