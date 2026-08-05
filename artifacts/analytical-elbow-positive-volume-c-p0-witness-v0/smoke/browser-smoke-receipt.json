@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.analytical-elbow-positive-volume-c-p0-browser-smoke.v0",
+  "status": "pass",
+  "requestedRoute": "analytical-elbow-positive-volume-c-p0-witness",
+  "effectiveRoute": "analytical-elbow-positive-volume-c-p0-witness",
+  "fallbackUsed": false,
+  "sourceRevision": "735921d7",
+  "browser": "Google Chrome 150.0.7871.187",
+  "backend": "headless WebGL through ANGLE Metal",
+  "loadedState": "data-witness-loaded=true",
+  "page": "http://127.0.0.1:8137/artifacts/analytical-elbow-positive-volume-c-p0-witness-v0/index.html",
+  "alternatePage": "http://127.0.0.1:8137/artifacts/analytical-elbow-positive-volume-c-p0-witness-v0/index.html?camera=three-quarter&wire=1&rest=1",
+  "images": [
+    {
+      "path": "profile.png",
+      "camera": "profile",
+      "width": 1440,
+      "height": 1100,
+      "sha256": "dc57c4a18ce941efee992657bcd6f445bd0421689e63fc4acb985293e7dd4e6f",
+      "inspected": true
+    },
+    {
+      "path": "three-quarter-wire-rest.png",
+      "camera": "three-quarter",
+      "wireframe": true,
+      "restOverlay": true,
+      "width": 1440,
+      "height": 1100,
+      "sha256": "b530cd0ece44f9d4204f5dd40329a6c2cd9283352bfe62bd3ae02eda658200a6",
+      "inspected": true
+    }
+  ],
+  "visualDisposition": "PASS_SYNTHETIC_SHAPE_RETENTION",
+  "visibleDelta": "The candidate reduces the scalar control's concentrated inner-bend strain and rearward bulge while retaining a continuous full transition with no visible pinch, flat spot, foldover, or rigid-zone leakage.",
+  "nextAction": "Run the predeclared unchanged-core transfer on the first eligible M31/M47 generated surface.",
+  "claimCeiling": "One synthetic 35-degree sleeve visual candidate; no anatomy, general cage, production, Track M, or product claim."
+}
