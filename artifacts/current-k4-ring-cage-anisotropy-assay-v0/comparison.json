@@ -1,0 +1,39 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-anisotropy-comparison.v0",
+  "status": "completed",
+  "selected": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "pairwiseMovableTotalPenetration": 10.164116328174828,
+    "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+    "pairwiseFixedTotalPenetration": 3.74533272446409,
+    "skeletalTotalPenetration": 0.04502050065172025,
+    "maximumRelativeVolumeError": 0.014999833625267148
+  },
+  "checkpoint": {
+    "carrierSha256": "101ea4a9bf25a542e83006283f783e2ac4330cd10e6eea9d78a0360ba92967d5",
+    "iterations": 72,
+    "pairwiseMovableTotalPenetration": 10.427448360493859,
+    "maximumRelativeVolumeError": 0.014245519597650896
+  },
+  "coupled": {
+    "carrierSha256": "e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d",
+    "pairwiseMovableTotalPenetration": 10.031586497873061,
+    "pairwiseMovableMaximumPenetration": 0.3614078791601595,
+    "pairwiseFixedTotalPenetration": 3.7202071192890536,
+    "skeletalTotalPenetration": 0.04343091516325526,
+    "maximumRelativeVolumeError": 0.01471100035906291,
+    "nonPositiveCellCount": 0,
+    "compartmentMaximumEscape": 0,
+    "fixedNodeMaximumDrift": 0,
+    "centerlineMaximumDrift": 0,
+    "maximumSectionAreaRelativeError": 5.669690972463759e-16
+  },
+  "decision": {
+    "classification": "coupled-anisotropy-nondominated-pending-visual-admission",
+    "improvedMovable": true,
+    "didNotWorsenMovableMaximum": false,
+    "didNotWorsenFixed": true,
+    "didNotWorsenSkeletal": true,
+    "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only"
+  }
+}

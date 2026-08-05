@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.current-k4-anisotropy-budget-allocation-config.v0",
+  "centerline": {
+    "curvatureRegularization": 12,
+    "maxIterations": 72,
+    "maximumLocalTurningAngleChange": 0.25,
+    "relaxationStep": 0.32,
+    "maximumTotalTurningAngleChange": 1.25,
+    "convergenceTolerance": 0.0001,
+    "maximumRelativeVolumeError": 0.015
+  },
+  "anisotropy": {
+    "subjectConstructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45",
+    "compressionScale": 0.96
+  }
+}

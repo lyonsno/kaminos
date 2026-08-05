@@ -1,0 +1,119 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0",
+  "status": "verified",
+  "bundleIdentity": {
+    "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+    "route": "current-k4-ring-cage-contact-orbitable-v0",
+    "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "packedCarrierSha256": "e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d",
+    "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+    "residualLedgerSha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50",
+    "sha256": "46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596"
+  },
+  "residualLedger": {
+    "path": "residual-ledger.json",
+    "sha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50"
+  },
+  "witnessRoute": {
+    "requested": "current-k4-ring-cage-contact-orbitable-v0",
+    "effective": "current-k4-ring-cage-contact-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "servedViewer": {
+    "requestedUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html",
+    "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html",
+    "sha256": "7a084677c67dcd4ae5a25021fb43725a1564cb024bf26f1442da17a8c86d65c6",
+    "expectedSha256": "7a084677c67dcd4ae5a25021fb43725a1564cb024bf26f1442da17a8c86d65c6",
+    "fallbackUsed": false,
+    "observedVisibleIdentity": {
+      "residualLedgerSha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50",
+      "routeRequested": "current-k4-ring-cage-contact-orbitable-v0",
+      "routeEffective": "current-k4-ring-cage-contact-orbitable-v0"
+    }
+  },
+  "captures": [
+    {
+      "requestedUrl": "index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before",
+      "sha256": "05a561a3b50b32431c852987e01c7625a0731adaeb957f6274d39dcf14adc00e",
+      "sizeBytes": 227577,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 59,
+        "idatBytes": 226848
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed",
+      "sha256": "01ff225eb52416fd2468ed25e4b91844df22d8ca2f9f2244511198ef2a176ed7",
+      "sizeBytes": 236595,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 61,
+        "idatBytes": 235842
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before&view=side",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=before&view=side",
+      "sha256": "0859f8dbbf0132f05f96e86f688c468790b7b0c3e43161c4090bf88e8f6de177",
+      "sizeBytes": 240446,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 62,
+        "idatBytes": 239681
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8777/artifacts/current-k4-ring-cage-anisotropy-assay-v0/index.html?bundle=46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=e14eeee721a815cb0b2b9922678c24e027b74e1210a0d2b457ece23a5070587d&ledger=9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50&routeRequested=current-k4-ring-cage-contact-orbitable-v0&routeEffective=current-k4-ring-cage-contact-orbitable-v0&state=packed&view=side",
+      "sha256": "ec85712ac217dd50e4cfe1e8a3271c5f05389e37f238bf4b89d52c211f5ed03f",
+      "sizeBytes": 249303,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 64,
+        "idatBytes": 248514
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ],
+  "failurePhase": null,
+  "receiptPaths": [
+    "source-crowded-capture-report.json",
+    "contact-relieved-capture-report.json",
+    "source-crowded-side-capture-report.json",
+    "contact-relieved-side-capture-report.json"
+  ]
+}

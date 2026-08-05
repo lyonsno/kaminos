@@ -12,6 +12,10 @@ export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-contact-residual-ledger.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESULT_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-contact-result.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_SECTION_ANISOTROPY_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-section-anisotropy.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_ANISOTROPY_SELECTION_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0';
 
 const EPSILON = 1e-10;
 
@@ -920,6 +924,343 @@ function measureFixedNodeMaximumDrift(carrier, reference) {
     }
   }
   return maximum;
+}
+
+function axisNodeReference(carrier) {
+  return new Map(carrier.cages.flatMap(cage => cage.manifest.nodes
+    .filter(node => node.id.endsWith(':axis'))
+    .map(node => [node.id, [...node.currentPosition]])));
+}
+
+function measureAxisNodeMaximumDrift(carrier, reference) {
+  let maximum = 0;
+  for (const cage of carrier.cages) {
+    for (const node of cage.manifest.nodes) {
+      const prior = reference.get(node.id);
+      if (prior) maximum = Math.max(maximum, distance(node.currentPosition, prior));
+    }
+  }
+  return maximum;
+}
+
+function sectionPlaneGeometry(cage, row) {
+  const axis = cage.nodeById.get(row.axisNodeId).currentPosition;
+  const ringNodes = row.nodeIds
+    .filter(nodeId => nodeId !== row.axisNodeId)
+    .map(nodeId => cage.nodeById.get(nodeId));
+  if (ringNodes.length < 3) {
+    throw new Error(`ring cage section ${row.sectionId} requires at least three ring vertices`);
+  }
+  const offsets = ringNodes.map(node => subtract(node.currentPosition, axis));
+  const doubledAreaVector = offsets.reduce((sum, offset, index) => add(
+    sum,
+    cross(offset, offsets[(index + 1) % offsets.length]),
+  ), [0, 0, 0]);
+  const doubledArea = length(doubledAreaVector);
+  if (!(doubledArea > EPSILON)) {
+    throw new Error(`ring cage section ${row.sectionId} has degenerate transverse area`);
+  }
+  return {
+    axis,
+    area: doubledArea / 2,
+    normal: scale(doubledAreaVector, 1 / doubledArea),
+    ringNodes,
+  };
+}
+
+export function derivePressureAlignedRingCageSectionAnisotropy(
+  solverCarrier,
+  residualLedger,
+  requestedConfig,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error('pressure-aligned anisotropy requires the admitted solver carrier schema');
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `pressure-aligned anisotropy source carrier identity mismatch: recorded ` +
+      `${solverCarrier.identity?.sha256 || 'missing'}, actual ${actualCarrierSha256}`,
+    );
+  }
+  if (!residualLedger || residualLedger.schema !==
+      MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA) {
+    throw new Error('pressure-aligned anisotropy requires the residual ledger schema');
+  }
+  if (residualLedger.sourceCarrierSha256 !== solverCarrier.identity.sha256) {
+    throw new Error(
+      `pressure-aligned anisotropy source carrier identity mismatch: ledger ` +
+      `${residualLedger.sourceCarrierSha256 || 'missing'}, carrier ` +
+      `${solverCarrier.identity.sha256}`,
+    );
+  }
+  if (JSON.stringify(residualLedger.orderedConstructionIds) !==
+      JSON.stringify(solverCarrier.orderedConstructionIds)) {
+    throw new Error('pressure-aligned anisotropy construction order mismatch');
+  }
+  const configKeys = [
+    'compressionScale',
+    'obstacleConstructionId',
+    'subjectConstructionId',
+  ];
+  if (!requestedConfig || typeof requestedConfig !== 'object' ||
+      Array.isArray(requestedConfig) ||
+      JSON.stringify(Object.keys(requestedConfig).sort()) !== JSON.stringify(configKeys)) {
+    throw new Error(
+      `pressure-aligned anisotropy config requires exactly ${configKeys.join(', ')}`,
+    );
+  }
+  if (typeof requestedConfig.subjectConstructionId !== 'string' ||
+      typeof requestedConfig.obstacleConstructionId !== 'string' ||
+      requestedConfig.subjectConstructionId === requestedConfig.obstacleConstructionId ||
+      !Number.isFinite(requestedConfig.compressionScale) ||
+      !(requestedConfig.compressionScale > 0 && requestedConfig.compressionScale <= 1)) {
+    throw new Error('pressure-aligned anisotropy config contains an invalid value');
+  }
+  const cage = solverCarrier.cages.find(
+    row => row.constructionId === requestedConfig.subjectConstructionId,
+  );
+  if (!cage) {
+    throw new Error(
+      `pressure-aligned anisotropy lacks construction ` +
+      `${requestedConfig.subjectConstructionId}`,
+    );
+  }
+  const prepared = prepareCage(cage);
+  const rows = sectionRows(prepared);
+  const contacts = residualLedger.pairwise.contacts.filter(contact =>
+    contact.fixed === false &&
+    contact.subjectConstructionId === requestedConfig.subjectConstructionId &&
+    contact.obstacleConstructionId === requestedConfig.obstacleConstructionId);
+  if (contacts.length === 0) {
+    throw new Error(
+      `pressure-aligned anisotropy has no movable ` +
+      `${requestedConfig.subjectConstructionId}->${requestedConfig.obstacleConstructionId} ` +
+      `contacts`,
+    );
+  }
+  const contactsBySection = new Map();
+  for (const contact of contacts) {
+    const row = rows.get(contact.sectionId);
+    if (!row || row.fixed || !row.nodeIds.includes(contact.nodeId)) {
+      throw new Error(
+        `pressure-aligned anisotropy contact ${contact.nodeId || 'missing'} ` +
+        `does not resolve to a movable subject section`,
+      );
+    }
+    const sectionContacts = contactsBySection.get(contact.sectionId) || [];
+    sectionContacts.push(contact);
+    contactsBySection.set(contact.sectionId, sectionContacts);
+  }
+  const adjustments = [...contactsBySection.keys()].sort().map(sectionId => {
+    const row = rows.get(sectionId);
+    const geometry = sectionPlaneGeometry(prepared, row);
+    const sectionContacts = contactsBySection.get(sectionId);
+    const strongestContact = [...sectionContacts].sort((left, right) =>
+      right.penetration - left.penetration || left.nodeId.localeCompare(right.nodeId))[0];
+    const strongestOffset = subtract(
+      prepared.nodeById.get(strongestContact.nodeId).currentPosition,
+      geometry.axis,
+    );
+    const strongestTransverse = subtract(
+      strongestOffset,
+      scale(geometry.normal, dot(strongestOffset, geometry.normal)),
+    );
+    const strongestMagnitude = length(strongestTransverse);
+    if (!(strongestMagnitude > EPSILON)) {
+      throw new Error(
+        `pressure-aligned anisotropy contact ${strongestContact.nodeId} ` +
+        `has no transverse radial direction`,
+      );
+    }
+    const basisU = scale(strongestTransverse, 1 / strongestMagnitude);
+    const basisV = normalizedOrFallback(cross(geometry.normal, basisU), row.nodeIds.length);
+    let doubledCosine = 0;
+    let doubledSine = 0;
+    for (const contact of sectionContacts) {
+      const offset = subtract(
+        prepared.nodeById.get(contact.nodeId).currentPosition,
+        geometry.axis,
+      );
+      const angle = Math.atan2(dot(offset, basisV), dot(offset, basisU));
+      doubledCosine += contact.penetration * Math.cos(2 * angle);
+      doubledSine += contact.penetration * Math.sin(2 * angle);
+    }
+    const principalAngle = 0.5 * Math.atan2(doubledSine, doubledCosine);
+    const pressureDirection = add(
+      scale(basisU, Math.cos(principalAngle)),
+      scale(basisV, Math.sin(principalAngle)),
+    );
+    return {
+      constructionId: requestedConfig.subjectConstructionId,
+      sectionId,
+      pressureDirection,
+      compressionScale: requestedConfig.compressionScale,
+    };
+  });
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_ANISOTROPY_SELECTION_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    residualLedgerSha256: hashMuscleCompartmentRingCageCanonicalJson(residualLedger),
+    requested: structuredClone(requestedConfig),
+    effective: structuredClone(requestedConfig),
+    fallbackUsed: false,
+    contactCount: contacts.length,
+    totalPenetration: contacts.reduce((sum, contact) => sum + contact.penetration, 0),
+    adjustments,
+  };
+}
+
+export function applyConstantAreaRingCageSectionAnisotropy(
+  solverCarrier,
+  requestedAdjustments,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error('constant-area anisotropy requires the admitted solver carrier schema');
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `constant-area anisotropy source carrier identity mismatch: recorded ` +
+      `${solverCarrier.identity?.sha256 || 'missing'}, actual ${actualCarrierSha256}`,
+    );
+  }
+  if (!Array.isArray(requestedAdjustments) || requestedAdjustments.length === 0) {
+    throw new Error('constant-area anisotropy requires at least one section adjustment');
+  }
+  const requested = structuredClone(requestedAdjustments);
+  const outputCarrier = structuredClone(solverCarrier);
+  const fixedReference = fixedNodeReference(outputCarrier);
+  const axisReference = axisNodeReference(outputCarrier);
+  const sectionReceipts = [];
+  const seen = new Set();
+  for (const adjustment of requestedAdjustments) {
+    if (!adjustment || typeof adjustment !== 'object' || Array.isArray(adjustment) ||
+        JSON.stringify(Object.keys(adjustment).sort()) !== JSON.stringify([
+          'compressionScale',
+          'constructionId',
+          'pressureDirection',
+          'sectionId',
+        ])) {
+      throw new Error(
+        'constant-area anisotropy adjustment requires exactly constructionId, ' +
+        'sectionId, pressureDirection, compressionScale',
+      );
+    }
+    if (typeof adjustment.constructionId !== 'string' ||
+        typeof adjustment.sectionId !== 'string') {
+      throw new Error('constant-area anisotropy constructionId and sectionId must be strings');
+    }
+    requirePoint(adjustment.pressureDirection, 'constant-area anisotropy pressureDirection');
+    if (!Number.isFinite(adjustment.compressionScale) ||
+        !(adjustment.compressionScale > 0 && adjustment.compressionScale <= 1)) {
+      throw new Error('constant-area anisotropy compressionScale must be in (0, 1]');
+    }
+    const adjustmentKey = `${adjustment.constructionId}|${adjustment.sectionId}`;
+    if (seen.has(adjustmentKey)) {
+      throw new Error(`duplicate constant-area anisotropy section ${adjustmentKey}`);
+    }
+    seen.add(adjustmentKey);
+    const cageIndex = outputCarrier.cages.findIndex(
+      cage => cage.constructionId === adjustment.constructionId,
+    );
+    if (cageIndex < 0) {
+      throw new Error(`constant-area anisotropy lacks construction ${adjustment.constructionId}`);
+    }
+    const cage = prepareCage(outputCarrier.cages[cageIndex]);
+    const row = sectionRows(cage).get(adjustment.sectionId);
+    if (!row) {
+      throw new Error(
+        `constant-area anisotropy lacks section ${adjustment.sectionId} ` +
+        `on ${adjustment.constructionId}`,
+      );
+    }
+    if (row.fixed) {
+      throw new Error(`constant-area anisotropy refuses fixed section ${adjustment.sectionId}`);
+    }
+    const before = sectionPlaneGeometry(cage, row);
+    const requestedDirectionMagnitude = length(adjustment.pressureDirection);
+    if (!(requestedDirectionMagnitude > EPSILON)) {
+      throw new Error('constant-area anisotropy pressureDirection must be nonzero');
+    }
+    const normalComponent = dot(adjustment.pressureDirection, before.normal);
+    const transverse = subtract(
+      adjustment.pressureDirection,
+      scale(before.normal, normalComponent),
+    );
+    const transverseMagnitude = length(transverse);
+    if (!(transverseMagnitude > EPSILON)) {
+      throw new Error(
+        `constant-area anisotropy pressureDirection is normal to ${adjustment.sectionId}`,
+      );
+    }
+    const compressionAxis = scale(transverse, 1 / transverseMagnitude);
+    const expansionAxis = normalizedOrFallback(
+      cross(before.normal, compressionAxis),
+      cageIndex,
+    );
+    for (const node of before.ringNodes) {
+      const offset = subtract(node.currentPosition, before.axis);
+      const compressed = scale(
+        compressionAxis,
+        dot(offset, compressionAxis) * adjustment.compressionScale,
+      );
+      const expanded = scale(
+        expansionAxis,
+        dot(offset, expansionAxis) / adjustment.compressionScale,
+      );
+      const normal = scale(before.normal, dot(offset, before.normal));
+      node.currentPosition = add(before.axis, add(compressed, add(expanded, normal)));
+    }
+    const afterCage = prepareCage(outputCarrier.cages[cageIndex]);
+    const after = sectionPlaneGeometry(
+      afterCage,
+      sectionRows(afterCage).get(adjustment.sectionId),
+    );
+    sectionReceipts.push({
+      constructionId: adjustment.constructionId,
+      sectionId: adjustment.sectionId,
+      requestedCompressionScale: adjustment.compressionScale,
+      effectiveCompressionScale: adjustment.compressionScale,
+      effectiveCompressionAxis: compressionAxis,
+      effectiveExpansionAxis: expansionAxis,
+      areaBefore: before.area,
+      areaAfter: after.area,
+      relativeAreaError: Math.abs(after.area - before.area) / before.area,
+    });
+  }
+  reidentifySolverCarrier(outputCarrier);
+  const fixedNodeMaximumDrift = measureFixedNodeMaximumDrift(
+    outputCarrier,
+    fixedReference,
+  );
+  const centerlineMaximumDrift = measureAxisNodeMaximumDrift(
+    outputCarrier,
+    axisReference,
+  );
+  if (fixedNodeMaximumDrift !== 0 || centerlineMaximumDrift !== 0) {
+    throw new Error(
+      'constant-area anisotropy violated fixed-node or centerline immutability',
+    );
+  }
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_SECTION_ANISOTROPY_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: outputCarrier.identity.sha256,
+    requested,
+    effective: structuredClone(requested),
+    fallbackUsed: false,
+    centerlineMaximumDrift,
+    fixedNodeMaximumDrift,
+    sectionReceipts,
+    outputCarrier,
+  };
 }
 
 export function solveMuscleCompartmentRingCageContact(

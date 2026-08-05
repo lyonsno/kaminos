@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-inspection.v0",
+  "status": "agent-inspected-rejected-no-material-visible-advance",
+  "inspectionMode": "original-resolution-four-view-comparison",
+  "inspectedAt": "2026-08-05T20:58:28Z",
+  "bundleIdentitySha256": "46f5c313e424596f26821d4d0966a358fd30255a61b7872c046d9dd442251596",
+  "residualLedgerSha256": "9052e6b5a6e17b6032fd26caf325a1217d9812db2e3fef69c25e8615fd090e50",
+  "captureRouteVerificationSha256": "b8f7ec515f12dc0fecf2f35ac4d779a25e583f94e9761d59ba571cfdbd367195",
+  "captures": [
+    {
+      "path": "source-crowded.png",
+      "sha256": "05a561a3b50b32431c852987e01c7625a0731adaeb957f6274d39dcf14adc00e",
+      "view": "selected-curvature-12-three-quarter"
+    },
+    {
+      "path": "contact-relieved.png",
+      "sha256": "01ff225eb52416fd2468ed25e4b91844df22d8ca2f9f2244511198ef2a176ed7",
+      "view": "coupled-anisotropy-three-quarter"
+    },
+    {
+      "path": "source-crowded-side.png",
+      "sha256": "0859f8dbbf0132f05f96e86f688c468790b7b0c3e43161c4090bf88e8f6de177",
+      "view": "selected-curvature-12-side"
+    },
+    {
+      "path": "contact-relieved-side.png",
+      "sha256": "ec85712ac217dd50e4cfe1e8a3271c5f05389e37f238bf4b89d52c211f5ed03f",
+      "view": "coupled-anisotropy-side"
+    }
+  ],
+  "observations": [
+    "The before state is the selected curvature-12 carrier and the proposal state is the iteration-72 plus anisotropy carrier; the semantic inversion does not recur.",
+    "All four construction colors, centerline bows, fixed attachment fans, and compartment relation remain stable between the selected reference and coupled proposal.",
+    "The yellow-purple interface is nearly indistinguishable at three-quarter and side views. The 4 percent pressure-aligned compression does not produce a material visible accommodation or a visibly false ribbon, fold, or hard cross-section discontinuity.",
+    "Orange movable-pressure marks remain distributed across the long yellow-purple interface, while white fixed pressure remains at the lower insertion and the two cyan skeletal contacts remain sparse.",
+    "The coupled proposal lowers movable total, fixed total, and skeletal total, but its worst movable penetration is visibly unresolved and numerically worsens from 0.3421 to 0.3614.",
+    "Bundle, source, proposal, ledger, requested route, and effective route identities are visible in every frame; all four captures used an independent headless shell with installedStableChrome false and complete process-group cleanup."
+  ],
+  "visibleDeltaAgainstAcceptedDirection": "No material visible advance. The exact determinant-one carrier mechanism is visually non-destructive at this amplitude, but the first coupled point is too subtle to admit and retains the distributed interface pressure while worsening the movable maximum.",
+  "visualDisposition": "reject-first-coupled-point-continue-bounded-amplitude-budget-sweep",
+  "claimCeiling": "Agent-inspected provisional current-graph K4 mechanism assay; no anatomical, authored-source, operator, or downstream visual admission."
+}
