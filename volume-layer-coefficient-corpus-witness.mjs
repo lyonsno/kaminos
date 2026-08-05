@@ -507,6 +507,14 @@ async function captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStat
     })()`);
   } catch (error) {
     if (!isExactTargetBlankImageError(error)) throw error;
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      exactTargetNativeReadbackFailure: {
+        stateId,
+        imageAuthority: 'native-gpu-rgba8-readback-rejected-v0',
+        reason: error.message,
+      },
+    };
     capture = await captureVisibleMotionTarget({
       stateId,
       fixedCameraPose,

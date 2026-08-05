@@ -98,6 +98,24 @@ def target_image(state: dict[str, Any], manifest_path: Path) -> np.ndarray:
     return pixels
 
 
+def target_evidence(state: dict[str, Any]) -> dict[str, Any]:
+    descriptor = state.get("target") or {}
+    image_authority = descriptor.get("imageAuthority")
+    require(isinstance(image_authority, str) and image_authority, f"{state.get('id')} target image authority is missing")
+    native_readback_failure = descriptor.get("nativeReadbackFailure")
+    if image_authority == "cdp-canvas-clip-capture-after-render-only-frozen-sim-state":
+        require(
+            isinstance(native_readback_failure, str) and "exact-target-blank-image" in native_readback_failure,
+            f"{state.get('id')} fallback target lost its native readback defect",
+        )
+    return {
+        "imageAuthority": image_authority,
+        "nativeReadbackFailure": native_readback_failure,
+        "overlayIsolationReceipt": descriptor.get("overlayIsolationReceipt"),
+        "overlayRestorationReceipt": descriptor.get("overlayRestorationReceipt"),
+    }
+
+
 def camera_contract(state: dict[str, Any]) -> dict[str, Any]:
     target = state.get("target") or {}
     return {
@@ -461,6 +479,7 @@ def run(manifest_path: Path, out_dir: Path) -> dict[str, Any]:
     del final_planes
 
     rendered_rows: list[dict[str, Any]] = []
+    target_evidence_rows: list[dict[str, Any]] = []
     motion_rows: list[dict[str, Any]] = []
     target_hashes: set[str] = set()
     render_hashes: set[str] = set()
@@ -469,6 +488,7 @@ def run(manifest_path: Path, out_dir: Path) -> dict[str, Any]:
         state_id = str(state["id"])
         steps = int((state.get("replay") or {}).get("completedSteps"))
         target = target_image(state, manifest_path)
+        evidence = target_evidence(state)
         planes, telemetry, rows = raster_state(state, manifest_path)
         linear, _, _, _ = ORACLE.compose_planes(planes, global_path_scale, "total")
         splat = ORACLE.tone_map(linear)
@@ -507,12 +527,14 @@ def run(manifest_path: Path, out_dir: Path) -> dict[str, Any]:
             "steps": steps,
             "rowCount": int(rows["count"]),
             "targetPixelSha256": target_hash,
+            "targetEvidence": evidence,
             "renderPixelSha256": render_hash,
             "metrics": metrics,
             "rasterTelemetry": telemetry,
             "estimatedDensePlaneBytes": int(estimated_dense_plane_bytes),
             "images": {"target": str(target_path), "splat": str(splat_path), "residual": str(residual_path)},
         })
+        target_evidence_rows.append({"stateId": state_id, **evidence})
         if previous is not None:
             step_delta = steps - int(previous["steps"])
             turnover = node_turnover(previous["ids"], current["ids"])
@@ -560,7 +582,11 @@ def run(manifest_path: Path, out_dir: Path) -> dict[str, Any]:
         "status": "complete",
         "failurePhase": None,
         "authority": "adjacent-exact-state-bilinear-motion-oracle-v0",
-        "source": {"manifestPath": str(manifest_path), "manifestSha256": sha256_file(manifest_path)},
+        "source": {
+            "manifestPath": str(manifest_path),
+            "manifestSha256": sha256_file(manifest_path),
+            "targetEvidence": target_evidence_rows,
+        },
         "transport": {
             "flowTapOffsets": FLOW_TAP_OFFSETS,
             "flowTapWeights": FLOW_TAP_WEIGHTS,

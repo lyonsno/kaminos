@@ -55,6 +55,11 @@ assert.match(capture, /restoreExactTargetCaptureOverlays/, 'fallback restores ro
 assert.match(capture, /finally\s*\{[\s\S]*restoreExactTargetCaptureOverlays/, 'overlay restoration survives screenshot or inspection failure');
 assert.match(capture, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'fallback records weaker but explicit visible-canvas image authority');
 assert.match(capture, /nativeReadbackFailure/, 'fallback preserves the native readback defect instead of laundering it');
+assert.match(
+  capture,
+  /lastTrustworthyEvidence\s*=\s*\{[\s\S]*exactTargetNativeReadbackFailure/,
+  'a failing visible-canvas fallback leaves the native blank-readback defect in the durable failure report',
+);
 assert.match(capture, /overlayIsolationReceipt/, 'capture report preserves visible-canvas overlay isolation authority');
 assert.match(capture, /overlayRestorationReceipt/, 'capture report proves the hidden route UI was restored');
 assert.match(capture, /exact-target-visible-canvas-blank-image/, 'fallback rejects blank visible-canvas pixels');
@@ -87,6 +92,8 @@ assert.match(renderer, /multiplicityChurn/, 'renderer measures deposit multiplic
 assert.match(renderer, /placementVelocity/, 'renderer measures shared-node placement velocity');
 assert.match(renderer, /sequence-viewer\.html/, 'renderer writes an operator-scrubbable exact temporal comparison');
 assert.match(renderer, /cached-or-static-render/, 'renderer rejects a static or cached rendered sequence');
+assert.match(renderer, /targetEvidence/, 'downstream render rows expose exact-target image authority');
+assert.match(renderer, /nativeReadbackFailure/, 'downstream render reports preserve the native readback defect behind fallback targets');
 assert.match(renderer, /matched-native-node-flow-tangent-tap-centers-v0/, 'placement velocity follows projected quadrature taps rather than fixed Eulerian cells');
 assert.match(renderer, /actual-in-bounds-positive-weight-bilinear-deposit-count-v1/, 'multiplicity churn counts actual in-frame positive-weight deposits');
 
