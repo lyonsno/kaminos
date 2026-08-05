@@ -8,7 +8,9 @@
     "id": "synthetic-mammalian-elbow-v0:sleeve-40x24",
     "semanticHash": "e1e29e69f31834c1445ece5b5f851e0aab3790dc891ac6af21a2f26c69db747f",
     "candidateRoute": "analytical-elbow-positive-volume-c-p0",
-    "scalarControlRoute": "analytical-elbow-collar-failure-witness"
+    "scalarControlRoute": "analytical-elbow-collar-failure-witness",
+    "candidateArtifactPath": "artifacts/analytical-elbow-positive-volume-c-p0-v0/c-p0.json",
+    "candidateArtifactSha256": "4facc5ba2d018fce24d749966f46c4041ee95279cd5d31e642024a0ad90f4005"
   },
   "comparison": {
     "status": "NUMERICAL_CANDIDATE",

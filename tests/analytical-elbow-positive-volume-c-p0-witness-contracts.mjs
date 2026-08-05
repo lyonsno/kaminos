@@ -55,10 +55,18 @@ assert.equal(
   result.report.source.candidateArtifactSha256,
   '4facc5ba2d018fce24d749966f46c4041ee95279cd5d31e642024a0ad90f4005',
 );
+assert.equal(
+  result.dataset.source.candidateArtifactSha256,
+  result.report.source.candidateArtifactSha256,
+);
 
 const html = await readFile(join(root, 'complete', 'index.html'), 'utf8');
 assert.match(html, /data-witness-route="analytical-elbow-positive-volume-c-p0-witness"/);
 assert.match(html, /__KAMINOS_C_P0_WITNESS__/);
+assert.match(
+  html,
+  /sourceArtifactSha256:data\.source\.candidateArtifactSha256/,
+);
 assert.match(html, /Scalar 0\.72 control/);
 assert.match(html, /W-seeded P0 candidate/);
 assert.match(html, /paused:true/);
