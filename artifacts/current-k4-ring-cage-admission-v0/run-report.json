@@ -2,13 +2,13 @@
   "schema": "kaminos.muscle-compartment-ring-cage-admission-run-report.v0",
   "status": "completed",
   "failurePhase": null,
-  "requestedInputPath": "/private/tmp/kaminos-current-k4-ring-cage-admission.eQe2Rm/cage-document.json",
-  "effectiveInputPath": "/private/tmp/kaminos-current-k4-ring-cage-admission.eQe2Rm/cage-document.json",
-  "inputFileSha256": "ee604339b9205098fadc03663b63ac19fb65732704cefcd45536916e35203957",
-  "expectedDocumentSha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809",
+  "requestedInputPath": "/private/tmp/kaminos-current-k4-ring-cage-corrected-source.json",
+  "effectiveInputPath": "/private/tmp/kaminos-current-k4-ring-cage-corrected-source.json",
+  "inputFileSha256": "db6e6fc0dd90c11df2282c10ee279b74246c168a68f50d3911c6eb3c51c48634",
+  "expectedDocumentSha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39",
   "inputArtifact": {
     "path": "repo://artifacts/current-k4-ring-cage-admission-v0/input-cage-document.json",
-    "sha256": "ee604339b9205098fadc03663b63ac19fb65732704cefcd45536916e35203957"
+    "sha256": "db6e6fc0dd90c11df2282c10ee279b74246c168a68f50d3911c6eb3c51c48634"
   },
   "route": {
     "requested": "generic-ring-cage-contact-containment-intake.v0",
@@ -27,18 +27,18 @@
     "config": {
       "requested": {
         "surfaceCellRelativeTolerance": 1e-12,
-        "expectedDocumentSha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809"
+        "expectedDocumentSha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39"
       },
       "effective": {
         "surfaceCellRelativeTolerance": 1e-12,
-        "expectedDocumentSha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809"
+        "expectedDocumentSha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39"
       },
       "fallbackUsed": false
     },
     "input": {
       "schema": "kaminos.muscle-compartment-ring-cage.v0",
-      "requestedSha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809",
-      "effectiveSha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809"
+      "requestedSha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39",
+      "effectiveSha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39"
     },
     "lastTrustworthyEvidence": {
       "phase": "all-cages-verified",
@@ -55,7 +55,7 @@
       "schema": "kaminos.muscle-compartment-ring-cage-solver-carrier.v0",
       "sourceDocument": {
         "schema": "kaminos.muscle-compartment-ring-cage.v0",
-        "sha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809"
+        "sha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39"
       },
       "orderedConstructionIds": [
         "muscle-34",
@@ -66,12 +66,12 @@
       "cageCount": 4,
       "identity": {
         "domain": "canonical-json-self-excluding-top-level-identity",
-        "sha256": "af5fa37d04dc882550755f7271b51474b640c51ff43bc4374489aac9c8437b6a"
+        "sha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
       }
     }
   },
   "primaryOutput": {
     "path": "repo://artifacts/current-k4-ring-cage-admission-v0/solver-carrier.json",
-    "sha256": "166b3f1230bcb8eacd53cab55aa1e24546986946d78e5fd6640c0d49e0985a2f"
+    "sha256": "c5641b7d07e01f9f857383a6e8bb527a880b0e2075e8473550c1f5d1797f5876"
   }
 }

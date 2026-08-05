@@ -85,28 +85,28 @@ function reidentify(value) {
   };
 }
 
-test('curved tapered cages fail loud on surface/cell disagreement before solver projection', () => {
-  const admission = admitMuscleCompartmentRingCageDocument(documentFor());
-  assert.equal(admission.status, 'refused');
-  assert.equal(admission.phase, 'carrier-admission');
+test('corrected curved tapered cages admit with surface/cell parity before solver projection', () => {
+  const document = documentFor();
+  const admission = admitMuscleCompartmentRingCageDocument(document);
+  assert.equal(admission.status, 'admitted');
+  assert.equal(admission.phase, 'carrier-admission-complete');
   assert.equal(admission.route.requested, admission.route.effective);
   assert.equal(admission.route.fallbackUsed, false);
-  assert.equal(admission.solverCarrier, null);
-  const referenceBlockers = admission.blockingMechanisms.filter(
-    item => item.kind === 'reference-surface-cell-volume-mismatch',
-  );
-  const currentBlockers = admission.blockingMechanisms.filter(
-    item => item.kind === 'current-surface-cell-volume-mismatch',
-  );
-  assert.equal(referenceBlockers.length, 4);
-  assert.equal(currentBlockers.length, 4);
-  assert.ok(referenceBlockers.every(item => item.relativeDisagreement > 2e-4));
+  assert.deepEqual(admission.blockingMechanisms, []);
+  assert.equal(admission.solverCarrier.cages.length, 4);
   assert.deepEqual(
-    referenceBlockers.map(item => item.constructionId),
+    admission.solverCarrier.orderedConstructionIds,
     createSyntheticFourMuscleCompartment().muscles.map(
       muscle => muscle.identity.constructionId,
     ),
   );
+  for (const cage of document.cages) {
+    assert.ok(
+      Math.abs(
+        cage.topology.referenceSignedVolume - cage.volumeAccounting.referenceVolume,
+      ) / cage.volumeAccounting.referenceVolume <= 1e-12,
+    );
+  }
 });
 
 test('one straight replay admits byte-identical generic manifests with fixed masks intact', () => {
@@ -296,8 +296,8 @@ test('CLI rejects every output-file alias without deleting or overwriting input 
   }
 });
 
-test('CLI clears stale primary output and writes the curved-carrier refusal receipt', async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-refusal-'));
+test('CLI replaces stale primary output with the corrected curved-carrier admission', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-curved-'));
   const input = path.join(root, 'cage-document.json');
   const output = path.join(root, 'output');
   const document = documentFor();
@@ -305,19 +305,20 @@ test('CLI clears stale primary output and writes the curved-carrier refusal rece
   await mkdir(output);
   await writeFile(path.join(output, 'solver-carrier.json'), '{"stale":true}\n');
   const result = runTool(input, output, document.identity.sha256);
-  assert.notEqual(result.status, 0);
+  assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
-  assert.equal(report.status, 'failed');
-  assert.equal(report.failurePhase, 'carrier-admission');
+  const primary = JSON.parse(await readFile(path.join(output, 'solver-carrier.json'), 'utf8'));
+  assert.equal(report.status, 'completed');
+  assert.equal(report.failurePhase, null);
   assert.match(report.inputFileSha256, /^[0-9a-f]{64}$/);
   assert.equal(report.route.effective, 'generic-ring-cage-contact-containment-intake.v0');
-  assert.equal(report.admission.status, 'refused');
-  assert.equal(report.admission.solverCarrier, null);
+  assert.equal(report.admission.status, 'admitted');
+  assert.equal(report.admission.solverCarrier.identity.sha256, primary.identity.sha256);
+  assert.equal(primary.schema, 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0');
   assert.deepEqual(
     await readFile(path.join(output, 'input-cage-document.json')),
     await readFile(input),
   );
-  await assert.rejects(readFile(path.join(output, 'solver-carrier.json')), /ENOENT/);
 });
 
 test('CLI publishes a hash-bound solver carrier only after straight admission', async () => {

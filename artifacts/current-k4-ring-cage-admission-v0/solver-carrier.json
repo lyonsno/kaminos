@@ -2,7 +2,7 @@
   "schema": "kaminos.muscle-compartment-ring-cage-solver-carrier.v0",
   "sourceDocument": {
     "schema": "kaminos.muscle-compartment-ring-cage.v0",
-    "sha256": "fdcba20aaea8450928980e0864ff4e800c9df6cc50947b5bb211aff1e2168809"
+    "sha256": "842cbf5dcea374d183d45303d9d091e8e784f3372b04c0ab2830e934b4052f39"
   },
   "orderedConstructionIds": [
     "muscle-34",
@@ -72242,6 +72242,6 @@
   ],
   "identity": {
     "domain": "canonical-json-self-excluding-top-level-identity",
-    "sha256": "af5fa37d04dc882550755f7271b51474b640c51ff43bc4374489aac9c8437b6a"
+    "sha256": "80e0bac245c20b67baf3762e06d40378b2ceb8154438f749803205ead877b7c2"
   }
 }
