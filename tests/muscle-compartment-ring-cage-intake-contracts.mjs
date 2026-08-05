@@ -248,6 +248,25 @@ test('CLI missing input clears stale primary and writes a pre-read failure repor
   assert.match(report.error, /ENOENT/);
 });
 
+test('CLI missing input parent still clears stale primary and writes a pre-read failure report', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-missing-parent-'));
+  const input = path.join(root, 'missing-parent', 'missing-cage-document.json');
+  const output = path.join(root, 'output');
+  await mkdir(output);
+  await writeFile(path.join(output, 'solver-carrier.json'), '{"stale":true}\n');
+  const result = runTool(input, output, '0'.repeat(64));
+  assert.notEqual(result.status, 0);
+  await assert.rejects(readFile(path.join(output, 'solver-carrier.json')), /ENOENT/);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'resolve-input');
+  assert.equal(report.requestedInputPath, input);
+  assert.equal(report.effectiveInputPath, null);
+  assert.equal(report.primaryOutput, null);
+  assert.equal(report.inputArtifact, null);
+  assert.match(report.error, /ENOENT/);
+});
+
 test('CLI rejects every output-file alias without deleting or overwriting input bytes', async () => {
   const document = documentFor(straightSource());
   const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`);

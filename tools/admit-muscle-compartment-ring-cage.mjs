@@ -51,11 +51,18 @@ function receiptPath(target) {
 
 async function effectiveDestination(target) {
   const absolute = path.resolve(target);
-  try {
-    return await realpath(absolute);
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
-    return path.join(await realpath(path.dirname(absolute)), path.basename(absolute));
+  let cursor = absolute;
+  const missingSuffix = [];
+  while (true) {
+    try {
+      return path.join(await realpath(cursor), ...missingSuffix);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      const parent = path.dirname(cursor);
+      if (parent === cursor) throw error;
+      missingSuffix.unshift(path.basename(cursor));
+      cursor = parent;
+    }
   }
 }
 
