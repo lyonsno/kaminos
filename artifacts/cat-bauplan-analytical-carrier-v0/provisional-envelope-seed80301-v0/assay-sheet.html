@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cat Representation Ablation, Seed 80301</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #111411; color: #e9ede7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111411; }
+    header { padding: 24px 28px 20px; border-bottom: 1px solid #465048; }
+    h1 { margin: 0 0 8px; font-size: 24px; letter-spacing: 0; }
+    h2 { margin: 0 0 8px; font-size: 18px; color: #f0c96d; letter-spacing: 0; }
+    p { max-width: 1180px; margin: 7px 0; line-height: 1.5; color: #cbd2cb; }
+    .verdict { color: #9dd8b7; font-weight: 700; }
+    .assay { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(390px, .95fr) minmax(300px, 1fr); border-bottom: 1px solid #465048; }
+    .cell { min-width: 0; padding: 20px; border-right: 1px solid #465048; }
+    .cell:last-child { border-right: 0; }
+    img { display: block; width: 100%; height: auto; background: #202520; border: 1px solid #5a655d; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12px; line-height: 1.45; color: #d7ddd7; }
+    dl { margin: 14px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 12px; }
+    dt { color: #8f9a91; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .observation { margin-top: 14px; padding-top: 12px; border-top: 1px solid #465048; color: #b9dfc8; }
+    footer { padding: 20px 28px 28px; color: #aab3ab; line-height: 1.5; }
+    @media (max-width: 980px) { .assay { grid-template-columns: 1fr; } .cell { border-right: 0; border-bottom: 1px solid #465048; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cat Representation Ablation, Seed 80301</h1>
+    <p class="verdict">Source representation controls morphology; the frozen prompt independently controls the exposed-anatomy surface category.</p>
+    <p>All rows use the same prompt, seed, model, route, quantization, guidance, steps, and resolution. Only the supplied image changes.</p>
+  </header>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Exposed Ecorche</h2>
+      <img src="../source-preview-r2-complete/ecorche/right-sagittal.png" alt="Complete admitted cat ecorche source">
+      <dl><dt>Input SHA</dt><dd>43e7f5038c6a3f56f7da4e9741336636dc75ce54c276a58622eab17384b8896f</dd><dt>Variable</dt><dd>Bone-gray and muscle-red source geometry</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</pre>
+      <dl><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd><dt>Job</dt><dd>ab52bade93a0</dd><dt>Route</dt><dd>mflux-generate-flux2-edit</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Literal Source Roles</h2>
+      <img src="../flux2-complete-palette-ablation-seed80301-v0/ecorche/output.png" alt="FLUX output preserving exposed bone and muscle roles">
+      <p class="observation">FLUX stays close to the incomplete source organization and preserves its exposed bone and muscle roles.</p>
+    </div>
+  </section>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Provisional Envelope</h2>
+      <img src="source-r3/right-sagittal.png" alt="Monochrome low-frequency envelope derived from admitted cat surfaces">
+      <dl><dt>Input SHA</dt><dd>cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967</dd><dt>Compiler</dt><dd>source-surface closing envelope v0</dd><dt>Closing radius</dt><dd>3.5148 source units</dd><dt>Authority</dt><dd>Agent-authored provisional fixture</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</pre>
+      <dl><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd><dt>Job</dt><dd>33abf132eca8</dd><dt>Route</dt><dd>mflux-generate-flux2-edit</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Morphology Survives</h2>
+      <img src="envelope/output.png" alt="FLUX output from the provisional envelope">
+      <p class="observation">FLUX reconstructs much more complete cat anatomy while retaining the folded hind limb, low front, long support chains, and broad source mass relationships. The surface category remains exposed anatomy.</p>
+    </div>
+  </section>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Source-Ablated Plate</h2>
+      <img src="source-r3/neutral-plate.png" alt="Blank neutral plate with the identical camera and background">
+      <dl><dt>Input SHA</dt><dd>0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650</dd><dt>Variable</dt><dd>No source morphology</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</pre>
+      <dl><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd><dt>Job</dt><dd>50d61894499f</dd><dt>Route</dt><dd>mflux-generate-flux2-edit</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Prompt-Only Ecorche</h2>
+      <img src="neutral/output.png" alt="Generic upright feline ecorche generated from the prompt and blank plate">
+      <p class="observation">The prompt alone produces a generic upright feline ecorche. Exposed anatomy is therefore not evidence of source literalism in this frozen comparison.</p>
+    </div>
+  </section>
+
+  <header>
+    <h1>Direct Prompt Ablation</h1>
+    <p class="verdict">Removing anatomy language switches the surface category to fur while source conditioning continues to control low-frequency form.</p>
+  </header>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Same Envelope</h2>
+      <img src="source-r3/right-sagittal.png" alt="Same provisional envelope used in the anatomy-led prompt row">
+      <dl><dt>Input SHA</dt><dd>cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967</dd><dt>Changed variable</dt><dd>Prompt only</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Exterior Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source's unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd><dt>Job</dt><dd>ef36bbd7dce5</dd><dt>Route</dt><dd>mflux-generate-flux2-edit</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Fur, Form Retained</h2>
+      <img src="exterior-envelope/output.png" alt="Fur-covered cat generated from the provisional envelope">
+      <p class="observation">The same envelope now becomes a continuous fur-covered cat. Rear-heavy mass, crouch, front reach, and a distinct tail event survive, but head-tail polarity reverses.</p>
+    </div>
+  </section>
+
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Same Neutral Plate</h2>
+      <img src="source-r3/neutral-plate.png" alt="Same blank neutral plate used in the anatomy-led prompt row">
+      <dl><dt>Input SHA</dt><dd>0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650</dd><dt>Changed variable</dt><dd>Prompt only</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Exterior Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source's unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd><dt>Job</dt><dd>d2214fc6bb0e</dd><dt>Route</dt><dd>mflux-generate-flux2-edit</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generic Crouched Cat</h2>
+      <img src="exterior-neutral/output.png" alt="Generic crouched cat generated from the exterior prompt and blank plate">
+      <p class="observation">The exterior prompt alone produces a generic crouched cat. The conditioned output remains visibly distinct, so its unusual low-frequency form is not prompt-only.</p>
+    </div>
+  </section>
+
+  <footer>Claim ceiling: these exact fixed-route comparisons separate source morphology pressure from prompt surface-category pressure and expose one directional-registration failure. They do not establish generality across seeds, views, envelope compilers, or models. Next: test a second registered view or explicit source-space orientation cue while holding all other variables fixed.</footer>
+</body>
+</html>

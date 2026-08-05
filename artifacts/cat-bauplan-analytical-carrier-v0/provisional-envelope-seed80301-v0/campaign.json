@@ -1,0 +1,99 @@
+{
+  "schema": "kaminos.flux2-representation-ablation.v0",
+  "status": "completed",
+  "assayId": "cat-bauplan-ecorche-envelope-neutral-seed80301-v0",
+  "question": "Does a provisional low-frequency envelope over the same authored cat structure preserve morphology while changing FLUX surface completion relative to exposed ecorche and a source-ablated control?",
+  "fixedVariables": {
+    "promptPath": "../flux2-prompt-switch-seed80301-v0/cat.txt",
+    "promptSha256": "9d562d7e44171c0a0479b11fd271a143f9496434e2db08d88a50748f23998f59",
+    "seed": 80301,
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "steps": 8,
+    "guidance": 1.0,
+    "width": 512,
+    "height": 512,
+    "mlxCacheLimitGb": 48,
+    "effectiveRouteBinary": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+  },
+  "source": {
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c",
+    "admittedSurfaceCount": 112,
+    "classificationSha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d"
+  },
+  "provisionalEnvelope": {
+    "authority": "agent-authored provisional analytical envelope",
+    "compilerId": "blender-cat-source-surface-closing-envelope-v0",
+    "compilerJobId": "2f0de598f7b8",
+    "surfaceSampleSpacing": 1.4059240673067044,
+    "closingRadius": 3.514810168266761,
+    "deduplicatedSurfaceSampleCount": 2294,
+    "meshSha256": "6d40cbe9b8bcbdb13a33bb82fd26cde1532244538ccc4ab89b710e62a0d74765"
+  },
+  "cells": [
+    {
+      "id": "ecorche",
+      "variable": "exposed bone-gray and muscle-red admitted geometry",
+      "inputPath": "../source-preview-r2-complete/ecorche/right-sagittal.png",
+      "inputSha256": "43e7f5038c6a3f56f7da4e9741336636dc75ce54c276a58622eab17384b8896f",
+      "jobId": "ab52bade93a0",
+      "outputPath": "../flux2-complete-palette-ablation-seed80301-v0/ecorche/output.png",
+      "outputSha256": "9051d888d77621dba165703398b7a0e06651a1c44e75ab4efe6157b7f3115066",
+      "observation": "FLUX stays close to the incomplete source organization and preserves its exposed bone and muscle roles."
+    },
+    {
+      "id": "provisional-envelope",
+      "variable": "one monochrome source-surface closing field over the same 112 admitted surfaces",
+      "inputPath": "source-r3/right-sagittal.png",
+      "inputSha256": "cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967",
+      "jobId": "33abf132eca8",
+      "outputPath": "envelope/output.png",
+      "outputSha256": "8e6acd9c9a98a050cbab194ca49b8d0ceca68fc0d361334f12f71be052136e22",
+      "observation": "FLUX reconstructs much more complete cat anatomy while retaining the authored folded hind limb, low front, long support chains, and broad mass relationships. It still selects an exposed-anatomy surface category."
+    },
+    {
+      "id": "neutral",
+      "variable": "source-ablated plate with the identical camera, prompt, seed, and settings",
+      "inputPath": "source-r3/neutral-plate.png",
+      "inputSha256": "0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650",
+      "jobId": "50d61894499f",
+      "outputPath": "neutral/output.png",
+      "outputSha256": "9d2f3631a1f6f508581d924a4908883f5df1d22114f5be86662ed748138a34d4",
+      "observation": "The prompt alone produces a generic upright feline ecorche. This establishes prompt-driven exposed-anatomy category pressure independently of the source image."
+    }
+  ],
+  "promptAblation": {
+    "promptPath": "exterior-only.txt",
+    "promptSha256": "636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332",
+    "fixedVariables": "The envelope, neutral plate, seed, model, quantization, steps, guidance, resolution, and route are unchanged from the primary comparison.",
+    "cells": [
+      {
+        "id": "exterior-envelope",
+        "inputPath": "source-r3/right-sagittal.png",
+        "inputSha256": "cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967",
+        "jobId": "ef36bbd7dce5",
+        "outputPath": "exterior-envelope/output.png",
+        "outputSha256": "1a8fd3323dc7c8d46866512de487a05151d3adc39189783da63f8fb7de576300",
+        "observation": "The same envelope becomes a continuous fur-covered cat while retaining rear-heavy mass, crouch, front reach, and a distinct tail event. It reverses source polarity from head-right to head-left."
+      },
+      {
+        "id": "exterior-neutral",
+        "inputPath": "source-r3/neutral-plate.png",
+        "inputSha256": "0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650",
+        "jobId": "d2214fc6bb0e",
+        "outputPath": "exterior-neutral/output.png",
+        "outputSha256": "963004704b873c47efc90f38aedf77632e90cb1bc83cd5416be2b2b34f967c46",
+        "observation": "The exterior prompt alone yields a generic crouched cat. The envelope-conditioned output remains visibly distinct, establishing source morphology pressure under the fur-covered surface category."
+      }
+    ],
+    "verdict": "EXTERIOR_PROMPT_FLIPS_SURFACE_CLASS_WHILE_ENVELOPE_RETAINS_LOW_FREQUENCY_MORPHOLOGY",
+    "residual": "Single-view conditioning does not preserve head-tail polarity reliably."
+  },
+  "result": {
+    "verdict": "SOURCE_CONTROLS_MORPHOLOGY_PROMPT_CONTROLS_SURFACE_CLASS_POLARITY_REMAINS_UNCONTROLLED",
+    "meaning": "At the frozen route and seed, the provisional envelope materially preserves low-frequency source morphology relative to the neutral control. Prompt wording independently switches the output between exposed anatomy and continuous fur. The generated view may reverse head-tail polarity despite the same source image.",
+    "claimCeiling": "These exact fixed-route comparisons separate route-local source morphology pressure from prompt surface-category pressure and expose a directional-registration failure. They do not establish generality across seeds, views, envelope compilers, or models.",
+    "nextAssay": "Test whether a second registered view or explicit source-space orientation cue preserves head-tail polarity without weakening morphology transfer."
+  }
+}

@@ -1,0 +1,765 @@
+{
+  "authority": "agent-authored provisional analytical envelope",
+  "classification": {
+    "admittedObjectCount": 112,
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "schema": "kaminos.cat-bauplan-source-classification.v0",
+    "sha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d"
+  },
+  "compilerId": "blender-cat-source-surface-closing-envelope-v0",
+  "deduplicatedSurfaceSampleCount": 2294,
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "cameraView": "right-sagittal",
+    "compilerId": "blender-cat-source-surface-closing-envelope-v0",
+    "orthoScale": 68.95558166503906,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "envelopeBounds": {
+    "max": [
+      31.205686569213867,
+      10.009673118591309,
+      32.0867919921875
+    ],
+    "min": [
+      8.801502227783203,
+      -56.22974395751953,
+      -14.52250862121582
+    ]
+  },
+  "envelopeElementCount": 2294,
+  "inputVertexCount": 21509,
+  "mesh": {
+    "byteLength": 1547072,
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/provisional-envelope.glb",
+    "polygonCount": 52287,
+    "sha256": "6d40cbe9b8bcbdb13a33bb82fd26cde1532244538ccc4ab89b710e62a0d74765",
+    "vertexCount": 42942
+  },
+  "outputs": {
+    "envelope": {
+      "byteLength": 875340,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/right-sagittal.png",
+      "sha256": "cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967"
+    },
+    "neutralPlate": {
+      "byteLength": 765761,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png",
+      "sha256": "0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650"
+    }
+  },
+  "parameters": {
+    "closingRadius": 3.514810168266761,
+    "closingRadiusFraction": 0.045,
+    "fieldResolutionFraction": 0.006,
+    "fieldThreshold": 0.6200000047683716,
+    "surfaceSampleFraction": 0.018,
+    "surfaceSampleSpacing": 1.4059240673067044
+  },
+  "schema": "kaminos.cat-bauplan-provisional-envelope.v0",
+  "skippedSourceObjects": [],
+  "source": {
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "sourceBounds": {
+    "max": [
+      29.656089783,
+      7.54165411,
+      29.760408401
+    ],
+    "min": [
+      10.208107948,
+      -54.025829315,
+      -14.19306469
+    ]
+  },
+  "sourceObjectCount": 112,
+  "sourceRecords": [
+    {
+      "sourceObjectName": "Cube.001",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 512,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.002",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 2434,
+      "vertexCount": 349
+    },
+    {
+      "sourceObjectName": "Cube.003",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 366,
+      "vertexCount": 54
+    },
+    {
+      "sourceObjectName": "Cube.004",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 128,
+      "vertexCount": 12
+    },
+    {
+      "sourceObjectName": "Cube.005",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 506,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.006",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.007",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.008",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.009",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.010",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.011",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 2411,
+      "vertexCount": 37
+    },
+    {
+      "sourceObjectName": "Cube.012",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 36,
+      "vertexCount": 8
+    },
+    {
+      "sourceObjectName": "Cube.013",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 698,
+      "vertexCount": 58
+    },
+    {
+      "sourceObjectName": "Cube.014",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 2278,
+      "vertexCount": 349
+    },
+    {
+      "sourceObjectName": "Cube.015",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 698,
+      "vertexCount": 58
+    },
+    {
+      "sourceObjectName": "Cube.016",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 2318,
+      "vertexCount": 349
+    },
+    {
+      "sourceObjectName": "Cube.017",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 416,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.018",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 410,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.019",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 318,
+      "vertexCount": 54
+    },
+    {
+      "sourceObjectName": "Cube.020",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 7600,
+      "vertexCount": 914
+    },
+    {
+      "sourceObjectName": "Cube.022",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 465,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.023",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 402,
+      "vertexCount": 54
+    },
+    {
+      "sourceObjectName": "Cube.024",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 226,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.025",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 196,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.026",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 172,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.027",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 168,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.028",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.029",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.030",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 166,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.031",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 166,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.032",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 166,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.033",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.034",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.035",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.036",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.037",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.038",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.039",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.040",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.041",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 144,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.042",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.043",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 138,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.044",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 494,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.045",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 512,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.046",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 2434,
+      "vertexCount": 349
+    },
+    {
+      "sourceObjectName": "Cube.047",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 366,
+      "vertexCount": 54
+    },
+    {
+      "sourceObjectName": "Cube.048",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 128,
+      "vertexCount": 12
+    },
+    {
+      "sourceObjectName": "Cube.049",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 506,
+      "vertexCount": 36
+    },
+    {
+      "sourceObjectName": "Cube.050",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 120,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.051",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 132,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.052",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 132,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.053",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 132,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Cube.054",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 132,
+      "vertexCount": 20
+    },
+    {
+      "sourceObjectName": "Icosphere",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 240,
+      "vertexCount": 42
+    },
+    {
+      "sourceObjectName": "Muscle 02 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 03 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 04 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 05 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 06 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 07 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 08 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 09 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 10 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 11 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 12 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1992,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 13 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1860,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 14 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 15 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 16 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 18 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 19 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 20 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 21 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 22 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 23 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 24 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 25 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 26 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 27 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 28 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 29 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1848,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 30 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 2136,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 31 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 32 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 33 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 34 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1884,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 35 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1824,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 37 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 38 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 39 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 40 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 41 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 42 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 43 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 44 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 45 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 2028,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 46 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 47 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 48 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 51 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1980,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 52 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 53 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 54 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1938,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 66 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 67 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 68 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 74 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1824,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 75 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 76 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1824,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle 85 | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "Muscle | Surface",
+      "sourceRole": "muscle_surface",
+      "surfaceSampleCount": 1788,
+      "vertexCount": 300
+    },
+    {
+      "sourceObjectName": "SRC_PELVIS",
+      "sourceRole": "authored_mesh",
+      "surfaceSampleCount": 5747,
+      "vertexCount": 768
+    }
+  ],
+  "status": "completed",
+  "surfaceSampleCount": 140255
+}

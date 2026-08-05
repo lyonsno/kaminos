@@ -1,0 +1,16 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "f720ebe56bb8",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "manifest.json",
+    "neutral-plate.png",
+    "provisional-envelope.glb",
+    "right-sagittal.png"
+  ],
+  "created_at": 1785966470.591337,
+  "duration_s": 1.4
+}
