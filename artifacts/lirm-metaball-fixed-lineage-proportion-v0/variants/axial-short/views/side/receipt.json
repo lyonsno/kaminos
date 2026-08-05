@@ -1,0 +1,200 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "axial-short-side",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 256,
+    "cameraYawRadians": 1.3
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 256,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "cameraYawRadians": 1.3,
+    "fixedProjectionEnvelope": {
+      "screenWidthWorld": 2.65,
+      "screenHeightWorld": 2.05,
+      "rayOriginDepth": 1.46,
+      "maxTravel": 3,
+      "framingPolicy": "fixed-world-envelope-no-variant-autofit"
+    },
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "axial-short-side/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "axial-short-side/clay-implicit.svg",
+        "rasterPath": "axial-short-side/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "axial-short-side/depth-implicit.svg",
+        "rasterPath": "axial-short-side/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "axial-short-side/normal-implicit.svg",
+        "rasterPath": "axial-short-side/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "axial-short-side/mask-implicit.svg",
+        "rasterPath": "axial-short-side/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "axial-short-side/semantic-implicit.svg",
+        "rasterPath": "axial-short-side/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "axial-short-side/trellis-source.svg",
+      "rasterPath": "axial-short-side/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "axial-short-side/bundle.json",
+      "byteSize": 8677,
+      "sha256": "sha256:7faf995b062309fe2eb5d5b728004e4c61a6ae42ea48784a61449e22ccfdd3b8"
+    },
+    {
+      "path": "axial-short-side/clay-implicit.svg",
+      "byteSize": 782468,
+      "sha256": "sha256:c258658badd7ba80d67aede9b5e71b671a0121a3e59bbfcf235492ee9b8b65a0"
+    },
+    {
+      "path": "axial-short-side/clay-implicit.png",
+      "byteSize": 19585,
+      "sha256": "sha256:d5f82fd007bfd6135dba4c468bee806ff6d7fc9b971979e048b8e68c71d3141e"
+    },
+    {
+      "path": "axial-short-side/depth-implicit.svg",
+      "byteSize": 805906,
+      "sha256": "sha256:d7bb834a67ad83615ed7d9fa798204af22ccc0a9a8208b7242e9ab462462630d"
+    },
+    {
+      "path": "axial-short-side/depth-implicit.png",
+      "byteSize": 12718,
+      "sha256": "sha256:189c8e5feab53ede8d8fddb7c9632bdf68390fae46dd1ab9b61179f5d4b98440"
+    },
+    {
+      "path": "axial-short-side/normal-implicit.svg",
+      "byteSize": 786387,
+      "sha256": "sha256:4c5ed6be67079c056c6c4a88237d227735efdae5e6908e39b5219989ed1157d4"
+    },
+    {
+      "path": "axial-short-side/normal-implicit.png",
+      "byteSize": 23325,
+      "sha256": "sha256:d1002e948a8db4d38a1c9e60f1c757d40de3d18a40a59c164ec1bc5d11124fdd"
+    },
+    {
+      "path": "axial-short-side/mask-implicit.svg",
+      "byteSize": 805862,
+      "sha256": "sha256:4e6b5ec1192341e678c84245c2306f007f2c236f254946466921b86c90817f5d"
+    },
+    {
+      "path": "axial-short-side/mask-implicit.png",
+      "byteSize": 7934,
+      "sha256": "sha256:e0cd833c111e9abf6f9c76d2bca002fadd6f84a245c7f4b2c74266bcae905816"
+    },
+    {
+      "path": "axial-short-side/semantic-implicit.svg",
+      "byteSize": 870567,
+      "sha256": "sha256:2753f5c95ac54d9c469039296475894938a67bf597e89717e8676d896e997f1b"
+    },
+    {
+      "path": "axial-short-side/semantic-implicit.png",
+      "byteSize": 9646,
+      "sha256": "sha256:a61dad5a87608e7e657904702ee823ba4b085852958b8fd985ace4f766296df7"
+    },
+    {
+      "path": "axial-short-side/trellis-source.svg",
+      "byteSize": 781657,
+      "sha256": "sha256:f00e6c4987e06b7b6ddc1ebab8702015fbf1b79e63a4c51c349099aab222c4e9"
+    },
+    {
+      "path": "axial-short-side/trellis-source.png",
+      "byteSize": 130803,
+      "sha256": "sha256:d33e1ef3c2ba9e171666a8cfa5c14a48d3ecf10455240996f42b310bcaa86703"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "min": 0.75,
+        "max": 1.4
+      },
+      {
+        "id": "bodyDepth",
+        "semanticRole": "ventralDorsalMass",
+        "min": 0.25,
+        "max": 0.62
+      },
+      {
+        "id": "dorsalArch",
+        "semanticRole": "dorsalProfile",
+        "min": -0.04,
+        "max": 0.28
+      },
+      {
+        "id": "posteriorMass",
+        "semanticRole": "posteriorMass",
+        "min": 0.65,
+        "max": 1.45
+      },
+      {
+        "id": "supportSpacing",
+        "semanticRole": "contactFootprint",
+        "min": 0.38,
+        "max": 0.82
+      },
+      {
+        "id": "supportLength",
+        "semanticRole": "contactLimb",
+        "min": 0.22,
+        "max": 0.58
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 0.78,
+    "bodyDepth": 0.36,
+    "dorsalArch": 0.03,
+    "posteriorMass": 0.85,
+    "supportSpacing": 0.52,
+    "supportLength": 0.32
+  },
+  "implicitPrimitiveCount": 16,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "facialLandmark",
+    "contactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

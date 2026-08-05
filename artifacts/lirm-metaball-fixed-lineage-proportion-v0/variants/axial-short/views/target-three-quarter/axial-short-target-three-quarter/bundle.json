@@ -1,0 +1,352 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-bundle.v0",
+  "route": "kaminos/lirm-armature-program/implicit-body-v0",
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "axial-short-target-three-quarter",
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "min": 0.75,
+        "max": 1.4
+      },
+      {
+        "id": "bodyDepth",
+        "semanticRole": "ventralDorsalMass",
+        "min": 0.25,
+        "max": 0.62
+      },
+      {
+        "id": "dorsalArch",
+        "semanticRole": "dorsalProfile",
+        "min": -0.04,
+        "max": 0.28
+      },
+      {
+        "id": "posteriorMass",
+        "semanticRole": "posteriorMass",
+        "min": 0.65,
+        "max": 1.45
+      },
+      {
+        "id": "supportSpacing",
+        "semanticRole": "contactFootprint",
+        "min": 0.38,
+        "max": 0.82
+      },
+      {
+        "id": "supportLength",
+        "semanticRole": "contactLimb",
+        "min": 0.22,
+        "max": 0.58
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 0.78,
+    "bodyDepth": 0.36,
+    "dorsalArch": 0.03,
+    "posteriorMass": 0.85,
+    "supportSpacing": 0.52,
+    "supportLength": 0.32
+  },
+  "renderMode": "raymarched-implicit-field",
+  "fieldModel": {
+    "kind": "smooth-sdf-armature-program",
+    "surfaceThreshold": 0.0065,
+    "smoothUnionK": 0.075,
+    "primitiveKinds": [
+      "ellipsoid",
+      "capsule"
+    ]
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 256,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "cameraYawRadians": 0.42,
+    "fixedProjectionEnvelope": {
+      "screenWidthWorld": 2.65,
+      "screenHeightWorld": 2.05,
+      "rayOriginDepth": 1.46,
+      "maxTravel": 3,
+      "framingPolicy": "fixed-world-envelope-no-variant-autofit"
+    },
+    "raySource": "software-sdf-raymarch"
+  },
+  "implicitPrimitiveCount": 16,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "facialLandmark",
+    "contactLimb",
+    "groundContact"
+  ],
+  "projectionEvidence": {
+    "schema": "kaminos.projected-support-identity-evidence.v0",
+    "pixelGrid": {
+      "width": 256,
+      "height": 256
+    },
+    "cameraYawRadians": 0.42,
+    "organismalMaskPixelCount": 9166,
+    "projectedContactMarkerOccupancy": 0,
+    "projectedSupportGeometryOccupancy": 0,
+    "primitiveVisibility": [
+      {
+        "id": "bodyMass-0",
+        "index": 0,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 0,
+        "projectedCentroid": null
+      },
+      {
+        "id": "bodyMass-1",
+        "index": 1,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 13,
+        "projectedCentroid": {
+          "x": 83.923,
+          "y": 135,
+          "depth01": 0.501
+        }
+      },
+      {
+        "id": "bodyMass-2",
+        "index": 2,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 352,
+        "projectedCentroid": {
+          "x": 92.182,
+          "y": 127.108,
+          "depth01": 0.455
+        }
+      },
+      {
+        "id": "bodyMass-3",
+        "index": 3,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 826,
+        "projectedCentroid": {
+          "x": 104.311,
+          "y": 111.732,
+          "depth01": 0.413
+        }
+      },
+      {
+        "id": "bodyMass-4",
+        "index": 4,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 1229,
+        "projectedCentroid": {
+          "x": 117.805,
+          "y": 121.614,
+          "depth01": 0.375
+        }
+      },
+      {
+        "id": "bodyMass-5",
+        "index": 5,
+        "role": "bodyMass",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 463,
+        "projectedCentroid": {
+          "x": 125.222,
+          "y": 143.648,
+          "depth01": 0.336
+        }
+      },
+      {
+        "id": "headOrientation-6",
+        "index": 6,
+        "role": "headOrientation",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 2117,
+        "projectedCentroid": {
+          "x": 138.419,
+          "y": 120.597,
+          "depth01": 0.295
+        }
+      },
+      {
+        "id": "facialLandmark-7",
+        "index": 7,
+        "role": "facialLandmark",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 1510,
+        "projectedCentroid": {
+          "x": 154.401,
+          "y": 126.438,
+          "depth01": 0.244
+        }
+      },
+      {
+        "id": "contactLimb-8",
+        "index": 8,
+        "role": "contactLimb",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 206,
+        "projectedCentroid": {
+          "x": 83.505,
+          "y": 159.699,
+          "depth01": 0.478
+        }
+      },
+      {
+        "id": "groundContact-9",
+        "index": 9,
+        "role": "groundContact",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 374,
+        "projectedCentroid": {
+          "x": 78.198,
+          "y": 173.032,
+          "depth01": 0.461
+        }
+      },
+      {
+        "id": "contactLimb-10",
+        "index": 10,
+        "role": "contactLimb",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 30,
+        "projectedCentroid": {
+          "x": 155.5,
+          "y": 184.733,
+          "depth01": 0.597
+        }
+      },
+      {
+        "id": "groundContact-11",
+        "index": 11,
+        "role": "groundContact",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 272,
+        "projectedCentroid": {
+          "x": 150.287,
+          "y": 175.647,
+          "depth01": 0.569
+        }
+      },
+      {
+        "id": "contactLimb-12",
+        "index": 12,
+        "role": "contactLimb",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 405,
+        "projectedCentroid": {
+          "x": 105.237,
+          "y": 156.64,
+          "depth01": 0.344
+        }
+      },
+      {
+        "id": "groundContact-13",
+        "index": 13,
+        "role": "groundContact",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 567,
+        "projectedCentroid": {
+          "x": 100.85,
+          "y": 172.802,
+          "depth01": 0.323
+        }
+      },
+      {
+        "id": "contactLimb-14",
+        "index": 14,
+        "role": "contactLimb",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 253,
+        "projectedCentroid": {
+          "x": 170.992,
+          "y": 159.688,
+          "depth01": 0.439
+        }
+      },
+      {
+        "id": "groundContact-15",
+        "index": 15,
+        "role": "groundContact",
+        "pairId": null,
+        "pairMember": null,
+        "visiblePixelCount": 549,
+        "projectedCentroid": {
+          "x": 172.867,
+          "y": 173.217,
+          "depth01": 0.433
+        }
+      }
+    ]
+  },
+  "renderMaps": [
+    {
+      "kind": "clay",
+      "path": "axial-short-target-three-quarter/clay-implicit.svg"
+    },
+    {
+      "kind": "depth",
+      "path": "axial-short-target-three-quarter/depth-implicit.svg"
+    },
+    {
+      "kind": "normal",
+      "path": "axial-short-target-three-quarter/normal-implicit.svg"
+    },
+    {
+      "kind": "mask",
+      "path": "axial-short-target-three-quarter/mask-implicit.svg"
+    },
+    {
+      "kind": "semantic",
+      "path": "axial-short-target-three-quarter/semantic-implicit.svg"
+    }
+  ],
+  "trellisSource": {
+    "kind": "trellis-clay",
+    "path": "axial-short-target-three-quarter/trellis-source.svg",
+    "rasterPath": "axial-short-target-three-quarter/trellis-source.png",
+    "effectiveSource": "tight-cropped-transparent-implicit-clay",
+    "requiredFor": [
+      "trellis_clay_probe",
+      "trellis_prior_assay",
+      "sam3_isolation"
+    ],
+    "framing": {
+      "background": "transparent",
+      "crop": "tight-surface-bounds",
+      "sourcePixelGrid": "256x256",
+      "displayedPixels": "512x512"
+    }
+  },
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

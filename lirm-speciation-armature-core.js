@@ -1468,6 +1468,14 @@ function implicitNormal(point, primitives, gestaltEnvelope = null) {
   return norm3(vec3(dx, dy, dz));
 }
 
+export const LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE = Object.freeze({
+  screenWidthWorld: 2.65,
+  screenHeightWorld: 2.05,
+  rayOriginDepth: 1.46,
+  maxTravel: 3.0,
+  framingPolicy: 'fixed-world-envelope-no-variant-autofit',
+});
+
 function raymarchImplicitPixel({
   pixelX,
   pixelY,
@@ -1477,12 +1485,17 @@ function raymarchImplicitPixel({
   gestaltEnvelope = null,
   cameraYaw = 0.42,
 }) {
-  const screenX = ((pixelX + 0.5) / width - 0.5) * 2.65;
-  const screenY = (0.5 - (pixelY + 0.5) / height) * 2.05;
-  const origin = rotateY(vec3(screenX, screenY, 1.46), cameraYaw);
+  const screenX = ((pixelX + 0.5) / width - 0.5)
+    * LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE.screenWidthWorld;
+  const screenY = (0.5 - (pixelY + 0.5) / height)
+    * LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE.screenHeightWorld;
+  const origin = rotateY(
+    vec3(screenX, screenY, LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE.rayOriginDepth),
+    cameraYaw,
+  );
   const direction = norm3(rotateY(vec3(0, 0, -1), cameraYaw));
   let travel = 0;
-  const maxTravel = 3.0;
+  const maxTravel = LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE.maxTravel;
   for (let step = 0; step < 88 && travel < maxTravel; step += 1) {
     const point = add3(origin, mul3(direction, travel));
     const field = evaluateImplicitField(point, primitives, gestaltEnvelope);
@@ -1960,6 +1973,7 @@ export function createLirmArmatureProgramImplicitBodyBundle({
       projection: 'orthographic',
       view: 'front-three-quarter',
       cameraYawRadians,
+      fixedProjectionEnvelope: { ...LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE },
       raySource: 'software-sdf-raymarch',
     },
     implicitPrimitiveCount: implicitPrimitives.length,

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { join, relative } from 'node:path';
 
 import {
+  LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE,
   writeLirmArmatureProgramImplicitBodyWitness,
 } from './lirm-speciation-armature-core.js';
 
@@ -199,6 +200,21 @@ const CONTOUR_EMBELLISHMENT_CONDITIONS = Object.freeze([
       'Complete one healthy, aesthetically pleasing living quadruped with rich species-specific anatomy, an expressive friendly face, articulated support transitions, strongly resolved skin or fur and materials, and abundant coherent regional detail contained within the authored outline.',
     ].join(' '),
   }),
+]);
+
+const FIXED_LINEAGE_PROPORTION_VARIANTS = Object.freeze([
+  Object.freeze({ id: 'axial-short', parameterId: 'bodyLength', value: 0.78 }),
+  Object.freeze({ id: 'baseline', parameterId: null, value: null }),
+  Object.freeze({ id: 'axial-long', parameterId: 'bodyLength', value: 1.35 }),
+  Object.freeze({ id: 'body-shallow', parameterId: 'bodyDepth', value: 0.26 }),
+  Object.freeze({ id: 'body-deep', parameterId: 'bodyDepth', value: 0.56 }),
+  Object.freeze({ id: 'supports-short', parameterId: 'supportLength', value: 0.23 }),
+  Object.freeze({ id: 'supports-long', parameterId: 'supportLength', value: 0.57 }),
+]);
+
+const FIXED_LINEAGE_PROPORTION_VIEWS = Object.freeze([
+  Object.freeze({ id: 'target-three-quarter', cameraYawRadians: 0.42 }),
+  Object.freeze({ id: 'side', cameraYawRadians: 1.3 }),
 ]);
 
 function createReferenceCardinalityPrompt(condition) {
@@ -476,6 +492,48 @@ export function createMetaballContourEmbellishmentTranche() {
   };
 }
 
+export function createMetaballFixedLineageProportionTranche() {
+  const lineageAnchor = CONTOUR_EMBELLISHMENT_CONDITIONS.find(
+    condition => condition.id === 'maximum-contour-bound-invention',
+  );
+  if (!lineageAnchor) throw new Error('missing fixed-lineage prompt anchor');
+  return {
+    schema: 'kaminos.lirm-metaball-fixed-lineage-proportion.v0',
+    status: 'source-contract-frozen',
+    lineageAnchor: {
+      conditionId: lineageAnchor.id,
+      seed: 80413,
+      sourceArtifact: 'artifacts/lirm-metaball-contour-embellishment-v0',
+      outputPath: 'artifacts/lirm-metaball-contour-embellishment-v0/generated/maximum-contour-bound-invention/seed-80413/output.png',
+      receiptPath: 'artifacts/lirm-metaball-contour-embellishment-v0/receipts/maximum-contour-bound-invention-seed-80413.json',
+    },
+    armatureProgram: METABALL_SILHOUETTE_ARMATURE_PROGRAM,
+    variants: FIXED_LINEAGE_PROPORTION_VARIANTS.map(item => (
+      item.parameterId
+        ? createVariant(item.id, item.parameterId, item.value)
+        : createVariant(item.id)
+    )),
+    views: FIXED_LINEAGE_PROPORTION_VIEWS.map(view => ({ ...view })),
+    referenceViewIds: ['target-three-quarter', 'side', 'target-three-quarter'],
+    referenceKinds: ['depth', 'depth', 'depth'],
+    fixedGenerator: {
+      requestedRoute: 'gpu-greenroom/mflux_flux2_edit_promptfile_3ref',
+      model: 'flux2-klein-9b',
+      quantize: 4,
+      width: 512,
+      height: 512,
+      steps: 8,
+      guidance: 1,
+      seeds: [80413],
+      prompt: lineageAnchor.prompt,
+    },
+    claimCeiling: [
+      'Experimental evidence for continuity of one matched generator basin and directional inheritance of three low-frequency bauplan axes.',
+      'No general morphology controllability, exact silhouette preservation, multiview geometric consistency, reconstructed volume, or production-admission claim.',
+    ].join(' '),
+  };
+}
+
 async function sha256(path) {
   const bytes = await readFile(path);
   return {
@@ -483,6 +541,94 @@ async function sha256(path) {
     byteSize: bytes.length,
     sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
   };
+}
+
+export async function writeMetaballFixedLineageProportionSources({
+  outDir = join(process.cwd(), 'artifacts', 'lirm-metaball-fixed-lineage-proportion-v0'),
+  pixelWidth = 256,
+  pixelHeight = 256,
+} = {}) {
+  const tranche = createMetaballFixedLineageProportionTranche();
+  await mkdir(outDir, { recursive: true });
+  const promptPath = join(outDir, 'prompt.txt');
+  await writeFile(promptPath, `${tranche.fixedGenerator.prompt}\n`);
+  const promptIdentity = await sha256(promptPath);
+  const rows = [];
+
+  for (const variant of tranche.variants) {
+    const views = [];
+    const byViewId = new Map();
+    for (const view of tranche.views) {
+      const candidateId = `${variant.id}-${view.id}`;
+      const viewOutDir = join(outDir, 'variants', variant.id, 'views', view.id);
+      const result = await writeLirmArmatureProgramImplicitBodyWitness({
+        outDir: viewOutDir,
+        armatureProgram: tranche.armatureProgram,
+        parameters: variant.parameters,
+        candidateId,
+        pixelWidth,
+        pixelHeight,
+        cameraYawRadians: view.cameraYawRadians,
+      });
+      const sourcePath = join(viewOutDir, candidateId, 'depth-implicit.png');
+      const sourceImage = {
+        kind: 'depth',
+        ...(await sha256(sourcePath)),
+        relativePath: relative(outDir, sourcePath),
+      };
+      const persistedView = {
+        ...view,
+        witnessReceiptPath: relative(outDir, result.receiptPath),
+        sourceImage,
+      };
+      views.push(persistedView);
+      byViewId.set(view.id, persistedView);
+    }
+
+    const references = tranche.referenceViewIds.map((viewId, index) => {
+      const source = byViewId.get(viewId)?.sourceImage;
+      if (!source) throw new Error(`missing ${viewId} depth source for ${variant.id}`);
+      return {
+        slot: index + 1,
+        viewId,
+        kind: tranche.referenceKinds[index],
+        path: relative(process.cwd(), join(outDir, source.relativePath)),
+        sha256: source.sha256,
+      };
+    });
+    rows.push({
+      id: variant.id,
+      axis: variant.axis,
+      parameters: variant.parameters,
+      views,
+      references,
+    });
+  }
+
+  const manifest = {
+    schema: tranche.schema,
+    status: 'sources-complete',
+    lineageAnchor: tranche.lineageAnchor,
+    armatureProgram: {
+      id: tranche.armatureProgram.id,
+      parameterVocabulary: tranche.armatureProgram.parameterVocabulary,
+    },
+    effectiveConfig: {
+      pixelWidth,
+      pixelHeight,
+      projection: 'orthographic',
+      fixedProjectionEnvelope: { ...LIRM_ARMATURE_PROGRAM_FIXED_PROJECTION_ENVELOPE },
+      sourceRasterPolicy: 'historical-fixed-display-raster',
+    },
+    promptPath: relative(outDir, promptPath),
+    promptSha256: promptIdentity.sha256,
+    rows,
+    fixedGenerator: tranche.fixedGenerator,
+    claimCeiling: tranche.claimCeiling,
+  };
+  const manifestPath = join(outDir, 'manifest.json');
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
 }
 
 export async function writeMetaballSilhouetteAuthoritySources({

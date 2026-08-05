@@ -1,0 +1,200 @@
+{
+  "schema": "kaminos.lirm-armature-program-implicit-body-witness.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "failurePhase": null,
+  "requestedRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "effectiveRoute": "kaminos/lirm-armature-program/implicit-body-v0",
+  "candidateId": "body-deep-target-three-quarter",
+  "requestedArmatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0"
+  },
+  "requestedConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 256,
+    "cameraYawRadians": 0.42
+  },
+  "effectiveConfig": {
+    "pixelWidth": 256,
+    "pixelHeight": 256,
+    "projection": "orthographic",
+    "view": "front-three-quarter",
+    "cameraYawRadians": 0.42,
+    "fixedProjectionEnvelope": {
+      "screenWidthWorld": 2.65,
+      "screenHeightWorld": 2.05,
+      "rayOriginDepth": 1.46,
+      "maxTravel": 3,
+      "framingPolicy": "fixed-world-envelope-no-variant-autofit"
+    },
+    "raySource": "software-sdf-raymarch"
+  },
+  "lastTrustworthyEvidence": "all conditioning maps and Trellis source written with byte and hash evidence",
+  "outputInventory": {
+    "bundle": "body-deep-target-three-quarter/bundle.json",
+    "maps": [
+      {
+        "kind": "clay",
+        "path": "body-deep-target-three-quarter/clay-implicit.svg",
+        "rasterPath": "body-deep-target-three-quarter/clay-implicit.png"
+      },
+      {
+        "kind": "depth",
+        "path": "body-deep-target-three-quarter/depth-implicit.svg",
+        "rasterPath": "body-deep-target-three-quarter/depth-implicit.png"
+      },
+      {
+        "kind": "normal",
+        "path": "body-deep-target-three-quarter/normal-implicit.svg",
+        "rasterPath": "body-deep-target-three-quarter/normal-implicit.png"
+      },
+      {
+        "kind": "mask",
+        "path": "body-deep-target-three-quarter/mask-implicit.svg",
+        "rasterPath": "body-deep-target-three-quarter/mask-implicit.png"
+      },
+      {
+        "kind": "semantic",
+        "path": "body-deep-target-three-quarter/semantic-implicit.svg",
+        "rasterPath": "body-deep-target-three-quarter/semantic-implicit.png"
+      }
+    ],
+    "trellisSource": {
+      "kind": "trellis-clay",
+      "path": "body-deep-target-three-quarter/trellis-source.svg",
+      "rasterPath": "body-deep-target-three-quarter/trellis-source.png"
+    }
+  },
+  "outputEvidence": [
+    {
+      "path": "body-deep-target-three-quarter/bundle.json",
+      "byteSize": 8788,
+      "sha256": "sha256:66dceba02b9a7d50bd426c436dcd57fb846d564d7a7eab887d92a14aba63709c"
+    },
+    {
+      "path": "body-deep-target-three-quarter/clay-implicit.svg",
+      "byteSize": 915608,
+      "sha256": "sha256:48ded2f23d4756b763283ac73fea18fa1f7a6bbb455143bf558c197d3d6ee2b4"
+    },
+    {
+      "path": "body-deep-target-three-quarter/clay-implicit.png",
+      "byteSize": 22889,
+      "sha256": "sha256:a1a7eb4b42265ccde011fe077e405aabd1781aa91aaa393dd224b6656eb5a906"
+    },
+    {
+      "path": "body-deep-target-three-quarter/depth-implicit.svg",
+      "byteSize": 940808,
+      "sha256": "sha256:62d5cd816278909c48c838ca6a4e70feda5839d44cdba72c7e294aa9197f430b"
+    },
+    {
+      "path": "body-deep-target-three-quarter/depth-implicit.png",
+      "byteSize": 13937,
+      "sha256": "sha256:ad8a065bce45fed6d8dc26a6f11a7a3ceed0d4fb70be49aa7f98a50a085c3364"
+    },
+    {
+      "path": "body-deep-target-three-quarter/normal-implicit.svg",
+      "byteSize": 923895,
+      "sha256": "sha256:90b57cf82d13cb1e5117e182418ee0a8e291e076de522c1836682cbf6aa67068"
+    },
+    {
+      "path": "body-deep-target-three-quarter/normal-implicit.png",
+      "byteSize": 26349,
+      "sha256": "sha256:5347e2fac7558b2abdfc9682add9793fb7b9e6f987f69ee09e56dc9df3d2b068"
+    },
+    {
+      "path": "body-deep-target-three-quarter/mask-implicit.svg",
+      "byteSize": 940764,
+      "sha256": "sha256:cce294e37aa74a31b5290f9ba29f8130f747cdacd29963b1bec3525e10a1edd7"
+    },
+    {
+      "path": "body-deep-target-three-quarter/mask-implicit.png",
+      "byteSize": 8142,
+      "sha256": "sha256:f8cdaf660a511352229316f73ed34759a144a64b38d228b7e7e6de6b2b842c8f"
+    },
+    {
+      "path": "body-deep-target-three-quarter/semantic-implicit.svg",
+      "byteSize": 1016889,
+      "sha256": "sha256:318ab041741a076a9fd25ca2f6df727ab6e2d038d26f5fc4f0b83bc6e77bef2c"
+    },
+    {
+      "path": "body-deep-target-three-quarter/semantic-implicit.png",
+      "byteSize": 10230,
+      "sha256": "sha256:0fb615df0a21d1d59a0160c62ee9ab643a75dc9537a66eab84e613f2d9583d43"
+    },
+    {
+      "path": "body-deep-target-three-quarter/trellis-source.svg",
+      "byteSize": 915606,
+      "sha256": "sha256:de22b3ccff5c9df0442abff5345463ed466c664f6bb9027df3558d46642dd60f"
+    },
+    {
+      "path": "body-deep-target-three-quarter/trellis-source.png",
+      "byteSize": 153389,
+      "sha256": "sha256:97c27a5f0d7975c2e233393413312b6ddf286a69e0ec4207423230bfcc1ec72f"
+    }
+  ],
+  "armatureProgram": {
+    "id": "kaminos.lirm-armature-program.metaball-silhouette-authority.v0",
+    "parameterVocabulary": "kaminos.lirm-metaball-silhouette.6-low-frequency-parameters.v0",
+    "parameterSpecs": [
+      {
+        "id": "bodyLength",
+        "semanticRole": "axialExtent",
+        "min": 0.75,
+        "max": 1.4
+      },
+      {
+        "id": "bodyDepth",
+        "semanticRole": "ventralDorsalMass",
+        "min": 0.25,
+        "max": 0.62
+      },
+      {
+        "id": "dorsalArch",
+        "semanticRole": "dorsalProfile",
+        "min": -0.04,
+        "max": 0.28
+      },
+      {
+        "id": "posteriorMass",
+        "semanticRole": "posteriorMass",
+        "min": 0.65,
+        "max": 1.45
+      },
+      {
+        "id": "supportSpacing",
+        "semanticRole": "contactFootprint",
+        "min": 0.38,
+        "max": 0.82
+      },
+      {
+        "id": "supportLength",
+        "semanticRole": "contactLimb",
+        "min": 0.22,
+        "max": 0.58
+      }
+    ]
+  },
+  "parameters": {
+    "bodyLength": 1.05,
+    "bodyDepth": 0.56,
+    "dorsalArch": 0.03,
+    "posteriorMass": 0.85,
+    "supportSpacing": 0.52,
+    "supportLength": 0.32
+  },
+  "implicitPrimitiveCount": 16,
+  "semanticRoles": [
+    "bodyMass",
+    "headOrientation",
+    "facialLandmark",
+    "contactLimb",
+    "groundContact"
+  ],
+  "falseClosureGuards": {
+    "finishedCreatureClaim": "forbidden",
+    "generatorFiringClaim": "not_yet_fired",
+    "programFitClaim": "parameters_supplied_by_caller",
+    "implicitBodyClaim": "raymarched_control_surface_only"
+  }
+}

@@ -1,0 +1,327 @@
+{
+  "schema": "kaminos.lirm-metaball-fixed-lineage-proportion-greenroom-jobs.v0",
+  "jobs": [
+    {
+      "cellId": "axial-short-seed-80413",
+      "variantId": "axial-short",
+      "axis": {
+        "parameterId": "bodyLength",
+        "from": 1.05,
+        "to": 0.78
+      },
+      "parameters": {
+        "bodyLength": 0.78,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-short/views/target-three-quarter/axial-short-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:adbf3ab2f6d07dc5d6936337f96682207bf91e16624d8ab289a14a6799d8c7e6"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-short/views/side/axial-short-side/depth-implicit.png",
+          "sha256": "sha256:189c8e5feab53ede8d8fddb7c9632bdf68390fae46dd1ab9b61179f5d4b98440"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-short/views/target-three-quarter/axial-short-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:adbf3ab2f6d07dc5d6936337f96682207bf91e16624d8ab289a14a6799d8c7e6"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "09517fb8dcce",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/axial-short/seed-80413"
+    },
+    {
+      "cellId": "baseline-seed-80413",
+      "variantId": "baseline",
+      "axis": {
+        "parameterId": null,
+        "from": null,
+        "to": null
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/side/baseline-side/depth-implicit.png",
+          "sha256": "sha256:f5b8b202954cc85e4c49f9643ce4c4ad31fc5c2e29e42efd3f29babc0aec0082"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/baseline/views/target-three-quarter/baseline-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:76a270c592f9656f620651aef8425d58cbed9fdddc98f181be815c07b1e28107"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "00855ddd51d4",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/baseline/seed-80413"
+    },
+    {
+      "cellId": "axial-long-seed-80413",
+      "variantId": "axial-long",
+      "axis": {
+        "parameterId": "bodyLength",
+        "from": 1.05,
+        "to": 1.35
+      },
+      "parameters": {
+        "bodyLength": 1.35,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-long/views/target-three-quarter/axial-long-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:445a43498bead9457f9073242af28c8f7a3621be3cbbdc9d5d3f725622523f57"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-long/views/side/axial-long-side/depth-implicit.png",
+          "sha256": "sha256:176376f6cfc6b884cc88e23483efac64b9a37c0d13c5071b73cc8c65b4e44653"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/axial-long/views/target-three-quarter/axial-long-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:445a43498bead9457f9073242af28c8f7a3621be3cbbdc9d5d3f725622523f57"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "50aa5348bca1",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/axial-long/seed-80413"
+    },
+    {
+      "cellId": "body-shallow-seed-80413",
+      "variantId": "body-shallow",
+      "axis": {
+        "parameterId": "bodyDepth",
+        "from": 0.36,
+        "to": 0.26
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.26,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-shallow/views/target-three-quarter/body-shallow-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:6840dc3401c9b86d786ed4578935714836eefe9eb94ba48adacf27066ce8b6ba"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-shallow/views/side/body-shallow-side/depth-implicit.png",
+          "sha256": "sha256:241d7a1b4c4659804294419a5377cad5545cd35574542f512f8b383f5e37a7db"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-shallow/views/target-three-quarter/body-shallow-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:6840dc3401c9b86d786ed4578935714836eefe9eb94ba48adacf27066ce8b6ba"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "4bb7ceee49b3",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/body-shallow/seed-80413"
+    },
+    {
+      "cellId": "body-deep-seed-80413",
+      "variantId": "body-deep",
+      "axis": {
+        "parameterId": "bodyDepth",
+        "from": 0.36,
+        "to": 0.56
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.56,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.32
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-deep/views/target-three-quarter/body-deep-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:ad8a065bce45fed6d8dc26a6f11a7a3ceed0d4fb70be49aa7f98a50a085c3364"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-deep/views/side/body-deep-side/depth-implicit.png",
+          "sha256": "sha256:723aa40f09536a6273e54e66be27f1df7eb23d72b3016654153ba458a3eefa07"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/body-deep/views/target-three-quarter/body-deep-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:ad8a065bce45fed6d8dc26a6f11a7a3ceed0d4fb70be49aa7f98a50a085c3364"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "632d32fada77",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/body-deep/seed-80413"
+    },
+    {
+      "cellId": "supports-short-seed-80413",
+      "variantId": "supports-short",
+      "axis": {
+        "parameterId": "supportLength",
+        "from": 0.32,
+        "to": 0.23
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.23
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/target-three-quarter/supports-short-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:7dbc1a38548e9593ab87d596c2e95e4e0fe02ca4d53ae4283a6193e8cd044874"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/side/supports-short-side/depth-implicit.png",
+          "sha256": "sha256:52e04214238c64b9e8ff9b7cb39abf740c17f652b76ed524c8a823af602a1056"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-short/views/target-three-quarter/supports-short-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:7dbc1a38548e9593ab87d596c2e95e4e0fe02ca4d53ae4283a6193e8cd044874"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "105e3676b0a6",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/supports-short/seed-80413"
+    },
+    {
+      "cellId": "supports-long-seed-80413",
+      "variantId": "supports-long",
+      "axis": {
+        "parameterId": "supportLength",
+        "from": 0.32,
+        "to": 0.57
+      },
+      "parameters": {
+        "bodyLength": 1.05,
+        "bodyDepth": 0.36,
+        "dorsalArch": 0.03,
+        "posteriorMass": 0.85,
+        "supportSpacing": 0.52,
+        "supportLength": 0.57
+      },
+      "seed": 80413,
+      "references": [
+        {
+          "slot": 1,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-long/views/target-three-quarter/supports-long-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:e5f1fe2fd9a86c6ddbeec602fcb42656ebdce0140a22f09fca47a9d860533aa2"
+        },
+        {
+          "slot": 2,
+          "viewId": "side",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-long/views/side/supports-long-side/depth-implicit.png",
+          "sha256": "sha256:ca3041c55731dd628f4cb6775476b18beda64efdcebfc054a95c64993e38b9f0"
+        },
+        {
+          "slot": 3,
+          "viewId": "target-three-quarter",
+          "kind": "depth",
+          "path": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/variants/supports-long/views/target-three-quarter/supports-long-target-three-quarter/depth-implicit.png",
+          "sha256": "sha256:e5f1fe2fd9a86c6ddbeec602fcb42656ebdce0140a22f09fca47a9d860533aa2"
+        }
+      ],
+      "promptPath": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/prompt.txt",
+      "promptSha256": "sha256:1cb41dd6a600457aee64d6ee5b10d82ae7c7ff6d20530f78adb648a1c126ce63",
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile_3ref",
+      "jobId": "9e303126c939",
+      "outputDir": "/private/tmp/kaminos-molten-metaball-silhouette-0804/artifacts/lirm-metaball-fixed-lineage-proportion-v0/generated/supports-long/seed-80413"
+    }
+  ]
+}
