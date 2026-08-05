@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.endpoint-tapered-packing-source-derivation.v0",
+  "parentSource": {
+    "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+    "input": {
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+      "kind": "synthetic-fixture",
+      "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+    }
+  },
+  "requested": {
+    "endpointRadiusMultiplier": 0.26,
+    "profile": "smoothstep-arc-length",
+    "transitionFraction": 0.2,
+    "volumeCompensation": "global-radius"
+  },
+  "effective": {
+    "endpointRadiusMultiplier": 0.26,
+    "perMuscle": [
+      {
+        "effectiveEndpointRadiusMultiplier": 0.2943429077117733,
+        "effectiveVolume": 64.02550251,
+        "globalRadiusCompensation": 1.1320881065837434,
+        "muscleId": "muscle-34",
+        "requestedEndpointRadiusMultiplier": 0.26,
+        "targetVolume": 64.02550251
+      },
+      {
+        "effectiveEndpointRadiusMultiplier": 0.2942490947813239,
+        "effectiveVolume": 64.51226816800002,
+        "globalRadiusCompensation": 1.1317272876204765,
+        "muscleId": "muscle-13",
+        "requestedEndpointRadiusMultiplier": 0.26,
+        "targetVolume": 64.512268168
+      },
+      {
+        "effectiveEndpointRadiusMultiplier": 0.29444835265426234,
+        "effectiveVolume": 76.826555301,
+        "globalRadiusCompensation": 1.132493664054855,
+        "muscleId": "muscle-12",
+        "requestedEndpointRadiusMultiplier": 0.26,
+        "targetVolume": 76.826555301
+      },
+      {
+        "effectiveEndpointRadiusMultiplier": 0.2942832427058631,
+        "effectiveVolume": 89.30211863799998,
+        "globalRadiusCompensation": 1.131858625791781,
+        "muscleId": "muscle-45",
+        "requestedEndpointRadiusMultiplier": 0.26,
+        "targetVolume": 89.302118638
+      }
+    ],
+    "profile": "smoothstep-arc-length",
+    "transitionFraction": 0.2,
+    "volumeCompensation": "global-radius"
+  },
+  "fallbackUsed": false,
+  "derivedSource": {
+    "kind": "endpoint-tapered-packing-source",
+    "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0--endpoint-taper-63a6f1c3f47abc96",
+    "sha256": "df731d0a47fa0fc2426ad5adaeb6c928a6eb7d65b80d6a6119604b2430a7cc9b"
+  }
+}

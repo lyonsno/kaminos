@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed",
+    "outputPath": "repo://artifacts/current-k4-occupancy-assay-v0/baseline-occupied-result.png",
+    "reportPath": "repo://artifacts/current-k4-occupancy-assay-v0/baseline-occupied-result-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 82595,
+    "processGroupId": 82595,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 82595,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2588,
+    "retainedBytes": 2588,
+    "truncated": false,
+    "tail": "[0804/202957.615207:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/202957.706734:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/202958.177427:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed (0)\n[0804/202958.177580:INFO:CONSOLE:0] \"[.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed (0)\n[0804/202958.179593:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/202958.233425:INFO:CONSOLE:0] \"[.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed (0)\n[0804/202958.235270:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/202958.310905:INFO:CONSOLE:0] \"[.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed (0)\n[0804/202958.312115:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/202958.356144:INFO:CONSOLE:0] \"[.WebGL-0x11c00498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/current-k4-occupancy-assay-v0/conditions/baseline/?state=packed (0)\n230260 bytes written to file repo://artifacts/current-k4-occupancy-assay-v0/baseline-occupied-result.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-occupancy-assay-v0/baseline-occupied-result.png",
+    "sizeBytes": 230260,
+    "sha256": "90ee6efa6483431da5fe6ad9d7af97f750d4e1ea08431378d7fb236acaee7a8f",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 60,
+      "idatBytes": 229519
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-occupancy-assay-v0/baseline-occupied-result.png",
+      "sizeBytes": 230260,
+      "sha256": "90ee6efa6483431da5fe6ad9d7af97f750d4e1ea08431378d7fb236acaee7a8f",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 60,
+        "idatBytes": 229519
+      }
+    }
+  }
+}

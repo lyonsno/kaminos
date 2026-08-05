@@ -673,19 +673,25 @@ function validateConfig(config) {
   }
   if (
     config.clusterUpdate !== undefined &&
-    !['unconstrained', 'capsule-axis-belly-turn'].includes(config.clusterUpdate)
+    ![
+      'unconstrained',
+      'capsule-axis-belly-turn',
+      'capsule-axis-occupancy-allocation',
+    ].includes(config.clusterUpdate)
   ) {
     throw new Error(
-      'muscle packing clusterUpdate must be unconstrained or capsule-axis-belly-turn',
+      'muscle packing clusterUpdate must be unconstrained, capsule-axis-belly-turn, ' +
+      'or capsule-axis-occupancy-allocation',
     );
   }
-  const bellyTurnKeys = [
+  const clusterKeys = [
     'clusterObstacleId',
     'clusterBellyRadius',
     'clusterTurnRadians',
     'clusterChirality',
     'clusterRadialReference',
     'clusterAllocationSchedule',
+    'clusterOccupancyReferenceDirection',
   ];
   if (config.clusterUpdate === 'capsule-axis-belly-turn') {
     if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
@@ -747,6 +753,11 @@ function validateConfig(config) {
         allocationMuscleIds.add(allocation.muscleId);
       }
     }
+    if (config.clusterOccupancyReferenceDirection !== undefined) {
+      throw new Error(
+        'clusterOccupancyReferenceDirection requires capsule-axis-occupancy-allocation',
+      );
+    }
     if (
       config.curvatureUpdate !== undefined &&
       !['unconstrained', 'source-sign-halfspace'].includes(config.curvatureUpdate)
@@ -755,10 +766,75 @@ function validateConfig(config) {
         'capsule-axis-belly-turn curvatureUpdate must be unconstrained or source-sign-halfspace',
       );
     }
-  } else {
-    for (const key of bellyTurnKeys) {
+  } else if (config.clusterUpdate === 'capsule-axis-occupancy-allocation') {
+    if (typeof config.clusterObstacleId !== 'string' || config.clusterObstacleId.length === 0) {
+      throw new Error(
+        'capsule-axis-occupancy-allocation requires a nonempty clusterObstacleId',
+      );
+    }
+    if (!isFinitePoint(config.clusterOccupancyReferenceDirection)) {
+      throw new Error(
+        'capsule-axis-occupancy-allocation requires a finite 3D ' +
+        'clusterOccupancyReferenceDirection',
+      );
+    }
+    if (
+      !Array.isArray(config.clusterAllocationSchedule) ||
+      config.clusterAllocationSchedule.length === 0
+    ) {
+      throw new Error(
+        'capsule-axis-occupancy-allocation requires a nonempty clusterAllocationSchedule',
+      );
+    }
+    const allowedAllocationKeys = new Set([
+      'muscleId',
+      'azimuthRadians',
+      'radialDistance',
+      'axialOffset',
+    ]);
+    const allocationMuscleIds = new Set();
+    for (const [index, allocation] of config.clusterAllocationSchedule.entries()) {
+      if (allocation === null || typeof allocation !== 'object' || Array.isArray(allocation)) {
+        throw new Error(`clusterAllocationSchedule[${index}] must be an object`);
+      }
+      const unknown = Object.keys(allocation).filter(key => !allowedAllocationKeys.has(key));
+      if (unknown.length > 0) {
+        throw new Error(
+          `clusterAllocationSchedule[${index}] has unknown fields: ${unknown.join(', ')}`,
+        );
+      }
+      if (typeof allocation.muscleId !== 'string' || allocation.muscleId.length === 0) {
+        throw new Error(`clusterAllocationSchedule[${index}] requires a nonempty muscleId`);
+      }
+      for (const key of ['azimuthRadians', 'radialDistance', 'axialOffset']) {
+        if (!Number.isFinite(allocation[key])) {
+          throw new Error(`clusterAllocationSchedule[${index}] ${key} must be finite`);
+        }
+      }
+      if (!(allocation.radialDistance > 0)) {
+        throw new Error(`clusterAllocationSchedule[${index}] radialDistance must be positive`);
+      }
+      if (allocationMuscleIds.has(allocation.muscleId)) {
+        throw new Error(
+          `clusterAllocationSchedule contains duplicate muscleId ${allocation.muscleId}`,
+        );
+      }
+      allocationMuscleIds.add(allocation.muscleId);
+    }
+    for (const key of [
+      'clusterBellyRadius',
+      'clusterTurnRadians',
+      'clusterChirality',
+      'clusterRadialReference',
+    ]) {
       if (config[key] !== undefined) {
-        throw new Error(`${key} requires capsule-axis-belly-turn clusterUpdate`);
+        throw new Error(`${key} cannot accompany capsule-axis-occupancy-allocation`);
+      }
+    }
+  } else {
+    for (const key of clusterKeys) {
+      if (config[key] !== undefined) {
+        throw new Error(`${key} requires a capsule-axis clusterUpdate`);
       }
     }
   }
@@ -799,6 +875,9 @@ function validateClusterAllocationSource(config, source) {
         unknownMuscleIds,
       })}`,
     );
+  }
+  if (config.clusterUpdate === 'capsule-axis-occupancy-allocation') {
+    effectiveOccupancyReferenceDirection(source, config);
   }
 }
 
@@ -985,7 +1064,7 @@ function crossSectionProjectionReceipt(config) {
   };
 }
 
-function clusterProjectionReceipt(config) {
+function clusterProjectionReceipt(config, source) {
   const update = config.clusterUpdate || 'unconstrained';
   const receipt = {
     requestedUpdate:update,
@@ -1003,6 +1082,13 @@ function clusterProjectionReceipt(config) {
       receipt.allocationReference =
         'capsule-axis-source-position-sine-zero-at-attachments';
     }
+  } else if (update === 'capsule-axis-occupancy-allocation') {
+    receipt.obstacleId = config.clusterObstacleId;
+    receipt.referenceDirection = structuredClone(config.clusterOccupancyReferenceDirection);
+    receipt.effectiveReferenceDirection = effectiveOccupancyReferenceDirection(source, config);
+    receipt.allocationSchedule = structuredClone(config.clusterAllocationSchedule);
+    receipt.allocationReference =
+      'capsule-axis-belly-anchor-absolute-role-preserve-local-shape-sine-zero-at-attachments';
   }
   receipt.fallbackUsed = false;
   return receipt;
@@ -2704,6 +2790,113 @@ function projectCapsuleAxisBellyTurn(source, muscles, attribution, category, con
   }
 }
 
+function occupancyCapsuleFrame(source, config) {
+  const obstacle = source.obstacles.find(row => row.id === config.clusterObstacleId);
+  if (!obstacle) {
+    throw new Error(
+      `capsule-axis-occupancy-allocation obstacle not found: ${config.clusterObstacleId}`,
+    );
+  }
+  if (obstacle.kind !== 'capsule') {
+    throw new Error('capsule-axis-occupancy-allocation requires a capsule obstacle');
+  }
+  const axisVector = subtract(obstacle.end, obstacle.start);
+  const axisLength = length(axisVector);
+  if (axisLength <= 1e-12) {
+    throw new Error('capsule-axis-occupancy-allocation obstacle axis is degenerate');
+  }
+  return { obstacle, axis: scale(axisVector, 1 / axisLength) };
+}
+
+function effectiveOccupancyReferenceDirection(source, config) {
+  const { axis } = occupancyCapsuleFrame(source, config);
+  const requested = config.clusterOccupancyReferenceDirection;
+  const projected = subtract(requested, scale(axis, dot(requested, axis)));
+  const projectedLength = length(projected);
+  if (projectedLength <= 1e-12) {
+    throw new Error(
+      'clusterOccupancyReferenceDirection must not be parallel to the capsule axis',
+    );
+  }
+  return scale(projected, 1 / projectedLength);
+}
+
+function projectCapsuleAxisOccupancyAllocation(
+  source,
+  muscles,
+  attribution,
+  category,
+  config,
+) {
+  const { obstacle, axis } = occupancyCapsuleFrame(source, config);
+  const referenceDirection = effectiveOccupancyReferenceDirection(source, config);
+  const allocationByMuscleId = new Map(
+    config.clusterAllocationSchedule.map(allocation => [allocation.muscleId, allocation]),
+  );
+  for (const [muscleIndex, muscle] of muscles.entries()) {
+    const sourceCenterline = source.muscles[muscleIndex].centerline;
+    const allocation = allocationByMuscleId.get(muscle.id);
+    const roleDirection = rotateAroundAxis(
+      referenceDirection,
+      axis,
+      allocation.azimuthRadians,
+    );
+    const anchorKnotIndex = Math.floor((sourceCenterline.length - 1) / 2);
+    const anchorPosition = sourceCenterline[anchorKnotIndex].position;
+    const anchorAxisPoint = closestPointOnObstacle(anchorPosition, obstacle);
+    const anchorOffset = subtract(anchorPosition, anchorAxisPoint);
+    const anchorRadial = subtract(anchorOffset, scale(axis, dot(anchorOffset, axis)));
+    const anchorRadialLength = length(anchorRadial);
+    if (anchorRadialLength <= 1e-12) {
+      throw new Error(`muscle ${muscle.id} belly anchor has undefined capsule radial direction`);
+    }
+    const anchorDirection = scale(anchorRadial, 1 / anchorRadialLength);
+    const signedRoleAngle = Math.atan2(
+      dot(axis, cross(anchorDirection, roleDirection)),
+      dot(anchorDirection, roleDirection),
+    );
+    const radialOffset = allocation.radialDistance - anchorRadialLength;
+    const envelopeMaximum = Math.max(
+      ...sourceCenterline.slice(1, -1).map((_, interiorIndex) =>
+        Math.sin(Math.PI * (interiorIndex + 1) / (sourceCenterline.length - 1))),
+    );
+    for (let knotIndex = 1; knotIndex < muscle.centerline.length - 1; knotIndex += 1) {
+      const sourcePosition = sourceCenterline[knotIndex].position;
+      const axisPoint = closestPointOnObstacle(sourcePosition, obstacle);
+      const sourceOffset = subtract(sourcePosition, axisPoint);
+      const sourceAxialOffset = dot(sourceOffset, axis);
+      const sourceRadial = subtract(sourceOffset, scale(axis, dot(sourceOffset, axis)));
+      const sourceRadialLength = length(sourceRadial);
+      if (sourceRadialLength <= 1e-12) {
+        throw new Error(
+          `muscle ${muscle.id} source knot ${knotIndex} has undefined capsule radial direction`,
+        );
+      }
+      const sourceDirection = scale(sourceRadial, 1 / sourceRadialLength);
+      const progress = knotIndex / (muscle.centerline.length - 1);
+      const envelope = Math.sin(Math.PI * progress) / envelopeMaximum;
+      const allocatedDirection = rotateAroundAxis(
+        sourceDirection,
+        axis,
+        signedRoleAngle * envelope,
+      );
+      const allocatedRadius = sourceRadialLength + radialOffset * envelope;
+      const allocatedAxisPoint = add(
+        axisPoint,
+        scale(axis, sourceAxialOffset + allocation.axialOffset * envelope),
+      );
+      applyAttributedPosition(
+        attribution,
+        category,
+        muscles,
+        muscleIndex,
+        knotIndex,
+        add(allocatedAxisPoint, scale(allocatedDirection, allocatedRadius)),
+      );
+    }
+  }
+}
+
 function residualMaximum(metrics) {
   return Math.max(
     metrics.pairwisePenetration,
@@ -2956,7 +3149,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
       pairwiseCoordinate: pairwiseCoordinateReceipt(config),
       curvatureProjection: curvatureProjectionReceipt(config),
       crossSectionProjection: crossSectionProjectionReceipt(config),
-      clusterProjection: clusterProjectionReceipt(config),
+      clusterProjection: clusterProjectionReceipt(config, source),
       clearanceValidation: {
         kind: 'conservative-continuous-piecewise-linear',
         centerlineDistance: 'nested-convex-golden-section',
@@ -2983,6 +3176,15 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
         blockingMechanisms,
       },
     };
+  }
+  if (config.clusterUpdate === 'capsule-axis-occupancy-allocation') {
+    projectCapsuleAxisOccupancyAllocation(
+      source,
+      muscles,
+      correctionAttribution,
+      'formationConstraint',
+      config,
+    );
   }
   const iterationHistory = [];
   let packed = initial;
@@ -3227,7 +3429,7 @@ export function solveMuscleCompartmentPacking(source, requestedConfig = {}) {
     pairwiseCoordinate: pairwiseCoordinateReceipt(config),
     curvatureProjection: curvatureProjectionReceipt(config),
     crossSectionProjection: crossSectionProjectionReceipt(config),
-    clusterProjection: clusterProjectionReceipt(config),
+    clusterProjection: clusterProjectionReceipt(config, source),
     clearanceValidation: {
       kind: 'conservative-continuous-piecewise-linear',
       centerlineDistance: 'nested-convex-golden-section',

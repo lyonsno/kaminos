@@ -296,3 +296,83 @@ test('endpoint taper rejects implicit defaults and unknown mechanism fields', as
     /radius multiplier must be in \(0, 1\)/,
   );
 });
+
+test('explicit current-K4 azimuthal and radial roles preserve tube refusal and reach tapered relaxation', async () => {
+  const fixture = await atlasFixture();
+  const series = packing.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+  });
+  const authenticatedTube = series.conditions[0].source;
+  const tapered = packing.deriveEndpointTaperedPackingSource(authenticatedTube, {
+    endpointRadiusMultiplier: 0.26,
+    transitionFraction: 0.2,
+    profile: 'smoothstep-arc-length',
+    volumeCompensation: 'global-radius',
+  }).source;
+  const requestedRoles = [
+    { azimuthRadians: -1.2, radialDistance: 1.8, axialOffset: 0 },
+    { azimuthRadians: 2.65, radialDistance: 2.2, axialOffset: 0 },
+    { azimuthRadians: 0.75, radialDistance: 1.4, axialOffset: -0.25 },
+    { azimuthRadians: 0.05, radialDistance: 1.8, axialOffset: 0.25 },
+  ];
+  const allocationSchedule = K4_IDS.map((muscleId, index) => ({
+    muscleId,
+    ...requestedRoles[index],
+  }));
+  const solverConfig = {
+    maxIterations: 1,
+    clusterUpdate: 'capsule-axis-occupancy-allocation',
+    clusterObstacleId: authenticatedTube.obstacles[0].id,
+    clusterOccupancyReferenceDirection: [1, 0, 0],
+    clusterAllocationSchedule: allocationSchedule,
+  };
+
+  const tubeResult = packing.solveMuscleCompartmentPacking(authenticatedTube, solverConfig);
+  assert.equal(tubeResult.status, 'immutable-constraint-conflict');
+  assert.deepEqual(
+    tubeResult.muscles.map(({ realizedVolume: ignored, ...muscle }) => muscle),
+    authenticatedTube.muscles,
+  );
+  assert.equal(tubeResult.failure.blockingMechanisms.length, 4);
+
+  const taperedResult = packing.solveMuscleCompartmentPacking(tapered, solverConfig);
+  assert.notEqual(taperedResult.status, 'immutable-constraint-conflict');
+  assert.deepEqual(taperedResult.clusterProjection, {
+    requestedUpdate: 'capsule-axis-occupancy-allocation',
+    effectiveUpdate: 'capsule-axis-occupancy-allocation',
+    obstacleId: authenticatedTube.obstacles[0].id,
+    referenceDirection: [1, 0, 0],
+    effectiveReferenceDirection: taperedResult.clusterProjection.effectiveReferenceDirection,
+    allocationSchedule,
+    allocationReference:
+      'capsule-axis-belly-anchor-absolute-role-preserve-local-shape-sine-zero-at-attachments',
+    fallbackUsed: false,
+  });
+  assert.equal(taperedResult.clusterProjection.effectiveReferenceDirection.length, 3);
+  assert.ok(
+    Math.abs(Math.hypot(...taperedResult.clusterProjection.effectiveReferenceDirection) - 1) <= 1e-12,
+  );
+  assert.equal(taperedResult.metrics.packed.endpointDrift, 0);
+  assert.ok(taperedResult.metrics.packed.maximumRelativeVolumeError <= 1e-9);
+  assert.ok(
+    taperedResult.metrics.packed.maximumSourceKnotDisplacement <= 2,
+    'source-aligned occupancy roles must not collapse axial overhangs onto the finite capsule',
+  );
+  assert.ok(
+    taperedResult.metrics.packed.pairwisePenetration <
+      taperedResult.metrics.initial.pairwisePenetration,
+    'local relaxation after occupancy allocation must materially reduce pairwise overlap',
+  );
+  assert.equal(
+    taperedResult.metrics.packed.sourceTangentReversalCount,
+    0,
+    'the first explicit occupancy carrier must not fold its longitudinal direction',
+  );
+  assert.equal(
+    taperedResult.metrics.packed.pairwiseRelationReversalCount,
+    0,
+    'the first explicit occupancy carrier must not invert pairwise source relations',
+  );
+});
