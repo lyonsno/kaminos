@@ -8,6 +8,8 @@ A fixed-source, fixed-seed five-cell switch now separates three generator contro
 
 The exact source image, complete prompts, effective settings, all five outputs, execution receipts, pre-result predictions, and post-result readings are archived in `flux2-prompt-switch-seed80301-v0/assay-sheet.html`. All five outputs were visually screened happy and safe.
 
+The source-ranked real-cat positive-control acquisition order is recorded in `cat-skeleton-positive-control-source-shortlist.md`. The default is to request the CT-derived 3D Anatomy Studios Blender assembly and inspect the Tavernier Amaury whole-skeleton photogrammetry archive in parallel.
+
 ## Campaign Result
 
 The newly completed operator-authored cat ecorche is already a viable generator-conditioning object. Three FLUX.2 Klein 9B cells varied only the seed; all three produced coherent, aesthetically admitted, happy and safe whole creatures.
