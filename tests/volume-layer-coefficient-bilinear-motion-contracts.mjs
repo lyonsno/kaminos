@@ -44,6 +44,12 @@ const captureStateEnd = capture.indexOf('async function captureMotionTarget', ca
 const captureState = capture.slice(captureStateStart, captureStateEnd);
 assert.match(captureState, /setSelectiveHeadLiveCapturePaused\(true\)/, 'exact state capture pauses the renderer loop before reading the frozen state');
 assert.doesNotMatch(captureState, /setActive\(false\)/, 'a frozen state remains active so render-only readback APIs stay available');
+assert.ok(
+  captureState.indexOf('const rows = await drainAnalyticalRows') < captureState.indexOf('await captureMotionTarget'),
+  'authoritative optical coefficients are drained before transient exact-target rendering can mutate presentation-owned coefficient buffers',
+);
+assert.match(capture, /analytical optical coefficient export is all zero/, 'capture fails before rendering an all-zero optical coefficient corpus');
+assert.match(capture, /positiveValueCount/, 'coefficient artifact records positive optical-mass evidence');
 assert.match(capture, /captureExactTargetFrame\.toString\(\)/, 'browser execution uses the executable exact-target helper');
 assert.match(exactCapture, /let sample = null;[\s\S]*try\s*\{[\s\S]*sample = await prototype\.sampleFrame/, 'successful target capture preserves the sample receipt beyond restoration');
 assert.match(capture, /shared-transmittance-contribution-sum/, 'target capture pins the exact shared-transmittance contribution target');

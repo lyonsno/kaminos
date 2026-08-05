@@ -52,6 +52,7 @@ const MOTION_DESCRIPTOR_COLUMNS = Object.freeze([0, 1, 2, 3, 20, 21, 22, 23]);
 const MOTION_DESCRIPTOR_ORDER = Object.freeze(MOTION_DESCRIPTOR_COLUMNS.map(index => FLOW_KERNEL_DESCRIPTOR_ORDER[index]));
 const MOTION_TARGET_MODE = 'shared-transmittance-contribution-sum';
 const MOTION_TARGET_IDENTITY = 'ridge-plus-non-ridge-contributions-under-shared-transmittance-v0';
+const OPTICAL_COEFFICIENT_EPSILON = 1e-7;
 const DESCRIPTOR_TREATMENT_ORDER = Object.freeze([
   'flow.coherence',
   'flow.curlMagnitude',
@@ -363,10 +364,6 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
   const effectiveControls = causalControlsFromRuntime(frozen.controls);
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
 
-  const target = motionCapture
-    ? await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs })
-    : null;
-
   failurePhase = `${stateId}:causal-controls`;
   const controlApplication = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.applyDebugNonRidgeCausalControls(${JSON.stringify(effectiveControls)})`);
   assert.equal(controlApplication?.ok, true, `${stateId} causal controls were substituted: ${JSON.stringify(controlApplication)}`);
@@ -385,6 +382,10 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
     sessionId: sourceBasis.sessionId,
   })})`);
   assert.equal(sourceRelease?.ok, true, `${stateId} source-basis release failed`);
+
+  const target = motionCapture
+    ? await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs })
+    : null;
 
   failurePhase = `${stateId}:full-field-export-begin`;
   const fullField = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginDebugFullFieldExport({})`);
@@ -717,6 +718,8 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
   let startFloat = 0;
   let sourceRowCount = 0;
   let retainedCount = 0;
+  let positiveCoefficientValueCount = 0;
+  let maximumCoefficientValue = 0;
   while (startFloat < sourceBasis.rowCount * SOURCE_BASIS_GPU_ROW_FLOATS) {
     const requestedFloatCount = Math.min(
       chunkRows * SOURCE_BASIS_GPU_ROW_FLOATS,
@@ -742,12 +745,21 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
     sinks.admission.write(f32Bytes(selected.admission));
     sinks.nativeCellIndices.write(u32Bytes(selected.nativeCellIndices));
     sinks.coefficients.write(f32Bytes(selected.coefficients));
+    for (const coefficientValue of selected.coefficients) {
+      if (coefficientValue > OPTICAL_COEFFICIENT_EPSILON) positiveCoefficientValueCount += 1;
+      maximumCoefficientValue = Math.max(maximumCoefficientValue, coefficientValue);
+    }
     sourceRowCount += selected.sourceRowCount;
     retainedCount += selected.count;
     startFloat += chunk.floatCount;
   }
   assert.equal(sourceRowCount, sourceBasis.rowCount, `${stateId} did not drain the full source grid`);
   assert.ok(retainedCount > 0, `${stateId} analytical admission retained zero rows`);
+  assert.ok(positiveCoefficientValueCount > 0, `${stateId} analytical optical coefficient export is all zero`);
+  const coefficients = sinks.coefficients.close([retainedCount, COEFFICIENT_ORDER.length], {
+    positiveValueCount: positiveCoefficientValueCount,
+    maximumValue: maximumCoefficientValue,
+  });
   return {
     count: retainedCount,
     sourceRowCount,
@@ -756,7 +768,7 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
     features: sinks.features.close([retainedCount, POST_ADMISSION_FEATURE_ORDER.length]),
     admission: sinks.admission.close([retainedCount, ANALYTICAL_ADMISSION_ORDER.length]),
     nativeCellIndices: sinks.nativeCellIndices.close([retainedCount]),
-    coefficients: sinks.coefficients.close([retainedCount, COEFFICIENT_ORDER.length]),
+    coefficients,
   };
 }
 
