@@ -25,6 +25,6 @@ Images:
 Hashes:
 - `desktop-cdp.png`: `cfba49ebde6333b89a31b42bb7a7dd8bee32834934277c45bac7d50483e4bb0b`
 - `desktop-three-quarter-wire-rest-cdp.png`: `87850799a077cc8202f8e67a8a123d9a321984130cdfd22561d37d4533c9c09e`
-- `mobile-full-cdp.png`: `784938e293765a1bef8475705d0f16f57c30399e806e108543657a65bdeca59b`
+- `mobile-full-cdp.png`: `85cad5409b7f69d4890024cc40b6e5282e546dd3f4c9c0c69e8a6187e768587b`
 
 Does not prove: creature-level poseability, anatomical correctness, production deformation quality, or that the selected volumetric/corrective freedom succeeds. This visualizes only the exact synthetic sleeve control and the reason that control was rejected.

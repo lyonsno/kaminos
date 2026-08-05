@@ -79,6 +79,16 @@ assert.match(html, /maximumAbsoluteLogEdgeStrain/);
 assert.match(html, /new URLSearchParams/);
 assert.match(html, /parameters\.get\('camera'\)/);
 assert.match(html, /parameters\.get\('wire'\) === '1'/);
+assert.match(
+  html,
+  /\.cell-head \{ grid-template-columns:1fr; gap:4px; \}/,
+  'mobile case headers must stack labels and metrics instead of clipping metrics',
+);
+assert.match(
+  html,
+  /\.metric \{ justify-self:start; max-width:100%; white-space:normal; text-align:left; overflow-wrap:anywhere; \}/,
+  'mobile metrics must remain fully inspectable',
+);
 assert.doesNotMatch(html, /setAnimationLoop/);
 assert.doesNotMatch(html, /requestAnimationFrame/);
 
