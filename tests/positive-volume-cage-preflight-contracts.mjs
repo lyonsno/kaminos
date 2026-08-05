@@ -14,6 +14,9 @@ function asymmetricNonRingManifest() {
     source: {
       id: 'asymmetric-wedge-surface-v0',
       vertexIds: ['surface:a'],
+      vertexPositions: [
+        { id: 'surface:a', rest: [0.3, 0.28, 0.28] },
+      ],
       triangleIds: [],
     },
     requestedRoute: 'positive-volume-cage-preflight',
@@ -105,6 +108,20 @@ badEmbedding.embedding[0].weights = [0.5, 0.2, 0.2, 0.2];
 assert.throws(
   () => validatePositiveVolumeCageManifest(badEmbedding),
   /embedding weights must sum to one/,
+);
+
+const missingSourceGeometry = structuredClone(nonRing);
+delete missingSourceGeometry.source.vertexPositions;
+assert.throws(
+  () => validatePositiveVolumeCageManifest(missingSourceGeometry),
+  /source vertexPositions must cover every source vertex exactly once/,
+);
+
+const falseRestReconstruction = structuredClone(nonRing);
+falseRestReconstruction.source.vertexPositions[0].rest = [0.31, 0.28, 0.28];
+assert.throws(
+  () => validatePositiveVolumeCageManifest(falseRestReconstruction),
+  /embedding must reconstruct source rest position/,
 );
 
 const inverted = structuredClone(nonRing);

@@ -165,6 +165,25 @@ export function validatePositiveVolumeCageManifest(manifest) {
   if (sourceVertexIds.size !== preGeometry.source.vertexIds.length) {
     throw new Error('source vertex ids must be unique');
   }
+  if (!Array.isArray(preGeometry.source.vertexPositions) ||
+      preGeometry.source.vertexPositions.length !== sourceVertexIds.size) {
+    throw new Error(
+      'source vertexPositions must cover every source vertex exactly once',
+    );
+  }
+  const sourcePositionsById = new Map();
+  for (const vertex of preGeometry.source.vertexPositions) {
+    assertObject(vertex, 'source vertex position');
+    assertIdentifier(vertex.id, 'source vertex position id');
+    if (!sourceVertexIds.has(vertex.id)) {
+      throw new Error(`source vertexPositions names unknown vertex ${vertex.id}`);
+    }
+    if (sourcePositionsById.has(vertex.id)) {
+      throw new Error('source vertexPositions ids must be unique');
+    }
+    assertPosition(vertex.rest, `source vertex ${vertex.id} rest position`);
+    sourcePositionsById.set(vertex.id, vertex.rest);
+  }
   if (!Array.isArray(preGeometry.source.triangleIds)) {
     throw new Error('source triangleIds must be an array');
   }
@@ -174,7 +193,7 @@ export function validatePositiveVolumeCageManifest(manifest) {
     throw new Error('embedding must cover every source surface vertex exactly once');
   }
   const embeddedVertexIds = new Set();
-  for (const entry of preGeometry.embedding) {
+  const embedding = preGeometry.embedding.map(entry => {
     assertObject(entry, 'embedding entry');
     assertIdentifier(entry.surfaceVertexId, 'embedding surface vertex id');
     if (!sourceVertexIds.has(entry.surfaceVertexId)) {
@@ -198,12 +217,33 @@ export function validatePositiveVolumeCageManifest(manifest) {
     if (Math.abs(weightSum - 1) > NUMERIC_TOLERANCE) {
       throw new Error('embedding weights must sum to one');
     }
-  }
+    const reconstructedRest = [0, 0, 0];
+    entry.nodeIds.forEach((nodeId, index) => {
+      const rest = nodesById.get(nodeId).rest;
+      for (let axis = 0; axis < 3; axis += 1) {
+        reconstructedRest[axis] += rest[axis] * entry.weights[index];
+      }
+    });
+    const restReconstructionError = distance(
+      reconstructedRest,
+      sourcePositionsById.get(entry.surfaceVertexId),
+    );
+    if (restReconstructionError > NUMERIC_TOLERANCE) {
+      throw new Error(
+        `embedding must reconstruct source rest position for ${entry.surfaceVertexId}`,
+      );
+    }
+    return {
+      ...structuredClone(entry),
+      restReconstructionError,
+    };
+  });
 
   const { nodesById: ignoredNodesById, ...validated } = preGeometry;
   return {
     ...validated,
     cells,
+    embedding,
   };
 }
 

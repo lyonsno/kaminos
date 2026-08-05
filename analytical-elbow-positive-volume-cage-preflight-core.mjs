@@ -133,13 +133,29 @@ function embeddingForVertex(vertex) {
   const sectorPosition = angle / (2 * Math.PI) * P0_SECTOR_COUNT;
   const lowerSector = Math.floor(sectorPosition) % P0_SECTOR_COUNT;
   const nextSector = (lowerSector + 1) % P0_SECTOR_COUNT;
-  const sectorWeight = sectorPosition - Math.floor(sectorPosition);
-  const radial = Math.hypot(vertex.rest[0], vertex.rest[2]);
   const lowerRadius = cageRadius(sectionAxial(lowerSection));
   const upperRadius = cageRadius(sectionAxial(lowerSection + 1));
   const interpolatedRadius =
     (1 - axialWeight) * lowerRadius + axialWeight * upperRadius;
-  const radialWeight = radial / interpolatedRadius;
+  const lowerAngle = 2 * Math.PI * lowerSector / P0_SECTOR_COUNT;
+  const upperAngle = 2 * Math.PI * nextSector / P0_SECTOR_COUNT;
+  const lowerBoundary = [
+    interpolatedRadius * Math.cos(lowerAngle),
+    interpolatedRadius * Math.sin(lowerAngle),
+  ];
+  const upperBoundary = [
+    interpolatedRadius * Math.cos(upperAngle),
+    interpolatedRadius * Math.sin(upperAngle),
+  ];
+  const determinant = lowerBoundary[0] * upperBoundary[1] -
+    lowerBoundary[1] * upperBoundary[0];
+  const lowerSectorWeight =
+    (vertex.rest[0] * upperBoundary[1] - vertex.rest[2] * upperBoundary[0]) /
+    determinant;
+  const upperSectorWeight =
+    (lowerBoundary[0] * vertex.rest[2] - lowerBoundary[1] * vertex.rest[0]) /
+    determinant;
+  const centerWeight = 1 - lowerSectorWeight - upperSectorWeight;
   const lowerWeight = 1 - axialWeight;
   const upperWeight = axialWeight;
   return {
@@ -153,12 +169,12 @@ function embeddingForVertex(vertex) {
       boundaryNodeId(lowerSection + 1, nextSector),
     ],
     weights: [
-      lowerWeight * (1 - radialWeight),
-      lowerWeight * radialWeight * (1 - sectorWeight),
-      lowerWeight * radialWeight * sectorWeight,
-      upperWeight * (1 - radialWeight),
-      upperWeight * radialWeight * (1 - sectorWeight),
-      upperWeight * radialWeight * sectorWeight,
+      lowerWeight * centerWeight,
+      lowerWeight * lowerSectorWeight,
+      lowerWeight * upperSectorWeight,
+      upperWeight * centerWeight,
+      upperWeight * lowerSectorWeight,
+      upperWeight * upperSectorWeight,
     ],
   };
 }
@@ -180,6 +196,10 @@ function createP0SourceAndEmbedding() {
       id: 'synthetic-mammalian-elbow-v0:sleeve-collar-0.72',
       fullSourceId: 'synthetic-mammalian-elbow-v0',
       vertexIds: transitionVertices.map(vertex => vertex.id),
+      vertexPositions: transitionVertices.map(vertex => ({
+        id: vertex.id,
+        rest: [...vertex.rest],
+      })),
       triangleIds,
     },
     embedding: transitionVertices.map(embeddingForVertex),
@@ -208,6 +228,9 @@ export function createAsymmetricNonRingCageManifest() {
     source: {
       id: 'asymmetric-wedge-surface-v0',
       vertexIds: ['surface:a'],
+      vertexPositions: [
+        { id: 'surface:a', rest: [0.3, 0.28, 0.28] },
+      ],
       triangleIds: [],
     },
     requestedRoute: ROUTE,

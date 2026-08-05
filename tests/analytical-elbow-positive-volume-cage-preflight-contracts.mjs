@@ -32,8 +32,12 @@ assert.equal(p0.fixture.circumferentialSectorCount, 8);
 assert.equal(p0.nodes.length, 63);
 assert.equal(p0.cells.length, 144);
 assert.ok(p0.source.vertexIds.length > 0);
+assert.equal(p0.source.vertexPositions.length, p0.source.vertexIds.length);
 assert.equal(p0.embedding.length, p0.source.vertexIds.length);
 assert.ok(validatedP0.cells.every(cell => cell.restSignedVolume > 0));
+assert.ok(
+  validatedP0.embedding.every(entry => entry.restReconstructionError <= 1e-12),
+);
 
 const rowS = createAnalyticalElbowRowSBundle();
 assert.equal(rowS.schema, ANALYTICAL_ELBOW_CAGE_PREFLIGHT_BUNDLE_SCHEMA);
