@@ -1,0 +1,112 @@
+{
+  "anatomicalAxes": {
+    "anterior": [
+      0.0,
+      -1.0,
+      0.0
+    ],
+    "dorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "right": [
+      1.0,
+      0.0,
+      0.0
+    ]
+  },
+  "classification": {
+    "admittedObjectCount": 112,
+    "admittedRoleCounts": {
+      "authored_mesh": 55,
+      "muscle_surface": 57
+    },
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "schema": "kaminos.cat-bauplan-source-classification.v0",
+    "sha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d"
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "palette": "white-clay",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "rendererId": "blender-cat-source-preview-v0"
+  },
+  "outputs": [
+    {
+      "byteLength": 889057,
+      "cameraDirection": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "cameraLocation": [
+        160.52450561523438,
+        -23.242088317871094,
+        7.783671855926514
+      ],
+      "imageUpAxis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "orthoScale": 68.95558166503906,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay/right-sagittal.png",
+      "sha256": "3c8ca62cd1c06bc35fed6fdb88f6ae02bd85d9e5afe981bea2514dacc46c3b5e",
+      "view": "right-sagittal"
+    },
+    {
+      "byteLength": 927231,
+      "cameraDirection": [
+        0.552966296672821,
+        -0.8244224786758423,
+        -0.12064719200134277
+      ],
+      "cameraLocation": [
+        97.67495727539062,
+        -139.14962768554688,
+        -9.178407669067383
+      ],
+      "imageUpAxis": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "orthoScale": 57.2412223815918,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay/right-anterior-three-quarter.png",
+      "sha256": "ef7269e4617da7e0f03f3ef3c901bacd785dde16fc85bcac1b3ea49f4aa16326",
+      "view": "right-anterior-three-quarter"
+    },
+    {
+      "byteLength": 861199,
+      "cameraDirection": [
+        0.0,
+        0.0,
+        -1.0
+      ],
+      "cameraLocation": [
+        19.932098388671875,
+        -23.242088317871094,
+        -132.80873107910156
+      ],
+      "imageUpAxis": [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      "orthoScale": 68.95558166503906,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay/dorsal.png",
+      "sha256": "92d8a880945f9221135fb62768444bf0ffb9355e1026268e5ad660c31e4d35cd",
+      "view": "dorsal"
+    }
+  ],
+  "palette": "white-clay",
+  "rendererId": "blender-cat-source-preview-v0",
+  "schema": "kaminos.cat-bauplan-source-preview.v0",
+  "source": {
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "status": "completed"
+}

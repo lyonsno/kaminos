@@ -11,6 +11,7 @@ import {
 } from '../cat-bauplan-source-classifier-core.mjs';
 
 const SOURCE_SHA256 = 'a'.repeat(64);
+const CAT_BAUPLAN_SHA256 = '9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c';
 const BOUNDS = { min: [-1, -2, -3], max: [1, 2, 3] };
 
 function object({
@@ -38,7 +39,7 @@ function object({
   };
 }
 
-function extraction(objects) {
+function extraction(objects, sourceSha256 = SOURCE_SHA256) {
   return {
     schema: 'kaminos.track-m-blender-extraction.v0',
     extractorId: 'blender-track-m-source-extract-v0',
@@ -46,7 +47,7 @@ function extraction(objects) {
     source: {
       requestedPath: '/operator/cat-bauplan.blend',
       effectivePath: '/operator/cat-bauplan.blend',
-      sha256: SOURCE_SHA256,
+      sha256: sourceSha256,
       byteLength: 123,
     },
     objects,
@@ -75,14 +76,17 @@ test('classification admits visible authored meshes and visible generated muscle
   assert.equal(result.rejectedObjects[0].reason, 'hidden_source_surface');
 });
 
-test('classification rejects semantic controls and paint meshes even when visible', () => {
+test('classification recovers source-hash-bound authored bones from semantic custody', () => {
   const result = classifyCatBauplanSource(extraction([
     object({ name: 'Cube.001', collection: 'Constructional Model/90 Semantics/Attachment Patches' }),
+    object({ name: 'Unbound Patch Control', collection: 'Constructional Model/90 Semantics/Attachment Patches' }),
     object({ name: 'SRC_PELVIS Muscle | Origin Paint', collection: 'Constructional Model/20 Muscle' }),
     object({ name: 'Muscle 07 | Path', collection: 'Constructional Model/20 Muscle', type: 'CURVE' }),
-  ]), { expectedSourceSha256: SOURCE_SHA256 });
+  ], CAT_BAUPLAN_SHA256), { expectedSourceSha256: CAT_BAUPLAN_SHA256 });
 
-  assert.deepEqual(result.admittedObjectNames, []);
+  assert.deepEqual(result.admittedObjectNames, ['Cube.001']);
+  assert.equal(result.admittedObjects[0].role, 'authored_mesh');
+  assert.equal(result.admittedObjects[0].admissionBasis, 'source_bound_anatomical_recovery');
   assert.deepEqual(result.rejectedObjects.map(item => item.reason), [
     'semantic_control_surface',
     'construction_paint_surface',

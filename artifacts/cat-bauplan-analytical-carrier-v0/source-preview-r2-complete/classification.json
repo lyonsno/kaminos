@@ -1,0 +1,4441 @@
+{
+  "schema": "kaminos.cat-bauplan-source-classification.v0",
+  "classifierId": "cat-bauplan-source-classifier-v0",
+  "status": "completed",
+  "source": {
+    "byteLength": 649217,
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "admittedObjectNames": [
+    "Cube.001",
+    "Cube.002",
+    "Cube.003",
+    "Cube.004",
+    "Cube.005",
+    "Cube.006",
+    "Cube.007",
+    "Cube.008",
+    "Cube.009",
+    "Cube.010",
+    "Cube.011",
+    "Cube.012",
+    "Cube.013",
+    "Cube.014",
+    "Cube.015",
+    "Cube.016",
+    "Cube.017",
+    "Cube.018",
+    "Cube.019",
+    "Cube.020",
+    "Cube.022",
+    "Cube.023",
+    "Cube.024",
+    "Cube.025",
+    "Cube.026",
+    "Cube.027",
+    "Cube.028",
+    "Cube.029",
+    "Cube.030",
+    "Cube.031",
+    "Cube.032",
+    "Cube.033",
+    "Cube.034",
+    "Cube.035",
+    "Cube.036",
+    "Cube.037",
+    "Cube.038",
+    "Cube.039",
+    "Cube.040",
+    "Cube.041",
+    "Cube.042",
+    "Cube.043",
+    "Cube.044",
+    "Cube.045",
+    "Cube.046",
+    "Cube.047",
+    "Cube.048",
+    "Cube.049",
+    "Cube.050",
+    "Cube.051",
+    "Cube.052",
+    "Cube.053",
+    "Cube.054",
+    "Icosphere",
+    "Muscle | Surface",
+    "Muscle 02 | Surface",
+    "Muscle 03 | Surface",
+    "Muscle 04 | Surface",
+    "Muscle 05 | Surface",
+    "Muscle 06 | Surface",
+    "Muscle 07 | Surface",
+    "Muscle 08 | Surface",
+    "Muscle 09 | Surface",
+    "Muscle 10 | Surface",
+    "Muscle 11 | Surface",
+    "Muscle 12 | Surface",
+    "Muscle 13 | Surface",
+    "Muscle 14 | Surface",
+    "Muscle 15 | Surface",
+    "Muscle 16 | Surface",
+    "Muscle 18 | Surface",
+    "Muscle 19 | Surface",
+    "Muscle 20 | Surface",
+    "Muscle 21 | Surface",
+    "Muscle 22 | Surface",
+    "Muscle 23 | Surface",
+    "Muscle 24 | Surface",
+    "Muscle 25 | Surface",
+    "Muscle 26 | Surface",
+    "Muscle 27 | Surface",
+    "Muscle 28 | Surface",
+    "Muscle 29 | Surface",
+    "Muscle 30 | Surface",
+    "Muscle 31 | Surface",
+    "Muscle 32 | Surface",
+    "Muscle 33 | Surface",
+    "Muscle 34 | Surface",
+    "Muscle 35 | Surface",
+    "Muscle 37 | Surface",
+    "Muscle 38 | Surface",
+    "Muscle 39 | Surface",
+    "Muscle 40 | Surface",
+    "Muscle 41 | Surface",
+    "Muscle 42 | Surface",
+    "Muscle 43 | Surface",
+    "Muscle 44 | Surface",
+    "Muscle 45 | Surface",
+    "Muscle 46 | Surface",
+    "Muscle 47 | Surface",
+    "Muscle 48 | Surface",
+    "Muscle 51 | Surface",
+    "Muscle 52 | Surface",
+    "Muscle 53 | Surface",
+    "Muscle 54 | Surface",
+    "Muscle 66 | Surface",
+    "Muscle 67 | Surface",
+    "Muscle 68 | Surface",
+    "Muscle 74 | Surface",
+    "Muscle 75 | Surface",
+    "Muscle 76 | Surface",
+    "Muscle 85 | Surface",
+    "SRC_PELVIS"
+  ],
+  "admittedObjects": [
+    {
+      "name": "Cube.001",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          29.601819992,
+          1.437738657,
+          24.196584702
+        ],
+        "min": [
+          24.200393677,
+          -11.729143143,
+          11.241835594
+        ]
+      }
+    },
+    {
+      "name": "Cube.002",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          29.3007164,
+          1.872230291,
+          12.999682426
+        ],
+        "min": [
+          21.848152161,
+          -12.478765488,
+          -7.032800674
+        ]
+      }
+    },
+    {
+      "name": "Cube.003",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          27.221755981,
+          1.85043931,
+          24.956777573
+        ],
+        "min": [
+          24.813570023,
+          -0.964988708,
+          20.897460938
+        ]
+      }
+    },
+    {
+      "name": "Cube.004",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          27.361497879,
+          0.717478991,
+          28.607145309
+        ],
+        "min": [
+          25.434768677,
+          -1.098453045,
+          25.019659042
+        ]
+      }
+    },
+    {
+      "name": "Cube.005",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          29.1649189,
+          0.124880366,
+          23.530508041
+        ],
+        "min": [
+          22.635694504,
+          -11.079661369,
+          11.471687317
+        ]
+      }
+    },
+    {
+      "name": "Cube.006",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.584381104,
+          -1.488888741,
+          -7.336325169
+        ],
+        "min": [
+          19.229646683,
+          -3.260233402,
+          -9.88111496
+        ]
+      }
+    },
+    {
+      "name": "Cube.007",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.583854675,
+          -0.334569842,
+          -6.870913029
+        ],
+        "min": [
+          19.229646683,
+          -2.045945644,
+          -9.200818062
+        ]
+      }
+    },
+    {
+      "name": "Cube.008",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.583854675,
+          0.884393394,
+          -6.267082691
+        ],
+        "min": [
+          19.229646683,
+          -0.826982319,
+          -8.596987724
+        ]
+      }
+    },
+    {
+      "name": "Cube.009",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.539310455,
+          2.130560398,
+          -5.763203621
+        ],
+        "min": [
+          19.270111084,
+          0.331622124,
+          -7.923155308
+        ]
+      }
+    },
+    {
+      "name": "Cube.010",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.53821373,
+          3.048059464,
+          -5.132261753
+        ],
+        "min": [
+          19.269014359,
+          1.271755695,
+          -7.295527935
+        ]
+      }
+    },
+    {
+      "name": "Cube.011",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          25.172096252,
+          -16.654973984,
+          5.926178932
+        ],
+        "min": [
+          14.599014282,
+          -33.738380432,
+          -9.654408455
+        ]
+      }
+    },
+    {
+      "name": "Cube.012",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.119033813,
+          -6.225291729,
+          -9.93e-7
+        ],
+        "min": [
+          20.119033813,
+          -6.225291729,
+          -9.93e-7
+        ]
+      }
+    },
+    {
+      "name": "Cube.013",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          29.656089783,
+          -25.360221863,
+          -2.331922293
+        ],
+        "min": [
+          21.929063797,
+          -32.469173431,
+          -12.298953056
+        ]
+      }
+    },
+    {
+      "name": "Cube.014",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          29.352657318,
+          -22.709222794,
+          11.965076447
+        ],
+        "min": [
+          24.142177582,
+          -31.99222374,
+          -4.28057909
+        ]
+      }
+    },
+    {
+      "name": "Cube.015",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          18.240898132,
+          -25.360221863,
+          -2.331921101
+        ],
+        "min": [
+          10.513870239,
+          -32.469173431,
+          -12.298952103
+        ]
+      }
+    },
+    {
+      "name": "Cube.016",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          15.827513695,
+          -21.53603363,
+          13.833672523
+        ],
+        "min": [
+          10.208107948,
+          -31.547578812,
+          -3.686961412
+        ]
+      }
+    },
+    {
+      "name": "Cube.017",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          28.166564941,
+          -23.583957672,
+          24.270921707
+        ],
+        "min": [
+          23.21796608,
+          -28.610364914,
+          11.3061409
+        ]
+      }
+    },
+    {
+      "name": "Cube.018",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          28.028711319,
+          -24.107698441,
+          23.882566452
+        ],
+        "min": [
+          21.286857605,
+          -27.208480835,
+          11.217708588
+        ]
+      }
+    },
+    {
+      "name": "Cube.019",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          26.285591125,
+          -26.536909103,
+          25.762664795
+        ],
+        "min": [
+          23.645492554,
+          -28.813821793,
+          23.718484879
+        ]
+      }
+    },
+    {
+      "name": "Cube.020",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          25.242528915,
+          -38.33889389,
+          0.672694147
+        ],
+        "min": [
+          14.224651337,
+          -54.025829315,
+          -11.8019104
+        ]
+      }
+    },
+    {
+      "name": "Cube.022",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          18.525535583,
+          -23.05286026,
+          26.474264145
+        ],
+        "min": [
+          11.607806206,
+          -27.751550674,
+          12.922493935
+        ]
+      }
+    },
+    {
+      "name": "Cube.023",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          15.703019142,
+          -25.720813751,
+          29.760408401
+        ],
+        "min": [
+          12.599863052,
+          -28.619333267,
+          25.977928162
+        ]
+      }
+    },
+    {
+      "name": "Cube.024",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          21.0776577,
+          -28.803640366,
+          -6.666566849
+        ],
+        "min": [
+          18.501480103,
+          -32.316322327,
+          -12.502662659
+        ]
+      }
+    },
+    {
+      "name": "Cube.025",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.838439941,
+          -31.141807556,
+          -6.209422588
+        ],
+        "min": [
+          18.65877533,
+          -34.327331543,
+          -11.170969963
+        ]
+      }
+    },
+    {
+      "name": "Cube.026",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.694396973,
+          -27.195604324,
+          -8.374278069
+        ],
+        "min": [
+          18.670236588,
+          -29.108192444,
+          -12.419061661
+        ]
+      }
+    },
+    {
+      "name": "Cube.027",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.605134964,
+          -33.103061676,
+          -5.536818981
+        ],
+        "min": [
+          18.885469437,
+          -36.044433594,
+          -9.369428635
+        ]
+      }
+    },
+    {
+      "name": "Cube.028",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.456707001,
+          -34.828907013,
+          -4.732066154
+        ],
+        "min": [
+          19.025918961,
+          -36.738185883,
+          -7.711750031
+        ]
+      }
+    },
+    {
+      "name": "Cube.029",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.443941116,
+          -36.2605896,
+          -4.497604847
+        ],
+        "min": [
+          19.042949677,
+          -37.600879669,
+          -7.199048519
+        ]
+      }
+    },
+    {
+      "name": "Cube.030",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.657455444,
+          -25.168218613,
+          -8.693152428
+        ],
+        "min": [
+          18.706090927,
+          -26.713560104,
+          -12.086434364
+        ]
+      }
+    },
+    {
+      "name": "Cube.031",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.656698227,
+          -23.269870758,
+          -8.632642746
+        ],
+        "min": [
+          18.706092834,
+          -24.847291946,
+          -11.709774017
+        ]
+      }
+    },
+    {
+      "name": "Cube.032",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.656698227,
+          -21.325746536,
+          -8.388326645
+        ],
+        "min": [
+          18.706092834,
+          -22.903167725,
+          -11.465457916
+        ]
+      }
+    },
+    {
+      "name": "Cube.033",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.592546463,
+          -19.252109528,
+          -8.180059433
+        ],
+        "min": [
+          18.764387131,
+          -21.147838593,
+          -11.210144043
+        ]
+      }
+    },
+    {
+      "name": "Cube.034",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.590959549,
+          -17.714139938,
+          -7.771291733
+        ],
+        "min": [
+          18.762800217,
+          -19.562871933,
+          -10.786287308
+        ]
+      }
+    },
+    {
+      "name": "Cube.035",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.528587341,
+          -6.866007805,
+          -8.495625496
+        ],
+        "min": [
+          18.833780289,
+          -8.509613037,
+          -11.556264877
+        ]
+      }
+    },
+    {
+      "name": "Cube.036",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.527927399,
+          -8.358307838,
+          -7.884937286
+        ],
+        "min": [
+          18.833780289,
+          -10.341156006,
+          -10.772462845
+        ]
+      }
+    },
+    {
+      "name": "Cube.037",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.449245453,
+          -9.86901474,
+          -7.220933437
+        ],
+        "min": [
+          18.91230011,
+          -11.847582817,
+          -9.869199753
+        ]
+      }
+    },
+    {
+      "name": "Cube.038",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.472211838,
+          -11.571669579,
+          -6.887187958
+        ],
+        "min": [
+          18.884410858,
+          -12.993457794,
+          -9.437811852
+        ]
+      }
+    },
+    {
+      "name": "Cube.039",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.470834732,
+          -12.986635208,
+          -6.867501736
+        ],
+        "min": [
+          18.883033752,
+          -14.413627625,
+          -9.403821945
+        ]
+      }
+    },
+    {
+      "name": "Cube.040",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.522878647,
+          -16.006193161,
+          -7.460724354
+        ],
+        "min": [
+          18.833171844,
+          -17.75835228,
+          -10.261330605
+        ]
+      }
+    },
+    {
+      "name": "Cube.041",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.521409988,
+          -14.431828499,
+          -7.014770985
+        ],
+        "min": [
+          18.831703186,
+          -16.19175148,
+          -9.817783356
+        ]
+      }
+    },
+    {
+      "name": "Cube.042",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.456707001,
+          -37.537055969,
+          -4.278307915
+        ],
+        "min": [
+          19.025918961,
+          -38.76927948,
+          -7.153255463
+        ]
+      }
+    },
+    {
+      "name": "Cube.043",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.443941116,
+          -38.5092659,
+          -4.441728592
+        ],
+        "min": [
+          19.042949677,
+          -40.198631287,
+          -7.224137306
+        ]
+      }
+    },
+    {
+      "name": "Cube.044",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          16.29227829,
+          -22.479423523,
+          27.105297089
+        ],
+        "min": [
+          10.955307007,
+          -27.900308609,
+          13.123023987
+        ]
+      }
+    },
+    {
+      "name": "Cube.045",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          15.990135193,
+          1.437739491,
+          24.196582794
+        ],
+        "min": [
+          10.588709831,
+          -11.729143143,
+          11.241835594
+        ]
+      }
+    },
+    {
+      "name": "Cube.046",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          18.342376709,
+          1.872230291,
+          12.999682426
+        ],
+        "min": [
+          10.889812469,
+          -12.478765488,
+          -7.032800198
+        ]
+      }
+    },
+    {
+      "name": "Cube.047",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          15.376958847,
+          1.85043931,
+          24.95677948
+        ],
+        "min": [
+          12.968772888,
+          -0.964989603,
+          20.897460938
+        ]
+      }
+    },
+    {
+      "name": "Cube.048",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          14.755760193,
+          0.71747911,
+          28.607145309
+        ],
+        "min": [
+          12.829031944,
+          -1.098452926,
+          25.019659042
+        ]
+      }
+    },
+    {
+      "name": "Cube.049",
+      "role": "authored_mesh",
+      "admissionBasis": "source_bound_anatomical_recovery",
+      "collections": [
+        "Constructional Model/90 Semantics/Attachment Patches"
+      ],
+      "worldBounds": {
+        "max": [
+          17.554834366,
+          0.124882244,
+          23.530506134
+        ],
+        "min": [
+          11.02560997,
+          -11.079660416,
+          11.471687317
+        ]
+      }
+    },
+    {
+      "name": "Cube.050",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.439826965,
+          7.54165411,
+          -3.108326435
+        ],
+        "min": [
+          19.372802734,
+          6.645879745,
+          -4.806489468
+        ]
+      }
+    },
+    {
+      "name": "Cube.051",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.455768585,
+          6.666722298,
+          -3.124153614
+        ],
+        "min": [
+          19.353437424,
+          5.47850275,
+          -4.939001083
+        ]
+      }
+    },
+    {
+      "name": "Cube.052",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.454816818,
+          5.868114471,
+          -3.406928778
+        ],
+        "min": [
+          19.352485657,
+          4.405932903,
+          -5.267994404
+        ]
+      }
+    },
+    {
+      "name": "Cube.053",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.490949631,
+          4.04744482,
+          -4.54102993
+        ],
+        "min": [
+          19.317871094,
+          2.384746313,
+          -6.537401199
+        ]
+      }
+    },
+    {
+      "name": "Cube.054",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          20.489927292,
+          4.977536201,
+          -3.891357183
+        ],
+        "min": [
+          19.316848755,
+          3.311130762,
+          -5.887097836
+        ]
+      }
+    },
+    {
+      "name": "Icosphere",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          24.839113235,
+          -0.195576549,
+          -3.778973579
+        ],
+        "min": [
+          22.897623062,
+          -2.236978531,
+          -5.820375443
+        ]
+      }
+    },
+    {
+      "name": "Muscle | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.394964218,
+          0.291430473,
+          -5.398234844
+        ],
+        "min": [
+          21.203536987,
+          -4.244074821,
+          -8.954569817
+        ]
+      }
+    },
+    {
+      "name": "Muscle 02 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.319602966,
+          0.340956688,
+          -5.378653049
+        ],
+        "min": [
+          20.741098404,
+          -3.174026966,
+          -8.695993423
+        ]
+      }
+    },
+    {
+      "name": "Muscle 03 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.194034576,
+          0.456274033,
+          -5.278745174
+        ],
+        "min": [
+          20.380147934,
+          -2.726004601,
+          -8.607779503
+        ]
+      }
+    },
+    {
+      "name": "Muscle 04 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.651996613,
+          5.592494488,
+          -4.635563374
+        ],
+        "min": [
+          24.29069519,
+          0.389204025,
+          -5.536439896
+        ]
+      }
+    },
+    {
+      "name": "Muscle 05 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.391990662,
+          2.589494228,
+          -5.090522766
+        ],
+        "min": [
+          23.563346863,
+          0.348555565,
+          -5.551027298
+        ]
+      }
+    },
+    {
+      "name": "Muscle 06 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.183433533,
+          1.083057404,
+          -5.315409184
+        ],
+        "min": [
+          23.49240303,
+          0.27419138,
+          -5.623252869
+        ]
+      }
+    },
+    {
+      "name": "Muscle 07 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.125450134,
+          -0.154127121,
+          -5.131399155
+        ],
+        "min": [
+          24.314401627,
+          -6.057289124,
+          -9.595240593
+        ]
+      }
+    },
+    {
+      "name": "Muscle 08 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.658432007,
+          -0.587570667,
+          -4.792140961
+        ],
+        "min": [
+          24.212085724,
+          -8.800588608,
+          -10.486244202
+        ]
+      }
+    },
+    {
+      "name": "Muscle 09 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.445451736,
+          -1.127614498,
+          -4.700021267
+        ],
+        "min": [
+          24.12100029,
+          -9.448507309,
+          -8.942482948
+        ]
+      }
+    },
+    {
+      "name": "Muscle 10 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.524410248,
+          -2.787043333,
+          -1.726716638
+        ],
+        "min": [
+          23.671360016,
+          -9.241765976,
+          -7.365527153
+        ]
+      }
+    },
+    {
+      "name": "Muscle 11 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.658208847,
+          -0.123904705,
+          7.548139572
+        ],
+        "min": [
+          20.043895721,
+          -9.054993629,
+          -1.200115919
+        ]
+      }
+    },
+    {
+      "name": "Muscle 12 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.469493866,
+          4.602597713,
+          9.981033325
+        ],
+        "min": [
+          22.400800705,
+          -9.077311516,
+          -4.336301804
+        ]
+      }
+    },
+    {
+      "name": "Muscle 13 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.215648651,
+          3.961344242,
+          10.637396812
+        ],
+        "min": [
+          20.309247971,
+          -8.621347427,
+          -2.935529947
+        ]
+      }
+    },
+    {
+      "name": "Muscle 14 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.565006256,
+          3.886970997,
+          7.341382504
+        ],
+        "min": [
+          22.615301132,
+          -8.557717323,
+          -4.642549515
+        ]
+      }
+    },
+    {
+      "name": "Muscle 15 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.642810822,
+          -0.530547619,
+          5.35199213
+        ],
+        "min": [
+          21.094612122,
+          -8.291236877,
+          -1.581859827
+        ]
+      }
+    },
+    {
+      "name": "Muscle 16 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.518346786,
+          3.830376148,
+          2.281489611
+        ],
+        "min": [
+          21.219003677,
+          -6.061639786,
+          -3.434097052
+        ]
+      }
+    },
+    {
+      "name": "Muscle 18 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.290067673,
+          2.655162334,
+          10.069775581
+        ],
+        "min": [
+          19.899520874,
+          -8.9395895,
+          -2.101293564
+        ]
+      }
+    },
+    {
+      "name": "Muscle 19 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.024644852,
+          -1.658830166,
+          -4.235384464
+        ],
+        "min": [
+          24.011201859,
+          -8.982780457,
+          -7.360179901
+        ]
+      }
+    },
+    {
+      "name": "Muscle 20 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.601554871,
+          -0.136658192,
+          -5.599188805
+        ],
+        "min": [
+          21.877660751,
+          -5.348218918,
+          -8.994452477
+        ]
+      }
+    },
+    {
+      "name": "Muscle 21 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.057115555,
+          -3.294253111,
+          0.53220433
+        ],
+        "min": [
+          23.524324417,
+          -4.674337864,
+          -5.175913811
+        ]
+      }
+    },
+    {
+      "name": "Muscle 22 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.131450653,
+          -1.228352547,
+          1.062936664
+        ],
+        "min": [
+          21.737379074,
+          -5.085626602,
+          -2.280960083
+        ]
+      }
+    },
+    {
+      "name": "Muscle 23 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.133495331,
+          -1.389418125,
+          0.393660128
+        ],
+        "min": [
+          22.588594437,
+          -4.673754692,
+          -2.92828846
+        ]
+      }
+    },
+    {
+      "name": "Muscle 24 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.049619675,
+          -2.100644112,
+          0.090356335
+        ],
+        "min": [
+          22.98692131,
+          -4.611022949,
+          -3.689299107
+        ]
+      }
+    },
+    {
+      "name": "Muscle 25 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.221057892,
+          1.635118008,
+          3.513361692
+        ],
+        "min": [
+          22.969200134,
+          -6.162662029,
+          -4.862436295
+        ]
+      }
+    },
+    {
+      "name": "Muscle 26 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.004039764,
+          4.177324772,
+          -3.87982583
+        ],
+        "min": [
+          23.129201889,
+          -0.169696808,
+          -4.648361206
+        ]
+      }
+    },
+    {
+      "name": "Muscle 27 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.013328552,
+          -2.861441135,
+          8.001893997
+        ],
+        "min": [
+          22.788722992,
+          -10.34654808,
+          -5.420746326
+        ]
+      }
+    },
+    {
+      "name": "Muscle 28 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.488021851,
+          -1.61226368,
+          11.534895897
+        ],
+        "min": [
+          23.85414505,
+          -11.932050705,
+          -4.049403667
+        ]
+      }
+    },
+    {
+      "name": "Muscle 29 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.291807175,
+          1.11176157,
+          9.549231529
+        ],
+        "min": [
+          22.308546066,
+          -11.128927231,
+          -4.722193718
+        ]
+      }
+    },
+    {
+      "name": "Muscle 30 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.433982849,
+          5.139194012,
+          11.048253059
+        ],
+        "min": [
+          23.112041473,
+          -8.807678223,
+          -5.473046303
+        ]
+      }
+    },
+    {
+      "name": "Muscle 31 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.787185669,
+          1.352222919,
+          22.264413834
+        ],
+        "min": [
+          24.238286972,
+          -8.948822975,
+          10.309265137
+        ]
+      }
+    },
+    {
+      "name": "Muscle 32 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.751682281,
+          5.241294384,
+          -3.831535816
+        ],
+        "min": [
+          23.909822464,
+          -0.32370615,
+          -4.990868092
+        ]
+      }
+    },
+    {
+      "name": "Muscle 33 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.167852402,
+          0.63354969,
+          -5.237046242
+        ],
+        "min": [
+          20.063087463,
+          -2.611682653,
+          -8.729863167
+        ]
+      }
+    },
+    {
+      "name": "Muscle 34 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.199142456,
+          2.339624882,
+          9.112445831
+        ],
+        "min": [
+          23.075601578,
+          -9.40860939,
+          -5.54307127
+        ]
+      }
+    },
+    {
+      "name": "Muscle 35 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.817926407,
+          -0.958929062,
+          11.103642464
+        ],
+        "min": [
+          23.069149017,
+          -11.326057434,
+          -5.004822254
+        ]
+      }
+    },
+    {
+      "name": "Muscle 37 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.327100754,
+          -3.011447668,
+          -0.812421918
+        ],
+        "min": [
+          23.445278168,
+          -5.241520405,
+          -8.60043335
+        ]
+      }
+    },
+    {
+      "name": "Muscle 38 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          24.135625839,
+          -6.752304554,
+          -9.3630867
+        ],
+        "min": [
+          22.217741013,
+          -7.268790722,
+          -9.90328598
+        ]
+      }
+    },
+    {
+      "name": "Muscle 39 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.09961319,
+          -1.079692364,
+          -2.701141834
+        ],
+        "min": [
+          23.255338669,
+          -7.362757683,
+          -6.831504822
+        ]
+      }
+    },
+    {
+      "name": "Muscle 40 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          24.863651276,
+          -4.16110754,
+          0.055775095
+        ],
+        "min": [
+          22.840938568,
+          -8.743391991,
+          -6.782767296
+        ]
+      }
+    },
+    {
+      "name": "Muscle 41 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.88942337,
+          5.701060772,
+          -4.873492241
+        ],
+        "min": [
+          24.235177994,
+          -0.387836456,
+          -5.932677746
+        ]
+      }
+    },
+    {
+      "name": "Muscle 42 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.045818329,
+          5.481902599,
+          -4.16942215
+        ],
+        "min": [
+          23.851657867,
+          -1.351949215,
+          -6.267002583
+        ]
+      }
+    },
+    {
+      "name": "Muscle 43 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.054494858,
+          3.704479694,
+          -4.140042782
+        ],
+        "min": [
+          23.50466156,
+          -1.683163166,
+          -6.608905792
+        ]
+      }
+    },
+    {
+      "name": "Muscle 44 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.953674316,
+          2.38835001,
+          -3.20980072
+        ],
+        "min": [
+          22.934587479,
+          -1.38661623,
+          -6.544793606
+        ]
+      }
+    },
+    {
+      "name": "Muscle 45 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.553863525,
+          5.557076931,
+          9.615887642
+        ],
+        "min": [
+          22.602470398,
+          -9.887187958,
+          -4.46743536
+        ]
+      }
+    },
+    {
+      "name": "Muscle 46 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.922943115,
+          1.165193558,
+          22.060382843
+        ],
+        "min": [
+          25.407999039,
+          -9.624958992,
+          9.075797081
+        ]
+      }
+    },
+    {
+      "name": "Muscle 47 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          29.017719269,
+          0.607286453,
+          22.132341385
+        ],
+        "min": [
+          25.521858215,
+          -9.058332443,
+          10.417675018
+        ]
+      }
+    },
+    {
+      "name": "Muscle 48 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.111721039,
+          1.236755371,
+          22.615558624
+        ],
+        "min": [
+          24.552200317,
+          -9.434939384,
+          11.121451378
+        ]
+      }
+    },
+    {
+      "name": "Muscle 51 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          27.99224472,
+          4.819163799,
+          11.994644165
+        ],
+        "min": [
+          20.941518784,
+          -7.078335762,
+          -3.47400856
+        ]
+      }
+    },
+    {
+      "name": "Muscle 52 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.068279266,
+          5.268569469,
+          -2.844045401
+        ],
+        "min": [
+          23.153129578,
+          -1.520606995,
+          -4.313379288
+        ]
+      }
+    },
+    {
+      "name": "Muscle 53 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.024284363,
+          5.479346752,
+          -1.780315757
+        ],
+        "min": [
+          23.180477142,
+          -1.982856274,
+          -4.401945114
+        ]
+      }
+    },
+    {
+      "name": "Muscle 54 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          21.878705978,
+          -0.599296689,
+          3.312524557
+        ],
+        "min": [
+          17.090192795,
+          -23.983560562,
+          -3.248278379
+        ]
+      }
+    },
+    {
+      "name": "Muscle 66 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.81202507,
+          0.441790104,
+          -5.158501148
+        ],
+        "min": [
+          20.669605255,
+          -5.855128765,
+          -10.912590027
+        ]
+      }
+    },
+    {
+      "name": "Muscle 67 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.019151688,
+          0.105596542,
+          -5.038020611
+        ],
+        "min": [
+          21.596260071,
+          -6.079739571,
+          -10.869059563
+        ]
+      }
+    },
+    {
+      "name": "Muscle 68 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          25.908184052,
+          -0.312819958,
+          -4.018583298
+        ],
+        "min": [
+          22.42924118,
+          -6.657588482,
+          -10.411519051
+        ]
+      }
+    },
+    {
+      "name": "Muscle 74 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          29.170661926,
+          -23.749326706,
+          12.482307434
+        ],
+        "min": [
+          24.999128342,
+          -28.899572372,
+          -4.504364491
+        ]
+      }
+    },
+    {
+      "name": "Muscle 75 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.322469711,
+          -24.077604294,
+          12.271119118
+        ],
+        "min": [
+          24.31835556,
+          -28.158826828,
+          -4.50042057
+        ]
+      }
+    },
+    {
+      "name": "Muscle 76 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          28.52466011,
+          -24.577100754,
+          13.042014122
+        ],
+        "min": [
+          24.127632141,
+          -30.927576065,
+          -4.377350807
+        ]
+      }
+    },
+    {
+      "name": "Muscle 85 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "collections": [
+        "Constructional Model/20 Muscle"
+      ],
+      "worldBounds": {
+        "max": [
+          26.976411819,
+          -23.698774338,
+          24.531045914
+        ],
+        "min": [
+          23.665681839,
+          -27.716117859,
+          11.290791512
+        ]
+      }
+    },
+    {
+      "name": "SRC_PELVIS",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "collections": [
+        "Collection"
+      ],
+      "worldBounds": {
+        "max": [
+          25.372341156,
+          6.560198784,
+          1.288298607
+        ],
+        "min": [
+          14.48103714,
+          -11.982673645,
+          -14.19306469
+        ]
+      }
+    }
+  ],
+  "admittedRoleCounts": {
+    "authored_mesh": 55,
+    "muscle_surface": 57
+  },
+  "worldBounds": {
+    "min": [
+      10.208107948,
+      -54.025829315,
+      -14.19306469
+    ],
+    "max": [
+      29.656089783,
+      7.54165411,
+      29.760408401
+    ]
+  },
+  "rejectedObjects": [
+    {
+      "name": "Camera",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Cube",
+      "reason": "hidden_source_surface"
+    },
+    {
+      "name": "Cube.021",
+      "reason": "hidden_source_surface"
+    },
+    {
+      "name": "Empty",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Light",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Light.001",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Light.002",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Light.003",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 02",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 02 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 02 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 02 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 02 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 03",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 03 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 03 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 03 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 03 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 04",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 04 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 04 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 04 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 04 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 05",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 05 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 05 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 05 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 05 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 06",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 06 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 06 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 06 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 06 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 07",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 07 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 07 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 07 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 07 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 08",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 08 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 08 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 08 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 08 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 09",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 09 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 09 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 09 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 09 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 10",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 10 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 10 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 10 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 10 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 100",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 100 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 100 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 100 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 100 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 101",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 101 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 101 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 101 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 101 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 102",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 102 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 102 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 102 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 102 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 103",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 103 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 103 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 103 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 103 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 11",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 11 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 11 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 11 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 11 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 12",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 12 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 12 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 12 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 12 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 13",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 13 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 13 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 13 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 13 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 14",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 14 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 14 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 14 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 14 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 15",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 15 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 15 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 15 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 15 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 16",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 16 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 16 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 16 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 16 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 17",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 17 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 17 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 17 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 17 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 18",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 18 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 18 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 18 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 18 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 19",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 19 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 19 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 19 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 19 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 20",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 20 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 20 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 20 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 20 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 21",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 21 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 21 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 21 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 21 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 22",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 22 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 22 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 22 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 22 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 23",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 23 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 23 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 23 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 23 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 24",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 24 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 24 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 24 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 24 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 25",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 25 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 25 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 25 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 25 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 26",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 26 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 26 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 26 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 26 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 27",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 27 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 27 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 27 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 27 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 28",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 28 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 28 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 28 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 28 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 29",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 29 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 29 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 29 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 29 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 30",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 30 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 30 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 30 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 30 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 31",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 31 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 31 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 31 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 31 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 32",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 32 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 32 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 32 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 32 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 33",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 33 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 33 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 33 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 33 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 34",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 34 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 34 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 34 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 34 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 35",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 35 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 35 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 35 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 35 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 36",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 36 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 36 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 36 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 37",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 37 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 37 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 37 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 37 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 38",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 38 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 38 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 38 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 38 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 39",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 39 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 39 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 39 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 39 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 40",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 40 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 40 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 40 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 40 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 41",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 41 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 41 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 41 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 41 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 42",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 42 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 42 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 42 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 42 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 43",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 43 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 43 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 43 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 43 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 44",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 44 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 44 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 44 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 44 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 45",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 45 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 45 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 45 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 45 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 46",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 46 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 46 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 46 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 46 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 47",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 47 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 47 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 47 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 47 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 48",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 48 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 48 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 48 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 48 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 49",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 49 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 49 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 49 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 49 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 50",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 50 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 50 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 51",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 51 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 51 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 51 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 51 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 52",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 52 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 52 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 52 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 52 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 53",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 53 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 53 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 53 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 53 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 54",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 54 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 54 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 54 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 55",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 56",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 56 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 57",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 57 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 58",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 58 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 58 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 58 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 58 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 59",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 59 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 59 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 59 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 59 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 60",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 60 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 60 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 60 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 60 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 61",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 61 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 61 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 61 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 61 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 62",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 62 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 62 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 62 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 62 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 63",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 63 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 63 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 63 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 63 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 64",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 64 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 64 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 64 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 64 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 65",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 65 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 65 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 65 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 65 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 66",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 66 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 66 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 66 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 66 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 67",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 67 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 67 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 67 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 67 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 68",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 68 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 68 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 68 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 68 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 69",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 69 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 69 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 69 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 69 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 70",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 70 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 70 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 70 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 70 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 71",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 71 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 71 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 71 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 71 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 72",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 72 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 72 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 72 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 72 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 73",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 73 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 73 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 73 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 73 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 74",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 74 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 74 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 74 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 74 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 75",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 75 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 75 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 75 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 75 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 76",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 76 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 76 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 76 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 76 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 77",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 77 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 77 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 77 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 78",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 78 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 78 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 78 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 78 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 79",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 79 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 79 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 79 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 79 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 80",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 80 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 80 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 80 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 80 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 81",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 81 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 81 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 81 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 81 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 82",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 82 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 82 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 82 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 82 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 83",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 83 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 83 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 83 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 83 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 84",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 84 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 84 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 84 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 85",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 85 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 85 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 85 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 85 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 86",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 86 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 86 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 86 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 86 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 87",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 87 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 87 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 87 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 87 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 88",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 88 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 88 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 88 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 88 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 89",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 89 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 89 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 89 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 89 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 90",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 90 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 90 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 90 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 90 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 91",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 91 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 91 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 91 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 91 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 92",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 92 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 92 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 92 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 92 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 93",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 93 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 93 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 93 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 94",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 94 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 94 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 94 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 94 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 95",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 95 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 95 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 95 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 95 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 96",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 96 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 96 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 96 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 96 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 97",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 97 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 97 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 97 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 97 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 98",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 98 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 98 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 98 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 98 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 99",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 99 | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 99 | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 99 | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle 99 | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Muscle | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "SRC_PELVIS Muscle",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Belly",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Insertion",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Insertion Paint",
+      "reason": "construction_paint_surface"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Origin",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Origin Paint",
+      "reason": "construction_paint_surface"
+    },
+    {
+      "name": "SRC_PELVIS Muscle | Path",
+      "reason": "non_mesh_object"
+    },
+    {
+      "name": "Segment Axis",
+      "reason": "non_mesh_object"
+    }
+  ]
+}

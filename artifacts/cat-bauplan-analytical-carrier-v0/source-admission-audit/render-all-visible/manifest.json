@@ -1,0 +1,65 @@
+{
+  "classification": {
+    "admittedObjectCount": 112,
+    "admittedRoleCounts": {
+      "authored_mesh": 55,
+      "muscle_surface": 57
+    },
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-admission-audit/classification-all-visible.json",
+    "schema": "kaminos.cat-bauplan-source-classification.v0",
+    "sha256": "51ef8728bf745f2c151ff71080d2b7eb14e06d77f273b0df9a329d391448b103"
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "palette": "ecorche",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "rendererId": "blender-cat-source-preview-v0"
+  },
+  "outputs": [
+    {
+      "byteLength": 911671,
+      "cameraLocation": [
+        160.07675170898438,
+        -23.242088317871094,
+        18.9952449798584
+      ],
+      "orthoScale": 68.95557403564453,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-admission-audit/render-all-visible/right-sagittal.png",
+      "sha256": "5fe689eb9d9b8b603d2b3a5198b70aa82ab4e47eedde90b6b8abd3f3e5962f84",
+      "view": "right-sagittal"
+    },
+    {
+      "byteLength": 908384,
+      "cameraLocation": [
+        124.06732177734375,
+        62.84302520751953,
+        46.660823822021484
+      ],
+      "orthoScale": 67.02516174316406,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-admission-audit/render-all-visible/front-three-quarter.png",
+      "sha256": "7e19539f4429fd4dcafecdb25858301216f95e8924edb2d17511b15369cfbd66",
+      "view": "front-three-quarter"
+    },
+    {
+      "byteLength": 846642,
+      "cameraLocation": [
+        31.1436710357666,
+        -23.242088317871094,
+        147.92832946777344
+      ],
+      "orthoScale": 68.95560455322266,
+      "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-admission-audit/render-all-visible/dorsal.png",
+      "sha256": "aa39590917643c4af1bd20a8ff2686781dae57aeed0e7f6ce4ec8e0dc4ac4fe7",
+      "view": "dorsal"
+    }
+  ],
+  "palette": "ecorche",
+  "rendererId": "blender-cat-source-preview-v0",
+  "schema": "kaminos.cat-bauplan-source-preview.v0",
+  "source": {
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "status": "completed"
+}

@@ -11,12 +11,15 @@ from pathlib import Path
 from typing import Any
 
 import bpy
-from mathutils import Quaternion, Vector
+from mathutils import Matrix, Vector
 
 
 SCHEMA = "kaminos.cat-bauplan-source-preview.v0"
 FAILURE_SCHEMA = "kaminos.cat-bauplan-source-preview-failure.v0"
 RENDERER_ID = "blender-cat-source-preview-v0"
+ANATOMICAL_RIGHT = Vector((1.0, 0.0, 0.0))
+ANATOMICAL_ANTERIOR = Vector((0.0, -1.0, 0.0))
+ANATOMICAL_DORSAL = Vector((0.0, 0.0, -1.0))
 
 
 def _arguments() -> argparse.Namespace:
@@ -27,6 +30,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--failure", required=True)
     parser.add_argument("--expected-source-sha256", required=True)
+    parser.add_argument("--palette", choices=("ecorche", "white-clay"), default="ecorche")
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     return parser.parse_args(argv)
 
@@ -60,12 +64,15 @@ def _assign_material(obj: bpy.types.Object, material: bpy.types.Material) -> Non
     obj.data.materials.append(material)
 
 
-def _look_at(camera: bpy.types.Object, target: Vector, *, roll: float = 0.0) -> None:
+def _orient_camera(camera: bpy.types.Object, target: Vector, image_up: Vector) -> None:
+    camera_back = (camera.location - target).normalized()
+    projected_up = image_up - camera_back * image_up.dot(camera_back)
+    if projected_up.length < 1e-6:
+        raise ValueError("camera image-up axis is parallel to its view direction")
+    camera_up = projected_up.normalized()
+    camera_right = camera_up.cross(camera_back).normalized()
     camera.rotation_mode = "QUATERNION"
-    camera.rotation_quaternion = (
-        (target - camera.location).to_track_quat("-Z", "Y")
-        @ Quaternion((0.0, 0.0, 1.0), roll)
-    )
+    camera.rotation_quaternion = Matrix((camera_right, camera_up, camera_back)).transposed().to_quaternion()
 
 
 def _view_corners(bounds: dict[str, list[float]]) -> list[Vector]:
@@ -121,12 +128,16 @@ def main() -> int:
 
     bone_material = _material("Diagnostic Bone", (0.72, 0.70, 0.64, 1.0), 0.72)
     muscle_material = _material("Diagnostic Muscle", (0.68, 0.18, 0.13, 1.0), 0.62)
+    shared_clay_material = _material("Diagnostic White Clay", (0.82, 0.81, 0.77, 1.0), 0.72)
     for obj in bpy.context.scene.objects:
         obj.hide_render = obj.name not in admitted_by_name
     for name, record in admitted_by_name.items():
         obj = bpy.data.objects[name]
         obj.hide_render = False
-        _assign_material(obj, muscle_material if record["role"] == "muscle_surface" else bone_material)
+        if args.palette == "white-clay":
+            _assign_material(obj, shared_clay_material)
+        else:
+            _assign_material(obj, muscle_material if record["role"] == "muscle_surface" else bone_material)
 
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_WORKBENCH"
@@ -170,14 +181,29 @@ def main() -> int:
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     views = {
-        "right-sagittal": (Vector((1.0, 0.0, 0.08)), 3.141592653589793),
-        "front-three-quarter": (Vector((0.75, 0.62, 0.28)), 3.141592653589793),
-        "dorsal": (Vector((0.08, 0.0, 1.0)), 0.0),
+        "right-sagittal": {
+            "direction": ANATOMICAL_RIGHT,
+            "imageUp": ANATOMICAL_DORSAL,
+        },
+        "right-anterior-three-quarter": {
+            "direction": (
+                ANATOMICAL_RIGHT * 0.55
+                + ANATOMICAL_ANTERIOR * 0.82
+                + ANATOMICAL_DORSAL * 0.12
+            ),
+            "imageUp": ANATOMICAL_DORSAL,
+        },
+        "dorsal": {
+            "direction": ANATOMICAL_DORSAL,
+            "imageUp": ANATOMICAL_ANTERIOR,
+        },
     }
     outputs = []
-    for name, (direction, roll) in views.items():
+    for name, view in views.items():
+        direction = view["direction"]
+        image_up = view["imageUp"]
         camera.location = center + direction.normalized() * diagonal * 1.8
-        _look_at(camera, center, roll=roll)
+        _orient_camera(camera, center, image_up)
         bpy.context.view_layer.update()
         _frame_orthographic(camera, corners, scene.render.resolution_x / scene.render.resolution_y)
         path = output_dir / f"{name}.png"
@@ -192,6 +218,8 @@ def main() -> int:
             "byteLength": path.stat().st_size,
             "sha256": _sha256(path),
             "cameraLocation": list(camera.location),
+            "cameraDirection": list(direction.normalized()),
+            "imageUpAxis": list(image_up),
             "orthoScale": camera.data.ortho_scale,
         })
 
@@ -215,6 +243,13 @@ def main() -> int:
             "blenderVersion": bpy.app.version_string,
             "renderEngine": scene.render.engine,
             "rendererId": RENDERER_ID,
+            "palette": args.palette,
+        },
+        "palette": args.palette,
+        "anatomicalAxes": {
+            "right": list(ANATOMICAL_RIGHT),
+            "anterior": list(ANATOMICAL_ANTERIOR),
+            "dorsal": list(ANATOMICAL_DORSAL),
         },
         "outputs": outputs,
     }

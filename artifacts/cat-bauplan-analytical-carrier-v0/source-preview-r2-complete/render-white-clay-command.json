@@ -1,0 +1,31 @@
+{
+  "schema": "gpu-greenroom.command.v1",
+  "repo_root": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805",
+  "cwd": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805",
+  "env": {},
+  "output_dir": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay",
+  "route_identity": "kaminos/blender-cat-source-preview-r2-complete-white-clay",
+  "argv": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "--python",
+    "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/tools/blender-cat-source-preview.py",
+    "--",
+    "--source",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "--classification",
+    "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "--output-dir",
+    "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay",
+    "--manifest",
+    "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay/manifest.json",
+    "--failure",
+    "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/white-clay/failure.json",
+    "--expected-source-sha256",
+    "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c",
+    "--palette",
+    "white-clay"
+  ],
+  "timeout": 900
+}

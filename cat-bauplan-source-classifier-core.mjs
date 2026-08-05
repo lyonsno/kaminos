@@ -1,6 +1,15 @@
 export const CAT_BAUPLAN_SOURCE_CLASSIFICATION_SCHEMA =
   'kaminos.cat-bauplan-source-classification.v0';
 
+const CAT_BAUPLAN_SOURCE_SHA256 =
+  '9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c';
+const RECOVERED_ANATOMICAL_MESHES = new Set([
+  'Cube.001', 'Cube.002', 'Cube.003', 'Cube.004', 'Cube.005',
+  'Cube.014', 'Cube.016', 'Cube.017', 'Cube.018', 'Cube.019',
+  'Cube.022', 'Cube.023', 'Cube.044', 'Cube.045', 'Cube.046',
+  'Cube.047', 'Cube.048', 'Cube.049',
+]);
+
 function requireObject(value, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -8,13 +17,10 @@ function requireObject(value, label) {
   return value;
 }
 
-function sourceRole(object) {
+function sourceRole(object, sourceSha256) {
   if (object.type !== 'MESH') return { admitted: false, reason: 'non_mesh_object' };
 
   const collections = Array.isArray(object.collections) ? object.collections : [];
-  if (collections.some(collection => collection.startsWith('Constructional Model/90 Semantics'))) {
-    return { admitted: false, reason: 'semantic_control_surface' };
-  }
   if (/ \| (Origin|Insertion) Paint$/.test(object.name)) {
     return { admitted: false, reason: 'construction_paint_surface' };
   }
@@ -34,8 +40,23 @@ function sourceRole(object) {
     return { admitted: false, reason: 'hidden_source_surface' };
   }
 
+  if (collections.some(collection => collection.startsWith('Constructional Model/90 Semantics'))) {
+    if (
+      sourceSha256 === CAT_BAUPLAN_SOURCE_SHA256
+      && collections.includes('Constructional Model/90 Semantics/Attachment Patches')
+      && RECOVERED_ANATOMICAL_MESHES.has(object.name)
+    ) {
+      return {
+        admitted: true,
+        role: 'authored_mesh',
+        admissionBasis: 'source_bound_anatomical_recovery',
+      };
+    }
+    return { admitted: false, reason: 'semantic_control_surface' };
+  }
+
   if (collections.includes('Collection')) {
-    return { admitted: true, role: 'authored_mesh' };
+    return { admitted: true, role: 'authored_mesh', admissionBasis: 'authoring_collection' };
   }
   if (
     collections.includes('Constructional Model/20 Muscle')
@@ -44,7 +65,7 @@ function sourceRole(object) {
       || object.name.endsWith(' | Surface')
     )
   ) {
-    return { admitted: true, role: 'muscle_surface' };
+    return { admitted: true, role: 'muscle_surface', admissionBasis: 'provisional_muscle_surface' };
   }
   return { admitted: false, reason: 'unclassified_mesh_surface' };
 }
@@ -76,7 +97,7 @@ export function classifyCatBauplanSource(rawExtraction, { expectedSourceSha256 }
   const rejectedObjects = [];
   const admittedRoleCounts = {};
   for (const object of extraction.objects) {
-    const disposition = sourceRole(requireObject(object, 'source object'));
+    const disposition = sourceRole(requireObject(object, 'source object'), expectedSourceSha256);
     if (!disposition.admitted) {
       rejectedObjects.push({ name: object.name, reason: disposition.reason });
       continue;
@@ -88,6 +109,7 @@ export function classifyCatBauplanSource(rawExtraction, { expectedSourceSha256 }
     admittedObjects.push({
       name: object.name,
       role: disposition.role,
+      admissionBasis: disposition.admissionBasis,
       collections: [...object.collections],
       worldBounds: bounds,
     });
