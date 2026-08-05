@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.lirm-metaball-contour-embellishment.v0",
-  "status": "sources-complete",
+  "status": "outputs-complete",
   "sourceArtifact": "artifacts/lirm-metaball-target-first-multiview-v0",
   "sourceSchema": "kaminos.lirm-metaball-target-first-multiview.v0",
   "baseline": {
