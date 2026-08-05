@@ -1,0 +1,1079 @@
+{
+  "schema": "kaminos.muscle-compartment-packing-result.v0",
+  "sourceSchema": "kaminos.muscle-compartment-packing-source.v0",
+  "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+  "sourceAuthority": {
+    "anatomicalAdmission": "none",
+    "kind": "synthetic-proxy"
+  },
+  "dimension": 3,
+  "formation": {
+    "requestedCenterlineSmoothingReference": "absolute-position",
+    "effectiveCenterlineSmoothingReference": "absolute-position",
+    "fallbackUsed": false
+  },
+  "pairwiseProjection": {
+    "requestedUpdate": "sequential",
+    "effectiveUpdate": "sequential",
+    "fallbackUsed": false
+  },
+  "pairwiseCoordinate": {
+    "requested": "cartesian",
+    "effective": "cartesian",
+    "fallbackUsed": false
+  },
+  "curvatureProjection": {
+    "requestedUpdate": "unconstrained",
+    "effectiveUpdate": "unconstrained",
+    "fallbackUsed": false
+  },
+  "crossSectionProjection": {
+    "requestedUpdate": "uniform",
+    "effectiveUpdate": "uniform",
+    "requestedStep": null,
+    "effectiveStep": null,
+    "fallbackUsed": false
+  },
+  "clusterProjection": {
+    "requestedUpdate": "capsule-axis-occupancy-allocation",
+    "effectiveUpdate": "capsule-axis-occupancy-allocation",
+    "obstacleId": "agent-authored-k4-central-pressure-capsule",
+    "referenceDirection": [
+      1,
+      0,
+      0
+    ],
+    "effectiveReferenceDirection": [
+      0.9688830546939377,
+      0.16942786907506863,
+      -0.18044340804702647
+    ],
+    "allocationSchedule": [
+      {
+        "muscleId": "muscle-34",
+        "azimuthRadians": -1.2,
+        "radialDistance": 1.8,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-13",
+        "azimuthRadians": 2.65,
+        "radialDistance": 2.2,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-12",
+        "azimuthRadians": 0.75,
+        "radialDistance": 1.4,
+        "axialOffset": -0.25
+      },
+      {
+        "muscleId": "muscle-45",
+        "azimuthRadians": 0.05,
+        "radialDistance": 1.8,
+        "axialOffset": 0.25
+      }
+    ],
+    "requestedEnvelopeProfile": "normalized-sine",
+    "effectiveEnvelopeProfile": "normalized-sine",
+    "allocationReference": "capsule-axis-belly-anchor-absolute-role-preserve-local-shape-normalized-sine-zero-at-attachments",
+    "fallbackUsed": false
+  },
+  "clearanceValidation": {
+    "kind": "conservative-continuous-piecewise-linear",
+    "centerlineDistance": "nested-convex-golden-section",
+    "segmentRadiusBound": "linear-taper-with-lipschitz-search-bound",
+    "sampledSupplementCount": 25
+  },
+  "status": "immutable-constraint-conflict",
+  "iterations": 0,
+  "correctionAttribution": {
+    "schema": "kaminos.muscle-compartment-packing-correction-attribution.v0",
+    "interpretation": "algorithmic-projection-path-length-not-physical-force",
+    "aggregation": "sum-of-primitive-applied-deltas",
+    "categories": [
+      "sourceSmoothing",
+      "formationConstraint",
+      "skeletalClearance",
+      "pairwiseExclusion",
+      "compartmentProjection",
+      "volumeRestoration"
+    ],
+    "byMuscle": [
+      {
+        "muscleId": "muscle-34",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-13",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-12",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          }
+        }
+      },
+      {
+        "muscleId": "muscle-45",
+        "corrections": {
+          "sourceSmoothing": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "formationConstraint": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "skeletalClearance": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "pairwiseExclusion": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "compartmentProjection": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          },
+          "volumeRestoration": {
+            "cumulativeAppliedKnotDisplacement": 0,
+            "cumulativeAppliedRadiusChange": 0,
+            "appliedPrimitiveCount": 0
+          }
+        }
+      }
+    ],
+    "totals": {
+      "sourceSmoothing": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "formationConstraint": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "skeletalClearance": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "pairwiseExclusion": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "compartmentProjection": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      },
+      "volumeRestoration": {
+        "cumulativeAppliedKnotDisplacement": 0,
+        "cumulativeAppliedRadiusChange": 0,
+        "appliedPrimitiveCount": 0
+      }
+    }
+  },
+  "input": {
+    "effective": {
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+      "kind": "synthetic-fixture",
+      "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+    },
+    "requested": {
+      "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+      "kind": "synthetic-fixture",
+      "sha256": "64c9c23fee4bf6f863ba333ccc78958c6d8f0a7576c8c7bcf847077e6f244c10"
+    }
+  },
+  "config": {
+    "maxIterations": 64,
+    "relaxationStep": 0.18,
+    "smoothnessStep": 0.035,
+    "sampleCount": 25,
+    "convergenceTolerance": 1e-7,
+    "maximumSourceBendEnergyRatio": 1.05,
+    "minimumSourceCurvatureCosine": 0.3,
+    "minimumSourceTangentCosine": 0,
+    "clusterUpdate": "capsule-axis-occupancy-allocation",
+    "clusterObstacleId": "agent-authored-k4-central-pressure-capsule",
+    "clusterOccupancyReferenceDirection": [
+      1,
+      0,
+      0
+    ],
+    "clusterAllocationSchedule": [
+      {
+        "muscleId": "muscle-34",
+        "azimuthRadians": -1.2,
+        "radialDistance": 1.8,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-13",
+        "azimuthRadians": 2.65,
+        "radialDistance": 2.2,
+        "axialOffset": 0
+      },
+      {
+        "muscleId": "muscle-12",
+        "azimuthRadians": 0.75,
+        "radialDistance": 1.4,
+        "axialOffset": -0.25
+      },
+      {
+        "muscleId": "muscle-45",
+        "azimuthRadians": 0.05,
+        "radialDistance": 1.8,
+        "axialOffset": 0.25
+      }
+    ],
+    "clusterOccupancyEnvelope": "normalized-sine"
+  },
+  "compartment": {
+    "clearance": 0.0593462031473567,
+    "id": "agent-authored-k4-data-envelope",
+    "kind": "box",
+    "maximum": [
+      11.586311546367833,
+      14.295522895367833,
+      13.273248878367836
+    ],
+    "minimum": [
+      -1.422363248367835,
+      -6.175986972367834,
+      -8.135205474367835
+    ]
+  },
+  "obstacles": [
+    {
+      "authority": "agent-authored-provisional",
+      "clearance": 0.0593462031473567,
+      "end": [
+        6.374811029192541,
+        1.5400552383765298,
+        5.005766562299481
+      ],
+      "id": "agent-authored-k4-central-pressure-capsule",
+      "kind": "capsule",
+      "radius": 0.1780386094420701,
+      "start": [
+        4.816881333826592,
+        5.7143891565462095,
+        0.5600337402269847
+      ]
+    }
+  ],
+  "muscles": [
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7",
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-a862cc8f-be08-48ad-9fa6-996cd0c5fe2c",
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 0,
+        "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            4.189600945,
+            8.059602737,
+            -5.167895317
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            4.427532273591861,
+            7.358807611522669,
+            -3.8610049706068286
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            4.777141506214413,
+            6.43851811677286,
+            -2.7079781201681503
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            5.12675114605869,
+            5.518228691823062,
+            -1.5549513337378007
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            5.476360462859667,
+            4.597939467203618,
+            -0.40192429642480176
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            5.825969696891004,
+            3.67764993074241,
+            0.7511025244055357
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            6.175578955619907,
+            2.7573604316076143,
+            1.9041293654890987
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            6.525188212825762,
+            1.837071018294726,
+            3.0571562735904116
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            6.874797445312568,
+            0.9167815788964788,
+            4.210183171466969
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            7.224406731710073,
+            -0.003507966354942299,
+            5.3632099684300645
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            7.574016416373407,
+            -0.9237974540737115,
+            6.516236692268462
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            7.923625635324687,
+            -1.8440868170514255,
+            7.669263646867757
+          ],
+          "radius": 1.0608537969135066
+        },
+        {
+          "position": [
+            8.319665909,
+            -2.78211689,
+            8.736489296
+          ],
+          "radius": 1.0608537969135066
+        }
+      ],
+      "id": "muscle-34",
+      "identity": {
+        "constructionId": "muscle-34",
+        "instanceId": "instance-dfa1e302-587f-4a02-813d-e18b63e1b78d",
+        "lineageId": "lineage-452338f8-5611-49e9-913f-d5b62c921b1e",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-34"
+      },
+      "targetVolume": 64.02550251,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 64.128959380475
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-76120608-af3c-4aaa-bff2-720daca75154",
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-4b9bc3a6-077d-4209-b940-429804d4944c",
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 1,
+        "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            1.544946909,
+            9.841607094,
+            -2.553966284
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            2.1435803171529217,
+            8.84949672305452,
+            -1.6373424234296294
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            2.5365331133004085,
+            7.851732156681528,
+            -0.560910869570014
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            2.9294858121846117,
+            6.853967610525367,
+            0.5155207400615766
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            3.3224387914538793,
+            5.8562033389024215,
+            1.5919524983026205
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            3.715391487472221,
+            4.85843872560157,
+            2.6683840467154325
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            4.108344446519642,
+            3.8606744978387058,
+            3.7448158541660863
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            4.5012972056398235,
+            2.8629100113410817,
+            4.8212474957036875
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            4.894250262848853,
+            1.8651457995983105,
+            5.897679282398406
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            5.2872030217322425,
+            0.8673813112469255,
+            6.974110922962188
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            5.680155704338883,
+            -0.13038298159256484,
+            8.050542772651257
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            6.07310893756523,
+            -1.1281476037814706,
+            9.126974112632938
+          ],
+          "radius": 1.0638253479258508
+        },
+        {
+          "position": [
+            6.266059875,
+            -2.056589127,
+            10.305938721
+          ],
+          "radius": 1.0638253479258508
+        }
+      ],
+      "id": "muscle-13",
+      "identity": {
+        "constructionId": "muscle-13",
+        "instanceId": "instance-f7dc71a2-aa05-4de0-9b9d-1522a51380d1",
+        "lineageId": "lineage-128e590e-d1ca-4373-a030-c619c0ee277f",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-13"
+      },
+      "targetVolume": 64.512268168,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 64.654183477011
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9",
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af",
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 2,
+        "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.534674406,
+            10.325469971,
+            -3.888942957
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            3.9143736139695835,
+            9.208049065054716,
+            -2.768140869776784
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            4.327159217094747,
+            8.143037307258961,
+            -1.6477283801080749
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            4.739945117042075,
+            7.078025782609421,
+            -0.5273157774751371
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            5.15273101603727,
+            6.01301429525399,
+            0.5930968582639259
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            5.5655164889751045,
+            4.948002716710794,
+            1.7135095678592682
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            5.978302431997541,
+            3.8829913163554846,
+            2.833922271436906
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            6.391088333087796,
+            2.8179797930692834,
+            3.954334873734377
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            6.803873844073459,
+            1.75296826435335,
+            5.074747615630892
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            7.2166597067679765,
+            0.6879568371670339,
+            6.195160324370892
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            7.629445649507055,
+            -0.37705477030068923,
+            7.315572831988919
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            8.042231607793681,
+            -1.4420663597061079,
+            8.435985348511794
+          ],
+          "radius": 1.1273018439469191
+        },
+        {
+          "position": [
+            8.526236534,
+            -2.489732265,
+            9.570702553
+          ],
+          "radius": 1.1273018439469191
+        }
+      ],
+      "id": "muscle-12",
+      "identity": {
+        "constructionId": "muscle-12",
+        "instanceId": "instance-ed3bd5d6-408e-477f-9f80-8f6ee9e31b10",
+        "lineageId": "lineage-27e2fbb3-3732-4933-8793-1bd61236401c",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-12"
+      },
+      "targetVolume": 76.826555301,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 76.836826727221
+    },
+    {
+      "attachments": {
+        "insertion": {
+          "id": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1",
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        },
+        "origin": {
+          "id": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d",
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "sourceAuthority": "measured-candidate-not-admitted"
+        }
+      },
+      "authority": {
+        "anatomicalAdmission": "none",
+        "kind": "synthetic-proxy"
+      },
+      "candidateEvidence": {
+        "centerlineState": "candidate",
+        "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+        "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+        "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+        "routeIndex": 3,
+        "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+        "targetVolumeState": "candidate"
+      },
+      "centerline": [
+        {
+          "position": [
+            3.766583204,
+            11.328212738,
+            -3.9319911
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            4.108249241740824,
+            9.964205299843261,
+            -2.830574608852763
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            4.510831272056769,
+            8.772936681228364,
+            -1.7347131663321367
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            4.913413005446194,
+            7.581668155600925,
+            -0.6388515119355955
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            5.31599506495555,
+            6.3903995248248044,
+            0.45700990076619424
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            5.718576759868431,
+            5.199131029843738,
+            1.5528716042205868
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            6.121158823288331,
+            4.007862382452443,
+            2.648732999154099
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            6.523740916035126,
+            2.816593829610379,
+            3.744594489126626
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            6.926322564535285,
+            1.6253253106579797,
+            4.840456179701658
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            7.328904648413805,
+            0.4340567306279807,
+            5.9363176438477865
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            7.731486345587658,
+            -0.7572118961061542,
+            7.032179199324876
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            8.134068123848325,
+            -1.9484807050709234,
+            8.128040522174356
+          ],
+          "radius": 1.186924062947134
+        },
+        {
+          "position": [
+            8.619001389,
+            -3.208676815,
+            9.192866325
+          ],
+          "radius": 1.186924062947134
+        }
+      ],
+      "id": "muscle-45",
+      "identity": {
+        "constructionId": "muscle-45",
+        "instanceId": "instance-a4b690df-3a8d-4ccb-be89-3550af103e0e",
+        "lineageId": "lineage-1c67a984-cb72-42d0-bd5f-8cd5134b7e65",
+        "sourceId": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3:muscle-45"
+      },
+      "targetVolume": 89.302118638,
+      "volumeAuthority": "measured-candidate-not-admitted",
+      "realizedVolume": 89.337490564013
+    }
+  ],
+  "metrics": {
+    "initial": {
+      "pairwisePenetration": 5.772364512578,
+      "skeletalPenetration": 0.922930635725,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0.002199818934,
+      "maximumBendEnergy": 0.123194664416,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "packed": {
+      "pairwisePenetration": 5.772364512578,
+      "skeletalPenetration": 0.922930635725,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0.002199818934,
+      "maximumBendEnergy": 0.123194664416,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    }
+  },
+  "iterationHistory": [],
+  "failure": {
+    "phase": "preflight",
+    "kind": "immutable-constraint-conflict",
+    "sourceId": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+    "blockingMechanisms": [
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-34",
+          "attachment": "insertion",
+          "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+        },
+        "right": {
+          "muscleId": "muscle-12",
+          "attachment": "insertion",
+          "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+        },
+        "penetration": 1.280371552983
+      },
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-34",
+          "attachment": "insertion",
+          "attachmentId": "instance-bb248e83-ffdd-434f-bb10-e598e42a5ba7"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "penetration": 1.555076559298
+      },
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-12",
+          "attachment": "origin",
+          "attachmentId": "instance-464ae250-e41f-43fe-ae07-c99ecd39a7af"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "origin",
+          "attachmentId": "instance-d74c85e3-8f33-4809-a6ac-86bac1a41d6d"
+        },
+        "penetration": 1.284115286632
+      },
+      {
+        "kind": "pairwise-fixed-attachment-penetration",
+        "left": {
+          "muscleId": "muscle-12",
+          "attachment": "insertion",
+          "attachmentId": "instance-db1d535f-8500-4019-8b6a-e0fa555e4fa9"
+        },
+        "right": {
+          "muscleId": "muscle-45",
+          "attachment": "insertion",
+          "attachmentId": "instance-62e9f81d-8282-42b1-8514-bde02ff698e1"
+        },
+        "penetration": 1.496762268873
+      }
+    ]
+  }
+}

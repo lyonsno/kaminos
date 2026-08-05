@@ -1,0 +1,65 @@
+{
+  "schema": "kaminos.current-k4-dual-profile-occupancy-assay-visual-inspection.v0",
+  "observedAt": "2026-08-05T01:10:52Z",
+  "route": {
+    "requested": "current-k4-dual-profile-occupancy-orbitable-v0",
+    "effective": "current-k4-dual-profile-occupancy-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "captureRoute": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false,
+    "browserKind": "playwright-chromium-headless-shell",
+    "installedStableChrome": false,
+    "captureCount": 12,
+    "allReportsComplete": true,
+    "processCleanup": "complete-no-process-group-remains"
+  },
+  "images": [
+    {"condition":"baseline","profile":"source-candidate-radius-tubes","state":"source","path":"baseline-source-candidate-radius-tubes-source.png","sha256":"347ff83b2ab20ce1f8d4cc901bf00b7e9131974736af3f7bff2920f8d107a0fd"},
+    {"condition":"baseline","profile":"source-candidate-radius-tubes","state":"immutable-refusal","path":"baseline-source-candidate-radius-tubes-result.png","sha256":"b99d2d6143397b8cbfdf1d3d481c5f2d9fa75ac3d626cbeda140fef39c7b913c"},
+    {"condition":"baseline","profile":"volume-preserving-tapered-belly.v0","state":"source","path":"baseline-volume-preserving-tapered-belly.v0-source.png","sha256":"957a91f2e327e3e239e0eaad25647c7bf7828fe536c66f3c90e9fd7695326608"},
+    {"condition":"baseline","profile":"volume-preserving-tapered-belly.v0","state":"immutable-refusal","path":"baseline-volume-preserving-tapered-belly.v0-result.png","sha256":"f00e578aff395fb83719503710b5fb74990c351c1bdb966f120514b21c245a9a"},
+    {"condition":"mild","profile":"source-candidate-radius-tubes","state":"source","path":"mild-source-candidate-radius-tubes-source.png","sha256":"2339c7834d514e9bef95d315f2959e1aaa06ab8d1577ce180ba707b5cf7e189c"},
+    {"condition":"mild","profile":"source-candidate-radius-tubes","state":"immutable-refusal","path":"mild-source-candidate-radius-tubes-result.png","sha256":"e3dd4da7115084604d6275475a8c499716ea3113818f9cbc225ae6bc21d5b191"},
+    {"condition":"mild","profile":"volume-preserving-tapered-belly.v0","state":"source","path":"mild-volume-preserving-tapered-belly.v0-source.png","sha256":"c57bcfa97a56852813dcf8ceb9c61a9eda6e28af625466e433373dfd067f93ca"},
+    {"condition":"mild","profile":"volume-preserving-tapered-belly.v0","state":"immutable-refusal","path":"mild-volume-preserving-tapered-belly.v0-result.png","sha256":"6542585b667a26804b081d5e37871740d8cb41e339e353c721393e25a54f57f7"},
+    {"condition":"moderate","profile":"source-candidate-radius-tubes","state":"source","path":"moderate-source-candidate-radius-tubes-source.png","sha256":"4bd640462b54158416d57d8f53962c67973055f98102cbc577bccf0b5a714b15"},
+    {"condition":"moderate","profile":"source-candidate-radius-tubes","state":"immutable-refusal","path":"moderate-source-candidate-radius-tubes-result.png","sha256":"40890f3ddb6c35e553b85bb46316a5ec03eb52a2c8c0473be27ccb1d380b2054"},
+    {"condition":"moderate","profile":"volume-preserving-tapered-belly.v0","state":"source","path":"moderate-volume-preserving-tapered-belly.v0-source.png","sha256":"a5f1bb82f49ad31ac08f895b07569b160cd459de39dfef24fa82f1388182777d"},
+    {"condition":"moderate","profile":"volume-preserving-tapered-belly.v0","state":"immutable-refusal","path":"moderate-volume-preserving-tapered-belly.v0-result.png","sha256":"4ad42e6e999f40a6226c4ebcea37e9aaed2a97fa4a03ce20f6263a51135a2572"}
+  ],
+  "observations": {
+    "tube": "All three tube inputs are visibly crowded, near-parallel cylinders with broad coincident attachment neighborhoods. Each source/result pair is geometrically identical because the fixed-attachment preflight refuses before occupancy; four red blocker rows remain visible and the labels do not imply a solve.",
+    "taperedBelly": "The exact Bytebound profile materially restores belly morphology and visibly narrows the attachment ends while preserving the same centerline positions. It removes two of four tube blockers, but every source/result pair remains geometrically identical because two insertion collisions survive. The lower red attachment cloud and the overlapping cyan/purple insertion neighborhood make the refusal visually plausible.",
+    "crowdingResponse": "Baseline, mild, and moderate remain distinguishable by increasing interior crowding. Neither profile produces a packed state, so no visual separation or anatomical improvement is claimed.",
+    "labelIntegrity": "Every frame names source profile, solver disposition, and selected state. No frame uses the ambiguous labels 'Before packing' or 'Packing result'."
+  },
+  "numericalContext": [
+    {"condition":"baseline","tube":{"blockerCount":4,"maximumFixedAttachmentPenetration":1.555076559298,"pairwisePenetration":5.581723846788},"taperedBelly":{"blockerCount":2,"maximumFixedAttachmentPenetration":0.204054995089,"pairwisePenetration":5.939877925286}},
+    {"condition":"mild","tube":{"blockerCount":4,"maximumFixedAttachmentPenetration":1.555076559298,"pairwisePenetration":5.772364512578},"taperedBelly":{"blockerCount":2,"maximumFixedAttachmentPenetration":0.203638768931,"pairwisePenetration":6.850309998645}},
+    {"condition":"moderate","tube":{"blockerCount":4,"maximumFixedAttachmentPenetration":1.555076559298,"pairwisePenetration":6.459445559318},"taperedBelly":{"blockerCount":2,"maximumFixedAttachmentPenetration":0.202388218654,"pairwisePenetration":7.870152609153}}
+  ],
+  "verdict": {
+    "profileConsumption": "accepted-exact-reviewed-profile",
+    "tubeOccupancy": "refused-preflight",
+    "taperedBellyOccupancy": "refused-preflight",
+    "visibleSeparation": "not-exercised",
+    "anatomicalAdmission": "rejected",
+    "failureCertificate": "The exact tapered belly is directionally useful but insufficient: M34/M45 and M12/M45 retain insertion penetrations of about 0.20 and 0.105 across all three pressure rungs, preventing any lawful occupancy update.",
+    "earliestBlockingMechanism": "pairwise exclusion treats overlapping immutable insertion neighborhoods as an impossible collision before movable belly samples can negotiate space"
+  },
+  "nextAssay": {
+    "id": "source-authority-bound-fixed-attachment-contact-assay.v0",
+    "preserve": [
+      "exact current-graph K4 identities and order",
+      "exact measured attachment ids and coordinates",
+      "Bytebound volume-preserving-tapered-belly.v0 radii and target volumes",
+      "provisional compartment, skeletal capsule, pressure rungs, and normalized-sine occupancy roles",
+      "the full fixed-attachment residual ledger"
+    ],
+    "falsifier": "A contact rule is rejected if it suppresses non-attachment overlap, hides a residual instead of accounting for it, moves an attachment, permits skeletal penetration, or still cannot open belly-space negotiation.",
+    "smallestRedirect": "Classify only the exact source-linked shared insertion neighborhoods as admitted fixed contact for preflight accounting, retain their penetration as a named residual, and continue enforcing pairwise exclusion immediately beyond the bounded attachment neighborhood."
+  }
+}

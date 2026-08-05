@@ -1,0 +1,11 @@
+# Current-K4 dual-profile occupancy interpretation
+
+This assay holds the current-graph K4 parent atlas, construction order, centerline positions, measured attachment coordinates and ids, target-volume fields, three pressure rungs, provisional environment, solver budget, and explicit normalized-sine occupancy role schedule fixed. Its only carrier-profile variable is Bytebound's unchanged source-candidate-radius tubes versus the exact reviewed `volume-preserving-tapered-belly.v0` profile from `e356e402`/`54fa0067`.
+
+The result is a source-linked failure certificate, not a packed-object claim. The tubes refuse on four pairwise fixed-attachment penetrations. The tapered belly removes two blockers and cuts the worst remaining fixed-attachment penetration from `1.555076559298` to `0.204054995089` at baseline, but it still refuses on M34/M45 and M12/M45 insertion collisions across baseline, mild, and moderate. Because preflight refuses before an iteration, every selected result frame is exactly the source geometry plus the explicit immutable-refusal disposition. Twelve independently captured and agent-inspected frames confirm that the labels and pixels agree with that state.
+
+Visually, the profile change is meaningful but not an occupancy result: the tapered members look more muscle-like and their ends are much narrower, yet the cyan/purple/red insertion neighborhood is still visibly coincident. No separation, skeletal-clearance improvement, or anatomical admission follows from this assay.
+
+The earliest blocker is now narrower than "the packer does not work." The current pairwise-exclusion law treats source-linked overlapping immutable insertion neighborhoods as an impossible collision before any movable belly samples can negotiate space. The next assay should preserve and report those measured residuals while testing a source-authority-bound attachment-contact class that applies only inside an exact bounded fixed-end neighborhood; pairwise exclusion must resume immediately outside it. If that bounded rule hides ordinary belly overlap, moves endpoints, weakens skeletal clearance, or fails to open occupancy, it is rejected.
+
+Orbitable portfolio: `http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/`

@@ -1,0 +1,133 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed",
+    "outputPath": "repo://artifacts/current-k4-dual-profile-occupancy-assay-v0/baseline-source-candidate-radius-tubes-result.png",
+    "reportPath": "repo://artifacts/current-k4-dual-profile-occupancy-assay-v0/baseline-source-candidate-radius-tubes-result-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 15000,
+    "cleanupGraceMs": 1000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 28681,
+    "processGroupId": 28681,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 28681,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 2837,
+    "retainedBytes": 2837,
+    "truncated": false,
+    "tail": "[0804/210923.707150:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0804/210923.768701:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/210924.241305:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed (0)\n[0804/210924.241423:INFO:CONSOLE:0] \"[.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed (0)\n[0804/210924.243333:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/210924.286840:INFO:CONSOLE:0] \"[.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed (0)\n[0804/210924.288418:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/210924.308112:INFO:CONSOLE:0] \"[.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed (0)\n[0804/210924.310106:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/210924.357135:INFO:CONSOLE:0] \"[.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8765/artifacts/current-k4-dual-profile-occupancy-assay-v0/conditions/baseline/source-candidate-radius-tubes/?state=packed (0)\n245274 bytes written to file repo://artifacts/current-k4-dual-profile-occupancy-assay-v0/baseline-source-candidate-radius-tubes-result.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/current-k4-dual-profile-occupancy-assay-v0/baseline-source-candidate-radius-tubes-result.png",
+    "sizeBytes": 245274,
+    "sha256": "b99d2d6143397b8cbfdf1d3d481c5f2d9fa75ac3d626cbeda140fef39c7b913c",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 63,
+      "idatBytes": 244497
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/current-k4-dual-profile-occupancy-assay-v0/baseline-source-candidate-radius-tubes-result.png",
+      "sizeBytes": 245274,
+      "sha256": "b99d2d6143397b8cbfdf1d3d481c5f2d9fa75ac3d626cbeda140fef39c7b913c",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 63,
+        "idatBytes": 244497
+      }
+    }
+  }
+}
