@@ -76,7 +76,7 @@ assert.match(renderer, /placementVelocity/, 'renderer measures shared-node place
 assert.match(renderer, /sequence-viewer\.html/, 'renderer writes an operator-scrubbable exact temporal comparison');
 assert.match(renderer, /cached-or-static-render/, 'renderer rejects a static or cached rendered sequence');
 assert.match(renderer, /matched-native-node-flow-tangent-tap-centers-v0/, 'placement velocity follows projected quadrature taps rather than fixed Eulerian cells');
-assert.match(renderer, /actual-in-bounds-bilinear-deposit-count-v0/, 'multiplicity churn counts actual in-frame deposits');
+assert.match(renderer, /actual-in-bounds-positive-weight-bilinear-deposit-count-v1/, 'multiplicity churn counts actual in-frame positive-weight deposits');
 
 const python = process.env.KAMINOS_MLX_PYTHON || '/private/tmp/kaminos-mlx-residual-venv/bin/python';
 const selfTest = spawnSync(python, [rendererUrl.pathname, '--self-test'], { encoding: 'utf8' });
