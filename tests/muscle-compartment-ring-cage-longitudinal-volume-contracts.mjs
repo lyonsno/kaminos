@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
 
 import { createSyntheticFourMuscleCompartment } from '../muscle-compartment-packing-core.mjs';
@@ -19,6 +21,7 @@ const CONFIG = Object.freeze({
 });
 const SCHEMA =
   'kaminos.muscle-compartment-ring-cage-longitudinal-volume-redistribution.v0';
+const REPO_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 
 function buildFixture() {
   const source = createSyntheticFourMuscleCompartment();
@@ -194,4 +197,111 @@ test('longitudinal redistribution refuses fixed, overlapping, and underpowered r
     ),
     /cannot repay/i,
   );
+});
+
+test('current-K4 pressure selection targets the global movable maximum and adjacent quiet run', async () => {
+  assert.equal(
+    typeof contactCore.derivePressureDirectedLongitudinalRingCageVolumeRedistribution,
+    'function',
+    'the current-K4 assay must derive longitudinal allocation from the residual ledger',
+  );
+  const carrier = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json',
+  ), 'utf8'));
+  const residualLedger = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json',
+  ), 'utf8'));
+  const source = JSON.parse(await readFile(path.join(
+    REPO_ROOT,
+    'artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json',
+  ), 'utf8'));
+  const requested = {
+    subjectConstructionId: 'muscle-45',
+    obstacleConstructionId: 'muscle-34',
+    compressionAreaScale: 0.96,
+    repaymentSectionCount: 4,
+    maximumRepaymentPressureRatio: 0.1,
+    maximumRepaymentAreaScale: 1.2,
+    maximumAdjacentAreaScaleDelta: 0.1,
+    volumeRelativeTolerance: 1e-10,
+  };
+  const selection =
+    contactCore.derivePressureDirectedLongitudinalRingCageVolumeRedistribution(
+      carrier,
+      residualLedger,
+      requested,
+    );
+
+  assert.equal(
+    selection.schema,
+    'kaminos.muscle-compartment-ring-cage-pressure-volume-redistribution-selection.v0',
+  );
+  assert.equal(selection.status, 'completed');
+  assert.equal(selection.sourceCarrierSha256, carrier.identity.sha256);
+  assert.deepEqual(selection.requested, requested);
+  assert.equal(selection.fallbackUsed, false);
+  assert.equal(selection.targetContactCount, 3);
+  assert.equal(selection.targetTotalPenetration, 0.46509551066969257);
+  assert.equal(selection.targetMaximumPenetration, 0.3420731982757239);
+  assert.deepEqual(selection.compressionSectionIds, [
+    'muscle-45:section:0011',
+  ]);
+  assert.deepEqual(selection.repaymentSectionIds, [
+    'muscle-45:section:0010',
+    'muscle-45:section:0009',
+    'muscle-45:section:0008',
+    'muscle-45:section:0007',
+  ]);
+  assert.deepEqual(selection.operatorRequest, {
+    constructionId: 'muscle-45',
+    compressionAreaScale: 0.96,
+    compressionSectionIds: selection.compressionSectionIds,
+    repaymentSectionIds: selection.repaymentSectionIds,
+    maximumRepaymentAreaScale: 1.2,
+    maximumAdjacentAreaScaleDelta: 0.1,
+    volumeRelativeTolerance: 1e-10,
+  });
+  assert.ok(selection.repaymentSections.every(
+    row => row.pressureRatio <= requested.maximumRepaymentPressureRatio,
+  ));
+  assert.deepEqual(
+    contactCore.derivePressureDirectedLongitudinalRingCageVolumeRedistribution(
+      carrier,
+      residualLedger,
+      requested,
+    ),
+    selection,
+  );
+
+  const before = contactCore.measureMuscleCompartmentRingCageContactState(
+    carrier,
+    source,
+  );
+  const transfer = contactCore.applyLongitudinalRingCageSectionVolumeRedistribution(
+    carrier,
+    selection.operatorRequest,
+  );
+  const after = contactCore.measureMuscleCompartmentRingCageContactState(
+    transfer.outputCarrier,
+    source,
+  );
+  assert.equal(transfer.effective.repaymentAreaScale, 1.0038672659546135);
+  assert.equal(transfer.finalVolumeRelativeError, 4.592657864275e-11);
+  assert.equal(transfer.nonPositiveCellCount, 0);
+  assert.equal(after.pairwise.movableMaximumPenetration, 0.3265856567325679);
+  assert.ok(after.pairwise.movableMaximumPenetration <
+    before.pairwise.movableMaximumPenetration);
+  assert.equal(after.pairwise.movableTotalPenetration, 10.212581724883897);
+  assert.ok(
+    after.pairwise.movableTotalPenetration >
+      before.pairwise.movableTotalPenetration,
+    'the first point must preserve its aggregate-movable trade rather than claim a scalar win',
+  );
+  assert.ok(after.pairwise.fixedTotalPenetration <
+    before.pairwise.fixedTotalPenetration);
+  assert.equal(after.skeletal.totalPenetration, before.skeletal.totalPenetration);
+  assert.equal(after.compartment.maximumEscape, 0);
+  assert.ok(after.cages.every(row => row.nonPositiveCellCount === 0));
 });

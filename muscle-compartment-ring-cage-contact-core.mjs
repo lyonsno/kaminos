@@ -18,6 +18,8 @@ export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_ANISOTROPY_SELECTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_REDISTRIBUTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-longitudinal-volume-redistribution.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_VOLUME_REDISTRIBUTION_SELECTION_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-pressure-volume-redistribution-selection.v0';
 
 const EPSILON = 1e-10;
 
@@ -1270,6 +1272,218 @@ function cageCurrentPositiveVolume(cage) {
     (sum, cell) => sum + Math.max(0, cell.orientedVolume),
     0,
   );
+}
+
+export function derivePressureDirectedLongitudinalRingCageVolumeRedistribution(
+  solverCarrier,
+  residualLedger,
+  requestedConfig,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error(
+      'pressure-directed longitudinal redistribution requires the admitted solver carrier schema',
+    );
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution source carrier identity mismatch: ` +
+      `recorded ${solverCarrier.identity?.sha256 || 'missing'}, actual ` +
+      `${actualCarrierSha256}`,
+    );
+  }
+  if (!residualLedger || residualLedger.schema !==
+      MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_RESIDUAL_LEDGER_SCHEMA) {
+    throw new Error(
+      'pressure-directed longitudinal redistribution requires the residual ledger schema',
+    );
+  }
+  if (residualLedger.sourceCarrierSha256 !== solverCarrier.identity.sha256) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution source carrier identity mismatch: ` +
+      `ledger ${residualLedger.sourceCarrierSha256 || 'missing'}, carrier ` +
+      `${solverCarrier.identity.sha256}`,
+    );
+  }
+  if (JSON.stringify(residualLedger.orderedConstructionIds) !==
+      JSON.stringify(solverCarrier.orderedConstructionIds)) {
+    throw new Error(
+      'pressure-directed longitudinal redistribution construction order mismatch',
+    );
+  }
+  const configKeys = [
+    'compressionAreaScale',
+    'maximumAdjacentAreaScaleDelta',
+    'maximumRepaymentAreaScale',
+    'maximumRepaymentPressureRatio',
+    'obstacleConstructionId',
+    'repaymentSectionCount',
+    'subjectConstructionId',
+    'volumeRelativeTolerance',
+  ];
+  if (!requestedConfig || typeof requestedConfig !== 'object' ||
+      Array.isArray(requestedConfig) ||
+      JSON.stringify(Object.keys(requestedConfig).sort()) !== JSON.stringify(configKeys)) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution config requires exactly ` +
+      `${configKeys.join(', ')}`,
+    );
+  }
+  if (typeof requestedConfig.subjectConstructionId !== 'string' ||
+      typeof requestedConfig.obstacleConstructionId !== 'string' ||
+      requestedConfig.subjectConstructionId === requestedConfig.obstacleConstructionId ||
+      !Number.isFinite(requestedConfig.compressionAreaScale) ||
+      !(requestedConfig.compressionAreaScale > 0 &&
+        requestedConfig.compressionAreaScale < 1) ||
+      !Number.isInteger(requestedConfig.repaymentSectionCount) ||
+      !(requestedConfig.repaymentSectionCount > 0) ||
+      !Number.isFinite(requestedConfig.maximumRepaymentPressureRatio) ||
+      !(requestedConfig.maximumRepaymentPressureRatio >= 0) ||
+      !Number.isFinite(requestedConfig.maximumRepaymentAreaScale) ||
+      !(requestedConfig.maximumRepaymentAreaScale > 1) ||
+      !Number.isFinite(requestedConfig.maximumAdjacentAreaScaleDelta) ||
+      !(requestedConfig.maximumAdjacentAreaScaleDelta > 0) ||
+      !Number.isFinite(requestedConfig.volumeRelativeTolerance) ||
+      !(requestedConfig.volumeRelativeTolerance > 0)) {
+    throw new Error(
+      'pressure-directed longitudinal redistribution config contains an invalid value',
+    );
+  }
+  const cage = solverCarrier.cages.find(
+    row => row.constructionId === requestedConfig.subjectConstructionId,
+  );
+  if (!cage) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution lacks construction ` +
+      `${requestedConfig.subjectConstructionId}`,
+    );
+  }
+  const prepared = prepareCage(cage);
+  const rows = sectionRows(prepared);
+  const orderedSectionIds = [...rows.keys()].sort();
+  const targetContacts = residualLedger.pairwise.contacts.filter(contact =>
+    contact.fixed === false &&
+    contact.subjectConstructionId === requestedConfig.subjectConstructionId &&
+    contact.obstacleConstructionId === requestedConfig.obstacleConstructionId);
+  if (targetContacts.length === 0) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution has no movable ` +
+      `${requestedConfig.subjectConstructionId}->` +
+      `${requestedConfig.obstacleConstructionId} contacts`,
+    );
+  }
+  const compressionSectionIds = [...new Set(targetContacts.map(contact => {
+    const row = rows.get(contact.sectionId);
+    if (!row || row.fixed || !row.nodeIds.includes(contact.nodeId)) {
+      throw new Error(
+        `pressure-directed longitudinal redistribution contact ` +
+        `${contact.nodeId || 'missing'} does not resolve to a movable subject section`,
+      );
+    }
+    return contact.sectionId;
+  }))].sort();
+  const compressionSectionIdSet = new Set(compressionSectionIds);
+  const allSubjectPressureBySectionId = new Map(
+    orderedSectionIds.map(sectionId => [sectionId, 0]),
+  );
+  for (const contact of residualLedger.pairwise.contacts) {
+    if (contact.fixed === false &&
+        contact.subjectConstructionId === requestedConfig.subjectConstructionId) {
+      if (!allSubjectPressureBySectionId.has(contact.sectionId)) {
+        throw new Error(
+          `pressure-directed longitudinal redistribution contact section ` +
+          `${contact.sectionId || 'missing'} is outside the subject cage`,
+        );
+      }
+      allSubjectPressureBySectionId.set(
+        contact.sectionId,
+        allSubjectPressureBySectionId.get(contact.sectionId) + contact.penetration,
+      );
+    }
+  }
+  const compressionPressure = Math.max(...compressionSectionIds.map(
+    sectionId => allSubjectPressureBySectionId.get(sectionId),
+  ));
+  if (!(compressionPressure > EPSILON)) {
+    throw new Error(
+      'pressure-directed longitudinal redistribution compression pressure is zero',
+    );
+  }
+  const sectionIndex = new Map(
+    orderedSectionIds.map((sectionId, index) => [sectionId, index]),
+  );
+  const eligibleRepayment = orderedSectionIds
+    .filter(sectionId => !rows.get(sectionId).fixed &&
+      !compressionSectionIdSet.has(sectionId))
+    .map(sectionId => {
+      const totalPenetration = allSubjectPressureBySectionId.get(sectionId);
+      const pressureRatio = totalPenetration / compressionPressure;
+      const longitudinalDistance = Math.min(...compressionSectionIds.map(
+        compressionSectionId => Math.abs(
+          sectionIndex.get(sectionId) - sectionIndex.get(compressionSectionId),
+        ),
+      ));
+      return {
+        sectionId,
+        totalPenetration,
+        pressureRatio,
+        longitudinalDistance,
+      };
+    })
+    .filter(row => row.pressureRatio <=
+      requestedConfig.maximumRepaymentPressureRatio)
+    .sort((left, right) =>
+      left.longitudinalDistance - right.longitudinalDistance ||
+      left.totalPenetration - right.totalPenetration ||
+      left.sectionId.localeCompare(right.sectionId));
+  if (eligibleRepayment.length < requestedConfig.repaymentSectionCount) {
+    throw new Error(
+      `pressure-directed longitudinal redistribution found ` +
+      `${eligibleRepayment.length} low-pressure repayment sections; ` +
+      `${requestedConfig.repaymentSectionCount} requested`,
+    );
+  }
+  const repaymentSections = eligibleRepayment.slice(
+    0,
+    requestedConfig.repaymentSectionCount,
+  );
+  const repaymentSectionIds = repaymentSections.map(row => row.sectionId);
+  const targetTotalPenetration = targetContacts.reduce(
+    (sum, contact) => sum + contact.penetration,
+    0,
+  );
+  const targetMaximumPenetration = Math.max(...targetContacts.map(
+    contact => contact.penetration,
+  ));
+  return {
+    schema:
+      MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_VOLUME_REDISTRIBUTION_SELECTION_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    residualLedgerSha256: hashMuscleCompartmentRingCageCanonicalJson(residualLedger),
+    requested: structuredClone(requestedConfig),
+    effective: structuredClone(requestedConfig),
+    fallbackUsed: false,
+    targetContactCount: targetContacts.length,
+    targetTotalPenetration,
+    targetMaximumPenetration,
+    compressionPressure,
+    compressionSectionIds,
+    repaymentSectionIds,
+    repaymentSections,
+    operatorRequest: {
+      constructionId: requestedConfig.subjectConstructionId,
+      compressionAreaScale: requestedConfig.compressionAreaScale,
+      compressionSectionIds,
+      repaymentSectionIds,
+      maximumRepaymentAreaScale: requestedConfig.maximumRepaymentAreaScale,
+      maximumAdjacentAreaScaleDelta:
+        requestedConfig.maximumAdjacentAreaScaleDelta,
+      volumeRelativeTolerance: requestedConfig.volumeRelativeTolerance,
+    },
+  };
 }
 
 function applyRingCageSectionAreaScales(
