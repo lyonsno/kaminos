@@ -94,6 +94,16 @@ function parseArguments(argv) {
   };
 }
 
+function preScanOutputDirectory(argv) {
+  let outputDirectory = null;
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== '--output') continue;
+    const value = argv[index + 1];
+    if (value && !value.startsWith('--')) outputDirectory = path.resolve(value);
+  }
+  return outputDirectory;
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -172,9 +182,11 @@ let outputPaths = [];
 let parentAtlasFileSha256 = null;
 let effectiveParentAtlasPath = null;
 let parentAtlasId = null;
+const rawArguments = process.argv.slice(2);
+const preScannedOutputDirectory = preScanOutputDirectory(rawArguments);
 
 try {
-  args = parseArguments(process.argv.slice(2));
+  args = parseArguments(rawArguments);
   await mkdir(args.outputDirectory, { recursive: true });
   reportPath = path.join(args.outputDirectory, 'run-report.json');
   outputPaths = OWNED_ARTIFACT_PATHS.map(
@@ -302,9 +314,15 @@ try {
   })}\n`);
 } catch (error) {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  if (args?.outputDirectory) {
-    await mkdir(args.outputDirectory, { recursive: true });
-    reportPath ||= path.join(args.outputDirectory, 'run-report.json');
+  const failureOutputDirectory = args?.outputDirectory || preScannedOutputDirectory;
+  if (failureOutputDirectory) {
+    await mkdir(failureOutputDirectory, { recursive: true });
+    reportPath ||= path.join(failureOutputDirectory, 'run-report.json');
+    if (outputPaths.length === 0) {
+      outputPaths = OWNED_ARTIFACT_PATHS.map(
+        relative => path.join(failureOutputDirectory, relative),
+      );
+    }
     for (const target of outputPaths) {
       await unlink(target).catch(unlinkError => {
         if (unlinkError.code !== 'ENOENT') throw unlinkError;
@@ -315,15 +333,16 @@ try {
       status: 'failed',
       failurePhase: phase,
       error: message,
-      requestedParentAtlasPath: args.requestedParentAtlasPath,
+      rawArguments,
+      requestedParentAtlasPath: args?.requestedParentAtlasPath || null,
       effectiveParentAtlasPath: effectiveParentAtlasPath
         ? receiptPath(effectiveParentAtlasPath)
         : null,
       parentAtlasId,
       parentAtlasFileSha256,
-      requestedConstructionIds: args.requestedConstructionIds,
-      requestedTaper: args.requestedTaper,
-      requestedSolverConfig: args.requestedSolverConfig,
+      requestedConstructionIds: args?.requestedConstructionIds || [],
+      requestedTaper: args?.requestedTaper || null,
+      requestedSolverConfig: args?.requestedSolverConfig || null,
       outputs: null,
       visual: null,
       lastTrustworthyEvidence: {

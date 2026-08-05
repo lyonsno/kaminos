@@ -12,6 +12,24 @@ const ATLAS = path.join(
   'artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json',
 );
 const ROUTES = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
+const STALE_ARTIFACT_PATHS = [
+  'authenticated-source.json',
+  'parent-preflight-result.json',
+  'derived-source.json',
+  'derivation-receipt.json',
+  'packing-result.json',
+  'parent/index.html',
+  'tapered/index.html',
+  'index.html',
+  'parent-before.png',
+  'tapered-before.png',
+  'tapered-packed.png',
+  'parent-before-capture-report.json',
+  'tapered-before-capture-report.json',
+  'tapered-packed-capture-report.json',
+  'visual-inspection.json',
+  'interpretation.md',
+];
 
 function run(output, extra = []) {
   return spawnSync(process.execPath, [
@@ -24,6 +42,24 @@ function run(output, extra = []) {
     '--max-iterations', '1',
     ...extra,
   ], { cwd: REPO_ROOT, encoding: 'utf8' });
+}
+
+async function seedStaleArtifacts(output) {
+  await mkdir(path.join(output, 'parent'), { recursive: true });
+  await mkdir(path.join(output, 'tapered'), { recursive: true });
+  await Promise.all(
+    STALE_ARTIFACT_PATHS.map(relative => writeFile(path.join(output, relative), 'stale')),
+  );
+}
+
+async function assertStaleArtifactsCleared(output) {
+  for (const relative of STALE_ARTIFACT_PATHS) {
+    await assert.rejects(
+      readFile(path.join(output, relative)),
+      /ENOENT/,
+      `${relative} must not survive a failed reused-root run`,
+    );
+  }
 }
 
 test('endpoint-taper assay writes identity-bound source, result, terminal report, and three-state visual route', async () => {
@@ -84,22 +120,7 @@ test('endpoint-taper assay fails loud on invalid taper without publishing a prim
 
 test('failed reused-root assay clears stale visual captures, receipts, and interpretation', async () => {
   const output = await mkdtemp(path.join(tmpdir(), 'kaminos-endpoint-taper-reused-'));
-  const stalePaths = [
-    'parent-before.png',
-    'tapered-before.png',
-    'tapered-packed.png',
-    'parent-before-capture-report.json',
-    'tapered-before-capture-report.json',
-    'tapered-packed-capture-report.json',
-    'visual-inspection.json',
-    'interpretation.md',
-  ];
-  await mkdir(path.join(output, 'parent'), { recursive: true });
-  await mkdir(path.join(output, 'tapered'), { recursive: true });
-  await Promise.all(stalePaths.map(relative => writeFile(path.join(output, relative), 'stale')));
-  await writeFile(path.join(output, 'packing-result.json'), '{"status":"stale-success"}\n');
-  await writeFile(path.join(output, 'parent', 'index.html'), 'stale parent viewer');
-  await writeFile(path.join(output, 'tapered', 'index.html'), 'stale taper viewer');
+  await seedStaleArtifacts(output);
 
   const failed = run(output, ['--endpoint-radius-multiplier', '1']);
   assert.notEqual(failed.status, 0);
@@ -108,14 +129,20 @@ test('failed reused-root assay clears stale visual captures, receipts, and inter
   assert.equal(report.failurePhase, 'derive-source');
   assert.equal(report.outputs, null);
   assert.equal(report.visual, null);
-  for (const relative of stalePaths) {
-    await assert.rejects(
-      readFile(path.join(output, relative)),
-      /ENOENT/,
-      `${relative} must not survive a failed reused-root run`,
-    );
-  }
-  await assert.rejects(readFile(path.join(output, 'packing-result.json')), /ENOENT/);
-  await assert.rejects(readFile(path.join(output, 'parent', 'index.html')), /ENOENT/);
-  await assert.rejects(readFile(path.join(output, 'tapered', 'index.html')), /ENOENT/);
+  await assertStaleArtifactsCleared(output);
+});
+
+test('parse-stage taper failure retains output custody and clears reused-root success evidence', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-endpoint-taper-parse-failure-'));
+  await seedStaleArtifacts(output);
+
+  const failed = run(output, ['--endpoint-radius-multiplier', 'not-finite']);
+  assert.notEqual(failed.status, 0);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'parse-arguments');
+  assert.match(report.error, /endpoint-radius-multiplier must be finite/);
+  assert.equal(report.outputs, null);
+  assert.equal(report.visual, null);
+  await assertStaleArtifactsCleared(output);
 });
