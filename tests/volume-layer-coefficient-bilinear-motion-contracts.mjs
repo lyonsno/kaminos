@@ -30,6 +30,11 @@ assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'witness wri
 assert.match(witness, /unlinkIfExists\(path\)/, 'wrapper removes stale child artifacts before accepting new evidence');
 assert.match(witness, /captureReport\.status !== 'captured'/, 'wrapper rejects stale or failed capture reports');
 assert.match(witness, /renderReport\.status !== 'complete'/, 'wrapper rejects stale or failed render reports');
+assert.match(
+  witness,
+  /targetEvidence:\s*renderReport\.source\?\.targetEvidence/,
+  'top-level witness report preserves per-state exact-target image authority',
+);
 
 assert.match(capture, /single-browser-multi-state-exact-bilinear-motion-v0/, 'one browser owns the complete exact sequence');
 assert.match(capture, /adjacent-exact-state-one-trajectory-v0/, 'all motion states share one deterministic replay origin and physical clock');

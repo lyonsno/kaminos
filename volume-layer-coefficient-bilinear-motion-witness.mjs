@@ -88,11 +88,17 @@ try {
       renderReportPath,
       renderReportSha256: sha256File(renderReportPath),
       renderReportStatus: renderReport.status,
+      targetEvidence: renderReport.source?.targetEvidence ?? null,
     };
   }
   if (render.status !== 0) throw new Error(`offline temporal render exited ${render.status ?? 'without status'}`);
   const renderReport = readJsonReport(renderReportPath, 'render report');
   if (renderReport.status !== 'complete') throw new Error(`offline temporal render report status is ${renderReport.status}`);
+  const targetEvidence = renderReport.source?.targetEvidence;
+  const expectedStateCount = stateSteps.split(',').length;
+  if (!Array.isArray(targetEvidence) || targetEvidence.length !== expectedStateCount) {
+    throw new Error(`offline temporal render target evidence is incomplete: ${targetEvidence?.length ?? 'missing'} of ${expectedStateCount}`);
+  }
 
   failurePhase = null;
   writeReport({
@@ -100,6 +106,7 @@ try {
     failurePhase,
     lastTrustworthyEvidence,
     authority: 'single-browser-multi-state-exact-bilinear-motion-v0',
+    targetEvidence: renderReport.source?.targetEvidence,
     stateSteps: stateSteps.split(',').map(Number),
     captureInvocationCount: 1,
   });
