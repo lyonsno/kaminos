@@ -1,0 +1,29 @@
+{
+  "schema": "kaminos.lirm-metaball-multiview-topology-metrics.v0",
+  "status": "post-hoc-diagnostic",
+  "summary": "Target modality strongly changes presentation while the low-frequency silhouette remains stable. Clay plus normal converges on clay; all-depth is the only cell that adds a fur-like organismal surface.",
+  "wholeFrameSsim": {
+    "depth__clay-target": 0.853859,
+    "depth__normal-target": 0.377383,
+    "depth__clay-normal-target": 0.847978,
+    "clay-target__normal-target": 0.386093,
+    "clay-target__clay-normal-target": 0.977128,
+    "normal-target__clay-normal-target": 0.399160
+  },
+  "backgroundRelativeMask": {
+    "method": "Largest four-connected RGB-distance component from a per-image border-median background; threshold 20 RGB Euclidean units.",
+    "claim": "Exploratory silhouette diagnostic only; not a predeclared admission metric.",
+    "iou": {
+      "depth__clay-target": 0.9596,
+      "depth__normal-target": 0.9342,
+      "depth__clay-normal-target": 0.9581,
+      "clay-target__clay-normal-target": 0.9867
+    }
+  },
+  "outputSha256": {
+    "depth-control": "sha256:0267ef5bb644941aefdd5690f50f5852a037edba4bfe87406ab68e7155ddf03d",
+    "clay-target": "sha256:b59de536381dcaadefbd26c4bee635bd8d45d0952d2bdc4903e085ed3d2e7887",
+    "normal-target": "sha256:ebfabff71556fc2aa775c400a332f627131b59624f5e2ddf119786c88a26920d",
+    "clay-normal-target": "sha256:f1fa44fe2448e13eeba6b2c04986ebd051108f6c2efa6cb99fe8da430f0600f4"
+  }
+}

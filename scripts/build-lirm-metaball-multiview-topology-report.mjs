@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,8 @@ const jobsPath = join(artifactRoot, 'greenroom-jobs.json');
 const jobs = existsSync(jobsPath) ? JSON.parse(readFileSync(jobsPath, 'utf8')) : { jobs: [] };
 const jobsByCell = new Map(jobs.jobs.map(job => [job.cellId, job]));
 const seed = manifest.fixedGenerator.seeds[0];
+const metricsPath = join(artifactRoot, 'metrics.json');
+const metrics = existsSync(metricsPath) ? JSON.parse(readFileSync(metricsPath, 'utf8')) : null;
 
 const escapeHtml = value => String(value)
   .replaceAll('&', '&amp;')
@@ -18,6 +21,7 @@ const escapeHtml = value => String(value)
   .replaceAll('>', '&gt;')
   .replaceAll('"', '&quot;');
 const reportRelativePath = path => relative(artifactRoot, resolve(repoRoot, path));
+const sha256 = path => `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
 
 const rows = manifest.conditions.map(condition => {
   const references = condition.references.map((reference, index) => {
@@ -31,20 +35,32 @@ const rows = manifest.conditions.map(condition => {
     ? reportRelativePath(condition.reuseOutputPath)
     : `generated/${condition.id}/seed-${seed}/output.png`;
   const jobId = condition.reuseJobId ?? job?.jobId;
-  const output = jobId && existsSync(resolve(artifactRoot, outputPath))
-    ? `<figure class="tile output"><figcaption>output · seed ${seed} · ${escapeHtml(jobId)}${condition.reuseJobId ? ' · reused control' : ''}</figcaption><img src="${escapeHtml(outputPath)}" alt="${escapeHtml(`${condition.id} output`)}"></figure>`
+  const absoluteOutputPath = resolve(artifactRoot, outputPath);
+  const receiptPath = condition.reuseReceiptPath
+    ? resolve(repoRoot, condition.reuseReceiptPath)
+    : join(artifactRoot, 'receipts', `${condition.id}.json`);
+  const receipt = existsSync(receiptPath) ? JSON.parse(readFileSync(receiptPath, 'utf8')) : null;
+  const outputHash = existsSync(absoluteOutputPath) ? sha256(absoluteOutputPath) : null;
+  const output = jobId && outputHash
+    ? `<figure class="tile output"><figcaption>output · ${escapeHtml(outputHash.slice(7, 19))} · ${escapeHtml(jobId)}${condition.reuseJobId ? ' · reused' : ''}</figcaption><img src="${escapeHtml(outputPath)}" alt="${escapeHtml(`${condition.id} output`)}"></figure>`
     : `<figure class="tile pending"><figcaption>output · seed ${seed}</figcaption><div>pending</div></figure>`;
-  return `<section><header><h2>${escapeHtml(condition.id)}</h2><p>${escapeHtml(condition.referenceKinds.join(' / '))} · ${escapeHtml(condition.requestedRoute)}</p></header><p class="row-prompt"><strong>exact prompt</strong> ${escapeHtml(condition.prompt)}</p><div class="tiles">${references}${output}</div></section>`;
+  const effectiveRoute = receipt
+    ? `<details><summary>effective route · ${escapeHtml(receipt.status)} · exit ${escapeHtml(receipt.exit_code)} · ${escapeHtml(receipt.job_type)}</summary><code>${escapeHtml(receipt.effective_route)}</code></details>`
+    : '<p class="route-missing">effective route pending</p>';
+  return `<section><header><h2>${escapeHtml(condition.id)}</h2><p>${escapeHtml(condition.referenceKinds.join(' / '))} · requested ${escapeHtml(condition.requestedRoute)}</p></header><p class="row-prompt"><strong>exact prompt</strong> ${escapeHtml(condition.prompt)}</p>${effectiveRoute}<div class="tiles">${references}${output}</div></section>`;
 }).join('');
 
 const completed = manifest.conditions.filter(condition => {
   if (condition.reuseOutputPath) return existsSync(resolve(repoRoot, condition.reuseOutputPath));
   return existsSync(join(artifactRoot, 'generated', condition.id, `seed-${seed}`, 'output.png'));
 }).length;
+const finding = metrics
+  ? `<p class="finding"><strong>observed separation</strong> ${escapeHtml(metrics.summary)}</p>`
+  : '';
 
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bowplan multiview topology assay</title><style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;background:#101412;color:#edf1eb}.mast{position:sticky;top:0;z-index:2;padding:16px 24px;background:#151a17f2;border-bottom:1px solid #4c5b51}h1{margin:0 0 8px;font-size:20px;letter-spacing:0}.config,.question,.claim{margin:4px 0;color:#bac5bc;font-size:13px;line-height:1.45}.config strong{color:#f1c965}.question strong,.row-prompt strong{color:#69d2b4}.claim strong{color:#dc8a78}main{padding:0 24px 32px}section{padding:18px 0 22px;border-bottom:1px solid #344039}section header{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}h2{margin:0;font-size:16px;letter-spacing:0}section header p{margin:0;color:#95a59a;font-size:12px}.row-prompt{margin:0 0 10px;color:#bac5bc;font-size:12px;line-height:1.4}.tiles{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px}.tile{min-width:0;margin:0;overflow:hidden;border:1px solid #3a463f;border-radius:4px;background:#0a0d0b;aspect-ratio:1/1.1}figcaption{height:28px;padding:6px 8px;background:#202722;color:#d8ded9;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile img{display:block;width:100%;height:calc(100% - 28px);object-fit:contain}.source{border-color:#287969}.source.clay{border-color:#8f7650}.source.normal{border-color:#5f719a}.output{border-color:#b98d34}.pending{display:grid;grid-template-rows:28px 1fr;color:#7e8a82}.pending div{display:grid;place-items:center;font-size:12px}@media(max-width:1000px){.tiles{grid-template-columns:repeat(2,minmax(150px,1fr))}}
-</style></head><body><header class="mast"><h1>Bowplan multiview topology · ${completed}/${manifest.conditions.length} outputs present</h1><p class="config"><strong>fixed generator</strong> ${escapeHtml(manifest.fixedGenerator.model)} · q${manifest.fixedGenerator.quantize} · ${manifest.fixedGenerator.width}×${manifest.fixedGenerator.height} · ${manifest.fixedGenerator.steps} steps · guidance ${manifest.fixedGenerator.guidance.toFixed(1)} · seed ${seed}</p><p class="question"><strong>controlled question</strong> Can target-view clay or normal structure restore organismal elaboration while the target/side/target depth topology retains low-frequency form?</p><p class="claim"><strong>claim ceiling</strong> ${escapeHtml(manifest.claimCeiling)}</p></header><main>${rows}</main></body></html>`;
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;background:#101412;color:#edf1eb}.mast{position:sticky;top:0;z-index:2;padding:16px 24px;background:#151a17f2;border-bottom:1px solid #4c5b51}h1{margin:0 0 8px;font-size:20px;letter-spacing:0}.config,.question,.claim,.finding{margin:4px 0;color:#bac5bc;font-size:13px;line-height:1.45}.config strong{color:#f1c965}.question strong,.row-prompt strong{color:#69d2b4}.finding strong{color:#8ed0db}.claim strong{color:#dc8a78}main{padding:0 24px 32px}section{padding:18px 0 22px;border-bottom:1px solid #344039}section header{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}h2{margin:0;font-size:16px;letter-spacing:0}section header p{margin:0;color:#95a59a;font-size:12px}.row-prompt{margin:0 0 8px;color:#bac5bc;font-size:12px;line-height:1.4}details{margin:0 0 10px;color:#94a49a;font-size:11px}details code{display:block;margin-top:6px;padding:8px;background:#090c0a;color:#bac5bc;white-space:pre-wrap;overflow-wrap:anywhere}.route-missing{color:#dc8a78;font-size:11px}.tiles{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:8px}.tile{min-width:0;margin:0;overflow:hidden;border:1px solid #3a463f;border-radius:4px;background:#0a0d0b;aspect-ratio:1/1.1}figcaption{height:28px;padding:6px 8px;background:#202722;color:#d8ded9;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tile img{display:block;width:100%;height:calc(100% - 28px);object-fit:contain}.source{border-color:#287969}.source.clay{border-color:#8f7650}.source.normal{border-color:#5f719a}.output{border-color:#b98d34}.pending{display:grid;grid-template-rows:28px 1fr;color:#7e8a82}.pending div{display:grid;place-items:center;font-size:12px}@media(max-width:1000px){.tiles{grid-template-columns:repeat(2,minmax(150px,1fr))}}
+</style></head><body><header class="mast"><h1>Bowplan multiview topology · ${completed}/${manifest.conditions.length} outputs present</h1><p class="config"><strong>fixed generator</strong> ${escapeHtml(manifest.fixedGenerator.model)} · q${manifest.fixedGenerator.quantize} · ${manifest.fixedGenerator.width}×${manifest.fixedGenerator.height} · ${manifest.fixedGenerator.steps} steps · guidance ${manifest.fixedGenerator.guidance.toFixed(1)} · seed ${seed}</p><p class="question"><strong>controlled question</strong> Can target-view clay or normal structure restore organismal elaboration while the target/side/target depth topology retains low-frequency form?</p>${finding}<p class="claim"><strong>claim ceiling</strong> ${escapeHtml(manifest.claimCeiling)}</p></header><main>${rows}</main></body></html>`;
 
 const reportPath = join(artifactRoot, 'report.html');
 writeFileSync(reportPath, html);
