@@ -53,6 +53,9 @@ const MOTION_DESCRIPTOR_ORDER = Object.freeze(MOTION_DESCRIPTOR_COLUMNS.map(inde
 const MOTION_TARGET_MODE = 'shared-transmittance-contribution-sum';
 const MOTION_TARGET_IDENTITY = 'ridge-plus-non-ridge-contributions-under-shared-transmittance-v0';
 const OPTICAL_COEFFICIENT_EPSILON = 1e-7;
+const NONRIDGE_MEMBERSHIP_OFFSET = 24;
+const OPTICAL_TAIL_START_OFFSET = 25;
+const OPTICAL_TAIL_END_OFFSET = 33;
 const DESCRIPTOR_TREATMENT_ORDER = Object.freeze([
   'flow.coherence',
   'flow.curlMagnitude',
@@ -75,6 +78,8 @@ const probeReportPath = resolve(String(args.get('--probe-report') || join(outDir
 const sourceAppearanceCorpusPath = resolve(String(args.get('--source-appearance-corpus') || DEFAULT_APPEARANCE_CORPUS));
 const stateSteps = String(args.get('--state-steps') || '80,120').split(',').map(value => Number(value.trim()));
 const motionCapture = args.has('--motion-capture');
+const sourceBasisProbeOnly = args.has('--source-basis-probe-only');
+const targetBeforeSourceProbe = args.has('--target-before-source-probe');
 const targetRaySteps = Number(args.get('--target-ray-steps') || 160);
 const timeoutMs = Number(args.get('--timeout-ms') || 900000);
 const settleMs = Number(args.get('--settle-ms') || 2500);
@@ -258,9 +263,11 @@ try {
   }
 
   failurePhase = 'training-manifest';
-  const manifest = motionCapture
-    ? buildMotionManifest({ states, fixedCameraPose })
-    : buildTrainingManifest({ states, sourceAppearanceCorpus });
+  const manifest = sourceBasisProbeOnly
+    ? buildSourceBasisProbeManifest({ states, fixedCameraPose })
+    : (motionCapture
+      ? buildMotionManifest({ states, fixedCameraPose })
+      : buildTrainingManifest({ states, sourceAppearanceCorpus }));
   writeFileSync(trainingManifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   lastTrustworthyEvidence = {
     ...lastTrustworthyEvidence,
@@ -300,6 +307,8 @@ try {
     sampleCap: null,
     droppedRowCount: 0,
     motionCapture,
+    sourceBasisProbeOnly,
+    targetBeforeSourceProbe,
   });
   console.log(JSON.stringify({
     status: 'captured',
@@ -364,6 +373,11 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
   const effectiveControls = causalControlsFromRuntime(frozen.controls);
   const controlIdentity = `sha256:${sha256(Buffer.from(canonicalJson(effectiveControls)))}`;
 
+  let target = null;
+  if (motionCapture && targetBeforeSourceProbe) {
+    target = await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs });
+  }
+
   failurePhase = `${stateId}:causal-controls`;
   const controlApplication = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.applyDebugNonRidgeCausalControls(${JSON.stringify(effectiveControls)})`);
   assert.equal(controlApplication?.ok, true, `${stateId} causal controls were substituted: ${JSON.stringify(controlApplication)}`);
@@ -376,16 +390,42 @@ async function captureState({ stateId, splitRole, steps, stateIndex, fixedCamera
   assert.equal(sourceBasis.rowCount, runtimeIdentity.grid ** 3, `${stateId} source-basis row count drifted`);
   assert.equal(sourceBasis.overflowCount, 0, `${stateId} source-basis capture overflowed`);
 
-  const rows = await drainAnalyticalRows({ stateId, sourceBasis, effectiveControls });
+  const rows = await drainAnalyticalRows({
+    stateId,
+    sourceBasis,
+    effectiveControls,
+    allowZeroOpticalCoefficients: sourceBasisProbeOnly,
+  });
   failurePhase = `${stateId}:source-basis-release`;
   const sourceRelease = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.releaseDebugNonRidgeSourceBasisCapture(${JSON.stringify({
     sessionId: sourceBasis.sessionId,
   })})`);
   assert.equal(sourceRelease?.ok, true, `${stateId} source-basis release failed`);
 
-  const target = motionCapture
-    ? await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs })
-    : null;
+  if (motionCapture && !target) {
+    target = await captureMotionTarget({ stateId, fixedCameraPose, frozen, exactStateTimeMs });
+  }
+
+  if (sourceBasisProbeOnly) {
+    return {
+      id: stateId,
+      splitRole,
+      sameStateCaptureId: stateId,
+      requestedControlIdentity: controlIdentity,
+      effectiveControlIdentity: controlIdentity,
+      replay,
+      target,
+      rows: {
+        count: rows.count,
+        sourceRowCount: rows.sourceRowCount,
+        features: rows.features,
+        admission: rows.admission,
+        nativeCellIndices: rows.nativeCellIndices,
+        coefficients: rows.coefficients,
+        rawOpticalTail: rows.rawOpticalTail,
+      },
+    };
+  }
 
   failurePhase = `${stateId}:full-field-export-begin`;
   const fullField = await evaluate(socket, `${VOLUME_PROTOTYPE_EXPRESSION}.beginDebugFullFieldExport({})`);
@@ -700,7 +740,12 @@ function clipFromCanvas(rect = {}) {
   };
 }
 
-async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) {
+async function drainAnalyticalRows({
+  stateId,
+  sourceBasis,
+  effectiveControls,
+  allowZeroOpticalCoefficients = false,
+}) {
   const sinks = {
     features: new ArtifactSink(join(artifactsDir, `${stateId}-features.f32`), {
       dtype: 'float32-le', semanticRole: 'post-admission-local-features',
@@ -720,6 +765,10 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
   let retainedCount = 0;
   let positiveCoefficientValueCount = 0;
   let maximumCoefficientValue = 0;
+  let positiveMembershipValueCount = 0;
+  let maximumMembershipValue = 0;
+  let positiveRawOpticalValueCount = 0;
+  let maximumRawOpticalValue = 0;
   while (startFloat < sourceBasis.rowCount * SOURCE_BASIS_GPU_ROW_FLOATS) {
     const requestedFloatCount = Math.min(
       chunkRows * SOURCE_BASIS_GPU_ROW_FLOATS,
@@ -736,6 +785,16 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
     const bytes = Buffer.from(chunk.base64, 'base64');
     assert.equal(bytes.byteLength, chunk.floatCount * Float32Array.BYTES_PER_ELEMENT, `${stateId} source-basis chunk byte length drifted`);
     const values = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+    for (let rowOffset = 0; rowOffset < values.length; rowOffset += SOURCE_BASIS_GPU_ROW_FLOATS) {
+      const membership = values[rowOffset + NONRIDGE_MEMBERSHIP_OFFSET];
+      if (membership > OPTICAL_COEFFICIENT_EPSILON) positiveMembershipValueCount += 1;
+      maximumMembershipValue = Math.max(maximumMembershipValue, membership);
+      for (let tailOffset = OPTICAL_TAIL_START_OFFSET; tailOffset < OPTICAL_TAIL_END_OFFSET; tailOffset += 1) {
+        const value = values[rowOffset + tailOffset];
+        if (value > OPTICAL_COEFFICIENT_EPSILON) positiveRawOpticalValueCount += 1;
+        maximumRawOpticalValue = Math.max(maximumRawOpticalValue, value);
+      }
+    }
     const selected = selectAnalyticalLayerRows({
       fullGridRows: values,
       effectiveControls,
@@ -755,11 +814,13 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
   }
   assert.equal(sourceRowCount, sourceBasis.rowCount, `${stateId} did not drain the full source grid`);
   assert.ok(retainedCount > 0, `${stateId} analytical admission retained zero rows`);
-  assert.ok(positiveCoefficientValueCount > 0, `${stateId} analytical optical coefficient export is all zero`);
   const coefficients = sinks.coefficients.close([retainedCount, COEFFICIENT_ORDER.length], {
     positiveValueCount: positiveCoefficientValueCount,
     maximumValue: maximumCoefficientValue,
   });
+  if (!allowZeroOpticalCoefficients) {
+    assert.ok(positiveCoefficientValueCount > 0, `${stateId} analytical optical coefficient export is all zero`);
+  }
   return {
     count: retainedCount,
     sourceRowCount,
@@ -769,6 +830,21 @@ async function drainAnalyticalRows({ stateId, sourceBasis, effectiveControls }) 
     admission: sinks.admission.close([retainedCount, ANALYTICAL_ADMISSION_ORDER.length]),
     nativeCellIndices: sinks.nativeCellIndices.close([retainedCount]),
     coefficients,
+    rawOpticalTail: {
+      identity: 'full-grid-source-basis-raw-optical-tail-statistics-v0',
+      sourceRowCount,
+      nonRidgeMembership: {
+        offset: NONRIDGE_MEMBERSHIP_OFFSET,
+        positiveValueCount: positiveMembershipValueCount,
+        maximumValue: maximumMembershipValue,
+      },
+      opticalCoefficients: {
+        startOffset: OPTICAL_TAIL_START_OFFSET,
+        endOffsetExclusive: OPTICAL_TAIL_END_OFFSET,
+        positiveValueCount: positiveRawOpticalValueCount,
+        maximumValue: maximumRawOpticalValue,
+      },
+    },
   };
 }
 
@@ -1205,6 +1281,37 @@ function buildMotionManifest({ states, fixedCameraPose }) {
   return { ...body, identity: `sha256:${sha256(Buffer.from(canonicalJson(body)))}` };
 }
 
+function buildSourceBasisProbeManifest({ states, fixedCameraPose }) {
+  const controlIdentities = new Set(states.map(state => state.requestedControlIdentity));
+  assert.equal(controlIdentities.size, 1, 'source-basis probe changed causal controls between exact states');
+  const body = {
+    schema: 'kaminos.volume.layer-coefficient-source-basis-prime-probe.v0',
+    status: 'complete',
+    authority: 'diagnostic-target-prime-source-basis-only-v0',
+    claimCeiling: 'coefficient-population-mechanism-only-v0',
+    route: {
+      requested: requestedUrl,
+      effective: runtimeIdentity.effectiveRoute,
+      prototypeIdentity: runtimeIdentity.prototypeIdentity,
+      backend: runtimeIdentity.backend,
+      fallbackReason: null,
+    },
+    sequence: {
+      identity: 'single-browser-multi-state-source-basis-prime-probe-v0',
+      stateSteps: [...stateSteps],
+      targetBeforeSourceProbe,
+      targetMode: targetBeforeSourceProbe ? MOTION_TARGET_MODE : null,
+      targetIdentity: targetBeforeSourceProbe ? MOTION_TARGET_IDENTITY : null,
+      fixedCameraPose,
+      fixedCameraPoseSha256: fixedCameraPose
+        ? sha256(Buffer.from(canonicalJson(fixedCameraPose)))
+        : null,
+    },
+    states,
+  };
+  return { ...body, identity: `sha256:${sha256(Buffer.from(canonicalJson(body)))}` };
+}
+
 function readSourceAppearanceCorpus() {
   const bytes = readFileSync(sourceAppearanceCorpusPath);
   const corpus = JSON.parse(bytes.toString('utf8'));
@@ -1253,6 +1360,8 @@ function validateArguments() {
       'motion state steps must be strictly increasing',
     );
   }
+  assert.equal(targetBeforeSourceProbe && !sourceBasisProbeOnly, false, 'target-before-source probe requires source-basis-probe-only');
+  assert.equal(sourceBasisProbeOnly && !motionCapture, false, 'source-basis probe requires motion capture');
   assert.ok(Number.isInteger(chunkRows) && chunkRows > 0, 'chunk rows must be a positive integer');
   assert.ok(Number.isInteger(chunkFloats) && chunkFloats > 0, 'chunk floats must be a positive integer');
   assert.ok(Number.isInteger(viewportWidth) && viewportWidth >= 128, 'viewport width must be at least 128');

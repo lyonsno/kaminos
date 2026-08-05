@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 const witnessUrl = new URL('../volume-layer-coefficient-bilinear-motion-witness.mjs', import.meta.url);
 const rendererUrl = new URL('../volume-layer-coefficient-bilinear-motion-render.py', import.meta.url);
 const captureUrl = new URL('../volume-layer-coefficient-corpus-witness.mjs', import.meta.url);
+const targetPrimeProbeUrl = new URL('../volume-layer-coefficient-target-prime-probe-witness.mjs', import.meta.url);
 const exactCaptureUrl = new URL('../volume-exact-target-capture.mjs', import.meta.url);
 const coreUrl = new URL('../volume-core.js', import.meta.url);
 
@@ -17,11 +18,13 @@ assert.match(core, /sharedTransmittanceIdentity:\s*'ridge-plus-non-ridge-extinct
 
 assert.ok(existsSync(witnessUrl), 'exact bilinear temporal witness must exist');
 assert.ok(existsSync(rendererUrl), 'exact bilinear temporal renderer must exist');
+assert.ok(existsSync(targetPrimeProbeUrl), 'target-prime source-basis probe must exist');
 
 const witness = readFileSync(witnessUrl, 'utf8');
 const renderer = readFileSync(rendererUrl, 'utf8');
 const capture = readFileSync(captureUrl, 'utf8');
 const exactCapture = readFileSync(exactCaptureUrl, 'utf8');
+const targetPrimeProbe = readFileSync(targetPrimeProbeUrl, 'utf8');
 
 assert.match(witness, /kaminos\.volume\.layer-coefficient-bilinear-motion-witness\.v0/, 'witness publishes a stable schema');
 assert.match(witness, /volume-layer-coefficient-corpus-witness\.mjs/, 'wrapper invokes the reviewed single-browser capture engine');
@@ -44,10 +47,18 @@ const captureStateEnd = capture.indexOf('async function captureMotionTarget', ca
 const captureState = capture.slice(captureStateStart, captureStateEnd);
 assert.match(captureState, /setSelectiveHeadLiveCapturePaused\(true\)/, 'exact state capture pauses the renderer loop before reading the frozen state');
 assert.doesNotMatch(captureState, /setActive\(false\)/, 'a frozen state remains active so render-only readback APIs stay available');
-assert.ok(
-  captureState.indexOf('const rows = await drainAnalyticalRows') < captureState.indexOf('await captureMotionTarget'),
-  'authoritative optical coefficients are drained before transient exact-target rendering can mutate presentation-owned coefficient buffers',
+assert.match(
+  captureState,
+  /if \(motionCapture && targetBeforeSourceProbe\)[\s\S]*await captureMotionTarget[\s\S]*const rows = await drainAnalyticalRows[\s\S]*if \(motionCapture && !target\)[\s\S]*await captureMotionTarget/,
+  'default capture drains coefficients before target rendering while the diagnostic arm explicitly primes target first',
 );
+assert.match(capture, /targetBeforeSourceProbe[\s\S]*await captureMotionTarget[\s\S]*drainAnalyticalRows/, 'diagnostic probe can render the exact target before source-basis capture');
+assert.match(capture, /sourceBasisProbeOnly[\s\S]*rawOpticalTail/, 'source-basis probe stops after preserving raw optical-tail statistics');
+assert.match(capture, /NONRIDGE_MEMBERSHIP_OFFSET\s*=\s*24/, 'probe records the raw non-ridge membership field');
+assert.match(capture, /OPTICAL_TAIL_START_OFFSET\s*=\s*25/, 'probe records the complete raw optical coefficient tail');
+assert.match(targetPrimeProbe, /--source-basis-probe-only/, 'probe wrapper requests source-basis-only evidence');
+assert.match(targetPrimeProbe, /--target-before-source-probe/, 'probe wrapper requests explicit target priming');
+assert.match(targetPrimeProbe, /captureReport\.status !== 'captured'/, 'probe wrapper rejects failed or stale capture evidence');
 assert.match(capture, /analytical optical coefficient export is all zero/, 'capture fails before rendering an all-zero optical coefficient corpus');
 assert.match(capture, /positiveValueCount/, 'coefficient artifact records positive optical-mass evidence');
 assert.match(capture, /captureExactTargetFrame\.toString\(\)/, 'browser execution uses the executable exact-target helper');
