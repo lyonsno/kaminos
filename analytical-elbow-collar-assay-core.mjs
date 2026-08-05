@@ -57,7 +57,7 @@ function rotateAroundZ(point, radians) {
   ];
 }
 
-function createSleeve({ axialSegments = 40, radialSegments = 24 } = {}) {
+export function createSleeve({ axialSegments = 40, radialSegments = 24 } = {}) {
   if (!Number.isInteger(axialSegments) || axialSegments < 12) {
     throw new Error('sleeve axialSegments must be an integer of at least 12');
   }
