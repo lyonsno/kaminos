@@ -123,6 +123,11 @@
       "c12-i066-s096",
       "c12-i072-s096"
     ],
+    "viewerRoute": {
+      "requested": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+      "effective": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
+      "fallbackUsed": false
+    },
     "manifest": {
       "path": "visual/visual-manifest.json",
       "sha256": "49a0d7805e3c782f8ead159b3657216790c6005097d4927a7527a67c0b522b24",
@@ -136,11 +141,6 @@
       "path": "visual/visual-inspection.json",
       "sha256": "4a2040a7499f552f47899c59eaa7f9550c1ae0687de75ec41d9bccf006e0ab15",
       "disposition": "reject-constant-area-anisotropy-for-current-k4"
-    },
-    "viewerRoute": {
-      "requested": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
-      "effective": "current-k4-ring-cage-anisotropy-frontier-orbitable-v0",
-      "fallbackUsed": false
     }
   },
   "lastTrustworthyEvidence": {

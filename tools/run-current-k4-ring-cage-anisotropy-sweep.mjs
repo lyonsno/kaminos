@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -20,6 +20,10 @@ const CLAIM_CEILING = 'agent-authored provisional current-graph K4 mechanism sel
 const CANDIDATE_DIRECTORY = 'candidates';
 const CHECKPOINT_DIRECTORY = 'checkpoints';
 const OWNED_FILES = Object.freeze(['sweep-result.json']);
+const CUSTODY_MARKER = '.kaminos-current-k4-anisotropy-sweep-output';
+const CUSTODY_SCHEMA =
+  'kaminos.current-k4-ring-cage-anisotropy-sweep-output-custody.v0';
+const CUSTODY_BYTES = Buffer.from(`${CUSTODY_SCHEMA}\n`);
 
 function parseArguments(argv) {
   const supported = new Set([
@@ -79,6 +83,46 @@ async function clearOwnedOutput(outputDirectory) {
   }
   await Promise.all([CANDIDATE_DIRECTORY, CHECKPOINT_DIRECTORY].map(relative =>
     rm(path.join(outputDirectory, relative), { recursive: true, force: true })));
+}
+
+async function exists(target) {
+  try {
+    await stat(target);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function hasOutputCustody(outputDirectory) {
+  try {
+    const bytes = await readFile(path.join(outputDirectory, CUSTODY_MARKER));
+    return bytes.equals(CUSTODY_BYTES);
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function claimOutputCustody(outputDirectory) {
+  if (await hasOutputCustody(outputDirectory)) return;
+  const lookalikePaths = [
+    ...OWNED_FILES,
+    'run-report.json',
+    CANDIDATE_DIRECTORY,
+    CHECKPOINT_DIRECTORY,
+  ];
+  const occupied = [];
+  for (const relative of lookalikePaths) {
+    if (await exists(path.join(outputDirectory, relative))) occupied.push(relative);
+  }
+  if (occupied.length > 0) {
+    throw new Error(
+      `refusing to claim unowned output containing ${occupied.join(', ')}`,
+    );
+  }
+  await writeAtomic(path.join(outputDirectory, CUSTODY_MARKER), CUSTODY_BYTES);
 }
 
 function receiptPath(target) {
@@ -242,6 +286,8 @@ try {
   reportPath = path.join(args.outputDirectory, 'run-report.json');
   phase = 'validate-path-custody';
   await assertInputOutputSeparation(args);
+  phase = 'claim-output-custody';
+  await claimOutputCustody(args.outputDirectory);
   phase = 'clear-stale-evidence';
   await clearOwnedOutput(args.outputDirectory);
 
@@ -436,6 +482,13 @@ try {
 
   phase = 'classify-frontier';
   const admissible = candidates.filter(candidate => candidate.status === 'admissible');
+  const candidateCapApplied = candidates.length !== requestedCandidateCount;
+  if (candidateCapApplied) {
+    throw new Error(
+      `effective candidate count ${candidates.length} did not preserve requested ` +
+      `${requestedCandidateCount}`,
+    );
+  }
   const nondominatedCandidateIds = admissible
     .filter(candidate => !dominates(selectedMetrics, candidate.metrics) &&
       !admissible.some(other => other.id !== candidate.id && dominates(other.metrics, candidate.metrics)))
@@ -452,7 +505,7 @@ try {
     },
     requestedCandidateCount,
     effectiveCandidateCount: candidates.length,
-    candidateCapApplied: false,
+    candidateCapApplied,
     selectedReference: {
       carrierIdentitySha256: selectedCarrier.identity.sha256,
       metrics: {
@@ -490,7 +543,7 @@ try {
     inputs: inputReceipts,
     requestedCandidateCount,
     effectiveCandidateCount: candidates.length,
-    candidateCapApplied: false,
+    candidateCapApplied,
     admissibleCandidateCount: admissible.length,
     refusedCandidateCount: candidates.length - admissible.length,
     nondominatedCandidateIds,
@@ -519,7 +572,8 @@ try {
   if (outputDirectory) {
     await mkdir(outputDirectory, { recursive: true });
     reportPath ||= path.join(outputDirectory, 'run-report.json');
-    await clearOwnedOutput(outputDirectory);
+    const outputCustodyVerified = await hasOutputCustody(outputDirectory);
+    if (outputCustodyVerified) await clearOwnedOutput(outputDirectory);
     await writeAtomic(reportPath, jsonBytes({
       schema: REPORT_SCHEMA,
       status: 'failed',
@@ -528,6 +582,8 @@ try {
       rawArguments,
       inputs: inputReceipts,
       requestedCandidateCount,
+      outputCustodyVerified,
+      staleEvidenceCleared: outputCustodyVerified,
       outputs: null,
       visual: null,
       lastTrustworthyEvidence: {

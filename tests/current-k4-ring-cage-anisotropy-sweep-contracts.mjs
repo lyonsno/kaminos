@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -97,6 +97,10 @@ test('the bounded current-K4 anisotropy frontier preserves all nine requested ou
 test('the anisotropy frontier writes a parse failure receipt and erases stale success', async () => {
   const output = await mkdtemp(path.join(os.tmpdir(), 'kaminos-anisotropy-sweep-failure-'));
   const stale = path.join(output, 'sweep-result.json');
+  await writeFile(
+    path.join(output, '.kaminos-current-k4-anisotropy-sweep-output'),
+    'kaminos.current-k4-ring-cage-anisotropy-sweep-output-custody.v0\n',
+  );
   await writeFile(stale, '{"status":"stale-success"}\n');
   const result = spawnSync(process.execPath, [
     TOOL,
@@ -109,5 +113,25 @@ test('the anisotropy frontier writes a parse failure receipt and erases stale su
   assert.equal(report.status, 'failed');
   assert.equal(report.failurePhase, 'parse-arguments');
   assert.equal(report.outputs, null);
+  assert.equal(report.outputCustodyVerified, true);
+  assert.equal(report.staleEvidenceCleared, true);
   await assert.rejects(readFile(stale), /ENOENT/);
+});
+
+test('a parse failure never clears lookalike output from an unowned directory', async () => {
+  const output = await mkdtemp(path.join(os.tmpdir(), 'kaminos-anisotropy-unowned-'));
+  const sentinel = path.join(output, 'candidates', 'other-tool.json');
+  await mkdir(path.dirname(sentinel), { recursive: true });
+  await writeFile(sentinel, '{"owner":"other-tool"}\n');
+  const result = spawnSync(process.execPath, [
+    TOOL,
+    '--output', output,
+    '--unsupported', 'value',
+  ], { cwd: REPO_ROOT, encoding: 'utf8' });
+  assert.notEqual(result.status, 0);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.outputCustodyVerified, false);
+  assert.equal(report.staleEvidenceCleared, false);
+  assert.equal(JSON.parse(await readFile(sentinel, 'utf8')).owner, 'other-tool');
 });
