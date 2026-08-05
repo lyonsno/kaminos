@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.muscle-compartment-ring-cage-pressure-volume-redistribution-selection.v0",
+  "status": "completed",
+  "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+  "residualLedgerSha256": "3ddb953bffade64cde817d0ea3086625d3aa82d666d9fb88d5b60adb6c321a64",
+  "requested": {
+    "subjectConstructionId": "muscle-45",
+    "obstacleConstructionId": "muscle-34",
+    "repaymentSectionCount": 4,
+    "maximumRepaymentPressureRatio": 0.1,
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10,
+    "compressionAreaScale": 0.94
+  },
+  "effective": {
+    "subjectConstructionId": "muscle-45",
+    "obstacleConstructionId": "muscle-34",
+    "repaymentSectionCount": 4,
+    "maximumRepaymentPressureRatio": 0.1,
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10,
+    "compressionAreaScale": 0.94
+  },
+  "fallbackUsed": false,
+  "targetContactCount": 3,
+  "targetTotalPenetration": 0.46509551066969257,
+  "targetMaximumPenetration": 0.3420731982757239,
+  "compressionPressure": 0.8224286828496284,
+  "compressionSectionIds": [
+    "muscle-45:section:0011"
+  ],
+  "repaymentSectionIds": [
+    "muscle-45:section:0010",
+    "muscle-45:section:0009",
+    "muscle-45:section:0008",
+    "muscle-45:section:0007"
+  ],
+  "repaymentSections": [
+    {
+      "sectionId": "muscle-45:section:0010",
+      "totalPenetration": 0,
+      "pressureRatio": 0,
+      "longitudinalDistance": 1
+    },
+    {
+      "sectionId": "muscle-45:section:0009",
+      "totalPenetration": 0.01438438652335986,
+      "pressureRatio": 0.0174901323644495,
+      "longitudinalDistance": 2
+    },
+    {
+      "sectionId": "muscle-45:section:0008",
+      "totalPenetration": 0,
+      "pressureRatio": 0,
+      "longitudinalDistance": 3
+    },
+    {
+      "sectionId": "muscle-45:section:0007",
+      "totalPenetration": 0,
+      "pressureRatio": 0,
+      "longitudinalDistance": 4
+    }
+  ],
+  "operatorRequest": {
+    "constructionId": "muscle-45",
+    "compressionAreaScale": 0.94,
+    "compressionSectionIds": [
+      "muscle-45:section:0011"
+    ],
+    "repaymentSectionIds": [
+      "muscle-45:section:0010",
+      "muscle-45:section:0009",
+      "muscle-45:section:0008",
+      "muscle-45:section:0007"
+    ],
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10
+  }
+}

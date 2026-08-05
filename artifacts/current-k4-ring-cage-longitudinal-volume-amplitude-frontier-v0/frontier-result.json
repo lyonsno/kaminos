@@ -1,0 +1,217 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-amplitude-frontier-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "residualLedger": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json",
+      "sha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-amplitude-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-amplitude-frontier-v0.json",
+      "sha256": "80f850ac2ce7c1971c71b613bcf9af9eed48937d0d143e87b19c2087f953b87a"
+    }
+  },
+  "requestedCompressionAreaScales": [
+    0.92,
+    0.94,
+    0.96
+  ],
+  "pressureSelection": {
+    "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "residualLedgerSha256": "3ddb953bffade64cde817d0ea3086625d3aa82d666d9fb88d5b60adb6c321a64",
+    "compressionSectionIds": [
+      "muscle-45:section:0011"
+    ],
+    "repaymentSectionIds": [
+      "muscle-45:section:0010",
+      "muscle-45:section:0009",
+      "muscle-45:section:0008",
+      "muscle-45:section:0007"
+    ],
+    "targetContactCount": 3,
+    "targetTotalPenetration": 0.46509551066969257,
+    "targetMaximumPenetration": 0.3420731982757239,
+    "compressionPressure": 0.8224286828496284
+  },
+  "selectedReference": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    }
+  },
+  "candidates": [
+    {
+      "id": "m45-s11-a092",
+      "status": "admissible",
+      "compressionAreaScale": 0.92,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.260410189331234,
+        "pairwiseMovableMaximumPenetration": 0.3107719543429947,
+        "pairwiseFixedTotalPenetration": 3.633980935817309,
+        "pairwiseFixedMaximumPenetration": 0.4513168004272448,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 4.9290487448632626e-11,
+        "repaymentAreaScale": 1.007764708250761,
+        "maximumAdjacentAreaScaleDelta": 0.08776470825076099
+      },
+      "packedCarrier": {
+        "path": "candidates/m45-s11-a092-packed-carrier.json",
+        "sha256": "3c3e1455bfda2195381bf2b4d1e23e26f7c06e67d469ab2bf508414484d7f8e9"
+      },
+      "residualLedger": {
+        "path": "candidates/m45-s11-a092-residual-ledger.json",
+        "sha256": "3cf7fb80eebc8610d9f14e7ee384982e33331461514096606b706fdcbef0cfb3"
+      },
+      "pressureSelection": {
+        "path": "candidates/m45-s11-a092-pressure-selection.json",
+        "sha256": "c823df57607578e4153c1bf4a8444fbfd7fbec09e59b53971c36209f51d3171a"
+      },
+      "refusal": null
+    },
+    {
+      "id": "m45-s11-a094",
+      "status": "admissible",
+      "compressionAreaScale": 0.94,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.236575594068075,
+        "pairwiseMovableMaximumPenetration": 0.31872086682750306,
+        "pairwiseFixedTotalPenetration": 3.662400670814392,
+        "pairwiseFixedMaximumPenetration": 0.45378806365808577,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 3.4531240744339264e-11,
+        "repaymentAreaScale": 1.0058121018111705,
+        "maximumAdjacentAreaScaleDelta": 0.06581210181117059
+      },
+      "packedCarrier": {
+        "path": "candidates/m45-s11-a094-packed-carrier.json",
+        "sha256": "8e5b9c466dd225030db6968ce7f1245b98d39043fcfe649cbbeef62d4cb92a0a"
+      },
+      "residualLedger": {
+        "path": "candidates/m45-s11-a094-residual-ledger.json",
+        "sha256": "94c7b4783294e1f2bec623b0ddfb010c7ac5d42216360ccf9f9c702cb138e4b7"
+      },
+      "pressureSelection": {
+        "path": "candidates/m45-s11-a094-pressure-selection.json",
+        "sha256": "73f1facf2496e131de04e65e6129fe5ca50c6ff8154b3f59e81906e0a8e84b48"
+      },
+      "refusal": null
+    },
+    {
+      "id": "m45-s11-a096",
+      "status": "admissible",
+      "compressionAreaScale": 0.96,
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.212581724883897,
+        "pairwiseMovableMaximumPenetration": 0.3265856567325679,
+        "pairwiseFixedTotalPenetration": 3.6904253483836245,
+        "pairwiseFixedMaximumPenetration": 0.4562162128261211,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 4.592657864275e-11,
+        "repaymentAreaScale": 1.0038672659546135,
+        "maximumAdjacentAreaScaleDelta": 0.043867265954613543
+      },
+      "packedCarrier": {
+        "path": "candidates/m45-s11-a096-packed-carrier.json",
+        "sha256": "53e279d00c33555b30f092f7fb8bf70c13469e3c44497ef7feca1e9acae07712"
+      },
+      "residualLedger": {
+        "path": "candidates/m45-s11-a096-residual-ledger.json",
+        "sha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39"
+      },
+      "pressureSelection": {
+        "path": "candidates/m45-s11-a096-pressure-selection.json",
+        "sha256": "761d616a45920aace3a7f39aab3e8ebba676b75b828bf0928d333b62b9455d4a"
+      },
+      "refusal": null
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "m45-s11-a092",
+    "m45-s11-a094",
+    "m45-s11-a096"
+  ],
+  "visual": {
+    "status": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "m45-s11-a092",
+      "m45-s11-a094",
+      "m45-s11-a096"
+    ],
+    "disposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+    "decision": {
+      "selectedCandidateId": null,
+      "retainedNondominatedCandidateIds": [
+        "m45-s11-a092",
+        "m45-s11-a094",
+        "m45-s11-a096"
+      ],
+      "earliestBlockingMechanism": "single-section compression concentrates the required scale transition at the section-10/11 boundary",
+      "redirectAssay": "apply a deterministic symmetric or pressure-weighted longitudinal compression ramp across multiple movable M45 sections, repay volume into quieter shoulders, and rerun the exact scalar plus contact-close visual frontier"
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "0d7a9f427a53b25c1094aa8332e1cf814676b6d765c49b040b87fb88da0ad654",
+      "sizeBytes": 452955,
+      "png": {
+        "width": 1600,
+        "height": 1500,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 114,
+        "idatBytes": 451566
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+      "manifestIdentitySha256": "6db637be3341cdf1bca39af1b365b2554a59fdcac4663366ba014675aa9de71f"
+    }
+  },
+  "resultStatus": "single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound"
+}

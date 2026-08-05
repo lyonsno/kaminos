@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-finalization-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "resultStatus": "single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound",
+  "visualStatus": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+  "visualDisposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+  "outputs": {
+    "frontierResult": {
+      "path": "../frontier-result.json",
+      "sha256": "7dc0663ed27886c5102006067d7cafaec91d9aeb903a4821b71c47b9984ccc8e"
+    },
+    "frontierRunReport": {
+      "path": "../run-report.json",
+      "sha256": "c7b183cdb51204b52f4b11c0054debde6ecfc77a1f6284dbfb7e7150c6eaf8d1"
+    },
+    "captureRouteVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403"
+    },
+    "visualInspection": {
+      "path": "visual-inspection.json",
+      "sha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound",
+    "visualStatus": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+    "visualDisposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+    "originalFrontierSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+    "finalizedFrontierSha256": "7dc0663ed27886c5102006067d7cafaec91d9aeb903a4821b71c47b9984ccc8e",
+    "visualInspectionSha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78",
+    "captureRouteVerificationSha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-amplitude-frontier-config.v0",
+  "compressionAreaScales": [0.92, 0.94, 0.96],
+  "selection": {
+    "subjectConstructionId": "muscle-45",
+    "obstacleConstructionId": "muscle-34",
+    "repaymentSectionCount": 4,
+    "maximumRepaymentPressureRatio": 0.1,
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10
+  }
+}

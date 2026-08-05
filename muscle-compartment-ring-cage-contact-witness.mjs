@@ -56,6 +56,20 @@ export function renderMuscleCompartmentRingCageContactHtml({
       residualLedger?.sourceInputSha256 !== source.input.effective.sha256) {
     throw new Error('ring-cage witness requires an exact visual bundle identity');
   }
+  const presentationFocus = presentation.focus || null;
+  if (presentationFocus && (
+    typeof presentationFocus !== 'object' ||
+    Array.isArray(presentationFocus) ||
+    JSON.stringify(Object.keys(presentationFocus).sort()) !==
+      JSON.stringify(['point', 'radius']) ||
+    !Array.isArray(presentationFocus.point) ||
+    presentationFocus.point.length !== 3 ||
+    !presentationFocus.point.every(Number.isFinite) ||
+    !Number.isFinite(presentationFocus.radius) ||
+    !(presentationFocus.radius > 0)
+  )) {
+    throw new Error('ring-cage witness presentation focus requires point[3] and radius > 0');
+  }
   const payload = JSON.stringify({
     sourceCages: sourceCarrier.cages.map(cagePayload),
     packedCages: result.packedCarrier.cages.map(cagePayload),
@@ -63,6 +77,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     route,
     bundleIdentity,
     residualLedger,
+    presentationFocus,
   });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
@@ -231,11 +246,20 @@ export function renderMuscleCompartmentRingCageContactHtml({
       document.body.innerHTML='<pre style="margin:24px;color:#ff8b8b">identity-bound capture route mismatch\\n'+JSON.stringify({requested:requestedIdentity,effective:expectedIdentity},null,2)+'</pre>';
       throw new Error('identity-bound capture route mismatch');
     }
-    const viewDirection=query.get('view')==='side'
+    const viewMode=query.get('view');
+    const contactFocus=payload.presentationFocus&&viewMode==='contact';
+    const effectiveCenter=contactFocus
+      ? new THREE.Vector3(...payload.presentationFocus.point)
+      : framingCenter;
+    const effectiveRadius=contactFocus
+      ? payload.presentationFocus.radius
+      : framingRadius;
+    const effectiveDistance=effectiveRadius/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.12;
+    const viewDirection=viewMode==='side'
       ? new THREE.Vector3(-1.2,.2,.08)
       : new THREE.Vector3(1.08,.72,1.12);
-    camera.position.copy(framingCenter).add(viewDirection.normalize().multiplyScalar(framingDistance));
-    controls.target.copy(framingCenter); controls.minDistance=framingRadius*.4; controls.maxDistance=framingRadius*10; controls.update();
+    camera.position.copy(effectiveCenter).add(viewDirection.normalize().multiplyScalar(effectiveDistance));
+    controls.target.copy(effectiveCenter); controls.minDistance=effectiveRadius*.4; controls.maxDistance=framingRadius*10; controls.update();
     function showState(state){
       const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghostGroup.visible=packed; contactGroup.visible=packed;
       document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));

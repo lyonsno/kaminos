@@ -1,0 +1,158 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-amplitude-frontier-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "residualLedger": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json",
+      "sha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-amplitude-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-amplitude-frontier-v0.json",
+      "sha256": "80f850ac2ce7c1971c71b613bcf9af9eed48937d0d143e87b19c2087f953b87a",
+      "requested": {
+        "schema": "kaminos.current-k4-longitudinal-volume-amplitude-frontier-config.v0",
+        "compressionAreaScales": [
+          0.92,
+          0.94,
+          0.96
+        ],
+        "selection": {
+          "subjectConstructionId": "muscle-45",
+          "obstacleConstructionId": "muscle-34",
+          "repaymentSectionCount": 4,
+          "maximumRepaymentPressureRatio": 0.1,
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10
+        }
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-longitudinal-volume-amplitude-frontier-config.v0",
+        "compressionAreaScales": [
+          0.92,
+          0.94,
+          0.96
+        ],
+        "selection": {
+          "subjectConstructionId": "muscle-45",
+          "obstacleConstructionId": "muscle-34",
+          "repaymentSectionCount": 4,
+          "maximumRepaymentPressureRatio": 0.1,
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10
+        }
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 3,
+  "effectiveCandidateCount": 3,
+  "candidateCapApplied": false,
+  "outputs": {
+    "frontierResult": {
+      "path": "frontier-result.json",
+      "sha256": "7dc0663ed27886c5102006067d7cafaec91d9aeb903a4821b71c47b9984ccc8e"
+    },
+    "visualInspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78"
+    },
+    "captureRouteVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "0d7a9f427a53b25c1094aa8332e1cf814676b6d765c49b040b87fb88da0ad654",
+      "sizeBytes": 452955,
+      "png": {
+        "width": 1600,
+        "height": 1500,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 114,
+        "idatBytes": 451566
+      }
+    }
+  },
+  "visual": {
+    "status": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "m45-s11-a092",
+      "m45-s11-a094",
+      "m45-s11-a096"
+    ],
+    "disposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+    "decision": {
+      "selectedCandidateId": null,
+      "retainedNondominatedCandidateIds": [
+        "m45-s11-a092",
+        "m45-s11-a094",
+        "m45-s11-a096"
+      ],
+      "earliestBlockingMechanism": "single-section compression concentrates the required scale transition at the section-10/11 boundary",
+      "redirectAssay": "apply a deterministic symmetric or pressure-weighted longitudinal compression ramp across multiple movable M45 sections, repay volume into quieter shoulders, and rerun the exact scalar plus contact-close visual frontier"
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "0d7a9f427a53b25c1094aa8332e1cf814676b6d765c49b040b87fb88da0ad654",
+      "sizeBytes": 452955,
+      "png": {
+        "width": 1600,
+        "height": 1500,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 114,
+        "idatBytes": 451566
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+      "manifestIdentitySha256": "6db637be3341cdf1bca39af1b365b2554a59fdcac4663366ba014675aa9de71f"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound",
+    "visualStatus": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+    "visualDisposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+    "originalFrontierSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+    "finalizedFrontierSha256": "7dc0663ed27886c5102006067d7cafaec91d9aeb903a4821b71c47b9984ccc8e",
+    "visualInspectionSha256": "594107fc7b50cb276355b247b045a7882873ab98ac1705e3c252d8e115f5fa78",
+    "captureRouteVerificationSha256": "dc2a5e5f9b924c077d3ccdf9d44dcb37a50a53bde795d7bd0680032b6bffa403"
+  },
+  "resultStatus": "single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound"
+}

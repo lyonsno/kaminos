@@ -1,0 +1,55 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-visual-inspection.v0",
+  "status": "agent-inspected-frontier-coherent-but-visually-subtle-adjacent-smoothness-bound",
+  "visualDisposition": "reject-current-single-section-amplitude-frontier-redirect-to-smooth-longitudinal-ramp",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "manifestIdentitySha256": "6db637be3341cdf1bca39af1b365b2554a59fdcac4663366ba014675aa9de71f",
+  "manifestFileSha256": "d903482b5483062390038bbcbd1386e4a0df1e5b97104b69661a621da9b7eaf8",
+  "frontierResultSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+  "captures": [
+    {
+      "id": "selected-reference",
+      "reportSha256": "179fda530c3cde1f40f372d4d794c8694fb13149e2bda963787c51ecf4c927d4",
+      "sha256": "1e026e85b191dd26d742b91c7e3a514ebd45ad8dd1022cdad91a24d57a39590c"
+    },
+    {
+      "id": "m45-s11-a092",
+      "reportSha256": "bbb38029836b07202e15c0f96a3f81082176c5b17470be62c02b3e8ca23aeddd",
+      "sha256": "c17c026ad3b5cd3534f05db3c15ab19545bd208069c2cb710a86fac8a33ef1e5"
+    },
+    {
+      "id": "m45-s11-a094",
+      "reportSha256": "1f14d4dcdc4afcf4640d85de3ed2086bd7c00da5720a189ee932e2b1f4d53548",
+      "sha256": "44c3ebeded26ea7e8000ea6210a1acb25da893ce1e2d0ae1575daa76ea0d539c"
+    },
+    {
+      "id": "m45-s11-a096",
+      "reportSha256": "9bdec24ae7e8a5eb1a3e8634f9cc611895ad0c5e6076c8def8c47d7f46fbbc2a",
+      "sha256": "5c4a9fbec9ff9588f2ec9559d172bf0bcb32d552569e4d9bdbff77dd0078a17e"
+    }
+  ],
+  "contactSheet": {
+    "reportSha256": "c1b318021f36ec210634e08c8e1e6d06709f182008558ab0e2e85ea27161d83c",
+    "sha256": "0d7a9f427a53b25c1094aa8332e1cf814676b6d765c49b040b87fb88da0ad654",
+    "viewport": {
+      "width": 1600,
+      "height": 1500
+    }
+  },
+  "observations": [
+    "All three proposals preserve the same smooth attachment-to-attachment centerline and show no fold, hard kink, attachment jump, skeletal incursion, or neighboring-construction displacement.",
+    "The pressure markers make the local M45 section-11 contact family legible, but the actual purple cage silhouette changes only subtly between the reference and area scales 0.96, 0.94, and 0.92.",
+    "The 0.92 candidate is the strongest visible narrowing in this frontier, yet it does not materially reorganize the local formation or make the four-muscle relationship easier to read.",
+    "At area scale 0.92 the measured maximum adjacent area-scale delta is 0.08776470825076099 against the preserved 0.1 ceiling, so stronger one-section compression would reach the smoothness guard before producing a persuasive visible change."
+  ],
+  "decision": {
+    "selectedCandidateId": null,
+    "retainedNondominatedCandidateIds": [
+      "m45-s11-a092",
+      "m45-s11-a094",
+      "m45-s11-a096"
+    ],
+    "earliestBlockingMechanism": "single-section compression concentrates the required scale transition at the section-10/11 boundary",
+    "redirectAssay": "apply a deterministic symmetric or pressure-weighted longitudinal compression ramp across multiple movable M45 sections, repay volume into quieter shoulders, and rerun the exact scalar plus contact-close visual frontier"
+  }
+}

@@ -1,0 +1,161 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0",
+  "status": "pending-agent-inspection",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requested": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-amplitude-frontier-v0/frontier-result.json",
+      "effective": "repo://artifacts/current-k4-ring-cage-longitudinal-volume-amplitude-frontier-v0/frontier-result.json",
+      "sha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+      "fallbackUsed": false
+    },
+    "source": {
+      "requested": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effective": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "fallbackUsed": false
+    }
+  },
+  "identity": {
+    "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0",
+    "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+    "frontierSha256": "82b58749cfb75bc13dac6a71daf906bcd8b75a09cafe676666fc41c926498217",
+    "sourceSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+    "selectedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "candidateIds": [
+      "m45-s11-a092",
+      "m45-s11-a094",
+      "m45-s11-a096"
+    ],
+    "bundles": {
+      "m45-s11-a092": {
+        "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+        "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "c5a1ca6fb67959b94f2e154e1ea6163cb23d00bdec3860a14278f4fe678fccc7",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "3cf7fb80eebc8610d9f14e7ee384982e33331461514096606b706fdcbef0cfb3",
+        "sha256": "46c3a8dbae36887253ef7e55fee4946c2df7d4c64f0322e6ca068315027ec66f"
+      },
+      "m45-s11-a094": {
+        "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+        "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "2c79bdf74915153d5d15b218283c9313c3444d4b93f5d0ed4b7e3b1ea64737b4",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "94c7b4783294e1f2bec623b0ddfb010c7ac5d42216360ccf9f9c702cb138e4b7",
+        "sha256": "6f3da0f73a913e125d9e1ed165109151c136fca237765ac9aa818a4e22bb690b"
+      },
+      "m45-s11-a096": {
+        "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+        "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "packedCarrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "residualLedgerSha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39",
+        "sha256": "ac3b419dfc04b96c7a00890780346f72a16e43a7cda0b19fc620c819faf76d0f"
+      }
+    },
+    "focus": {
+      "sectionId": "muscle-45:section:0011",
+      "point": [
+        8.396755744615195,
+        -1.7105116328208096,
+        8.383702852785943
+      ],
+      "radius": 2.2
+    },
+    "sha256": "6db637be3341cdf1bca39af1b365b2554a59fdcac4663366ba014675aa9de71f"
+  },
+  "route": {
+    "requested": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+    "effective": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "focus": {
+    "sectionId": "muscle-45:section:0011",
+    "point": [
+      8.396755744615195,
+      -1.7105116328208096,
+      8.383702852785943
+    ],
+    "radius": 2.2
+  },
+  "candidateIds": [
+    "m45-s11-a092",
+    "m45-s11-a094",
+    "m45-s11-a096"
+  ],
+  "bundles": {
+    "m45-s11-a092": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "packedCarrierSha256": "c5a1ca6fb67959b94f2e154e1ea6163cb23d00bdec3860a14278f4fe678fccc7",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "residualLedgerSha256": "3cf7fb80eebc8610d9f14e7ee384982e33331461514096606b706fdcbef0cfb3",
+      "sha256": "46c3a8dbae36887253ef7e55fee4946c2df7d4c64f0322e6ca068315027ec66f"
+    },
+    "m45-s11-a094": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "packedCarrierSha256": "2c79bdf74915153d5d15b218283c9313c3444d4b93f5d0ed4b7e3b1ea64737b4",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "residualLedgerSha256": "94c7b4783294e1f2bec623b0ddfb010c7ac5d42216360ccf9f9c702cb138e4b7",
+      "sha256": "6f3da0f73a913e125d9e1ed165109151c136fca237765ac9aa818a4e22bb690b"
+    },
+    "m45-s11-a096": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "packedCarrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "residualLedgerSha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39",
+      "sha256": "ac3b419dfc04b96c7a00890780346f72a16e43a7cda0b19fc620c819faf76d0f"
+    }
+  },
+  "captureUrls": [
+    {
+      "id": "selected-reference",
+      "state": "before",
+      "url": "candidates/m45-s11-a092/index.html?bundle=46c3a8dbae36887253ef7e55fee4946c2df7d4c64f0322e6ca068315027ec66f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=c5a1ca6fb67959b94f2e154e1ea6163cb23d00bdec3860a14278f4fe678fccc7&ledger=3cf7fb80eebc8610d9f14e7ee384982e33331461514096606b706fdcbef0cfb3&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=before&view=contact",
+      "output": "selected-reference-contact.png",
+      "report": "selected-reference-contact-capture-report.json"
+    },
+    {
+      "id": "m45-s11-a092",
+      "state": "packed",
+      "url": "candidates/m45-s11-a092/index.html?bundle=46c3a8dbae36887253ef7e55fee4946c2df7d4c64f0322e6ca068315027ec66f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=c5a1ca6fb67959b94f2e154e1ea6163cb23d00bdec3860a14278f4fe678fccc7&ledger=3cf7fb80eebc8610d9f14e7ee384982e33331461514096606b706fdcbef0cfb3&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "output": "candidates/m45-s11-a092/contact.png",
+      "report": "candidates/m45-s11-a092/contact-capture-report.json"
+    },
+    {
+      "id": "m45-s11-a094",
+      "state": "packed",
+      "url": "candidates/m45-s11-a094/index.html?bundle=6f3da0f73a913e125d9e1ed165109151c136fca237765ac9aa818a4e22bb690b&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=2c79bdf74915153d5d15b218283c9313c3444d4b93f5d0ed4b7e3b1ea64737b4&ledger=94c7b4783294e1f2bec623b0ddfb010c7ac5d42216360ccf9f9c702cb138e4b7&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "output": "candidates/m45-s11-a094/contact.png",
+      "report": "candidates/m45-s11-a094/contact-capture-report.json"
+    },
+    {
+      "id": "m45-s11-a096",
+      "state": "packed",
+      "url": "candidates/m45-s11-a096/index.html?bundle=ac3b419dfc04b96c7a00890780346f72a16e43a7cda0b19fc620c819faf76d0f&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc&ledger=7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "output": "candidates/m45-s11-a096/contact.png",
+      "report": "candidates/m45-s11-a096/contact-capture-report.json"
+    }
+  ],
+  "expectedCaptures": [
+    "selected-reference-contact.png",
+    "candidates/m45-s11-a092/contact.png",
+    "candidates/m45-s11-a094/contact.png",
+    "candidates/m45-s11-a096/contact.png"
+  ],
+  "expectedCaptureReports": [
+    "selected-reference-contact-capture-report.json",
+    "candidates/m45-s11-a092/contact-capture-report.json",
+    "candidates/m45-s11-a094/contact-capture-report.json",
+    "candidates/m45-s11-a096/contact-capture-report.json"
+  ]
+}
