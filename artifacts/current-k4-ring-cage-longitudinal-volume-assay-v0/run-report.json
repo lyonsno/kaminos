@@ -1,0 +1,195 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "path": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "residualLedger": {
+      "path": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/residual-ledger.json",
+      "sha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d"
+    },
+    "source": {
+      "path": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "path": "repo://fixtures/current-k4-packing/current-k4-longitudinal-volume-first-point-v0.json",
+      "sha256": "a3c69669b3564ef977cb8e159269fcdc1a9ea96d180f69c57811ab2e5cab6ece"
+    }
+  },
+  "config": {
+    "requested": {
+      "schema": "kaminos.current-k4-longitudinal-volume-first-point-config.v0",
+      "selection": {
+        "subjectConstructionId": "muscle-45",
+        "obstacleConstructionId": "muscle-34",
+        "compressionAreaScale": 0.96,
+        "repaymentSectionCount": 4,
+        "maximumRepaymentPressureRatio": 0.1,
+        "maximumRepaymentAreaScale": 1.2,
+        "maximumAdjacentAreaScaleDelta": 0.1,
+        "volumeRelativeTolerance": 1e-10
+      }
+    },
+    "effective": {
+      "schema": "kaminos.current-k4-longitudinal-volume-first-point-config.v0",
+      "selection": {
+        "subjectConstructionId": "muscle-45",
+        "obstacleConstructionId": "muscle-34",
+        "compressionAreaScale": 0.96,
+        "repaymentSectionCount": 4,
+        "maximumRepaymentPressureRatio": 0.1,
+        "maximumRepaymentAreaScale": 1.2,
+        "maximumAdjacentAreaScaleDelta": 0.1,
+        "volumeRelativeTolerance": 1e-10
+      }
+    },
+    "fallbackUsed": false
+  },
+  "resultStatus": "longitudinal-volume-nondominated-visually-subtle-continue-frontier",
+  "outputs": {
+    "comparison": {
+      "path": "comparison.json",
+      "sha256": "b723693d32a07b279acbc9e71b73aa9db16d8a886a944a45f06b737640d90413"
+    },
+    "pressureSelection": {
+      "path": "pressure-selection.json",
+      "sha256": "8a970f4c5b033b605fbff9c202743212e43a37529b08793aa732578e9d214741"
+    },
+    "redistributionReceipt": {
+      "path": "redistribution-receipt.json",
+      "sha256": "e763b9d52c31b49c8612a9f2d973bc47c2ec2bf0e0bbea1612a63a6c45afc0b5"
+    },
+    "selectedCarrier": {
+      "path": "selected-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "packedCarrier": {
+      "path": "packed-carrier.json",
+      "sha256": "53e279d00c33555b30f092f7fb8bf70c13469e3c44497ef7feca1e9acae07712"
+    },
+    "residualLedger": {
+      "path": "residual-ledger.json",
+      "sha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "6b2f9d1ef0eaa58bc63dae58ff520b9e88767299c5131692a0fd99562234f7d1"
+    },
+    "visualInspection": {
+      "path": "visual-inspection.json",
+      "sha256": "c91212786afcfbd4b8c7b2cfddaf3b8c632f575652260e0aa1278ffd239c2b76",
+      "disposition": "continue-bounded-pressure-directed-amplitude-frontier"
+    },
+    "routeVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "73613a2b27dd379e751affa248777d79fc733e8eef07441aec911ced65c79719",
+      "status": "verified"
+    }
+  },
+  "comparison": {
+    "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-comparison.v0",
+    "status": "completed",
+    "selected": {
+      "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    },
+    "proposal": {
+      "carrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+      "pairwiseMovableTotalPenetration": 10.212581724883897,
+      "pairwiseMovableMaximumPenetration": 0.3265856567325679,
+      "pairwiseFixedTotalPenetration": 3.6904253483836245,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148,
+      "nonPositiveCellCount": 0,
+      "compartmentMaximumEscape": 0,
+      "fixedNodeMaximumDrift": 0,
+      "centerlineMaximumDrift": 0,
+      "transferVolumeRelativeError": 4.592657864275e-11,
+      "repaymentAreaScale": 1.0038672659546135
+    },
+    "decision": {
+      "classification": "longitudinal-volume-nondominated-pending-visual-admission",
+      "improvedMovableMaximum": true,
+      "improvedMovableTotal": false,
+      "improvedFixedTotal": true,
+      "didNotWorsenSkeletal": true,
+      "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "current-k4-ring-cage-longitudinal-volume-orbitable-v0",
+      "effective": "current-k4-ring-cage-longitudinal-volume-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "status": "agent-inspected-nondominated-subtle-local-relief-no-material-silhouette-advance",
+    "viewer": {
+      "path": "index.html",
+      "sha256": "6b2f9d1ef0eaa58bc63dae58ff520b9e88767299c5131692a0fd99562234f7d1"
+    },
+    "bundleIdentity": {
+      "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+      "route": "current-k4-ring-cage-longitudinal-volume-orbitable-v0",
+      "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "packedCarrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+      "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+      "residualLedgerSha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39",
+      "sha256": "8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228"
+    },
+    "captureUrls": [
+      "index.html?bundle=8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc&ledger=7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39&routeRequested=current-k4-ring-cage-longitudinal-volume-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-orbitable-v0&state=before",
+      "index.html?bundle=8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc&ledger=7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39&routeRequested=current-k4-ring-cage-longitudinal-volume-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-orbitable-v0&state=packed",
+      "index.html?bundle=8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc&ledger=7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39&routeRequested=current-k4-ring-cage-longitudinal-volume-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-orbitable-v0&state=before&view=side",
+      "index.html?bundle=8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc&ledger=7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39&routeRequested=current-k4-ring-cage-longitudinal-volume-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-orbitable-v0&state=packed&view=side"
+    ],
+    "expectedCaptures": [
+      "source-crowded.png",
+      "contact-relieved.png",
+      "source-crowded-side.png",
+      "contact-relieved-side.png"
+    ],
+    "stateLabels": {
+      "source": "Curvature-12 selected reference",
+      "proposal": "Pressure-directed longitudinal volume transfer"
+    },
+    "inspection": {
+      "path": "visual-inspection.json",
+      "sha256": "c91212786afcfbd4b8c7b2cfddaf3b8c632f575652260e0aa1278ffd239c2b76",
+      "disposition": "continue-bounded-pressure-directed-amplitude-frontier"
+    },
+    "routeVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "73613a2b27dd379e751affa248777d79fc733e8eef07441aec911ced65c79719",
+      "status": "verified"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-inspection-finalized",
+    "selectedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "packedCarrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+    "residualLedgerSha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39",
+    "decision": {
+      "classification": "longitudinal-volume-nondominated-pending-visual-admission",
+      "improvedMovableMaximum": true,
+      "improvedMovableTotal": false,
+      "improvedFixedTotal": true,
+      "didNotWorsenSkeletal": true,
+      "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only"
+    },
+    "visualStatus": "agent-inspected-nondominated-subtle-local-relief-no-material-silhouette-advance",
+    "visualDisposition": "continue-bounded-pressure-directed-amplitude-frontier",
+    "visualInspectionSha256": "c91212786afcfbd4b8c7b2cfddaf3b8c632f575652260e0aa1278ffd239c2b76",
+    "routeVerificationSha256": "73613a2b27dd379e751affa248777d79fc733e8eef07441aec911ced65c79719"
+  },
+  "visualDisposition": "continue-bounded-pressure-directed-amplitude-frontier"
+}

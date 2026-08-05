@@ -1,0 +1,13 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-first-point-config.v0",
+  "selection": {
+    "subjectConstructionId": "muscle-45",
+    "obstacleConstructionId": "muscle-34",
+    "compressionAreaScale": 0.96,
+    "repaymentSectionCount": 4,
+    "maximumRepaymentPressureRatio": 0.1,
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10
+  }
+}

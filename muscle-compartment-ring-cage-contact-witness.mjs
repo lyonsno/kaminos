@@ -46,6 +46,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
   route,
   bundleIdentity,
   residualLedger,
+  presentation = {},
 }) {
   if (!bundleIdentity?.sha256 ||
       bundleIdentity.sourceCarrierSha256 !== sourceCarrier.identity.sha256 ||
@@ -66,6 +67,14 @@ export function renderMuscleCompartmentRingCageContactHtml({
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
   const maxVolumeError = Math.max(...packed.cages.map(row => row.relativeVolumeError));
+  const title = presentation.title || 'Current-K4 cage-level contact';
+  const explanation = presentation.explanation ||
+    'The source state is the squeezed, crowded construction. The proposal is the same ' +
+    'identity-bound tetrahedral cages after whole-centerline curvature-regularized contact ' +
+    'relief; fixed attachments remain fixed and visible residuals remain binding.';
+  const sourceLabel = presentation.sourceLabel || 'Source crowded input';
+  const proposalLabel = presentation.proposalLabel ||
+    'Curvature-bearing proposal · residual remains';
   const colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff'];
   const legend = sourceCarrier.cages.map((cage, index) =>
     `<span><i style="background:${colors[index]}"></i>${escapeHtml(cage.constructionId)}</span>`,
@@ -105,13 +114,13 @@ export function renderMuscleCompartmentRingCageContactHtml({
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="Ring-cage contact assay controls and residuals">
-    <h1>Current-K4 cage-level contact</h1>
+    <h1>${escapeHtml(title)}</h1>
     <p class="authority">Agent-authored provisional assay · no packing or anatomical admission</p>
     <p class="status">Solver disposition · ${escapeHtml(result.status)}</p>
-    <p class="explanation">The source state is the squeezed, crowded construction. The proposal is the same identity-bound tetrahedral cages after whole-centerline curvature-regularized contact relief; fixed attachments remain fixed and visible residuals remain binding.</p>
+    <p class="explanation">${escapeHtml(explanation)}</p>
     <div class="controls">
-      <button data-state="before">Source crowded input</button>
-      <button data-state="packed">Curvature-bearing proposal · residual remains</button>
+      <button data-state="before">${escapeHtml(sourceLabel)}</button>
+      <button data-state="packed">${escapeHtml(proposalLabel)}</button>
     </div>
     <div class="metrics">
       <span class="head">measurement</span><span class="head value">source</span><span class="head value">proposal</span>

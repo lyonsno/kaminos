@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-visual-inspection.v0",
+  "status": "agent-inspected-nondominated-subtle-local-relief-no-material-silhouette-advance",
+  "visualDisposition": "continue-bounded-pressure-directed-amplitude-frontier",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "bundleIdentitySha256": "8b6bfc8485e5fbe2f85cee22ce7431684e25792f884b90e56d2a2cdeb1f60228",
+  "residualLedgerSha256": "7e8c8bd6b96f7b122c02bc831b84f7b63b967b45be110cb67cff84ce5877bf39",
+  "captureRouteVerificationSha256": "73613a2b27dd379e751affa248777d79fc733e8eef07441aec911ced65c79719",
+  "captures": [
+    {
+      "path": "source-crowded.png",
+      "sha256": "85bc5653047c39d4e670d64ab5a9434acba40dfbf387a5f7665f492226990c65"
+    },
+    {
+      "path": "contact-relieved.png",
+      "sha256": "9d4ac56b14194393ecb6c2f4a51b3c3b82929434908b0a5f33d02ac6c9bd81b7"
+    },
+    {
+      "path": "source-crowded-side.png",
+      "sha256": "13bb5bc9c9bc5f068df19cf55ea83276b4cbfc51ba46f6add0ab4b8a6cb7b849"
+    },
+    {
+      "path": "contact-relieved-side.png",
+      "sha256": "e0214b7d1d25d81f1552abee10b470c731317ab935135256beb6272aaaa70105"
+    }
+  ],
+  "inspection": {
+    "views": [
+      "primary selected reference versus proposal at original resolution",
+      "side selected reference versus proposal at original resolution"
+    ],
+    "visibleLocalChange": "The pressure-selected Muscle 45 endpoint region narrows without a hard kink, fold, attachment jump, or neighboring-construction displacement; proposal pressure markers remain concentrated in the expected local contact family.",
+    "visibleGlobalChange": "The primary and side silhouettes remain almost indistinguishable from the curvature-12 selected reference. The 0.96 area point does not produce a material formation-level opening at the full-cluster framing.",
+    "scalarTrade": "The global movable maximum improves from 0.3420731982757239 to 0.3265856567325679 and fixed total improves, while aggregate movable penetration worsens from 10.164116328174828 to 10.212581724883897.",
+    "rejectionPressure": "Do not promote this point as visual packing progress or anatomical admission. Preserve it as evidence that pressure-directed longitudinal transfer can lower the worst local contact without same-slice reciprocal expansion, then test bounded stronger amplitudes with a tighter local witness.",
+    "sourceProposalSemantics": "The reference is the selected curvature-12 current-K4 carrier. The proposal changes only the pressure-derived Muscle 45 section-area field and preserves source/carrier identity lineage, fixed endpoints, centerline, other constructions, positive cells, volume, and compartment."
+  }
+}

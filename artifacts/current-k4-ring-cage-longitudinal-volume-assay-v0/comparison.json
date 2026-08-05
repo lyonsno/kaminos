@@ -1,0 +1,34 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-comparison.v0",
+  "status": "completed",
+  "selected": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "pairwiseMovableTotalPenetration": 10.164116328174828,
+    "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+    "pairwiseFixedTotalPenetration": 3.74533272446409,
+    "skeletalTotalPenetration": 0.04502050065172025,
+    "maximumRelativeVolumeError": 0.014999833625267148
+  },
+  "proposal": {
+    "carrierSha256": "4ace652c22eddf2d89763d778df64a226c5a5302e7378a12f22680470f09a7dc",
+    "pairwiseMovableTotalPenetration": 10.212581724883897,
+    "pairwiseMovableMaximumPenetration": 0.3265856567325679,
+    "pairwiseFixedTotalPenetration": 3.6904253483836245,
+    "skeletalTotalPenetration": 0.04502050065172025,
+    "maximumRelativeVolumeError": 0.014999833625267148,
+    "nonPositiveCellCount": 0,
+    "compartmentMaximumEscape": 0,
+    "fixedNodeMaximumDrift": 0,
+    "centerlineMaximumDrift": 0,
+    "transferVolumeRelativeError": 4.592657864275e-11,
+    "repaymentAreaScale": 1.0038672659546135
+  },
+  "decision": {
+    "classification": "longitudinal-volume-nondominated-pending-visual-admission",
+    "improvedMovableMaximum": true,
+    "improvedMovableTotal": false,
+    "improvedFixedTotal": true,
+    "didNotWorsenSkeletal": true,
+    "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only"
+  }
+}
