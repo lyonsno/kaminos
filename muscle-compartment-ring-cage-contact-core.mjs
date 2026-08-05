@@ -18,6 +18,8 @@ export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_ANISOTROPY_SELECTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_REDISTRIBUTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-longitudinal-volume-redistribution.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_RAMP_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-longitudinal-volume-ramp.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_VOLUME_REDISTRIBUTION_SELECTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-pressure-volume-redistribution-selection.v0';
 
@@ -1721,6 +1723,248 @@ export function applyLongitudinalRingCageSectionVolumeRedistribution(
   });
   return {
     schema: MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_REDISTRIBUTION_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: solved.outputCarrier.identity.sha256,
+    requested: structuredClone(requestedConfig),
+    effective: {
+      ...structuredClone(requestedConfig),
+      repaymentAreaScale,
+    },
+    fallbackUsed: false,
+    sourceVolume,
+    compressedVolume: compressed.currentVolume,
+    finalVolume: solved.currentVolume,
+    displacedVolume,
+    repaidVolume: solved.currentVolume - compressed.currentVolume,
+    finalVolumeRelativeError,
+    maximumAdjacentAreaScaleDelta,
+    fixedNodeMaximumDrift,
+    centerlineMaximumDrift,
+    nonPositiveCellCount,
+    iterationCount,
+    sectionReceipts,
+    outputCarrier: solved.outputCarrier,
+  };
+}
+
+export function applyLongitudinalRingCageSectionVolumeRamp(
+  solverCarrier,
+  requestedConfig,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error(
+      'longitudinal volume ramp requires the admitted solver carrier schema',
+    );
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `longitudinal volume ramp source carrier identity mismatch: recorded ` +
+      `${solverCarrier.identity?.sha256 || 'missing'}, actual ${actualCarrierSha256}`,
+    );
+  }
+  const configKeys = [
+    'compressionSections',
+    'constructionId',
+    'maximumAdjacentAreaScaleDelta',
+    'maximumRepaymentAreaScale',
+    'repaymentSectionIds',
+    'volumeRelativeTolerance',
+  ];
+  if (!requestedConfig || typeof requestedConfig !== 'object' ||
+      Array.isArray(requestedConfig) ||
+      JSON.stringify(Object.keys(requestedConfig).sort()) !== JSON.stringify(configKeys)) {
+    throw new Error(
+      `longitudinal volume ramp config requires exactly ${configKeys.join(', ')}`,
+    );
+  }
+  if (typeof requestedConfig.constructionId !== 'string' ||
+      !Array.isArray(requestedConfig.compressionSections) ||
+      requestedConfig.compressionSections.length === 0 ||
+      !Array.isArray(requestedConfig.repaymentSectionIds) ||
+      requestedConfig.repaymentSectionIds.length === 0 ||
+      !requestedConfig.repaymentSectionIds.every(id => typeof id === 'string') ||
+      new Set(requestedConfig.repaymentSectionIds).size !==
+        requestedConfig.repaymentSectionIds.length) {
+    throw new Error(
+      'longitudinal volume ramp requires compression sections and unique repayment section ids',
+    );
+  }
+  const compressionSectionKeys = ['areaScale', 'sectionId'];
+  for (const row of requestedConfig.compressionSections) {
+    if (!row || typeof row !== 'object' || Array.isArray(row) ||
+        JSON.stringify(Object.keys(row).sort()) !==
+          JSON.stringify(compressionSectionKeys) ||
+        typeof row.sectionId !== 'string' ||
+        !Number.isFinite(row.areaScale) ||
+        !(row.areaScale > 0 && row.areaScale < 1)) {
+      throw new Error(
+        'longitudinal volume ramp compression sections require sectionId and areaScale in (0, 1)',
+      );
+    }
+  }
+  const compressionSectionIds = requestedConfig.compressionSections.map(
+    row => row.sectionId,
+  );
+  if (new Set(compressionSectionIds).size !== compressionSectionIds.length) {
+    throw new Error('longitudinal volume ramp requires unique compression section ids');
+  }
+  if (!Number.isFinite(requestedConfig.maximumRepaymentAreaScale) ||
+      !(requestedConfig.maximumRepaymentAreaScale > 1) ||
+      !Number.isFinite(requestedConfig.maximumAdjacentAreaScaleDelta) ||
+      !(requestedConfig.maximumAdjacentAreaScaleDelta > 0) ||
+      !Number.isFinite(requestedConfig.volumeRelativeTolerance) ||
+      !(requestedConfig.volumeRelativeTolerance > 0)) {
+    throw new Error('longitudinal volume ramp contains an invalid bound or tolerance');
+  }
+  const compressionScaleBySectionId = new Map(
+    requestedConfig.compressionSections.map(row => [row.sectionId, row.areaScale]),
+  );
+  const repaymentIds = new Set(requestedConfig.repaymentSectionIds);
+  if (compressionSectionIds.some(sectionId => repaymentIds.has(sectionId))) {
+    throw new Error('longitudinal volume ramp compression and repayment sets overlap');
+  }
+  const cageIndex = solverCarrier.cages.findIndex(
+    cage => cage.constructionId === requestedConfig.constructionId,
+  );
+  if (cageIndex < 0) {
+    throw new Error(
+      `longitudinal volume ramp lacks construction ${requestedConfig.constructionId}`,
+    );
+  }
+  const sourcePrepared = prepareCage(solverCarrier.cages[cageIndex]);
+  const rows = sectionRows(sourcePrepared);
+  const orderedSectionIds = [...rows.keys()].sort();
+  for (const sectionId of [...compressionSectionIds, ...repaymentIds]) {
+    const row = rows.get(sectionId);
+    if (!row) throw new Error(`longitudinal volume ramp lacks section ${sectionId}`);
+    if (row.fixed) {
+      throw new Error(`longitudinal volume ramp refuses fixed section ${sectionId}`);
+    }
+  }
+  const fixedReference = fixedNodeReference(solverCarrier);
+  const axisReference = axisNodeReference(solverCarrier);
+  const sourceVolume = cageCurrentPositiveVolume(sourcePrepared);
+  if (!(sourceVolume > EPSILON)) {
+    throw new Error('longitudinal volume ramp source construction has no positive volume');
+  }
+  const sourceAreaBySectionId = new Map(orderedSectionIds.map(sectionId => [
+    sectionId,
+    sectionPlaneGeometry(sourcePrepared, rows.get(sectionId)).area,
+  ]));
+  const areaScaleMap = repaymentAreaScale => new Map(orderedSectionIds.map(sectionId => [
+    sectionId,
+    compressionScaleBySectionId.get(sectionId) ??
+      (repaymentIds.has(sectionId) ? repaymentAreaScale : 1),
+  ]));
+  const compressed = applyRingCageSectionAreaScales(
+    solverCarrier,
+    cageIndex,
+    areaScaleMap(1),
+  );
+  const displacedVolume = sourceVolume - compressed.currentVolume;
+  if (!(displacedVolume > sourceVolume * requestedConfig.volumeRelativeTolerance)) {
+    throw new Error('longitudinal volume ramp displaced no measurable volume');
+  }
+  const maximum = applyRingCageSectionAreaScales(
+    solverCarrier,
+    cageIndex,
+    areaScaleMap(requestedConfig.maximumRepaymentAreaScale),
+  );
+  if (maximum.currentVolume <
+      sourceVolume * (1 - requestedConfig.volumeRelativeTolerance)) {
+    throw new Error(
+      'longitudinal volume ramp cannot repay displaced volume within maximumRepaymentAreaScale',
+    );
+  }
+  let lower = 1;
+  let upper = requestedConfig.maximumRepaymentAreaScale;
+  let solved = maximum;
+  let repaymentAreaScale = upper;
+  let iterationCount = 0;
+  for (; iterationCount < 80; iterationCount += 1) {
+    repaymentAreaScale = (lower + upper) / 2;
+    solved = applyRingCageSectionAreaScales(
+      solverCarrier,
+      cageIndex,
+      areaScaleMap(repaymentAreaScale),
+    );
+    const relativeError = Math.abs(solved.currentVolume - sourceVolume) / sourceVolume;
+    if (relativeError <= requestedConfig.volumeRelativeTolerance) break;
+    if (solved.currentVolume < sourceVolume) lower = repaymentAreaScale;
+    else upper = repaymentAreaScale;
+  }
+  const finalVolumeRelativeError =
+    Math.abs(solved.currentVolume - sourceVolume) / sourceVolume;
+  if (finalVolumeRelativeError > requestedConfig.volumeRelativeTolerance) {
+    throw new Error(
+      `longitudinal volume ramp failed volume tolerance: ` +
+      `${finalVolumeRelativeError} > ${requestedConfig.volumeRelativeTolerance}`,
+    );
+  }
+  const effectiveAreaScales = areaScaleMap(repaymentAreaScale);
+  let maximumAdjacentAreaScaleDelta = 0;
+  for (let index = 1; index < orderedSectionIds.length; index += 1) {
+    maximumAdjacentAreaScaleDelta = Math.max(
+      maximumAdjacentAreaScaleDelta,
+      Math.abs(
+        effectiveAreaScales.get(orderedSectionIds[index]) -
+        effectiveAreaScales.get(orderedSectionIds[index - 1]),
+      ),
+    );
+  }
+  if (maximumAdjacentAreaScaleDelta >
+      requestedConfig.maximumAdjacentAreaScaleDelta + EPSILON) {
+    throw new Error(
+      `longitudinal volume ramp violates maximumAdjacentAreaScaleDelta: ` +
+      `${maximumAdjacentAreaScaleDelta} > ` +
+      `${requestedConfig.maximumAdjacentAreaScaleDelta}`,
+    );
+  }
+  const fixedNodeMaximumDrift = measureFixedNodeMaximumDrift(
+    solved.outputCarrier,
+    fixedReference,
+  );
+  const centerlineMaximumDrift = measureAxisNodeMaximumDrift(
+    solved.outputCarrier,
+    axisReference,
+  );
+  if (fixedNodeMaximumDrift !== 0 || centerlineMaximumDrift !== 0) {
+    throw new Error(
+      'longitudinal volume ramp violated fixed-node or centerline immutability',
+    );
+  }
+  const nonPositiveCellCount = solved.prepared.cellGeometry.filter(
+    cell => !(cell.orientedVolume > EPSILON),
+  ).length;
+  if (nonPositiveCellCount !== 0) {
+    throw new Error(
+      `longitudinal volume ramp produced ${nonPositiveCellCount} nonpositive cells`,
+    );
+  }
+  const solvedRows = sectionRows(solved.prepared);
+  const sectionReceipts = orderedSectionIds.map(sectionId => {
+    const areaBefore = sourceAreaBySectionId.get(sectionId);
+    const areaAfter = sectionPlaneGeometry(
+      solved.prepared,
+      solvedRows.get(sectionId),
+    ).area;
+    return {
+      sectionId,
+      role: compressionScaleBySectionId.has(sectionId)
+        ? 'compression'
+        : repaymentIds.has(sectionId) ? 'repayment' : 'unchanged',
+      requestedAreaScale: effectiveAreaScales.get(sectionId),
+      effectiveAreaScale: areaAfter / areaBefore,
+      areaBefore,
+      areaAfter,
+    };
+  });
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_RAMP_SCHEMA,
     status: 'completed',
     sourceCarrierSha256: solverCarrier.identity.sha256,
     outputCarrierSha256: solved.outputCarrier.identity.sha256,
