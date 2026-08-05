@@ -1,5 +1,13 @@
 # Completed Cat Ecorche Generator Assay
 
+## Prompt Authority Result
+
+A fixed-source, fixed-seed five-cell switch now separates three generator controls that had previously been conflated. The authored bauplan controls the global axial, support, shoulder, head-placement, and folded-hindquarter event. A named taxon changes local phenotype, especially tail, feet, distal supports, and stance. Surface commitment is a third axis: the friendly-round baseline produces a continuous living exterior, while the preservation-heavy low-prior template remains an ecorche even when it explicitly requests an outer surface.
+
+![Complete fixed-source, fixed-seed prompt-authority dossier](flux2-prompt-switch-seed80301-v0/full-page-assay-sheet.png)
+
+The exact source image, complete prompts, effective settings, all five outputs, execution receipts, pre-result predictions, and post-result readings are archived in `flux2-prompt-switch-seed80301-v0/assay-sheet.html`. All five outputs were visually screened happy and safe.
+
 ## Campaign Result
 
 The newly completed operator-authored cat ecorche is already a viable generator-conditioning object. Three FLUX.2 Klein 9B cells varied only the seed; all three produced coherent, aesthetically admitted, happy and safe whole creatures.

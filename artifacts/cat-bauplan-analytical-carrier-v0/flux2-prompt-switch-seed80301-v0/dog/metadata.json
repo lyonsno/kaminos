@@ -1,0 +1,23 @@
+{
+  "name": "right-sagittal",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "1b188c5f0429",
+  "input_path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview/right-sagittal.png",
+  "input_name": "right-sagittal.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/flux2-prompt-switch-seed80301-v0/dog.txt",
+    "seed": "80301",
+    "steps": "8",
+    "guidance": "1.0",
+    "width": "512",
+    "height": "512",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785955745.148005,
+  "duration_s": 42.4
+}

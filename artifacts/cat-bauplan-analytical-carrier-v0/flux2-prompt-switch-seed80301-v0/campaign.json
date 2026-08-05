@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.flux2-prompt-switch-seed80301.v0",
-  "status": "queued",
+  "status": "completed",
   "campaignQuestion": "How much of the observed bear-like phenotype comes from the friendly-round baseline prompt, and can named taxon change phenotype while preserving the same authored organization?",
   "fixed": {
     "inputPath": "../source-preview/right-sagittal.png",
@@ -20,41 +20,67 @@
     {
       "id": "friendly-round-baseline",
       "execution": "existing",
+      "jobId": "99341018f649",
+      "durationSeconds": 33.674235,
       "promptPath": "../flux2-matched-tranche/prior-led-friendly-completion.txt",
+      "promptSha256": "a9c279e9a7cd0ba17f124024652de42a717a61ec4da4287ead973f0259843f01",
       "outputPath": "../flux2-matched-tranche/seed-80301/output.png",
-      "modalPhenotypePrediction": "Compact rounded friendly ground mammal with sturdy columnar supports, small eyes, and substantial weight; bear, mustelid, or wombat-like basin is likely."
+      "outputSha256": "fa767c042c0ac6eb27fd4ec282f917ba840fa153b038e5b5961f35c728a30288",
+      "modalPhenotypePrediction": "Compact rounded friendly ground mammal with sturdy columnar supports, small eyes, and substantial weight; bear, mustelid, or wombat-like basin is likely.",
+      "postResult": "Smooth peach anatomy-literal creature with a continuous exterior. The source folded hindquarter and head-to-shoulder organization remain visible, while compact-round wording strongly governs surface commitment and mass character.",
+      "visualAdmission": "happy / safe"
     },
     {
       "id": "low-prior",
-      "execution": "queued",
+      "execution": "completed",
       "jobId": "237c130e4a96",
+      "durationSeconds": 49.475,
       "promptPath": "low-prior.txt",
+      "promptSha256": "511b9da3931e235ddf93db273a0f563c90f2b9d528c41e712f0e83c59f2bfbe9",
       "outputPath": "low-prior/output.png",
-      "modalPhenotypePrediction": "Taxonomically unresolved quadruped whose massing, joint chain, stance, and support organization are led primarily by the source."
+      "outputSha256": "c77051da5a704482f271608af97a30d52ffe5b8aaa07a2091c3af6aeb4ef9bdf",
+      "modalPhenotypePrediction": "Taxonomically unresolved quadruped whose massing, joint chain, stance, and support organization are led primarily by the source.",
+      "postResult": "Taxonomically unresolved ecorche. It preserves the global authored organization most literally, but the preservation-heavy wording does not overcome the visible-anatomy basin to produce an outer skin.",
+      "visualAdmission": "happy / safe"
     },
     {
       "id": "cat",
-      "execution": "queued",
+      "execution": "completed",
       "jobId": "1b40e1cbddaf",
+      "durationSeconds": 39.276,
       "promptPath": "cat.txt",
+      "promptSha256": "9d562d7e44171c0a0479b11fd271a143f9496434e2db08d88a50748f23998f59",
       "outputPath": "cat/output.png",
-      "modalPhenotypePrediction": "Feline cranial, paw, torso, tail, coat, and digitigrade stance traits applied without replacing the source organization."
+      "outputSha256": "f10fe5e37d2e8e95334e47a8c79a1774f93db26dfb3d047cc99ffa371f99ced1",
+      "modalPhenotypePrediction": "Feline cranial, paw, torso, tail, coat, and digitigrade stance traits applied without replacing the source organization.",
+      "postResult": "The global source organization survives while the long tail, folded hind chain, hock, and paw organization become more feline. The skull remains comparatively source-led and the output remains an ecorche.",
+      "visualAdmission": "happy / safe"
     },
     {
       "id": "dog",
-      "execution": "queued",
+      "execution": "completed",
       "jobId": "1b188c5f0429",
+      "durationSeconds": 42.39,
       "promptPath": "dog.txt",
+      "promptSha256": "cf9014a31bcdbf117410787c2b9c06615e92ac8500fd89bf727f730b3014d156",
       "outputPath": "dog/output.png",
-      "modalPhenotypePrediction": "Canid cranial, paw, torso, tail, coat, and stance traits applied without replacing the source organization."
+      "outputSha256": "f0235ffefe3fb984c23c465d3ecc512d6b8d305271e7a12755e32fb9649114fc",
+      "modalPhenotypePrediction": "Canid cranial, paw, torso, tail, coat, and stance traits applied without replacing the source organization.",
+      "postResult": "The global source organization survives while the distal supports become longer and straighter and the feet and stance become more canid-like. The tail is suppressed, the skull remains source-led, and the output remains an ecorche.",
+      "visualAdmission": "happy / safe"
     },
     {
       "id": "bear",
-      "execution": "queued",
+      "execution": "completed",
       "jobId": "8bb8b70abb9e",
+      "durationSeconds": 48.002,
       "promptPath": "bear.txt",
+      "promptSha256": "6118b6f6f8dfe39f72cc9df004cd64694d6e4f54b12c73701b9f2a2658f06cf2",
       "outputPath": "bear/output.png",
-      "modalPhenotypePrediction": "Ursid cranial, paw, torso, tail, coat, plantigrade stance, and weight traits applied without replacing the source organization."
+      "outputSha256": "d3936b1cdd30f4732910e348d74ede5c535517cfc30c74346cc9a9770dcb6581",
+      "modalPhenotypePrediction": "Ursid cranial, paw, torso, tail, coat, plantigrade stance, and weight traits applied without replacing the source organization.",
+      "postResult": "The global source organization survives while the hind foot, support event, and stance become heavier and more plantigrade. The tail is suppressed, the skull remains source-led, and the output remains an ecorche.",
+      "visualAdmission": "happy / safe"
     }
   ],
   "grading": {
@@ -75,5 +101,20 @@
       "stance"
     ]
   },
-  "claimCeiling": "One fixed-source, fixed-seed prompt-switch assay can separate prompt phenotype pressure from broad source-organization survival for these five cells; it cannot establish general prompt robustness, anatomical fidelity, or 3D correspondence."
+  "result": {
+    "sourceAuthority": "All five cells preserve the source's major axial, support, shoulder, head-placement, and folded-hindquarter organization.",
+    "phenotypeAuthority": "Changing only the taxon noun produces coherent local differences in tail, feet, distal supports, and stance without replacing the global authored event.",
+    "surfaceCommitment": "The friendly-round baseline produces a continuous living exterior. The four preservation-heavy cells remain ecorches despite explicit outer-surface language, exposing surface commitment as an independent prompt axis.",
+    "nextCausalAssay": "Hold source, seed, and low-prior structure text fixed while varying only the minimal surface-commitment clause; then repeat the strongest surface clause across multiple seeds before drawing a general conclusion."
+  },
+  "dossier": {
+    "htmlPath": "assay-sheet.html",
+    "htmlSha256": "d8fc9f9b963472441f7b27bd41afc0c7c20b17f76fd207eb68892d833efa406e",
+    "fullPageImagePath": "full-page-assay-sheet.png",
+    "fullPageImageSha256": "fde15221443bf23b84990e8babf11424866e7b704164ba7e09de15ce7dc6c060",
+    "allOutputsShown": true,
+    "allOutputsVisuallyScreened": true,
+    "visualAdmission": "happy / safe"
+  },
+  "claimCeiling": "One fixed-source, fixed-seed prompt-switch assay shows local phenotype response and global source-organization survival on this route. It does not establish general prompt robustness, anatomical fidelity, surface-commitment reliability, 3D correspondence, or multi-seed invariance."
 }

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cat bauplan FLUX.2 prompt-authority assay</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #151918; color: #f4f0e7; font: 15px/1.45 Arial, sans-serif; letter-spacing: 0; }
+    header, section { padding: 24px 28px; border-bottom: 1px solid #3d4742; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 10px; font-size: 28px; }
+    h2 { margin-bottom: 8px; font-size: 21px; color: #f1c878; }
+    h3 { margin-bottom: 8px; font-size: 17px; }
+    .lede, .note { max-width: 1700px; color: #c9cdca; }
+    .status-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .status { padding: 5px 9px; border: 1px solid #48776b; background: #1b2b27; color: #9fe1d0; font-size: 13px; font-weight: 700; }
+    .source { display: grid; grid-template-columns: minmax(340px, 0.75fr) minmax(420px, 1.25fr); gap: 1px; background: #46504b; }
+    .source figure, .source article, .cell { margin: 0; min-width: 0; background: #1d211f; }
+    .source img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #202522; }
+    figcaption, .source article { padding: 14px 16px; }
+    .sub { display: block; margin-top: 4px; color: #b7bcb9; font-size: 12px; font-weight: 400; }
+    code { color: #a9ddcf; font: 12px/1.4 Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+    .settings { display: grid; grid-template-columns: repeat(8, minmax(100px, 1fr)); gap: 1px; margin-top: 16px; background: #46504b; }
+    .setting { padding: 10px 12px; background: #1d211f; }
+    .label { display: block; color: #a5aaa7; font-size: 11px; text-transform: uppercase; }
+    .value { display: block; margin-top: 3px; color: #9ad9c8; font-weight: 700; overflow-wrap: anywhere; }
+    .cells { display: grid; gap: 2px; background: #46504b; }
+    .cell { display: grid; grid-template-columns: minmax(360px, 0.9fr) minmax(420px, 1.1fr); }
+    .cell-copy { padding: 18px; }
+    .cell img { display: block; width: 100%; min-height: 480px; height: 100%; object-fit: contain; background: #f0eee7; }
+    .prompt { padding: 12px; border-left: 3px solid #9ad9c8; background: #181d1b; color: #e0ddd4; }
+    .prediction { color: #d9c79f; }
+    .result { color: #b9ddd4; }
+    .receipt { margin-bottom: 0; color: #aeb4b0; font-size: 12px; }
+    .interpretation { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: #46504b; }
+    .interpretation article { padding: 16px; background: #1d211f; }
+    .positive { color: #9fe1d0; }
+    .ceiling { color: #d7b487; }
+    @media (max-width: 980px) {
+      .source, .cell, .interpretation { grid-template-columns: 1fr; }
+      .settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cell img { min-height: 0; aspect-ratio: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cat bauplan prompt-authority assay</h1>
+    <p class="lede">One exact operator-authored source plate, one seed, one FLUX.2 route, and five prompt conditions. This sheet shows the complete tranche. It separates global source authority, local phenotype pressure, and the newly exposed surface-commitment axis.</p>
+    <div class="status-row">
+      <span class="status">5 of 5 outputs shown</span>
+      <span class="status">all outputs visually screened happy / safe</span>
+      <span class="status">source, seed, route, and settings fixed</span>
+      <span class="status">cat / dog / bear differ only by taxon noun</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. Fixed conditioning and route</h2>
+    <div class="source">
+      <figure>
+        <img src="../source-preview/right-sagittal.png" alt="Right sagittal source plate of the operator-authored cat bauplan">
+        <figcaption>Right sagittal conditioning plate<span class="sub">The only image supplied to every cell</span><code>92ad03e4b55b94cd219eeee73afffba52e1a16955a949d2b65e2aad0279a26fc</code></figcaption>
+      </figure>
+      <article>
+        <h3>Controlled question</h3>
+        <p>How much of the observed bear-like phenotype comes from the friendly-round baseline prompt, and can a named taxon alter phenotype while the authored organization remains intact?</p>
+        <p class="note">Every prompt retains the same camera instruction. The low-prior template increases explicit preservation pressure. Cat, dog, and bear are exact copies of that template with only the taxon noun changed.</p>
+        <div class="settings">
+          <div class="setting"><span class="label">Job type</span><span class="value">mflux_flux2_edit_promptfile</span></div>
+          <div class="setting"><span class="label">Model</span><span class="value">flux2-klein-9b</span></div>
+          <div class="setting"><span class="label">Seed</span><span class="value">80301</span></div>
+          <div class="setting"><span class="label">Resolution</span><span class="value">512 x 512</span></div>
+          <div class="setting"><span class="label">Steps</span><span class="value">8</span></div>
+          <div class="setting"><span class="label">Guidance</span><span class="value">1.0</span></div>
+          <div class="setting"><span class="label">Quantize</span><span class="value">4</span></div>
+          <div class="setting"><span class="label">MLX cache</span><span class="value">48 GB</span></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Complete prompt switch</h2>
+    <p class="note">Each row keeps the exact prompt visually adjacent to its generated output. Predictions were written before generation; result readings were written after visual inspection.</p>
+    <div class="cells">
+      <article class="cell">
+        <div class="cell-copy">
+          <h3>Friendly-round baseline</h3>
+          <p class="prompt">Use the supplied operator-authored anatomy as a strong ancestral structure seed for one newly discovered friendly ground creature. Retain the distinctive pelvis and folded hind-limb event, the long muscle trajectories, the rear support spacing, and the source's direction of travel. Let biological plausibility invent a coherent missing forebody, head, support anatomy, and outer surface wherever the partial construction leaves them open. Favor a compact rounded whole-body silhouette, four sturdy supports, softly integrated masses, a simple expressive head, small calm eyes, and gentle curious character. The result should feel discovered from the anatomy: one healthy, aesthetically pleasing, softly stylized living animal with convincing weight. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+          <p class="prediction"><strong>Prediction:</strong> Compact rounded friendly ground mammal; bear, mustelid, or wombat-like basin likely.</p>
+          <p class="result"><strong>Observed:</strong> Continuous smooth exterior with the folded hindquarter and head-to-shoulder organization intact. Prompt strongly governs surface commitment and mass character.</p>
+          <p class="receipt"><code>job 99341018f649 | 33.674 s | output fa767c042c0ac6eb27fd4ec282f917ba840fa153b038e5b5961f35c728a30288</code></p>
+        </div>
+        <img src="../flux2-matched-tranche/seed-80301/output.png" alt="Friendly-round FLUX completion at seed 80301">
+      </article>
+
+      <article class="cell">
+        <div class="cell-copy">
+          <h3>Low-prior structural completion</h3>
+          <p class="prompt">Complete the supplied operator-authored anatomy into one coherent living quadruped. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+          <p class="prediction"><strong>Prediction:</strong> Taxonomically unresolved quadruped led primarily by source massing, joint chain, and stance.</p>
+          <p class="result"><strong>Observed:</strong> Taxonomically unresolved ecorche with the most literal source organization. Preservation pressure dominates the requested outer surface.</p>
+          <p class="receipt"><code>job 237c130e4a96 | 49.475 s | output c77051da5a704482f271608af97a30d52ffe5b8aaa07a2091c3af6aeb4ef9bdf</code></p>
+        </div>
+        <img src="low-prior/output.png" alt="Low-prior structural FLUX completion at seed 80301">
+      </article>
+
+      <article class="cell">
+        <div class="cell-copy">
+          <h3>Cat</h3>
+          <p class="prompt">Complete the supplied operator-authored anatomy into one coherent living cat. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+          <p class="prediction"><strong>Prediction:</strong> Feline cranial, paw, torso, tail, coat, and digitigrade traits without source replacement.</p>
+          <p class="result"><strong>Observed:</strong> Long tail, folded hind chain, hock, and paw organization become more feline. Global organization survives; skull and exposed-anatomy state remain source-led.</p>
+          <p class="receipt"><code>job 1b40e1cbddaf | 39.276 s | output f10fe5e37d2e8e95334e47a8c79a1774f93db26dfb3d047cc99ffa371f99ced1</code></p>
+        </div>
+        <img src="cat/output.png" alt="Cat-conditioned FLUX completion at seed 80301">
+      </article>
+
+      <article class="cell">
+        <div class="cell-copy">
+          <h3>Dog</h3>
+          <p class="prompt">Complete the supplied operator-authored anatomy into one coherent living dog. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+          <p class="prediction"><strong>Prediction:</strong> Canid cranial, paw, torso, tail, coat, and stance traits without source replacement.</p>
+          <p class="result"><strong>Observed:</strong> Distal supports become longer and straighter and feet and stance become more canid-like. Tail is suppressed; skull and exposed-anatomy state remain source-led.</p>
+          <p class="receipt"><code>job 1b188c5f0429 | 42.390 s | output f0235ffefe3fb984c23c465d3ecc512d6b8d305271e7a12755e32fb9649114fc</code></p>
+        </div>
+        <img src="dog/output.png" alt="Dog-conditioned FLUX completion at seed 80301">
+      </article>
+
+      <article class="cell">
+        <div class="cell-copy">
+          <h3>Bear</h3>
+          <p class="prompt">Complete the supplied operator-authored anatomy into one coherent living bear. Preserve the visible proportions, joint locations and organization, pelvis and folded hind-limb event, long muscle trajectories, rear support spacing, axial organization, support count, and direction of travel. Add only the missing connective anatomy and continuous outer surface needed to make the existing structure biologically complete. Do not normalize or replace the source's major mass relationships, limb lengths, joint chain, or stance. Three-quarter neutral studio creature render on a clean pale background. Keep the body continuous and clean, with no exposed anatomy, wounds, clustered apertures, repeated holes, extra limbs, duplicate body, text, interface, or logo.</p>
+          <p class="prediction"><strong>Prediction:</strong> Ursid cranial, paw, torso, tail, coat, plantigrade stance, and weight traits without source replacement.</p>
+          <p class="result"><strong>Observed:</strong> Hind foot, support event, and stance become heavier and more plantigrade. Tail is suppressed; skull and exposed-anatomy state remain source-led.</p>
+          <p class="receipt"><code>job 8bb8b70abb9e | 48.002 s | output d3936b1cdd30f4732910e348d74ede5c535517cfc30c74346cc9a9770dcb6581</code></p>
+        </div>
+        <img src="bear/output.png" alt="Bear-conditioned FLUX completion at seed 80301">
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>3. Research interpretation</h2>
+    <div class="interpretation">
+      <article><h3 class="positive">Source authority</h3><p>All five cells preserve the folded hindquarter, rear support spacing, axial bridge, shoulder separation, head placement, and four-support organization. The authored low-frequency event is already a strong control surface.</p></article>
+      <article><h3 class="positive">Phenotype authority</h3><p>Changing only cat, dog, or bear produces coherent local changes in tail, feet, distal supports, and stance. The named taxon can modify phenotype without erasing global source organization.</p></article>
+      <article><h3 class="ceiling">Surface commitment and ceiling</h3><p>Completing an outer skin is not implied by structural completion. It is a separate prompt axis. This one source and seed do not establish multi-seed robustness, anatomical fidelity, 3D correspondence, or general surface reliability.</p></article>
+    </div>
+    <p class="note" style="margin-top:16px"><strong>Next causal assay:</strong> hold the low-prior structure prompt, source, seed, and route fixed while varying only a minimal surface-commitment clause. Repeat the strongest clause across seeds only after the first switch demonstrates an effect.</p>
+  </section>
+</body>
+</html>
