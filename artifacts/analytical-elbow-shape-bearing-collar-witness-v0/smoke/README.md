@@ -9,7 +9,7 @@ Route:
 - worktree: `/private/tmp/kaminos-mushfinger-shape-bearing-collar-assay-0804`
 - branch: `cc/mushfinger-shape-bearing-collar-assay-0804`
 - implementation commit: `0ec784520131ce953fe51390f5ecf46158b23f2e`
-- review-correction commit: `7b1b26936f7af23999c7131e72536a65c0c92fce`
+- review-correction commit: `7b1b2693bd7f6206b97403aac820516f3529b1b3`
 - generator: `node analytical-elbow-collar-witness.mjs artifacts/analytical-elbow-shape-bearing-collar-witness-v0`
 - server: `python3 -m http.server 4178 --bind 127.0.0.1`
 - page: `http://127.0.0.1:4178/artifacts/analytical-elbow-shape-bearing-collar-witness-v0/index.html`
