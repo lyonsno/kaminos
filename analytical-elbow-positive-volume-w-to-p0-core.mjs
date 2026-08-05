@@ -15,6 +15,8 @@ export const ANALYTICAL_ELBOW_W_TO_P0_REPORT_SCHEMA =
   'kaminos.analytical-elbow-positive-volume-w-to-p0-report.v0';
 export const ANALYTICAL_ELBOW_W_TO_P0_BUNDLE_SCHEMA =
   'kaminos.analytical-elbow-positive-volume-w-to-p0-bundle.v0';
+export const ANALYTICAL_ELBOW_P0_GEOMETRY_STATE_REPORT_SCHEMA =
+  'kaminos.analytical-elbow-p0-geometry-state-report.v0';
 
 const ROUTE = 'analytical-elbow-positive-volume-w-to-p0';
 const OUTPUT_ID = 'analytical-elbow-w-to-p0-v0';
@@ -367,7 +369,7 @@ function surfaceDiagnostics(rowWInput, posedVertices) {
   };
 }
 
-export function evaluateAnalyticalElbowWToP0(input) {
+function evaluateAnalyticalElbowWToP0Internal(input, requireCanonicalProjection) {
   try {
     validateOuterIdentity(input);
   } catch (error) {
@@ -402,15 +404,33 @@ export function evaluateAnalyticalElbowWToP0(input) {
     );
   }
 
-  try {
-    validateProjectionRecord(input);
-  } catch (error) {
-    return failureReport(
-      input,
-      'projection-identity-validation',
-      'projection-record-invalid',
-      error.message,
-    );
+  if (requireCanonicalProjection) {
+    try {
+      validateProjectionRecord(input);
+    } catch (error) {
+      return failureReport(
+        input,
+        'projection-identity-validation',
+        'projection-record-invalid',
+        error.message,
+      );
+    }
+  } else {
+    const expectedIds = manifest.nodes.map(node => node.id);
+    const receivedIds = input.projection?.posedNodes?.map(node => node.id);
+    if (input.projection?.method !== PROJECTION_METHOD ||
+        semanticHash(receivedIds) !== semanticHash(expectedIds) ||
+        input.projection.posedNodes.some(node =>
+          !Array.isArray(node.position) || node.position.length !== 3 ||
+          node.position.some(value => !Number.isFinite(value))
+        )) {
+      return failureReport(
+        input,
+        'state-identity-validation',
+        'p0-state-invalid',
+        'P0 state must preserve canonical ordered finite node identity',
+      );
+    }
   }
 
   const posedNodesById = new Map(
@@ -563,6 +583,58 @@ export function evaluateAnalyticalElbowWToP0(input) {
     error: admitted ? null : { code: 'w-to-p0-hard-veto-failed' },
     claimCeiling:
       'P0 representation admission for one exact Row W state; no optimizer, visual improvement, transfer, anatomy, motion, or production claim',
+  };
+}
+
+export function evaluateAnalyticalElbowWToP0(input) {
+  return evaluateAnalyticalElbowWToP0Internal(input, true);
+}
+
+export function evaluateAnalyticalElbowP0GeometryState(posedNodes) {
+  const input = createAnalyticalElbowWToP0Input();
+  input.projection.posedNodes = structuredClone(posedNodes);
+  input.projection.semanticHash = semanticHash({
+    method: input.projection.method,
+    posedNodes: input.projection.posedNodes,
+  });
+  const admissionEvaluation = evaluateAnalyticalElbowWToP0Internal(input, false);
+  const commonEvidence = {
+    schema: ANALYTICAL_ELBOW_P0_GEOMETRY_STATE_REPORT_SCHEMA,
+    evidenceClass: 'p0-geometry-state-evaluation',
+    canonicalWToP0Admission: false,
+    evaluatedStateHash: semanticHash(input.projection.posedNodes),
+  };
+  if (admissionEvaluation.status === 'W_P0_INVALID') {
+    return {
+      ...commonEvidence,
+      evaluationValid: false,
+      failurePhase: admissionEvaluation.failurePhase,
+      lastTrustworthyEvidence: admissionEvaluation.lastTrustworthyEvidence,
+      geometryDefinitionIdentities: null,
+      projection: null,
+      cellOrientation: null,
+      surface: null,
+      hardVetoes: null,
+      allHardVetoesPass: false,
+      error: structuredClone(admissionEvaluation.error),
+      claimCeiling:
+        'Invalid P0 geometry-state evidence; not canonical W-to-P0 admission, hard-veto passage, optimizer success, visual improvement, transfer, anatomy, motion, or production evidence',
+    };
+  }
+  return {
+    ...commonEvidence,
+    evaluationValid: true,
+    failurePhase: null,
+    geometryDefinitionIdentities: structuredClone(admissionEvaluation.identities),
+    projection: admissionEvaluation.projection,
+    cellOrientation: admissionEvaluation.cellOrientation,
+    surface: admissionEvaluation.surface,
+    hardVetoes: admissionEvaluation.hardVetoes,
+    allHardVetoesPass: Object.values(admissionEvaluation.hardVetoes)
+      .every(veto => veto.pass === true),
+    error: null,
+    claimCeiling:
+      'Geometry-only P0 state evaluation against the frozen veto definitions; not canonical W-to-P0 admission, optimizer success, visual improvement, transfer, anatomy, motion, or production evidence',
   };
 }
 

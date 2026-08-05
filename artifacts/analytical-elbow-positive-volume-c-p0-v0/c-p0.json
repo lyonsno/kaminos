@@ -1,0 +1,3689 @@
+{
+  "schema": "kaminos.analytical-elbow-positive-volume-c-p0-bundle.v0",
+  "status": "complete",
+  "case": "c-p0",
+  "input": {
+    "schema": "kaminos.analytical-elbow-positive-volume-c-p0-input.v0",
+    "id": "analytical-elbow-c-p0-v0",
+    "requestedRoute": "analytical-elbow-positive-volume-c-p0",
+    "effectiveRoute": "analytical-elbow-positive-volume-c-p0",
+    "fallbackUsed": false,
+    "requestedConfig": {
+      "parameterization": "P0",
+      "objective": "rest-edge-log-strain-plus-signed-cell-volume-barrier",
+      "solver": "deterministic-central-difference-backtracking-v0",
+      "budget": 80,
+      "finiteDifferenceStep": 0.00001,
+      "initialStep": 0.05,
+      "minimumStep": 1e-8,
+      "volumeBarrierFloor": 0.05,
+      "volumeBarrierWeight": 100
+    },
+    "effectiveConfig": {
+      "parameterization": "P0",
+      "objective": "rest-edge-log-strain-plus-signed-cell-volume-barrier",
+      "solver": "deterministic-central-difference-backtracking-v0",
+      "budget": 80,
+      "finiteDifferenceStep": 0.00001,
+      "initialStep": 0.05,
+      "minimumStep": 1e-8,
+      "volumeBarrierFloor": 0.05,
+      "volumeBarrierWeight": 100
+    },
+    "predecessorIdentity": {
+      "source": "synthetic-mammalian-elbow-v0:sleeve-collar-0.72",
+      "projection": "5bbc7a1521595e93f651f4289570fb8cbd7efe2eabcdb8ed2170489f2d0eb15a",
+      "manifest": "3a48d4abfe57f5e20267afb713ec8e22969e0d09815c7772a0793bf10aff3bec"
+    },
+    "initializations": [
+      {
+        "id": "w-derived",
+        "posedNodes": [
+          {
+            "id": "p0:section:0:center",
+            "position": [
+              0.41297503417275316,
+              -0.5897894718880741,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:0",
+            "position": [
+              0.6298864955004781,
+              -0.4379064315423171,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:1",
+            "position": [
+              0.566354599394671,
+              -0.4823919441123593,
+              0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:2",
+            "position": [
+              0.41297503417275316,
+              -0.5897894718880741,
+              0.2648
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:3",
+            "position": [
+              0.2595954689508353,
+              -0.6971869996637888,
+              0.18724187565819778
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:4",
+            "position": [
+              0.19606357284502818,
+              -0.741672512233831,
+              3.242864724142191e-17
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:5",
+            "position": [
+              0.25959546895083524,
+              -0.6971869996637888,
+              -0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:6",
+            "position": [
+              0.4129750341727531,
+              -0.5897894718880741,
+              -0.2648
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:7",
+            "position": [
+              0.566354599394671,
+              -0.48239194411235936,
+              -0.1872418756581978
+            ]
+          },
+          {
+            "id": "p0:section:1:center",
+            "position": [
+              0.286788218175523,
+              -0.38957602214449594,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:0",
+            "position": [
+              0.5510163014876179,
+              -0.24086906202084668,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:1",
+            "position": [
+              0.47362568766542945,
+              -0.284424322231426,
+              0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:2",
+            "position": [
+              0.286788218175523,
+              -0.38957602214449594,
+              0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:3",
+            "position": [
+              0.09995074868561665,
+              -0.4947277220575658,
+              0.2143947760557612
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:4",
+            "position": [
+              0.02256013486342806,
+              -0.5382829822681452,
+              3.7131290950147746e-17
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:5",
+            "position": [
+              0.0999507486856166,
+              -0.4947277220575659,
+              -0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:6",
+            "position": [
+              0.28678821817552297,
+              -0.38957602214449594,
+              -0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:7",
+            "position": [
+              0.47362568766542934,
+              -0.28442432223142605,
+              -0.21439477605576124
+            ]
+          },
+          {
+            "id": "p0:section:2:center",
+            "position": [
+              0.18354445963233473,
+              -0.18212865417247734,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:0",
+            "position": [
+              0.4968128060220849,
+              -0.04591740959174723,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:1",
+            "position": [
+              0.4050586316956234,
+              -0.0858127594555837,
+              0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:2",
+            "position": [
+              0.18354445963233476,
+              -0.18212865417247734,
+              0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:3",
+            "position": [
+              -0.0379697124309539,
+              -0.278444548889371,
+              0.24154767645332462
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:4",
+            "position": [
+              -0.12972388675741542,
+              -0.31833989875320745,
+              4.183393465887358e-17
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:5",
+            "position": [
+              -0.037969712430953984,
+              -0.278444548889371,
+              -0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:6",
+            "position": [
+              0.18354445963233468,
+              -0.18212865417247737,
+              -0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:7",
+            "position": [
+              0.4050586316956233,
+              -0.08581275945558373,
+              -0.24154767645332467
+            ]
+          },
+          {
+            "id": "p0:section:3:center",
+            "position": [
+              0.10324375854318821,
+              0.032552632027981726,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:0",
+            "position": [
+              0.4656561998275144,
+              0.14682083583960548,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:1",
+            "position": [
+              0.35950805336170677,
+              0.11335245381718739,
+              0.268700576850888
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:2",
+            "position": [
+              0.10324375854318824,
+              0.03255263202798173,
+              0.37999999999999995
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:3",
+            "position": [
+              -0.15302053627533033,
+              -0.04824718976122393,
+              0.26870057685088805
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:4",
+            "position": [
+              -0.259168682741138,
+              -0.08171557178364204,
+              4.653657836759942e-17
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:5",
+            "position": [
+              -0.15302053627533044,
+              -0.04824718976122397,
+              -0.268700576850888
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:6",
+            "position": [
+              0.10324375854318814,
+              0.032552632027981705,
+              -0.37999999999999995
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:7",
+            "position": [
+              0.35950805336170666,
+              0.11335245381718737,
+              -0.2687005768508881
+            ]
+          },
+          {
+            "id": "p0:section:4:center",
+            "position": [
+              0.045886114908083704,
+              0.25446783645688065,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:0",
+            "position": [
+              0.38062808152183547,
+              0.3225734587472457,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:1",
+            "position": [
+              0.2825844294483885,
+              0.30262578381532745,
+              0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:2",
+            "position": [
+              0.045886114908083725,
+              0.25446783645688065,
+              0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:3",
+            "position": [
+              -0.19081219963222107,
+              0.20630988909843384,
+              0.24154767645332462
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:4",
+            "position": [
+              -0.2888558517056681,
+              0.1863622141665156,
+              4.183393465887358e-17
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:5",
+            "position": [
+              -0.19081219963222115,
+              0.2063098890984338,
+              -0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:6",
+            "position": [
+              0.04588611490808364,
+              0.25446783645688065,
+              -0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:7",
+            "position": [
+              0.2825844294483884,
+              0.30262578381532745,
+              -0.24154767645332467
+            ]
+          },
+          {
+            "id": "p0:section:5:center",
+            "position": [
+              0.01147152872702097,
+              0.48361695911422,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:0",
+            "position": [
+              0.31320931157900544,
+              0.5133583511389498,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:1",
+            "position": [
+              0.22483236112185317,
+              0.5046472990968339,
+              0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:2",
+            "position": [
+              0.011471528727020988,
+              0.48361695911422,
+              0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:3",
+            "position": [
+              -0.2018893036678112,
+              0.46258661913160604,
+              0.2143947760557612
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:4",
+            "position": [
+              -0.29026625412496354,
+              0.4538755670894902,
+              3.7131290950147746e-17
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:5",
+            "position": [
+              -0.20188930366781124,
+              0.46258661913160604,
+              -0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:6",
+            "position": [
+              0.011471528727020914,
+              0.48361695911422,
+              -0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:7",
+            "position": [
+              0.2248323611218531,
+              0.5046472990968339,
+              -0.21439477605576124
+            ]
+          },
+          {
+            "id": "p0:section:6:center",
+            "position": [
+              0,
+              0.7200000000000003,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:0",
+            "position": [
+              0.2648,
+              0.7200000000000003,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:1",
+            "position": [
+              0.18724187565819778,
+              0.7200000000000003,
+              0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:2",
+            "position": [
+              1.6214323620710955e-17,
+              0.7200000000000003,
+              0.2648
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:3",
+            "position": [
+              -0.18724187565819775,
+              0.7200000000000003,
+              0.18724187565819778
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:4",
+            "position": [
+              -0.2648,
+              0.7200000000000003,
+              3.242864724142191e-17
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:5",
+            "position": [
+              -0.1872418756581978,
+              0.7200000000000003,
+              -0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:6",
+            "position": [
+              -4.8642970862132865e-17,
+              0.7200000000000003,
+              -0.2648
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:7",
+            "position": [
+              0.18724187565819772,
+              0.7200000000000003,
+              -0.1872418756581978
+            ]
+          }
+        ]
+      },
+      {
+        "id": "neutral-boundary-applied",
+        "posedNodes": [
+          {
+            "id": "p0:section:0:center",
+            "position": [
+              0.41297503417275316,
+              -0.5897894718880741,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:0",
+            "position": [
+              0.6298864955004781,
+              -0.4379064315423171,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:1",
+            "position": [
+              0.566354599394671,
+              -0.4823919441123593,
+              0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:2",
+            "position": [
+              0.41297503417275316,
+              -0.5897894718880741,
+              0.2648
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:3",
+            "position": [
+              0.2595954689508353,
+              -0.6971869996637888,
+              0.18724187565819778
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:4",
+            "position": [
+              0.19606357284502815,
+              -0.741672512233831,
+              3.242864724142191e-17
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:5",
+            "position": [
+              0.2595954689508352,
+              -0.6971869996637888,
+              -0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:6",
+            "position": [
+              0.4129750341727531,
+              -0.5897894718880741,
+              -0.2648
+            ]
+          },
+          {
+            "id": "p0:section:0:boundary:7",
+            "position": [
+              0.566354599394671,
+              -0.48239194411235936,
+              -0.1872418756581978
+            ]
+          },
+          {
+            "id": "p0:section:1:center",
+            "position": [
+              0,
+              -0.48,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:0",
+            "position": [
+              0.30319999999999997,
+              -0.48,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:1",
+            "position": [
+              0.2143947760557612,
+              -0.48,
+              0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:2",
+            "position": [
+              1.8565645475073873e-17,
+              -0.48,
+              0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:3",
+            "position": [
+              -0.21439477605576118,
+              -0.48,
+              0.2143947760557612
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:4",
+            "position": [
+              -0.30319999999999997,
+              -0.48,
+              3.7131290950147746e-17
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:5",
+            "position": [
+              -0.21439477605576124,
+              -0.48,
+              -0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:6",
+            "position": [
+              -5.569693642522162e-17,
+              -0.48,
+              -0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:1:boundary:7",
+            "position": [
+              0.21439477605576113,
+              -0.48,
+              -0.21439477605576124
+            ]
+          },
+          {
+            "id": "p0:section:2:center",
+            "position": [
+              0,
+              -0.24,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:0",
+            "position": [
+              0.34159999999999996,
+              -0.24,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:1",
+            "position": [
+              0.24154767645332462,
+              -0.24,
+              0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:2",
+            "position": [
+              2.091696732943679e-17,
+              -0.24,
+              0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:3",
+            "position": [
+              -0.2415476764533246,
+              -0.24,
+              0.24154767645332462
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:4",
+            "position": [
+              -0.34159999999999996,
+              -0.24,
+              4.183393465887358e-17
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:5",
+            "position": [
+              -0.24154767645332467,
+              -0.24,
+              -0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:6",
+            "position": [
+              -6.275090198831037e-17,
+              -0.24,
+              -0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:2:boundary:7",
+            "position": [
+              0.24154767645332453,
+              -0.24,
+              -0.24154767645332467
+            ]
+          },
+          {
+            "id": "p0:section:3:center",
+            "position": [
+              0,
+              1.1102230246251565e-16,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:0",
+            "position": [
+              0.37999999999999995,
+              1.1102230246251565e-16,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:1",
+            "position": [
+              0.26870057685088805,
+              1.1102230246251565e-16,
+              0.268700576850888
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:2",
+            "position": [
+              2.326828918379971e-17,
+              1.1102230246251565e-16,
+              0.37999999999999995
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:3",
+            "position": [
+              -0.268700576850888,
+              1.1102230246251565e-16,
+              0.26870057685088805
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:4",
+            "position": [
+              -0.37999999999999995,
+              1.1102230246251565e-16,
+              4.653657836759942e-17
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:5",
+            "position": [
+              -0.2687005768508881,
+              1.1102230246251565e-16,
+              -0.268700576850888
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:6",
+            "position": [
+              -6.980486755139911e-17,
+              1.1102230246251565e-16,
+              -0.37999999999999995
+            ]
+          },
+          {
+            "id": "p0:section:3:boundary:7",
+            "position": [
+              0.26870057685088794,
+              1.1102230246251565e-16,
+              -0.2687005768508881
+            ]
+          },
+          {
+            "id": "p0:section:4:center",
+            "position": [
+              0,
+              0.24,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:0",
+            "position": [
+              0.34159999999999996,
+              0.24,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:1",
+            "position": [
+              0.24154767645332462,
+              0.24,
+              0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:2",
+            "position": [
+              2.091696732943679e-17,
+              0.24,
+              0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:3",
+            "position": [
+              -0.2415476764533246,
+              0.24,
+              0.24154767645332462
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:4",
+            "position": [
+              -0.34159999999999996,
+              0.24,
+              4.183393465887358e-17
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:5",
+            "position": [
+              -0.24154767645332467,
+              0.24,
+              -0.2415476764533246
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:6",
+            "position": [
+              -6.275090198831037e-17,
+              0.24,
+              -0.34159999999999996
+            ]
+          },
+          {
+            "id": "p0:section:4:boundary:7",
+            "position": [
+              0.24154767645332453,
+              0.24,
+              -0.24154767645332467
+            ]
+          },
+          {
+            "id": "p0:section:5:center",
+            "position": [
+              0,
+              0.48,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:0",
+            "position": [
+              0.30319999999999997,
+              0.48,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:1",
+            "position": [
+              0.2143947760557612,
+              0.48,
+              0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:2",
+            "position": [
+              1.8565645475073873e-17,
+              0.48,
+              0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:3",
+            "position": [
+              -0.21439477605576118,
+              0.48,
+              0.2143947760557612
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:4",
+            "position": [
+              -0.30319999999999997,
+              0.48,
+              3.7131290950147746e-17
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:5",
+            "position": [
+              -0.21439477605576124,
+              0.48,
+              -0.21439477605576118
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:6",
+            "position": [
+              -5.569693642522162e-17,
+              0.48,
+              -0.30319999999999997
+            ]
+          },
+          {
+            "id": "p0:section:5:boundary:7",
+            "position": [
+              0.21439477605576113,
+              0.48,
+              -0.21439477605576124
+            ]
+          },
+          {
+            "id": "p0:section:6:center",
+            "position": [
+              0,
+              0.7200000000000002,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:0",
+            "position": [
+              0.2648,
+              0.7200000000000002,
+              0
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:1",
+            "position": [
+              0.18724187565819778,
+              0.7200000000000002,
+              0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:2",
+            "position": [
+              1.6214323620710955e-17,
+              0.7200000000000002,
+              0.2648
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:3",
+            "position": [
+              -0.18724187565819775,
+              0.7200000000000002,
+              0.18724187565819778
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:4",
+            "position": [
+              -0.2648,
+              0.7200000000000002,
+              3.242864724142191e-17
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:5",
+            "position": [
+              -0.1872418756581978,
+              0.7200000000000002,
+              -0.18724187565819775
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:6",
+            "position": [
+              -4.8642970862132865e-17,
+              0.7200000000000002,
+              -0.2648
+            ]
+          },
+          {
+            "id": "p0:section:6:boundary:7",
+            "position": [
+              0.18724187565819772,
+              0.7200000000000002,
+              -0.1872418756581978
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "report": {
+    "schema": "kaminos.analytical-elbow-positive-volume-c-p0-report.v0",
+    "status": "C_P0_COMPLETE",
+    "requestedRoute": "analytical-elbow-positive-volume-c-p0",
+    "effectiveRoute": "analytical-elbow-positive-volume-c-p0",
+    "fallbackUsed": false,
+    "requestedConfig": {
+      "parameterization": "P0",
+      "objective": "rest-edge-log-strain-plus-signed-cell-volume-barrier",
+      "solver": "deterministic-central-difference-backtracking-v0",
+      "budget": 80,
+      "finiteDifferenceStep": 0.00001,
+      "initialStep": 0.05,
+      "minimumStep": 1e-8,
+      "volumeBarrierFloor": 0.05,
+      "volumeBarrierWeight": 100
+    },
+    "effectiveConfig": {
+      "parameterization": "P0",
+      "objective": "rest-edge-log-strain-plus-signed-cell-volume-barrier",
+      "solver": "deterministic-central-difference-backtracking-v0",
+      "budget": 80,
+      "finiteDifferenceStep": 0.00001,
+      "initialStep": 0.05,
+      "minimumStep": 1e-8,
+      "volumeBarrierFloor": 0.05,
+      "volumeBarrierWeight": 100
+    },
+    "failurePhase": null,
+    "lastTrustworthyEvidence": "canonical matched initializations, deterministic solve history, and final hard vetoes evaluated",
+    "configHash": "d3d768cf54e64b0daa464430e274b92334cd4bcdddd845d7fe5ad2733f691379",
+    "runs": [
+      {
+        "initialization": "w-derived",
+        "requestedConfigHash": "d3d768cf54e64b0daa464430e274b92334cd4bcdddd845d7fe5ad2733f691379",
+        "effectiveConfigHash": "d3d768cf54e64b0daa464430e274b92334cd4bcdddd845d7fe5ad2733f691379",
+        "initialObjective": 0.002544615830591612,
+        "finalObjective": 0.002304935725184375,
+        "iterationHistory": [
+          {
+            "iteration": 0,
+            "objective": 0.002544615830591612,
+            "edgeEnergy": 0.002544615830591612,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7882351622147697,
+            "acceptedStep": 0
+          },
+          {
+            "iteration": 1,
+            "objective": 0.0025379300148460336,
+            "edgeEnergy": 0.0025379300148460336,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7887874292029449,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 2,
+            "objective": 0.0025314437305049868,
+            "edgeEnergy": 0.0025314437305049868,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.789323428790897,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 3,
+            "objective": 0.0025251490189324094,
+            "edgeEnergy": 0.0025251490189324094,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7898434758723258,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 4,
+            "objective": 0.002519038284683325,
+            "edgeEnergy": 0.002519038284683325,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.790347879016481,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 5,
+            "objective": 0.0025131042774811027,
+            "edgeEnergy": 0.0025131042774811027,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7908369405974967,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 6,
+            "objective": 0.0025073400751467654,
+            "edgeEnergy": 0.0025073400751467654,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7913109569212141,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 7,
+            "objective": 0.0025017390674266296,
+            "edgeEnergy": 0.0025017390674266296,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.791770218348924,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 8,
+            "objective": 0.002496294940668925,
+            "edgeEnergy": 0.002496294940668925,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7922150094184806,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 9,
+            "objective": 0.002491001663301797,
+            "edgeEnergy": 0.002491001663301797,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7926456089628586,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 10,
+            "objective": 0.0024858534720687,
+            "edgeEnergy": 0.0024858534720687,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7930622902260758,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 11,
+            "objective": 0.002480844858979329,
+            "edgeEnergy": 0.002480844858979329,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7934653209767827,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 12,
+            "objective": 0.002475970558937064,
+            "edgeEnergy": 0.002475970558937064,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7938549636192428,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 13,
+            "objective": 0.0024712255380056145,
+            "edgeEnergy": 0.0024712255380056145,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7942314753020944,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 14,
+            "objective": 0.0024666049822802435,
+            "edgeEnergy": 0.0024666049822802435,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7945951080248752,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 15,
+            "objective": 0.002462104287330541,
+            "edgeEnergy": 0.002462104287330541,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7949461087422253,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 16,
+            "objective": 0.0024577190481839583,
+            "edgeEnergy": 0.0024577190481839583,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7952847194659404,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 17,
+            "objective": 0.00245344504982073,
+            "edgeEnergy": 0.00245344504982073,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7956111773650262,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 18,
+            "objective": 0.002449278258152688,
+            "edgeEnergy": 0.002449278258152688,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7959257148635323,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 19,
+            "objective": 0.002445214811460116,
+            "edgeEnergy": 0.002445214811460116,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7962285597365233,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 20,
+            "objective": 0.0024412510122619386,
+            "edgeEnergy": 0.0024412510122619386,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7965199352040347,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 21,
+            "objective": 0.0024373833195961447,
+            "edgeEnergy": 0.0024373833195961447,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7968000600230798,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 22,
+            "objective": 0.0024336083416887262,
+            "edgeEnergy": 0.0024336083416887262,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7970691485778422,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 23,
+            "objective": 0.002429922828990491,
+            "edgeEnergy": 0.002429922828990491,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.79732741096806,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 24,
+            "objective": 0.0024263236675620458,
+            "edgeEnergy": 0.0024263236675620458,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7975750530955088,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 25,
+            "objective": 0.002422807872788995,
+            "edgeEnergy": 0.002422807872788995,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.797812276748999,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 26,
+            "objective": 0.0024193725834094713,
+            "edgeEnergy": 0.0024193725834094713,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7980392796872527,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 27,
+            "objective": 0.0024160150558381697,
+            "edgeEnergy": 0.0024160150558381697,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.798256255720569,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 28,
+            "objective": 0.0024127326587707913,
+            "edgeEnergy": 0.0024127326587707913,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7984633947905224,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 29,
+            "objective": 0.0024095228680546957,
+            "edgeEnergy": 0.0024095228680546957,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7986608830482707,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 30,
+            "objective": 0.0024063832618117418,
+            "edgeEnergy": 0.0024063832618117418,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7988489029311533,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 31,
+            "objective": 0.0024033115158000736,
+            "edgeEnergy": 0.0024033115158000736,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7990276332378157,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 32,
+            "objective": 0.0024003053990027954,
+            "edgeEnergy": 0.0024003053990027954,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7991972492019306,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 33,
+            "objective": 0.0023973627694315654,
+            "edgeEnergy": 0.0023973627694315654,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7993579225642696,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 34,
+            "objective": 0.0023944815701340215,
+            "edgeEnergy": 0.0023944815701340215,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7995098216434372,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 35,
+            "objective": 0.0023916598253948796,
+            "edgeEnergy": 0.0023916598253948796,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7996531114053003,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 36,
+            "objective": 0.0023888956371202973,
+            "edgeEnergy": 0.0023888956371202973,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7997879535307657,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 37,
+            "objective": 0.0023861871813966166,
+            "edgeEnergy": 0.0023861871813966166,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7999145064824578,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 38,
+            "objective": 0.0023835327052142198,
+            "edgeEnergy": 0.0023835327052142198,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8000329255699963,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 39,
+            "objective": 0.002380930523348255,
+            "edgeEnergy": 0.002380930523348255,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8001433630138713,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 40,
+            "objective": 0.0023783790153884374,
+            "edgeEnergy": 0.0023783790153884374,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800245968008251,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 41,
+            "objective": 0.002375876622909937,
+            "edgeEnergy": 0.002375876622909937,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8003408867822736,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 42,
+            "objective": 0.0023734218467787818,
+            "edgeEnergy": 0.0023734218467787818,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8004282626604252,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 43,
+            "objective": 0.002371013244584587,
+            "edgeEnergy": 0.002371013244584587,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800508236121406,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 44,
+            "objective": 0.00236864942819431,
+            "edgeEnergy": 0.00236864942819431,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8005809448561185,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 45,
+            "objective": 0.0023663290614212495,
+            "edgeEnergy": 0.0023663290614212495,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8006465238241904,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 46,
+            "objective": 0.0023640508578029952,
+            "edgeEnergy": 0.0023640508578029952,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800705105309675,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 47,
+            "objective": 0.0023618135784835214,
+            "edgeEnergy": 0.0023618135784835214,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8007568189753765,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 48,
+            "objective": 0.0023596160301936732,
+            "edgeEnergy": 0.0023596160301936732,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008017919162964,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 49,
+            "objective": 0.0023574570633255773,
+            "edgeEnergy": 0.0023574570633255773,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008401487118899,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 50,
+            "objective": 0.0023553355700961457,
+            "edgeEnergy": 0.0023553355700961457,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008720114772533,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 51,
+            "objective": 0.0023532504827952776,
+            "edgeEnergy": 0.0023532504827952776,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008974999134799,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 52,
+            "objective": 0.0023512007721147327,
+            "edgeEnergy": 0.0023512007721147327,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009167313567039,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 53,
+            "objective": 0.002349185445553484,
+            "edgeEnergy": 0.002349185445553484,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009298208264745,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 54,
+            "objective": 0.002347203545896038,
+            "edgeEnergy": 0.002347203545896038,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009368810728686,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 55,
+            "objective": 0.0023452541497600288,
+            "edgeEnergy": 0.0023452541497600288,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009380226229319,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 56,
+            "objective": 0.0023433363662097085,
+            "edgeEnergy": 0.0023433363662097085,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009333538259136,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 57,
+            "objective": 0.0023414493354322195,
+            "edgeEnergy": 0.0023414493354322195,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009229808978888,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 58,
+            "objective": 0.0023395922274735506,
+            "edgeEnergy": 0.0023395922274735506,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8009070079652006,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 59,
+            "objective": 0.00233776424103125,
+            "edgeEnergy": 0.00233776424103125,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008855371071416,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 60,
+            "objective": 0.0023359646023013193,
+            "edgeEnergy": 0.0023359646023013193,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008586683979012,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 61,
+            "objective": 0.002334192563876427,
+            "edgeEnergy": 0.002334192563876427,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8008264999474225,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 62,
+            "objective": 0.0023324474036932603,
+            "edgeEnergy": 0.0023324474036932603,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8007891279415722,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 63,
+            "objective": 0.0023307284240264817,
+            "edgeEnergy": 0.0023307284240264817,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8007466466815236,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 64,
+            "objective": 0.002329034950527103,
+            "edgeEnergy": 0.002329034950527103,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8006991486222753,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 65,
+            "objective": 0.0023273663313032756,
+            "edgeEnergy": 0.0023273663313032756,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800646724410444,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 66,
+            "objective": 0.002325721936041287,
+            "edgeEnergy": 0.002325721936041287,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8005894629211787,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 67,
+            "objective": 0.0023241011551650057,
+            "edgeEnergy": 0.0023241011551650057,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8005274512944957,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 68,
+            "objective": 0.0023225033990320093,
+            "edgeEnergy": 0.0023225033990320093,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8004607749706786,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 69,
+            "objective": 0.002320928097164502,
+            "edgeEnergy": 0.002320928097164502,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8003895177251932,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 70,
+            "objective": 0.0023193746975134506,
+            "edgeEnergy": 0.0023193746975134506,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8003137617026584,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 71,
+            "objective": 0.002317842665754546,
+            "edgeEnergy": 0.002317842665754546,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.8002335874502334,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 72,
+            "objective": 0.002316331484614249,
+            "edgeEnergy": 0.002316331484614249,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800149073950405,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 73,
+            "objective": 0.0023148406532246743,
+            "edgeEnergy": 0.0023148406532246743,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.800060298652895,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 74,
+            "objective": 0.0023133696865060317,
+            "edgeEnergy": 0.0023133696865060317,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7999673375061274,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 75,
+            "objective": 0.002311918114575137,
+            "edgeEnergy": 0.002311918114575137,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7998702649879524,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 76,
+            "objective": 0.0023104854821790134,
+            "edgeEnergy": 0.0023104854821790134,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7997691541356922,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 77,
+            "objective": 0.0023090713481523344,
+            "edgeEnergy": 0.0023090713481523344,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7996640765756805,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 78,
+            "objective": 0.002307675284897529,
+            "edgeEnergy": 0.002307675284897529,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7995551025521881,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 79,
+            "objective": 0.0023062968778867327,
+            "edgeEnergy": 0.0023062968778867327,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7994423009556111,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 80,
+            "objective": 0.002304935725184375,
+            "edgeEnergy": 0.002304935725184375,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.7993257393502118,
+            "acceptedStep": 0.05
+          }
+        ],
+        "initialCellOrientation": {
+          "cellCount": 144,
+          "minimumSignedVolumeRatio": 0.7882351622147697,
+          "maximumSignedVolumeRatio": 1.1192275125729991,
+          "negativeOrCollapsedCellCount": 0
+        },
+        "initialHardVetoes": {
+          "finiteGeometry": {
+            "pass": true
+          },
+          "exactRestEmbedding": {
+            "pass": true,
+            "maximumError": 2.2929868617541516e-16,
+            "tolerance": 1e-12
+          },
+          "rigidBoundaryResidual": {
+            "pass": true,
+            "maximumCageNodeResidual": 1.1102230246251565e-16,
+            "maximumSurfaceResidual": 0,
+            "tolerance": 1e-12
+          },
+          "positiveCellOrientation": {
+            "pass": true,
+            "minimumSignedVolumeRatio": 0.7882351622147697,
+            "threshold": 0.000001
+          },
+          "surfaceOrientation": {
+            "pass": true,
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.8189988201697743
+          },
+          "transitionSelfIntersection": {
+            "pass": true,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0
+          },
+          "crossSectionAreaRatio": {
+            "pass": true,
+            "minimum": 0.9986394055421399,
+            "threshold": 0.1
+          },
+          "totalSignedVolumeRatio": {
+            "pass": true,
+            "ratio": 0.9533628941254327,
+            "allowedRange": [
+              0.5,
+              1.5
+            ]
+          }
+        },
+        "hardVetoes": {
+          "finiteGeometry": {
+            "pass": true
+          },
+          "exactRestEmbedding": {
+            "pass": true,
+            "maximumError": 2.2929868617541516e-16,
+            "tolerance": 1e-12
+          },
+          "rigidBoundaryResidual": {
+            "pass": true,
+            "maximumCageNodeResidual": 1.1102230246251565e-16,
+            "maximumSurfaceResidual": 0,
+            "tolerance": 1e-12
+          },
+          "positiveCellOrientation": {
+            "pass": true,
+            "minimumSignedVolumeRatio": 0.7993257393502118,
+            "threshold": 0.000001
+          },
+          "surfaceOrientation": {
+            "pass": true,
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.8488047119242595
+          },
+          "transitionSelfIntersection": {
+            "pass": true,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0
+          },
+          "crossSectionAreaRatio": {
+            "pass": true,
+            "minimum": 0.997572454064708,
+            "threshold": 0.1
+          },
+          "totalSignedVolumeRatio": {
+            "pass": true,
+            "ratio": 0.9583852558011114,
+            "allowedRange": [
+              0.5,
+              1.5
+            ]
+          }
+        },
+        "comparison": {
+          "q95AbsoluteLogEdgeStrain": 0.10567458674815311,
+          "scalarControlQ95AbsoluteLogEdgeStrain": 0.1348103998679601
+        },
+        "finalGeometry": {
+          "posedNodes": [
+            {
+              "id": "p0:section:0:center",
+              "position": [
+                0.41297503417275316,
+                -0.5897894718880741,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:0",
+              "position": [
+                0.6298864955004781,
+                -0.4379064315423171,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:1",
+              "position": [
+                0.566354599394671,
+                -0.4823919441123593,
+                0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:2",
+              "position": [
+                0.41297503417275316,
+                -0.5897894718880741,
+                0.2648
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:3",
+              "position": [
+                0.2595954689508353,
+                -0.6971869996637888,
+                0.18724187565819778
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:4",
+              "position": [
+                0.19606357284502818,
+                -0.741672512233831,
+                3.242864724142191e-17
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:5",
+              "position": [
+                0.25959546895083524,
+                -0.6971869996637888,
+                -0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:6",
+              "position": [
+                0.4129750341727531,
+                -0.5897894718880741,
+                -0.2648
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:7",
+              "position": [
+                0.566354599394671,
+                -0.48239194411235936,
+                -0.1872418756581978
+              ]
+            },
+            {
+              "id": "p0:section:1:center",
+              "position": [
+                0.28456603420562754,
+                -0.39057841352346323,
+                -0.00003327431968738574
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:0",
+              "position": [
+                0.5537082854529345,
+                -0.24507114475456407,
+                0.0002485381215568648
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:1",
+              "position": [
+                0.47476112217324656,
+                -0.28967519188909246,
+                0.2173160402738268
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:2",
+              "position": [
+                0.286290078705352,
+                -0.3946389801765546,
+                0.3040305040569256
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:3",
+              "position": [
+                0.10095995332238247,
+                -0.49678878455429154,
+                0.21287448019219424
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:4",
+              "position": [
+                0.024426937439034832,
+                -0.5373925415725282,
+                -0.00025542055650863807
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:5",
+              "position": [
+                0.0998114279814213,
+                -0.49380844213158964,
+                -0.21344972194914918
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:6",
+              "position": [
+                0.2853495934603147,
+                -0.3908671053574725,
+                -0.3041720082625038
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:7",
+              "position": [
+                0.4743544534515934,
+                -0.28767406792057126,
+                -0.2167928791135983
+              ]
+            },
+            {
+              "id": "p0:section:2:center",
+              "position": [
+                0.18059721556329042,
+                -0.18160862290850202,
+                0.00016489075251469726
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:0",
+              "position": [
+                0.4975121744221011,
+                -0.04967024633446777,
+                -0.000033022636132746044
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:1",
+              "position": [
+                0.4050323802126579,
+                -0.09031599788009854,
+                0.24391993322262454
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:2",
+              "position": [
+                0.18248447868237472,
+                -0.18641159699691967,
+                0.3424806917402499
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:3",
+              "position": [
+                -0.03720406546266266,
+                -0.2800299583111522,
+                0.24012777390689477
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:4",
+              "position": [
+                -0.12786976299142438,
+                -0.3170334548267617,
+                -0.00010929358375024054
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:5",
+              "position": [
+                -0.03853457192315188,
+                -0.2769349255161552,
+                -0.24054978136511782
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:6",
+              "position": [
+                0.18124402096027442,
+                -0.1826744575673403,
+                -0.34298811231845827
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:7",
+              "position": [
+                0.4046213054780359,
+                -0.08839183045361233,
+                -0.24416034844140888
+              ]
+            },
+            {
+              "id": "p0:section:3:center",
+              "position": [
+                0.10174549052505108,
+                0.035254496255215866,
+                0.00018828454254916915
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:0",
+              "position": [
+                0.4784310078407516,
+                0.14994515587829454,
+                -0.0000015840550811156706
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:1",
+              "position": [
+                0.3648722854725489,
+                0.11322332508433021,
+                0.2771618848463793
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:2",
+              "position": [
+                0.10207286305721658,
+                0.029761640156414762,
+                0.3828479925595769
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:3",
+              "position": [
+                -0.1508740515224654,
+                -0.04929398004159761,
+                0.26624236057171047
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:4",
+              "position": [
+                -0.2541742163116466,
+                -0.07994628928809658,
+                -0.000013707269096854432
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:5",
+              "position": [
+                -0.15189921094357944,
+                -0.046049174626731665,
+                -0.266289052574197
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:6",
+              "position": [
+                0.10088538858151005,
+                0.03363786301464194,
+                -0.3828685624782931
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:7",
+              "position": [
+                0.36423561957614164,
+                0.11523821651156746,
+                -0.2771414011776849
+              ]
+            },
+            {
+              "id": "p0:section:4:center",
+              "position": [
+                0.04393540212993413,
+                0.2575054765096952,
+                0.00025472942442221827
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:0",
+              "position": [
+                0.37950819393562996,
+                0.32375164483099306,
+                -0.00007947662292173696
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:1",
+              "position": [
+                0.28112656288433474,
+                0.30275986067100336,
+                0.24408885013711465
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:2",
+              "position": [
+                0.04382495527621196,
+                0.25296349012088337,
+                0.3428196914406584
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:3",
+              "position": [
+                -0.19028758619866382,
+                0.20503946006892615,
+                0.24033301088164394
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:4",
+              "position": [
+                -0.28644521790297994,
+                0.18699100478997685,
+                0.0000644831309648873
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:5",
+              "position": [
+                -0.19100101094217706,
+                0.2083296373055388,
+                -0.2400446982890353
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:6",
+              "position": [
+                0.042703152140288685,
+                0.25672435739115335,
+                -0.34242920865999127
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:7",
+              "position": [
+                0.2802857940618481,
+                0.30453829649666947,
+                -0.2439633474167414
+              ]
+            },
+            {
+              "id": "p0:section:5:center",
+              "position": [
+                0.008827951017885792,
+                0.48733566887720636,
+                0.0002334878080440493
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:0",
+              "position": [
+                0.31336947441744756,
+                0.5163600590715339,
+                -0.00046275116244746603
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:1",
+              "position": [
+                0.22388582252787304,
+                0.5062254124321278,
+                0.2166240370143348
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:2",
+              "position": [
+                0.009730500868703574,
+                0.483360222209894,
+                0.3039251433155624
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:3",
+              "position": [
+                -0.20124321892490163,
+                0.46215025967982115,
+                0.21318965696421788
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:4",
+              "position": [
+                -0.28796447267620584,
+                0.45493004052673064,
+                0.00018408643209618763
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:5",
+              "position": [
+                -0.20208228288375288,
+                0.4651851542344936,
+                -0.21282665135876336
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:6",
+              "position": [
+                0.008289758845790212,
+                0.4869109498817594,
+                -0.30404325865890625
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:7",
+              "position": [
+                0.22297186053191792,
+                0.5080511502336185,
+                -0.21745487469212452
+              ]
+            },
+            {
+              "id": "p0:section:6:center",
+              "position": [
+                0,
+                0.7200000000000003,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:0",
+              "position": [
+                0.2648,
+                0.7200000000000003,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:1",
+              "position": [
+                0.18724187565819778,
+                0.7200000000000003,
+                0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:2",
+              "position": [
+                1.6214323620710955e-17,
+                0.7200000000000003,
+                0.2648
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:3",
+              "position": [
+                -0.18724187565819775,
+                0.7200000000000003,
+                0.18724187565819778
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:4",
+              "position": [
+                -0.2648,
+                0.7200000000000003,
+                3.242864724142191e-17
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:5",
+              "position": [
+                -0.1872418756581978,
+                0.7200000000000003,
+                -0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:6",
+              "position": [
+                -4.8642970862132865e-17,
+                0.7200000000000003,
+                -0.2648
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:7",
+              "position": [
+                0.18724187565819772,
+                0.7200000000000003,
+                -0.1872418756581978
+              ]
+            }
+          ],
+          "projection": {
+            "method": "row-w-map-at-cage-nodes/fixed-rest-embedding",
+            "posedNodeCount": 63,
+            "embeddedSurfaceVertexCount": 552,
+            "maximumSurfaceProjectionError": 0.011552762073687687,
+            "maximumRestReconstructionError": 2.2929868617541516e-16,
+            "maximumRigidBoundaryResidual": 1.1102230246251565e-16
+          },
+          "cellOrientation": {
+            "cellCount": 144,
+            "minimumSignedVolumeRatio": 0.7993257393502118,
+            "maximumSignedVolumeRatio": 1.1044581644719556,
+            "negativeOrCollapsedCellCount": 0
+          },
+          "surface": {
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.8488047119242595,
+            "minimumCrossSectionAreaRatio": 0.997572454064708,
+            "maximumCrossSectionAreaRatio": 1.016961217011461,
+            "restSignedVolume": -0.27306252842759143,
+            "posedSignedVolume": -0.26169910115677547,
+            "totalSignedVolumeRatio": 0.9583852558011114,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0,
+            "testedPairCount": 1545
+          }
+        }
+      },
+      {
+        "initialization": "neutral-boundary-applied",
+        "requestedConfigHash": "d3d768cf54e64b0daa464430e274b92334cd4bcdddd845d7fe5ad2733f691379",
+        "effectiveConfigHash": "d3d768cf54e64b0daa464430e274b92334cd4bcdddd845d7fe5ad2733f691379",
+        "initialObjective": 0.09586058815732187,
+        "finalObjective": 0.015727241288041555,
+        "iterationHistory": [
+          {
+            "iteration": 0,
+            "objective": 0.09586058815732187,
+            "edgeEnergy": 0.023078255826446854,
+            "barrierEnergy": 0.07278233233087503,
+            "minimumSignedCellVolumeRatio": -0.17538986857367864,
+            "acceptedStep": 0
+          },
+          {
+            "iteration": 1,
+            "objective": 0.026488107314959188,
+            "edgeEnergy": 0.026488107314959188,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.15806130156513196,
+            "acceptedStep": 0.025
+          },
+          {
+            "iteration": 2,
+            "objective": 0.026157124937658174,
+            "edgeEnergy": 0.026157124937658174,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.1617167808591529,
+            "acceptedStep": 0.03125
+          },
+          {
+            "iteration": 3,
+            "objective": 0.02578665884321508,
+            "edgeEnergy": 0.02578665884321508,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.16623558022162743,
+            "acceptedStep": 0.0390625
+          },
+          {
+            "iteration": 4,
+            "objective": 0.025376521260287596,
+            "edgeEnergy": 0.025376521260287596,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.1718065802299497,
+            "acceptedStep": 0.048828125
+          },
+          {
+            "iteration": 5,
+            "objective": 0.02500579173544389,
+            "edgeEnergy": 0.02500579173544389,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.1774175567491602,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 6,
+            "objective": 0.02467334644522257,
+            "edgeEnergy": 0.02467334644522257,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.18293536224698762,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 7,
+            "objective": 0.024370940180839455,
+            "edgeEnergy": 0.024370940180839455,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.18836229523710898,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 8,
+            "objective": 0.0240927063230921,
+            "edgeEnergy": 0.0240927063230921,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.19370049684409024,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 9,
+            "objective": 0.023834330383839242,
+            "edgeEnergy": 0.023834330383839242,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.1989519844816903,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 10,
+            "objective": 0.02359255195176121,
+            "edgeEnergy": 0.02359255195176121,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2041186752083109,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 11,
+            "objective": 0.023364850441325292,
+            "edgeEnergy": 0.023364850441325292,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.20920240251626826,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 12,
+            "objective": 0.023149239122992618,
+            "edgeEnergy": 0.023149239122992618,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.21420492875444314,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 13,
+            "objective": 0.02294412572057684,
+            "edgeEnergy": 0.02294412572057684,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2191279545502012,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 14,
+            "objective": 0.02274821543371614,
+            "edgeEnergy": 0.02274821543371614,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.22397312610350417,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 15,
+            "objective": 0.022560441848543614,
+            "edgeEnergy": 0.022560441848543614,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.22874204093375747,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 16,
+            "objective": 0.0223799166798109,
+            "edgeEnergy": 0.0223799166798109,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23343625247704045,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 17,
+            "objective": 0.022205892532066247,
+            "edgeEnergy": 0.022205892532066247,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23805727381337494,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 18,
+            "objective": 0.022037734851151406,
+            "edgeEnergy": 0.022037734851151406,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24260658072466404,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 19,
+            "objective": 0.02187490048499967,
+            "edgeEnergy": 0.02187490048499967,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24708561422796407,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 20,
+            "objective": 0.02171692107754801,
+            "edgeEnergy": 0.02171692107754801,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.25149578269696876,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 21,
+            "objective": 0.021563390050610913,
+            "edgeEnergy": 0.021563390050610913,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2558384636521262,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 22,
+            "objective": 0.021413952286000827,
+            "edgeEnergy": 0.021413952286000827,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26011500528295545,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 23,
+            "objective": 0.021268295865377058,
+            "edgeEnergy": 0.021268295865377058,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26432672775385935,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 24,
+            "objective": 0.021126145396196325,
+            "edgeEnergy": 0.021126145396196325,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2684749243300674,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 25,
+            "objective": 0.02098725657317962,
+            "edgeEnergy": 0.02098725657317962,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.27256086235898636,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 26,
+            "objective": 0.020851411711573526,
+            "edgeEnergy": 0.020851411711573526,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2765857841259262,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 27,
+            "objective": 0.02071841605170143,
+            "edgeEnergy": 0.02071841605170143,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2805509076113813,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 28,
+            "objective": 0.020588094680765927,
+            "edgeEnergy": 0.020588094680765927,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2844574271608722,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 29,
+            "objective": 0.020460289952529985,
+            "edgeEnergy": 0.020460289952529985,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.28830651408320634,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 30,
+            "objective": 0.02033485931148349,
+            "edgeEnergy": 0.02033485931148349,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.29209931719179894,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 31,
+            "objective": 0.020211673447865848,
+            "edgeEnergy": 0.020211673447865848,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2941102518494878,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 32,
+            "objective": 0.020090614725080586,
+            "edgeEnergy": 0.020090614725080586,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2923830741723884,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 33,
+            "objective": 0.019971575832663634,
+            "edgeEnergy": 0.019971575832663634,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.290678572734688,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 34,
+            "objective": 0.019854458627138798,
+            "edgeEnergy": 0.019854458627138798,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.28899660007965433,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 35,
+            "objective": 0.019739173130167834,
+            "edgeEnergy": 0.019739173130167834,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.28733699808394325,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 36,
+            "objective": 0.019625636659084365,
+            "edgeEnergy": 0.019625636659084365,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.28569959932858685,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 37,
+            "objective": 0.01951377306936393,
+            "edgeEnergy": 0.01951377306936393,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2840842283232109,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 38,
+            "objective": 0.019403512092164923,
+            "edgeEnergy": 0.019403512092164923,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2824907025981376,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 39,
+            "objective": 0.019294788752978975,
+            "edgeEnergy": 0.019294788752978975,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.280918833679669,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 40,
+            "objective": 0.019187542859747605,
+            "edgeEnergy": 0.019187542859747605,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2793684279654858,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 41,
+            "objective": 0.019081718550714055,
+            "edgeEnergy": 0.019081718550714055,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.27783928750724723,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 42,
+            "objective": 0.018977263893836277,
+            "edgeEnergy": 0.018977263893836277,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.27633121071290406,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 43,
+            "objective": 0.018874130530845912,
+            "edgeEnergy": 0.018874130530845912,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2748439929766165,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 44,
+            "objective": 0.01877227336012088,
+            "edgeEnergy": 0.01877227336012088,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2733774272442307,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 45,
+            "objective": 0.018671650253388117,
+            "edgeEnergy": 0.018671650253388117,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.27193130452208164,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 46,
+            "objective": 0.018572221802024485,
+            "edgeEnergy": 0.018572221802024485,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.270505414331787,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 47,
+            "objective": 0.018473951089311744,
+            "edgeEnergy": 0.018473951089311744,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26909954512115436,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 48,
+            "objective": 0.018376803485528732,
+            "edgeEnergy": 0.018376803485528732,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26771348463093025,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 49,
+            "objective": 0.018280746463182868,
+            "edgeEnergy": 0.018280746463182868,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26634702022674706,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 50,
+            "objective": 0.01818574943006163,
+            "edgeEnergy": 0.01818574943006163,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2649999391941028,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 51,
+            "objective": 0.0180917835780765,
+            "edgeEnergy": 0.0180917835780765,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26367202900480186,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 52,
+            "objective": 0.01799882174614967,
+            "edgeEnergy": 0.01799882174614967,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26236307755495814,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 53,
+            "objective": 0.01790683829560586,
+            "edgeEnergy": 0.01790683829560586,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.26107287337876334,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 54,
+            "objective": 0.017815808996736782,
+            "edgeEnergy": 0.017815808996736782,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2598012058378524,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 55,
+            "objective": 0.017725710925355173,
+            "edgeEnergy": 0.017725710925355173,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.258547865293102,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 56,
+            "objective": 0.01763652236831717,
+            "edgeEnergy": 0.01763652236831717,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.257312643254679,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 57,
+            "objective": 0.017548222737094717,
+            "edgeEnergy": 0.017548222737094717,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.25609533251727784,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 58,
+            "objective": 0.01746079248859978,
+            "edgeEnergy": 0.01746079248859978,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.254895727279015,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 59,
+            "objective": 0.01737421305254897,
+            "edgeEnergy": 0.01737421305254897,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.25371362324732394,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 60,
+            "objective": 0.017288466764735822,
+            "edgeEnergy": 0.017288466764735822,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.25254881773253385,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 61,
+            "objective": 0.01720353680565661,
+            "edgeEnergy": 0.01720353680565661,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.251401109727494,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 62,
+            "objective": 0.017119407143985382,
+            "edgeEnergy": 0.017119407143985382,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2502702999797871,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 63,
+            "objective": 0.017036062484453673,
+            "edgeEnergy": 0.017036062484453673,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24915619105383913,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 64,
+            "objective": 0.016953488219742813,
+            "edgeEnergy": 0.016953488219742813,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24805858738275233,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 65,
+            "objective": 0.016871670386022684,
+            "edgeEnergy": 0.016871670386022684,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24697729531399892,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 66,
+            "objective": 0.01679059562182468,
+            "edgeEnergy": 0.01679059562182468,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24591212314773714,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 67,
+            "objective": 0.01671025112996074,
+            "edgeEnergy": 0.01671025112996074,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24486288116861557,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 68,
+            "objective": 0.01663062464222351,
+            "edgeEnergy": 0.01663062464222351,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24382938167188495,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 69,
+            "objective": 0.016551704386643464,
+            "edgeEnergy": 0.016551704386643464,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24281143898319282,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 70,
+            "objective": 0.016473479057082997,
+            "edgeEnergy": 0.016473479057082997,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2418088694758795,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 71,
+            "objective": 0.016395937784985937,
+            "edgeEnergy": 0.016395937784985937,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.24082149158168464,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 72,
+            "objective": 0.016319070113095014,
+            "edgeEnergy": 0.016319070113095014,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23984912579838424,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 73,
+            "objective": 0.016242865971002145,
+            "edgeEnergy": 0.016242865971002145,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23889159469386448,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 74,
+            "objective": 0.016167315652364372,
+            "edgeEnergy": 0.016167315652364372,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23794872290805258,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 75,
+            "objective": 0.016092409793676474,
+            "edgeEnergy": 0.016092409793676474,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23702033714989343,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 76,
+            "objective": 0.016018139354469555,
+            "edgeEnergy": 0.016018139354469555,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23610626619370756,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 77,
+            "objective": 0.015944495598832677,
+            "edgeEnergy": 0.015944495598832677,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23520634087161268,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 78,
+            "objective": 0.015871470078153555,
+            "edgeEnergy": 0.015871470078153555,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.2343203940655919,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 79,
+            "objective": 0.015799054614999718,
+            "edgeEnergy": 0.015799054614999718,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23344826069570992,
+            "acceptedStep": 0.05
+          },
+          {
+            "iteration": 80,
+            "objective": 0.015727241288041555,
+            "edgeEnergy": 0.015727241288041555,
+            "barrierEnergy": 0,
+            "minimumSignedCellVolumeRatio": 0.23258977770887682,
+            "acceptedStep": 0.05
+          }
+        ],
+        "initialCellOrientation": {
+          "cellCount": 144,
+          "minimumSignedVolumeRatio": -0.17538986857367864,
+          "maximumSignedVolumeRatio": 1.5443399111673448,
+          "negativeOrCollapsedCellCount": 2
+        },
+        "initialHardVetoes": {
+          "finiteGeometry": {
+            "pass": true
+          },
+          "exactRestEmbedding": {
+            "pass": true,
+            "maximumError": 2.2929868617541516e-16,
+            "tolerance": 1e-12
+          },
+          "rigidBoundaryResidual": {
+            "pass": true,
+            "maximumCageNodeResidual": 0,
+            "maximumSurfaceResidual": 0,
+            "tolerance": 1e-12
+          },
+          "positiveCellOrientation": {
+            "pass": false,
+            "minimumSignedVolumeRatio": -0.17538986857367864,
+            "threshold": 0.000001
+          },
+          "surfaceOrientation": {
+            "pass": true,
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.37727946664007805
+          },
+          "transitionSelfIntersection": {
+            "pass": true,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0
+          },
+          "crossSectionAreaRatio": {
+            "pass": true,
+            "minimum": 0.9548320293597463,
+            "threshold": 0.1
+          },
+          "totalSignedVolumeRatio": {
+            "pass": true,
+            "ratio": 0.9772619980133017,
+            "allowedRange": [
+              0.5,
+              1.5
+            ]
+          }
+        },
+        "hardVetoes": {
+          "finiteGeometry": {
+            "pass": true
+          },
+          "exactRestEmbedding": {
+            "pass": true,
+            "maximumError": 2.2929868617541516e-16,
+            "tolerance": 1e-12
+          },
+          "rigidBoundaryResidual": {
+            "pass": true,
+            "maximumCageNodeResidual": 0,
+            "maximumSurfaceResidual": 0,
+            "tolerance": 1e-12
+          },
+          "positiveCellOrientation": {
+            "pass": true,
+            "minimumSignedVolumeRatio": 0.23258977770887682,
+            "threshold": 0.000001
+          },
+          "surfaceOrientation": {
+            "pass": true,
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.5211885385259984
+          },
+          "transitionSelfIntersection": {
+            "pass": true,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0
+          },
+          "crossSectionAreaRatio": {
+            "pass": true,
+            "minimum": 0.9108317666977214,
+            "threshold": 0.1
+          },
+          "totalSignedVolumeRatio": {
+            "pass": true,
+            "ratio": 0.9762287017167238,
+            "allowedRange": [
+              0.5,
+              1.5
+            ]
+          }
+        },
+        "comparison": {
+          "q95AbsoluteLogEdgeStrain": 0.23095745605266535,
+          "scalarControlQ95AbsoluteLogEdgeStrain": 0.1348103998679601
+        },
+        "finalGeometry": {
+          "posedNodes": [
+            {
+              "id": "p0:section:0:center",
+              "position": [
+                0.41297503417275316,
+                -0.5897894718880741,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:0",
+              "position": [
+                0.6298864955004781,
+                -0.4379064315423171,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:1",
+              "position": [
+                0.566354599394671,
+                -0.4823919441123593,
+                0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:2",
+              "position": [
+                0.41297503417275316,
+                -0.5897894718880741,
+                0.2648
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:3",
+              "position": [
+                0.2595954689508353,
+                -0.6971869996637888,
+                0.18724187565819778
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:4",
+              "position": [
+                0.19606357284502815,
+                -0.741672512233831,
+                3.242864724142191e-17
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:5",
+              "position": [
+                0.2595954689508352,
+                -0.6971869996637888,
+                -0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:6",
+              "position": [
+                0.4129750341727531,
+                -0.5897894718880741,
+                -0.2648
+              ]
+            },
+            {
+              "id": "p0:section:0:boundary:7",
+              "position": [
+                0.566354599394671,
+                -0.48239194411235936,
+                -0.1872418756581978
+              ]
+            },
+            {
+              "id": "p0:section:1:center",
+              "position": [
+                0.07867421954182814,
+                -0.506150928938786,
+                -0.003413491529272958
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:0",
+              "position": [
+                0.32111776353849064,
+                -0.4060557537235193,
+                0.018422801629635818
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:1",
+              "position": [
+                0.22440441400994432,
+                -0.4587711174915834,
+                0.2086947661102835
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:2",
+              "position": [
+                0.035612656284376654,
+                -0.4908474354365892,
+                0.30166753640264704
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:3",
+              "position": [
+                -0.15878089060998915,
+                -0.5065635326852291,
+                0.20142757379683845
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:4",
+              "position": [
+                -0.23886875022983853,
+                -0.5060489782356932,
+                -0.007994713973508552
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:5",
+              "position": [
+                -0.14889134727056985,
+                -0.49755617784421613,
+                -0.21401187213131118
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:6",
+              "position": [
+                0.06055078411223495,
+                -0.4882061057838213,
+                -0.29642402384841116
+              ]
+            },
+            {
+              "id": "p0:section:1:boundary:7",
+              "position": [
+                0.26460311756044785,
+                -0.4644184618883984,
+                -0.19865923335181415
+              ]
+            },
+            {
+              "id": "p0:section:2:center",
+              "position": [
+                0.0016753675481211974,
+                -0.2441078206470435,
+                -0.0012464814263006881
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:0",
+              "position": [
+                0.3539823625194987,
+                -0.20515143526739266,
+                -0.002606285964743389
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:1",
+              "position": [
+                0.24374301130518503,
+                -0.23401579605684686,
+                0.23936234236432724
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:2",
+              "position": [
+                0.0011894175435552584,
+                -0.24195658835701248,
+                0.3412051772249227
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:3",
+              "position": [
+                -0.23985185301977013,
+                -0.24711531915371657,
+                0.23987771649287368
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:4",
+              "position": [
+                -0.3381953393151708,
+                -0.2485355482502905,
+                -0.001981545456039852
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:5",
+              "position": [
+                -0.23721063351676497,
+                -0.24756166769006663,
+                -0.24188154158991543
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:6",
+              "position": [
+                0.0016295113508216297,
+                -0.24461907729736837,
+                -0.34078111474850603
+              ]
+            },
+            {
+              "id": "p0:section:2:boundary:7",
+              "position": [
+                0.24167416900383193,
+                -0.23273038283800768,
+                -0.24761007203676189
+              ]
+            },
+            {
+              "id": "p0:section:3:center",
+              "position": [
+                -0.0006452864628307833,
+                -0.0009467201930834992,
+                -0.00024663067367605436
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:0",
+              "position": [
+                0.38203301906083187,
+                0.010787122358647377,
+                0.00030602848333594957
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:1",
+              "position": [
+                0.268774167336608,
+                0.0009471089266205908,
+                0.2687241440040854
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:2",
+              "position": [
+                -0.0001723123277661362,
+                -0.00045610779265745766,
+                0.3797999204533308
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:3",
+              "position": [
+                -0.2686344501759732,
+                -0.001269472073619509,
+                0.26827193946586864
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:4",
+              "position": [
+                -0.3796274814121612,
+                -0.00150149637720847,
+                -0.00027553969949794307
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:5",
+              "position": [
+                -0.2684519799397059,
+                -0.001279211532383254,
+                -0.26859855125806
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:6",
+              "position": [
+                -0.0006852017251277042,
+                -0.0002524423544014347,
+                -0.3802891659734095
+              ]
+            },
+            {
+              "id": "p0:section:3:boundary:7",
+              "position": [
+                0.2684982985997272,
+                0.0032210269565360883,
+                -0.27093444899869285
+              ]
+            },
+            {
+              "id": "p0:section:4:center",
+              "position": [
+                -0.00023631194699747838,
+                0.2399319611837764,
+                -0.000014092572736413146
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:0",
+              "position": [
+                0.3413447118143963,
+                0.24180913846657148,
+                0.00003701960927813609
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:1",
+              "position": [
+                0.24150658112780043,
+                0.2401047826972013,
+                0.2415466680559558
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:2",
+              "position": [
+                -0.00003568088569388408,
+                0.23992643492967147,
+                0.3415938545227699
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:3",
+              "position": [
+                -0.24158537798792523,
+                0.23983676938441525,
+                0.24153211431921412
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:4",
+              "position": [
+                -0.3416287211252253,
+                0.23981776215033965,
+                -0.00002462052616471017
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:5",
+              "position": [
+                -0.24160143531756906,
+                0.2398752011335718,
+                -0.24155431958984336
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:6",
+              "position": [
+                -0.00018525153955157884,
+                0.2401080658330611,
+                -0.34167125242195284
+              ]
+            },
+            {
+              "id": "p0:section:4:boundary:7",
+              "position": [
+                0.24133989542754794,
+                0.2407660167140678,
+                -0.2418338408185196
+              ]
+            },
+            {
+              "id": "p0:section:5:center",
+              "position": [
+                -0.00005922715865490369,
+                0.4800264327868964,
+                0.000007803530382641255
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:0",
+              "position": [
+                0.303167534478033,
+                0.48022409303331354,
+                0.000003288831620506128
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:1",
+              "position": [
+                0.21438877227852027,
+                0.4800081187806055,
+                0.2143951616327365
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:2",
+              "position": [
+                -0.0000050810111415943366,
+                0.4799893488681832,
+                0.3031999424915368
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:3",
+              "position": [
+                -0.21440074932519787,
+                0.479981032326762,
+                0.21439393609353807
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:4",
+              "position": [
+                -0.30320585496293456,
+                0.47998145843058304,
+                -0.0000012347071891551882
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:5",
+              "position": [
+                -0.21440788580991124,
+                0.4799958151180376,
+                -0.21439276046964872
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:6",
+              "position": [
+                -0.00003635988585714403,
+                0.48004321510242526,
+                -0.3032107656872529
+              ]
+            },
+            {
+              "id": "p0:section:5:boundary:7",
+              "position": [
+                0.21435846515328771,
+                0.48014449134523557,
+                -0.21443839731451886
+              ]
+            },
+            {
+              "id": "p0:section:6:center",
+              "position": [
+                0,
+                0.7200000000000002,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:0",
+              "position": [
+                0.2648,
+                0.7200000000000002,
+                0
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:1",
+              "position": [
+                0.18724187565819778,
+                0.7200000000000002,
+                0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:2",
+              "position": [
+                1.6214323620710955e-17,
+                0.7200000000000002,
+                0.2648
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:3",
+              "position": [
+                -0.18724187565819775,
+                0.7200000000000002,
+                0.18724187565819778
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:4",
+              "position": [
+                -0.2648,
+                0.7200000000000002,
+                3.242864724142191e-17
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:5",
+              "position": [
+                -0.1872418756581978,
+                0.7200000000000002,
+                -0.18724187565819775
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:6",
+              "position": [
+                -4.8642970862132865e-17,
+                0.7200000000000002,
+                -0.2648
+              ]
+            },
+            {
+              "id": "p0:section:6:boundary:7",
+              "position": [
+                0.18724187565819772,
+                0.7200000000000002,
+                -0.1872418756581978
+              ]
+            }
+          ],
+          "projection": {
+            "method": "row-w-map-at-cage-nodes/fixed-rest-embedding",
+            "posedNodeCount": 63,
+            "embeddedSurfaceVertexCount": 552,
+            "maximumSurfaceProjectionError": 0.2785661848881283,
+            "maximumRestReconstructionError": 2.2929868617541516e-16,
+            "maximumRigidBoundaryResidual": 0
+          },
+          "cellOrientation": {
+            "cellCount": 144,
+            "minimumSignedVolumeRatio": 0.23258977770887682,
+            "maximumSignedVolumeRatio": 1.339353145328724,
+            "negativeOrCollapsedCellCount": 0
+          },
+          "surface": {
+            "invertedTriangleCount": 0,
+            "minimumPosedAreaRatio": 0.5211885385259984,
+            "minimumCrossSectionAreaRatio": 0.9108317666977214,
+            "maximumCrossSectionAreaRatio": 1.0049105200682076,
+            "restSignedVolume": -0.27306252842759143,
+            "posedSignedVolume": -0.26657147761435357,
+            "totalSignedVolumeRatio": 0.9762287017167238,
+            "globalIntersectionCount": 0,
+            "transitionIntersectionCount": 0,
+            "testedPairCount": 1603
+          }
+        }
+      }
+    ],
+    "controlComparison": {
+      "scalarControlQ95AbsoluteLogEdgeStrain": 0.1348103998679601,
+      "improvementDelta": 0.000001,
+      "candidateRuns": [
+        "w-derived"
+      ],
+      "status": "NUMERICAL_CANDIDATE"
+    },
+    "primaryOutput": "analytical-elbow-c-p0-v0",
+    "error": null,
+    "claimCeiling": "matched P0 solver basin evidence on one synthetic sleeve; no visual, transfer, anatomy, motion, or production claim"
+  },
+  "execution": {
+    "requestedRoute": "analytical-elbow-positive-volume-c-p0-cli",
+    "effectiveRoute": "analytical-elbow-positive-volume-c-p0-cli",
+    "fallbackUsed": false,
+    "innerRequestedRoute": "analytical-elbow-positive-volume-c-p0",
+    "innerEffectiveRoute": "analytical-elbow-positive-volume-c-p0"
+  }
+}
