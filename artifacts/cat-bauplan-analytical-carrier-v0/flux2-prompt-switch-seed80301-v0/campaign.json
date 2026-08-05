@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.flux2-prompt-switch-seed80301.v0",
+  "status": "queued",
+  "campaignQuestion": "How much of the observed bear-like phenotype comes from the friendly-round baseline prompt, and can named taxon change phenotype while preserving the same authored organization?",
+  "fixed": {
+    "inputPath": "../source-preview/right-sagittal.png",
+    "inputSha256": "92ad03e4b55b94cd219eeee73afffba52e1a16955a949d2b65e2aad0279a26fc",
+    "seed": 80301,
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "quantize": 4,
+    "mlxCacheLimitGb": 48,
+    "cameraInstruction": "Three-quarter neutral studio creature render on a clean pale background."
+  },
+  "cells": [
+    {
+      "id": "friendly-round-baseline",
+      "execution": "existing",
+      "promptPath": "../flux2-matched-tranche/prior-led-friendly-completion.txt",
+      "outputPath": "../flux2-matched-tranche/seed-80301/output.png",
+      "modalPhenotypePrediction": "Compact rounded friendly ground mammal with sturdy columnar supports, small eyes, and substantial weight; bear, mustelid, or wombat-like basin is likely."
+    },
+    {
+      "id": "low-prior",
+      "execution": "queued",
+      "jobId": "237c130e4a96",
+      "promptPath": "low-prior.txt",
+      "outputPath": "low-prior/output.png",
+      "modalPhenotypePrediction": "Taxonomically unresolved quadruped whose massing, joint chain, stance, and support organization are led primarily by the source."
+    },
+    {
+      "id": "cat",
+      "execution": "queued",
+      "jobId": "1b40e1cbddaf",
+      "promptPath": "cat.txt",
+      "outputPath": "cat/output.png",
+      "modalPhenotypePrediction": "Feline cranial, paw, torso, tail, coat, and digitigrade stance traits applied without replacing the source organization."
+    },
+    {
+      "id": "dog",
+      "execution": "queued",
+      "jobId": "1b188c5f0429",
+      "promptPath": "dog.txt",
+      "outputPath": "dog/output.png",
+      "modalPhenotypePrediction": "Canid cranial, paw, torso, tail, coat, and stance traits applied without replacing the source organization."
+    },
+    {
+      "id": "bear",
+      "execution": "queued",
+      "jobId": "8bb8b70abb9e",
+      "promptPath": "bear.txt",
+      "outputPath": "bear/output.png",
+      "modalPhenotypePrediction": "Ursid cranial, paw, torso, tail, coat, plantigrade stance, and weight traits applied without replacing the source organization."
+    }
+  ],
+  "grading": {
+    "sourceOrganization": [
+      "folded hindquarter",
+      "rear support spacing",
+      "axial bridge",
+      "shoulder separation",
+      "head placement",
+      "support count"
+    ],
+    "phenotypeAdoption": [
+      "cranium",
+      "paws",
+      "torso",
+      "tail",
+      "coat",
+      "stance"
+    ]
+  },
+  "claimCeiling": "One fixed-source, fixed-seed prompt-switch assay can separate prompt phenotype pressure from broad source-organization survival for these five cells; it cannot establish general prompt robustness, anatomical fidelity, or 3D correspondence."
+}
