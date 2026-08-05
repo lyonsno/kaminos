@@ -96,21 +96,33 @@ let primaryPath = '';
 let inputArtifactPath = '';
 let admission = null;
 let lastTrustworthyEvidence = null;
+let outputMutationAllowed = false;
+let reportWritten = false;
 
 try {
   args = parseArguments(process.argv.slice(2));
-  phase = 'resolve-destinations';
-  inputPath = await realpath(args.requestedInputPath);
+  phase = 'prepare-output';
   await mkdir(args.outputDirectory, { recursive: true });
   const outputDirectory = await realpath(args.outputDirectory);
   reportPath = path.join(outputDirectory, 'run-report.json');
   primaryPath = path.join(outputDirectory, 'solver-carrier.json');
   inputArtifactPath = path.join(outputDirectory, 'input-cage-document.json');
+
+  phase = 'guard-output-alias';
+  const requestedInputDestination = await effectiveDestination(args.requestedInputPath);
   const effectiveReportPath = await effectiveDestination(reportPath);
   const effectivePrimaryPath = await effectiveDestination(primaryPath);
-  if ([effectiveReportPath, effectivePrimaryPath].includes(inputPath)) {
+  const effectiveInputArtifactPath = await effectiveDestination(inputArtifactPath);
+  if ([
+    effectiveReportPath,
+    effectivePrimaryPath,
+    effectiveInputArtifactPath,
+  ].includes(requestedInputDestination)) {
     throw new Error('ring cage admission output must not alias the input document');
   }
+  outputMutationAllowed = true;
+
+  phase = 'clear-stale-output';
   await unlink(primaryPath).catch(error => {
     if (error?.code !== 'ENOENT') throw error;
   });
@@ -118,6 +130,8 @@ try {
     if (error?.code !== 'ENOENT') throw error;
   });
 
+  phase = 'resolve-input';
+  inputPath = await realpath(args.requestedInputPath);
   phase = 'read-input';
   const inputBytes = await readFile(inputPath);
   inputFileSha256 = sha256(inputBytes);
@@ -164,6 +178,7 @@ try {
     },
   };
   await writeJson(reportPath, report);
+  reportWritten = true;
   process.stdout.write(`${JSON.stringify({
     status: report.status,
     reportPath,
@@ -172,7 +187,7 @@ try {
     solverCarrierSha256: admission.solverCarrier.identity.sha256,
   })}\n`);
 } catch (error) {
-  if (primaryPath) {
+  if (primaryPath && outputMutationAllowed) {
     await unlink(primaryPath).catch(unlinkError => {
       if (unlinkError?.code !== 'ENOENT') error.unlinkError = unlinkError.message;
     });
@@ -198,12 +213,13 @@ try {
     error: error.message,
     primaryOutput: null,
   };
-  if (reportPath) {
+  if (reportPath && outputMutationAllowed) {
     await writeJson(reportPath, report);
+    reportWritten = true;
   }
   process.stderr.write(`${JSON.stringify({
     status: report.status,
-    reportPath: reportPath || null,
+    reportPath: reportWritten ? reportPath : null,
     failurePhase: report.failurePhase,
     blockerKinds: admission?.blockingMechanisms?.map(item => item.kind) ?? [],
     error: report.error,

@@ -215,6 +215,68 @@ test('missing, tampered, substituted, and invalid config inputs refuse or fail e
   ));
 });
 
+test('a re-signed unsupported document schema refuses before solver projection', () => {
+  const wrongSchema = documentFor(straightSource());
+  wrongSchema.schema = 'not-the-ring-cage-schema';
+  reidentify(wrongSchema);
+  const admission = admitMuscleCompartmentRingCageDocument(wrongSchema);
+  assert.equal(admission.status, 'refused');
+  assert.equal(admission.phase, 'document-schema');
+  assert.equal(admission.solverCarrier, null);
+  assert.deepEqual(
+    admission.blockingMechanisms.map(item => item.kind),
+    ['ring-cage-document-schema-mismatch'],
+  );
+});
+
+test('CLI missing input clears stale primary and writes a pre-read failure report', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-missing-'));
+  const input = path.join(root, 'missing-cage-document.json');
+  const output = path.join(root, 'output');
+  await mkdir(output);
+  await writeFile(path.join(output, 'solver-carrier.json'), '{"stale":true}\n');
+  const result = runTool(input, output, '0'.repeat(64));
+  assert.notEqual(result.status, 0);
+  await assert.rejects(readFile(path.join(output, 'solver-carrier.json')), /ENOENT/);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'resolve-input');
+  assert.equal(report.requestedInputPath, input);
+  assert.equal(report.effectiveInputPath, null);
+  assert.equal(report.primaryOutput, null);
+  assert.equal(report.inputArtifact, null);
+  assert.match(report.error, /ENOENT/);
+});
+
+test('CLI rejects every output-file alias without deleting or overwriting input bytes', async () => {
+  const document = documentFor(straightSource());
+  const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`);
+  for (const outputName of [
+    'run-report.json',
+    'solver-carrier.json',
+    'input-cage-document.json',
+  ]) {
+    const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-alias-'));
+    const output = path.join(root, 'output');
+    await mkdir(output);
+    const input = path.join(output, outputName);
+    await writeFile(input, bytes);
+    const result = runTool(input, output, document.identity.sha256);
+    assert.notEqual(result.status, 0, `${outputName} unexpectedly admitted`);
+    const preserved = await readFile(input);
+    assert.equal(
+      preserved.byteLength,
+      bytes.byteLength,
+      `${outputName} input byte length changed`,
+    );
+    assert.equal(
+      createHash('sha256').update(preserved).digest('hex'),
+      createHash('sha256').update(bytes).digest('hex'),
+      `${outputName} input SHA-256 changed`,
+    );
+  }
+});
+
 test('CLI clears stale primary output and writes the curved-carrier refusal receipt', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'kaminos-ring-cage-intake-refusal-'));
   const input = path.join(root, 'cage-document.json');

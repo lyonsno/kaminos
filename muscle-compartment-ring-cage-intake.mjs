@@ -1,4 +1,5 @@
 import {
+  MUSCLE_COMPARTMENT_RING_CAGE_SCHEMA,
   hashMuscleCompartmentRingCageCanonicalJson,
   measureMuscleCompartmentRingCageCurrentGeometry,
   verifyMuscleCompartmentRingCageIdentity,
@@ -334,6 +335,20 @@ export function admitMuscleCompartmentRingCageDocument(
       document,
       phase: 'document-structure',
       blockers: [{ kind: 'ring-cage-document-incomplete' }],
+      lastTrustworthyEvidence: initialEvidence,
+    });
+  }
+
+  if (document.schema !== MUSCLE_COMPARTMENT_RING_CAGE_SCHEMA) {
+    return refusal({
+      config,
+      document,
+      phase: 'document-schema',
+      blockers: [{
+        kind: 'ring-cage-document-schema-mismatch',
+        requested: MUSCLE_COMPARTMENT_RING_CAGE_SCHEMA,
+        effective: document.schema ?? null,
+      }],
       lastTrustworthyEvidence: initialEvidence,
     });
   }
