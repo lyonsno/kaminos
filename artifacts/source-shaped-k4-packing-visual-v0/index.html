@@ -44,6 +44,11 @@
   <section id="panel" aria-label="K4 visual witness controls">
     <h1>Current K4 packing response</h1>
     <div class="claim">Experimental qualitative evidence only — candidate geometry, agent-authored environment, and no anatomical admission.</div>
+    <div class="eyebrow">Geometry profile</div>
+    <div class="row" id="profiles">
+      <button data-profile="tube">Source-radius tubes</button>
+      <button data-profile="belly">Tapered bellies</button>
+    </div>
     <div class="eyebrow">Pressure rung</div>
     <div class="row" id="conditions">
       <button data-condition="baseline">Baseline · 0%</button>
@@ -68,8 +73,20 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     const ROUTE_ID = 'source-shaped-k4-packing-visual-v0';
-    const RESULT_PATH = '../source-shaped-k4-packing-perturbation-v0/perturbation-result.json';
-    const EXPECTED_RESULT_SHA256 = 'ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b';
+    const RESULT_SPECS = new Map([
+      ['tube', {
+        label: 'source-radius tubes',
+        path: '../source-shaped-k4-packing-perturbation-v0/perturbation-result.json',
+        sha256: 'ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b',
+        shapeProfileId: null,
+      }],
+      ['belly', {
+        label: 'volume-preserving tapered bellies',
+        path: '../source-shaped-k4-packing-tapered-belly-v0/perturbation-result.json',
+        sha256: '27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088',
+        shapeProfileId: 'volume-preserving-tapered-belly.v0',
+      }],
+    ]);
     const EXPECTED_SCHEMA = 'kaminos.source-shaped-muscle-packing-perturbation-result.v0';
     const EXPECTED_IDS = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
     const EXPECTED_CONDITIONS = ['baseline', 'mild', 'moderate'];
@@ -83,25 +100,31 @@
     const metricsNode = document.querySelector('#metrics');
     const legendNode = document.querySelector('#legend');
     let dataset;
+    let profileId = new URLSearchParams(location.search).get('profile') || 'tube';
     let conditionId = new URLSearchParams(location.search).get('condition') || 'baseline';
     let stateId = new URLSearchParams(location.search).get('state') || 'packed';
+    let loadGeneration = 0;
 
     function sameIds(actual, expected) {
       return actual.length === expected.length && actual.every((id, index) => id === expected[index]);
     }
 
-    async function loadExactResult() {
-      const response = await fetch(RESULT_PATH, { cache: 'no-store' });
+    async function loadExactResult(spec) {
+      const response = await fetch(spec.path, { cache: 'no-store' });
       if (!response.ok) throw new Error(`result fetch failed: HTTP ${response.status}`);
       const bytes = await response.arrayBuffer();
       const digest = await crypto.subtle.digest('SHA-256', bytes);
       const sha256 = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-      if (sha256 !== EXPECTED_RESULT_SHA256) throw new Error(`result SHA mismatch: ${sha256}`);
+      if (sha256 !== spec.sha256) throw new Error(`result SHA mismatch: ${sha256}`);
       const parsed = JSON.parse(new TextDecoder().decode(bytes));
       if (parsed.schema !== EXPECTED_SCHEMA) throw new Error(`result schema mismatch: ${parsed.schema}`);
       if (!sameIds(parsed.requestedConstructionIds, EXPECTED_IDS)) throw new Error('requested construction order mismatch');
       if (!sameIds(parsed.effectiveConstructionIds, EXPECTED_IDS)) throw new Error('effective construction order mismatch');
       if (!sameIds(parsed.conditions.map(condition => condition.id), EXPECTED_CONDITIONS)) throw new Error('condition order mismatch');
+      const effectiveShapeProfileId = parsed.shapeProfile?.effective?.id ?? null;
+      if (effectiveShapeProfileId !== spec.shapeProfileId) {
+        throw new Error(`shape profile mismatch: ${effectiveShapeProfileId}`);
+      }
       for (const condition of parsed.conditions) {
         if (!sameIds(condition.source.muscles.map(muscle => muscle.id), EXPECTED_IDS)) throw new Error(`${condition.id} source order mismatch`);
         if (!sameIds(condition.result.muscles.map(muscle => muscle.id), EXPECTED_IDS)) throw new Error(`${condition.id} packed order mismatch`);
@@ -141,12 +164,15 @@
       });
     }
 
-    function addSegment(group, a, b, radius, mat, radialSegments = 14) {
+    function addSegment(group, a, b, startRadius, endRadius, mat, radialSegments = 14) {
       const start = new THREE.Vector3(...a);
       const end = new THREE.Vector3(...b);
       const delta = end.clone().sub(start);
       const length = delta.length();
-      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, radialSegments, 1, false), mat);
+      const mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(endRadius, startRadius, length, radialSegments, 1, false),
+        mat,
+      );
       mesh.position.copy(start).add(end).multiplyScalar(.5);
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
       group.add(mesh);
@@ -156,8 +182,14 @@
       const mat = material(color, opacity);
       const points = muscle.centerline;
       for (let i = 1; i < points.length; i += 1) {
-        const radius = (points[i - 1].radius + points[i].radius) / 2;
-        addSegment(group, points[i - 1].position, points[i].position, radius, mat);
+        addSegment(
+          group,
+          points[i - 1].position,
+          points[i].position,
+          points[i - 1].radius,
+          points[i].radius,
+          mat,
+        );
       }
       const knotGeometry = new THREE.SphereGeometry(1, 14, 9);
       points.forEach((point, index) => {
@@ -196,7 +228,15 @@
       const obstacleMat = material(0xffa85c, .58, true);
       obstacleMat.depthTest = false;
       obstacleMat.depthWrite = false;
-      addSegment(group, obstacle.start, obstacle.end, obstacle.radius + obstacle.clearance, obstacleMat, 18);
+      addSegment(
+        group,
+        obstacle.start,
+        obstacle.end,
+        obstacle.radius + obstacle.clearance,
+        obstacle.radius + obstacle.clearance,
+        obstacleMat,
+        18,
+      );
       for (const point of [obstacle.start, obstacle.end]) {
         const cap = new THREE.Mesh(new THREE.SphereGeometry(obstacle.radius + obstacle.clearance, 16, 10), obstacleMat);
         cap.position.set(...point);
@@ -261,19 +301,49 @@
       });
       document.querySelectorAll('[data-condition]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.condition === conditionId)));
       document.querySelectorAll('[data-state]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.state === stateId)));
+      document.querySelectorAll('[data-profile]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.profile === profileId)));
       renderMetrics(condition);
-      statusNode.textContent = `${condition.id} · ${Math.round(condition.crowdingFraction * 100)}% pressure · ${stateId === 'before' ? 'input candidate' : `packed (${condition.result.status}, ${condition.result.iterations} iterations)`}`;
+      const spec = RESULT_SPECS.get(profileId);
+      statusNode.textContent = `${spec.label} · ${condition.id} · ${Math.round(condition.crowdingFraction * 100)}% pressure · ${stateId === 'before' ? 'input candidate' : `packed (${condition.result.status}, ${condition.result.iterations} iterations)`}`;
       const params = new URLSearchParams(location.search);
+      params.set('profile', profileId);
       params.set('condition', conditionId);
       params.set('state', stateId);
       history.replaceState(null, '', `${location.pathname}?${params}`);
       document.documentElement.dataset.condition = conditionId;
       document.documentElement.dataset.state = stateId;
+      document.documentElement.dataset.profile = profileId;
       document.documentElement.dataset.witnessLoaded = 'true';
+    }
+
+    async function selectProfile(nextProfileId) {
+      const spec = RESULT_SPECS.get(nextProfileId);
+      if (!spec) throw new Error(`unknown geometry profile: ${nextProfileId}`);
+      const generation = ++loadGeneration;
+      statusNode.classList.remove('error');
+      statusNode.textContent = `Verifying exact ${spec.label} result bytes…`;
+      delete document.documentElement.dataset.witnessLoaded;
+      const loaded = await loadExactResult(spec);
+      if (generation !== loadGeneration) return;
+      profileId = nextProfileId;
+      dataset = loaded;
+      frameAllConditions();
+      renderState();
+      identityNode.textContent = `route ${route.effective} · fallback ${route.fallbackUsed} · result ${spec.sha256.slice(0, 12)}… · order ${EXPECTED_IDS.join(' → ')}`;
+      document.documentElement.dataset.resultSha256 = spec.sha256;
     }
 
     document.querySelectorAll('[data-condition]').forEach(button => button.addEventListener('click', () => { conditionId = button.dataset.condition; renderState(); }));
     document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => { stateId = button.dataset.state; renderState(); }));
+    document.querySelectorAll('[data-profile]').forEach(button => button.addEventListener('click', async () => {
+      try {
+        await selectProfile(button.dataset.profile);
+      } catch (error) {
+        statusNode.classList.add('error');
+        statusNode.textContent = `Witness refused to render: ${error.message}`;
+        document.documentElement.dataset.witnessFailed = 'true';
+      }
+    }));
 
     function animate() {
       controls.update();
@@ -287,15 +357,11 @@
     });
 
     try {
-      dataset = await loadExactResult();
       legendNode.innerHTML = EXPECTED_IDS.map(id => `<span><i class="swatch" style="background:#${colors.get(id).toString(16).padStart(6, '0')}"></i>${id}</span>`).join('');
-      identityNode.textContent = `route ${route.effective} · fallback ${route.fallbackUsed} · result ${EXPECTED_RESULT_SHA256.slice(0, 12)}… · order ${EXPECTED_IDS.join(' → ')}`;
       document.documentElement.dataset.requestedRoute = route.requested;
       document.documentElement.dataset.effectiveRoute = route.effective;
       document.documentElement.dataset.fallbackUsed = String(route.fallbackUsed);
-      document.documentElement.dataset.resultSha256 = EXPECTED_RESULT_SHA256;
-      frameAllConditions();
-      renderState();
+      await selectProfile(profileId);
       animate();
     } catch (error) {
       statusNode.classList.add('error');

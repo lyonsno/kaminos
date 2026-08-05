@@ -20,7 +20,7 @@ function parseArguments(argv) {
   const parsed = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (!['--parent-atlas', '--routes', '--output'].includes(argument)) {
+    if (!['--parent-atlas', '--routes', '--output', '--shape-profile'].includes(argument)) {
       throw new Error(`unsupported argument ${argument}`);
     }
     const value = argv[index + 1];
@@ -37,6 +37,7 @@ function parseArguments(argv) {
     requestedParentAtlasPath: parsed['parent-atlas'],
     requestedConstructionIds,
     outputDirectory: path.resolve(parsed.output),
+    requestedShapeProfileId: parsed['shape-profile'] || null,
   };
 }
 
@@ -75,6 +76,9 @@ function compactCondition(condition) {
     initial: condition.result.metrics.initial,
     packed: condition.result.metrics.packed,
     response: condition.response,
+    ...(condition.source.assayProvenance.shapeProfile
+      ? { shapeProfile: condition.source.assayProvenance.shapeProfile }
+      : {}),
   };
 }
 
@@ -135,6 +139,7 @@ try {
     parentAtlasFileSha256,
     requestedConstructionIds: args.requestedConstructionIds,
     levels: LEVELS,
+    shapeProfileId: args.requestedShapeProfileId,
   });
 
   phase = 'write-primary';
@@ -157,6 +162,7 @@ try {
     claimCeiling: result.claimCeiling,
     mechanism: result.mechanism,
     interpretationChecks: result.interpretationChecks,
+    ...(result.shapeProfile ? { shapeProfile: result.shapeProfile } : {}),
     conditions: result.conditions.map(compactCondition),
     primaryOutput: 'perturbation-result.json',
     outputSha256,
@@ -193,6 +199,7 @@ try {
       requestedParentAtlasPath: args.requestedParentAtlasPath,
       effectiveParentAtlasPath: effectiveParentAtlasPath || null,
       requestedConstructionIds: args.requestedConstructionIds,
+      requestedShapeProfileId: args.requestedShapeProfileId,
       effectiveConstructionIds: [],
       primaryOutput: null,
       outputSha256: null,
@@ -202,6 +209,7 @@ try {
         parentAtlasSha256: parentAtlasSha256 || null,
         parentAtlasFileSha256: parentAtlasFileSha256 || null,
         requestedConstructionIds: args.requestedConstructionIds,
+        requestedShapeProfileId: args.requestedShapeProfileId,
       },
     });
   }

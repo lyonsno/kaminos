@@ -1,0 +1,88 @@
+{
+  "schema": "kaminos.source-shaped-k4-packing-profile-comparison-report.v0",
+  "status": "agent-inspected-operator-inspection-open",
+  "observedAt": "2026-08-05T00:03:25Z",
+  "viewerRoute": {
+    "requested": "source-shaped-k4-packing-visual-v0",
+    "effective": "source-shaped-k4-packing-visual-v0",
+    "fallbackUsed": false
+  },
+  "profiles": {
+    "tube": {
+      "label": "source-candidate-radius tubes",
+      "resultSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b",
+      "shapeProfile": null
+    },
+    "belly": {
+      "label": "volume-preserving tapered bellies",
+      "resultSha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088",
+      "shapeProfile": {
+        "id": "volume-preserving-tapered-belly.v0",
+        "authority": "agent-authored-provisional",
+        "parameterization": "normalized-candidate-centerline-arc-length",
+        "endpointRadiusFraction": 0.32,
+        "bellyExponent": 0.8,
+        "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+      }
+    }
+  },
+  "sharedIdentity": {
+    "constructionIds": ["muscle-34", "muscle-13", "muscle-12", "muscle-45"],
+    "conditions": ["baseline", "mild", "moderate"],
+    "states": ["before", "packed"],
+    "attachments": "unchanged measured candidates",
+    "targetVolumes": "unchanged measured candidates",
+    "claimCeiling": "qualitative experimental geometry response; no anatomical admission"
+  },
+  "metricComparison": [
+    {
+      "condition": "baseline",
+      "tube": {"initialPairwise": 5.581723846788, "packedPairwise": 4.445160916104, "packedSkeletal": 0.183025363698},
+      "belly": {"initialPairwise": 5.939877925286, "packedPairwise": 1.802638224135, "packedSkeletal": 0.104535958902}
+    },
+    {
+      "condition": "mild",
+      "tube": {"initialPairwise": 5.772364512578, "packedPairwise": 4.448398812615, "packedSkeletal": 0.175651672059},
+      "belly": {"initialPairwise": 6.850309998645, "packedPairwise": 1.878395111366, "packedSkeletal": 0.106665082317}
+    },
+    {
+      "condition": "moderate",
+      "tube": {"initialPairwise": 6.459445559318, "packedPairwise": 4.46190996936, "packedSkeletal": 0.176866736698},
+      "belly": {"initialPairwise": 7.870152609153, "packedPairwise": 1.97222858319, "packedSkeletal": 0.10819522338}
+    }
+  ],
+  "captureEvidence": {
+    "report": "capture-report.json",
+    "status": "complete",
+    "captureCount": 12,
+    "route": "chromium-virtual-time-dom-verified-screenshot-v0",
+    "allExactViewerStatesVerified": true,
+    "failedAttemptsPreserved": true,
+    "priorFailedReports": [
+      "capture-report.failed-profile-contention.json",
+      "capture-report.failed-sequential-timeout.json",
+      "capture-report.failed-belly-mild-packed-timeout.json"
+    ]
+  },
+  "contactSheet": {
+    "path": "contact-sheet.png",
+    "sha256": "ada710dc109b8b7fd525170339fa7f778d7c9d5a354b1890b35c8b9cc17f5a98",
+    "layout": "columns baseline/mild/moderate; rows tube-input/tube-packed/belly-input/belly-packed"
+  },
+  "visualVerdict": {
+    "classification": "belly-profile-materially-changes-contact-response-without-convergence",
+    "observations": [
+      "The tapered profile produces the intended narrow ends and broad mid-belly while preserving the same centerlines and attachment positions.",
+      "The input bellies concentrate more overlap in the middle than the tube proxy, matching the higher initial pairwise penetration.",
+      "After packing, yellow, cyan, and purple acquire visibly stronger lateral organization and the numerical pairwise residual falls by more than half relative to tubes.",
+      "Substantial central overlap and red-member occlusion remain, so the improved residual does not establish coherent four-member packing.",
+      "The same qualitative response persists across all three pressure rungs without a new crossing, inversion, or catastrophic shape change."
+    ],
+    "claim": "The belly profile is a useful next assay geometry and exposes a materially different contact regime, but it does not remove the need for explicit per-construction occupancy allocation.",
+    "nextComparison": "Compose Packer's explicit azimuthal/radial occupancy result against both tube and belly profiles before adding passive tendon or attachment mechanics."
+  },
+  "operatorInspection": {
+    "status": "open",
+    "question": "Does the packed belly response look like a meaningful improvement in four-member organization, or does the remaining central overlap indicate that occupancy allocation must dominate the next shape decision?"
+  }
+}

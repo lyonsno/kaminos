@@ -12,13 +12,15 @@ const ATLAS = path.join(
   'artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json',
 );
 
-function run(output, routes, parentAtlas = ATLAS) {
-  return spawnSync(process.execPath, [
+function run(output, routes, parentAtlas = ATLAS, shapeProfileId = null) {
+  const args = [
     TOOL,
     '--parent-atlas', parentAtlas,
     '--routes', routes.join(','),
     '--output', output,
-  ], {
+  ];
+  if (shapeProfileId) args.push('--shape-profile', shapeProfileId);
+  return spawnSync(process.execPath, args, {
     cwd: REPO_ROOT,
     encoding: 'utf8',
   });
@@ -36,6 +38,36 @@ test('assay CLI rejects a primary-output alias before touching parent-atlas byte
   assert.equal(report.status, 'failed');
   assert.equal(report.failurePhase, 'resolve-destinations');
   assert.match(report.error, /primary output.*alias.*parent atlas/i);
+});
+
+test('assay CLI binds requested and effective belly profile and fails unsupported profiles durably', async () => {
+  const routes = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
+  const profileId = 'volume-preserving-tapered-belly.v0';
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-k4-assay-belly-'));
+  const result = run(output, routes, ATLAS, profileId);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+  const primary = JSON.parse(await readFile(path.join(output, 'perturbation-result.json'), 'utf8'));
+  assert.deepEqual(report.shapeProfile.requested, { id: profileId });
+  assert.deepEqual(report.shapeProfile.effective, primary.shapeProfile.effective);
+  assert.equal(report.shapeProfile.effective.authority, 'agent-authored-provisional');
+  assert.ok(report.conditions.every(condition =>
+    condition.shapeProfile.effective.id === profileId));
+
+  const failedOutput = await mkdtemp(path.join(tmpdir(), 'kaminos-k4-assay-bad-profile-'));
+  const failed = run(failedOutput, routes, ATLAS, 'unbound-convenient-belly');
+  assert.notEqual(failed.status, 0);
+  const failureReport = JSON.parse(
+    await readFile(path.join(failedOutput, 'run-report.json'), 'utf8'),
+  );
+  assert.equal(failureReport.status, 'failed');
+  assert.equal(failureReport.failurePhase, 'build-and-solve');
+  assert.equal(failureReport.requestedShapeProfileId, 'unbound-convenient-belly');
+  assert.match(failureReport.error, /shape profile.*unsupported|unsupported.*shape profile/i);
+  await assert.rejects(
+    readFile(path.join(failedOutput, 'perturbation-result.json')),
+    /ENOENT/,
+  );
 });
 
 test('assay CLI redirects a report alias to a failure sidecar without publishing success', async () => {

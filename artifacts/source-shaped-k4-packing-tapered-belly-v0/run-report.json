@@ -1,0 +1,442 @@
+{
+  "schema": "kaminos.source-shaped-muscle-packing-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedParentAtlasPath": "artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "effectiveParentAtlasPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+  "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+  "parentAtlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+  "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "evidenceTrack": "experimental",
+  "claimCeiling": "qualitative-route-local-mechanical-response",
+  "mechanism": {
+    "effective": {
+      "config": {
+        "convergenceTolerance": 1e-7,
+        "maxIterations": 640,
+        "relaxationStep": 0.18,
+        "sampleCount": 25,
+        "smoothnessStep": 0.035
+      },
+      "id": "muscle-compartment-packing-projection.v0"
+    },
+    "requested": {
+      "config": {
+        "convergenceTolerance": 1e-7,
+        "maxIterations": 640,
+        "relaxationStep": 0.18,
+        "sampleCount": 25,
+        "smoothnessStep": 0.035
+      },
+      "id": "muscle-compartment-packing-projection.v0"
+    }
+  },
+  "interpretationChecks": {
+    "fixedEndpointsPreserved": true,
+    "initialPairwisePenetrationStrictlyIncreasing": true,
+    "maximumInteriorDisplacementNondecreasing": true,
+    "targetVolumesPreserved": true
+  },
+  "shapeProfile": {
+    "effective": {
+      "authority": "agent-authored-provisional",
+      "bellyExponent": 0.8,
+      "endpointRadiusFraction": 0.32,
+      "id": "volume-preserving-tapered-belly.v0",
+      "parameterization": "normalized-candidate-centerline-arc-length",
+      "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+    },
+    "requested": {
+      "id": "volume-preserving-tapered-belly.v0"
+    }
+  },
+  "conditions": [
+    {
+      "id": "baseline",
+      "crowdingFraction": 0,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "441fee34c0597182cfca966d246f097c1812bd5d8080a4550a23ca477f3d997e"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-baseline-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "441fee34c0597182cfca966d246f097c1812bd5d8080a4550a23ca477f3d997e"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0,
+        "effective": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "baseline",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 3e-12,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 5.939877925286,
+        "skeletalPenetration": 1.118640209394
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.330600075262,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 1.802638224135,
+        "skeletalPenetration": 0.104535958902
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.618497169134,
+        "meanInteriorDisplacement": 0.754399240514
+      },
+      "shapeProfile": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "bellyExponent": 0.8,
+          "endpointRadiusFraction": 0.32,
+          "id": "volume-preserving-tapered-belly.v0",
+          "parameterization": "normalized-candidate-centerline-arc-length",
+          "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+        },
+        "requested": {
+          "id": "volume-preserving-tapered-belly.v0"
+        }
+      }
+    },
+    {
+      "id": "mild",
+      "crowdingFraction": 0.12,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "6ed9b731e7cdab710b3974fcc42b7669dc6964e1288bda912ac38ce91da7377a"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-mild-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "6ed9b731e7cdab710b3974fcc42b7669dc6964e1288bda912ac38ce91da7377a"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.12,
+        "effective": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "mild",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.12,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.123194664416,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 6.850309998645,
+        "skeletalPenetration": 1.18146882859
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.332184187013,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 1.878395111366,
+        "skeletalPenetration": 0.106665082317
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.675820933258,
+        "meanInteriorDisplacement": 0.848904953598
+      },
+      "shapeProfile": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "bellyExponent": 0.8,
+          "endpointRadiusFraction": 0.32,
+          "id": "volume-preserving-tapered-belly.v0",
+          "parameterization": "normalized-candidate-centerline-arc-length",
+          "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+        },
+        "requested": {
+          "id": "volume-preserving-tapered-belly.v0"
+        }
+      }
+    },
+    {
+      "id": "moderate",
+      "crowdingFraction": 0.24,
+      "sourceInput": {
+        "effective": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "4481b4af6993cae0fce4722a00abbf9e327c32b6df1626079811098aadd9cacc"
+        },
+        "requested": {
+          "id": "source-shaped-muscle-34-muscle-13-muscle-12-muscle-45-moderate-v0",
+          "kind": "synthetic-fixture",
+          "sha256": "4481b4af6993cae0fce4722a00abbf9e327c32b6df1626079811098aadd9cacc"
+        }
+      },
+      "perturbation": {
+        "crowdingFraction": 0.24,
+        "effective": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        },
+        "endpointPolicy": "fixed-measured-candidates",
+        "id": "moderate",
+        "kind": "interior-samples-toward-cohort-centroid",
+        "requested": {
+          "crowdingFraction": 0.24,
+          "endpointPolicy": "fixed-measured-candidates",
+          "kind": "interior-samples-toward-cohort-centroid"
+        }
+      },
+      "assumptions": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "compartment": {
+            "clearance": 0.0593462031473567,
+            "id": "agent-authored-k4-data-envelope",
+            "kind": "box",
+            "maximum": [
+              11.586311546367833,
+              14.295522895367833,
+              13.273248878367836
+            ],
+            "minimum": [
+              -1.422363248367835,
+              -6.175986972367834,
+              -8.135205474367835
+            ]
+          },
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule",
+          "obstacles": [
+            {
+              "authority": "agent-authored-provisional",
+              "clearance": 0.0593462031473567,
+              "end": [
+                6.374811029192541,
+                1.5400552383765298,
+                5.005766562299481
+              ],
+              "id": "agent-authored-k4-central-pressure-capsule",
+              "kind": "capsule",
+              "radius": 0.1780386094420701,
+              "start": [
+                4.816881333826592,
+                5.7143891565462095,
+                0.5600337402269847
+              ]
+            }
+          ],
+          "sha256": "ac39acee5fdf44d704ec339330929c4b60b92a27aa900902d36c92b5f4fb2ac7"
+        },
+        "requested": {
+          "authority": "agent-authored-provisional",
+          "compartmentDerivation": "selected-candidate-knot-axis-envelope-plus-1.5-maximum-radius-margin",
+          "id": "source-shaped-k4-provisional-environment.v0",
+          "obstacleDerivation": "cohort-centroid-middle-thirty-percent-capsule"
+        }
+      },
+      "status": "iteration-limit",
+      "iterations": 640,
+      "initial": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.492777912542,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 7.870152609153,
+        "skeletalPenetration": 1.244117035434
+      },
+      "packed": {
+        "compartmentEscape": 0,
+        "endpointDrift": 0,
+        "maximumBendEnergy": 0.336139165544,
+        "maximumRelativeVolumeError": 0,
+        "nonFiniteValueCount": 0,
+        "nonPositiveRadiusCount": 0,
+        "pairwisePenetration": 1.97222858319,
+        "skeletalPenetration": 0.10819522338
+      },
+      "response": {
+        "interiorSampleCount": 44,
+        "maximumInteriorDisplacement": 1.732056493467,
+        "meanInteriorDisplacement": 0.947697960296
+      },
+      "shapeProfile": {
+        "effective": {
+          "authority": "agent-authored-provisional",
+          "bellyExponent": 0.8,
+          "endpointRadiusFraction": 0.32,
+          "id": "volume-preserving-tapered-belly.v0",
+          "parameterization": "normalized-candidate-centerline-arc-length",
+          "volumePolicy": "global-radius-scale-to-measured-candidate-target-volume"
+        },
+        "requested": {
+          "id": "volume-preserving-tapered-belly.v0"
+        }
+      }
+    }
+  ],
+  "primaryOutput": "perturbation-result.json",
+  "outputSha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088",
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-written",
+    "parentAtlasFileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71",
+    "effectiveConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  }
+}

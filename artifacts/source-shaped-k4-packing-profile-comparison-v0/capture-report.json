@@ -1,0 +1,527 @@
+{
+  "schema": "kaminos.source-shaped-k4-profile-comparison-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "chromium-virtual-time-dom-verified-screenshot-v0",
+    "effective": "chromium-virtual-time-dom-verified-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "viewerRoute": {
+    "requested": "source-shaped-k4-packing-visual-v0",
+    "effective": "source-shaped-k4-packing-visual-v0",
+    "fallbackUsed": false
+  },
+  "invocation": {
+    "baseUrl": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html",
+    "outputDirectory": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0",
+    "reportPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "virtualTimeBudgetMs": 5000,
+    "captureTimeoutMs": 8000,
+    "maxCaptureAttempts": 10,
+    "resumeReportPath": "/private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/capture-report.json"
+  },
+  "requestedProfiles": {
+    "tube": {
+      "resultSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+    },
+    "belly": {
+      "resultSha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+    }
+  },
+  "captures": [
+    {
+      "profile": "tube",
+      "condition": "baseline",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before",
+      "output": "tube-baseline-before.png",
+      "sha256": "8d4a3f81d76d322396aaff57a14e84e8d125b474a559f94746a399b9fa55fadf",
+      "sizeBytes": 297199,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "baseline",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2131,
+        "retainedBytes": 2131,
+        "truncated": false,
+        "tail": "[0804/200014.055002:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200014.120284:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before (0)\n[0804/200014.165821:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200014.599244:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before (0)\n[0804/200014.601075:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200014.622407:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before (0)\n[0804/200014.626337:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200014.647905:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=before (0)\n297199 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-before.png\n"
+      }
+    },
+    {
+      "profile": "tube",
+      "condition": "baseline",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=packed",
+      "output": "tube-baseline-packed.png",
+      "sha256": "17c76bea871f251775dff579e719979183eff0ed5fff3f8f165e72db58613490",
+      "sizeBytes": 305416,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "baseline",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2131,
+        "retainedBytes": 2131,
+        "truncated": false,
+        "tail": "[0804/200015.146670:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200015.195819:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=packed (0)\n[0804/200015.242468:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200015.745592:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=packed (0)\n[0804/200015.748456:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200015.767294:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=packed (0)\n[0804/200015.776365:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200015.792729:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=baseline&state=packed (0)\n305416 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-baseline-packed.png\n"
+      }
+    },
+    {
+      "profile": "tube",
+      "condition": "mild",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=before",
+      "output": "tube-mild-before.png",
+      "sha256": "85fc36d6d00aba1e46f925dfe2b6b0c3fccff2d0e0fd7d7e1737787832eabb9c",
+      "sizeBytes": 291309,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "mild",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2111,
+        "retainedBytes": 2111,
+        "truncated": false,
+        "tail": "[0804/200016.274928:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200016.321809:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=before (0)\n[0804/200016.362013:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200016.765129:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=before (0)\n[0804/200016.767058:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200016.786424:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=before (0)\n[0804/200016.793130:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200016.813178:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=before (0)\n291309 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-mild-before.png\n"
+      }
+    },
+    {
+      "profile": "tube",
+      "condition": "mild",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=packed",
+      "output": "tube-mild-packed.png",
+      "sha256": "6479c33ee90a3f496ad034e6e8a8f83c84177e6731f7b4488ca98dc3b6edf2b6",
+      "sizeBytes": 303841,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "mild",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2111,
+        "retainedBytes": 2111,
+        "truncated": false,
+        "tail": "[0804/200017.290647:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200017.337835:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=packed (0)\n[0804/200017.383383:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200017.870913:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=packed (0)\n[0804/200017.873373:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200017.894552:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=packed (0)\n[0804/200017.901432:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200017.922007:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=mild&state=packed (0)\n303841 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-mild-packed.png\n"
+      }
+    },
+    {
+      "profile": "tube",
+      "condition": "moderate",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=before",
+      "output": "tube-moderate-before.png",
+      "sha256": "22440816f8bc2318fa09601c350164c8fd9f610d49f69f902a7e182c158b9545",
+      "sizeBytes": 284603,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "moderate",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2131,
+        "retainedBytes": 2131,
+        "truncated": false,
+        "tail": "[0804/200018.409987:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200018.458478:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=before (0)\n[0804/200018.498900:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200018.912836:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=before (0)\n[0804/200018.914974:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200018.935685:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=before (0)\n[0804/200018.943123:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200018.962377:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=before (0)\n284603 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-moderate-before.png\n"
+      }
+    },
+    {
+      "profile": "tube",
+      "condition": "moderate",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=packed",
+      "output": "tube-moderate-packed.png",
+      "sha256": "0e953ca0eae46a6e3d9fff5e6db071bc70fe090850aadd36e177b3c03deaf8a8",
+      "sizeBytes": 301830,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "tube",
+        "data-condition": "moderate",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2131,
+        "retainedBytes": 2131,
+        "truncated": false,
+        "tail": "[0804/200019.587368:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200019.633748:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=packed (0)\n[0804/200019.679299:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200020.183691:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=packed (0)\n[0804/200020.186688:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200020.207271:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=packed (0)\n[0804/200020.209664:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200020.230211:INFO:CONSOLE:0] \"[.WebGL-0x12c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=tube&condition=moderate&state=packed (0)\n301830 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/tube-moderate-packed.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "baseline",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=before",
+      "output": "belly-baseline-before.png",
+      "sha256": "2f20bc9d2722deda041d3ca83458e5975c0e268008677a69d8fc917b017b2679",
+      "sizeBytes": 283500,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "baseline",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": "browser capture failed: spawnSync /Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ETIMEDOUT",
+          "stderr": {
+            "totalBytes": 0,
+            "retainedBytes": 0,
+            "truncated": false,
+            "tail": ""
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2136,
+        "retainedBytes": 2136,
+        "truncated": false,
+        "tail": "[0804/200028.866335:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200028.909868:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=before (0)\n[0804/200028.945395:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200029.327600:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=before (0)\n[0804/200029.329257:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200029.348207:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=before (0)\n[0804/200029.351187:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200029.369702:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=before (0)\n283500 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-baseline-before.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "baseline",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed",
+      "output": "belly-baseline-packed.png",
+      "sha256": "ea804eaf2df5c6336a12863a446e0a41dc4945dfce10c4aac2eebfaf4d36ca26",
+      "sizeBytes": 297420,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "baseline",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": "browser capture failed: spawnSync /Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ETIMEDOUT",
+          "stderr": {
+            "totalBytes": 1974,
+            "retainedBytes": 1974,
+            "truncated": false,
+            "tail": "[0804/200030.479143:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200030.520420:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200030.561292:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200031.020020:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200031.022623:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200031.042971:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200031.044174:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200031.065934:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n"
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2136,
+        "retainedBytes": 2136,
+        "truncated": false,
+        "tail": "[0804/200038.023216:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200038.076768:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200038.126968:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200038.662935:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200038.667033:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200038.689781:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n[0804/200038.695839:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200038.717434:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=baseline&state=packed (0)\n297420 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-baseline-packed.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "mild",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=before",
+      "output": "belly-mild-before.png",
+      "sha256": "77f15d7baac68bf06be10e5c199ad609cc7017e394c9192af2595256175cb236",
+      "sizeBytes": 278877,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "mild",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2116,
+        "retainedBytes": 2116,
+        "truncated": false,
+        "tail": "[0804/200039.353712:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200039.403892:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=before (0)\n[0804/200039.446201:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200039.878039:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=before (0)\n[0804/200039.880189:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200039.903129:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=before (0)\n[0804/200039.904902:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200039.925110:INFO:CONSOLE:0] \"[.WebGL-0x11400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=before (0)\n278877 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-mild-before.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "mild",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=packed",
+      "output": "belly-mild-packed.png",
+      "sha256": "9c89d2f92cc7b9e4997976066c449decb4cc4e5fe49a35f41b09658a41ea1c49",
+      "sizeBytes": 295398,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "mild",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2116,
+        "retainedBytes": 2116,
+        "truncated": false,
+        "tail": "[0804/200040.720824:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200040.781482:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=packed (0)\n[0804/200040.842521:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200041.544852:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=packed (0)\n[0804/200041.549116:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200041.576466:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=packed (0)\n[0804/200041.578478:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200041.607835:INFO:CONSOLE:0] \"[.WebGL-0x12400568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=mild&state=packed (0)\n295398 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-mild-packed.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "moderate",
+      "state": "before",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before",
+      "output": "belly-moderate-before.png",
+      "sha256": "ce64b52b3767fbc8b64f04573dc1cc8deaad212b743dc0d56118e20298ee0edc",
+      "sizeBytes": 272669,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "moderate",
+        "data-state": "before",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": "browser capture failed: spawnSync /Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ETIMEDOUT",
+          "stderr": {
+            "totalBytes": 1974,
+            "retainedBytes": 1974,
+            "truncated": false,
+            "tail": "[0804/200048.462577:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200048.544190:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200048.612234:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200049.269930:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200049.273046:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200049.299596:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200049.301528:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200049.352296:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n"
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2136,
+        "retainedBytes": 2136,
+        "truncated": false,
+        "tail": "[0804/200101.335549:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200101.391884:INFO:CONSOLE:0] \"[.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200101.437494:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200101.953588:INFO:CONSOLE:0] \"[.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200101.956013:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200101.979524:INFO:CONSOLE:0] \"[.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n[0804/200101.981405:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200102.008294:INFO:CONSOLE:0] \"[.WebGL-0x13c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=before (0)\n272669 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-moderate-before.png\n"
+      }
+    },
+    {
+      "profile": "belly",
+      "condition": "moderate",
+      "state": "packed",
+      "url": "http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed",
+      "output": "belly-moderate-packed.png",
+      "sha256": "05c848ce5fcfed56141b6f269313cf1c3e3579b3955fdf850ca472db3be17bd1",
+      "sizeBytes": 293146,
+      "png": {
+        "width": 1400,
+        "height": 900
+      },
+      "domIdentity": {
+        "data-requested-route": "source-shaped-k4-packing-visual-v0",
+        "data-effective-route": "source-shaped-k4-packing-visual-v0",
+        "data-fallback-used": "false",
+        "data-profile": "belly",
+        "data-condition": "moderate",
+        "data-state": "packed",
+        "data-witness-loaded": "true",
+        "data-result-sha256": "27cef65084d1669568e175f0d3aa2339f8d38cdd9bff3d61170e71a58422a088"
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "status": "failed",
+          "error": "browser capture failed: spawnSync /Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ETIMEDOUT",
+          "stderr": {
+            "totalBytes": 1974,
+            "retainedBytes": 1974,
+            "truncated": false,
+            "tail": "[0804/200212.394339:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200212.533675:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200212.630917:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200214.167680:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200214.173257:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200214.616696:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200214.619362:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200214.905459:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n"
+          }
+        },
+        {
+          "attempt": 2,
+          "status": "failed",
+          "error": "browser capture failed: spawnSync /Users/noahlyons/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell ETIMEDOUT",
+          "stderr": {
+            "totalBytes": 1974,
+            "retainedBytes": 1974,
+            "truncated": false,
+            "tail": "[0804/200220.605141:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200220.715049:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200220.811437:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200222.129426:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200222.134544:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200222.197764:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200222.200184:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200222.257529:INFO:CONSOLE:0] \"[.WebGL-0x10c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n"
+          }
+        },
+        {
+          "attempt": 3,
+          "status": "validated"
+        }
+      ],
+      "stderr": {
+        "totalBytes": 2136,
+        "retainedBytes": 2136,
+        "truncated": false,
+        "tail": "[0804/200229.609144:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200229.704369:INFO:CONSOLE:0] \"[.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200229.765113:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200230.650062:INFO:CONSOLE:0] \"[.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200230.655333:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0804/200230.698182:INFO:CONSOLE:0] \"[.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n[0804/200230.702696:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0804/200230.740912:INFO:CONSOLE:0] \"[.WebGL-0x13c00559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8766/artifacts/source-shaped-k4-packing-visual-v0/index.html?profile=belly&condition=moderate&state=packed (0)\n293146 bytes written to file /private/tmp/kaminos-bytebound-source-export-0803/artifacts/source-shaped-k4-packing-profile-comparison-v0/belly-moderate-packed.png\n"
+      }
+    }
+  ],
+  "primaryOutput": {
+    "kind": "dom-verified-profile-comparison-capture-set",
+    "count": 12
+  },
+  "failurePhase": null,
+  "error": null,
+  "currentCapture": null,
+  "lastTrustworthyEvidence": {
+    "phase": "capture-dom-and-png-validated",
+    "profile": "belly",
+    "condition": "moderate",
+    "state": "packed",
+    "output": "belly-moderate-packed.png",
+    "sha256": "05c848ce5fcfed56141b6f269313cf1c3e3579b3955fdf850ca472db3be17bd1"
+  }
+}

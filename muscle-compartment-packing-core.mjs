@@ -8,6 +8,8 @@ export const SOURCE_SHAPED_PACKING_PERTURBATION_SERIES_SCHEMA =
   'kaminos.source-shaped-muscle-packing-perturbation-series.v0';
 export const SOURCE_SHAPED_PACKING_PERTURBATION_RESULT_SCHEMA =
   'kaminos.source-shaped-muscle-packing-perturbation-result.v0';
+export const VOLUME_PRESERVING_TAPERED_BELLY_PROFILE =
+  'volume-preserving-tapered-belly.v0';
 
 const DEFAULT_CONFIG = Object.freeze({
   maxIterations: 640,
@@ -191,6 +193,54 @@ function carrierVolume(centerline) {
     );
   }
   return volume;
+}
+
+function resolveSourceShapedShapeProfile(shapeProfileId) {
+  if (shapeProfileId === undefined || shapeProfileId === null) return null;
+  if (shapeProfileId !== VOLUME_PRESERVING_TAPERED_BELLY_PROFILE) {
+    throw new Error(`source-shaped packing shape profile is unsupported: ${shapeProfileId}`);
+  }
+  return {
+    requested: { id: shapeProfileId },
+    effective: {
+      id: shapeProfileId,
+      authority: 'agent-authored-provisional',
+      parameterization: 'normalized-candidate-centerline-arc-length',
+      endpointRadiusFraction: 0.32,
+      bellyExponent: 0.8,
+      volumePolicy: 'global-radius-scale-to-measured-candidate-target-volume',
+    },
+  };
+}
+
+function applySourceShapedShapeProfile(centerline, targetVolume, shapeProfile) {
+  if (!shapeProfile) return centerline;
+  if (shapeProfile.effective.id !== VOLUME_PRESERVING_TAPERED_BELLY_PROFILE) {
+    throw new Error(`source-shaped packing shape profile is unsupported: ${shapeProfile.effective.id}`);
+  }
+  const cumulativeLengths = [0];
+  for (let index = 1; index < centerline.length; index += 1) {
+    cumulativeLengths.push(
+      cumulativeLengths[index - 1] +
+      distance(centerline[index - 1].position, centerline[index].position),
+    );
+  }
+  const totalLength = cumulativeLengths.at(-1);
+  if (!(totalLength > 0)) throw new Error('tapered belly profile requires a nonzero centerline length');
+  const { endpointRadiusFraction, bellyExponent } = shapeProfile.effective;
+  const profiled = centerline.map((knot, index) => {
+    const pathT = cumulativeLengths[index] / totalLength;
+    const bellyWeight = Math.sin(Math.PI * pathT) ** bellyExponent;
+    return {
+      position: [...knot.position],
+      radius: endpointRadiusFraction + (1 - endpointRadiusFraction) * bellyWeight,
+    };
+  });
+  const unscaledVolume = carrierVolume(profiled);
+  if (!(unscaledVolume > 0)) throw new Error('tapered belly profile produced a nonpositive carrier volume');
+  const radiusScale = Math.sqrt(targetVolume / unscaledVolume);
+  for (const knot of profiled) knot.radius *= radiusScale;
+  return profiled;
 }
 
 function sampleCarrier(muscle, count) {
@@ -769,6 +819,7 @@ function provisionalSourceForLevel({
   centroids,
   environment,
   level,
+  shapeProfile,
 }) {
   const requestedPerturbation = {
     kind: 'interior-samples-toward-cohort-centroid',
@@ -787,12 +838,17 @@ function provisionalSourceForLevel({
   };
   const muscles = candidateRoutes.map((candidate, muscleIndex) => {
     const route = candidate.route;
-    const centerline = candidate.centerline.map((knot, knotIndex) => ({
+    let centerline = candidate.centerline.map((knot, knotIndex) => ({
       position: knotIndex === 0 || knotIndex === candidate.centerline.length - 1
         ? [...knot.position]
         : interpolatePoint(knot.position, centroids[knotIndex], level.crowdingFraction),
       radius: knot.radius,
     }));
+    centerline = applySourceShapedShapeProfile(
+      centerline,
+      candidate.targetVolume,
+      shapeProfile,
+    );
     return {
       id: route.constructionId,
       identity: {
@@ -829,6 +885,7 @@ function provisionalSourceForLevel({
         targetVolumeState: route.fields.targetVolume.state,
         sourcePathSha256: candidate.sourcePathSha256,
       },
+      ...(shapeProfile ? { shapeProfile: structuredClone(shapeProfile.effective) } : {}),
     };
   });
   const core = {
@@ -874,6 +931,7 @@ function provisionalSourceForLevel({
           sha256: hashJson(effectiveAssumptionPayload),
         },
       },
+      ...(shapeProfile ? { shapeProfile: structuredClone(shapeProfile) } : {}),
     },
   };
   const sha256 = hashJson(core);
@@ -891,6 +949,7 @@ export function createSourceShapedPackingPerturbationSeries({
   parentAtlasFileSha256,
   requestedConstructionIds,
   levels,
+  shapeProfileId,
 }) {
   validateSourceShapedAtlas(parentAtlas, parentAtlasFileSha256);
   validatePerturbationLevels(levels);
@@ -898,6 +957,7 @@ export function createSourceShapedPackingPerturbationSeries({
   const candidateRoutes = routes.map(sourceShapedCandidateRoute);
   const centroids = cohortCentroids(candidateRoutes);
   const environment = provisionalCohortEnvironment(candidateRoutes, centroids);
+  const shapeProfile = resolveSourceShapedShapeProfile(shapeProfileId);
   const conditions = levels.map(level => ({
     id: level.id,
     crowdingFraction: level.crowdingFraction,
@@ -909,6 +969,7 @@ export function createSourceShapedPackingPerturbationSeries({
       centroids,
       environment,
       level,
+      shapeProfile,
     }),
   }));
   return canonical({
@@ -922,6 +983,7 @@ export function createSourceShapedPackingPerturbationSeries({
     },
     requestedConstructionIds: [...requestedConstructionIds],
     effectiveConstructionIds: routes.map(route => route.constructionId),
+    ...(shapeProfile ? { shapeProfile } : {}),
     conditions,
   });
 }
@@ -1154,6 +1216,7 @@ export function runSourceShapedPackingPerturbationSeries({
   requestedConstructionIds,
   levels,
   solverConfig = {},
+  shapeProfileId,
 }) {
   const requestedMechanismConfig = Object.keys(solverConfig).length === 0
     ? { ...DEFAULT_CONFIG }
@@ -1163,6 +1226,7 @@ export function runSourceShapedPackingPerturbationSeries({
     parentAtlasFileSha256,
     requestedConstructionIds,
     levels,
+    shapeProfileId,
   });
   const conditions = series.conditions.map(condition => {
     const result = solveMuscleCompartmentPacking(condition.source, requestedMechanismConfig);
@@ -1185,6 +1249,7 @@ export function runSourceShapedPackingPerturbationSeries({
     parentAtlas: series.parentAtlas,
     requestedConstructionIds: series.requestedConstructionIds,
     effectiveConstructionIds: series.effectiveConstructionIds,
+    ...(series.shapeProfile ? { shapeProfile: series.shapeProfile } : {}),
     mechanism: {
       requested: {
         id: 'muscle-compartment-packing-projection.v0',

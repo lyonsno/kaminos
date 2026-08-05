@@ -15,6 +15,22 @@ const LEVELS = [
   { id: 'mild', crowdingFraction: 0.12 },
   { id: 'moderate', crowdingFraction: 0.24 },
 ];
+const BELLY_PROFILE_ID = 'volume-preserving-tapered-belly.v0';
+
+function carrierVolume(centerline) {
+  let volume = 0;
+  for (let index = 0; index < centerline.length - 1; index += 1) {
+    const start = centerline[index];
+    const end = centerline[index + 1];
+    const segmentLength = Math.hypot(...start.position.map(
+      (value, axis) => end.position[axis] - value,
+    ));
+    volume += Math.PI * segmentLength / 3 * (
+      start.radius ** 2 + start.radius * end.radius + end.radius ** 2
+    );
+  }
+  return volume;
+}
 
 async function atlasFixture() {
   const bytes = await readFile(ATLAS_PATH);
@@ -138,6 +154,75 @@ test('ordered route selection is caller-addressed and the ladder produces determ
   assert.ok(first.conditions.every(
     condition => condition.result.metrics.packed.maximumRelativeVolumeError <= 1e-9,
   ));
+});
+
+test('tapered belly mode is explicit, volume preserving, and leaves the tube baseline untouched', async () => {
+  const api = assayApi();
+  const fixture = await atlasFixture();
+  const tube = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+  });
+  const belly = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+    shapeProfileId: BELLY_PROFILE_ID,
+  });
+
+  assert.equal(tube.shapeProfile, undefined, 'the legacy tube comparison must remain byte-stable');
+  assert.deepEqual(belly.shapeProfile.requested, { id: BELLY_PROFILE_ID });
+  assert.deepEqual(belly.shapeProfile.effective, {
+    id: BELLY_PROFILE_ID,
+    authority: 'agent-authored-provisional',
+    parameterization: 'normalized-candidate-centerline-arc-length',
+    endpointRadiusFraction: 0.32,
+    bellyExponent: 0.8,
+    volumePolicy: 'global-radius-scale-to-measured-candidate-target-volume',
+  });
+  assert.deepEqual(belly.requestedConstructionIds, tube.requestedConstructionIds);
+  assert.deepEqual(belly.effectiveConstructionIds, tube.effectiveConstructionIds);
+  assert.equal(belly.parentAtlas.fileSha256, tube.parentAtlas.fileSha256);
+
+  for (const condition of belly.conditions) {
+    assert.deepEqual(condition.source.assayProvenance.shapeProfile, belly.shapeProfile);
+    for (const muscle of condition.source.muscles) {
+      assert.equal(muscle.shapeProfile.id, BELLY_PROFILE_ID);
+      assert.equal(muscle.shapeProfile.authority, 'agent-authored-provisional');
+      const middle = muscle.centerline[Math.floor(muscle.centerline.length / 2)].radius;
+      assert.ok(middle > muscle.centerline[0].radius * 2.5, `${muscle.id} origin must taper`);
+      assert.ok(middle > muscle.centerline.at(-1).radius * 2.5, `${muscle.id} insertion must taper`);
+      assert.ok(
+        Math.abs(carrierVolume(muscle.centerline) - muscle.targetVolume) / muscle.targetVolume <= 1e-12,
+        `${muscle.id} belly profile must preserve the measured-candidate target volume`,
+      );
+      assert.deepEqual(
+        muscle.centerline.map(knot => knot.position),
+        tube.conditions.find(candidate => candidate.id === condition.id)
+          .source.muscles.find(candidate => candidate.id === muscle.id)
+          .centerline.map(knot => knot.position),
+        `${muscle.id} profile must not move the candidate centerline or attachments`,
+      );
+    }
+  }
+
+  const replay = api.createSourceShapedPackingPerturbationSeries({
+    ...fixture,
+    requestedConstructionIds: K4_IDS,
+    levels: LEVELS,
+    shapeProfileId: BELLY_PROFILE_ID,
+  });
+  assert.deepEqual(replay, belly, 'identical belly inputs must replay byte-identically');
+  assert.throws(
+    () => api.createSourceShapedPackingPerturbationSeries({
+      ...fixture,
+      requestedConstructionIds: K4_IDS,
+      levels: LEVELS,
+      shapeProfileId: 'convenient-unbound-belly',
+    }),
+    /shape profile.*unsupported|unsupported.*shape profile/i,
+  );
 });
 
 test('parent-atlas and candidate disagreements fail before a provisional fixture can launder them', async () => {
