@@ -1,0 +1,17 @@
+{
+  "name": "blank-plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "330e13ea196a",
+  "input_path": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/inputs/blank-plate.png",
+  "input_name": "blank-plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/prompts/exterior-original.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785983167.625181,
+  "duration_s": 32.8
+}

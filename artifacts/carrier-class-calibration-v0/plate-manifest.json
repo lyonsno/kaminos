@@ -1,0 +1,188 @@
+{
+  "schema": "kaminos.carrier-class-calibration-plate.v0",
+  "title": "Carrier-Class Calibration, Seed 80301 \u2014 three carriers x two prompts",
+  "verdict": "Production receipt only. Route identity verified per cell; interpretation belongs to the Molten and Ghost functions.",
+  "description": "Amendment SS-C.2. Three conditioning arms (clean generic-cat envelope, the demoted \"mush\" envelope, and a source-ablated blank plate) run under two prompts. The original exterior prompt verbally restates the source morphology; the neutralized prompt removes that restatement and changes nothing else. All six cells verified route-identical except the supplied image and the prompt file.",
+  "comparisonClass": {
+    "matched": [
+      "seed 80301",
+      "flux2-klein-9b",
+      "quantize 4",
+      "8 steps",
+      "guidance 1.0",
+      "512x512",
+      "effective runner",
+      "submission route"
+    ],
+    "varied": [
+      "conditioning image (3 arms)",
+      "prompt (2 variants)"
+    ],
+    "knownCoupling": "Arm A is produced by a different model family (Z-Image-Turbo photo -> TRELLIS) than arms B and C (Blender envelope compiler), so carrier cleanliness and production route are coupled in that arm. Arm A also carries TRELLIS surface noise (fur tufts) absent from the smooth compiler arms, and its camera is nearer a three-quarter front than the arms\u2019 right-sagittal."
+  },
+  "claimCeiling": "Claim ceiling: these six fixed-route cells establish prompt-vs-image attribution for posture under this exact route, seed, and prompt pair. They do not establish multi-seed reliability, anatomical fidelity, 3D correspondence, reconstruction quality, carrier ranking, or production admission. Single seed: an existence probe, not a stable effect.",
+  "cells": [
+    {
+      "group": "Group 1 \u2014 ORIGINAL exterior prompt (restates source morphology in words)",
+      "inputLabel": "Clean generic-cat envelope",
+      "inputImage": "inputs/clean-envelope.png",
+      "inputSha256": "8c577f1912758bcdb280b3902261dc3aa60753d1e70eec4243f582cf841e7030",
+      "inputMeta": {
+        "Provenance": "photo (Z-Image-Turbo) -> TRELLIS2MLX -> Blender clay render",
+        "Model family": "non-FLUX (Tongyi-MAI Z-Image-Turbo) + TRELLIS",
+        "Facing": "image-left"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source's unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "b51c76f356d8",
+      "outputLabel": "Generated",
+      "outputImage": "cells/original-clean/output.png",
+      "outputSha256": "b7189a65f4625c33c5273015ae7e311e924dfe0cc1cb566eb9ffe3f1ad47adb6",
+      "observation": "Crouched, low front, head image-left. Closely resembles the source-ablated cell below."
+    },
+    {
+      "group": "Group 1 \u2014 ORIGINAL exterior prompt (restates source morphology in words)",
+      "inputLabel": "Provisional envelope (demoted \"mush\")",
+      "inputImage": "inputs/mush-envelope.png",
+      "inputSha256": "cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967",
+      "inputMeta": {
+        "Compiler": "source-surface closing envelope v0",
+        "Closing radius": "3.5148 source units",
+        "Authority": "agent-authored provisional fixture",
+        "Operator verdict": "does not resemble the bauplan"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source's unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "f10ee00d0c32",
+      "outputLabel": "Generated",
+      "outputImage": "cells/original-mush/output.png",
+      "outputSha256": "ee51812289beb2032cf424fb763f49c65b88a318f6f13672d98ddbf2766fa303",
+      "observation": "Crouched, low front, head image-left. The non-resembling lump input produces the same posture class as the detailed envelope and as the blank plate."
+    },
+    {
+      "group": "Group 1 \u2014 ORIGINAL exterior prompt (restates source morphology in words)",
+      "inputLabel": "Source-ablated plate",
+      "inputImage": "inputs/blank-plate.png",
+      "inputSha256": "0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650",
+      "inputMeta": {
+        "Variable": "no source morphology",
+        "Purpose": "isolates what the prompt alone produces"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source's unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "330e13ea196a",
+      "outputLabel": "Generated",
+      "outputImage": "cells/original-blank/output.png",
+      "outputSha256": "6ccf20254cd4894eb738d84bbe8e6c44e48228fe965bf91d11a114a13cb0e099",
+      "observation": "Crouched, low front, head image-left, from NO source image. The posture named in the prompt appears without any conditioning morphology."
+    },
+    {
+      "group": "Group 2 \u2014 NEUTRALIZED prompt (pose/proportion restatement removed)",
+      "inputLabel": "Clean generic-cat envelope",
+      "inputImage": "inputs/clean-envelope.png",
+      "inputSha256": "8c577f1912758bcdb280b3902261dc3aa60753d1e70eec4243f582cf841e7030",
+      "inputMeta": {
+        "Provenance": "photo (Z-Image-Turbo) -> TRELLIS2MLX -> Blender clay render",
+        "Model family": "non-FLUX (Tongyi-MAI Z-Image-Turbo) + TRELLIS",
+        "Facing": "image-left"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "348f925affb5",
+      "outputLabel": "Generated",
+      "outputImage": "cells/neutralized-clean/output.png",
+      "outputSha256": "07df9f1b92ee4dbb43a641639c3cfc85f967d1c0c4d232be19aff0d5d79300ba",
+      "observation": "Standing quadruped, head image-left, matching the supplied envelope\u2019s facing. Upright stance replaces the crouch."
+    },
+    {
+      "group": "Group 2 \u2014 NEUTRALIZED prompt (pose/proportion restatement removed)",
+      "inputLabel": "Provisional envelope (demoted \"mush\")",
+      "inputImage": "inputs/mush-envelope.png",
+      "inputSha256": "cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967",
+      "inputMeta": {
+        "Compiler": "source-surface closing envelope v0",
+        "Closing radius": "3.5148 source units",
+        "Authority": "agent-authored provisional fixture",
+        "Operator verdict": "does not resemble the bauplan"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "a65236878e74",
+      "outputLabel": "Generated",
+      "outputImage": "cells/neutralized-mush/output.png",
+      "outputSha256": "4417d6865b770c389ecf0d5f7befbd22f36da79aaf58c8e2f51ac8c6c9dd35f9",
+      "observation": "Standing quadruped, head image-right. Facing differs from the clean-envelope cell under the identical prompt."
+    },
+    {
+      "group": "Group 2 \u2014 NEUTRALIZED prompt (pose/proportion restatement removed)",
+      "inputLabel": "Source-ablated plate",
+      "inputImage": "inputs/blank-plate.png",
+      "inputSha256": "0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650",
+      "inputMeta": {
+        "Variable": "no source morphology",
+        "Purpose": "isolates what the prompt alone produces"
+      },
+      "promptText": "Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.",
+      "promptSha256": "9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e",
+      "settings": {
+        "Seed": 80301,
+        "Model": "flux2-klein-9b, quantize 4",
+        "Steps": 8,
+        "Guidance": 1.0,
+        "Output": "512 x 512"
+      },
+      "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "effectiveRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+      "jobId": "c00f72346b82",
+      "outputLabel": "Generated",
+      "outputImage": "cells/neutralized-blank/output.png",
+      "outputSha256": "d6b181edf90b467bf155ad8f4b14cb7df82a19feb8f5af876f1618c0551df194",
+      "observation": "Seated cat, head image-right. Neither standing nor crouched; posture differs from both conditioned cells."
+    }
+  ]
+}

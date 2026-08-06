@@ -1,0 +1,52 @@
+{
+  "authority": "agent-authored carrier-class control render",
+  "bounds": {
+    "max": [
+      0.4994810223579407,
+      0.285919189453125,
+      0.3743939995765686
+    ],
+    "min": [
+      -0.49846896529197693,
+      -0.3490695357322693,
+      -0.3724091351032257
+    ]
+  },
+  "compilerId": "blender-glb-clay-plate-v0",
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "cameraView": "right-sagittal",
+    "orthoScale": 0.8364195227622986,
+    "presentationMatchedTo": "blender-cat-source-surface-closing-envelope-v0",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "resolution": [
+      900,
+      900
+    ]
+  },
+  "importedMeshCount": 1,
+  "outputs": {
+    "clay": {
+      "byteLength": 1045777,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/envelope-render/right-sagittal.png",
+      "sha256": "8c577f1912758bcdb280b3902261dc3aa60753d1e70eec4243f582cf841e7030"
+    }
+  },
+  "schema": "kaminos.glb-clay-plate.v0",
+  "source": {
+    "byteLength": 11344544,
+    "effectiveSha256": "af39766bdd681759bf08225ac604c35b0237efc57c2fdbc9c39d97548e6e4d2f",
+    "path": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/trellis/output.glb",
+    "requestedSha256": "af39766bdd681759bf08225ac604c35b0237efc57c2fdbc9c39d97548e6e4d2f"
+  }
+}

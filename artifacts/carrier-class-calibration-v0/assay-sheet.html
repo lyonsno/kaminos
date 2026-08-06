@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carrier-Class Calibration, Seed 80301 — three carriers x two prompts</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #111411; color: #e9ede7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111411; }
+    header { padding: 24px 28px 20px; border-bottom: 1px solid #465048; }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    h2 { margin: 0 0 8px; font-size: 18px; color: #f0c96d; }
+    h3 { margin: 24px 28px 0; font-size: 19px; color: #f0c96d; }
+    p { max-width: 1180px; margin: 7px 0; line-height: 1.5; color: #cbd2cb; }
+    .verdict { color: #9dd8b7; font-weight: 700; }
+    .assay { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(390px, .95fr) minmax(300px, 1fr); border-bottom: 1px solid #465048; }
+    .cell { min-width: 0; padding: 20px; border-right: 1px solid #465048; }
+    .cell:last-child { border-right: 0; }
+    img { display: block; width: 100%; height: auto; background: #202520; border: 1px solid #5a655d; }
+    pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12px; line-height: 1.45; color: #d7ddd7; }
+    dl { margin: 14px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; font-size: 12px; }
+    dt { color: #8f9a91; }
+    dd { margin: 0; overflow-wrap: anywhere; }
+    .observation { margin-top: 14px; padding-top: 12px; border-top: 1px solid #465048; color: #b9dfc8; }
+    .missing { color: #ff9d8a; font-weight: 700; }
+    .route-mismatch dd { color: #ff9d8a; }
+    .route-warning { margin-top: 8px; font-size: 12px; color: #ff9d8a; font-weight: 700; }
+    .frozen { margin: 0 28px 4px; padding: 14px 18px; border: 1px solid #465048; background: #161a16; font-size: 12px; }
+    .frozen dl { margin: 0; }
+    footer { padding: 20px 28px 28px; color: #aab3ab; line-height: 1.5; }
+    @media (max-width: 980px) { .assay { grid-template-columns: 1fr; } .cell { border-right: 0; border-bottom: 1px solid #465048; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Carrier-Class Calibration, Seed 80301 — three carriers x two prompts</h1>
+    <p class="verdict">Production receipt only. Route identity verified per cell; interpretation belongs to the Molten and Ghost functions.</p>
+    <p>Amendment SS-C.2. Three conditioning arms (clean generic-cat envelope, the demoted &quot;mush&quot; envelope, and a source-ablated blank plate) run under two prompts. The original exterior prompt verbally restates the source morphology; the neutralized prompt removes that restatement and changes nothing else. All six cells verified route-identical except the supplied image and the prompt file.</p>
+  </header>
+  <div class="frozen"><dl>
+    <dt>Frozen across cells</dt><dd>seed 80301, flux2-klein-9b, quantize 4, 8 steps, guidance 1.0, 512x512, effective runner, submission route</dd>
+    <dt>Varied</dt><dd>conditioning image (3 arms), prompt (2 variants)</dd>
+    <dt>Known coupling</dt><dd>Arm A is produced by a different model family (Z-Image-Turbo photo -&gt; TRELLIS) than arms B and C (Blender envelope compiler), so carrier cleanliness and production route are coupled in that arm. Arm A also carries TRELLIS surface noise (fur tufts) absent from the smooth compiler arms, and its camera is nearer a three-quarter front than the arms’ right-sagittal.</dd>
+  </dl></div>
+
+  <h3>Group 1 — ORIGINAL exterior prompt (restates source morphology in words)</h3>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Clean generic-cat envelope</h2>
+      <img src="inputs/clean-envelope.png" alt="Clean generic-cat envelope">
+      <dl><dt>Input SHA</dt><dd>8c577f1912758bcdb280b3902261dc3aa60753d1e70eec4243f582cf841e7030</dd><dt>Provenance</dt><dd>photo (Z-Image-Turbo) -&gt; TRELLIS2MLX -&gt; Blender clay render</dd><dt>Model family</dt><dd>non-FLUX (Tongyi-MAI Z-Image-Turbo) + TRELLIS</dd><dt>Facing</dt><dd>image-left</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source&#x27;s unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>b51c76f356d8</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/original-clean/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>b7189a65f4625c33c5273015ae7e311e924dfe0cc1cb566eb9ffe3f1ad47adb6</dd></dl>
+      <p class="observation">Crouched, low front, head image-left. Closely resembles the source-ablated cell below.</p>
+    </div>
+  </section>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Provisional envelope (demoted &quot;mush&quot;)</h2>
+      <img src="inputs/mush-envelope.png" alt="Provisional envelope (demoted &quot;mush&quot;)">
+      <dl><dt>Input SHA</dt><dd>cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967</dd><dt>Compiler</dt><dd>source-surface closing envelope v0</dd><dt>Closing radius</dt><dd>3.5148 source units</dd><dt>Authority</dt><dd>agent-authored provisional fixture</dd><dt>Operator verdict</dt><dd>does not resemble the bauplan</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source&#x27;s unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>f10ee00d0c32</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/original-mush/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>ee51812289beb2032cf424fb763f49c65b88a318f6f13672d98ddbf2766fa303</dd></dl>
+      <p class="observation">Crouched, low front, head image-left. The non-resembling lump input produces the same posture class as the detailed envelope and as the blank plate.</p>
+    </div>
+  </section>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Source-ablated plate</h2>
+      <img src="inputs/blank-plate.png" alt="Source-ablated plate">
+      <dl><dt>Input SHA</dt><dd>0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650</dd><dt>Variable</dt><dd>no source morphology</dd><dt>Purpose</dt><dd>isolates what the prompt alone produces</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Keep its low front, folded rear stance, body length, limb spacing, support placement, and direction unchanged. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. Preserve the source&#x27;s unusual mass relationships instead of replacing them with a generic cat pose. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>636fe82a6c34d472dd3fae4105cef4b2074de5a4701fdc9fb8c730f73e3b2332</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>330e13ea196a</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/original-blank/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>6ccf20254cd4894eb738d84bbe8e6c44e48228fe965bf91d11a114a13cb0e099</dd></dl>
+      <p class="observation">Crouched, low front, head image-left, from NO source image. The posture named in the prompt appears without any conditioning morphology.</p>
+    </div>
+  </section>
+  <h3>Group 2 — NEUTRALIZED prompt (pose/proportion restatement removed)</h3>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Clean generic-cat envelope</h2>
+      <img src="inputs/clean-envelope.png" alt="Clean generic-cat envelope">
+      <dl><dt>Input SHA</dt><dd>8c577f1912758bcdb280b3902261dc3aa60753d1e70eec4243f582cf841e7030</dd><dt>Provenance</dt><dd>photo (Z-Image-Turbo) -&gt; TRELLIS2MLX -&gt; Blender clay render</dd><dt>Model family</dt><dd>non-FLUX (Tongyi-MAI Z-Image-Turbo) + TRELLIS</dd><dt>Facing</dt><dd>image-left</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>348f925affb5</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/neutralized-clean/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>07df9f1b92ee4dbb43a641639c3cfc85f967d1c0c4d232be19aff0d5d79300ba</dd></dl>
+      <p class="observation">Standing quadruped, head image-left, matching the supplied envelope’s facing. Upright stance replaces the crouch.</p>
+    </div>
+  </section>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Provisional envelope (demoted &quot;mush&quot;)</h2>
+      <img src="inputs/mush-envelope.png" alt="Provisional envelope (demoted &quot;mush&quot;)">
+      <dl><dt>Input SHA</dt><dd>cb4b413080c03c7eab683c64dfd6ef52cf7408a98d2fc61a840c29d32b69d967</dd><dt>Compiler</dt><dd>source-surface closing envelope v0</dd><dt>Closing radius</dt><dd>3.5148 source units</dd><dt>Authority</dt><dd>agent-authored provisional fixture</dd><dt>Operator verdict</dt><dd>does not resemble the bauplan</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>a65236878e74</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/neutralized-mush/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>4417d6865b770c389ecf0d5f7befbd22f36da79aaf58c8e2f51ac8c6c9dd35f9</dd></dl>
+      <p class="observation">Standing quadruped, head image-right. Facing differs from the clean-envelope cell under the identical prompt.</p>
+    </div>
+  </section>
+  <section class="assay">
+    <div class="cell">
+      <h2>Input: Source-ablated plate</h2>
+      <img src="inputs/blank-plate.png" alt="Source-ablated plate">
+      <dl><dt>Input SHA</dt><dd>0ba2fa5d4558e6cfe415853858d7341b9bc41a6b2769d9d269119c1717a71650</dd><dt>Variable</dt><dd>no source morphology</dd><dt>Purpose</dt><dd>isolates what the prompt alone produces</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Exact Prompt and Settings</h2>
+      <pre>Use the supplied silhouette and proportions as the exact shape guide for one coherent living domestic cat. Render a complete continuous fur-covered exterior with natural paws, face, ears, and tail in a neutral three-quarter studio view on a clean pale background. No cutaway, exposed interior, diagram, text, interface, or logo.</pre>
+      <dl><dt>Prompt SHA</dt><dd>9db4f33cf72a1a7a18757168d2f3ace27ce9d9862c5adefd49f07a4c4cd8485e</dd><dt>Seed</dt><dd>80301</dd><dt>Model</dt><dd>flux2-klein-9b, quantize 4</dd><dt>Steps</dt><dd>8</dd><dt>Guidance</dt><dd>1.0</dd><dt>Output</dt><dd>512 x 512</dd></dl>
+      <dl class="route"><dt>Requested route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Effective route</dt><dd>gpu-greenroom/mflux_flux2_edit_promptfile</dd><dt>Job</dt><dd>c00f72346b82</dd></dl>
+    </div>
+    <div class="cell">
+      <h2>Output: Generated</h2>
+      <img src="cells/neutralized-blank/output.png" alt="Generated">
+      <dl><dt>Output SHA</dt><dd>d6b181edf90b467bf155ad8f4b14cb7df82a19feb8f5af876f1618c0551df194</dd></dl>
+      <p class="observation">Seated cat, head image-right. Neither standing nor crouched; posture differs from both conditioned cells.</p>
+    </div>
+  </section>
+  <footer>Claim ceiling: these six fixed-route cells establish prompt-vs-image attribution for posture under this exact route, seed, and prompt pair. They do not establish multi-seed reliability, anatomical fidelity, 3D correspondence, reconstruction quality, carrier ranking, or production admission. Single seed: an existence probe, not a stable effect.</footer>
+</body>
+</html>

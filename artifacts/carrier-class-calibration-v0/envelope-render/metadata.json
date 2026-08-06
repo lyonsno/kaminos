@@ -1,0 +1,17 @@
+{
+  "name": "output",
+  "job_type": "kaminos_glb_clay_plate_calibration_0805",
+  "job_id": "c3b04694ca2d",
+  "input_path": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/trellis/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "expected_glb_sha256": "af39766bdd681759bf08225ac604c35b0237efc57c2fdbc9c39d97548e6e4d2f"
+  },
+  "output_files": [
+    "failure.json",
+    "manifest.json",
+    "right-sagittal.png"
+  ],
+  "created_at": 1785982283.338312,
+  "duration_s": 1.3
+}

@@ -1,0 +1,17 @@
+{
+  "name": "clean-envelope",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "348f925affb5",
+  "input_path": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/inputs/clean-envelope.png",
+  "input_name": "clean-envelope.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-plateforge/artifacts/carrier-class-calibration-v0/prompts/exterior-neutralized.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1785983230.879894,
+  "duration_s": 63.3
+}
