@@ -1,0 +1,102 @@
+{
+  "schema": "kaminos.envelope-relation-comparison.v0",
+  "measurerId": "envelope-relation-axial-profile-v0",
+  "status": "completed",
+  "verdict": null,
+  "verdictNote": "Tier 2 relations are instrumented, not gated. No threshold is asserted.",
+  "sourceApproximation": "per-object axis-aligned bounding boxes from classification worldBounds",
+  "frame": {
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "anterior": [
+      0,
+      -1,
+      0
+    ],
+    "dorsal": [
+      0,
+      0,
+      -1
+    ],
+    "basis": "measured asset axes, not convention-guessed"
+  },
+  "inputs": {
+    "classification": {
+      "requestedPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+      "effectivePath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+      "sha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d",
+      "schema": "kaminos.cat-bauplan-source-classification.v0",
+      "admittedObjectCount": 112,
+      "declaredSourceSha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+    },
+    "envelope": {
+      "requestedPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source/provisional-envelope.glb",
+      "effectivePath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source/provisional-envelope.glb",
+      "sha256": "81882d75ec9976a16aa04f4e07d344a40c6befdb2cbc0c0ff8eae297d97305f2",
+      "vertexCount": 39042,
+      "triangleCount": 78072
+    }
+  },
+  "parameters": {
+    "sliceCount": 48
+  },
+  "sourceRelations": {
+    "shoulderToHaunchRatio": 0.30985601155283815,
+    "massCentroidStation": 0.2998699322602761,
+    "thoracicDepthRatio": 0.6951755637557959,
+    "shoulderSeparationRatio": 0.31588073367804703,
+    "axialConcentration": 0.11459304488155961
+  },
+  "envelopeRelations": {
+    "shoulderToHaunchRatio": 2.9250902805349104,
+    "massCentroidStation": 0.6447873207814548,
+    "thoracicDepthRatio": 1.4307512267591824,
+    "shoulderSeparationRatio": 0.4517483221557089,
+    "axialConcentration": 0.048005782028506624
+  },
+  "comparison": {
+    "shoulderToHaunchRatio": {
+      "source": 0.30985601155283815,
+      "envelope": 2.9250902805349104,
+      "delta": 2.6152342689820722,
+      "relativeDelta": 8.440159853203655
+    },
+    "massCentroidStation": {
+      "source": 0.2998699322602761,
+      "envelope": 0.6447873207814548,
+      "delta": 0.34491738852117876,
+      "relativeDelta": 1.1502233182278614
+    },
+    "thoracicDepthRatio": {
+      "source": 0.6951755637557959,
+      "envelope": 1.4307512267591824,
+      "delta": 0.7355756630033865,
+      "relativeDelta": 1.0581149588016625
+    },
+    "shoulderSeparationRatio": {
+      "source": 0.31588073367804703,
+      "envelope": 0.4517483221557089,
+      "delta": 0.1358675884776619,
+      "relativeDelta": 0.4301230622572293
+    },
+    "axialConcentration": {
+      "source": 0.11459304488155961,
+      "envelope": 0.048005782028506624,
+      "delta": -0.06658726285305298,
+      "relativeDelta": -0.5810759537969852
+    }
+  },
+  "profiles": {
+    "source": {
+      "axialSpan": 61.567483425000006,
+      "totalArea": 27370.276386830603
+    },
+    "envelope": {
+      "axialSpan": 44.87871837615967,
+      "totalArea": 5933.112874605168
+    }
+  }
+}
