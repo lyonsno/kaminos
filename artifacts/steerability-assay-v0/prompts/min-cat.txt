@@ -1,0 +1,1 @@
+A cat, following the shape in the supplied image.

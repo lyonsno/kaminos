@@ -1,0 +1,183 @@
+{
+ "title": "Plate x prompt matrix - minimal pair isolates the target noun",
+ "subtitle": "All cells seed 80301, flux2-klein-9b, q4, 8 steps, guidance 1.0, 512x512. Rows vary the conditioning plate; columns vary the prompt. Verdicts are Prometheus preliminary reads pending operator adjudication. The blank-plate row is the no-information baseline: any cell resembling its row-mate contributed nothing from the plate.",
+ "footer": "This route has no negative-prompt field. mflux-generate-flux2-edit accepts --prompt-file only; exclusion clauses shown in orange are inline within each prompt.",
+ "prompts": [
+  {
+   "id": "mincat",
+   "name": "MINIMAL: \"A cat\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/min-cat.txt"
+  },
+  {
+   "id": "mincreature",
+   "name": "MINIMAL: \"A creature\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/min-creature.txt"
+  },
+  {
+   "id": "anatomy",
+   "name": "anatomy (cat.txt)",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/flux2-prompt-switch-seed80301-v0/cat.txt"
+  },
+  {
+   "id": "exterior",
+   "name": "exterior-only",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt"
+  },
+  {
+   "id": "nodom",
+   "name": "exterior, no \"domestic\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-no-domestic.txt"
+  },
+  {
+   "id": "creature",
+   "name": "exterior, species removed",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-creature-category.txt"
+  },
+  {
+   "id": "render",
+   "name": "exterior + \"creature render\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-creature-render.txt"
+  },
+  {
+   "id": "bare",
+   "name": "bare, no cue",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/bare-no-cue.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "ecorche",
+   "name": "operator ecorche",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/ecorche/right-sagittal.png"
+  },
+  {
+   "id": "partaware",
+   "name": "part-aware envelope",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  },
+  {
+   "id": "oldenv",
+   "name": "old provisional envelope",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/right-sagittal.png"
+  },
+  {
+   "id": "blank",
+   "name": "BLANK (control)",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "partaware",
+   "prompt": "anatomy",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/part-aware-envelope-anatomy-prompt/output.png",
+   "note": "Folded hindquarter, low forward head, vertebral series, rib cage."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "exterior",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/part-aware-envelope/output.png",
+   "note": "Matches blank-plate row-mate."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "nodom",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-no-domestic/output.png",
+   "note": "Ambiguous - has a crouch, reads close to normal reclining cat."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "creature",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-creature-category/output.png",
+   "note": "Prometheus first misread as collapsed. Raised folded haunch, dropped front, extended foreleg - furred and photoreal."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "render",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-exterior-creature-render/output.png",
+   "note": "Output-class noun had no effect."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "bare",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-bare-no-cue/output.png",
+   "note": "Least adherent in corpus - standing calico, no crouch at all."
+  },
+  {
+   "plate": "ecorche",
+   "prompt": "anatomy",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/flux2-complete-palette-ablation-seed80301-v0/ecorche/output.png",
+   "note": "Molten original."
+  },
+  {
+   "plate": "ecorche",
+   "prompt": "exterior",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/ecorche-exterior-prompt/output.png",
+   "note": "Best plate available still collapses. Head faces opposite the source."
+  },
+  {
+   "plate": "oldenv",
+   "prompt": "exterior",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-envelope/output.png",
+   "note": "Molten original."
+  },
+  {
+   "plate": "oldenv",
+   "prompt": "anatomy",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/envelope/output.png",
+   "note": "Molten original."
+  },
+  {
+   "plate": "blank",
+   "prompt": "exterior",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-neutral/output.png",
+   "note": "No-information baseline for the exterior column."
+  },
+  {
+   "plate": "blank",
+   "prompt": "anatomy",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/neutral/output.png",
+   "note": "No-information baseline for the anatomy column."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "mincat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/min-envelope-cat/output.png",
+   "note": "Hews to the envelope closely - same dark ground, segmented body, floating limb arrangement. Adds a cat head, ears, tail."
+  },
+  {
+   "plate": "partaware",
+   "prompt": "mincreature",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/min-envelope-creature/output.png",
+   "note": "Near passthrough. Barely modifies the envelope at all."
+  },
+  {
+   "plate": "blank",
+   "prompt": "mincat",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/min-neutral-cat/output.png",
+   "note": "No plate: flat vector icon. Nothing like its row-mate."
+  },
+  {
+   "plate": "blank",
+   "prompt": "mincreature",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/min-neutral-creature/output.png",
+   "note": "No plate baseline for the creature column."
+  }
+ ]
+}

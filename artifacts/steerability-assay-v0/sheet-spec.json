@@ -1,0 +1,88 @@
+{
+ "title": "Structural adherence assay \u2014 every cell with its exact plate and prompt",
+ "subtitle": "All cells seed 80301, flux2-klein-9b, quantize 4, steps 8, guidance 1.0, 512x512, mflux-generate-flux2-edit. Verdicts are Prometheus preliminary reads pending operator adjudication.",
+ "route": "mflux_flux2_edit_promptfile / flux2-klein-9b / seed 80301",
+ "cells": [
+  {
+   "id": "A. part-aware envelope + exterior-only",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/part-aware-envelope/output.png",
+   "promptPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt",
+   "note": "Generic crouching tabby. Indistinguishable from the blank-plate control."
+  },
+  {
+   "id": "B. part-aware envelope + anatomy (cat.txt)",
+   "seed": 80301,
+   "verdict": "adhered",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/part-aware-envelope-anatomy-prompt/output.png",
+   "promptPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/flux2-prompt-switch-seed80301-v0/cat.txt",
+   "note": "Folded hindquarter, low forward head, discrete vertebral series, rib cage all transferred."
+  },
+  {
+   "id": "C. operator ecorche + exterior-only",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/ecorche/right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/ecorche-exterior-prompt/output.png",
+   "promptPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt",
+   "note": "Best plate available. Still collapses. Head faces opposite the source."
+  },
+  {
+   "id": "D. old provisional envelope + exterior-only",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-envelope/output.png",
+   "promptPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt",
+   "note": "Molten original cell."
+  },
+  {
+   "id": "E. blank neutral plate + exterior-only (CONTROL)",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png",
+   "outputPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-neutral/output.png",
+   "promptPath": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt",
+   "note": "Plate verified genuinely blank. This is the no-information baseline every collapsed cell matches."
+  },
+  {
+   "id": "F. part-aware envelope + exterior + \"creature render\"",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-exterior-creature-render/output.png",
+   "promptPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-creature-render.txt",
+   "note": "Output-class noun restored. No effect."
+  },
+  {
+   "id": "G. part-aware envelope + bare, no style cue",
+   "seed": 80301,
+   "verdict": "collapsed",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-bare-no-cue/output.png",
+   "promptPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/bare-no-cue.txt",
+   "note": "Least adherent output in the corpus - standing calico, crouch entirely absent. Confirms photorealism is the default basin."
+  },
+  {
+   "id": "H. part-aware envelope + exterior, \"domestic\" removed",
+   "seed": 80301,
+   "verdict": "unscored",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-no-domestic/output.png",
+   "promptPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-no-domestic.txt",
+   "note": "Ambiguous. Has a crouch but reads close to a normal reclining cat. Needs operator adjudication."
+  },
+  {
+   "id": "I. part-aware envelope + exterior, species name removed",
+   "seed": 80301,
+   "verdict": "adhered",
+   "platePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/envelope-creature-category/output.png",
+   "promptPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/exterior-only-creature-category.txt",
+   "note": "Prometheus initially misread this as collapsed. On second look: raised folded haunch, low dropped front, extended foreleg - the envelope event, in a furred photoreal output. Needs operator confirmation."
+  }
+ ]
+}
