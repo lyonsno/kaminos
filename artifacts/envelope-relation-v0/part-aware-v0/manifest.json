@@ -1,0 +1,57 @@
+{
+  "authority": "agent-authored part-aware analytical envelope",
+  "compilerId": "blender-part-aware-envelope-v0",
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "cameraView": "right-sagittal",
+    "compilerId": "blender-part-aware-envelope-v0",
+    "orthoScale": 70.30680084228516,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "elementCount": 9632,
+  "mesh": {
+    "byteLength": 5560416,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/part-aware-envelope.glb",
+    "polygonCount": 140018,
+    "sha256": "882f3d27645877f72aa5daacd20703f4ac1066b645b95eb1cd5ad3604c55bd02",
+    "vertexCount": 115816
+  },
+  "outputs": {
+    "envelope": {
+      "byteLength": 878821,
+      "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+      "sha256": "c9598f20f6a0f3d579543be7ebb9de160e6c857f3ef206905a232de4133829dd"
+    },
+    "source": {
+      "byteLength": 890731,
+      "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/source-right-sagittal.png",
+      "sha256": "c9e6893d7164902848c64689c8f619cb877be7f15220cb662e202c1592dee1e1"
+    }
+  },
+  "parameters": {
+    "fieldResolution": 0.26842546463012695,
+    "resolutionFraction": 0.0035,
+    "threshold": 0.62
+  },
+  "partCount": 116,
+  "plan": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/element-plan.json",
+    "sha256": "89631a0831bd7489db064e56ed0137e468a8bb97e195170e4e03f7e699e7ee5c"
+  },
+  "schema": "kaminos.part-aware-envelope.v0",
+  "sourceSurfaces": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/source-surfaces/admitted-surfaces.json",
+    "sha256": "aa27d5da487fd648b6657ceca8c95ecadc73ade501b32e821713c741bfb0758a"
+  },
+  "status": "completed"
+}

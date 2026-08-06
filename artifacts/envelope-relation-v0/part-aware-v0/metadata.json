@@ -1,0 +1,17 @@
+{
+  "name": "element-plan",
+  "job_type": "kaminos_part_aware_envelope",
+  "job_id": "0f80468c0c8c",
+  "input_path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/element-plan.json",
+  "input_name": "element-plan.json",
+  "params": {},
+  "output_files": [
+    "element-plan.json",
+    "envelope-right-sagittal.png",
+    "manifest.json",
+    "part-aware-envelope.glb",
+    "source-right-sagittal.png"
+  ],
+  "created_at": 1785990165.8664908,
+  "duration_s": 1.8
+}
