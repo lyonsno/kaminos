@@ -1,0 +1,29 @@
+{
+  "authority": "evaluated source surfaces; no source mutation",
+  "classification": {
+    "admittedObjectCount": 112,
+    "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "sha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d"
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "exporterId": "blender-admitted-surface-triangles-v0"
+  },
+  "exportedObjectCount": 112,
+  "exporterId": "blender-admitted-surface-triangles-v0",
+  "output": {
+    "byteLength": 2268954,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/source-surfaces/admitted-surfaces.json",
+    "sha256": "aa27d5da487fd648b6657ceca8c95ecadc73ade501b32e821713c741bfb0758a"
+  },
+  "schema": "kaminos.admitted-surface-export.v0",
+  "skippedSourceObjects": [],
+  "source": {
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "status": "completed",
+  "triangleCount": 42481,
+  "vertexCount": 21509
+}

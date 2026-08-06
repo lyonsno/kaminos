@@ -127,26 +127,57 @@ function readClassificationBoxes(path) {
   };
 }
 
+/**
+ * Read exported evaluated source surfaces.
+ *
+ * This is the accurate source route. Bounding boxes systematically overestimate
+ * thin diagonal structures such as long limb bones, so any relation that
+ * depends on mass distribution needs true surfaces.
+ */
+function readExportedSurfaces(path) {
+  const payload = JSON.parse(readFileSync(path, 'utf8'));
+  if (payload.schema !== 'kaminos.admitted-surface-export.v0') {
+    throw new Error(`unexpected surface export schema: ${payload.schema}`);
+  }
+  if (!Array.isArray(payload.positions) || !Array.isArray(payload.triangles)) {
+    throw new Error('surface export lacks positions or triangles');
+  }
+  if (payload.triangles.length === 0) {
+    throw new Error('surface export contains no triangles');
+  }
+  return {
+    mesh: { positions: payload.positions, triangles: payload.triangles },
+    objectCount: Array.isArray(payload.objects) ? payload.objects.length : null,
+    declaredSourceSha256: payload.source?.sha256 ?? null,
+  };
+}
+
 function parseArguments(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i += 2) {
     if (!argv[i].startsWith('--')) throw new Error(`unexpected argument: ${argv[i]}`);
     args[argv[i].slice(2)] = argv[i + 1];
   }
-  for (const required of ['classification', 'envelope', 'out']) {
-    if (!args[required]) throw new Error(`--${required} is required`);
+  if (!args.envelope || !args.out) {
+    throw new Error('--envelope and --out are required');
+  }
+  if (!args.surfaces && !args.classification) {
+    throw new Error('one of --surfaces (accurate) or --classification (bounding-box approximation) is required');
   }
   return args;
 }
 
 function main() {
   const args = parseArguments(process.argv.slice(2));
-  const classificationPath = resolve(args.classification);
   const envelopePath = resolve(args.envelope);
   const outPath = resolve(args.out);
   const sliceCount = args['slice-count'] ? Number(args['slice-count']) : 48;
 
-  const source = readClassificationBoxes(classificationPath);
+  const usingSurfaces = Boolean(args.surfaces);
+  const sourcePath = resolve(usingSurfaces ? args.surfaces : args.classification);
+  const source = usingSurfaces
+    ? readExportedSurfaces(sourcePath)
+    : readClassificationBoxes(sourcePath);
   const envelopeMesh = readGlbMesh(envelopePath);
 
   const sourceProfile = axialProfile(source.mesh, { sliceCount, frame: CAT_ANATOMICAL_FRAME });
@@ -161,7 +192,9 @@ function main() {
     status: 'completed',
     verdict: null,
     verdictNote: 'Tier 2 relations are instrumented, not gated. No threshold is asserted.',
-    sourceApproximation: 'per-object axis-aligned bounding boxes from classification worldBounds',
+    sourceRepresentation: usingSurfaces
+      ? 'evaluated source surface triangles'
+      : 'APPROXIMATION: per-object axis-aligned bounding boxes from classification worldBounds; overestimates thin diagonal structures',
     frame: {
       right: [...CAT_ANATOMICAL_FRAME.right],
       anterior: [...CAT_ANATOMICAL_FRAME.anterior],
@@ -169,13 +202,14 @@ function main() {
       basis: 'measured asset axes, not convention-guessed',
     },
     inputs: {
-      classification: {
-        requestedPath: args.classification,
-        effectivePath: classificationPath,
-        sha256: sha256(classificationPath),
-        schema: source.schema,
-        admittedObjectCount: source.admittedObjectCount,
-        declaredSourceSha256: source.sourceSha256,
+      source: {
+        route: usingSurfaces ? 'exported-surfaces' : 'classification-bounding-boxes',
+        requestedPath: usingSurfaces ? args.surfaces : args.classification,
+        effectivePath: sourcePath,
+        sha256: sha256(sourcePath),
+        objectCount: source.objectCount ?? source.admittedObjectCount ?? null,
+        declaredSourceSha256: source.declaredSourceSha256 ?? source.sourceSha256 ?? null,
+        triangleCount: source.mesh.triangles.length,
       },
       envelope: {
         requestedPath: args.envelope,

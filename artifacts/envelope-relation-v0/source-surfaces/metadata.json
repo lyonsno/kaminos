@@ -1,0 +1,19 @@
+{
+  "name": "cat-bauplan",
+  "job_type": "kaminos_admitted_surface_export",
+  "job_id": "b5172ab868da",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+  "input_name": "cat-bauplan.blend",
+  "params": {
+    "source_blend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "classification": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "expected_source_sha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c"
+  },
+  "output_files": [
+    "UNBLOCK-RECEIPT.md",
+    "admitted-surfaces.json",
+    "manifest.json"
+  ],
+  "created_at": 1785988572.799853,
+  "duration_s": 0.6
+}
