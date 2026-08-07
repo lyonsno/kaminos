@@ -1,0 +1,30 @@
+{
+  "authority": "evaluated source surfaces; no source mutation",
+  "classification": {
+    "admittedObjectCount": 78,
+    "mode": "in-place",
+    "path": "in-place",
+    "sha256": null
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "exporterId": "blender-admitted-surface-triangles-v0"
+  },
+  "exportedObjectCount": 78,
+  "exporterId": "blender-admitted-surface-triangles-v0",
+  "output": {
+    "byteLength": 405099,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-011/admitted-surfaces.json",
+    "sha256": "8bd3dc0545ac50dff3e5e75751565db7d9d90b2e7f62b8b796f17b8f102e5701"
+  },
+  "schema": "kaminos.admitted-surface-export.v0",
+  "skippedSourceObjects": [],
+  "source": {
+    "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+    "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+    "sha256": "7dce5c1b785d64d811c8c604a18219f4285e334d52ce9b51d240071baca4171b"
+  },
+  "status": "completed",
+  "triangleCount": 7473,
+  "vertexCount": 3970
+}

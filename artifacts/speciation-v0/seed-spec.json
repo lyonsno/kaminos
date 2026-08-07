@@ -1,0 +1,97 @@
+{
+ "title": "Hostile-prior speciation across four seeds",
+ "subtitle": "Part-aware envelope plate, six-word prompts, identical route. Seed is a known major basin selector in this campaign, so a single-seed result cannot distinguish gestalt survival from a lucky basin. Bird (bipedal) and lizard (sprawling) priors both contradict the envelope arrangement.  RESULT: the seed-80301 bird cell does NOT replicate. Two of three additional bird seeds produce plain birds with no envelope structure.",
+ "footer": "If the folded hindquarter, dropped front and forward head persist across seeds under taxa whose priors fight them, the preservation is a property of the conditioning rather than of seed 80301.",
+ "prompts": [
+  {
+   "id": "bird",
+   "name": "\"This shape as a bird.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-bird.txt"
+  },
+  {
+   "id": "lizard",
+   "name": "\"This shape as a lizard.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-lizard.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "s80301",
+   "name": "seed 80301",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  },
+  {
+   "id": "s80302",
+   "name": "seed 80302",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  },
+  {
+   "id": "s80413",
+   "name": "seed 80413",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  },
+  {
+   "id": "s80505",
+   "name": "seed 80505",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "s80301",
+   "prompt": "bird",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bird/output.png",
+   "note": "Wings and tail feathers grown ONTO the envelope arrangement. Folded limb, mass distribution, head position all retained."
+  },
+  {
+   "plate": "s80301",
+   "prompt": "lizard",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-lizard/output.png",
+   "note": "Near-passthrough - the taxon barely moved it."
+  },
+  {
+   "plate": "s80302",
+   "prompt": "bird",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bird-s80302/output.png",
+   "note": "Plain bird, mirrored, wings spread. No envelope structure."
+  },
+  {
+   "plate": "s80302",
+   "prompt": "lizard",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-lizard-s80302/output.png",
+   "note": "Needs operator adjudication."
+  },
+  {
+   "plate": "s80413",
+   "prompt": "bird",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bird-s80413/output.png",
+   "note": "Needs operator adjudication."
+  },
+  {
+   "plate": "s80413",
+   "prompt": "lizard",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-lizard-s80413/output.png",
+   "note": "Sprawled and rotated, but segmented body and limb arrangement still read as envelope-derived. Partial."
+  },
+  {
+   "plate": "s80505",
+   "prompt": "bird",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bird-s80505/output.png",
+   "note": "Plain perched bird, upright on two legs. Gestalt absent."
+  },
+  {
+   "plate": "s80505",
+   "prompt": "lizard",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-lizard-s80505/output.png",
+   "note": "Needs operator adjudication."
+  }
+ ]
+}

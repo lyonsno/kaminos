@@ -1,0 +1,17 @@
+{
+  "name": "envelope-right-sagittal",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "3d72ca155402",
+  "input_path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png",
+  "input_name": "envelope-right-sagittal.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-lizard.txt",
+    "seed": "80413"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786079241.9676821,
+  "duration_s": 85.5
+}
