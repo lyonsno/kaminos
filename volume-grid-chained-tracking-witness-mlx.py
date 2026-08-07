@@ -190,6 +190,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                     learning_rate=args.warm_learning_rate,
                     initial_state=current_state,
                     anchor_weight=chain["anchor"],
+                    high_frequency_weight=args.high_frequency_weight,
                 )
                 ORACLE.require_lattice_identity(data["lattice"], data["digest"])
                 current_state = fit["state"]
@@ -263,6 +264,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--hop-iterations", type=int, default=150)
     parser.add_argument("--warm-learning-rate", type=float, default=0.002)
     parser.add_argument("--anchor-weight", type=float, default=0.05)
+    parser.add_argument("--high-frequency-weight", type=float, default=0.0)
     parser.add_argument("--fit-width", type=int, default=96)
     parser.add_argument("--fit-samples-per-cell", type=int, default=3)
     parser.add_argument("--fit-cameras", type=int, default=6)
