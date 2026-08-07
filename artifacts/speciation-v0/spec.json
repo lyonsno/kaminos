@@ -1,0 +1,100 @@
+{
+ "title": "Envelope elaboration language + speciation fan",
+ "subtitle": "Part-aware envelope plate, seed 80301, identical route. Envelope is layer 2 - a closed low-frequency volume, not exposed anatomy - so these prompts use elaboration language (\"this shape...\") rather than the completion language appropriate to an ecorche. Speciation fan holds the plate and seed fixed and varies only the taxon noun at six words, so the plate stays load-bearing.",
+ "footer": "Cat and bear priors already agree with a quadrupedal source; lizard (sprawling) and bird (bipedal) priors actively fight the envelope arrangement. Those are the discriminating cells.",
+ "prompts": [
+  {
+   "id": "skin",
+   "name": "\"This shape covered in skin.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt"
+  },
+  {
+   "id": "fur",
+   "name": "\"This shape covered in fur.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-fur.txt"
+  },
+  {
+   "id": "cat",
+   "name": "\"This shape as a cat.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-cat.txt"
+  },
+  {
+   "id": "bear",
+   "name": "\"This shape as a bear.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-bear.txt"
+  },
+  {
+   "id": "lizard",
+   "name": "\"This shape as a lizard.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-lizard.txt"
+  },
+  {
+   "id": "bird",
+   "name": "\"This shape as a bird.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-bird.txt"
+  },
+  {
+   "id": "creature",
+   "name": "\"This shape as an unknown creature.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-creature.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "env",
+   "name": "part-aware envelope",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "env",
+   "prompt": "skin",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/env-skin/output.png",
+   "note": "Elaboration language over layer-2 volume."
+  },
+  {
+   "plate": "env",
+   "prompt": "fur",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/env-fur/output.png",
+   "note": "Highest-fidelity adherence observed. Fur applied directly over the geometry, silhouette essentially intact."
+  },
+  {
+   "plate": "env",
+   "prompt": "cat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-cat/output.png",
+   "note": "Friendly prior."
+  },
+  {
+   "plate": "env",
+   "prompt": "bear",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bear/output.png",
+   "note": "Friendly prior. Bear head and mass, envelope arrangement retained."
+  },
+  {
+   "plate": "env",
+   "prompt": "lizard",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-lizard/output.png",
+   "note": "HOSTILE prior (sprawling). Near-passthrough - the taxon barely moved it."
+  },
+  {
+   "plate": "env",
+   "prompt": "bird",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-bird/output.png",
+   "note": "HOSTILE prior (bipedal). Grew wings and tail feathers ONTO the envelope arrangement rather than replacing it with a bird."
+  },
+  {
+   "plate": "env",
+   "prompt": "creature",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/speciation-v0/sp-creature/output.png",
+   "note": "No species prior."
+  }
+ ]
+}
