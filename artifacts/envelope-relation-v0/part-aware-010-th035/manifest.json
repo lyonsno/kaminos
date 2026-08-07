@@ -1,0 +1,57 @@
+{
+  "authority": "agent-authored part-aware analytical envelope",
+  "compilerId": "blender-part-aware-envelope-v0",
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "cameraView": "right-sagittal",
+    "compilerId": "blender-part-aware-envelope-v0",
+    "orthoScale": 70.71058654785156,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "elementCount": 4956,
+  "mesh": {
+    "byteLength": 3164540,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-010-th035/part-aware-envelope.glb",
+    "polygonCount": 80187,
+    "sha256": "e9b762b8c6b59b14603b173f005204d54d01206da146a6a6976ae3118d47bff6",
+    "vertexCount": 65908
+  },
+  "outputs": {
+    "envelope": {
+      "byteLength": 834976,
+      "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-010-th035/envelope-right-sagittal.png",
+      "sha256": "10cf1ed739f1a4bf749cf6386816c8c49a52d7d3be2644fbdca053a3fb9737d8"
+    },
+    "source": {
+      "byteLength": 826789,
+      "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-010-th035/source-right-sagittal.png",
+      "sha256": "9dd59bc8bbe2258cb9418cd9c70e1c27bb65f84f362389a15655d584528351dc"
+    }
+  },
+  "parameters": {
+    "fieldResolution": 0.27709007263183594,
+    "resolutionFraction": 0.0035,
+    "threshold": 0.35
+  },
+  "partCount": 82,
+  "plan": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-010/element-plan.json",
+    "sha256": "6dd842348b4546592bd284faef7052445097200f5cd640e0f014fea9090e1299"
+  },
+  "schema": "kaminos.part-aware-envelope.v0",
+  "sourceSurfaces": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-cat-bauplan-010/admitted-surfaces.json",
+    "sha256": "86ce898b62a66175c4015696d0306b0aeb2796a0d9f58fb0b6a8f263753bbfff"
+  },
+  "status": "completed"
+}

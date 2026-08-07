@@ -1,0 +1,28 @@
+{
+  "schema": "gpu-greenroom.command.v1",
+  "repo_root": "/private/tmp/kaminos-prometheus-envelope-relations-0805/",
+  "cwd": "/private/tmp/kaminos-prometheus-envelope-relations-0805/",
+  "env": {},
+  "output_dir": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-cat-bauplan-009",
+  "route_identity": "kaminos/admitted-surface-export-v0",
+  "argv": [
+    "/Applications/Blender.app/Contents/MacOS/Blender",
+    "--background",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-009.blend",
+    "--python",
+    "/private/tmp/kaminos-prometheus-envelope-relations-0805/tools/blender-export-admitted-surfaces.py",
+    "--",
+    "--source",
+    "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-009.blend",
+    "--classify-in-place",
+    "--out",
+    "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-cat-bauplan-009/admitted-surfaces.json",
+    "--manifest",
+    "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-cat-bauplan-009/manifest.json",
+    "--failure",
+    "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-cat-bauplan-009/failure.json",
+    "--expected-source-sha256",
+    "5c7f3c41c55e9a801e3bd1783c9c10039bd7b500191e3a4004076524e92256db"
+  ],
+  "timeout": 900
+}

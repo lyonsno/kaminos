@@ -33,7 +33,18 @@ EXPORTER_ID = "blender-admitted-surface-triangles-v0"
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
-    parser.add_argument("--classification", required=True)
+    parser.add_argument("--classification", required=False)
+    parser.add_argument(
+        "--classify-in-place",
+        action="store_true",
+        help=(
+            "Derive admission from live scene state instead of a prior classification. "
+            "Applies the same rules as the campaign classifier -- mesh, visible in every "
+            "sense, not construction paint, not a semantic-control surface -- but without "
+            "its hardcoded source SHA and per-object rescue list, so it runs on any "
+            "source revision."
+        ),
+    )
     parser.add_argument("--out", required=True)
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--failure", required=True)
@@ -56,6 +67,45 @@ def _write_json(path: str | Path, value: Any) -> None:
     target.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _admit(obj: Any) -> dict[str, Any]:
+    """Admission rules mirroring the campaign classifier, minus its source pinning.
+
+    Mesh, visible in viewport / render / view layer, not construction paint, not a
+    semantic-control surface. Muscle surfaces are admitted on their CMK role or
+    ` | Surface` suffix; anything in the authoring collection is admitted.
+    """
+    if obj.type != "MESH":
+        return {"admitted": False, "reason": "non_mesh_object"}
+    if obj.name.endswith(" | Origin Paint") or obj.name.endswith(" | Insertion Paint"):
+        return {"admitted": False, "reason": "construction_paint_surface"}
+    if obj.hide_viewport or obj.hide_render or not obj.visible_get():
+        return {"admitted": False, "reason": "hidden_source_surface"}
+
+    collections = [c.name for c in obj.users_collection]
+    full = []
+    for c in obj.users_collection:
+        parts, node = [c.name], c
+        while True:
+            parents = [p for p in bpy.data.collections if node.name in [x.name for x in p.children]]
+            if not parents:
+                break
+            node = parents[0]
+            parts.insert(0, node.name)
+        full.append("/".join(parts))
+
+    if any(p.startswith("Constructional Model/90 Semantics") for p in full):
+        return {"admitted": False, "reason": "semantic_control_surface"}
+    if "Collection" in collections:
+        return {"admitted": True, "role": "authored_mesh", "basis": "authoring_collection"}
+    if any(p.startswith("Constructional Model/20 Muscle") for p in full):
+        if obj.get("cmk_role") == "muscle_surface_provisional" or obj.name.endswith(" | Surface"):
+            return {"admitted": True, "role": "muscle_surface", "basis": "cmk_muscle_surface"}
+        return {"admitted": False, "reason": "muscle_control_object"}
+    if any(p.startswith("Constructional Model/10 Structure") for p in full):
+        return {"admitted": True, "role": "authored_mesh", "basis": "structure_collection"}
+    return {"admitted": True, "role": "authored_mesh", "basis": "visible_mesh"}
+
+
 def main() -> int:
     args = _arguments()
     Path(args.failure).unlink(missing_ok=True)
@@ -68,8 +118,32 @@ def main() -> int:
     if source_sha256 != args.expected_source_sha256:
         raise ValueError("source SHA-256 mismatch; refusing to export from an unexpected source")
 
-    classification_path = Path(args.classification).resolve()
-    classification = json.loads(classification_path.read_text(encoding="utf-8"))
+    if args.classify_in_place:
+        admitted = []
+        rejected = []
+        for obj in bpy.context.scene.objects:
+            verdict = _admit(obj)
+            if verdict["admitted"]:
+                admitted.append({"name": obj.name, "role": verdict["role"],
+                                 "admissionBasis": verdict["basis"],
+                                 "collections": [c.name for c in obj.users_collection]})
+            else:
+                rejected.append({"name": obj.name, "reason": verdict["reason"]})
+        if not admitted:
+            raise ValueError("in-place classification admitted no surfaces")
+        classification = {
+            "status": "completed",
+            "schema": "kaminos.in-place-source-classification.v0",
+            "source": {"sha256": source_sha256},
+            "admittedObjects": admitted,
+            "rejectedObjects": rejected,
+        }
+        classification_path = None
+    else:
+        if not args.classification:
+            raise ValueError("--classification is required unless --classify-in-place is set")
+        classification_path = Path(args.classification).resolve()
+        classification = json.loads(classification_path.read_text(encoding="utf-8"))
     if classification.get("status") != "completed":
         raise ValueError("classification is not completed")
     if classification.get("source", {}).get("sha256") != source_sha256:
@@ -148,8 +222,9 @@ def main() -> int:
             "sha256": source_sha256,
         },
         "classification": {
-            "path": str(classification_path),
-            "sha256": _sha256(classification_path),
+            "path": str(classification_path) if classification_path else "in-place",
+            "sha256": _sha256(classification_path) if classification_path else None,
+            "mode": "in-place" if args.classify_in_place else "prior-classification",
             "admittedObjectCount": len(admitted),
         },
         "exportedObjectCount": len(records),

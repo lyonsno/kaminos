@@ -1,0 +1,16 @@
+{
+  "name": "cat-bauplan-009",
+  "job_type": "kaminos_admitted_surface_export_inplace",
+  "job_id": "c1e97d7fed6d",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-009.blend",
+  "input_name": "cat-bauplan-009.blend",
+  "params": {
+    "expected_source_sha256": "5c7f3c41c55e9a801e3bd1783c9c10039bd7b500191e3a4004076524e92256db"
+  },
+  "output_files": [
+    "admitted-surfaces.json",
+    "manifest.json"
+  ],
+  "created_at": 1786066901.060927,
+  "duration_s": 0.5
+}
