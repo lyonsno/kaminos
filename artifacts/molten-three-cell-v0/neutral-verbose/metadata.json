@@ -1,0 +1,17 @@
+{
+  "name": "neutral-plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "724521582226",
+  "input_path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png",
+  "input_name": "neutral-plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786077316.089343,
+  "duration_s": 408.6
+}

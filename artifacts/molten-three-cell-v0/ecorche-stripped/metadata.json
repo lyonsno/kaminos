@@ -1,0 +1,17 @@
+{
+  "name": "right-sagittal",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "5c14ed27704d",
+  "input_path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/ecorche/right-sagittal.png",
+  "input_name": "right-sagittal.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-skin.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786076647.217525,
+  "duration_s": 39.5
+}

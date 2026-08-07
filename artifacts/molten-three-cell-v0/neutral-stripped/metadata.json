@@ -1,0 +1,17 @@
+{
+  "name": "neutral-plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "99b07343a764",
+  "input_path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png",
+  "input_name": "neutral-plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-skin.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786077515.0202932,
+  "duration_s": 198.9
+}

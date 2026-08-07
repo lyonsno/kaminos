@@ -1,0 +1,78 @@
+{
+ "title": "Molten queued three-cell envelope assay, run with prompt as a deliberate axis",
+ "subtitle": "Molten specified three plates at seed 80301 with all settings frozen; the assay never ran before the outage. Run here as six cells: his three plates crossed with the 90-word prompt his design implies and a matched 9-word stripped prompt. Everything else exactly as specified. Design and predictions were sealed in project coordination state before results existed.",
+ "footer": "Claim ceiling inherited from Molten unchanged: route-local representation-dependent completion tradeoff only. Added ceiling for the modification: one prompt-length contrast at two points, not a characterised curve.",
+ "prompts": [
+  {
+   "id": "verbose",
+   "name": "VERBOSE 90w (as specified)",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/exterior-only.txt"
+  },
+  {
+   "id": "stripped",
+   "name": "STRIPPED 9w (declared modification)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-skin.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "ecorche",
+   "name": "repaired ecorche (112 surfaces)",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/ecorche/right-sagittal.png"
+  },
+  {
+   "id": "envelope",
+   "name": "provisional envelope",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/right-sagittal.png"
+  },
+  {
+   "id": "neutral",
+   "name": "source-ablated (control)",
+   "path": "/private/tmp/kaminos-molten-cat-analytical-carrier-0805/artifacts/cat-bauplan-analytical-carrier-v0/provisional-envelope-seed80301-v0/source-r3/neutral-plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "ecorche",
+   "prompt": "verbose",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/ecorche-verbose/output.png",
+   "note": "Generic tabby. Matches its neutral row-mate."
+  },
+  {
+   "plate": "ecorche",
+   "prompt": "stripped",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/ecorche-stripped/output.png",
+   "note": "Lean, ribbed, sharply articulated, standing. Source pose and proportions carried."
+  },
+  {
+   "plate": "envelope",
+   "prompt": "verbose",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/envelope-verbose/output.png",
+   "note": "Generic tabby. Indistinguishable from ecorche-verbose and from the control."
+  },
+  {
+   "plate": "envelope",
+   "prompt": "stripped",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/envelope-stripped/output.png",
+   "note": "Fully skinned, softer and heavier than the ecorche cell, crouched. This plate had never adhered under any prior prompt."
+  },
+  {
+   "plate": "neutral",
+   "prompt": "verbose",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/neutral-verbose/output.png",
+   "note": "No-information baseline, verbose arm."
+  },
+  {
+   "plate": "neutral",
+   "prompt": "stripped",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/molten-three-cell-v0/neutral-stripped/output.png",
+   "note": "No-information baseline, stripped arm. Bulky upright three-quarter animal - a different pose from BOTH plate cells, so stripped-arm adherence is plate-driven not prompt-driven."
+  }
+ ]
+}
