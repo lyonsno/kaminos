@@ -1,0 +1,29 @@
+{
+  "comparison": "pixel",
+  "note": "File hashes differ on every run because the route embeds XMP/EXIF generation timestamps via --metadata. Byte comparison is not a valid drift signal for this route.",
+  "reference": {
+    "jobId": "4ce88d05f1f4",
+    "path": "artifacts/route-drift-canary-v0/historical-2026-08-04.png",
+    "sha256": "552dfe47c2a0def9b37aa0bd1ec211db98d6a1fb17ef200b805ba9f5d55e039e"
+  },
+  "replay": {
+    "jobId": "71365b9e547c",
+    "path": "artifacts/route-drift-canary-v0/replay-2026-08-07/output.png",
+    "sha256": "97dcdc4ea988b3fe591752cd0f6ceea8a30de4f96d24febbe37ba7220abdcbe6"
+  },
+  "result": {
+    "differingPixelCount": 0,
+    "drift": false,
+    "identicalPixelFraction": 1.0,
+    "maxChannelDelta": 0,
+    "meanAbsDelta": 0.0,
+    "reason": null,
+    "shape": [
+      512,
+      512,
+      3
+    ]
+  },
+  "schema": "kaminos.route-drift-canary.v0",
+  "status": "stable"
+}
