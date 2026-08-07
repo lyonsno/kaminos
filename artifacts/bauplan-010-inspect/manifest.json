@@ -1,0 +1,70 @@
+{
+  "authority": "read-only operator-source inspection render",
+  "bounds": {
+    "max": [
+      30.17658042907715,
+      14.837885856628418,
+      28.11322021484375
+    ],
+    "min": [
+      9.743470191955566,
+      -47.31019973754883,
+      -18.0848388671875
+    ]
+  },
+  "compilerId": "blender-bauplan-inspect-plate-v0",
+  "effectiveRoute": {
+    "anatomicalAnterior": [
+      0.0,
+      -1.0,
+      0.0
+    ],
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "presentationMatchedTo": "blender-cat-source-surface-closing-envelope-v0",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "resolution": [
+      900,
+      900
+    ]
+  },
+  "outputs": {
+    "anterior": {
+      "byteLength": 870369,
+      "orthoScale": 51.74182891845703,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/anterior.png",
+      "sha256": "ee5b51536187206ed4a0528f71dd1d7aa3b538b52ff62406c183b42e7b95fdfe"
+    },
+    "dorsal": {
+      "byteLength": 843408,
+      "orthoScale": 69.6058578491211,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/dorsal.png",
+      "sha256": "daf472cb70be44c159c8916d759f93d4316ea4395a1bf5893a2c059487562298"
+    },
+    "right-sagittal": {
+      "byteLength": 852830,
+      "orthoScale": 69.6058578491211,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/right-sagittal.png",
+      "sha256": "86360a5d6bd09a54b071b0aa76e28a5a121794778ae40e604e81bfa136c6a01b"
+    }
+  },
+  "schema": "kaminos.bauplan-inspect-plate.v0",
+  "source": {
+    "byteLength": 285265,
+    "mutated": false,
+    "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/source/cat-bauplan-010.blend",
+    "requestedSha256": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09",
+    "sha256After": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09",
+    "sha256Before": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09"
+  },
+  "visibleMeshCount": 94
+}

@@ -1,0 +1,3407 @@
+{
+  "schema": "kaminos.bauplan-inventory.v0",
+  "source": {
+    "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/source/cat-bauplan-010.blend",
+    "sha256Before": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09",
+    "sha256After": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09",
+    "mutated": false
+  },
+  "blenderVersion": "5.1.2",
+  "sceneName": "Scene",
+  "collectionNames": [
+    "00 Reference",
+    "10 Structure",
+    "30 Tendon + Constraint",
+    "40 Envelope",
+    "90 Semantics",
+    "Attachment Patches",
+    "Clearance Volumes",
+    "Collection",
+    "Constructional Model",
+    "Joint Frames",
+    "Segment Axes",
+    "Support Targets"
+  ],
+  "objectCount": 104,
+  "meshCount": 97,
+  "visibleMeshCount": 94,
+  "objects": [
+    {
+      "name": "SRC_PELVIS",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 386,
+      "materials": [
+        "Material"
+      ],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.266,
+        -1.99,
+        -12.303
+      ],
+      "boundsMax": [
+        24.588,
+        11.905,
+        -0.441
+      ],
+      "centroid": [
+        19.927,
+        4.958,
+        -6.372
+      ]
+    },
+    {
+      "name": "Light",
+      "type": "LIGHT",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Camera",
+      "type": "CAMERA",
+      "visible": false,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Light.002",
+      "type": "LIGHT",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Icosphere",
+      "type": "MESH",
+      "visible": false,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 42,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        22.898,
+        -2.237,
+        -5.82
+      ],
+      "boundsMax": [
+        24.839,
+        -0.196,
+        -3.779
+      ],
+      "centroid": [
+        23.868,
+        -1.216,
+        -4.8
+      ]
+    },
+    {
+      "name": "Cube",
+      "type": "MESH",
+      "visible": false,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 34,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        6.579,
+        -5.668,
+        11.021
+      ],
+      "boundsMax": [
+        7.864,
+        -4.246,
+        12.72
+      ],
+      "centroid": [
+        7.222,
+        -4.957,
+        11.871
+      ]
+    },
+    {
+      "name": "Cube.011",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 44,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.098,
+        -36.148,
+        -11.593
+      ],
+      "boundsMax": [
+        26.582,
+        -15.88,
+        4.709
+      ],
+      "centroid": [
+        19.84,
+        -26.014,
+        -3.442
+      ]
+    },
+    {
+      "name": "Cube.012",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 8,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        20.106,
+        2.724,
+        -0.061
+      ],
+      "boundsMax": [
+        20.106,
+        2.724,
+        -0.061
+      ],
+      "centroid": [
+        20.106,
+        2.724,
+        -0.061
+      ]
+    },
+    {
+      "name": "Cube.013",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 58,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        21.727,
+        -34.927,
+        -10.669
+      ],
+      "boundsMax": [
+        29.886,
+        -26.416,
+        -0.821
+      ],
+      "centroid": [
+        25.806,
+        -30.671,
+        -5.745
+      ]
+    },
+    {
+      "name": "Cube.020",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 788,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.823,
+        -47.31,
+        -18.085
+      ],
+      "boundsMax": [
+        23.818,
+        -36.56,
+        -9.611
+      ],
+      "centroid": [
+        19.82,
+        -41.935,
+        -13.848
+      ]
+    },
+    {
+      "name": "Cube.024",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.546,
+        -33.021,
+        -12.01
+      ],
+      "boundsMax": [
+        21.123,
+        -28.817,
+        -6.295
+      ],
+      "centroid": [
+        19.834,
+        -30.919,
+        -9.152
+      ]
+    },
+    {
+      "name": "Cube.025",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.659,
+        -35.385,
+        -10.681
+      ],
+      "boundsMax": [
+        20.838,
+        -31.236,
+        -6.015
+      ],
+      "centroid": [
+        19.749,
+        -33.31,
+        -8.348
+      ]
+    },
+    {
+      "name": "Cube.026",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.508,
+        -30.345,
+        -12.883
+      ],
+      "boundsMax": [
+        20.919,
+        -27.176,
+        -7.027
+      ],
+      "centroid": [
+        19.714,
+        -28.761,
+        -9.955
+      ]
+    },
+    {
+      "name": "Cube.027",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.881,
+        -36.047,
+        -9.003
+      ],
+      "boundsMax": [
+        20.599,
+        -32.992,
+        -5.387
+      ],
+      "centroid": [
+        19.74,
+        -34.52,
+        -7.195
+      ]
+    },
+    {
+      "name": "Cube.029",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.919,
+        -36.811,
+        -8.045
+      ],
+      "boundsMax": [
+        20.543,
+        -35.062,
+        -4.611
+      ],
+      "centroid": [
+        19.731,
+        -35.937,
+        -6.328
+      ]
+    },
+    {
+      "name": "Cube.030",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.751,
+        -27.579,
+        -12.825
+      ],
+      "boundsMax": [
+        20.705,
+        -25.525,
+        -8.222
+      ],
+      "centroid": [
+        19.728,
+        -26.552,
+        -10.523
+      ]
+    },
+    {
+      "name": "Cube.031",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.751,
+        -25.499,
+        -11.644
+      ],
+      "boundsMax": [
+        20.702,
+        -23.672,
+        -8.469
+      ],
+      "centroid": [
+        19.726,
+        -24.586,
+        -10.056
+      ]
+    },
+    {
+      "name": "Cube.032",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.751,
+        -23.54,
+        -11.702
+      ],
+      "boundsMax": [
+        20.702,
+        -21.714,
+        -8.527
+      ],
+      "centroid": [
+        19.726,
+        -22.627,
+        -10.115
+      ]
+    },
+    {
+      "name": "Cube.033",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.764,
+        -21.148,
+        -11.21
+      ],
+      "boundsMax": [
+        20.593,
+        -19.252,
+        -8.18
+      ],
+      "centroid": [
+        19.678,
+        -20.2,
+        -9.695
+      ]
+    },
+    {
+      "name": "Cube.034",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.763,
+        -19.563,
+        -10.786
+      ],
+      "boundsMax": [
+        20.591,
+        -17.714,
+        -7.771
+      ],
+      "centroid": [
+        19.677,
+        -18.639,
+        -9.279
+      ]
+    },
+    {
+      "name": "Cube.036",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.659,
+        -1.337,
+        -10.798
+      ],
+      "boundsMax": [
+        20.958,
+        1.152,
+        -7.067
+      ],
+      "centroid": [
+        19.809,
+        -0.092,
+        -8.933
+      ]
+    },
+    {
+      "name": "Cube.039",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.825,
+        -14.633,
+        -9.4
+      ],
+      "boundsMax": [
+        20.529,
+        -12.951,
+        -6.633
+      ],
+      "centroid": [
+        19.677,
+        -13.792,
+        -8.017
+      ]
+    },
+    {
+      "name": "Cube.040",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.833,
+        -17.758,
+        -10.261
+      ],
+      "boundsMax": [
+        20.523,
+        -16.006,
+        -7.461
+      ],
+      "centroid": [
+        19.678,
+        -16.882,
+        -8.861
+      ]
+    },
+    {
+      "name": "Cube.041",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.856,
+        -16.145,
+        -9.763
+      ],
+      "boundsMax": [
+        20.497,
+        -14.436,
+        -7.041
+      ],
+      "centroid": [
+        19.676,
+        -15.29,
+        -8.402
+      ]
+    },
+    {
+      "name": "Cube.043",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.97,
+        -38.877,
+        -8.397
+      ],
+      "boundsMax": [
+        20.495,
+        -36.33,
+        -4.89
+      ],
+      "centroid": [
+        19.732,
+        -37.603,
+        -6.644
+      ]
+    },
+    {
+      "name": "Cube.006",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.511,
+        6.658,
+        -9.526
+      ],
+      "boundsMax": [
+        20.515,
+        8.139,
+        -7.588
+      ],
+      "centroid": [
+        20.013,
+        7.398,
+        -8.557
+      ]
+    },
+    {
+      "name": "Cube.007",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.403,
+        7.504,
+        -9.077
+      ],
+      "boundsMax": [
+        20.574,
+        9.245,
+        -7.044
+      ],
+      "centroid": [
+        19.989,
+        8.374,
+        -8.06
+      ]
+    },
+    {
+      "name": "Cube.008",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.389,
+        8.419,
+        -8.33
+      ],
+      "boundsMax": [
+        20.562,
+        10.149,
+        -6.288
+      ],
+      "centroid": [
+        19.976,
+        9.284,
+        -7.309
+      ]
+    },
+    {
+      "name": "Cube.009",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.414,
+        9.237,
+        -7.523
+      ],
+      "boundsMax": [
+        20.512,
+        10.991,
+        -5.634
+      ],
+      "centroid": [
+        19.963,
+        10.114,
+        -6.578
+      ]
+    },
+    {
+      "name": "Cube.010",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.453,
+        11.299,
+        -5.15
+      ],
+      "boundsMax": [
+        20.404,
+        12.794,
+        -3.514
+      ],
+      "centroid": [
+        19.928,
+        12.047,
+        -4.332
+      ]
+    },
+    {
+      "name": "Cube.050",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.449,
+        14.012,
+        -3.949
+      ],
+      "boundsMax": [
+        20.364,
+        14.838,
+        -2.488
+      ],
+      "centroid": [
+        19.907,
+        14.425,
+        -3.218
+      ]
+    },
+    {
+      "name": "Cube.051",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.44,
+        12.99,
+        -4.22
+      ],
+      "boundsMax": [
+        20.384,
+        14.184,
+        -2.627
+      ],
+      "centroid": [
+        19.912,
+        13.587,
+        -3.423
+      ]
+    },
+    {
+      "name": "Cube.052",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.447,
+        12.148,
+        -4.611
+      ],
+      "boundsMax": [
+        20.391,
+        13.547,
+        -3.012
+      ],
+      "centroid": [
+        19.919,
+        12.848,
+        -3.811
+      ]
+    },
+    {
+      "name": "Cube.053",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.436,
+        10.647,
+        -5.952
+      ],
+      "boundsMax": [
+        20.446,
+        12.225,
+        -4.239
+      ],
+      "centroid": [
+        19.941,
+        11.436,
+        -5.096
+      ]
+    },
+    {
+      "name": "Cube.054",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.476,
+        9.954,
+        -6.63
+      ],
+      "boundsMax": [
+        20.42,
+        11.522,
+        -5.108
+      ],
+      "centroid": [
+        19.948,
+        10.738,
+        -5.869
+      ]
+    },
+    {
+      "name": "Cube.055",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.052,
+        -40.829,
+        -11.245
+      ],
+      "boundsMax": [
+        20.423,
+        -37.962,
+        -9.378
+      ],
+      "centroid": [
+        19.737,
+        -39.395,
+        -10.312
+      ]
+    },
+    {
+      "name": "Cube.056",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.041,
+        -40.749,
+        -10.17
+      ],
+      "boundsMax": [
+        20.443,
+        -37.627,
+        -8.05
+      ],
+      "centroid": [
+        19.742,
+        -39.188,
+        -9.11
+      ]
+    },
+    {
+      "name": "Cube.057",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.996,
+        -40.246,
+        -9.159
+      ],
+      "boundsMax": [
+        20.497,
+        -37.173,
+        -6.215
+      ],
+      "centroid": [
+        19.746,
+        -38.71,
+        -7.687
+      ]
+    },
+    {
+      "name": "Cube.058",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        25.371,
+        -25.092,
+        24.011
+      ],
+      "boundsMax": [
+        26.454,
+        -23.739,
+        27.043
+      ],
+      "centroid": [
+        25.913,
+        -24.416,
+        25.527
+      ]
+    },
+    {
+      "name": "Cube.059",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        24.741,
+        -25.015,
+        24.062
+      ],
+      "boundsMax": [
+        25.502,
+        -23.742,
+        27.058
+      ],
+      "centroid": [
+        25.122,
+        -24.378,
+        25.56
+      ]
+    },
+    {
+      "name": "Cube.060",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.907,
+        -25.01,
+        24.102
+      ],
+      "boundsMax": [
+        24.82,
+        -23.744,
+        27.058
+      ],
+      "centroid": [
+        24.363,
+        -24.377,
+        25.58
+      ]
+    },
+    {
+      "name": "Cube.061",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        22.998,
+        -24.991,
+        24.173
+      ],
+      "boundsMax": [
+        24.114,
+        -23.747,
+        27.058
+      ],
+      "centroid": [
+        23.556,
+        -24.369,
+        25.615
+      ]
+    },
+    {
+      "name": "Cube.046",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        25.248,
+        -26.809,
+        26.586
+      ],
+      "boundsMax": [
+        26.489,
+        -24.779,
+        27.909
+      ],
+      "centroid": [
+        25.868,
+        -25.794,
+        27.247
+      ]
+    },
+    {
+      "name": "Cube.047",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        24.738,
+        -26.793,
+        26.612
+      ],
+      "boundsMax": [
+        25.563,
+        -24.779,
+        27.907
+      ],
+      "centroid": [
+        25.151,
+        -25.786,
+        27.26
+      ]
+    },
+    {
+      "name": "Cube.048",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.827,
+        -26.777,
+        26.637
+      ],
+      "boundsMax": [
+        24.65,
+        -24.769,
+        27.903
+      ],
+      "centroid": [
+        24.239,
+        -25.773,
+        27.27
+      ]
+    },
+    {
+      "name": "Cube.049",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        22.944,
+        -26.761,
+        26.662
+      ],
+      "boundsMax": [
+        24.167,
+        -24.779,
+        27.902
+      ],
+      "centroid": [
+        23.556,
+        -25.77,
+        27.282
+      ]
+    },
+    {
+      "name": "Cube.004",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        24.499,
+        -1.365,
+        19.11
+      ],
+      "boundsMax": [
+        27.342,
+        3.381,
+        27.618
+      ],
+      "centroid": [
+        25.92,
+        1.008,
+        23.364
+      ]
+    },
+    {
+      "name": "Cube.045",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.922,
+        -1.434,
+        19.178
+      ],
+      "boundsMax": [
+        26.283,
+        3.277,
+        27.758
+      ],
+      "centroid": [
+        25.103,
+        0.921,
+        23.468
+      ]
+    },
+    {
+      "name": "Cube.066",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.359,
+        -1.405,
+        19.138
+      ],
+      "boundsMax": [
+        25.394,
+        3.166,
+        27.996
+      ],
+      "centroid": [
+        24.376,
+        0.88,
+        23.567
+      ]
+    },
+    {
+      "name": "Cube.067",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        22.729,
+        -1.387,
+        19.163
+      ],
+      "boundsMax": [
+        24.756,
+        3.06,
+        28.113
+      ],
+      "centroid": [
+        23.742,
+        0.837,
+        23.638
+      ]
+    },
+    {
+      "name": "Cube.072",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        25.86,
+        -3.517,
+        26.592
+      ],
+      "boundsMax": [
+        27.431,
+        -1.301,
+        27.914
+      ],
+      "centroid": [
+        26.645,
+        -2.409,
+        27.253
+      ]
+    },
+    {
+      "name": "Cube.073",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        25.357,
+        -3.588,
+        26.618
+      ],
+      "boundsMax": [
+        26.513,
+        -1.459,
+        27.913
+      ],
+      "centroid": [
+        25.935,
+        -2.523,
+        27.265
+      ]
+    },
+    {
+      "name": "Cube.074",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        24.455,
+        -3.727,
+        26.642
+      ],
+      "boundsMax": [
+        25.61,
+        -1.604,
+        27.912
+      ],
+      "centroid": [
+        25.033,
+        -2.665,
+        27.277
+      ]
+    },
+    {
+      "name": "Cube.075",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.586,
+        -3.861,
+        26.668
+      ],
+      "boundsMax": [
+        25.13,
+        -1.696,
+        27.91
+      ],
+      "centroid": [
+        24.358,
+        -2.779,
+        27.289
+      ]
+    },
+    {
+      "name": "Cube.076",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.433,
+        -5.459,
+        -9.504
+      ],
+      "boundsMax": [
+        21.014,
+        -3.039,
+        -5.4
+      ],
+      "centroid": [
+        19.723,
+        -4.249,
+        -7.452
+      ]
+    },
+    {
+      "name": "Cube.077",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.472,
+        -7.403,
+        -9.14
+      ],
+      "boundsMax": [
+        20.913,
+        -5.389,
+        -5.365
+      ],
+      "centroid": [
+        19.693,
+        -6.396,
+        -7.253
+      ]
+    },
+    {
+      "name": "Cube.079",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.537,
+        -9.546,
+        -9.059
+      ],
+      "boundsMax": [
+        20.823,
+        -7.686,
+        -5.477
+      ],
+      "centroid": [
+        19.68,
+        -8.616,
+        -7.268
+      ]
+    },
+    {
+      "name": "Cube.080",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.631,
+        -11.55,
+        -9.06
+      ],
+      "boundsMax": [
+        20.724,
+        -9.648,
+        -5.71
+      ],
+      "centroid": [
+        19.678,
+        -10.599,
+        -7.385
+      ]
+    },
+    {
+      "name": "Cube.078",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.791,
+        -13.182,
+        -9.084
+      ],
+      "boundsMax": [
+        20.563,
+        -11.493,
+        -6.223
+      ],
+      "centroid": [
+        19.677,
+        -12.338,
+        -7.653
+      ]
+    },
+    {
+      "name": "Cube.037",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.514,
+        -3.805,
+        -9.686
+      ],
+      "boundsMax": [
+        20.99,
+        -1.377,
+        -5.727
+      ],
+      "centroid": [
+        19.752,
+        -2.591,
+        -7.707
+      ]
+    },
+    {
+      "name": "Cube.038",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.573,
+        -2.763,
+        -10.254
+      ],
+      "boundsMax": [
+        21.003,
+        0.112,
+        -6.262
+      ],
+      "centroid": [
+        19.788,
+        -1.326,
+        -8.258
+      ]
+    },
+    {
+      "name": "Cube.035",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.719,
+        0.594,
+        -11.029
+      ],
+      "boundsMax": [
+        20.881,
+        2.518,
+        -7.662
+      ],
+      "centroid": [
+        19.8,
+        1.556,
+        -9.345
+      ]
+    },
+    {
+      "name": "Cube.083",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 8,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.632,
+        2.7,
+        -0.103
+      ],
+      "boundsMax": [
+        19.632,
+        2.7,
+        -0.103
+      ],
+      "centroid": [
+        19.632,
+        2.7,
+        -0.103
+      ]
+    },
+    {
+      "name": "Cube.042",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.116,
+        -40.555,
+        -12.292
+      ],
+      "boundsMax": [
+        20.357,
+        -38.051,
+        -10.726
+      ],
+      "centroid": [
+        19.737,
+        -39.303,
+        -11.509
+      ]
+    },
+    {
+      "name": "Cube.015",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 58,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        10.035,
+        -34.927,
+        -10.669
+      ],
+      "boundsMax": [
+        18.195,
+        -26.416,
+        -0.821
+      ],
+      "centroid": [
+        14.115,
+        -30.671,
+        -5.745
+      ]
+    },
+    {
+      "name": "Cube.016",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.464,
+        -25.092,
+        24.011
+      ],
+      "boundsMax": [
+        14.547,
+        -23.739,
+        27.043
+      ],
+      "centroid": [
+        14.006,
+        -24.416,
+        25.527
+      ]
+    },
+    {
+      "name": "Cube.022",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.416,
+        -25.015,
+        24.062
+      ],
+      "boundsMax": [
+        15.177,
+        -23.742,
+        27.058
+      ],
+      "centroid": [
+        14.797,
+        -24.378,
+        25.56
+      ]
+    },
+    {
+      "name": "Cube.023",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.098,
+        -25.01,
+        24.102
+      ],
+      "boundsMax": [
+        16.011,
+        -23.744,
+        27.055
+      ],
+      "centroid": [
+        15.555,
+        -24.377,
+        25.578
+      ]
+    },
+    {
+      "name": "Cube.044",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 16,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.804,
+        -24.99,
+        24.173
+      ],
+      "boundsMax": [
+        16.92,
+        -23.747,
+        27.043
+      ],
+      "centroid": [
+        16.362,
+        -24.368,
+        25.608
+      ]
+    },
+    {
+      "name": "Cube.062",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.429,
+        -26.809,
+        26.586
+      ],
+      "boundsMax": [
+        14.67,
+        -24.779,
+        27.906
+      ],
+      "centroid": [
+        14.05,
+        -25.794,
+        27.246
+      ]
+    },
+    {
+      "name": "Cube.063",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.356,
+        -26.793,
+        26.612
+      ],
+      "boundsMax": [
+        15.18,
+        -24.779,
+        27.905
+      ],
+      "centroid": [
+        14.768,
+        -25.786,
+        27.258
+      ]
+    },
+    {
+      "name": "Cube.064",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.268,
+        -26.777,
+        26.637
+      ],
+      "boundsMax": [
+        16.091,
+        -24.768,
+        27.906
+      ],
+      "centroid": [
+        15.679,
+        -25.773,
+        27.271
+      ]
+    },
+    {
+      "name": "Cube.065",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.751,
+        -26.761,
+        26.662
+      ],
+      "boundsMax": [
+        16.974,
+        -24.779,
+        27.902
+      ],
+      "centroid": [
+        16.363,
+        -25.77,
+        27.282
+      ]
+    },
+    {
+      "name": "Cube.068",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        12.591,
+        -1.365,
+        19.11
+      ],
+      "boundsMax": [
+        15.434,
+        3.381,
+        27.618
+      ],
+      "centroid": [
+        14.013,
+        1.008,
+        23.364
+      ]
+    },
+    {
+      "name": "Cube.069",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.65,
+        -1.437,
+        19.178
+      ],
+      "boundsMax": [
+        16.011,
+        3.277,
+        27.758
+      ],
+      "centroid": [
+        14.83,
+        0.92,
+        23.468
+      ]
+    },
+    {
+      "name": "Cube.070",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.539,
+        -1.405,
+        19.138
+      ],
+      "boundsMax": [
+        16.575,
+        3.166,
+        27.996
+      ],
+      "centroid": [
+        15.557,
+        0.88,
+        23.567
+      ]
+    },
+    {
+      "name": "Cube.071",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 20,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        15.177,
+        -1.387,
+        19.163
+      ],
+      "boundsMax": [
+        17.204,
+        3.06,
+        28.113
+      ],
+      "centroid": [
+        16.19,
+        0.837,
+        23.638
+      ]
+    },
+    {
+      "name": "Cube.081",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        12.502,
+        -3.517,
+        26.592
+      ],
+      "boundsMax": [
+        14.073,
+        -1.301,
+        27.914
+      ],
+      "centroid": [
+        13.288,
+        -2.409,
+        27.253
+      ]
+    },
+    {
+      "name": "Cube.082",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.42,
+        -3.588,
+        26.618
+      ],
+      "boundsMax": [
+        14.576,
+        -1.459,
+        27.913
+      ],
+      "centroid": [
+        13.998,
+        -2.523,
+        27.265
+      ]
+    },
+    {
+      "name": "Cube.084",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.323,
+        -3.727,
+        26.642
+      ],
+      "boundsMax": [
+        15.478,
+        -1.604,
+        27.912
+      ],
+      "centroid": [
+        14.9,
+        -2.665,
+        27.277
+      ]
+    },
+    {
+      "name": "Cube.085",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 24,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.803,
+        -3.861,
+        26.668
+      ],
+      "boundsMax": [
+        16.347,
+        -1.696,
+        27.91
+      ],
+      "centroid": [
+        15.575,
+        -2.779,
+        27.289
+      ]
+    },
+    {
+      "name": "Light.001",
+      "type": "LIGHT",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Cube.028",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 31,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        20.594,
+        -46.636,
+        -12.02
+      ],
+      "boundsMax": [
+        21.268,
+        -45.819,
+        -9.815
+      ],
+      "centroid": [
+        20.931,
+        -46.227,
+        -10.917
+      ]
+    },
+    {
+      "name": "Cube.094",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Collection"
+      ],
+      "parent": null,
+      "vertexCount": 31,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        18.266,
+        -46.689,
+        -12.116
+      ],
+      "boundsMax": [
+        19.019,
+        -45.736,
+        -9.57
+      ],
+      "centroid": [
+        18.642,
+        -46.212,
+        -10.843
+      ]
+    },
+    {
+      "name": "Empty",
+      "type": "EMPTY",
+      "visible": false,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "10 Structure"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Cube.001",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.221,
+        -6.687,
+        5.4
+      ],
+      "boundsMax": [
+        27.459,
+        4.63,
+        19.278
+      ],
+      "centroid": [
+        25.34,
+        -1.028,
+        12.339
+      ]
+    },
+    {
+      "name": "Cube.002",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 349,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        20.064,
+        -8.103,
+        -6.035
+      ],
+      "boundsMax": [
+        28.599,
+        9.762,
+        8.201
+      ],
+      "centroid": [
+        24.331,
+        0.829,
+        1.083
+      ]
+    },
+    {
+      "name": "Cube.003",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 54,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        22.761,
+        1.99,
+        15.535
+      ],
+      "boundsMax": [
+        25.495,
+        6.042,
+        19.611
+      ],
+      "centroid": [
+        24.128,
+        4.016,
+        17.573
+      ]
+    },
+    {
+      "name": "Cube.005",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        19.827,
+        -5.864,
+        4.315
+      ],
+      "boundsMax": [
+        28.073,
+        4.342,
+        18.802
+      ],
+      "centroid": [
+        23.95,
+        -0.761,
+        11.559
+      ]
+    },
+    {
+      "name": "Cube.014",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 349,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.486,
+        -35.163,
+        -4.0
+      ],
+      "boundsMax": [
+        30.177,
+        -21.904,
+        10.279
+      ],
+      "centroid": [
+        26.831,
+        -28.534,
+        3.139
+      ]
+    },
+    {
+      "name": "Cube.017",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 40,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.028,
+        -25.853,
+        8.842
+      ],
+      "boundsMax": [
+        27.79,
+        -21.525,
+        23.602
+      ],
+      "centroid": [
+        25.409,
+        -23.689,
+        16.222
+      ]
+    },
+    {
+      "name": "Cube.018",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        21.257,
+        -25.149,
+        9.078
+      ],
+      "boundsMax": [
+        27.238,
+        -23.054,
+        22.516
+      ],
+      "centroid": [
+        24.248,
+        -24.101,
+        15.797
+      ]
+    },
+    {
+      "name": "Cube.019",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 54,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        23.534,
+        -24.915,
+        22.704
+      ],
+      "boundsMax": [
+        25.988,
+        -22.87,
+        24.576
+      ],
+      "centroid": [
+        24.761,
+        -23.893,
+        23.64
+      ]
+    },
+    {
+      "name": "Cube.021",
+      "type": "MESH",
+      "visible": false,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        -7.673,
+        -22.67,
+        11.203
+      ],
+      "boundsMax": [
+        -3.155,
+        -17.366,
+        24.24
+      ],
+      "centroid": [
+        -5.414,
+        -20.018,
+        17.721
+      ]
+    },
+    {
+      "name": "Cube.086",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        12.463,
+        -6.69,
+        5.4
+      ],
+      "boundsMax": [
+        16.712,
+        4.63,
+        19.279
+      ],
+      "centroid": [
+        14.587,
+        -1.03,
+        12.34
+      ]
+    },
+    {
+      "name": "Cube.087",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 349,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        11.227,
+        -8.235,
+        -6.252
+      ],
+      "boundsMax": [
+        20.008,
+        9.78,
+        8.201
+      ],
+      "centroid": [
+        15.618,
+        0.772,
+        0.974
+      ]
+    },
+    {
+      "name": "Cube.088",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 54,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        14.438,
+        1.99,
+        15.535
+      ],
+      "boundsMax": [
+        17.172,
+        6.042,
+        19.611
+      ],
+      "centroid": [
+        15.805,
+        4.016,
+        17.573
+      ]
+    },
+    {
+      "name": "Cube.089",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        11.859,
+        -5.865,
+        4.315
+      ],
+      "boundsMax": [
+        20.096,
+        4.343,
+        18.802
+      ],
+      "centroid": [
+        15.978,
+        -0.761,
+        11.559
+      ]
+    },
+    {
+      "name": "Cube.090",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 349,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        9.743,
+        -35.163,
+        -4.0
+      ],
+      "boundsMax": [
+        16.434,
+        -21.905,
+        10.279
+      ],
+      "centroid": [
+        13.089,
+        -28.534,
+        3.139
+      ]
+    },
+    {
+      "name": "Cube.091",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 40,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        12.128,
+        -25.853,
+        8.842
+      ],
+      "boundsMax": [
+        16.89,
+        -21.525,
+        23.602
+      ],
+      "centroid": [
+        14.509,
+        -23.689,
+        16.222
+      ]
+    },
+    {
+      "name": "Cube.092",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 36,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        12.679,
+        -25.149,
+        9.078
+      ],
+      "boundsMax": [
+        18.662,
+        -23.054,
+        22.516
+      ],
+      "centroid": [
+        15.67,
+        -24.101,
+        15.797
+      ]
+    },
+    {
+      "name": "Cube.093",
+      "type": "MESH",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "parent": null,
+      "vertexCount": 54,
+      "materials": [],
+      "displayColor": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "boundsMin": [
+        13.931,
+        -24.915,
+        22.704
+      ],
+      "boundsMax": [
+        16.384,
+        -22.87,
+        24.576
+      ],
+      "centroid": [
+        15.157,
+        -23.893,
+        23.64
+      ]
+    },
+    {
+      "name": "Segment Axis",
+      "type": "EMPTY",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Segment Axes"
+      ],
+      "parent": null
+    },
+    {
+      "name": "Segment Axis.001",
+      "type": "EMPTY",
+      "visible": true,
+      "hideViewport": false,
+      "hideRender": false,
+      "collections": [
+        "Segment Axes"
+      ],
+      "parent": null
+    }
+  ]
+}

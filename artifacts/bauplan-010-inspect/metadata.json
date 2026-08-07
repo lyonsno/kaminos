@@ -1,0 +1,19 @@
+{
+  "name": "cat-bauplan-010",
+  "job_type": "kaminos_bauplan_inspect_plate_0806",
+  "job_id": "e83a4457ac43",
+  "input_path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-010-inspect/source/cat-bauplan-010.blend",
+  "input_name": "cat-bauplan-010.blend",
+  "params": {
+    "expected_source_sha256": "ddea4502ce0b2cc1d0b5fff11ca24af7c77c36eeafe4686bd5f1f361e3e0ce09",
+    "views": "right-sagittal,anterior,dorsal"
+  },
+  "output_files": [
+    "anterior.png",
+    "dorsal.png",
+    "manifest.json",
+    "right-sagittal.png"
+  ],
+  "created_at": 1786066227.670631,
+  "duration_s": 0.8
+}
