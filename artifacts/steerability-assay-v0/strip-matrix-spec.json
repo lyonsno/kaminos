@@ -1,0 +1,95 @@
+{
+ "title": "Stripped prompts on the dense ecorche - Molten prompt classes vs minimal instruction",
+ "subtitle": "Same plate (input_source_posterior), seed 80301, identical route. Top row: Molten original 111-136 word prompts with heavy quality adjectives and exclusion clauses. Bottom rows: stripped 6-9 word prompts, no quality language, no exclusions. Question: how much of the original coherence was prompt scaffolding?",
+ "footer": "Empty-prompt cell omitted: mflux rejects an empty prompt file, but Greenroom still reported exit 0 with no output image - a harness that can report success without its primary artifact.",
+ "prompts": [
+  {
+   "id": "faithful",
+   "name": "ORIGINAL faithful-skinned",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-prompts/faithful-skinned-completion.txt"
+  },
+  {
+   "id": "priorled",
+   "name": "ORIGINAL prior-led friendly",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-prompts/prior-led-friendly-completion.txt"
+  },
+  {
+   "id": "stripcomplete",
+   "name": "STRIPPED generic",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-complete.txt"
+  },
+  {
+   "id": "stripcat",
+   "name": "STRIPPED cat",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-cat.txt"
+  },
+  {
+   "id": "stripskin",
+   "name": "STRIPPED skin",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-skin.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "eco",
+   "name": "dense ecorche (posterior)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/input_source_posterior.png"
+  },
+  {
+   "id": "neut",
+   "name": "neutral gray (control)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/input_neutral_gray.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "eco",
+   "prompt": "faithful",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/faithful_source_posterior.png",
+   "note": "Molten original, 132 words."
+  },
+  {
+   "plate": "eco",
+   "prompt": "priorled",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/prior_led_source_posterior.png",
+   "note": "Molten original, 136 words."
+  },
+  {
+   "plate": "neut",
+   "prompt": "faithful",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/faithful_neutral_control.png",
+   "note": "No plate. Shows what 132 words alone produce."
+  },
+  {
+   "plate": "neut",
+   "prompt": "priorled",
+   "verdict": "control",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/prior_led_neutral_control.png",
+   "note": "No plate. Shows what 136 words alone produce."
+  },
+  {
+   "plate": "eco",
+   "prompt": "stripcomplete",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-complete/output.png",
+   "note": "6 words. Fully skinned coherent quadruped, inherits proportions and stance."
+  },
+  {
+   "plate": "eco",
+   "prompt": "stripcat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-cat/output.png",
+   "note": "6 words. Partial cutaway - fur over part, exposed muscle/bone elsewhere, retains the polygonal thoracic block."
+  },
+  {
+   "plate": "eco",
+   "prompt": "stripskin",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-skin/output.png",
+   "note": "9 words. Keeps the crouched folded forward-hunched pose rather than snapping to a standing quadruped. Skinned. Unsettling - no quality adjectives to soften it."
+  }
+ ]
+}

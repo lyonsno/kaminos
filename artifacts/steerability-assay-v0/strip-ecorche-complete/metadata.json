@@ -1,0 +1,17 @@
+{
+  "name": "input_source_posterior",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "201946cab542",
+  "input_path": "reference-plates/input_source_posterior.png",
+  "input_name": "input_source_posterior.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-complete.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786061570.807167,
+  "duration_s": 35.9
+}
