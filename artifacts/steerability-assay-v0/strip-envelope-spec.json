@@ -1,0 +1,78 @@
+{
+ "title": "Stripped prompts: envelope vs ecorche vs blank",
+ "subtitle": "6-9 word prompts. No quality adjectives, no exclusion clauses, no style cues. Seed 80301, identical route. The question: what does each plate carry when the text supplies almost nothing?",
+ "footer": "Compare against the 90-word exterior-only column in the earlier matrix, where every one of these plates collapsed to a generic cat.",
+ "prompts": [
+  {
+   "id": "complete",
+   "name": "\"Complete this into a living animal.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-complete.txt"
+  },
+  {
+   "id": "cat",
+   "name": "\"Complete this into a living cat.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-cat.txt"
+  },
+  {
+   "id": "skin",
+   "name": "\"...living animal with continuous skin.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/strip-skin.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "env",
+   "name": "part-aware envelope",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/part-aware-v0/envelope-right-sagittal.png"
+  },
+  {
+   "id": "eco",
+   "name": "dense ecorche",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/reference-plates/input_source_posterior.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "env",
+   "prompt": "complete",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-envelope-complete/output.png",
+   "note": "Holds the raised folded hindquarter, dropped front, forward head. Retains the envelope dorsal bumps as a visible ridge."
+  },
+  {
+   "plate": "env",
+   "prompt": "cat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-envelope-cat/output.png",
+   "note": "Tabby in the envelope arrangement rather than a stock crouch. Species named and it still holds the pose."
+  },
+  {
+   "plate": "env",
+   "prompt": "skin",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-envelope-skin/output.png",
+   "note": "Fully skinned continuous creature holding the exact envelope pose. This is the four-layer target output."
+  },
+  {
+   "plate": "eco",
+   "prompt": "complete",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-complete/output.png",
+   "note": "Skinned coherent quadruped, inherits proportions and stance."
+  },
+  {
+   "plate": "eco",
+   "prompt": "cat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-cat/output.png",
+   "note": "Partial cutaway - fur over part, exposed muscle/bone elsewhere, retains the polygonal thoracic block."
+  },
+  {
+   "plate": "eco",
+   "prompt": "skin",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/strip-ecorche-skin/output.png",
+   "note": "Keeps the crouched folded pose. Unsettling - no adjectives to soften it."
+  }
+ ]
+}
