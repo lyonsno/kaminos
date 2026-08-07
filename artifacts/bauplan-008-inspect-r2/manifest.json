@@ -1,0 +1,76 @@
+{
+  "authority": "read-only operator-source inspection render",
+  "bounds": {
+    "max": [
+      30.17658042907715,
+      14.837885856628418,
+      28.11322021484375
+    ],
+    "min": [
+      9.743470191955566,
+      -47.36701965332031,
+      -19.64080810546875
+    ]
+  },
+  "compilerId": "blender-bauplan-inspect-plate-v0",
+  "effectiveRoute": {
+    "anatomicalAnterior": [
+      0.0,
+      -1.0,
+      0.0
+    ],
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "presentationMatchedTo": "blender-cat-source-surface-closing-envelope-v0",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "resolution": [
+      900,
+      900
+    ]
+  },
+  "outputs": {
+    "anterior": {
+      "byteLength": 920607,
+      "orthoScale": 53.48451232910156,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-008-inspect-r2/anterior.png",
+      "sha256": "85f9b7d3fac503d5b5aea61edec73acfe7d2d45686560c1a8c8c3f823c4f380c"
+    },
+    "dorsal": {
+      "byteLength": 875688,
+      "orthoScale": 69.66949462890625,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-008-inspect-r2/dorsal.png",
+      "sha256": "1fb50da54f8cb1471bf18952014f9fe342ec16bb16e9e30483209b6bb6736f43"
+    },
+    "left-sagittal": {
+      "byteLength": 916915,
+      "orthoScale": 69.66949462890625,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-008-inspect-r2/left-sagittal.png",
+      "sha256": "7d20beeba68f81c44f545501636740a66d55a0f8e6312ee55913544c799958c2"
+    },
+    "right-sagittal": {
+      "byteLength": 901722,
+      "orthoScale": 69.66949462890625,
+      "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-008-inspect-r2/right-sagittal.png",
+      "sha256": "5fdd449082fc273c2ba72a1872e9767e93c0589cde9c0804e9a38c3dd546a098"
+    }
+  },
+  "schema": "kaminos.bauplan-inspect-plate.v0",
+  "source": {
+    "byteLength": 723873,
+    "mutated": false,
+    "path": "/private/tmp/kaminos-plateforge/artifacts/bauplan-008-inspect/source/cat-bauplan-008.blend",
+    "requestedSha256": "6a2ef6a86c08945920f05da9e3905ebdfe249918b7b77b41c41c79d6574b7eb8",
+    "sha256After": "6a2ef6a86c08945920f05da9e3905ebdfe249918b7b77b41c41c79d6574b7eb8",
+    "sha256Before": "6a2ef6a86c08945920f05da9e3905ebdfe249918b7b77b41c41c79d6574b7eb8"
+  },
+  "visibleMeshCount": 92
+}
