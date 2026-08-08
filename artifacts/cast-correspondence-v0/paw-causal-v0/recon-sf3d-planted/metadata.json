@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "sf3d",
+  "job_id": "d4111c0bb27f",
+  "input_path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-correspondence-v0/paw-causal-v0/gen-skin-planted-s80301/output.png",
+  "input_name": "output.png",
+  "params": {},
+  "output_files": [
+    "input.png",
+    "output.glb",
+    "receipt.json"
+  ],
+  "created_at": 1786177731.4325519,
+  "duration_s": 30.8
+}

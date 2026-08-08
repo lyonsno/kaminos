@@ -1,0 +1,108 @@
+{
+  "schema": "kaminos.limb-proportion-correction.v0",
+  "bodyScale": 0.301387,
+  "maxCorrectionFraction": 0.05,
+  "coherenceFloor": 0.6,
+  "corrections": {
+    "hind-left": {
+      "boneNames": [
+        "Cube.012",
+        "Cube.004",
+        "Cube.045",
+        "Cube.066",
+        "Cube.067",
+        "Cube.072",
+        "Cube.073",
+        "Cube.074",
+        "Cube.075"
+      ],
+      "insideFractionBefore": 0.375,
+      "translation": [
+        -0.00148595,
+        0.00491464,
+        0.00260414
+      ],
+      "magnitude": 0.00575702,
+      "coherence": 0.8042,
+      "earned": true,
+      "bounded": false,
+      "insideFractionAfter": 0.591667
+    },
+    "fore-left": {
+      "boneNames": [
+        "Cube.058",
+        "Cube.059",
+        "Cube.060",
+        "Cube.061",
+        "Cube.046",
+        "Cube.047",
+        "Cube.048",
+        "Cube.049",
+        "Cube.019"
+      ],
+      "insideFractionBefore": 0,
+      "translation": [
+        -0.00777403,
+        0.0076119,
+        0.0104264
+      ],
+      "magnitude": 0.0150694,
+      "coherence": 0.9518,
+      "earned": true,
+      "bounded": true,
+      "insideFractionAfter": 0
+    },
+    "fore-right": {
+      "boneNames": [
+        "Cube.016",
+        "Cube.022",
+        "Cube.023",
+        "Cube.044",
+        "Cube.062",
+        "Cube.063",
+        "Cube.064",
+        "Cube.065",
+        "Cube.093"
+      ],
+      "insideFractionBefore": 0,
+      "translation": [
+        0.00633195,
+        0.00823912,
+        0.0109137
+      ],
+      "magnitude": 0.0150694,
+      "coherence": 0.9257,
+      "earned": true,
+      "bounded": true,
+      "insideFractionAfter": 0.00740741
+    },
+    "hind-right": {
+      "boneNames": [
+        "Cube.068",
+        "Cube.069",
+        "Cube.070",
+        "Cube.071",
+        "Cube.081",
+        "Cube.082",
+        "Cube.084",
+        "Cube.085"
+      ],
+      "insideFractionBefore": 0.175,
+      "translation": [
+        0.0037859,
+        -0.00132558,
+        -0.0145257
+      ],
+      "magnitude": 0.0150694,
+      "coherence": 0.8054,
+      "earned": true,
+      "bounded": true,
+      "insideFractionAfter": 0.3875
+    }
+  },
+  "authority": "measured rest-proportion adjustment between authored skeleton and this exact cast; declared, bounded, never a pose DOF; earned only by coherent displacement",
+  "chain": {
+    "frameLinkReceiptSha256": "97060ddaf4a6db7d8c0b0cd54fd9ec88f940add568e3480642751882b0c91538",
+    "stageAReceiptSha256": "07d07c5eb5d7e3dd7aab9d849a9b35390414199fe673519d010c005f11efc294"
+  }
+}
