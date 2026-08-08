@@ -48,23 +48,22 @@
       "role": "secondary cell: separate reconstructor; runs as its own cell, never averaged with SF3D"
     }
   },
-  "pending": {
-    "recon-trellis-skin-baseline/output.glb": {
-      "greenroom_job": "8ce3dfe61650",
-      "input_sha256": "1e013cf528a2b6746798eb18af4de9461157e4d915a4722d57559d8a3809a867",
-      "role": "Trellis-cell baseline cast (honest-geometry reconstructor); freeze hash on completion"
-    },
-    "recon-trellis-skin-longneck/output.glb": {
-      "greenroom_job": "aace0378cf52",
-      "input_sha256": "85e7acac2349e0ffa3e2c098da9eb704d15cff1e640991d3919b583127e4e133",
-      "role": "Trellis-cell LONG-NECK cast; freeze hash on completion"
-    }
-  },
+  "pending": {},
   "frozen_addendum": {
     "cast-sf3d-skin-longneck.glb": {
       "sha256": "dfd42669ba7527c239157c0b590cf647505bcec76d6fed985f444fa24955f2ea",
       "source": "greenroom job d8d510626a8b (sf3d, 32.5s, exit 0), effective route sf3d run_greenroom.py --texture-resolution 1024 --remesh none --dtype float16",
       "role": "PRIMARY LONG-NECK cast for the SF3D 2x2"
+    },
+    "cast-trellis-skin-baseline.glb": {
+      "sha256": "3a7e1e9fc389cab58cc44d41f58241a966bf5e2f50fa4a13c80293c333b55e7c",
+      "source": "greenroom job 8ce3dfe61650 (trellis2mlx_fast seed 80301)",
+      "role": "Trellis-cell baseline cast for the Trellis 2x2"
+    },
+    "cast-trellis-skin-longneck.glb": {
+      "sha256": "f73c0a5227b7d932abde77741c740c75a39298f64d7023b5a8f4fdf127c11b37",
+      "source": "greenroom job aace0378cf52 (trellis2mlx_fast seed 80301)",
+      "role": "Trellis-cell LONG-NECK cast for the Trellis 2x2"
     }
   },
   "consumed_pressure": [
@@ -75,5 +74,10 @@
     "Envelope GLBs and generated images are operator/Prometheus artifacts consumed read-only; Mushfinger owns the correspondence assay and any deformation mechanics built on it.",
     "Operator six-view skeleton registration (2026-08-07) is perception evidence motivating this assay, not an input to it.",
     "Authored skeleton source: not yet frozen here; skeleton-vs-cast medial probe binds it when the exact skeleton export is named."
-  ]
+  ],
+  "receipts": {
+    "schema": "kaminos.cast-registration-receipt.v0",
+    "location": "artifacts/cast-correspondence-v0/receipts/",
+    "note": "Eight Stage A global-similarity registration receipts: full 2x2 on both reconstructors. Produced by cast-registration-core.mjs; contracts at tests/cast-registration-contracts.mjs (9/9)."
+  }
 }

@@ -1,0 +1,15 @@
+{
+  "name": "image-skin-baseline",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "8ce3dfe61650",
+  "input_path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-correspondence-v0/frozen/image-skin-baseline.png",
+  "input_name": "image-skin-baseline.png",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786157129.3543448,
+  "duration_s": 69.0
+}

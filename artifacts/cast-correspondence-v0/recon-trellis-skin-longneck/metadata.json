@@ -1,0 +1,15 @@
+{
+  "name": "image-skin-longneck-s80301",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "aace0378cf52",
+  "input_path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-correspondence-v0/frozen/image-skin-longneck-s80301.png",
+  "input_name": "image-skin-longneck-s80301.png",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786157194.226431,
+  "duration_s": 64.9
+}
