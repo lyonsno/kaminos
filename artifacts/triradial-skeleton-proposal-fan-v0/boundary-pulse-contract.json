@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.generator-follow-up-contract.v0",
+  "parentCampaign": "triradial-skeleton-proposal-fan-v0",
+  "triggeringObservation": "Armature language preserved the authored projection, animal language erased the tri-radial relation into ordinary quadrupeds, and lower-body language suppressed elaboration.",
+  "question": "Can armature language plus positive affect produce a happy completion while preserving three support chains, either implicitly or through the targeted phrase three-footed?",
+  "fixedVariables": {
+    "conditioningPlate": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+    "route": "mflux_flux2_edit_promptfile",
+    "seeds": [80301, 80302, 80413]
+  },
+  "prompts": [
+    {"id": "p09", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p09-armature-friendly-creature.txt"},
+    {"id": "p10", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p10-armature-three-footed.txt"}
+  ],
+  "claimCeiling": "This pulse can identify a better 2D proposal and a causal prompt boundary; only reconstructed multi-view inspection can establish retained 3D topology."
+}

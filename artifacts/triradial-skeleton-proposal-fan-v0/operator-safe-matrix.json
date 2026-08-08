@@ -1,0 +1,38 @@
+{
+  "title": "Tri-radial skeleton completion: positive and boundary cells",
+  "subtitle": "One authored Blender projection, matched seeds 80301 / 80302 / 80413. Effective route: FLUX.2 Klein 9B Q4, 512 x 512, 8 steps, guidance 1.0. This sheet excludes the negatively classified literal-skeleton and hostile completion cells.",
+  "plates": [
+    {"id": "s80301", "name": "Authored source - seed 80301", "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png"},
+    {"id": "s80302", "name": "Authored source - seed 80302", "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png"},
+    {"id": "s80413", "name": "Authored source - seed 80413", "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png"}
+  ],
+  "prompts": [
+    {"id": "p06", "name": "skeleton + friendly", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p06-skeleton-friendly.txt"},
+    {"id": "p07", "name": "armature + friendly animal", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p07-armature-friendly-animal.txt"},
+    {"id": "p08", "name": "friendly lower body", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p08-lower-body-friendly.txt"},
+    {"id": "p09", "name": "armature + friendly creature", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p09-armature-friendly-creature.txt"},
+    {"id": "p10", "name": "armature + happy three-footed", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p10-armature-three-footed.txt"}
+  ],
+  "cells": [
+    {"plate": "s80301", "prompt": "p06", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p06-seed80301/output.png", "verdict": "adhered", "note": "Happy completion with three independently legible limb chains; selected for provisional Trellis reconstruction."},
+    {"plate": "s80302", "prompt": "p06", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p06-seed80302/output.png", "verdict": "elaborated", "note": "Happy completion, but extra conventional limb structure weakens tri-radial correspondence."},
+    {"plate": "s80413", "prompt": "p06", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p06-seed80413/output.png", "verdict": "collapsed", "note": "Happy ordinary bilateral creature; authored tri-radial relation did not survive."},
+
+    {"plate": "s80301", "prompt": "p07", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p07-seed80301/output.png", "verdict": "collapsed", "note": "Friendly animal prior replaces the authored structure with a conventional quadruped."},
+    {"plate": "s80302", "prompt": "p07", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p07-seed80302/output.png", "verdict": "collapsed", "note": "Friendly animal prior replaces the authored structure with a conventional quadruped."},
+    {"plate": "s80413", "prompt": "p07", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p07-seed80413/output.png", "verdict": "collapsed", "note": "Friendly animal prior replaces the authored structure with a conventional quadruped."},
+
+    {"plate": "s80301", "prompt": "p08", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p08-seed80301/output.png", "verdict": "control", "note": "Source relation survives, but the model performs almost no completion."},
+    {"plate": "s80302", "prompt": "p08", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p08-seed80302/output.png", "verdict": "control", "note": "Source relation survives, but the model performs almost no completion."},
+    {"plate": "s80413", "prompt": "p08", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p08-seed80413/output.png", "verdict": "control", "note": "Source relation survives, but the model performs almost no completion."},
+
+    {"plate": "s80301", "prompt": "p09", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p09-seed80301/output.png", "verdict": "collapsed", "note": "Positive affect succeeds, but the authored tri-radial relation becomes a conventional upright biped."},
+    {"plate": "s80302", "prompt": "p09", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p09-seed80302/output.png", "verdict": "collapsed", "note": "Positive affect succeeds, but the authored tri-radial relation becomes a conventional upright biped."},
+    {"plate": "s80413", "prompt": "p09", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p09-seed80413/output.png", "verdict": "collapsed", "note": "Positive affect succeeds, but the authored tri-radial relation becomes a conventional upright biped."},
+
+    {"plate": "s80301", "prompt": "p10", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p10-seed80301/output.png", "verdict": "collapsed", "note": "Three-footed wording changes distal anatomy, but bilateral arm-and-leg roles still replace the intended support organization."},
+    {"plate": "s80302", "prompt": "p10", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p10-seed80302/output.png", "verdict": "collapsed", "note": "Three-footed wording changes distal anatomy, but bilateral arm-and-leg roles still replace the intended support organization."},
+    {"plate": "s80413", "prompt": "p10", "outputPath": "artifacts/triradial-skeleton-proposal-fan-v0/runs/p10-seed80413/output.png", "verdict": "collapsed", "note": "Three-footed wording changes distal anatomy, but bilateral arm-and-leg roles still replace the intended support organization."}
+  ],
+  "footer": "Interpretation is row-wise and prompt-wise. A 2D adhered verdict establishes only visible projection correspondence; Trellis and a witnessed multi-view viewer are required before claiming 3D support topology."
+}

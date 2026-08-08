@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8092/index.html?mesh_root=lerms-preview&mesh_path=kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/trellis/p06-seed80301/output.glb",
+  "effectiveUrl": "http://127.0.0.1:8092/index.html?mesh_root=lerms-preview&mesh_path=kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/trellis/p06-seed80301/output.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-molten-triradial-proposals-0808",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9439,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9439-78973",
+  "settleMs": 5000,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.108",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.16",
+    "WebKit-Version": "537.36 (@4744b886309d987d292e43232776d2206cccb13d)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9439/devtools/browser/898b0e93-dd00-42e9-9e85-b5337d8ade0c"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9439/devtools/browser/898b0e93-dd00-42e9-9e85-b5337d8ade0c\nTrying to load the allocator multiple times. This is *not* supported.\n[78984:15343005:0808/014733.523152:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n",
+  "ok": true,
+  "screenshot": "/private/tmp/triradial-p06-trellis-kaminos.png",
+  "screenshotBytes": 483089,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/trellis/p06-seed80301/output.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-molten-triradial-proposals-0808%2Fartifacts%2Ftriradial-skeleton-proposal-fan-v0%2Ftrellis%2Fp06-seed80301%2Foutput.glb",
+        "fileName": "output.glb",
+        "label": "P06 Seed80301",
+        "registeredObjectId": "glb-2a4ada2e-12f3-47c7-b3aa-c89096c43ee2",
+        "registeredAt": "2026-08-08T05:47:32.561Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-2a4ada2e-12f3-47c7-b3aa-c89096c43ee2",
+        "label": "P06 Seed80301",
+        "source": "/api/read?root=lerms-preview&path=kaminos-molten-triradial-proposals-0808%2Fartifacts%2Ftriradial-skeleton-proposal-fan-v0%2Ftrellis%2Fp06-seed80301%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-2192dc78-a67b-4463-971b-937c891f0cae",
+        "active": true,
+        "transform": {
+          "position": [
+            0.0013578608632087708,
+            0.000448569655418396,
+            0.001752510666847229
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.5225151633503813,
+            1.5225151633503813,
+            1.5225151633503813
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8092/api/read?root=lerms-preview&path=kaminos-molten-triradial-proposals-0808%2Fartifacts%2Ftriradial-skeleton-proposal-fan-v0%2Ftrellis%2Fp06-seed80301%2Foutput.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-molten-triradial-proposals-0808%2Fartifacts%2Ftriradial-skeleton-proposal-fan-v0%2Ftrellis%2Fp06-seed80301%2Foutput.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: P06 Seed80301"
+    }
+  }
+}
