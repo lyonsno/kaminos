@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.exact-three-reptilian-basin-probe.v1",
+  "campaignQuestion": "Is the d01-seed80301 exact-three reptilian result a steerable seed-conditioned basin or an isolated lucky conjunction?",
+  "causalSplit": {
+    "fixedSeedPromptPerturbation": "Hold seed 80301 and the complete effective route fixed while adding only concise reptilian, friendliness, and visible-pelvis pressure.",
+    "neutralPromptHitRate": "Hold the exact d01 neutral prompt and route fixed while sampling three new seeds to estimate whether the prompt itself produces further exact-three candidates."
+  },
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_t2i",
+    "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 1024,
+    "height": 1024,
+    "steps": 4,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "admission": {
+    "exactThreeContinuousLegs": true,
+    "visiblyInspectableThreeWayAttachment": true,
+    "noPlausibleHiddenFourthLeg": true,
+    "operatorUsableAesthetic": true,
+    "rapidEnvelopeAuthorability": true
+  },
+  "operatorExposure": "Inspect every output internally. Expose at most the strongest three by research value. State isolated-background status explicitly. Withhold multiplicity, infestation or corruption cues, clustered cavities, pathological growth, or ambiguous appendage proliferation.",
+  "claimCeiling": "A positive fixed-seed cell establishes prompt steerability only around seed 80301 on this exact route. A positive hit-rate cell establishes only another discrete text-to-image candidate. Neither establishes 3D topology, Trellis survival, anatomical validity, or general exact-three controllability."
+}

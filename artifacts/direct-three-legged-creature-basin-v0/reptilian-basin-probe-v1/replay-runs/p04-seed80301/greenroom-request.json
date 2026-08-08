@@ -1,0 +1,42 @@
+{
+  "job_type": "command",
+  "input_path": "",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p04-seed80301",
+  "params": {},
+  "repo_root": "/private/tmp/kaminos-molten-triradial-proposals-0808",
+  "command_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2",
+    "--prompt-file",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p04-friendly-lizard-pelvis.txt",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p04-seed80301/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "1024",
+    "--width",
+    "1024",
+    "--steps",
+    "4",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "80301",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "command_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+  "command_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "route_identity": "mflux_flux2_t2i",
+  "command_timeout": 1800.0,
+  "required_worker_capabilities": [
+    "structured-command.v1"
+  ],
+  "job_id": "afa48e969ed8",
+  "submitted_at": 1786218289.451919
+}

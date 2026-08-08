@@ -1,0 +1,17 @@
+{
+  "job_type": "mflux_flux2_t2i",
+  "input_path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p05-diverging-pelvis.txt",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/runs/p05-seed80301",
+  "params": {
+    "seed": "80301",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "job_id": "9e9d05d4b5c9",
+  "submitted_at": 1786217785.08504
+}

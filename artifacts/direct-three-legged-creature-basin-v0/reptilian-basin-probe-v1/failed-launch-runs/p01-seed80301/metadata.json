@@ -1,0 +1,20 @@
+{
+  "name": "p01-reptilian",
+  "job_type": "mflux_flux2_t2i",
+  "job_id": "fbdcc9920c73",
+  "input_path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p01-reptilian.txt",
+  "input_name": "p01-reptilian.txt",
+  "params": {
+    "seed": "80301",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [],
+  "created_at": 1786217789.179749,
+  "duration_s": 3.3
+}

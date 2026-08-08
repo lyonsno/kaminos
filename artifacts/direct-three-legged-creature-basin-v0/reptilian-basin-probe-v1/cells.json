@@ -1,0 +1,74 @@
+[
+  {
+    "id": "p01-seed80301",
+    "arm": "fixed-seed-prompt-perturbation",
+    "promptId": "p01-reptilian",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p01-reptilian.txt",
+    "seed": 80301,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p01-seed80301/output.png",
+    "jobId": "1cde125d4ee8"
+  },
+  {
+    "id": "p02-seed80301",
+    "arm": "fixed-seed-prompt-perturbation",
+    "promptId": "p02-friendly-reptilian",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p02-friendly-reptilian.txt",
+    "seed": 80301,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p02-seed80301/output.png",
+    "jobId": "c5b8557de571"
+  },
+  {
+    "id": "p03-seed80301",
+    "arm": "fixed-seed-prompt-perturbation",
+    "promptId": "p03-lizard-pelvis",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p03-lizard-pelvis.txt",
+    "seed": 80301,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p03-seed80301/output.png",
+    "jobId": "6f2fa933d70d"
+  },
+  {
+    "id": "p04-seed80301",
+    "arm": "fixed-seed-prompt-perturbation",
+    "promptId": "p04-friendly-lizard-pelvis",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p04-friendly-lizard-pelvis.txt",
+    "seed": 80301,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p04-seed80301/output.png",
+    "jobId": "afa48e969ed8"
+  },
+  {
+    "id": "p05-seed80301",
+    "arm": "fixed-seed-prompt-perturbation",
+    "promptId": "p05-diverging-pelvis",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p05-diverging-pelvis.txt",
+    "seed": 80301,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p05-seed80301/output.png",
+    "jobId": "47e573ee2d67"
+  },
+  {
+    "id": "control-seed80501",
+    "arm": "neutral-prompt-hit-rate",
+    "promptId": "control-neutral",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/control-neutral.txt",
+    "seed": 80501,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/control-seed80501/output.png",
+    "jobId": "faae4deb4de4"
+  },
+  {
+    "id": "control-seed80502",
+    "arm": "neutral-prompt-hit-rate",
+    "promptId": "control-neutral",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/control-neutral.txt",
+    "seed": 80502,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/control-seed80502/output.png",
+    "jobId": "669e27b87c9b"
+  },
+  {
+    "id": "control-seed80503",
+    "arm": "neutral-prompt-hit-rate",
+    "promptId": "control-neutral",
+    "promptPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/control-neutral.txt",
+    "seed": 80503,
+    "outputPath": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/control-seed80503/output.png",
+    "jobId": "ed86057756b8"
+  }
+]

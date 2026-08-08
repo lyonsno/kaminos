@@ -1,0 +1,128 @@
+{
+  "schema": "kaminos.exact-three-reptilian-basin-classification.v1",
+  "inspectedBy": "agent-visual-inspection",
+  "inspectedAt": "2026-08-08",
+  "summary": {
+    "fixedSeedExactThree": "1/5",
+    "freshSeedNeutralPromptExactThree": "2/3",
+    "allKnownNeutralPromptExactThree": "3/6",
+    "historicalNeutralPromptSource": "../text-only-classification.json",
+    "historicalNeutralPromptCells": [
+      {"id": "d01-seed80301", "exactThreeLegs": true},
+      {"id": "d01-seed80302", "exactThreeLegs": false},
+      {"id": "d01-seed80413", "exactThreeLegs": false}
+    ],
+    "operatorAestheticStatus": "unreviewed",
+    "selectedCells": [
+      "p05-seed80301",
+      "control-seed80502",
+      "control-seed80503"
+    ]
+  },
+  "cells": [
+    {
+      "id": "p01-seed80301",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": false,
+      "exactThreeContinuousLegs": false,
+      "visibleLegCount": 4,
+      "visiblyInspectableThreeWayAttachment": false,
+      "noPlausibleHiddenFourthLeg": false,
+      "rapidEnvelopeAuthorability": false,
+      "disposition": "reject",
+      "note": "Reptilian phenotype survives, but the image contains two foreground legs and two distinct rear legs."
+    },
+    {
+      "id": "p02-seed80301",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": true,
+      "exactThreeContinuousLegs": false,
+      "visibleLegCount": 2,
+      "visiblyInspectableThreeWayAttachment": false,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": false,
+      "disposition": "reject",
+      "note": "Friendly pressure produces a pleasant biped with arms and a tail; it overwrites the requested leg topology."
+    },
+    {
+      "id": "p03-seed80301",
+      "safeForOperator": false,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": false,
+      "exactThreeContinuousLegs": false,
+      "visibleLegCount": 2,
+      "visiblyInspectableThreeWayAttachment": false,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": false,
+      "disposition": "withhold",
+      "note": "Explicit pelvis wording literalizes the named region into exposed anatomy with clustered cavities; it does not produce a third leg."
+    },
+    {
+      "id": "p04-seed80301",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": true,
+      "exactThreeContinuousLegs": false,
+      "visibleLegCount": 2,
+      "visiblyInspectableThreeWayAttachment": false,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": false,
+      "disposition": "reject",
+      "note": "Friendly pressure softens the literalization but still yields an ordinary two-legged character with arms."
+    },
+    {
+      "id": "p05-seed80301",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": true,
+      "exactThreeContinuousLegs": true,
+      "visibleLegCount": 3,
+      "visiblyInspectableThreeWayAttachment": true,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": true,
+      "disposition": "select",
+      "note": "Relational wording produces two lateral legs and one central leg diverging visibly from the lower torso while preserving the reptilian seed phenotype."
+    },
+    {
+      "id": "control-seed80501",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": false,
+      "exactThreeContinuousLegs": false,
+      "visibleLegCount": 4,
+      "visiblyInspectableThreeWayAttachment": false,
+      "noPlausibleHiddenFourthLeg": false,
+      "rapidEnvelopeAuthorability": false,
+      "disposition": "reject",
+      "note": "The neutral prompt yields four legs plus two arms."
+    },
+    {
+      "id": "control-seed80502",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": true,
+      "exactThreeContinuousLegs": true,
+      "visibleLegCount": 3,
+      "visiblyInspectableThreeWayAttachment": true,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": true,
+      "disposition": "select",
+      "note": "A fresh seed yields a coherent three-legged primate-like body with a distinct central rear leg and no plausible fourth."
+    },
+    {
+      "id": "control-seed80503",
+      "safeForOperator": true,
+      "isolatedBackground": true,
+      "agentClassifiedAestheticallyUsable": true,
+      "exactThreeContinuousLegs": true,
+      "visibleLegCount": 3,
+      "visiblyInspectableThreeWayAttachment": true,
+      "noPlausibleHiddenFourthLeg": true,
+      "rapidEnvelopeAuthorability": true,
+      "disposition": "select",
+      "note": "The strongest authoring candidate: three unambiguous load-bearing legs, no arms, a compact body, and a clean isolated silhouette."
+    }
+  ]
+}

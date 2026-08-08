@@ -1,0 +1,28 @@
+{
+  "job_id": "6b9f06be6c66",
+  "status": "done",
+  "job_type": "mflux_flux2_t2i",
+  "input_path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/control-neutral.txt",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/runs/control-seed80501",
+  "params": {
+    "seed": "80501",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "submitted_at": 1786217785.185101,
+  "started_at": 1786217797.277442,
+  "finished_at": 1786217799.274186,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2 --prompt-file artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/control-neutral.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/runs/control-seed80501/output.png --metadata --model flux2-klein-9b --quantize 4 --height 1024 --width 1024 --steps 4 --guidance 1.0 --seed 80501 --mlx-cache-limit-gb 48",
+  "pid": 12729,
+  "warnings": [
+    "volatile_output"
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "job_id": "1cde125d4ee8",
+  "job_type": "command",
+  "status": "done",
+  "input_path": "",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p01-seed80301",
+  "repo_root": "/private/tmp/kaminos-molten-triradial-proposals-0808",
+  "requested_route": "mflux_flux2_t2i",
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2 --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p01-reptilian.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p01-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 1024 --width 1024 --steps 4 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+  "effective_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2",
+    "--prompt-file",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/prompts/p01-reptilian.txt",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p01-seed80301/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "1024",
+    "--width",
+    "1024",
+    "--steps",
+    "4",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "80301",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+  "effective_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {},
+  "effective_timeout": 1800.0,
+  "ignored_params": null,
+  "started_at": 1786218290.978679,
+  "finished_at": 1786218325.877507,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/1cde125d4ee8/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/1cde125d4ee8/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/1cde125d4ee8/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 12729,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

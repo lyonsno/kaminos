@@ -1,0 +1,14 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "c5b8557de571",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786218359.243177,
+  "duration_s": 33.4
+}

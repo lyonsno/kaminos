@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.generator-launch-diagnosis.v1",
+  "invalidLaunch": {
+    "jobIds": [
+      "fbdcc9920c73",
+      "39fb7fb8cdc0",
+      "aa8c07a4d7e4",
+      "192547a309da",
+      "9e9d05d4b5c9",
+      "6b9f06be6c66",
+      "fe1bf59b1d31",
+      "6c583b6efb7c"
+    ],
+    "failurePhase": "input-resolution",
+    "observedStdout": "Prompt file does not exist",
+    "cause": "The typed job route evaluated a relative prompt path from /Users/noahlyons/dev/mlx-openai-server instead of the Kaminos worktree.",
+    "falseClosure": "The runner returned exit code 0 and Greenroom marked the jobs done even though no output image existed.",
+    "rawEvidenceRoot": "failed-launch-runs",
+    "submissionFile": "failed-launch-submissions.jsonl",
+    "evidenceAuthority": "none"
+  },
+  "validReplay": {
+    "submissionFile": "replay-submissions.jsonl",
+    "inputPaths": "absolute",
+    "routeIdentity": "mflux_flux2_t2i",
+    "transport": "gpu-greenroom.command.v1",
+    "requiredWorkerCapability": "structured-command.v1",
+    "outputRequirement": "Every cell has a nonempty output.png and an effective-route receipt."
+  }
+}
