@@ -21,6 +21,17 @@
         "insideFraction": 0.919355
       },
       {
+        "coverage": {
+          "coverage": 0.978498,
+          "skeletonReach": 0.371252,
+          "castSpan": 0.37941,
+          "direction": [
+            0.167888,
+            -0.985016,
+            0.0394512
+          ],
+          "coneCosine": 0.85
+        },
         "group": "forelimb-left",
         "boneCount": 12,
         "refinable": true,
@@ -42,6 +53,17 @@
         "meanOutsideAfter": 0.00732015
       },
       {
+        "coverage": {
+          "coverage": 1.02723,
+          "skeletonReach": 0.478764,
+          "castSpan": 0.466073,
+          "direction": [
+            0.0302102,
+            -0.993406,
+            0.1106
+          ],
+          "coneCosine": 0.85
+        },
         "group": "forelimb-right",
         "boneCount": 13,
         "refinable": true,
@@ -63,6 +85,17 @@
         "meanOutsideAfter": 0.00313279
       },
       {
+        "coverage": {
+          "coverage": 0.107586,
+          "skeletonReach": 0.0985936,
+          "castSpan": 0.916421,
+          "direction": [
+            0.995441,
+            -0.0585333,
+            -0.0753014
+          ],
+          "coneCosine": 0.85
+        },
         "group": "head",
         "boneCount": 3,
         "refinable": true,
@@ -84,6 +117,17 @@
         "meanOutsideAfter": 0.00094117
       },
       {
+        "coverage": {
+          "coverage": 1.03592,
+          "skeletonReach": 0.507433,
+          "castSpan": 0.489838,
+          "direction": [
+            -0.0284819,
+            -0.982638,
+            -0.183332
+          ],
+          "coneCosine": 0.85
+        },
         "group": "hindlimb-left",
         "boneCount": 14,
         "refinable": true,
@@ -105,6 +149,17 @@
         "meanOutsideAfter": 0.00400401
       },
       {
+        "coverage": {
+          "coverage": 1.03293,
+          "skeletonReach": 0.414107,
+          "castSpan": 0.400904,
+          "direction": [
+            -0.150155,
+            -0.98502,
+            -0.0847934
+          ],
+          "coneCosine": 0.85
+        },
         "group": "hindlimb-right",
         "boneCount": 13,
         "refinable": true,
@@ -126,6 +181,17 @@
         "meanOutsideAfter": 0.00270821
       },
       {
+        "coverage": {
+          "coverage": 0.290844,
+          "skeletonReach": 0.146081,
+          "castSpan": 0.502266,
+          "direction": [
+            0.208896,
+            -0.971295,
+            -0.113794
+          ],
+          "coneCosine": 0.85
+        },
         "group": "tail",
         "boneCount": 10,
         "refinable": true,
@@ -151,6 +217,6 @@
     "samplesPerBone": 20
   },
   "jointModel": "v1 limb-level: one bounded rotation per limb instance about its attachment pivot; no joint translation; no scale; chain-level (knee/ankle) deferred",
-  "generatedAt": "2026-08-08T04:37:55.733Z",
-  "receiptSha256": "588fe24afcc90d40483865db21b5450849bd68f6eff85e4dfa9410ef6ea2d4db"
+  "generatedAt": "2026-08-08T04:57:57.734Z",
+  "receiptSha256": "1906978970a5f38f59cfacceb04a36e3dd3dcb6cf4ce6bb5cec4669db2e2647b"
 }

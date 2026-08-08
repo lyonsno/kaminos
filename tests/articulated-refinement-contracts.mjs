@@ -141,6 +141,22 @@ test('deriveRefinementGroups composes manifest classes with spatial instances (r
   assert.equal(covered, bones.length, 'every bone belongs to exactly one group');
 });
 
+test('coverage leg detects an underspanning chain that containment cannot see', async () => {
+  const { measureChainCoverage } = await import('../articulated-refinement-core.mjs');
+  const pivot = [0, 2, 0];
+  // Long leg volume extending to y=-3.
+  const legCast = boxMesh([0, -0.5, 0], [0.8, 2.7, 0.8]);
+  // Short chain reaching only y=-0.5: fully contained, underspanning.
+  const shortChain = octa([0, 0, 0], 0.5);
+  const short = measureChainCoverage({ samples: shortChain.positions.slice(), cast: legCast, pivot });
+  assert.ok(short.coverage !== null, 'coverage must compute');
+  assert.ok(short.coverage < 0.65, `short chain must underspan, got ${short.coverage}`);
+  // Full-length chain reaching y=-2.8: near-full coverage.
+  const longChain = octa([0, -2.3, 0], 0.5);
+  const full = measureChainCoverage({ samples: longChain.positions.slice(), cast: legCast, pivot });
+  assert.ok(full.coverage > 0.85, `full chain must cover, got ${full.coverage}`);
+});
+
 test('receipt is deterministic, wall-clock-free, and declares the joint model', async () => {
   const pivotCast = boxMesh([0, 0, 0], [2, 2, 2]);
   const bones = [{ name: 'SRC_PELVIS', geometry: octa([0, 0, 0], 0.4) }];

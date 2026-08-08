@@ -275,6 +275,53 @@ export function solveGroupRotation({
   };
 }
 
+// --- cast-side coverage (the one-sided-containment complement) ------------------
+
+// Containment can never detect cast-not-filled: a too-short chain tucking
+// fully inside the cast tail scores perfect containment while underspanning
+// (operator source correction: the authored tail is unfinished-short).
+// Directional-span coverage v1: from the group's pivot, along the refined
+// chain's principal direction, compare the skeleton's reach against the
+// cast's own extent within a cone about that direction.
+export function measureChainCoverage({ samples, cast, pivot, coneCosine = 0.85 }) {
+  const count = samples.length / 3;
+  // Chain direction: pivot -> farthest sample.
+  let farthest = 0;
+  let direction = [0, 0, 1];
+  for (let i = 0; i < count; i += 1) {
+    const d = [0, 1, 2].map(k => samples[i * 3 + k] - pivot[k]);
+    const len = Math.hypot(...d);
+    if (len > farthest) { farthest = len; direction = d.map(v => v / len); }
+  }
+  if (farthest < 1e-12) return { coverage: null, reason: 'degenerate-chain' };
+  // Skeleton reach: max projection of samples on direction.
+  let skeletonReach = 0;
+  for (let i = 0; i < count; i += 1) {
+    const proj = [0, 1, 2].reduce((a, k) => a + (samples[i * 3 + k] - pivot[k]) * direction[k], 0);
+    skeletonReach = Math.max(skeletonReach, proj);
+  }
+  // Cast span: max projection of cast vertices lying within the cone.
+  let castSpan = 0;
+  const { positions } = cast;
+  for (let i = 0; i < positions.length; i += 3) {
+    const d = [0, 1, 2].map(k => positions[i + k] - pivot[k]);
+    const len = Math.hypot(...d);
+    if (len < 1e-12) continue;
+    const cos = [0, 1, 2].reduce((a, k) => a + d[k] * direction[k], 0) / len;
+    if (cos < coneCosine) continue;
+    const proj = len * cos;
+    castSpan = Math.max(castSpan, proj);
+  }
+  if (castSpan < 1e-12) return { coverage: null, reason: 'no-cast-support-in-cone' };
+  return {
+    coverage: Number((skeletonReach / castSpan).toPrecision(6)),
+    skeletonReach: Number(skeletonReach.toPrecision(6)),
+    castSpan: Number(castSpan.toPrecision(6)),
+    direction: direction.map(v => Number(v.toPrecision(6))),
+    coneCosine,
+  };
+}
+
 // --- full refinement pass ------------------------------------------------------
 
 export function refineArticulated({
@@ -324,7 +371,20 @@ export function refineArticulated({
       samples, cast, castIndex, pivot: pivotCast,
       maxAngleRad: maxAngleDeg * (Math.PI / 180),
     });
+    // Coverage measured on the REFINED samples: rotate about the pivot first.
+    const refinedSamples = new Float64Array(samples.length);
+    for (let i = 0; i < samples.length; i += 3) {
+      const x = samples[i] - pivotCast[0];
+      const y = samples[i + 1] - pivotCast[1];
+      const z = samples[i + 2] - pivotCast[2];
+      for (let r = 0; r < 3; r += 1) {
+        refinedSamples[i + r] = solved.rotation[r][0] * x + solved.rotation[r][1] * y
+          + solved.rotation[r][2] * z + pivotCast[r];
+      }
+    }
+    const coverage = measureChainCoverage({ samples: refinedSamples, cast, pivot: pivotCast });
     results.push({
+      coverage,
       group: group.name,
       boneCount: group.bones.length,
       refinable: true,
