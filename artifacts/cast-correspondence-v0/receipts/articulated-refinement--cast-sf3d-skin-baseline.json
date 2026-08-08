@@ -1,0 +1,156 @@
+{
+  "schema": "kaminos.articulated-refinement-receipt.v0",
+  "status": "completed",
+  "inputs": {
+    "skeletonSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+    "castSha256": "bcc51bb15fd7e4fae8e6c67990416a7f7f09d3b9b9b39a4ae793ca3c5b5770f2",
+    "castLabel": "cast-sf3d-skin-baseline",
+    "manifestSha256": "5ca8341685db9650e09d88ce75c7aa75906e171483561ca399c02b9eda6036dd"
+  },
+  "manifestAuthority": "provisional-spatial-derivation; operator sign pending",
+  "chain": {
+    "frameLinkReceiptSha256": "97060ddaf4a6db7d8c0b0cd54fd9ec88f940add568e3480642751882b0c91538",
+    "stageAReceiptSha256": "475c7e7e8e90d59bfa5032a4bb74968179f2f51b73c727c66c15167a2d5fff82"
+  },
+  "refinement": {
+    "groups": [
+      {
+        "group": "core",
+        "boneCount": 31,
+        "refinable": false,
+        "insideFraction": 0.919355
+      },
+      {
+        "group": "forelimb-left",
+        "boneCount": 12,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.146699,
+          -0.0121131,
+          -0.127497
+        ],
+        "correctionAngleDeg": 25,
+        "correctionAxis": [
+          -0.186229,
+          0.979542,
+          0.0762678
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.483333,
+        "insideFractionAfter": 0.483333,
+        "meanOutsideBefore": 0.00814119,
+        "meanOutsideAfter": 0.00732015
+      },
+      {
+        "group": "forelimb-right",
+        "boneCount": 13,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.118189,
+          0.0800003,
+          -0.0088859
+        ],
+        "correctionAngleDeg": 25,
+        "correctionAxis": [
+          -0.145104,
+          0.988043,
+          -0.0521037
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.446154,
+        "insideFractionAfter": 0.588462,
+        "meanOutsideBefore": 0.00634195,
+        "meanOutsideAfter": 0.00313279
+      },
+      {
+        "group": "head",
+        "boneCount": 3,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.409824,
+          0.253001,
+          -0.0393863
+        ],
+        "correctionAngleDeg": 18.5444,
+        "correctionAxis": [
+          -0.22277,
+          0.394986,
+          -0.891269
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.633333,
+        "insideFractionAfter": 0.716667,
+        "meanOutsideBefore": 0.00187257,
+        "meanOutsideAfter": 0.00094117
+      },
+      {
+        "group": "hindlimb-left",
+        "boneCount": 14,
+        "refinable": true,
+        "pivotCastFrame": [
+          0.260124,
+          0.122954,
+          -0.0354377
+        ],
+        "correctionAngleDeg": 3.61988,
+        "correctionAxis": [
+          0.206121,
+          0.869658,
+          -0.448563
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.526923,
+        "insideFractionAfter": 0.596154,
+        "meanOutsideBefore": 0.00438692,
+        "meanOutsideAfter": 0.00400401
+      },
+      {
+        "group": "hindlimb-right",
+        "boneCount": 13,
+        "refinable": true,
+        "pivotCastFrame": [
+          0.266926,
+          0.0150145,
+          0.0845285
+        ],
+        "correctionAngleDeg": 6.11404,
+        "correctionAxis": [
+          0.102825,
+          -0.844574,
+          -0.525473
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.5375,
+        "insideFractionAfter": 0.620833,
+        "meanOutsideBefore": 0.00329654,
+        "meanOutsideAfter": 0.00270821
+      },
+      {
+        "group": "tail",
+        "boneCount": 10,
+        "refinable": true,
+        "pivotCastFrame": [
+          0.400428,
+          0.164067,
+          0.0420201
+        ],
+        "correctionAngleDeg": 25,
+        "correctionAxis": [
+          0.298816,
+          -0.445685,
+          -0.843845
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.295,
+        "insideFractionAfter": 0.935,
+        "meanOutsideBefore": 0.0135583,
+        "meanOutsideAfter": 0.000154899
+      }
+    ],
+    "maxAngleDeg": 25,
+    "samplesPerBone": 20
+  },
+  "jointModel": "v1 limb-level: one bounded rotation per limb instance about its attachment pivot; no joint translation; no scale; chain-level (knee/ankle) deferred",
+  "generatedAt": "2026-08-08T04:37:55.733Z",
+  "receiptSha256": "588fe24afcc90d40483865db21b5450849bd68f6eff85e4dfa9410ef6ea2d4db"
+}
