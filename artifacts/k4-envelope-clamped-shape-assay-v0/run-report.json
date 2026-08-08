@@ -1,0 +1,48 @@
+{
+  "schema": "kaminos.k4-envelope-clamped-shape-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "claimCeiling": "metric-mechanism-only",
+  "shapeAuthority": "envelope-fit-derived-provisional",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "outputs": {
+    "shapeAssayResult": {
+      "path": "shape-assay-result.json",
+      "sha256": "df29bb724c8c9c1621cfecd93e1ec3cca2ef96b47a580fb2d7d4bed37c02c877"
+    },
+    "shapedCarrier": {
+      "path": "shaped-carrier.json",
+      "sha256": "e023a83da752f6a87691af9c0c4631e43af1ec0a29bc3b89932854acdf57f64d"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "shape-assay-result-written",
+    "shapeAssayResultSha256": "df29bb724c8c9c1621cfecd93e1ec3cca2ef96b47a580fb2d7d4bed37c02c877",
+    "shapedCarrierSha256": "6675603e39060332f1b67f55c08fc440718d969e089d04e6c2db20cc4d7dd47c",
+    "rowIds": [
+      "reference",
+      "envelope-clamped"
+    ]
+  }
+}

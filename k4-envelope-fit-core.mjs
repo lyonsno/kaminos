@@ -261,6 +261,230 @@ function applySimilarity(transform, point) {
     transform.translation[row]);
 }
 
+const SHAPING_EPSILON = 1e-10;
+
+function signedTetVolume(a, b, c, d) {
+  const ab = sub(b, a);
+  const ac = sub(c, a);
+  const ad = sub(d, a);
+  return dot(ab, cross(ac, ad)) / 6;
+}
+
+function envelopeRayCrossing(axisPoint, direction, mesh, maximumDistance) {
+  // March outward from an inside axis point until the signed distance turns
+  // positive, then bisect the crossing.
+  let low = 0;
+  let high = null;
+  const stepCount = 24;
+  for (let step = 1; step <= stepCount; step += 1) {
+    const t = (maximumDistance * step) / stepCount;
+    const probe = [
+      axisPoint[0] + direction[0] * t,
+      axisPoint[1] + direction[1] * t,
+      axisPoint[2] + direction[2] * t,
+    ];
+    if (signedEnvelopeDistance(probe, mesh).inside) low = t;
+    else { high = t; break; }
+  }
+  if (high === null) return null;
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const middle = (low + high) / 2;
+    const probe = [
+      axisPoint[0] + direction[0] * middle,
+      axisPoint[1] + direction[1] * middle,
+      axisPoint[2] + direction[2] * middle,
+    ];
+    if (signedEnvelopeDistance(probe, mesh).inside) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+export function applyEnvelopeClampedSectionShaping({
+  frameReceipt,
+  envelopeMesh,
+  solverCarrier,
+  config,
+}) {
+  if (frameReceipt?.schema !== FRAME_RECEIPT_SCHEMA) {
+    throw new Error(`envelope-clamped shaping requires ${FRAME_RECEIPT_SCHEMA}`);
+  }
+  const { receiptSha256: recordedReceiptSha256, ...receiptDomain } = frameReceipt;
+  if (recordedReceiptSha256 !== sha256(canonicalJson(receiptDomain))) {
+    throw new Error('envelope-clamped shaping frame receipt identity mismatch');
+  }
+  if (!solverCarrier || solverCarrier.schema !== SOLVER_CARRIER_SCHEMA) {
+    throw new Error('envelope-clamped shaping requires the admitted solver carrier schema');
+  }
+  const { identity: _identity, ...carrierDomain } = solverCarrier;
+  if (solverCarrier.identity?.sha256 !==
+      hashMuscleCompartmentRingCageCanonicalJson(carrierDomain)) {
+    throw new Error('envelope-clamped shaping carrier identity mismatch');
+  }
+  if (!config || typeof config !== 'object' || Array.isArray(config) ||
+      JSON.stringify(Object.keys(config).sort()) !==
+        JSON.stringify(['marginFraction', 'maximumGrowth', 'minimumShrink']) ||
+      !Number.isFinite(config.marginFraction) ||
+      !(config.marginFraction > 0 && config.marginFraction < 1) ||
+      !Number.isFinite(config.maximumGrowth) || !(config.maximumGrowth >= 1) ||
+      !Number.isFinite(config.minimumShrink) ||
+      !(config.minimumShrink > 0 && config.minimumShrink < 1)) {
+    throw new Error(
+      'envelope-clamped shaping config requires marginFraction in (0,1), ' +
+      'maximumGrowth >= 1, minimumShrink in (0,1)',
+    );
+  }
+  const transform = frameReceipt.sourceToEnvelope.transform;
+  const outputCarrier = structuredClone(solverCarrier);
+  const sectionReceipts = [];
+  for (const cage of outputCarrier.cages) {
+    const fixedNodeIds = new Set((cage.manifest.constraints?.boundaryMasks || [])
+      .filter(mask => mask.fixed === true)
+      .map(mask => mask.nodeId));
+    const nodesBySection = new Map();
+    for (const node of cage.manifest.nodes) {
+      const match = /^(.*:section:\d+)/.exec(node.id);
+      if (!match) continue;
+      const rows = nodesBySection.get(match[1]) || [];
+      rows.push(node);
+      nodesBySection.set(match[1], rows);
+    }
+    for (const [sectionId, nodes] of [...nodesBySection.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))) {
+      const axisNode = nodes.find(node => node.id.endsWith(':axis'));
+      if (!axisNode) throw new Error(`envelope-clamped shaping lacks axis for ${sectionId}`);
+      if (nodes.some(node => fixedNodeIds.has(node.id))) {
+        sectionReceipts.push({
+          constructionId: cage.constructionId,
+          sectionId,
+          status: 'fixed-section',
+          nodeReceipts: [],
+        });
+        continue;
+      }
+      const axisEnvelope = applySimilarity(transform, axisNode.currentPosition);
+      if (!signedEnvelopeDistance(axisEnvelope, envelopeMesh).inside) {
+        sectionReceipts.push({
+          constructionId: cage.constructionId,
+          sectionId,
+          status: 'axis-outside-envelope',
+          nodeReceipts: [],
+        });
+        continue;
+      }
+      const nodeReceipts = [];
+      for (const node of nodes) {
+        if (node === axisNode) continue;
+        const radial = sub(node.currentPosition, axisNode.currentPosition);
+        const radialLength = norm(radial);
+        if (!(radialLength > SHAPING_EPSILON)) continue;
+        const nodeEnvelope = applySimilarity(transform, node.currentPosition);
+        const envelopeRadial = sub(nodeEnvelope, axisEnvelope);
+        const envelopeRadialLength = norm(envelopeRadial);
+        const direction = envelopeRadial.map(value => value / envelopeRadialLength);
+        const crossing = envelopeRayCrossing(
+          axisEnvelope,
+          direction,
+          envelopeMesh,
+          envelopeRadialLength * Math.max(4, config.maximumGrowth * 4),
+        );
+        let appliedRadialScale;
+        let cap = null;
+        if (crossing === null) {
+          // The surface lies beyond the search span, so the margin target is
+          // far above the growth ceiling; the ceiling is the honest result.
+          appliedRadialScale = config.maximumGrowth;
+          cap = 'growth-capped-no-crossing-within-search';
+        } else {
+          const targetScale =
+            (config.marginFraction * crossing) / envelopeRadialLength;
+          appliedRadialScale = targetScale;
+          if (targetScale > config.maximumGrowth) {
+            appliedRadialScale = config.maximumGrowth;
+            cap = 'growth-capped';
+          } else if (targetScale < config.minimumShrink) {
+            appliedRadialScale = config.minimumShrink;
+            cap = 'shrink-floor-capped';
+          }
+        }
+        node.currentPosition = [0, 1, 2].map(axisIndex =>
+          axisNode.currentPosition[axisIndex] + radial[axisIndex] * appliedRadialScale);
+        nodeReceipts.push({
+          nodeId: node.id,
+          appliedRadialScale,
+          envelopeCrossingDistance: crossing,
+          cap,
+        });
+      }
+      sectionReceipts.push({
+        constructionId: cage.constructionId,
+        sectionId,
+        status: 'shaped',
+        nodeReceipts,
+      });
+    }
+  }
+  // Custody checks: fixed nodes and axes untouched by construction; verify anyway.
+  let fixedNodeMaximumDrift = 0;
+  let centerlineMaximumDrift = 0;
+  let nonPositiveCellCount = 0;
+  for (const [cageIndex, cage] of outputCarrier.cages.entries()) {
+    const sourceCage = solverCarrier.cages[cageIndex];
+    const sourceById = new Map(sourceCage.manifest.nodes.map(node => [node.id, node]));
+    const fixedNodeIds = new Set((cage.manifest.constraints?.boundaryMasks || [])
+      .filter(mask => mask.fixed === true)
+      .map(mask => mask.nodeId));
+    const positionById = new Map(cage.manifest.nodes.map(node => [node.id, node]));
+    for (const node of cage.manifest.nodes) {
+      const drift = norm(sub(node.currentPosition,
+        sourceById.get(node.id).currentPosition));
+      if (fixedNodeIds.has(node.id)) {
+        fixedNodeMaximumDrift = Math.max(fixedNodeMaximumDrift, drift);
+      }
+      if (node.id.endsWith(':axis')) {
+        centerlineMaximumDrift = Math.max(centerlineMaximumDrift, drift);
+      }
+    }
+    for (const cell of cage.manifest.cells) {
+      const [a, b, c, d] = cell.nodeIds.map(nodeId =>
+        positionById.get(nodeId).currentPosition);
+      const oriented = signedTetVolume(a, b, c, d) * cell.restOrientationParity;
+      if (!(oriented > SHAPING_EPSILON)) nonPositiveCellCount += 1;
+    }
+  }
+  if (fixedNodeMaximumDrift !== 0 || centerlineMaximumDrift !== 0) {
+    throw new Error('envelope-clamped shaping violated fixed-node or centerline immutability');
+  }
+  if (nonPositiveCellCount !== 0) {
+    throw new Error(
+      `envelope-clamped shaping produced ${nonPositiveCellCount} nonpositive cells`,
+    );
+  }
+  const { identity: _priorIdentity, ...outputDomain } = outputCarrier;
+  outputCarrier.identity = {
+    domain: 'canonical-json-self-excluding-top-level-identity',
+    sha256: hashMuscleCompartmentRingCageCanonicalJson(outputDomain),
+  };
+  return {
+    schema: 'kaminos.k4-envelope-clamped-section-shaping.v0',
+    status: 'completed-provisional',
+    shapeAuthority: 'envelope-fit-derived-provisional',
+    claimCeiling: frameReceipt.claimCeiling,
+    heldClaims: [...frameReceipt.heldClaims, 'anatomical-shape-authorship'],
+    frameReceiptSha256: recordedReceiptSha256,
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: outputCarrier.identity.sha256,
+    requested: structuredClone(config),
+    effective: structuredClone(config),
+    fallbackUsed: false,
+    fixedNodeMaximumDrift,
+    centerlineMaximumDrift,
+    nonPositiveCellCount,
+    sectionReceipts,
+    outputCarrier,
+  };
+}
+
 export function computeK4EnvelopeFitMetric({
   frameReceipt,
   envelopeMesh,

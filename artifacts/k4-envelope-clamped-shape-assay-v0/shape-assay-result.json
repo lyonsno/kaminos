@@ -1,0 +1,2972 @@
+{
+  "schema": "kaminos.k4-envelope-clamped-shape-assay-result.v0",
+  "status": "completed-provisional",
+  "shapeAuthority": "envelope-fit-derived-provisional",
+  "claimCeiling": "metric-mechanism-only",
+  "heldClaims": [
+    "operator-authored-frame-binding",
+    "anatomical-registration",
+    "production-admission",
+    "source-authorized-envelope-fit",
+    "anatomical-shape-authorship"
+  ],
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "shaping": {
+    "schema": "kaminos.k4-envelope-clamped-section-shaping.v0",
+    "status": "completed-provisional",
+    "shapeAuthority": "envelope-fit-derived-provisional",
+    "claimCeiling": "metric-mechanism-only",
+    "heldClaims": [
+      "operator-authored-frame-binding",
+      "anatomical-registration",
+      "production-admission",
+      "source-authorized-envelope-fit",
+      "anatomical-shape-authorship"
+    ],
+    "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+    "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "outputCarrierSha256": "6675603e39060332f1b67f55c08fc440718d969e089d04e6c2db20cc4d7dd47c",
+    "requested": {
+      "marginFraction": 0.92,
+      "maximumGrowth": 1.15,
+      "minimumShrink": 0.35
+    },
+    "effective": {
+      "marginFraction": 0.92,
+      "maximumGrowth": 1.15,
+      "minimumShrink": 0.35
+    },
+    "fallbackUsed": false,
+    "fixedNodeMaximumDrift": 0,
+    "centerlineMaximumDrift": 0,
+    "nonPositiveCellCount": 0,
+    "sectionReceipts": [
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0000",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0001",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0001:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0001:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0002",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0002:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0002:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0003",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0003:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.221899802642245,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.236925690373248,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0003:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0004",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0004:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.76508977320559,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.8651534583675105,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.9412694477218517,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0004:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0005",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0005:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.292077426879866,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.460247944814741,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.476114611259157,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.650852347861171,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0005:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0006",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0006:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 5.329943244192107,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.64626972415106,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.350727035390777,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.560029639760216,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.6343009022310677,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0006:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0007",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0007:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.88226679454904,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.4788119086738307,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:08",
+            "appliedRadialScale": 0.9227857809605834,
+            "envelopeCrossingDistance": 1.1482666837507034,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:09",
+            "appliedRadialScale": 0.9641428863830437,
+            "envelopeCrossingDistance": 1.1997293196222687,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.7457385237808147,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0007:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.206075010878305,
+            "cap": "growth-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0008",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-34:section:0008:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:06",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.06731792592086802,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:07",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.0295348299243219,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:08",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.0228365437344446,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:09",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.023816756763717122,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:10",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.034560726621471985,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-34:section:0008:vertex:11",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.12301766794710181,
+            "cap": "shrink-floor-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0009",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0010",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0011",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-34",
+        "sectionId": "muscle-34:section:0012",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0000",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0001",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0001:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0001:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0002",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0002:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0002:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0003",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0003:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0003:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0004",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0004:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0004:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0005",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0005:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.612732303530526,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0005:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0006",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0006:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.70923369936548,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.339901620868087,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.544714404027594,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0006:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0007",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0007:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.38369314556412,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.5080164956215185,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.2907084292581477,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.211083111455524,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.7044266977136524,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0007:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0008",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0008:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.8423101096275385,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.813176588311922,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.1870725532788384,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.1950645244033486,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.900548601180608,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0008:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0009",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0009:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.2362512738293994,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.7995189446891433,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.4863870226881057,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.624810045033886,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.3875995257373033,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0009:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0010",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0010:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.9634834367027252,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.0928915908466976,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:08",
+            "appliedRadialScale": 1.0140103205260862,
+            "envelopeCrossingDistance": 0.9161199809820493,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:09",
+            "appliedRadialScale": 1.1344967370911279,
+            "envelopeCrossingDistance": 1.0249749034515432,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.6714387976782588,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-13:section:0010:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0011",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-13:section:0011:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:06",
+            "appliedRadialScale": 1.0116625121421932,
+            "envelopeCrossingDistance": 0.7082754720262303,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:07",
+            "appliedRadialScale": 0.6094654354747557,
+            "envelopeCrossingDistance": 0.4266930883532894,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:08",
+            "appliedRadialScale": 0.5435438523963332,
+            "envelopeCrossingDistance": 0.3805406877767623,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:09",
+            "appliedRadialScale": 0.6339963788054294,
+            "envelopeCrossingDistance": 0.4438674400363297,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:10",
+            "appliedRadialScale": 1.1162497804054832,
+            "envelopeCrossingDistance": 0.7814980793423183,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-13:section:0011:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-13",
+        "sectionId": "muscle-13:section:0012",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0000",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0001",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0001:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0001:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0002",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0002:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0002:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0003",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0003:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.9683911783513706,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.074441828422197,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0003:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0004",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0004:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.744907221280389,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.4981220284802106,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.5186605068244816,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.816430589110674,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0004:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0005",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0005:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.9853760044798934,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.6772619798646073,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.7213090911378837,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.602226255971642,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0005:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.158807112111854,
+            "cap": "growth-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0006",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0006:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.5185080666650643,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.763064839775471,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:09",
+            "appliedRadialScale": 1.1447597585569256,
+            "envelopeCrossingDistance": 1.5423929324587877,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.807226333306369,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0006:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.7480668546496605,
+            "cap": "growth-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0007",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-12:section:0007:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:06",
+            "appliedRadialScale": 0.7309204552059392,
+            "envelopeCrossingDistance": 0.9664885291350677,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:07",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.32938068349925187,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:08",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.24181329516190286,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:09",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.2423208520907983,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:10",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.3319682840555177,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-12:section:0007:vertex:11",
+            "appliedRadialScale": 0.5641545909119812,
+            "envelopeCrossingDistance": 0.7459757585113586,
+            "cap": null
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0008",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0009",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0010",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0011",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-12",
+        "sectionId": "muscle-12:section:0012",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0000",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0001",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0001:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0001:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0002",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0002:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0002:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0003",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0003:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.183509969382876,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.177961256780164,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0003:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0004",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0004:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 5.201954645270214,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.6669803657325333,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.5981061901480134,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.727565095444268,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0004:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0005",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0005:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 4.321688824294064,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.946212595348021,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.788603065737774,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.6345041500475483,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0005:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.1986521375267456,
+            "cap": "growth-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0006",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0006:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:07",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.068809261475418,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:08",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.8824303066030006,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:09",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.7648256003751785,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:10",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 1.873113854893763,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0006:vertex:11",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 2.7064650568223003,
+            "cap": "growth-capped"
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0007",
+        "status": "shaped",
+        "nodeReceipts": [
+          {
+            "nodeId": "muscle-45:section:0007:vertex:00",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 5.170670387883028,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:01",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:02",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:03",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:04",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:05",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": null,
+            "cap": "growth-capped-no-crossing-within-search"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:06",
+            "appliedRadialScale": 1.15,
+            "envelopeCrossingDistance": 3.1620977174350964,
+            "cap": "growth-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:07",
+            "appliedRadialScale": 0.5132031840856063,
+            "envelopeCrossingDistance": 0.7144940752930857,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:08",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.4653266351690481,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:09",
+            "appliedRadialScale": 0.35,
+            "envelopeCrossingDistance": 0.43054566098048036,
+            "cap": "shrink-floor-capped"
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:10",
+            "appliedRadialScale": 0.36963163097596513,
+            "envelopeCrossingDistance": 0.5146102289032612,
+            "cap": null
+          },
+          {
+            "nodeId": "muscle-45:section:0007:vertex:11",
+            "appliedRadialScale": 0.5551588447264242,
+            "envelopeCrossingDistance": 0.7729058019481048,
+            "cap": null
+          }
+        ]
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0008",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0009",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0010",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0011",
+        "status": "axis-outside-envelope",
+        "nodeReceipts": []
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0012",
+        "status": "fixed-section",
+        "nodeReceipts": []
+      }
+    ]
+  },
+  "shapedCarrier": {
+    "path": "shaped-carrier.json",
+    "sha256": "e023a83da752f6a87691af9c0c4631e43af1ec0a29bc3b89932854acdf57f64d"
+  },
+  "rows": [
+    {
+      "id": "reference",
+      "contact": {
+        "pairwiseMovableTotalPenetration": 10.164116328174828,
+        "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metric": {
+        "schema": "kaminos.k4-envelope-fit-metric.v0",
+        "status": "completed-provisional",
+        "claimCeiling": "metric-mechanism-only",
+        "frameAuthority": "fit-derived-provisional",
+        "heldClaims": [
+          "operator-authored-frame-binding",
+          "anatomical-registration",
+          "production-admission",
+          "source-authorized-envelope-fit"
+        ],
+        "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled",
+        "constructions": [
+          {
+            "constructionId": "muscle-34",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6602564102564102,
+            "meanSignedDistance": -1.1978436954453795,
+            "maximumOutsideExcursion": 2.480402521608233,
+            "maximumInsideDepth": 3.885054904785619
+          },
+          {
+            "constructionId": "muscle-13",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.9358974358974359,
+            "meanSignedDistance": -1.391692200795551,
+            "maximumOutsideExcursion": 0.47652943933606107,
+            "maximumInsideDepth": 3.3297260085128775
+          },
+          {
+            "constructionId": "muscle-12",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.5961538461538461,
+            "meanSignedDistance": -0.7467127027818474,
+            "maximumOutsideExcursion": 2.527441861573392,
+            "maximumInsideDepth": 3.9130394575440377
+          },
+          {
+            "constructionId": "muscle-45",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6089743589743589,
+            "meanSignedDistance": -0.6767319872520196,
+            "maximumOutsideExcursion": 2.822790688719696,
+            "maximumInsideDepth": 3.7667818595929248
+          }
+        ]
+      }
+    },
+    {
+      "id": "envelope-clamped",
+      "contact": {
+        "pairwiseMovableTotalPenetration": 11.048558092921498,
+        "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+        "pairwiseFixedTotalPenetration": 3.918015607706556,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 4.826564747631603,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.3037565920925256
+      },
+      "metric": {
+        "schema": "kaminos.k4-envelope-fit-metric.v0",
+        "status": "completed-provisional",
+        "claimCeiling": "metric-mechanism-only",
+        "frameAuthority": "fit-derived-provisional",
+        "heldClaims": [
+          "operator-authored-frame-binding",
+          "anatomical-registration",
+          "production-admission",
+          "source-authorized-envelope-fit"
+        ],
+        "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+        "sourceCarrierSha256": "6675603e39060332f1b67f55c08fc440718d969e089d04e6c2db20cc4d7dd47c",
+        "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled",
+        "constructions": [
+          {
+            "constructionId": "muscle-34",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6602564102564102,
+            "meanSignedDistance": -1.1917073217054706,
+            "maximumOutsideExcursion": 2.480402521608233,
+            "maximumInsideDepth": 3.918910345584294
+          },
+          {
+            "constructionId": "muscle-13",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.9551282051282052,
+            "meanSignedDistance": -1.373337010706646,
+            "maximumOutsideExcursion": 0.47652943933606107,
+            "maximumInsideDepth": 3.293840628281309
+          },
+          {
+            "constructionId": "muscle-12",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6089743589743589,
+            "meanSignedDistance": -0.7444056449377541,
+            "maximumOutsideExcursion": 2.527441861573392,
+            "maximumInsideDepth": 3.9055433990597592
+          },
+          {
+            "constructionId": "muscle-45",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6346153846153846,
+            "meanSignedDistance": -0.673022388773925,
+            "maximumOutsideExcursion": 2.822790688719696,
+            "maximumInsideDepth": 3.733322165544827
+          }
+        ]
+      }
+    }
+  ],
+  "sectionOverlays": [
+    {
+      "path": "overlays/section-x-reference.svg",
+      "sha256": "657ec40ea9980891a08eeb4751d026e4dc4d212b0b0a9b141703968fb665594b",
+      "axis": "x",
+      "level": -34.919445844048404,
+      "rowId": "reference",
+      "sampleCount": 83,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-x-envelope-clamped.svg",
+      "sha256": "5fd595510bcc85f0d71593d4748a3ccbdbbec43a581dab375924ff1a88eb091a",
+      "axis": "x",
+      "level": -34.919445844048404,
+      "rowId": "envelope-clamped",
+      "sampleCount": 81,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-y-reference.svg",
+      "sha256": "2a8c9cabfdca80fdf550ee7a1a9fd6e71e8dd0696f10d1b62982a92ff355fb07",
+      "axis": "y",
+      "level": -1.6217218592731775,
+      "rowId": "reference",
+      "sampleCount": 37,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-y-envelope-clamped.svg",
+      "sha256": "88b80d9c8f3f9e1383ef277e9c7910ee8f24427720d0e1fc38deea58c6f7ccae",
+      "axis": "y",
+      "level": -1.6217218592731775,
+      "rowId": "envelope-clamped",
+      "sampleCount": 41,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-z-reference.svg",
+      "sha256": "e3199c564fa65e72758dc6bf5a7688e861f57425985da666d98b1b2830a3b5ff",
+      "axis": "z",
+      "level": 3.8866252551849754,
+      "rowId": "reference",
+      "sampleCount": 37,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-z-envelope-clamped.svg",
+      "sha256": "12a7d3505a22084682b1c117570f6a7eb95d437de8d8369f7033456321ad7686",
+      "axis": "z",
+      "level": 3.8866252551849754,
+      "rowId": "envelope-clamped",
+      "sampleCount": 33,
+      "slab": 0.35
+    }
+  ]
+}
