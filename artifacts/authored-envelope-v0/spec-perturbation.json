@@ -1,0 +1,130 @@
+{
+ "title": "PERTURBATION TEST: authored neck-length edit, baseline vs long-neck, three seeds",
+ "subtitle": "Same authored envelope, one relation edited. Topology identical (3764 verts both), width unchanged (2.91), body axis 7.36 to 8.14 and height 8.58 to 10.44. This is the reverse-edit half of Assay 2 and the test that distinguishes conditioning within the prior from control over it.",
+ "footer": "The cat cells are the sharpest: told \"cat\", the perturbed plate still produces a cat with an unmistakably too-long neck - outside normal cat proportions. The plate overrides the species prior on the perturbed dimension while the prior supplies the rest.",
+ "prompts": [
+  {
+   "id": "fur",
+   "name": "\"This shape covered in fur.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-fur.txt"
+  },
+  {
+   "id": "skin",
+   "name": "\"This shape covered in skin.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt"
+  },
+  {
+   "id": "cat",
+   "name": "\"This shape as a cat.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-cat.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "base",
+   "name": "BASELINE envelope",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  },
+  {
+   "id": "lb1",
+   "name": "LONG-NECK envelope (seed 80301)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png"
+  },
+  {
+   "id": "lb2",
+   "name": "LONG-NECK envelope (seed 80302)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png"
+  },
+  {
+   "id": "lb3",
+   "name": "LONG-NECK envelope (seed 80413)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "base",
+   "prompt": "fur",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-env-fur/output.png",
+   "note": "Baseline, normal neck."
+  },
+  {
+   "plate": "base",
+   "prompt": "skin",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-env-skin/output.png",
+   "note": "Baseline, normal neck."
+  },
+  {
+   "plate": "base",
+   "prompt": "cat",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+   "note": "Baseline, normal neck."
+  },
+  {
+   "plate": "lb1",
+   "prompt": "fur",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-fur-s80301/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb1",
+   "prompt": "skin",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-skin-s80301/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb1",
+   "prompt": "cat",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-sp-cat-s80301/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb2",
+   "prompt": "fur",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-fur-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb2",
+   "prompt": "skin",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-skin-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb2",
+   "prompt": "cat",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-sp-cat-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb3",
+   "prompt": "fur",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-fur-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb3",
+   "prompt": "skin",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-env-skin-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "lb3",
+   "prompt": "cat",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-sp-cat-s80413/output.png",
+   "note": ""
+  }
+ ]
+}

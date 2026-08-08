@@ -1,36 +1,32 @@
 {
+  "derivedFrame": {
+    "extents": [
+      79.73022270202637,
+      64.20608139038086,
+      56.67140579223633
+    ],
+    "longAxisIndex": 0,
+    "note": "axes derived from imported geometry, not assumed to match the Blender source frame",
+    "shortAxisIndex": 2,
+    "upAxisIndex": 1
+  },
   "effectiveRoute": {
-    "anatomicalDorsal": [
-      0.0,
-      0.0,
-      -1.0
-    ],
-    "anatomicalRight": [
-      1.0,
-      0.0,
-      0.0
-    ],
     "blenderVersion": "5.1.2",
-    "cameraView": "right-sagittal",
-    "orthoScale": 12.04074764251709,
+    "orthoScale": 89.2978515625,
     "renderEngine": "BLENDER_WORKBENCH"
   },
+  "glb": {
+    "path": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
+    "sha256": "37084f055b78ebaebb822ee1190390759fabd344305a158258a597b1747dcaf4"
+  },
+  "meshCount": 98,
   "output": {
-    "byteLength": 866719,
+    "byteLength": 861915,
     "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate/plate.png",
-    "sha256": "3eb33548cd33767a85e5baec64cf43d02d6f6d4d49f7346f2cc660c7a77be16b"
+    "sha256": "a744cb3e161f5301b2c78bd4b0e7a5885b4c1b02251fbd8600f540e8fbd80c70"
   },
-  "renderedObjects": [
-    {
-      "name": "Cube.020",
-      "vertexCount": 788
-    }
-  ],
-  "rendererId": "blender-named-object-right-sagittal-v0",
-  "schema": "kaminos.named-object-render.v0",
-  "source": {
-    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
-    "sha256": "7dce5c1b785d64d811c8c604a18219f4285e334d52ce9b51d240071baca4171b"
-  },
-  "status": "completed"
+  "rendererId": "blender-glb-lateral-plate-v0",
+  "schema": "kaminos.glb-plate-render.v0",
+  "status": "completed",
+  "totalVertexCount": 23941
 }

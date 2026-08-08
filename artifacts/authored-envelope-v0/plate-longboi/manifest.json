@@ -1,0 +1,32 @@
+{
+  "derivedFrame": {
+    "extents": [
+      20.32135009765625,
+      77.61223220825195,
+      63.11857223510742
+    ],
+    "longAxisIndex": 1,
+    "note": "axes derived from imported geometry, not assumed to match the Blender source frame",
+    "shortAxisIndex": 0,
+    "upAxisIndex": 2
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "orthoScale": 86.92569732666016,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope_longboi.glb",
+    "sha256": "059e375c90833167c1eaacfca1d1645b3920011390c983127afed6618df442b0"
+  },
+  "meshCount": 1,
+  "output": {
+    "byteLength": 839323,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png",
+    "sha256": "c1dddbe34794a2d0390ec21fd2bffe00798ba9125cbeec76ebc484d48ab3f045"
+  },
+  "rendererId": "blender-glb-lateral-plate-v0",
+  "schema": "kaminos.glb-plate-render.v0",
+  "status": "completed",
+  "totalVertexCount": 3764
+}

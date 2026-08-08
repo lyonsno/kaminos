@@ -1,0 +1,108 @@
+{
+  "blenderVersion": "5.1.2",
+  "meshes": [
+    {
+      "boundsDiagonal": 21.29734178172885,
+      "collections": [
+        "Collection"
+      ],
+      "evaluatedVertexCount": 772,
+      "extents": [
+        9.254234313964844,
+        14.57007884979248,
+        12.475925326347351
+      ],
+      "name": "SRC_PELVIS",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/SRC_PELVIS.png"
+    },
+    {
+      "boundsDiagonal": 15.852116709985822,
+      "collections": [
+        "Collection"
+      ],
+      "evaluatedVertexCount": 1552,
+      "extents": [
+        7.994319915771484,
+        10.750667572021484,
+        8.473700523376465
+      ],
+      "name": "Cube.020",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_020.png"
+    },
+    {
+      "boundsDiagonal": 87.55726850784399,
+      "collections": [
+        "90 Semantics"
+      ],
+      "evaluatedVertexCount": 394,
+      "extents": [
+        11.136268615722656,
+        66.81454086303711,
+        55.480403900146484
+      ],
+      "name": "Cube.095",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_095.png"
+    },
+    {
+      "boundsDiagonal": 25.204544850397966,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "evaluatedVertexCount": 349,
+      "extents": [
+        9.38658332824707,
+        18.058810234069824,
+        14.867430210113525
+      ],
+      "name": "Cube.002",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_002.png"
+    },
+    {
+      "boundsDiagonal": 20.602858061806412,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "evaluatedVertexCount": 349,
+      "extents": [
+        6.6904296875,
+        13.259098052978516,
+        14.279784202575684
+      ],
+      "name": "Cube.014",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_014.png"
+    },
+    {
+      "boundsDiagonal": 24.3360194809514,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "evaluatedVertexCount": 349,
+      "extents": [
+        8.68465805053711,
+        17.633596420288086,
+        14.348338603973389
+      ],
+      "name": "Cube.087",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_087.png"
+    },
+    {
+      "boundsDiagonal": 20.601367612458695,
+      "collections": [
+        "Attachment Patches"
+      ],
+      "evaluatedVertexCount": 349,
+      "extents": [
+        6.690306663513184,
+        13.257780075073242,
+        14.278914451599121
+      ],
+      "name": "Cube.090",
+      "thumbnail": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/thumbsheet/thumbs/Cube_090.png"
+    }
+  ],
+  "minVertices": 150,
+  "renderedCount": 7,
+  "schema": "kaminos.mesh-thumbnail-sheet.v0",
+  "source": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+  "status": "completed"
+}

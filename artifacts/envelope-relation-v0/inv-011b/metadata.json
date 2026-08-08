@@ -1,0 +1,13 @@
+{
+  "name": "cat-bauplan-011",
+  "job_type": "kaminos_blender_scene_inventory",
+  "job_id": "2dcec29c57ac",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+  "input_name": "cat-bauplan-011.blend",
+  "params": {},
+  "output_files": [
+    "inventory.json"
+  ],
+  "created_at": 1786117513.709492,
+  "duration_s": 0.8
+}

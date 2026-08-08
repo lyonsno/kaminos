@@ -1,0 +1,88 @@
+{
+ "title": "Authored envelope: fantasy elaboration and plate-framing variants",
+ "subtitle": "Operator-authored layer-2 envelope, seed 80301, identical route. Top group varies the target species into fantasy categories with no cat prior to fall back on. Bottom group varies how the PLATE ITSELF is named - maquette, armature, blockout - rather than what to do to an unnamed shape.",
+ "footer": "Style transfer is prompt-dependent, not automatic: the bear cell retained the plate low-poly faceting while the hell beast abandoned it for flat illustration.",
+ "prompts": [
+  {
+   "id": "dragon",
+   "name": "\"This shape as a dragon.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fx-dragon.txt"
+  },
+  {
+   "id": "hell",
+   "name": "\"This shape as a hell beast.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fx-hellbeast.txt"
+  },
+  {
+   "id": "phantom",
+   "name": "\"This shape as a phantom.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fx-phantom.txt"
+  },
+  {
+   "id": "maquette",
+   "name": "FRAMING: partially finished maquette",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-maquette.txt"
+  },
+  {
+   "id": "armature",
+   "name": "FRAMING: armature",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-armature.txt"
+  },
+  {
+   "id": "blockout",
+   "name": "FRAMING: blockout",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-blockout.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "auth",
+   "name": "AUTHORED envelope",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "auth",
+   "prompt": "dragon",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fx-dragon/output.png",
+   "note": "Dragon head, wings, spinal ridge, tail fin grown onto the envelope stance and proportions. Retained low-poly style."
+  },
+  {
+   "plate": "auth",
+   "prompt": "hell",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fx-hellbeast/output.png",
+   "note": "Same stance, proportions and limb arrangement, fully restyled to flat illustration. Low-poly style NOT retained - style transfer is prompt-dependent."
+  },
+  {
+   "plate": "auth",
+   "prompt": "phantom",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fx-phantom/output.png",
+   "note": ""
+  },
+  {
+   "plate": "auth",
+   "prompt": "maquette",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-maquette/output.png",
+   "note": "STRONGEST OUTPUT OF THE SESSION. Finished sculpted maquette holding silhouette, stance, proportions and head position while adding shoulder mass, ribcage, haunch definition and proper paws."
+  },
+  {
+   "plate": "auth",
+   "prompt": "armature",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-armature/output.png",
+   "note": ""
+  },
+  {
+   "plate": "auth",
+   "prompt": "blockout",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-blockout/output.png",
+   "note": ""
+  }
+ ]
+}

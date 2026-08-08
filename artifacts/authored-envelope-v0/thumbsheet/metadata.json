@@ -1,0 +1,13 @@
+{
+  "name": "cat-bauplan-011",
+  "job_type": "kaminos_render_all_meshes",
+  "job_id": "5a9ee3ab6085",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+  "input_name": "cat-bauplan-011.blend",
+  "params": {},
+  "output_files": [
+    "manifest.json"
+  ],
+  "created_at": 1786145600.113357,
+  "duration_s": 1.0
+}

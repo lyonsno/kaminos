@@ -1,0 +1,88 @@
+{
+ "title": "Operator-authored layer-2 envelope: elaboration and speciation",
+ "subtitle": "First conditioning plate that is a genuine authored layer-2 envelope - continuous watertight body volume with deformation-ready topology and authored joint bridging. Seed 80301, identical route, six-to-nine word prompts. Note this envelope is a NEUTRAL STANDING pose, unlike the crouched compiled envelope, so it is a strong test of surface elaboration but a weak test of gestalt preservation: a standing quadruped is what every taxon prior already wants.",
+ "footer": "Compare against the compiled-envelope cells, where the same prompts ran on a metaball approximation of the same animal.",
+ "prompts": [
+  {
+   "id": "fur",
+   "name": "\"This shape covered in fur.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-fur.txt"
+  },
+  {
+   "id": "skin",
+   "name": "\"This shape covered in skin.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt"
+  },
+  {
+   "id": "cat",
+   "name": "\"This shape as a cat.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-cat.txt"
+  },
+  {
+   "id": "bear",
+   "name": "\"This shape as a bear.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-bear.txt"
+  },
+  {
+   "id": "lizard",
+   "name": "\"This shape as a lizard.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-lizard.txt"
+  },
+  {
+   "id": "creature",
+   "name": "\"This shape as an unknown creature.\"",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-creature.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "auth",
+   "name": "AUTHORED envelope (operator)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "auth",
+   "prompt": "fur",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-env-fur/output.png",
+   "note": "Extremely tight - same silhouette, stance and proportions, fur applied over the volume."
+  },
+  {
+   "plate": "auth",
+   "prompt": "skin",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-env-skin/output.png",
+   "note": ""
+  },
+  {
+   "plate": "auth",
+   "prompt": "cat",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+   "note": ""
+  },
+  {
+   "plate": "auth",
+   "prompt": "bear",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-sp-bear/output.png",
+   "note": "Retained the plate LOW-POLY FACETED STYLE rather than elaborating it. Representation style transfers alongside shape."
+  },
+  {
+   "plate": "auth",
+   "prompt": "lizard",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-sp-lizard/output.png",
+   "note": ""
+  },
+  {
+   "plate": "auth",
+   "prompt": "creature",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-sp-creature/output.png",
+   "note": ""
+  }
+ ]
+}

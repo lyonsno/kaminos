@@ -1,0 +1,14 @@
+{
+  "name": "authored_cat_envelope_longboi",
+  "job_type": "kaminos_render_glb_plate",
+  "job_id": "41d6c8196606",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope_longboi.glb",
+  "input_name": "authored_cat_envelope_longboi.glb",
+  "params": {},
+  "output_files": [
+    "manifest.json",
+    "plate.png"
+  ],
+  "created_at": 1786147672.1775858,
+  "duration_s": 0.7
+}

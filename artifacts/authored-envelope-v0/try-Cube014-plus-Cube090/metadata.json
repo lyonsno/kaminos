@@ -1,0 +1,17 @@
+{
+  "name": "cat-bauplan-011",
+  "job_type": "kaminos_render_named_objects",
+  "job_id": "5a808fca680e",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+  "input_name": "cat-bauplan-011.blend",
+  "params": {
+    "objects": "Cube.014,Cube.090",
+    "expected_source_sha256": "9524c3dd85a492e69d3d87f4ae7d0fbb2d1dadae9bc2d63c58b91a6c2165515b"
+  },
+  "output_files": [
+    "manifest.json",
+    "plate.png"
+  ],
+  "created_at": 1786145516.8803809,
+  "duration_s": 0.6
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "kaminos.envelope-relation-comparison.v0",
+  "measurerId": "envelope-relation-axial-profile-v0",
+  "status": "completed",
+  "verdict": null,
+  "verdictNote": "Tier 2 relations are instrumented, not gated. No threshold is asserted.",
+  "sourceRepresentation": "evaluated source surface triangles",
+  "frame": {
+    "right": [
+      1,
+      0,
+      0
+    ],
+    "anterior": [
+      0,
+      -1,
+      0
+    ],
+    "dorsal": [
+      0,
+      0,
+      -1
+    ],
+    "basis": "measured asset axes, not convention-guessed"
+  },
+  "inputs": {
+    "source": {
+      "route": "exported-surfaces",
+      "requestedPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-011/admitted-surfaces.json",
+      "effectivePath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/envelope-relation-v0/src-011/admitted-surfaces.json",
+      "sha256": "8bd3dc0545ac50dff3e5e75751565db7d9d90b2e7f62b8b796f17b8f102e5701",
+      "objectCount": 78,
+      "declaredSourceSha256": "7dce5c1b785d64d811c8c604a18219f4285e334d52ce9b51d240071baca4171b",
+      "triangleCount": 7473
+    },
+    "envelope": {
+      "requestedPath": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
+      "effectivePath": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
+      "sha256": "37084f055b78ebaebb822ee1190390759fabd344305a158258a597b1747dcaf4",
+      "vertexCount": 23941,
+      "triangleCount": 12037
+    }
+  },
+  "parameters": {
+    "sliceCount": 48
+  },
+  "sourceRelations": {
+    "shoulderToHaunchRatio": 2.0424060005154083,
+    "massCentroidStation": 0.5576972579496232,
+    "thoracicDepthRatio": 0.6610432257563101,
+    "shoulderSeparationRatio": 0.27721580419861425,
+    "axialConcentration": 0.07348895530407527
+  },
+  "envelopeRelations": {
+    "shoulderToHaunchRatio": 0.5764927982356477,
+    "massCentroidStation": 0.4090457763086207,
+    "thoracicDepthRatio": 0.25020720250109724,
+    "shoulderSeparationRatio": 0.22277378968971376,
+    "axialConcentration": 0.09898129027290542
+  },
+  "comparison": {
+    "shoulderToHaunchRatio": {
+      "source": 2.0424060005154083,
+      "envelope": 0.5764927982356477,
+      "delta": -1.4659132022797605,
+      "relativeDelta": -0.717738393791358
+    },
+    "massCentroidStation": {
+      "source": 0.5576972579496232,
+      "envelope": 0.4090457763086207,
+      "delta": -0.1486514816410025,
+      "relativeDelta": -0.26654511838110956
+    },
+    "thoracicDepthRatio": {
+      "source": 0.6610432257563101,
+      "envelope": 0.25020720250109724,
+      "delta": -0.4108360232552129,
+      "relativeDelta": -0.6214964577924066
+    },
+    "shoulderSeparationRatio": {
+      "source": 0.27721580419861425,
+      "envelope": 0.22277378968971376,
+      "delta": -0.05444201450890049,
+      "relativeDelta": -0.1963885669010953
+    },
+    "axialConcentration": {
+      "source": 0.07348895530407527,
+      "envelope": 0.09898129027290542,
+      "delta": 0.025492334968830146,
+      "relativeDelta": 0.3468866153199553
+    }
+  },
+  "profiles": {
+    "source": {
+      "axialSpan": 61.23110771179199,
+      "totalArea": 2561.591681422556
+    },
+    "envelope": {
+      "axialSpan": 80.30075550079346,
+      "totalArea": 10868.942610070759
+    }
+  }
+}

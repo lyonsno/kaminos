@@ -1,0 +1,36 @@
+{
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "anatomicalRight": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "blenderVersion": "5.1.2",
+    "cameraView": "right-sagittal",
+    "orthoScale": 15.99238395690918,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "output": {
+    "byteLength": 808570,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/try-Cube090/plate.png",
+    "sha256": "9324729039a085f77fbf9cc38caf4998904b134dda0ed5e63d4064065da35512"
+  },
+  "renderedObjects": [
+    {
+      "name": "Cube.090",
+      "vertexCount": 349
+    }
+  ],
+  "rendererId": "blender-named-object-right-sagittal-v0",
+  "schema": "kaminos.named-object-render.v0",
+  "source": {
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-011.blend",
+    "sha256": "9524c3dd85a492e69d3d87f4ae7d0fbb2d1dadae9bc2d63c58b91a6c2165515b"
+  },
+  "status": "completed"
+}

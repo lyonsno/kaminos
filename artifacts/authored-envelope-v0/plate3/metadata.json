@@ -1,7 +1,7 @@
 {
   "name": "authored_cat_envelope",
   "job_type": "kaminos_render_glb_plate",
-  "job_id": "d6b856b35b3b",
+  "job_id": "df6acf114b64",
   "input_path": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
   "input_name": "authored_cat_envelope.glb",
   "params": {},
@@ -9,6 +9,6 @@
     "manifest.json",
     "plate.png"
   ],
-  "created_at": 1786145329.650221,
-  "duration_s": 1.1
+  "created_at": 1786146115.953032,
+  "duration_s": 0.6
 }
