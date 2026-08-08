@@ -23,6 +23,8 @@ test('K4 envelope overlay binds exact receipt, geometry, route, and provisional 
   assert.match(html, /requested:\s*ROUTE_ID[\s\S]*effective:\s*ROUTE_ID[\s\S]*fallbackUsed:\s*false/);
   assert.match(html, /metric-mechanism-only[\s\S]*baseline-derived radii[\s\S]*no anatomical admission/i);
   assert.match(html, /window\.__K4_ENVELOPE_WITNESS__/);
+  assert.match(html, /rejected-fog-suppressed-replay-v0/);
+  assert.match(html, /originalEvidence:\s*!rejectedPresentationReplay/);
 });
 
 test('inspected overlay report preserves exact captures and rejects the visually suppressed first frame', async () => {
@@ -37,7 +39,13 @@ test('inspected overlay report preserves exact captures and rejects the visually
   assert.ok(report.captures.every(capture => /^[0-9a-f]{64}$/.test(capture.sha256)));
   assert.ok(report.captures.every(capture => capture.domRouteAndIdentityVerified && capture.agentInspected));
   assert.equal(report.falseClosureIncident.observed, true);
-  assert.match(report.falseClosureIncident.disposition, /rejected[\s\S]*recaptured/i);
+  assert.equal(report.falseClosureIncident.originalCapturePreserved, false);
+  assert.match(report.falseClosureIncident.custodyFailure, /overwritten[\s\S]*not recoverable/i);
+  assert.equal(report.falseClosureIncident.replay.originalEvidence, false);
+  assert.equal(report.falseClosureIncident.replay.presentation, 'rejected-fog-suppressed-replay-v0');
+  assert.match(report.falseClosureIncident.replay.path, /rejected-fog-suppressed-replay\.png$/);
+  assert.match(report.falseClosureIncident.replay.sha256, /^[0-9a-f]{64}$/);
+  assert.match(report.falseClosureIncident.disposition, /replay[\s\S]*not the original/i);
   assert.match(report.visualVerdict.frameBinding, /plausible[\s\S]*no scale explosion[\s\S]*mirrored placement/i);
   assert.match(report.visualVerdict.packingResponse, /parallel capsule-like bodies[\s\S]*not an envelope-filling/i);
   assert.equal(report.operatorInspection.status, 'open');

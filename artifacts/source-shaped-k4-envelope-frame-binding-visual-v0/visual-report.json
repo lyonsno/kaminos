@@ -41,7 +41,19 @@
   "falseClosureIncident": {
     "observed": true,
     "failure": "the first dynamic capture verified identity but distance fog and the translucent shell suppressed the K4 colors until the frame was not useful for visual judgment",
-    "disposition": "rejected, presentation repaired to a low-opacity wireframe envelope without changing geometry or frame identity, then both states recaptured and inspected"
+    "originalCapturePreserved": false,
+    "custodyFailure": "the original rejected PNG was overwritten by the corrected recapture before durable preservation and is not recoverable as an inspectable original artifact",
+    "replay": {
+      "path": "rejected-fog-suppressed-replay.png",
+      "sha256": "57af138646afc027aece0f036008a30f6761ea6ddc5d4cbf339bb8c384b7e00d",
+      "state": "packed",
+      "presentation": "rejected-fog-suppressed-replay-v0",
+      "originalEvidence": false,
+      "domRouteIdentityAndPresentationVerified": true,
+      "agentInspected": true,
+      "derivation": "deterministic replay from the same exact receipt, K4 result, envelope bytes, camera framing, fog density, shell opacity, edge opacity, and non-emissive muscle material used by the rejected presentation"
+    },
+    "disposition": "custody loss is explicit; the replay demonstrates the rejected presentation failure but is not the original capture, while corrected before and packed frames remain the accepted visual evidence"
   },
   "visualVerdict": {
     "frameBinding": "plausible at the metric-mechanism claim ceiling: the K4 cluster lands at one coherent pelvic or proximal-hindlimb region of the authored envelope with no scale explosion, remote displacement, or mirrored placement visible in this view",
