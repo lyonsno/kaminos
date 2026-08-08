@@ -1,0 +1,59 @@
+{
+  "schema": "kaminos.frame-link-receipt.v0",
+  "status": "completed",
+  "inputs": {
+    "sourceLabel": "frozen/skeleton-authored.glb",
+    "envelopeLabel": "frozen/envelope-baseline.glb",
+    "sourceSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+    "envelopeSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "effectiveRoute": "frame-link-core.mjs solveFrameLink sampleCount=2000",
+  "link": {
+    "transform": {
+      "rotation": [
+        [
+          0.9999973343244632,
+          -0.0005648885216679898,
+          0.002238804351880802
+        ],
+        [
+          0.0005428292799864085,
+          0.9999514236834568,
+          0.009841524770076287
+        ],
+        [
+          -0.0022442549633904137,
+          -0.00984028324721027,
+          0.999949064775438
+        ]
+      ],
+      "translation": [
+        -59.3660538094313,
+        24.36251889862305,
+        -0.016053850531601924
+      ]
+    },
+    "rotationAngleDeg": 0.5791639420311495,
+    "before": {
+      "sampleCount": 2000,
+      "insideFraction": 0,
+      "outsideCount": 2000,
+      "outsideQ50": 56.295357624241404,
+      "outsideQ95": 60.91385745941458,
+      "outsideMax": 63.03134024588407
+    },
+    "after": {
+      "sampleCount": 2000,
+      "insideFraction": 0.9915,
+      "outsideCount": 17,
+      "outsideQ50": 0.08715356343729075,
+      "outsideQ95": 0.1580035324418672,
+      "outsideMax": 0.1580035324418672
+    },
+    "iterations": 120,
+    "converged": false,
+    "scaleLocked": true
+  },
+  "generatedAt": "2026-08-08T03:36:04.456Z",
+  "receiptSha256": "97060ddaf4a6db7d8c0b0cd54fd9ec88f940add568e3480642751882b0c91538"
+}
