@@ -1,0 +1,31 @@
+{
+  "schema": "kaminos.paw-causal-cell.v0",
+  "castLabel": "cast-sf3d-skin-planted",
+  "matchedControl": "cast-sf3d-skin-baseline (pedal mean 0.3493, coherence 0.85-0.99 all feet)",
+  "onlyChangedVariable": "prompt clause: with large flat paws planted squarely on the ground",
+  "observedPromptSideEffects": "bulkier body, turned head - clause moved more than the paws; single seed",
+  "stageAReceiptSha256": "2a29f291355860ac7c860066bd28067ea29f0cd12c503c1c3cabaa6b4aefab6b",
+  "perFoot": {
+    "hind-L": {
+      "inside": 0.65,
+      "exits": 84,
+      "coherence": 0.984693078206736
+    },
+    "fore-L": {
+      "inside": 0,
+      "exits": 270,
+      "coherence": 0.987196474116793
+    },
+    "fore-R": {
+      "inside": 0,
+      "exits": 270,
+      "coherence": 0.9695263293903997
+    },
+    "hind-R": {
+      "inside": 0,
+      "exits": 240,
+      "coherence": 0.6850945739348854
+    }
+  },
+  "pedalOverall": 0.15294117647058825
+}
