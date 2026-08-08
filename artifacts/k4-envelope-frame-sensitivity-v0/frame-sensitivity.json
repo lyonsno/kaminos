@@ -1,0 +1,151 @@
+{
+  "schema": "kaminos.k4-envelope-frame-sensitivity-result.v0",
+  "status": "completed-provisional",
+  "claimCeiling": "exact-solver-continuation-frame-sensitivity-only",
+  "requestedRoute": "mushfinger-frame-link-extended-budget-plus-packer-envelope-fit",
+  "effectiveRoute": "mushfinger-frame-link-core.solveFrameLink@9289f3bc + packer-k4-envelope-fit-core.computeK4EnvelopeFitMetric@53127cae",
+  "inputs": {
+    "baseFrameReceipt": {
+      "path": "artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "fileSha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c",
+      "receiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa"
+    },
+    "skeleton": {
+      "sourceRef": "cc/mushfinger-cast-correspondence-0807@9289f3bc:artifacts/cast-correspondence-v0/frozen/skeleton-authored.glb",
+      "fileSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7"
+    },
+    "envelope": {
+      "sourceRef": "artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "fileSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "referenceCarrier": {
+      "sourceRef": "53127cae:artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "fileSha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609",
+      "identitySha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98"
+    },
+    "frameSolver": {
+      "sourceRef": "cc/mushfinger-cast-correspondence-0807@9289f3bc:frame-link-core.mjs",
+      "fileSha256": "6baa9c86a238ba4ee4059fc1976ba26bdf1e059bd60e8d3c9885f63255221116",
+      "registrationCoreFileSha256": "03363b00f7b4fe75625c2e9268b2a575dcb1128f97166890dafd54f03cc62ced"
+    },
+    "metricCore": {
+      "sourceRef": "53127cae:k4-envelope-fit-core.mjs",
+      "fileSha256": "077f277f6a41f15fd5f490db1056cfb8c25d51f25a621b84401c6e9136bdfac4"
+    },
+    "constructionOrder": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ]
+  },
+  "solverComparison": {
+    "base": {
+      "sampleCount": 2000,
+      "maxIterations": 120,
+      "iterations": 120,
+      "converged": false,
+      "scaleLocked": true,
+      "insideFraction": 0.9915,
+      "outsideCount": 17,
+      "outsideQ95": 0.1580035324418672,
+      "transform": {
+        "rotation": [
+          [0.9999973343244632, -0.0005648885216679898, 0.002238804351880802],
+          [0.0005428292799864085, 0.9999514236834568, 0.009841524770076287],
+          [-0.0022442549633904137, -0.00984028324721027, 0.999949064775438]
+        ],
+        "translation": [-59.3660538094313, 24.36251889862305, -0.016053850531601924]
+      }
+    },
+    "extended": {
+      "sampleCount": 2000,
+      "maxIterations": 360,
+      "iterations": 189,
+      "converged": true,
+      "scaleLocked": true,
+      "insideFraction": 0.9915,
+      "outsideCount": 17,
+      "outsideQ95": 0.15800328069386563,
+      "transform": {
+        "rotation": [
+          [0.9999973343583294, -0.0005648828671987822, 0.002238790651737807],
+          [0.0005428237417942652, 0.999951423604037, 0.009841533145085056],
+          [-0.0022442412128174153, -0.009840291642365702, 0.9999490647236842]
+        ],
+        "translation": [-59.36605368280332, 24.362518796084238, -0.01605415199115273]
+      }
+    },
+    "delta": {
+      "maximumRotationEntryDelta": 1.3750572998381255e-8,
+      "translationDelta": [1.2662798098972416e-7, -1.0253881299604473e-7, -3.0145955080482234e-7],
+      "translationDeltaNorm": 3.426758154752346e-7
+    }
+  },
+  "candidateFrameReceiptSha256": "cb840e9e47cc3930cd9901bfd7e316a1326b4f517b910532c94b2978d9db5339",
+  "metricComparison": {
+    "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled",
+    "rows": [
+      {
+        "constructionId": "muscle-34",
+        "baseInsideFraction": 0.6602564102564102,
+        "convergedInsideFraction": 0.6602564102564102,
+        "insideFractionDelta": 0,
+        "baseMeanSignedDistance": -1.1978436954453795,
+        "convergedMeanSignedDistance": -1.1978436876740481,
+        "meanSignedDistanceDelta": 7.771331356209998e-9,
+        "baseMaximumOutsideExcursion": 2.480402521608233,
+        "convergedMaximumOutsideExcursion": 2.4804023731949725,
+        "maximumOutsideExcursionDelta": -1.484132603479793e-7
+      },
+      {
+        "constructionId": "muscle-13",
+        "baseInsideFraction": 0.9358974358974359,
+        "convergedInsideFraction": 0.9358974358974359,
+        "insideFractionDelta": 0,
+        "baseMeanSignedDistance": -1.391692200795551,
+        "convergedMeanSignedDistance": -1.3916922274457664,
+        "meanSignedDistanceDelta": -2.6650215367851615e-8,
+        "baseMaximumOutsideExcursion": 0.47652943933606107,
+        "convergedMaximumOutsideExcursion": 0.4765292735785951,
+        "maximumOutsideExcursionDelta": -1.65757465975247e-7
+      },
+      {
+        "constructionId": "muscle-12",
+        "baseInsideFraction": 0.5961538461538461,
+        "convergedInsideFraction": 0.5961538461538461,
+        "insideFractionDelta": 0,
+        "baseMeanSignedDistance": -0.7467127027818474,
+        "convergedMeanSignedDistance": -0.7467127503323107,
+        "meanSignedDistanceDelta": -4.755046323356993e-8,
+        "baseMaximumOutsideExcursion": 2.527441861573392,
+        "convergedMaximumOutsideExcursion": 2.5274417036407937,
+        "maximumOutsideExcursionDelta": -1.5793259811047733e-7
+      },
+      {
+        "constructionId": "muscle-45",
+        "baseInsideFraction": 0.6089743589743589,
+        "convergedInsideFraction": 0.6089743589743589,
+        "insideFractionDelta": 0,
+        "baseMeanSignedDistance": -0.6767319872520196,
+        "convergedMeanSignedDistance": -0.6767320377360273,
+        "meanSignedDistanceDelta": -5.048400775198303e-8,
+        "baseMaximumOutsideExcursion": 2.822790688719696,
+        "convergedMaximumOutsideExcursion": 2.822790532676024,
+        "maximumOutsideExcursionDelta": -1.5604367176180745e-7
+      }
+    ],
+    "maximumAbsoluteMeanSignedDistanceDelta": 5.048400775198303e-8,
+    "maximumAbsoluteOutsideExcursionDelta": 1.65757465975247e-7,
+    "maximumRelativeOutsideExcursionDelta": 3.4784307598328773e-7
+  },
+  "disposition": "FORMAL_NONCONVERGENCE_NOT_MATERIAL / SHAPE_DOMINATED_UNDER_EXACT_SOLVER_CONTINUATION",
+  "interpretation": "The exact scale-locked frame solver converges with additional budget, but its transform and every K4 envelope-fit inside fraction remain unchanged at reported precision. The current formal nonconvergence flag is not a material explanation of the K4 envelope residual under this solver/objective. Shape succession becomes the dominant next discriminator.",
+  "heldClaims": [
+    "anatomically-correct-frame",
+    "alternate-registration-objective-equivalence",
+    "body-interior-envelope-fit",
+    "authored-muscle-shape",
+    "production-admission"
+  ]
+}
