@@ -1,0 +1,18 @@
+{
+  "name": "az000-el18",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "6dbd321f98f7",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+  "input_name": "az000-el18.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/prompts/p11-tripodal-organism.txt",
+    "seed": "80302",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786172337.848625,
+  "duration_s": 46.2
+}

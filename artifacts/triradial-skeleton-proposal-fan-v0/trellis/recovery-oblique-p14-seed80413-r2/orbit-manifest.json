@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.4055163860321045,
+      0.37568899989128113,
+      0.4998847544193268
+    ],
+    "low": [
+      -0.40364065766334534,
+      -0.38529688119888306,
+      -0.4999798834323883
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/output.glb",
+    "sha256": "59976e18c5c7b67af46e8862bc3be18bf0626ab13046cc26aea0014e1f12d805"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 562824,
+      "cameraLocation": [
+        2.632272481918335,
+        -0.004803940653800964,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.2608731985092163,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az000-el12.png",
+      "sha256": "9ee5f078360ad8787eab821e564088b2f3d7e6afb1c012bcf74a52048daa1065"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 522139,
+      "cameraLocation": [
+        1.3166050910949707,
+        2.273998737335205,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.319067358970642,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az060-el12.png",
+      "sha256": "cb74d2d077ea6a438375340bced1507fe62bfae149de83ac06bb954f1e2f469b"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 519131,
+      "cameraLocation": [
+        -1.3147294521331787,
+        2.273998737335205,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.319067358970642,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az120-el12.png",
+      "sha256": "1d31637824f494c8a8850208d9304503734ccd6e5e272ca568eba12fefd7ae1d"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 544350,
+      "cameraLocation": [
+        -2.630396604537964,
+        -0.004803940653800964,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.2608731985092163,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az180-el12.png",
+      "sha256": "374a954000d6efa996641ea2290f5abef9dfff710713c13a3fbc6e9d26f849ae"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 551769,
+      "cameraLocation": [
+        -1.3147294521331787,
+        -2.28360652923584,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.319067358970642,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az240-el12.png",
+      "sha256": "2d11d17d3436e1f645958f1d8959981364b3ea90fb3c8b8e06c401cef4a07b23"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 562809,
+      "cameraLocation": [
+        1.3166050910949707,
+        -2.28360652923584,
+        0.5592598915100098
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.319067358970642,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/trellis/recovery-oblique-p14-seed80413-r2/orbit/az300-el12.png",
+      "sha256": "cb239427df623fc3c7cd600c31bf524de721b8b5dff2305b5cf956bb03fabf97"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 167310
+}

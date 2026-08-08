@@ -1,0 +1,18 @@
+{
+  "name": "az000-el18",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "bd3815cc2361",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+  "input_name": "az000-el18.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/prompts/p16-graceful-tripodal-feline.txt",
+    "seed": "80301",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786173189.06388,
+  "duration_s": 37.6
+}

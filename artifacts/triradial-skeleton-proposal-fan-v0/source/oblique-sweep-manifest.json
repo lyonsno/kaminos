@@ -1,0 +1,147 @@
+{
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "blenderVersion": "5.1.2",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "singleColor": [
+      0.800000011920929,
+      0.75,
+      0.6200000047683716
+    ]
+  },
+  "meshCount": 35,
+  "meshNames": [
+    "SRC_PELVIS.001",
+    "Cube.099",
+    "Cube.100",
+    "Cube.101",
+    "Cube.102",
+    "Cube.103",
+    "Cube.104",
+    "Cube.105",
+    "Cube.106",
+    "Cube.110",
+    "Cube.111",
+    "Cube.112",
+    "Cube.113",
+    "Cube.114",
+    "Cube.115",
+    "Cube.116",
+    "Cube.117",
+    "Cube.121",
+    "Cube.122",
+    "Cube.123",
+    "Cube.124",
+    "Cube.125",
+    "Cube.126",
+    "Cube.127",
+    "Cube.128",
+    "Cube.098",
+    "Cube.107",
+    "Cube.108",
+    "Cube.109",
+    "Cube.118",
+    "Cube.119",
+    "Cube.120",
+    "Cube.129",
+    "Cube.130",
+    "Cube.131"
+  ],
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 294464,
+      "cameraLocation": [
+        95.6851577758789,
+        0.9199233055114746,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az000-el18",
+      "orthoScale": 49.1330451965332,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+      "sha256": "ad5848cfbc26ca1df4b38279f1b00e11d9a463ef24fc6748245536da745e95de"
+    },
+    {
+      "azimuthDegrees": 30.0,
+      "byteLength": 292519,
+      "cameraLocation": [
+        82.77728271484375,
+        49.0927734375,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az030-el18",
+      "orthoScale": 49.87650680541992,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az030-el18.png",
+      "sha256": "2ee289ec59f2384ee7177a7c5ba45f05cd2473d6e12c6b74836b9cefcfc241c8"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 292319,
+      "cameraLocation": [
+        47.51231002807617,
+        84.35774993896484,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az060-el18",
+      "orthoScale": 49.62403106689453,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az060-el18.png",
+      "sha256": "3002c2c44d64fe745686cb1a1fda84fc655a99a178e20582f22dabdafda63932"
+    },
+    {
+      "azimuthDegrees": 90.0,
+      "byteLength": 294435,
+      "cameraLocation": [
+        -0.6605424880981445,
+        97.265625,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az090-el18",
+      "orthoScale": 49.02562713623047,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az090-el18.png",
+      "sha256": "ea59299d0cdbe0ef2b38eec5d1e8b932d7d869f6be0def58170878500a93dd25"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 291588,
+      "cameraLocation": [
+        -48.83339309692383,
+        84.35774993896484,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az120-el18",
+      "orthoScale": 50.005775451660156,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az120-el18.png",
+      "sha256": "92244a78eadda3d6a53fc08e4830ebbf5e008e942040d3657fb7acabbbfd95ea"
+    },
+    {
+      "azimuthDegrees": 150.0,
+      "byteLength": 293568,
+      "cameraLocation": [
+        -84.09837341308594,
+        49.0927734375,
+        -50.494476318359375
+      ],
+      "elevationDegrees": 18.0,
+      "label": "az150-el18",
+      "orthoScale": 49.16978454589844,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az150-el18.png",
+      "sha256": "575e19b4990d44737eaf2fc233102753118b5de827bcb6a2342de14dc3775f82"
+    }
+  ],
+  "schema": "kaminos.triradial-oblique-source-sweep.v0",
+  "source": {
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/triradial-bauplan-013.blend",
+    "sha256": "39f9d3458264643fcc948bbaa7b5dbdaaa3d17a27ea9d60b6e828dd51160cdde"
+  },
+  "status": "completed"
+}

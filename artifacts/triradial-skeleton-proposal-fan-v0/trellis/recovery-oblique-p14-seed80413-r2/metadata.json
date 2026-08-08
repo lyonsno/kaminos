@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "eeeedf588a83",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/recovery-runs/oblique-bone/p14-seed80413/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "80413"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786174306.7606342,
+  "duration_s": 103.8
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos.generator-tripodal-biological-basin-extension.v0",
+  "parentContract": "artifacts/triradial-skeleton-proposal-fan-v0/tripodal-recovery-contract.json",
+  "triggeringResult": "The oblique source recovered one organic three-legged completion, while skeleton-directed prompts preserved skeletal material and the recovered organic basin was not operator-safe or envelope-authorable.",
+  "question": "Can a concise familiar soft-tissue prior retain the recovered three-leg topology while moving the output into a happy, envelope-authorable biological basin?",
+  "source": {
+    "id": "oblique-bone",
+    "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+    "sha256": "ad5848cfbc26ca1df4b38279f1b00e11d9a463ef24fc6748245536da745e95de"
+  },
+  "prompts": [
+    {
+      "id": "p15",
+      "class": "friendly-tripodal-mammal",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p15-friendly-tripodal-mammal.txt"
+    },
+    {
+      "id": "p16",
+      "class": "graceful-tripodal-feline",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p16-graceful-tripodal-feline.txt"
+    }
+  ],
+  "seeds": [80301, 80302, 80413],
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "admission": [
+    "Exactly three grounded support chains remain visibly distinct.",
+    "Each support chain connects continuously from central body mass to a distal foot.",
+    "The completion has enough coherent soft-tissue organization to support a low-frequency authored envelope.",
+    "The output is positively classified as happy or aesthetically pleasing before operator exposure."
+  ],
+  "claimCeiling": "A positive cell can justify one Trellis reconstruction and an authored-envelope attempt. It cannot establish retained 3D topology until the cast is inspected from multiple views."
+}

@@ -1,0 +1,18 @@
+{
+  "name": "operator-blender-front-square-512",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "3b005f6ce390",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+  "input_name": "operator-blender-front-square-512.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/prompts/p12-load-bearing-legs.txt",
+    "seed": "80413",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786171936.823066,
+  "duration_s": 48.3
+}

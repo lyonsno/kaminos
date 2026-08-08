@@ -1,0 +1,147 @@
+{
+  "effectiveRoute": {
+    "anatomicalDorsal": [
+      0.0,
+      0.0,
+      -1.0
+    ],
+    "blenderVersion": "5.1.2",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH",
+    "singleColor": [
+      0.800000011920929,
+      0.75,
+      0.6200000047683716
+    ]
+  },
+  "meshCount": 35,
+  "meshNames": [
+    "SRC_PELVIS.001",
+    "Cube.099",
+    "Cube.100",
+    "Cube.101",
+    "Cube.102",
+    "Cube.103",
+    "Cube.104",
+    "Cube.105",
+    "Cube.106",
+    "Cube.110",
+    "Cube.111",
+    "Cube.112",
+    "Cube.113",
+    "Cube.114",
+    "Cube.115",
+    "Cube.116",
+    "Cube.117",
+    "Cube.121",
+    "Cube.122",
+    "Cube.123",
+    "Cube.124",
+    "Cube.125",
+    "Cube.126",
+    "Cube.127",
+    "Cube.128",
+    "Cube.098",
+    "Cube.107",
+    "Cube.108",
+    "Cube.109",
+    "Cube.118",
+    "Cube.119",
+    "Cube.120",
+    "Cube.129",
+    "Cube.130",
+    "Cube.131"
+  ],
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 291513,
+      "cameraLocation": [
+        82.32272338867188,
+        0.9199233055114746,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az000-el35",
+      "orthoScale": 49.13146209716797,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az000-el35.png",
+      "sha256": "7f71e7cb1349ad01a56522b8ba966e3f1b07a44fa18226fa455bbf49bda927b9"
+    },
+    {
+      "azimuthDegrees": 30.0,
+      "byteLength": 290322,
+      "cameraLocation": [
+        71.20507049560547,
+        42.411556243896484,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az030-el35",
+      "orthoScale": 50.737396240234375,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az030-el35.png",
+      "sha256": "687057d43fb624d579c8341678597cb6a0d5b1303af48b4fe746823b06bc15b4"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 290373,
+      "cameraLocation": [
+        40.831092834472656,
+        72.78553771972656,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az060-el35",
+      "orthoScale": 50.057655334472656,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az060-el35.png",
+      "sha256": "b5f530fffc0a114f78bdd2cf7aedb2b02637faf095c12161945339344e72eacb"
+    },
+    {
+      "azimuthDegrees": 90.0,
+      "byteLength": 291363,
+      "cameraLocation": [
+        -0.6605424880981445,
+        83.90319061279297,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az090-el35",
+      "orthoScale": 49.15804672241211,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az090-el35.png",
+      "sha256": "ec0aae57fb4b3cceaea4d0a558d7c671fe304b615c0e74ae6f752e458053dad2"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 287868,
+      "cameraLocation": [
+        -42.15217590332031,
+        72.78553771972656,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az120-el35",
+      "orthoScale": 51.33073043823242,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az120-el35.png",
+      "sha256": "8757a250a00ea8becf6371eed58f7e921b21f954fa7944b3a8218f216fa66480"
+    },
+    {
+      "azimuthDegrees": 150.0,
+      "byteLength": 290365,
+      "cameraLocation": [
+        -72.52616119384766,
+        42.411556243896484,
+        -77.29537200927734
+      ],
+      "elevationDegrees": 35.0,
+      "label": "az150-el35",
+      "orthoScale": 49.778995513916016,
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep-el35/az150-el35.png",
+      "sha256": "1efbd8fb1512ccab1c555c2745bbf9cf6f213913ae77cb1064035e45147101f5"
+    }
+  ],
+  "schema": "kaminos.triradial-oblique-source-sweep.v0",
+  "source": {
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/triradial-bauplan-013.blend",
+    "sha256": "39f9d3458264643fcc948bbaa7b5dbdaaa3d17a27ea9d60b6e828dd51160cdde"
+  },
+  "status": "completed"
+}

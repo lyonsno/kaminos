@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.generator-tripodal-recovery-contract.v0",
+  "parentCampaign": "triradial-skeleton-proposal-fan-v0",
+  "triggeringObservation": "The first reconstructed cast retained only vague protrusion count. It did not contain a coherent tripodal biological load path or useful envelope scaffolding.",
+  "question": "Do a support-legible oblique source plate and an explicit tripodal organism prior recover three continuous biological support chains before reconstruction?",
+  "hypotheses": [
+    "The frontal gray source collapses one radial support into other geometry and leaves material identity underdetermined.",
+    "The unfamiliar topology needs an explicit tripodal organism prior rather than only three-legged wording.",
+    "If neither correction yields biological 2D chains, reconstruction is downstream of the current failure and should not receive more cells."
+  ],
+  "sources": [
+    {
+      "id": "front-gray",
+      "role": "existing projection baseline",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+      "sha256": "4bf30a4726d7b43b17b35241dc9868360533f4eeba7c88af90ef58f8e4806da1"
+    },
+    {
+      "id": "oblique-bone",
+      "role": "support-legible projection and material-prior correction",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+      "sha256": "ad5848cfbc26ca1df4b38279f1b00e11d9a463ef24fc6748245536da745e95de"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "p11",
+      "class": "tripodal-prior-only",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p11-tripodal-organism.txt"
+    },
+    {
+      "id": "p12",
+      "class": "three-load-bearing-legs",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p12-load-bearing-legs.txt"
+    },
+    {
+      "id": "p13",
+      "class": "skeleton-tripodal",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p13-skeleton-tripodal.txt"
+    },
+    {
+      "id": "p14",
+      "class": "skeleton-friendly-tripodal",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p14-skeleton-friendly-tripodal.txt"
+    }
+  ],
+  "seeds": [80301, 80302, 80413],
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "twoDimensionalAdmission": [
+    "Exactly three grounded support chains remain visibly distinct.",
+    "Each support chain connects continuously from central body mass to a distal foot.",
+    "The chains contain credible biological articulation, taper, or mass organization rather than disconnected blocks.",
+    "The completion does not silently substitute an ordinary bilateral quadruped.",
+    "The output is positively classified as happy or aesthetically pleasing before operator exposure."
+  ],
+  "reconstructionGate": "No cell reaches Trellis unless it satisfies every two-dimensional admission criterion.",
+  "claimCeiling": "A positive cell may establish a useful 2D biological envelope reference for this source projection and prompt. It cannot establish retained 3D topology until a reconstructed cast is inspected from multiple views."
+}

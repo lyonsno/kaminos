@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.generator-tripodal-tissue-wrap-extension.v0",
+  "parentContract": "artifacts/triradial-skeleton-proposal-fan-v0/tripodal-recovery-contract.json",
+  "triggeringResult": "Generic tripodal wording recovered organic three-leg topology in one unsafe cell. Familiar mammal priors produced happy outputs but overwrote or overlaid the authored structure instead of wrapping it.",
+  "question": "Can a concise body-region edit wrap the exact authored three-support structure in coherent living tissue without replacing its topology?",
+  "source": {
+    "id": "oblique-bone",
+    "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/oblique-sweep/az000-el18.png",
+    "sha256": "ad5848cfbc26ca1df4b38279f1b00e11d9a463ef24fc6748245536da745e95de"
+  },
+  "prompts": [
+    {
+      "id": "p17",
+      "class": "wrap-exact-tripodal-skeleton",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p17-wrap-tripodal-skeleton.txt"
+    },
+    {
+      "id": "p18",
+      "class": "wrap-exact-three-legs",
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p18-wrap-three-legs.txt"
+    }
+  ],
+  "seeds": [80301, 80302, 80413],
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "admission": [
+    "Exactly three grounded support chains remain visibly distinct.",
+    "Each support chain connects continuously from central body mass to a distal foot.",
+    "Living soft tissue wraps rather than merely accompanies the source support structure.",
+    "The completion has enough coherent mass organization for a low-frequency authored envelope.",
+    "The output is positively classified as happy or aesthetically pleasing before operator exposure."
+  ],
+  "claimCeiling": "A positive cell can justify one Trellis reconstruction and an authored-envelope attempt. It cannot establish retained 3D topology until the cast is inspected from multiple views."
+}
