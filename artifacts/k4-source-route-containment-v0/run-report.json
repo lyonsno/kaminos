@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.k4-source-route-containment-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "inputs": {
+    "parentAtlas": {
+      "requestedPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+      "effectivePath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+      "fileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71"
+    },
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "fileSha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "fileSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "solverCarrier": {
+      "requestedPath": "git://3f49ef97/artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "git://3f49ef97/artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "fileSha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "shapeAssay": {
+      "requestedPath": "git://3f49ef97/artifacts/k4-envelope-clamped-shape-assay-v0/shape-assay-result.json",
+      "effectivePath": "git://3f49ef97/artifacts/k4-envelope-clamped-shape-assay-v0/shape-assay-result.json",
+      "fileSha256": "df29bb724c8c9c1621cfecd93e1ec3cca2ef96b47a580fb2d7d4bed37c02c877"
+    }
+  },
+  "output": {
+    "requestedPath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+    "effectivePath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+    "fileSha256": "c66fe9ebd07651d9e5022004fd8a4afbd9b49141bdf7f1aa3e40bb6c420ac92a"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-written",
+    "returnedEscapeSectionIds": [
+      "muscle-34:section:0009",
+      "muscle-34:section:0010",
+      "muscle-34:section:0011",
+      "muscle-12:section:0008",
+      "muscle-12:section:0009",
+      "muscle-12:section:0010",
+      "muscle-12:section:0011",
+      "muscle-45:section:0008",
+      "muscle-45:section:0009",
+      "muscle-45:section:0010",
+      "muscle-45:section:0011"
+    ],
+    "outputFileSha256": "c66fe9ebd07651d9e5022004fd8a4afbd9b49141bdf7f1aa3e40bb6c420ac92a"
+  }
+}
