@@ -10,11 +10,78 @@
 // nearest refinement groups); quality upgrades are future slices with the
 // same interfaces.
 
+import { createHash } from 'node:crypto';
+
 import { buildSurfaceIndex, sampleSurface } from './cast-registration-core.mjs';
 import { applyChain } from './bone-containment-probe-core.mjs';
 import { deriveRefinementGroups } from './articulated-refinement-core.mjs';
+import {
+  canonicalProxyRigJson,
+  PROXY_RIG_PACKAGE_SCHEMA,
+  PROXY_RIG_RUNTIME_SCHEMA,
+} from './proxy-rig-runtime.mjs';
+
+export {
+  buildCastAdjacency,
+  PROXY_RIG_PACKAGE_SCHEMA,
+  PROXY_RIG_RUNTIME_SCHEMA,
+  poseCastThroughProxy,
+  poseEnvelope,
+  smoothDisplacementField,
+} from './proxy-rig-runtime.mjs';
 
 export const PROXY_RIG_SCHEMA = 'kaminos.proxy-rig.v0';
+
+function serialGeometry(geometry) {
+  return {
+    positions: Array.from(geometry.positions),
+    triangles: Array.from(geometry.triangles),
+  };
+}
+
+export function createProxyRigPackage({
+  envelopeInCastFrame,
+  cast,
+  skinBinding,
+  castBinding,
+  source,
+}) {
+  for (const key of ['cast', 'envelope', 'skeleton']) {
+    if (typeof source?.[key] !== 'string' || !source[key].trim()) {
+      throw new Error(`Proxy rig package source.${key} is required`);
+    }
+  }
+  const content = {
+    schema: PROXY_RIG_PACKAGE_SCHEMA,
+    runtimeSchema: PROXY_RIG_RUNTIME_SCHEMA,
+    source: { ...source },
+    envelope: serialGeometry(envelopeInCastFrame),
+    cast: serialGeometry(cast),
+    skinBinding: {
+      groups: skinBinding.groups.map(group => ({ name: group.name, pivot: Array.from(group.pivot) })),
+      neighbors: skinBinding.neighbors,
+      weightGroups: Array.from(skinBinding.weightGroups),
+      weightValues: Array.from(skinBinding.weightValues),
+    },
+    castBinding: {
+      triangle: Array.from(castBinding.triangle),
+      local: Array.from(castBinding.local),
+    },
+  };
+  const digest = createHash('sha256').update(canonicalProxyRigJson(content)).digest('hex');
+  return { ...content, packageId: `sha256:${digest}` };
+}
+
+export function assertProxyRigArtifactHash(bytes, expectedSha256, label) {
+  if (typeof expectedSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(expectedSha256)) {
+    throw new Error(`Proxy rig ${label} receipt hash is missing or malformed`);
+  }
+  const actual = createHash('sha256').update(bytes).digest('hex');
+  if (actual !== expectedSha256) {
+    throw new Error(`Proxy rig ${label} bytes do not match receipt hash: ${actual} != ${expectedSha256}`);
+  }
+  return actual;
+}
 
 // --- envelope <- skeleton binding ----------------------------------------------
 
@@ -133,157 +200,4 @@ export function bindCastToEnvelope({ cast, envelopeInCastFrame }) {
     }
   }
   return binding;
-}
-
-// --- posing ---------------------------------------------------------------------
-
-function rotationFromAxisAngle(axis, angleDeg) {
-  const angle = (angleDeg * Math.PI) / 180;
-  const len = Math.hypot(...axis) || 1;
-  if (Math.abs(angleDeg) < 1e-9) return [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-  const [x, y, z] = axis.map(v => v / len);
-  const c = Math.cos(angle); const s = Math.sin(angle); const t = 1 - c;
-  return [
-    [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
-    [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
-    [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
-  ];
-}
-
-// pose: { [groupName]: { axis: [x,y,z], angleDeg, pivot?: override } }
-export function poseEnvelope({ envelopeInCastFrame, skinBinding, pose }) {
-  const { weightGroups, weightValues, neighbors, groups } = skinBinding;
-  const transforms = groups.map(group => {
-    const spec = pose[group.name];
-    if (!spec) return null;
-    return {
-      rotation: rotationFromAxisAngle(spec.axis, spec.angleDeg),
-      pivot: spec.pivot ?? group.pivot,
-    };
-  });
-  const vertexCount = envelopeInCastFrame.positions.length / 3;
-  const posed = envelopeInCastFrame.positions.slice();
-  for (let v = 0; v < vertexCount; v += 1) {
-    const px = posed[v * 3]; const py = posed[v * 3 + 1]; const pz = posed[v * 3 + 2];
-    let ox = 0; let oy = 0; let oz = 0;
-    for (let k = 0; k < neighbors; k += 1) {
-      const g = weightGroups[v * neighbors + k];
-      const w = weightValues[v * neighbors + k];
-      const t = g >= 0 ? transforms[g] : null;
-      if (!t) { ox += w * px; oy += w * py; oz += w * pz; continue; }
-      const [cx, cy, cz] = t.pivot;
-      const x = px - cx; const y = py - cy; const z = pz - cz;
-      ox += w * (t.rotation[0][0] * x + t.rotation[0][1] * y + t.rotation[0][2] * z + cx);
-      oy += w * (t.rotation[1][0] * x + t.rotation[1][1] * y + t.rotation[1][2] * z + cy);
-      oz += w * (t.rotation[2][0] * x + t.rotation[2][1] * y + t.rotation[2][2] * z + cz);
-    }
-    posed[v * 3] = ox; posed[v * 3 + 1] = oy; posed[v * 3 + 2] = oz;
-  }
-  return { positions: posed, triangles: envelopeInCastFrame.triangles };
-}
-
-// --- displacement-field smoothing ------------------------------------------------
-
-// Correspondence discontinuities (adjacent cast vertices bound to envelope
-// triangles that diverge under pose - chin/chest, ear/shoulder gaps) produce
-// spike artifacts. Body motion is low-frequency; spikes are single-vertex
-// outliers - so smooth the DISPLACEMENT field over the cast's own topology,
-// never the positions, preserving surface detail exactly at identity.
-// Adjacency merges positionally-duplicated vertices (flat-shaded exports)
-// so smoothing crosses shading seams.
-export function buildCastAdjacency(cast) {
-  const vertexCount = cast.positions.length / 3;
-  const key = v => `${cast.positions[v * 3].toFixed(6)},${cast.positions[v * 3 + 1].toFixed(6)},${cast.positions[v * 3 + 2].toFixed(6)}`;
-  const canon = new Map();
-  const vid = new Int32Array(vertexCount);
-  for (let v = 0; v < vertexCount; v += 1) {
-    const k = key(v);
-    if (!canon.has(k)) canon.set(k, v);
-    vid[v] = canon.get(k);
-  }
-  const adjacency = new Map();
-  const link = (a, b) => {
-    if (!adjacency.has(a)) adjacency.set(a, new Set());
-    adjacency.get(a).add(b);
-  };
-  const { triangles } = cast;
-  for (let t = 0; t < triangles.length; t += 3) {
-    const a = vid[triangles[t]]; const b = vid[triangles[t + 1]]; const c = vid[triangles[t + 2]];
-    link(a, b); link(b, a); link(b, c); link(c, b); link(a, c); link(c, a);
-  }
-  return { vid, adjacency };
-}
-
-export function smoothDisplacementField({
-  cast,
-  posedPositions,
-  adjacency: adjacencyInput = null,
-  iterations = 15,
-  lambda = 0.6,
-}) {
-  const { vid, adjacency } = adjacencyInput ?? buildCastAdjacency(cast);
-  const vertexCount = cast.positions.length / 3;
-  // Canonical displacement (merged verts share one displacement).
-  let disp = new Map();
-  for (let v = 0; v < vertexCount; v += 1) {
-    const c = vid[v];
-    if (!disp.has(c)) {
-      disp.set(c, [
-        posedPositions[v * 3] - cast.positions[v * 3],
-        posedPositions[v * 3 + 1] - cast.positions[v * 3 + 1],
-        posedPositions[v * 3 + 2] - cast.positions[v * 3 + 2],
-      ]);
-    }
-  }
-  for (let iter = 0; iter < iterations; iter += 1) {
-    const next = new Map();
-    for (const [v, d] of disp) {
-      const neighbors = adjacency.get(v);
-      if (!neighbors || neighbors.size === 0) { next.set(v, d); continue; }
-      const mean = [0, 0, 0];
-      for (const n of neighbors) {
-        const nd = disp.get(n) ?? [0, 0, 0];
-        mean[0] += nd[0]; mean[1] += nd[1]; mean[2] += nd[2];
-      }
-      const inv = 1 / neighbors.size;
-      next.set(v, [
-        d[0] + lambda * (mean[0] * inv - d[0]),
-        d[1] + lambda * (mean[1] * inv - d[1]),
-        d[2] + lambda * (mean[2] * inv - d[2]),
-      ]);
-    }
-    disp = next;
-  }
-  const out = new Float64Array(cast.positions.length);
-  for (let v = 0; v < vertexCount; v += 1) {
-    const d = disp.get(vid[v]);
-    out[v * 3] = cast.positions[v * 3] + d[0];
-    out[v * 3 + 1] = cast.positions[v * 3 + 1] + d[1];
-    out[v * 3 + 2] = cast.positions[v * 3 + 2] + d[2];
-  }
-  return out;
-}
-
-export function poseCastThroughProxy({ cast, posedEnvelope, castBinding }) {
-  const { positions, triangles } = posedEnvelope;
-  const vertexCount = cast.positions.length / 3;
-  const posed = new Float64Array(cast.positions.length);
-  for (let v = 0; v < vertexCount; v += 1) {
-    const t = castBinding.triangle[v];
-    const ia = triangles[t * 3] * 3; const ib = triangles[t * 3 + 1] * 3; const ic = triangles[t * 3 + 2] * 3;
-    const e0x = positions[ib] - positions[ia]; const e0y = positions[ib + 1] - positions[ia + 1]; const e0z = positions[ib + 2] - positions[ia + 2];
-    const e1x = positions[ic] - positions[ia]; const e1y = positions[ic + 1] - positions[ia + 1]; const e1z = positions[ic + 2] - positions[ia + 2];
-    let nx = e0y * e1z - e0z * e1y;
-    let ny = e0z * e1x - e0x * e1z;
-    let nz = e0x * e1y - e0y * e1x;
-    const nLen = Math.hypot(nx, ny, nz) || 1e-18;
-    nx /= nLen; ny /= nLen; nz /= nLen;
-    const a = castBinding.local[v * 3];
-    const b = castBinding.local[v * 3 + 1];
-    const c = castBinding.local[v * 3 + 2];
-    posed[v * 3] = positions[ia] + a * e0x + b * e1x + c * nx;
-    posed[v * 3 + 1] = positions[ia + 1] + a * e0y + b * e1y + c * ny;
-    posed[v * 3 + 2] = positions[ia + 2] + a * e0z + b * e1z + c * nz;
-  }
-  return { positions: posed, triangles: cast.triangles };
 }

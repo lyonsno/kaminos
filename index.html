@@ -90,6 +90,26 @@ canvas { display: block; }
 .hybrid-control-row label, .hybrid-control-label { color: #858585; font-size: 10px; }
 .hybrid-control-value { color: #aaa; font: 9px 'SF Mono', monospace; text-align: right; }
 
+#proxy-rig-live-controls { position: absolute; top: 16px; left: 16px; width: min(248px, calc(100% - 32px)); z-index: 8; padding: 10px; border: 1px solid rgba(76,100,106,0.92); border-radius: 8px; background: rgba(17,20,21,0.92); backdrop-filter: blur(10px); box-shadow: 0 12px 34px rgba(0,0,0,0.38); }
+#proxy-rig-live-controls[hidden] { display: none; }
+#proxy-rig-live-controls[data-status="error"] { border-color: rgba(126,57,57,0.95); }
+.proxy-rig-live-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.proxy-rig-live-title { color: #e8eeee; font-size: 11px; font-weight: 700; }
+.proxy-rig-live-badge { color: #65c9d4; font: 9px 'SF Mono', monospace; text-transform: uppercase; }
+.proxy-rig-live-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.proxy-rig-live-row .select-input { min-width: 0; }
+.proxy-rig-live-row .tb-btn { flex: 1; min-width: 0; }
+.proxy-rig-live-row .tb-btn:disabled { opacity: 0.42; cursor: default; }
+#proxy-rig-record-button.recording { background: #722e32; border-color: #b44d53; color: #fff; }
+.proxy-rig-live-toggle { display: flex; align-items: center; gap: 6px; color: #909b9e; font-size: 10px; white-space: nowrap; }
+.proxy-rig-live-toggle input { accent-color: #58aeb8; }
+.proxy-rig-live-status { min-height: 24px; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.07); color: #88b9c0; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; }
+.proxy-rig-live-status.error { color: #efaaaa; }
+
+@media (max-width: 760px) {
+  #proxy-rig-live-controls { top: auto; bottom: 46px; }
+}
+
 #transform-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); padding: 6px 10px; border-radius: 8px; display: none; gap: 4px; align-items: center; border: 1px solid rgba(255,255,255,0.08); z-index: 5; }
 #transform-bar.visible { display: flex; }
 .tb-btn { padding: 5px 10px; background: #252525; border: 1px solid #333; border-radius: 5px; color: #aaa; font-size: 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
@@ -2673,6 +2693,26 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <button class="tb-btn" data-greenroom-preview-action="back" onclick="restoreAuthoredSceneFromPreview()">Back to Scene</button>
     </div>
   </div>
+  <div id="proxy-rig-live-controls" hidden data-status="idle">
+    <div class="proxy-rig-live-head">
+      <span class="proxy-rig-live-title">Live Proxy Rig</span>
+      <span class="proxy-rig-live-badge">Assay</span>
+    </div>
+    <div class="proxy-rig-live-row">
+      <select class="select-input" id="proxy-rig-control-select" aria-label="Proxy rig control"></select>
+      <button type="button" class="tb-btn" id="proxy-rig-reset-selected">Reset</button>
+    </div>
+    <div class="proxy-rig-live-row">
+      <button type="button" class="tb-btn" id="proxy-rig-record-button">Record</button>
+      <button type="button" class="tb-btn" id="proxy-rig-replay-button" disabled>Replay</button>
+      <button type="button" class="tb-btn" id="proxy-rig-stop-button" disabled>Stop</button>
+    </div>
+    <div class="proxy-rig-live-row">
+      <button type="button" class="tb-btn" id="proxy-rig-reset-all">Reset All</button>
+      <label class="proxy-rig-live-toggle"><input type="checkbox" id="proxy-rig-ghost-toggle" checked> Rest ghost</label>
+    </div>
+    <div class="proxy-rig-live-status" id="proxy-rig-live-status">Loading package</div>
+  </div>
   <div id="info-bar">No asset loaded</div>
   <div id="fps-counter" style="position:absolute; bottom:8px; right:12px; font-family:'SF Mono',monospace; font-size:11px; color:#888; pointer-events:none; z-index:10;"></div>
   <div id="viewport-drop-overlay">Drop GLB, OBJ, PLY/SPZ, or .kaminos.json</div>
@@ -2819,6 +2859,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { createProxyRigLiveHost, setProxyRigControlVisibility } from './proxy-rig-live-host.mjs';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -2833,6 +2874,7 @@ let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
+let proxyRigLiveHost = null;
 let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
@@ -4609,14 +4651,34 @@ function updateSplatCorrectionModeUi() {
 
 function attachTransformControlsToCurrentTarget() {
   if (!transformControls) return;
-  const target = splatCorrectionTransformTarget() || currentMesh;
+  const target = proxyRigLiveHost?.transformTarget() || splatCorrectionTransformTarget() || currentMesh;
   transformControls.detach();
-  transformControls.visible = false;
+  setProxyRigControlVisibility([], transformControls, false);
   if (target) {
     transformControls.attach(target);
-    transformControls.visible = true;
+    setProxyRigControlVisibility([], transformControls, true);
     document.getElementById('transform-bar')?.classList.add('visible');
   }
+}
+
+function initKaminosProxyRigRoute(packagePath) {
+  if (!proxyRigLiveHost) {
+    proxyRigLiveHost = createProxyRigLiveHost({
+      THREE,
+      scene,
+      camera,
+      orbitControls: controls,
+      transformControls,
+      renderer,
+      markDirty: () => window._kaminosDirty?.(),
+      setInfo,
+    });
+    window.kaminosProxyRigDebugState = () => proxyRigLiveHost.debugState();
+    window.kaminosProxyRigSelectControl = name => proxyRigLiveHost.selectControl(name);
+    window.kaminosProxyRigSetControlQuaternion = (name, quaternion) => proxyRigLiveHost.setControlQuaternion(name, quaternion);
+    window.kaminosProxyRigSetControlVisibility = visible => proxyRigLiveHost.setControlVisibility(visible);
+  }
+  return proxyRigLiveHost.load(packagePath);
 }
 
 function setSplatCorrectionDraftDirty(dirty = true) {
@@ -5520,7 +5582,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls');
+  return !!event.target.closest?.('#transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #proxy-rig-live-controls');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -5573,6 +5635,14 @@ function handleViewportSelectionClick(event) {
     };
     return;
   }
+
+  const proxyControl = proxyRigLiveHost?.pickControl(event);
+  if (proxyControl) {
+    proxyRigLiveHost.selectControl(proxyControl);
+    window._kaminosDirty?.();
+    return;
+  }
+  if (proxyRigLiveHost?.isActive()) return;
 
   const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
@@ -8960,7 +9030,12 @@ async function initScene() {
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
-    if (splatCorrectionTransformTarget()) {
+    updateTransformInspector();
+  });
+  transformControls.addEventListener('objectChange', () => {
+    if (proxyRigLiveHost?.transformTarget()) {
+      proxyRigLiveHost.handleControlChange();
+    } else if (splatCorrectionTransformTarget()) {
       syncSplatCorrectionDraftFromActiveTarget();
     } else {
       const entry = selectedSceneObjectEntry();
@@ -19549,6 +19624,10 @@ window.rotateAxis = function(axis) {
 };
 
 window.resetTransform = function() {
+  if (proxyRigLiveHost?.transformTarget()) {
+    proxyRigLiveHost.reset(true);
+    return;
+  }
   if (!currentMesh) return;
   // Re-center and re-scale from scratch
   currentMesh.rotation.set(0, 0, 0);
@@ -19764,7 +19843,8 @@ window.cullSmallFaces = function() {
 };
 
 window.setGizmoMode = function(mode) {
-  const target = splatCorrectionTransformTarget() || currentMesh;
+  const proxyTarget = proxyRigLiveHost?.transformTarget();
+  const target = proxyTarget || splatCorrectionTransformTarget() || currentMesh;
   if (!target) return;
   const btns = ['translate', 'rotate', 'scale'];
   btns.forEach(m => document.getElementById('tb-gizmo-' + m)?.classList.remove('active'));
@@ -19777,11 +19857,12 @@ window.setGizmoMode = function(mode) {
     setInfo('Gizmo off');
     return;
   }
+  if (proxyTarget) mode = 'rotate';
   transformControls.attach(target);
   transformControls.setMode(mode);
   transformControls.visible = true;
   document.getElementById('tb-gizmo-' + mode)?.classList.add('active');
-  const noun = splatCorrectionTransformTarget() ? 'splat correction draft' : 'scene object';
+  const noun = proxyTarget ? 'proxy control' : splatCorrectionTransformTarget() ? 'splat correction draft' : 'scene object';
   setInfo(`${mode.charAt(0).toUpperCase() + mode.slice(1)} gizmo: ${noun}`);
 };
 
@@ -19793,7 +19874,7 @@ window.addEventListener('keydown', e => {
     exitSplatCorrectionMode({ revert: true });
     return;
   }
-  if (!currentMesh && !splatCorrectionTransformTarget()) return;
+  if (!currentMesh && !splatCorrectionTransformTarget() && !proxyRigLiveHost?.transformTarget()) return;
   switch (e.key.toLowerCase()) {
     case 'w': setGizmoMode('translate'); break;
     case 'e': setGizmoMode('rotate'); break;
@@ -22117,6 +22198,14 @@ initScene().then(() => {
   // Load HDR environment first, then auto-load deep-linked splat if present
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
+    const proxyRigPackage = params.get('proxy_rig_package');
+    if (proxyRigPackage) {
+      try {
+        await initKaminosProxyRigRoute(proxyRigPackage);
+      } catch (err) {
+        console.error('Proxy rig deep-link failed:', err);
+      }
+    }
     const loadSplat = params.get('load');
     if (loadSplat) {
       // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
