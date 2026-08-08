@@ -13,6 +13,10 @@ const RAMP_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-result.v0';
 const RAMP_FRONTIER_REPORT_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-run-report.v0';
+const CONTACT_NORMAL_FRONTIER_SCHEMA =
+  'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0';
+const CONTACT_NORMAL_FRONTIER_REPORT_SCHEMA =
+  'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-run-report.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const VISUAL_REPORT_SCHEMA =
@@ -28,10 +32,13 @@ const RESULT_STATUS_BY_FRONTIER_SCHEMA = Object.freeze({
     'single-section-amplitude-frontier-rejected-visually-subtle-adjacency-bound',
   [RAMP_FRONTIER_SCHEMA]:
     'smooth-ramp-frontier-retained-scalar-advance-no-visual-selection',
+  [CONTACT_NORMAL_FRONTIER_SCHEMA]:
+    'contact-normal-frontier-retained-first-visible-directional-displacement-no-selection',
 });
 const REPORT_SCHEMA_BY_FRONTIER_SCHEMA = Object.freeze({
   [AMPLITUDE_FRONTIER_SCHEMA]: AMPLITUDE_FRONTIER_REPORT_SCHEMA,
   [RAMP_FRONTIER_SCHEMA]: RAMP_FRONTIER_REPORT_SCHEMA,
+  [CONTACT_NORMAL_FRONTIER_SCHEMA]: CONTACT_NORMAL_FRONTIER_REPORT_SCHEMA,
 });
 
 function sha256(bytes) {

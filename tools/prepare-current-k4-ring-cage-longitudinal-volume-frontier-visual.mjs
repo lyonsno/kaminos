@@ -16,6 +16,8 @@ const AMPLITUDE_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-amplitude-frontier-result.v0';
 const RAMP_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-result.v0';
+const CONTACT_NORMAL_FRONTIER_SCHEMA =
+  'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const REPORT_SCHEMA =
@@ -178,7 +180,17 @@ function candidateSubtitle(candidate) {
   const repayment = candidate.requested.repaymentSectionIds
     .map(sectionId => sectionId.split(':').at(-1))
     .join('/');
-  return `${candidate.status} · compress ${compression} · repay ${repayment}`;
+  const contactNormal = Number.isFinite(candidate.requested.anisotropyPeakScale)
+    ? ` · contact-normal peak ${candidate.requested.anisotropyPeakScale}` +
+      `/shoulder ${candidate.requested.anisotropyShoulderScale}`
+    : '';
+  return `${candidate.status} · compress ${compression} · repay ${repayment}${contactNormal}`;
+}
+
+function frontierFamilyLabel(frontier) {
+  return frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
+    ? 'contact-normal ramp frontier'
+    : 'longitudinal volume frontier';
 }
 
 function contactSheetHtml(frontier, manifest) {
@@ -212,9 +224,9 @@ function contactSheetHtml(frontier, manifest) {
     </dl>
   </article>`).join('\n');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Current-K4 longitudinal volume frontier · contact close</title>
+<title>Current-K4 ${escapeHtml(frontierFamilyLabel(frontier))} · contact close</title>
 <style>*{box-sizing:border-box}body{margin:0;padding:22px;background:#07090d;color:#f4eee3;font-family:Inter,system-ui,sans-serif}h1{margin:0 0 4px;font:700 22px/1.2 ui-monospace,monospace}p{margin:0 0 18px;color:#aeb9c6;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}article{overflow:hidden;border:1px solid #ffffff20;border-radius:12px;background:#0b1017}.image{aspect-ratio:14/9;background:#05070a}.image img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}header{display:flex;justify-content:space-between;gap:8px;padding:10px 12px 6px}header strong{font:700 12px/1.3 ui-monospace,monospace;color:#ffd166}header span{font-size:10px;color:#9aa8b7;text-align:right}dl{display:grid;grid-template-columns:1fr auto;gap:3px 12px;margin:0;padding:0 12px 12px;font:10px/1.25 ui-monospace,monospace}dt{color:#8e9baa}dd{margin:0;color:#dce6f0}.identity{margin-top:16px;color:#6f7d8c;font:9px/1.35 ui-monospace,monospace;overflow-wrap:anywhere}</style></head><body>
-<h1>Current-K4 longitudinal volume frontier · M45 section 11 close view</h1>
+<h1>Current-K4 ${escapeHtml(frontierFamilyLabel(frontier))} · M45 section 11 close view</h1>
 <p>The reference and every measured candidate share exact centerlines, attachments, source identity, and integrated M45 volume. Candidate status remains visible. This is provisional mechanism evidence, not packing or anatomical admission.</p>
 <section class="grid">${articles}</section>
 <div class="identity">manifest ${escapeHtml(manifest.identity.sha256)} · frontier ${escapeHtml(manifest.inputs.frontier.sha256)} · route ${escapeHtml(ROUTE)}</div>
@@ -261,11 +273,14 @@ try {
     },
   };
   phase = 'verify-frontier-input';
-  if (![AMPLITUDE_FRONTIER_SCHEMA, RAMP_FRONTIER_SCHEMA].includes(frontier?.schema) ||
-      frontier.status !== 'completed') {
+  if (![
+    AMPLITUDE_FRONTIER_SCHEMA,
+    RAMP_FRONTIER_SCHEMA,
+    CONTACT_NORMAL_FRONTIER_SCHEMA,
+  ].includes(frontier?.schema) || frontier.status !== 'completed') {
     throw new Error(
-      `visual preparation requires completed ${AMPLITUDE_FRONTIER_SCHEMA} or ` +
-      `${RAMP_FRONTIER_SCHEMA}`,
+      `visual preparation requires completed ${AMPLITUDE_FRONTIER_SCHEMA}, ` +
+      `${RAMP_FRONTIER_SCHEMA}, or ${CONTACT_NORMAL_FRONTIER_SCHEMA}`,
     );
   }
   if (frontier.inputs.source.sha256 !== sha256(sourceBytes) ||
@@ -285,10 +300,12 @@ try {
   }
   const compressionSectionId = frontier.schema === AMPLITUDE_FRONTIER_SCHEMA
     ? frontier.pressureSelection.compressionSectionIds[0]
-    : frontier.candidates
-      .flatMap(candidate => candidate.requested.compressionSections)
-      .sort((left, right) => left.areaScale - right.areaScale ||
-        right.sectionId.localeCompare(left.sectionId))[0]?.sectionId;
+    : frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
+      ? frontier.anisotropyContract.peakSectionId
+      : frontier.candidates
+        .flatMap(candidate => candidate.requested.compressionSections)
+        .sort((left, right) => left.areaScale - right.areaScale ||
+          right.sectionId.localeCompare(left.sectionId))[0]?.sectionId;
   const focusNodeId = `${compressionSectionId}:axis`;
   const focusCage = selectedCarrier.cages.find(cage =>
     cage.constructionId === compressionSectionId.split(':')[0]);
@@ -354,7 +371,9 @@ try {
         termination: {
           reason: frontier.schema === AMPLITUDE_FRONTIER_SCHEMA
             ? 'pressure-directed-longitudinal-amplitude-frontier'
-            : 'smooth-longitudinal-ramp-frontier',
+            : frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
+              ? 'contact-normal-cross-section-ramp-frontier'
+              : 'smooth-longitudinal-ramp-frontier',
         },
         metrics: { initial: initialMeasurement, packed: packedMeasurement },
         packedCarrier,
