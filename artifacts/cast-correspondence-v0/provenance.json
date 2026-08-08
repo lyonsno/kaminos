@@ -64,6 +64,12 @@
       "sha256": "f73c0a5227b7d932abde77741c740c75a39298f64d7023b5a8f4fdf127c11b37",
       "source": "greenroom job aace0378cf52 (trellis2mlx_fast seed 80301)",
       "role": "Trellis-cell LONG-NECK cast for the Trellis 2x2"
+    },
+    "skeleton-authored.glb": {
+      "sha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+      "source": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_skeleton.glb (operator direct, 2026-08-08)",
+      "role": "authored skeleton; 96 separable bone mesh nodes (only SRC_PELVIS semantically named), 18147 verts / 9111 tris",
+      "frame_finding": "NOT co-located with envelope as exported: offset ~[+59,-24,0], extents match within ~1 unit on all axes - consistent with translation-only export-origin difference, pending operator confirmation. Containment/medial probes must resolve this frame link before binding."
     }
   },
   "consumed_pressure": [
@@ -73,7 +79,7 @@
   "custody_notes": [
     "Envelope GLBs and generated images are operator/Prometheus artifacts consumed read-only; Mushfinger owns the correspondence assay and any deformation mechanics built on it.",
     "Operator six-view skeleton registration (2026-08-07) is perception evidence motivating this assay, not an input to it.",
-    "Authored skeleton source: not yet frozen here; skeleton-vs-cast medial probe binds it when the exact skeleton export is named."
+    "Skeleton frozen 2026-08-08; envelope-skeleton frame link is translation-suspect and operator-confirmable; region manifest (node-to-region map) still absent - names are mostly Cube.0xx."
   ],
   "receipts": {
     "schema": "kaminos.cast-registration-receipt.v0",
