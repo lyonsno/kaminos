@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,10 @@ import {
 
 const REPO_ROOT = path.resolve(new URL('..', import.meta.url).pathname);
 const TOOL = path.join(REPO_ROOT, 'tools/run-k4-source-route-containment-assay.mjs');
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
 
 function sourceRoute(constructionId, positions) {
   return {
@@ -193,6 +198,7 @@ test('parent-atlas hash refusal writes a durable pre-output failure report', asy
   await writeFile(placeholder, '{}\n');
   const result = spawnSync(process.execPath, [
     TOOL,
+    '--repo-root', REPO_ROOT,
     '--parent-atlas', parent,
     '--expected-parent-atlas-file-sha256', '0'.repeat(64),
     '--parent-atlas-locator', 'fixture://parent-atlas.json',
@@ -222,4 +228,46 @@ test('parent-atlas hash refusal writes a durable pre-output failure report', asy
   assert.equal(report.failurePhase, 'parent-atlas-hash');
   assert.deepEqual(report.requestedConstructionIds, ['muscle-34']);
   assert.equal(report.lastTrustworthyEvidence.parentAtlasRead, true);
+});
+
+test('a public-safe locator cannot impersonate different effective bytes', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'kaminos-route-locator-'));
+  const parent = path.join(directory, 'parent-atlas.json');
+  const placeholder = path.join(directory, 'placeholder.json');
+  const output = path.join(directory, 'result.json');
+  const runReport = path.join(directory, 'run-report.json');
+  const failure = path.join(directory, 'failure.json');
+  const parentBytes = Buffer.from('{"schema":"kaminos.authored-muscle-coordinate-parent-atlas.v0"}\n');
+  await writeFile(parent, parentBytes);
+  await writeFile(placeholder, '{}\n');
+  const result = spawnSync(process.execPath, [
+    TOOL,
+    '--repo-root', REPO_ROOT,
+    '--parent-atlas', parent,
+    '--expected-parent-atlas-file-sha256', sha256(parentBytes),
+    '--parent-atlas-locator', 'repo://definitely-not-the-parent-atlas.json',
+    '--frame-receipt', placeholder,
+    '--expected-frame-receipt-file-sha256', '0'.repeat(64),
+    '--frame-receipt-locator', 'fixture://frame-receipt.json',
+    '--envelope', placeholder,
+    '--expected-envelope-file-sha256', '0'.repeat(64),
+    '--envelope-locator', 'fixture://envelope.glb',
+    '--solver-carrier', placeholder,
+    '--expected-solver-carrier-file-sha256', '0'.repeat(64),
+    '--solver-carrier-locator', 'fixture://solver-carrier.json',
+    '--shape-assay', placeholder,
+    '--expected-shape-assay-file-sha256', '0'.repeat(64),
+    '--shape-assay-locator', 'fixture://shape-assay.json',
+    '--requested-constructions', 'muscle-34',
+    '--tolerance', '1e-9',
+    '--out', output,
+    '--out-locator', 'fixture://result.json',
+    '--report', runReport,
+    '--report-locator', 'fixture://run-report.json',
+    '--failure', failure,
+  ], { cwd: REPO_ROOT, encoding: 'utf8' });
+  assert.notEqual(result.status, 0, 'false locator unexpectedly succeeded');
+  const report = JSON.parse(await readFile(failure, 'utf8'));
+  assert.equal(report.failurePhase, 'parent-atlas-locator');
+  assert.match(report.error, /locator/);
 });

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, relative, resolve, sep } from 'node:path';
 
 import {
   buildK4SourceRouteContainment,
@@ -23,6 +24,7 @@ function parseArgs(argv) {
     values.set(key, value);
   }
   const required = [
+    '--repo-root',
     '--parent-atlas', '--expected-parent-atlas-file-sha256',
     '--parent-atlas-locator',
     '--frame-receipt', '--expected-frame-receipt-file-sha256',
@@ -46,6 +48,7 @@ function parseArgs(argv) {
     throw new Error('argument-parse: tolerance must be positive');
   }
   return {
+    repoRoot: resolve(values.get('--repo-root')),
     parentAtlas: resolve(values.get('--parent-atlas')),
     expectedParentAtlasFileSha256:
       values.get('--expected-parent-atlas-file-sha256'),
@@ -96,6 +99,68 @@ function verifyExpectedHash(label, bytes, expected) {
   return effective;
 }
 
+function resolveRepoLocator(repoRoot, locator) {
+  const relativePath = locator.slice('repo://'.length);
+  const effectivePath = resolve(repoRoot, relativePath);
+  const fromRoot = relative(repoRoot, effectivePath);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) ||
+      fromRoot.length === 0) {
+    throw new Error(`repo locator escapes or aliases the repo root: ${locator}`);
+  }
+  return { effectivePath, relativePath };
+}
+
+async function verifyInputLocator(label, locator, runtimeBytes, repoRoot) {
+  if (locator.startsWith('repo://')) {
+    const { effectivePath, relativePath } = resolveRepoLocator(repoRoot, locator);
+    let locatedBytes;
+    try {
+      locatedBytes = await readFile(effectivePath);
+    } catch (error) {
+      throw new Error(`${label} locator cannot be read: ${locator}: ${error.message}`);
+    }
+    if (sha256(locatedBytes) !== sha256(runtimeBytes)) {
+      throw new Error(`${label} locator bytes disagree with effective input: ${locator}`);
+    }
+    return { scheme: 'repo-worktree', locator, relativePath };
+  }
+  if (locator.startsWith('git://')) {
+    const match = /^git:\/\/([0-9a-f]{7,40})\/(.+)$/.exec(locator);
+    if (!match || match[2].split('/').includes('..')) {
+      throw new Error(`${label} locator is not a safe git object locator: ${locator}`);
+    }
+    const [, commit, gitPath] = match;
+    let locatedBytes;
+    try {
+      locatedBytes = execFileSync('git', ['show', `${commit}:${gitPath}`], {
+        cwd: repoRoot,
+        encoding: 'buffer',
+        maxBuffer: Math.max(16 * 1024 * 1024, runtimeBytes.length * 2),
+      });
+    } catch (error) {
+      throw new Error(`${label} locator cannot resolve ${locator}: ${error.message}`);
+    }
+    if (sha256(locatedBytes) !== sha256(runtimeBytes)) {
+      throw new Error(`${label} locator bytes disagree with effective input: ${locator}`);
+    }
+    return { scheme: 'git-object', locator, commit, gitPath };
+  }
+  throw new Error(`${label} locator scheme is unsupported: ${locator}`);
+}
+
+function verifyOutputLocator(label, locator, runtimePath, repoRoot) {
+  if (!locator.startsWith('repo://')) {
+    throw new Error(`${label} output locator must use repo://`);
+  }
+  const { effectivePath, relativePath } = resolveRepoLocator(repoRoot, locator);
+  if (effectivePath !== runtimePath) {
+    throw new Error(
+      `${label} output locator disagrees with runtime path: ${locator}`,
+    );
+  }
+  return { scheme: 'repo-worktree', locator, relativePath };
+}
+
 let args = null;
 let phase = 'argument-parse';
 const lastTrustworthyEvidence = {};
@@ -110,6 +175,10 @@ try {
   phase = 'parent-atlas-hash';
   verifyExpectedHash('parent atlas', parentInput.bytes,
     args.expectedParentAtlasFileSha256);
+  phase = 'parent-atlas-locator';
+  lastTrustworthyEvidence.parentAtlasLocator = await verifyInputLocator(
+    'parent atlas', args.parentAtlasLocator, parentInput.bytes, args.repoRoot,
+  );
 
   phase = 'frame-receipt-read';
   const frameInput = await readJson(args.frameReceipt, phase);
@@ -118,6 +187,10 @@ try {
   phase = 'frame-receipt-hash';
   verifyExpectedHash('frame receipt', frameInput.bytes,
     args.expectedFrameReceiptFileSha256);
+  phase = 'frame-receipt-locator';
+  lastTrustworthyEvidence.frameReceiptLocator = await verifyInputLocator(
+    'frame receipt', args.frameReceiptLocator, frameInput.bytes, args.repoRoot,
+  );
 
   phase = 'envelope-read';
   const envelopeBytes = await readFile(args.envelope);
@@ -126,6 +199,10 @@ try {
   phase = 'envelope-hash';
   verifyExpectedHash('envelope', envelopeBytes,
     args.expectedEnvelopeFileSha256);
+  phase = 'envelope-locator';
+  lastTrustworthyEvidence.envelopeLocator = await verifyInputLocator(
+    'envelope', args.envelopeLocator, envelopeBytes, args.repoRoot,
+  );
   phase = 'envelope-parse';
   const envelopeMesh = parseGlbTriangleSoup(envelopeBytes);
   lastTrustworthyEvidence.envelopeTriangleCount = envelopeMesh.triangles.length;
@@ -137,6 +214,10 @@ try {
   phase = 'solver-carrier-hash';
   verifyExpectedHash('solver carrier', carrierInput.bytes,
     args.expectedSolverCarrierFileSha256);
+  phase = 'solver-carrier-locator';
+  lastTrustworthyEvidence.solverCarrierLocator = await verifyInputLocator(
+    'solver carrier', args.solverCarrierLocator, carrierInput.bytes, args.repoRoot,
+  );
 
   phase = 'shape-assay-read';
   const shapeInput = await readJson(args.shapeAssay, phase);
@@ -145,6 +226,10 @@ try {
   phase = 'shape-assay-hash';
   verifyExpectedHash('shape assay', shapeInput.bytes,
     args.expectedShapeAssayFileSha256);
+  phase = 'shape-assay-locator';
+  lastTrustworthyEvidence.shapeAssayLocator = await verifyInputLocator(
+    'shape assay', args.shapeAssayLocator, shapeInput.bytes, args.repoRoot,
+  );
 
   phase = 'comparison-build';
   const result = buildK4SourceRouteContainment({
@@ -184,6 +269,13 @@ try {
     },
   };
 
+  phase = 'output-locators';
+  lastTrustworthyEvidence.outputLocator = verifyOutputLocator(
+    'primary', args.outLocator, args.out, args.repoRoot,
+  );
+  lastTrustworthyEvidence.reportLocator = verifyOutputLocator(
+    'report', args.reportLocator, args.report, args.repoRoot,
+  );
   phase = 'primary-output';
   await mkdir(dirname(args.out), { recursive: true });
   const outputBytes = Buffer.from(`${JSON.stringify(result, null, 2)}\n`);
