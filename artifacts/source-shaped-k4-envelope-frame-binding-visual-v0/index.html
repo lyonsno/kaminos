@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>K4 authored-envelope frame-binding witness</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #071019; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #panel {
+      position: fixed; z-index: 2; top: 18px; left: 18px; width: min(410px, calc(100vw - 36px));
+      padding: 17px; border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
+      background: rgba(8,14,23,.91); box-shadow: 0 14px 42px rgba(0,0,0,.44); backdrop-filter: blur(15px);
+    }
+    h1 { margin: 0 0 6px; font-size: 18px; line-height: 1.2; }
+    .claim { color: #ffcf78; font-size: 11px; line-height: 1.45; }
+    .eyebrow { margin-top: 12px; color: #8fa4b8; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
+    .row { display: flex; gap: 8px; margin-top: 7px; }
+    button {
+      flex: 1; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 7px 9px;
+      color: #dce8f4; background: #142232; font: inherit; font-size: 12px; cursor: pointer;
+    }
+    button[aria-pressed="true"] { color: #06101a; background: #91d7ff; border-color: #c2eaff; font-weight: 700; }
+    .legend { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; margin-top: 8px; font-size: 11px; }
+    .legend span { display: flex; align-items: center; gap: 6px; }
+    .swatch { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(255,255,255,.3); }
+    .authority { margin-top: 9px; font-size: 11px; line-height: 1.45; color: #b9c7d6; }
+    .authority strong { color: #8ee3bd; }
+    .status { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(255,255,255,.13); font-size: 11px; color: #b9c8d8; }
+    .error { color: #ff9090; }
+    .fine { margin-top: 8px; font-size: 9px; line-height: 1.4; color: #8093a7; overflow-wrap: anywhere; }
+    #hint { position: fixed; right: 18px; bottom: 14px; font-size: 11px; color: rgba(220,235,248,.62); }
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+  <section id="panel" aria-label="K4 envelope frame-binding witness">
+    <h1>K4 inside the authored envelope</h1>
+    <div class="claim">metric-mechanism-only — exact source positions, baseline-derived radii, fit-derived envelope frame, and no anatomical admission.</div>
+    <div class="eyebrow">K4 state</div>
+    <div class="row">
+      <button data-state="before">Input geometry</button>
+      <button data-state="packed">Packed geometry</button>
+    </div>
+    <div class="eyebrow">Stable construction identity</div>
+    <div class="legend" id="legend"></div>
+    <div class="authority">
+      <strong>Position delta 0.</strong> Radius delta up to 0.186924 source units; full sample identity false.<br>
+      Envelope surface is translucent blue; K4 geometry is transformed by the reviewed source→envelope similarity.
+    </div>
+    <div class="status" id="status">Verifying exact receipt and geometry bytes…</div>
+    <div class="fine" id="identity"></div>
+  </section>
+  <div id="hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const ROUTE_ID = 'source-shaped-k4-envelope-frame-binding-visual-v0';
+    const route = { requested: ROUTE_ID, effective: ROUTE_ID, fallbackUsed: false };
+    const EXPECTED_IDS = ['muscle-34', 'muscle-13', 'muscle-12', 'muscle-45'];
+    const EXPECTED = {
+      receiptFileSha256: 'a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c',
+      receiptSha256: '46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa',
+      skeletonSha256: '533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7',
+      envelopeSha256: 'cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e',
+      resultSha256: 'ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b',
+    };
+    const colors = new Map([
+      ['muscle-34', 0xf15c6b], ['muscle-13', 0xf6ca58],
+      ['muscle-12', 0x40d1bd], ['muscle-45', 0xab8cf4],
+    ]);
+    const statusNode = document.querySelector('#status');
+    const identityNode = document.querySelector('#identity');
+    const legendNode = document.querySelector('#legend');
+    let stateId = new URLSearchParams(location.search).get('state') || 'packed';
+    let receipt;
+    let result;
+    let envelope;
+    let content = new THREE.Group();
+
+    function sameIds(actual, expected) {
+      return actual.length === expected.length && actual.every((id, index) => id === expected[index]);
+    }
+
+    async function sha256(bytes) {
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function fetchExact(path, expectedSha256) {
+      const response = await fetch(path, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${path} fetch failed: HTTP ${response.status}`);
+      const bytes = await response.arrayBuffer();
+      const effectiveSha256 = await sha256(bytes);
+      if (effectiveSha256 !== expectedSha256) throw new Error(`${path} SHA mismatch: ${effectiveSha256}`);
+      return bytes;
+    }
+
+    function decodeJson(bytes, label) {
+      try { return JSON.parse(new TextDecoder().decode(bytes)); }
+      catch (error) { throw new Error(`${label} JSON parse failed: ${error.message}`); }
+    }
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x071019);
+    const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 0.02, 500);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    document.body.prepend(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = .06;
+    scene.add(new THREE.HemisphereLight(0xe5f4ff, 0x18283b, 2.1));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
+    key.position.set(12, 18, 10);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x73bfff, 1.7);
+    rim.position.set(-12, 3, -10);
+    scene.add(rim);
+    scene.add(content);
+
+    function transformPoint(position) {
+      const { scale, rotation, translation } = receipt.sourceToEnvelope.transform;
+      return [0, 1, 2].map(row => scale * (
+        rotation[row][0] * position[0]
+        + rotation[row][1] * position[1]
+        + rotation[row][2] * position[2]
+      ) + translation[row]);
+    }
+
+    function muscleMaterial(color) {
+      const base = new THREE.Color(color);
+      return new THREE.MeshStandardMaterial({
+        color: base,
+        emissive: base.clone().multiplyScalar(.12),
+        roughness: .34,
+        metalness: .04,
+      });
+    }
+
+    function addSegment(group, a, b, startRadius, endRadius, mat) {
+      const start = new THREE.Vector3(...a);
+      const end = new THREE.Vector3(...b);
+      const delta = end.clone().sub(start);
+      const length = delta.length();
+      if (!(length > 0)) return;
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(endRadius, startRadius, length, 18, 1, false), mat);
+      mesh.position.copy(start).add(end).multiplyScalar(.5);
+      mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize());
+      group.add(mesh);
+    }
+
+    function addMuscle(group, muscle) {
+      const scale = receipt.sourceToEnvelope.transform.scale;
+      const mat = muscleMaterial(colors.get(muscle.id));
+      const points = muscle.centerline.map(sample => ({
+        position: transformPoint(sample.position),
+        radius: sample.radius * scale,
+      }));
+      for (let index = 1; index < points.length; index += 1) {
+        addSegment(group, points[index - 1].position, points[index].position, points[index - 1].radius, points[index].radius, mat);
+      }
+      const sphere = new THREE.SphereGeometry(1, 18, 12);
+      points.forEach(point => {
+        const knot = new THREE.Mesh(sphere, mat);
+        knot.position.set(...point.position);
+        knot.scale.setScalar(point.radius);
+        group.add(knot);
+      });
+    }
+
+    function prepareEnvelope(root) {
+      root.traverse(node => {
+        if (!node.isMesh) return;
+        node.material = new THREE.MeshStandardMaterial({
+          color: 0x75bce8,
+          emissive: 0x0a2136,
+          roughness: .7,
+          metalness: 0,
+          transparent: true,
+          opacity: .085,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          wireframe: true,
+        });
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(node.geometry, 24),
+          new THREE.LineBasicMaterial({ color: 0x8dd2fa, transparent: true, opacity: .34 }),
+        );
+        node.add(edges);
+      });
+      return root;
+    }
+
+    function frameContent() {
+      const box = new THREE.Box3().setFromObject(content);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const distance = Math.max(size.x, size.y, size.z) * 1.35;
+      camera.position.copy(center).add(new THREE.Vector3(distance * .7, distance * .35, distance));
+      controls.target.copy(center);
+      controls.update();
+    }
+
+    function renderState() {
+      if (!['before', 'packed'].includes(stateId)) throw new Error(`unknown state: ${stateId}`);
+      scene.remove(content);
+      content = new THREE.Group();
+      scene.add(content);
+      content.add(envelope.clone(true));
+      const baseline = result.conditions.find(condition => condition.id === 'baseline');
+      const muscles = stateId === 'before' ? baseline.source.muscles : baseline.result.muscles;
+      muscles.forEach(muscle => addMuscle(content, muscle));
+      document.querySelectorAll('[data-state]').forEach(button => {
+        button.setAttribute('aria-pressed', String(button.dataset.state === stateId));
+      });
+      frameContent();
+      window.__K4_ENVELOPE_WITNESS__ = {
+        status: 'verified-rendered',
+        route,
+        state: stateId,
+        receiptSha256: receipt.receiptSha256,
+        requestedConstructionIds: receipt.requestedConstructionIds,
+        sourcePositionAuthority: receipt.k4SourceWorldBinding.sourcePositionAuthority,
+        radiusAuthority: receipt.k4SourceWorldBinding.radiusAuthority,
+        fullSampleIdentity: receipt.k4SourceWorldBinding.fullSampleIdentity,
+      };
+      document.documentElement.dataset.witnessStatus = 'verified-rendered';
+      document.documentElement.dataset.requestedRoute = route.requested;
+      document.documentElement.dataset.effectiveRoute = route.effective;
+      document.documentElement.dataset.state = stateId;
+    }
+
+    document.querySelectorAll('[data-state]').forEach(button => {
+      button.addEventListener('click', () => {
+        stateId = button.dataset.state;
+        renderState();
+        history.replaceState(null, '', `?state=${stateId}`);
+      });
+    });
+
+    async function load() {
+      const [receiptBytes, resultBytes, envelopeBytes] = await Promise.all([
+        fetchExact('../source-shaped-k4-envelope-frame-binding-v0/receipt.json', EXPECTED.receiptFileSha256),
+        fetchExact('../source-shaped-k4-packing-perturbation-v0/perturbation-result.json', EXPECTED.resultSha256),
+        fetchExact('./envelope-baseline.glb', EXPECTED.envelopeSha256),
+      ]);
+      receipt = decodeJson(receiptBytes, 'receipt');
+      result = decodeJson(resultBytes, 'K4 result');
+      if (receipt.receiptSha256 !== EXPECTED.receiptSha256) throw new Error('receipt semantic SHA mismatch');
+      if (receipt.inputs.skeletonFileSha256 !== EXPECTED.skeletonSha256) throw new Error('skeleton identity mismatch');
+      if (receipt.inputs.envelopeFileSha256 !== EXPECTED.envelopeSha256) throw new Error('envelope identity mismatch');
+      if (receipt.claimCeiling !== 'metric-mechanism-only') throw new Error('claim ceiling mismatch');
+      if (receipt.k4SourceWorldBinding.sourcePositionAuthority !== 'byte-identical-measured-candidate'
+        || receipt.k4SourceWorldBinding.radiusAuthority !== 'baseline-derived-candidate'
+        || receipt.k4SourceWorldBinding.fullSampleIdentity !== false) throw new Error('source/radius authority split mismatch');
+      if (!sameIds(receipt.requestedConstructionIds, EXPECTED_IDS)
+        || !sameIds(receipt.effectiveConstructionIds, EXPECTED_IDS)) throw new Error('receipt construction order mismatch');
+      if (!sameIds(result.requestedConstructionIds, EXPECTED_IDS)
+        || !sameIds(result.effectiveConstructionIds, EXPECTED_IDS)) throw new Error('result construction order mismatch');
+      const parsed = await new GLTFLoader().parseAsync(envelopeBytes, './');
+      envelope = prepareEnvelope(parsed.scene);
+      legendNode.innerHTML = EXPECTED_IDS.map(id => `<span><i class="swatch" style="background:#${colors.get(id).toString(16).padStart(6, '0')}"></i>${id}</span>`).join('');
+      identityNode.textContent = `route ${route.effective} · receipt ${receipt.receiptSha256.slice(0, 12)}… · envelope ${EXPECTED.envelopeSha256.slice(0, 12)}…`;
+      statusNode.textContent = 'Exact receipt, K4 result, envelope, route order, and authority split verified.';
+      renderState();
+    }
+
+    load().catch(error => {
+      statusNode.textContent = error.message;
+      statusNode.classList.add('error');
+      window.__K4_ENVELOPE_WITNESS__ = { status: 'failed', route, error: error.message };
+      document.documentElement.dataset.witnessStatus = 'failed';
+      console.error(error);
+    });
+
+    function animate() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

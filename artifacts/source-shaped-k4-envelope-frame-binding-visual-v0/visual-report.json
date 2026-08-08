@@ -1,0 +1,61 @@
+{
+  "schema": "kaminos.k4-envelope-frame-binding-visual-report.v0",
+  "status": "agent-inspected-operator-inspection-open",
+  "route": {
+    "requested": "source-shaped-k4-envelope-frame-binding-visual-v0",
+    "effective": "source-shaped-k4-envelope-frame-binding-visual-v0",
+    "fallbackUsed": false
+  },
+  "claimCeiling": "metric-mechanism-only",
+  "inputs": {
+    "receiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+    "skeletonFileSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+    "envelopeFileSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
+    "k4ResultFileSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b",
+    "requestedConstructionIds": [
+      "muscle-34",
+      "muscle-13",
+      "muscle-12",
+      "muscle-45"
+    ],
+    "sourcePositionAuthority": "byte-identical-measured-candidate",
+    "radiusAuthority": "baseline-derived-candidate",
+    "fullSampleIdentity": false
+  },
+  "captures": [
+    {
+      "state": "before",
+      "path": "before.png",
+      "sha256": "d274c1853838dacae5ba1feee2a5e5ca2c973fdd1421d8a967b15e3e19abbc94",
+      "domRouteAndIdentityVerified": true,
+      "agentInspected": true
+    },
+    {
+      "state": "packed",
+      "path": "packed.png",
+      "sha256": "ed64a2baeb7e5ab25dd185e54a5a90d90a64ae434efd6d48db7d7e2156613569",
+      "domRouteAndIdentityVerified": true,
+      "agentInspected": true
+    }
+  ],
+  "falseClosureIncident": {
+    "observed": true,
+    "failure": "the first dynamic capture verified identity but distance fog and the translucent shell suppressed the K4 colors until the frame was not useful for visual judgment",
+    "disposition": "rejected, presentation repaired to a low-opacity wireframe envelope without changing geometry or frame identity, then both states recaptured and inspected"
+  },
+  "visualVerdict": {
+    "frameBinding": "plausible at the metric-mechanism claim ceiling: the K4 cluster lands at one coherent pelvic or proximal-hindlimb region of the authored envelope with no scale explosion, remote displacement, or mirrored placement visible in this view",
+    "packingResponse": "the packed state remains a tight set of four nearly parallel capsule-like bodies at the envelope boundary; the visible change from input is local and subtle, not an envelope-filling or anatomical-belly result",
+    "nextDiscriminator": "Packer computes signed envelope-fit residuals and per-construction attribution, then the operator compares this overview with a close boundary view before any stronger composition judgment",
+    "heldClaims": [
+      "anatomical registration",
+      "source-authorized radii",
+      "envelope occupancy success",
+      "production admission"
+    ]
+  },
+  "operatorInspection": {
+    "status": "open",
+    "question": "Does the K4 cluster appear to occupy the intended pelvic or hindlimb neighborhood, and is the boundary relationship meaningful enough to proceed with quantitative envelope-fit scoring?"
+  }
+}
