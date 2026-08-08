@@ -1,0 +1,47 @@
+{
+  "schema": "kaminos.generator-campaign-contract.v0",
+  "campaign": "triradial-skeleton-proposal-fan-v0",
+  "question": "Can concise generation complete the operator-authored tri-radial lower skeleton while preserving three distinct support chains?",
+  "namedConsumer": "the operator-authored envelope and Trellis reconstruction loop",
+  "boundedClaim": "A positive cell may establish that one 2D proposal preserves a legible three-support interpretation under the effective FLUX route.",
+  "falsifyingObservation": "The output collapses the source into an ordinary bilateral quadruped, erases a support chain, or loses the authored pelvic relation.",
+  "claimCeiling": "No cell establishes 3D topology, anatomical correctness, production viability, or motion compatibility.",
+  "source": {
+    "operatorFrame": {
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front.png",
+      "sha256": "87cbcfd3b98dc733e8c089f6440f5078d37284780043c5775de648caf292a590"
+    },
+    "conditioningPlate": {
+      "path": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+      "sha256": "4bf30a4726d7b43b17b35241dc9868360533f4eeba7c88af90ef58f8e4806da1",
+      "derivation": "Aspect-preserving pad to square with dark gray background, then Lanczos scale to 512x512."
+    },
+    "authoredGlb": {
+      "path": "/Users/noahlyons/dev/operator-scratch/meshes/triadial_lower_skeleton.glb",
+      "sha256": "f2f41a858b427e7a1febb14a9013be65c1f01c9cfddaf51613fdb5f6985bef47"
+    },
+    "authoredBlend": {
+      "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/triradial-bauplan-013.blend",
+      "sha256": "39f9d3458264643fcc948bbaa7b5dbdaaa3d17a27ea9d60b6e828dd51160cdde"
+    }
+  },
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "prompts": [
+    {"id": "p01", "class": "structure-neutral", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p01-structure-neutral.txt"},
+    {"id": "p02", "class": "armature-neutral", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p02-armature-neutral.txt"},
+    {"id": "p03", "class": "skeleton-neutral", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p03-skeleton-neutral.txt"},
+    {"id": "p04", "class": "skeleton-three-legged", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p04-skeleton-three-legged.txt"},
+    {"id": "p05", "class": "skeleton-coherent", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p05-skeleton-coherent.txt"},
+    {"id": "p06", "class": "skeleton-friendly", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p06-skeleton-friendly.txt"}
+  ],
+  "seeds": [80301, 80302, 80413],
+  "inspectionPolicy": "Classify every output, but expose only positively classified outputs to the operator unless the operator explicitly requests the rest."
+}
