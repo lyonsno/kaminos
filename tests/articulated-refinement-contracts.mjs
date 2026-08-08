@@ -157,6 +157,56 @@ test('coverage leg detects an underspanning chain that containment cannot see', 
   assert.ok(full.coverage > 0.85, `full chain must cover, got ${full.coverage}`);
 });
 
+test('chain stage bends a distal segment into an angled volume the limb rotation cannot reach', async () => {
+  const { solveChainStage } = await import('../articulated-refinement-core.mjs');
+  const { buildSurfaceIndex } = await import('../cast-registration-core.mjs');
+  // Cast: vertical upper box plus a lower box swung 35 deg about the elbow at
+  // the origin - an L-ish leg. Authored chain: two octas straight down.
+  const upper = boxMesh([0, 1.2, 0], [0.8, 1.3, 0.8]);
+  const lowerStraight = boxMesh([0, -1.3, 0], [0.7, 1.4, 0.7]);
+  const bend = rotateAboutPivot(lowerStraight, [0, 0, 0], [0, 0, 1], 35 * Math.PI / 180);
+  const castGeom = {
+    positions: Float64Array.from([...upper.positions, ...bend.positions]),
+    triangles: Uint32Array.from([
+      ...upper.triangles,
+      ...Array.from(bend.triangles, t => t + upper.positions.length / 3),
+    ]),
+  };
+  // Straight authored chain: 4 octa bones from shoulder (0,2.2,0) downward.
+  const boneGeoms = [
+    octa([0, 1.6, 0], 0.35), octa([0, 0.7, 0], 0.35),
+    octa([0, -0.6, 0], 0.35), octa([0, -1.7, 0], 0.35),
+  ];
+  const samples = [];
+  const boneSampleRanges = [];
+  let cursor = 0;
+  boneGeoms.forEach((g, i) => {
+    boneSampleRanges.push({ name: `bone-${i}`, start: cursor, count: g.positions.length / 3 });
+    samples.push(...g.positions);
+    cursor += g.positions.length / 3;
+  });
+  const pivot = [0, 2.2, 0];
+  const chainSamples = Float64Array.from(samples);
+  const reach = 2.2 + 1.7 + 0.35;
+  const result = solveChainStage({
+    samples: chainSamples,
+    boneSampleRanges,
+    pivot,
+    direction: [0, -1, 0],
+    reach,
+    cast: castGeom,
+    castIndex: buildSurfaceIndex(castGeom),
+    insideTest: null,
+    maxAngleDeg: 45,
+  });
+  assert.equal(result.skipped, false);
+  assert.ok(result.correctionAngleDeg > 15,
+    `distal bend must be material, got ${result.correctionAngleDeg}`);
+  assert.ok(result.distalInsideAfter > result.distalInsideBefore,
+    `bend must improve distal containment: ${result.distalInsideBefore} -> ${result.distalInsideAfter}`);
+  assert.match(result.elbowDerivation, /not authored authority/);
+});
+
 test('receipt is deterministic, wall-clock-free, and declares the joint model', async () => {
   const pivotCast = boxMesh([0, 0, 0], [2, 2, 2]);
   const bones = [{ name: 'SRC_PELVIS', geometry: octa([0, 0, 0], 0.4) }];

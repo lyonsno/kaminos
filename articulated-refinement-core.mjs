@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 
 import { buildSurfaceIndex, sampleSurface } from './cast-registration-core.mjs';
 import { pointInsideMesh } from './frame-link-core.mjs';
+import { buildWindingIndex } from './winding-index-core.mjs';
 import { applyChain } from './bone-containment-probe-core.mjs';
 
 export const ARTICULATED_REFINEMENT_RECEIPT_SCHEMA = 'kaminos.articulated-refinement-receipt.v0';
@@ -145,12 +146,14 @@ export function solveGroupRotation({
   samples,
   cast,
   castIndex,
+  insideTest = null,
   pivot,
   maxAngleRad = 25 * (Math.PI / 180),
   maxIterations = 60,
   stepClamp = 0.08,
 }) {
   const count = samples.length / 3;
+  const isInside = insideTest ?? ((px, py, pz) => pointInsideMesh(px, py, pz, cast));
   let rotation = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   const moved = new Float64Array(samples.length);
   const applyAboutPivot = () => {
@@ -168,7 +171,7 @@ export function solveGroupRotation({
     let outsideSum = 0;
     for (let i = 0; i < count; i += 1) {
       const px = moved[i * 3]; const py = moved[i * 3 + 1]; const pz = moved[i * 3 + 2];
-      if (pointInsideMesh(px, py, pz, cast)) inside += 1;
+      if (isInside(px, py, pz)) inside += 1;
       else outsideSum += castIndex.nearest(px, py, pz).distance;
     }
     return { insideFraction: inside / count, meanOutside: outsideSum / count };
@@ -194,7 +197,7 @@ export function solveGroupRotation({
     let active = 0;
     for (let i = 0; i < count; i += 1) {
       const px = moved[i * 3]; const py = moved[i * 3 + 1]; const pz = moved[i * 3 + 2];
-      const inside = pointInsideMesh(px, py, pz, cast);
+      const inside = isInside(px, py, pz);
       const hit = castIndex.nearest(px, py, pz);
       let rx; let ry; let rz; let weight;
       if (!inside) {
@@ -322,6 +325,76 @@ export function measureChainCoverage({ samples, cast, pivot, coneCosine = 0.85 }
   };
 }
 
+// --- chain stage (v2): distal segment rotation about a derived elbow -----------
+
+// A single limb-level rotation cannot express an elbow bend (observed:
+// forelimbs saturating the bound for marginal gain). The chain stage splits
+// a limb's bones into proximal/distal halves along the refined chain
+// direction, derives the elbow pivot at the split, and grants the distal
+// segment ONE further bounded rotation. Elbow position is derived geometry,
+// not authored authority - reported as such.
+export function solveChainStage({
+  samples,
+  boneSampleRanges,
+  pivot,
+  direction,
+  reach,
+  cast,
+  castIndex,
+  insideTest,
+  maxAngleDeg = 35,
+}) {
+  // Bone centroid projections along the chain.
+  const projections = boneSampleRanges.map(range => {
+    let proj = 0;
+    for (let i = 0; i < range.count; i += 1) {
+      const s = (range.start + i) * 3;
+      proj += [0, 1, 2].reduce((a, k) => a + (samples[s + k] - pivot[k]) * direction[k], 0);
+    }
+    return { ...range, projection: proj / range.count };
+  });
+  const splitProj = reach * 0.5;
+  const distal = projections.filter(p => p.projection > splitProj);
+  const proximal = projections.filter(p => p.projection <= splitProj);
+  if (distal.length < 2 || proximal.length < 2) {
+    return { skipped: true, reason: 'insufficient-bones-for-chain-split' };
+  }
+  const maxProx = Math.max(...proximal.map(p => p.projection));
+  const minDist = Math.min(...distal.map(p => p.projection));
+  const elbowProj = (maxProx + minDist) / 2;
+  const elbowPivot = [0, 1, 2].map(k => pivot[k] + direction[k] * elbowProj);
+  const distalCount = distal.reduce((a, r) => a + r.count, 0);
+  const distalSamples = new Float64Array(distalCount * 3);
+  let cursor = 0;
+  for (const range of distal) {
+    for (let i = 0; i < range.count; i += 1) {
+      const s = (range.start + i) * 3;
+      distalSamples[cursor * 3] = samples[s];
+      distalSamples[cursor * 3 + 1] = samples[s + 1];
+      distalSamples[cursor * 3 + 2] = samples[s + 2];
+      cursor += 1;
+    }
+  }
+  const solved = solveGroupRotation({
+    samples: distalSamples, cast, castIndex, insideTest, pivot: elbowPivot,
+    maxAngleRad: maxAngleDeg * (Math.PI / 180),
+  });
+  return {
+    skipped: false,
+    elbowPivot: elbowPivot.map(v => Number(v.toPrecision(6))),
+    elbowDerivation: 'geometric-split-midpoint; not authored authority',
+    distalBones: distal.map(d => d.name),
+    correctionAngleDeg: Number(solved.angleDeg.toPrecision(6)),
+    correctionAxis: solved.axis,
+    clampedAtBound: solved.clampedAtBound,
+    distalInsideBefore: Number(solved.before.insideFraction.toPrecision(6)),
+    distalInsideAfter: Number(solved.after.insideFraction.toPrecision(6)),
+    distalMeanOutsideBefore: Number(solved.before.meanOutside.toPrecision(6)),
+    distalMeanOutsideAfter: Number(solved.after.meanOutside.toPrecision(6)),
+    rotation: solved.rotation,
+  };
+}
+
 // --- full refinement pass ------------------------------------------------------
 
 export function refineArticulated({
@@ -334,14 +407,23 @@ export function refineArticulated({
 }) {
   const groups = deriveRefinementGroups(bones, manifest);
   const castIndex = buildSurfaceIndex(cast);
+  // Large casts (Trellis ~200k tris) use hierarchical fast winding.
+  const insideTest = (cast.triangles.length / 3) > 50000
+    ? buildWindingIndex(cast).inside
+    : (px, py, pz) => pointInsideMesh(px, py, pz, cast);
   const results = [];
   for (const group of groups) {
-    // Sample every member bone, carry through the receipted chain.
+    // Sample every member bone, carry through the receipted chain. Ranges
+    // keep bone identity so the chain stage can split proximal/distal.
     const parts = [];
+    const boneSampleRanges = [];
+    let sampleCursor = 0;
     for (const bone of group.bones) {
       let s;
       try { s = sampleSurface(bone.geometry, samplesPerBone); } catch { continue; }
       parts.push(s);
+      boneSampleRanges.push({ name: bone.name, start: sampleCursor, count: s.length / 3 });
+      sampleCursor += s.length / 3;
     }
     if (parts.length === 0) continue;
     const samples = new Float64Array(parts.reduce((a, p) => a + p.length, 0));
@@ -357,7 +439,7 @@ export function refineArticulated({
       let inside = 0;
       const count = samples.length / 3;
       for (let i = 0; i < count; i += 1) {
-        if (pointInsideMesh(samples[i * 3], samples[i * 3 + 1], samples[i * 3 + 2], cast)) inside += 1;
+        if (insideTest(samples[i * 3], samples[i * 3 + 1], samples[i * 3 + 2])) inside += 1;
       }
       results.push({
         group: group.name,
@@ -368,7 +450,7 @@ export function refineArticulated({
       continue;
     }
     const solved = solveGroupRotation({
-      samples, cast, castIndex, pivot: pivotCast,
+      samples, cast, castIndex, insideTest, pivot: pivotCast,
       maxAngleRad: maxAngleDeg * (Math.PI / 180),
     });
     // Coverage measured on the REFINED samples: rotate about the pivot first.
@@ -383,8 +465,23 @@ export function refineArticulated({
       }
     }
     const coverage = measureChainCoverage({ samples: refinedSamples, cast, pivot: pivotCast });
+    // v2 chain stage for limb groups: one bounded distal rotation about a
+    // geometrically derived elbow.
+    let chainStage = null;
+    if (group.name.includes('limb') && coverage.coverage !== null) {
+      chainStage = solveChainStage({
+        samples: refinedSamples,
+        boneSampleRanges,
+        pivot: pivotCast,
+        direction: coverage.direction,
+        reach: coverage.skeletonReach,
+        cast, castIndex, insideTest,
+      });
+      if (chainStage.rotation) delete chainStage.rotation; // matrices live in receipts as axis/angle
+    }
     results.push({
       coverage,
+      chainStage,
       group: group.name,
       boneCount: group.bones.length,
       refinable: true,

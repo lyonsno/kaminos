@@ -1,0 +1,353 @@
+{
+  "schema": "kaminos.articulated-refinement-receipt.v0",
+  "status": "completed",
+  "inputs": {
+    "skeletonSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+    "castSha256": "372887134a3994e2d980f14419ef7bc8bdcbc36c275feaeeaf53c311fffcf24d",
+    "castLabel": "cast-trellis-maquette-baseline",
+    "manifestSha256": "5ca8341685db9650e09d88ce75c7aa75906e171483561ca399c02b9eda6036dd"
+  },
+  "manifestAuthority": "provisional-spatial-derivation; operator sign pending",
+  "chain": {
+    "frameLinkReceiptSha256": "97060ddaf4a6db7d8c0b0cd54fd9ec88f940add568e3480642751882b0c91538",
+    "stageAReceiptSha256": "07d07c5eb5d7e3dd7aab9d849a9b35390414199fe673519d010c005f11efc294"
+  },
+  "refinement": {
+    "groups": [
+      {
+        "group": "core",
+        "boneCount": 31,
+        "refinable": false,
+        "insideFraction": 0.943548
+      },
+      {
+        "coverage": {
+          "coverage": 1.06655,
+          "skeletonReach": 0.358568,
+          "castSpan": 0.336193,
+          "direction": [
+            0.0176773,
+            -0.999733,
+            0.0148671
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": {
+          "skipped": false,
+          "elbowPivot": [
+            -0.0970351,
+            -0.187178,
+            0.196586
+          ],
+          "elbowDerivation": "geometric-split-midpoint; not authored authority",
+          "distalBones": [
+            "Cube.058",
+            "Cube.059",
+            "Cube.060",
+            "Cube.061",
+            "Cube.046",
+            "Cube.047",
+            "Cube.048",
+            "Cube.049",
+            "Cube.018",
+            "Cube.019"
+          ],
+          "correctionAngleDeg": 13.9552,
+          "correctionAxis": [
+            -0.830629,
+            -0.554596,
+            -0.0497791
+          ],
+          "clampedAtBound": false,
+          "distalInsideBefore": 0.435,
+          "distalInsideAfter": 0.44,
+          "distalMeanOutsideBefore": 0.00939558,
+          "distalMeanOutsideAfter": 0.00742002
+        },
+        "group": "forelimb-left",
+        "boneCount": 12,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.100222,
+          -0.00695869,
+          0.193906
+        ],
+        "correctionAngleDeg": 12.1723,
+        "correctionAxis": [
+          -0.804328,
+          -0.189937,
+          -0.56301
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.15,
+        "insideFractionAfter": 0.4875,
+        "meanOutsideBefore": 0.0270863,
+        "meanOutsideAfter": 0.00818727
+      },
+      {
+        "coverage": {
+          "coverage": 1.00878,
+          "skeletonReach": 0.462406,
+          "castSpan": 0.458381,
+          "direction": [
+            0.247864,
+            -0.966905,
+            0.0604818
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": {
+          "skipped": false,
+          "elbowPivot": [
+            0.0488402,
+            -0.094838,
+            0.172722
+          ],
+          "elbowDerivation": "geometric-split-midpoint; not authored authority",
+          "distalBones": [
+            "Cube.016",
+            "Cube.022",
+            "Cube.023",
+            "Cube.044",
+            "Cube.062",
+            "Cube.063",
+            "Cube.064",
+            "Cube.065",
+            "Cube.091",
+            "Cube.092",
+            "Cube.093"
+          ],
+          "correctionAngleDeg": 35,
+          "correctionAxis": [
+            -0.290676,
+            0.955376,
+            -0.0525783
+          ],
+          "clampedAtBound": true,
+          "distalInsideBefore": 0.481818,
+          "distalInsideAfter": 0.654545,
+          "distalMeanOutsideBefore": 0.00293029,
+          "distalMeanOutsideAfter": 0.00135998
+        },
+        "group": "forelimb-right",
+        "boneCount": 13,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.000195187,
+          0.0964465,
+          0.160757
+        ],
+        "correctionAngleDeg": 8.74966,
+        "correctionAxis": [
+          -0.653138,
+          -0.596682,
+          0.466242
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.215385,
+        "insideFractionAfter": 0.507692,
+        "meanOutsideBefore": 0.0234634,
+        "meanOutsideAfter": 0.00397441
+      },
+      {
+        "coverage": {
+          "coverage": 0.119972,
+          "skeletonReach": 0.095225,
+          "castSpan": 0.793725,
+          "direction": [
+            -0.309048,
+            0.117763,
+            -0.943727
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": null,
+        "group": "head",
+        "boneCount": 3,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.0271306,
+          0.251221,
+          0.449625
+        ],
+        "correctionAngleDeg": 25,
+        "correctionAxis": [
+          -0.434981,
+          0.718694,
+          -0.542467
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.85,
+        "insideFractionAfter": 0.85,
+        "meanOutsideBefore": 0.00276858,
+        "meanOutsideAfter": 0.00136841
+      },
+      {
+        "coverage": {
+          "coverage": 1.01259,
+          "skeletonReach": 0.490096,
+          "castSpan": 0.484003,
+          "direction": [
+            -0.0645617,
+            -0.997609,
+            0.0246677
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": {
+          "skipped": false,
+          "elbowPivot": [
+            -0.0724102,
+            -0.0416983,
+            -0.195254
+          ],
+          "elbowDerivation": "geometric-split-midpoint; not authored authority",
+          "distalBones": [
+            "Cube.004",
+            "Cube.045",
+            "Cube.066",
+            "Cube.067",
+            "Cube.072",
+            "Cube.073",
+            "Cube.074",
+            "Cube.075",
+            "Cube.001",
+            "Cube.003",
+            "Cube.005"
+          ],
+          "correctionAngleDeg": 1.12684,
+          "correctionAxis": [
+            -0.453221,
+            0.891271,
+            -0.0150722
+          ],
+          "clampedAtBound": false,
+          "distalInsideBefore": 0.786364,
+          "distalInsideAfter": 0.786364,
+          "distalMeanOutsideBefore": 0.000940622,
+          "distalMeanOutsideAfter": 0.000943832
+        },
+        "group": "hindlimb-left",
+        "boneCount": 14,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.060413,
+          0.143683,
+          -0.199838
+        ],
+        "correctionAngleDeg": 10.7686,
+        "correctionAxis": [
+          -0.240905,
+          0.96672,
+          -0.0861275
+        ],
+        "clampedAtBound": false,
+        "insideFractionBefore": 0.515385,
+        "insideFractionAfter": 0.815385,
+        "meanOutsideBefore": 0.00279075,
+        "meanOutsideAfter": 0.000797463
+      },
+      {
+        "coverage": {
+          "coverage": 1.00803,
+          "skeletonReach": 0.399958,
+          "castSpan": 0.396771,
+          "direction": [
+            0.0651305,
+            -0.995234,
+            -0.0725818
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": {
+          "skipped": false,
+          "elbowPivot": [
+            0.079546,
+            -0.143307,
+            -0.233538
+          ],
+          "elbowDerivation": "geometric-split-midpoint; not authored authority",
+          "distalBones": [
+            "Cube.068",
+            "Cube.069",
+            "Cube.070",
+            "Cube.071",
+            "Cube.081",
+            "Cube.082",
+            "Cube.084",
+            "Cube.085",
+            "Cube.088"
+          ],
+          "correctionAngleDeg": 2.52334,
+          "correctionAxis": [
+            0.45569,
+            -0.889373,
+            -0.0369035
+          ],
+          "clampedAtBound": false,
+          "distalInsideBefore": 0.705556,
+          "distalInsideAfter": 0.672222,
+          "distalMeanOutsideBefore": 0.00153824,
+          "distalMeanOutsideAfter": 0.00171518
+        },
+        "group": "hindlimb-right",
+        "boneCount": 13,
+        "refinable": true,
+        "pivotCastFrame": [
+          0.0665609,
+          0.0551125,
+          -0.219067
+        ],
+        "correctionAngleDeg": 23.3163,
+        "correctionAxis": [
+          0.410011,
+          -0.91201,
+          -0.0113536
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.341667,
+        "insideFractionAfter": 0.725,
+        "meanOutsideBefore": 0.0120446,
+        "meanOutsideAfter": 0.00260413
+      },
+      {
+        "coverage": {
+          "coverage": 0.291124,
+          "skeletonReach": 0.14109,
+          "castSpan": 0.48464,
+          "direction": [
+            0.0700452,
+            -0.934007,
+            -0.35032
+          ],
+          "coneCosine": 0.85
+        },
+        "chainStage": null,
+        "group": "tail",
+        "boneCount": 10,
+        "refinable": true,
+        "pivotCastFrame": [
+          -0.00236977,
+          0.195977,
+          -0.33924
+        ],
+        "correctionAngleDeg": 25,
+        "correctionAxis": [
+          -0.543846,
+          0.654771,
+          0.524887
+        ],
+        "clampedAtBound": true,
+        "insideFractionBefore": 0.895,
+        "insideFractionAfter": 0.975,
+        "meanOutsideBefore": 0.000475916,
+        "meanOutsideAfter": 0.000042034
+      }
+    ],
+    "maxAngleDeg": 25,
+    "samplesPerBone": 20
+  },
+  "jointModel": "v1 limb-level: one bounded rotation per limb instance about its attachment pivot; no joint translation; no scale; chain-level (knee/ankle) deferred",
+  "generatedAt": "2026-08-08T05:33:49.182Z",
+  "receiptSha256": "809356924c3d44404307ea8fdf7780a8313bebc89e507e0bc23025bca11b7c4c"
+}

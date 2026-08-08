@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 
 import { buildSurfaceIndex, sampleSurface } from './cast-registration-core.mjs';
 import { pointInsideMesh } from './frame-link-core.mjs';
+import { buildWindingIndex } from './winding-index-core.mjs';
 
 export const BONE_CONTAINMENT_RECEIPT_SCHEMA = 'kaminos.bone-containment-receipt.v0';
 
@@ -172,6 +173,10 @@ export function probeBoneContainment({
   samplesPerBone = 40,
 }) {
   const castIndex = buildSurfaceIndex(cast);
+  // Large casts (Trellis ~200k tris) use hierarchical fast winding.
+  const insideTest = (cast.triangles.length / 3) > 50000
+    ? buildWindingIndex(cast).inside
+    : (px, py, pz) => pointInsideMesh(px, py, pz, cast);
   const boundsOf = geometries => {
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
@@ -203,7 +208,7 @@ export function probeBoneContainment({
     const outsideDistances = [];
     for (let i = 0; i < samplesPerBone; i += 1) {
       const p = applyChain([samples[i * 3], samples[i * 3 + 1], samples[i * 3 + 2]], transforms);
-      if (pointInsideMesh(p[0], p[1], p[2], cast)) {
+      if (insideTest(p[0], p[1], p[2])) {
         inside += 1;
       } else {
         outsideDistances.push(castIndex.nearest(p[0], p[1], p[2]).distance);
