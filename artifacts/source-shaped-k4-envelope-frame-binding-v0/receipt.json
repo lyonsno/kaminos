@@ -1,0 +1,248 @@
+{
+  "schema": "kaminos.k4-envelope-frame-binding-receipt.v0",
+  "status": "completed-provisional",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "inputs": {
+    "sourceExtractionFileSha256": "8f9f915c99b15ff4dbd71687b0aac6f3eb2a5f64b67cd0541468cd1beade6678",
+    "sourceAsset": {
+      "requestedPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+      "effectivePath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+      "sha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3"
+    },
+    "parentAtlas": {
+      "id": "coordinate-parent-atlas-3f4c65867a776edf",
+      "atlasSha256": "a55dcfb39bc1e59ddef787b1aa49c51c76a645eb1df04b431256128b517abfd8",
+      "fileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71"
+    },
+    "baseline": {
+      "id": "baseline",
+      "fileSha256": "ba263ef00bc0e8533b7ce284853797ce01be04ea42ee01000897a5f7aaf4b46b"
+    },
+    "skeletonFileSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
+    "envelopeFileSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
+    "skeletonEnvelopeFrameLinkFileSha256": "4c4863ed1d1074472a48cee194caecf0c2d7330e933c8d88ca52aa10b3c2c78d"
+  },
+  "k4SourceWorldBinding": {
+    "method": "ordered-full-sample-audit-with-exact-source-position-gate",
+    "maximumPositionDelta": 0,
+    "maximumRadiusDelta": 0.18692406294713404,
+    "fullSampleIdentity": false,
+    "comparedLoadBearingFields": [
+      "position",
+      "radius"
+    ],
+    "sourcePositionAuthority": "byte-identical-measured-candidate",
+    "radiusAuthority": "baseline-derived-candidate",
+    "coordinateFrame": "source-blend-world",
+    "authority": "mixed-source-position-and-baseline-derived-sample-candidate"
+  },
+  "sourceToSkeleton": {
+    "method": "unique-semantic-object-frame-relation",
+    "anchor": {
+      "name": "SRC_PELVIS",
+      "sourceLocator": "sourceExtraction.objects[name=SRC_PELVIS].matrixWorld",
+      "targetLocator": "skeletonGltf.nodes[name=SRC_PELVIS].TRS"
+    },
+    "transform": {
+      "scale": 0.8618723121154453,
+      "rotation": [
+        [
+          0.9999999346616778,
+          0,
+          0
+        ],
+        [
+          0,
+          1.000000032669157,
+          9.083716181257456e-8
+        ],
+        [
+          0,
+          -9.083716181257456e-8,
+          1.000000032669157
+        ]
+      ],
+      "translation": [
+        19.41816239879825,
+        -29.221735874288743,
+        1.3234638057794212
+      ]
+    },
+    "residual": {
+      "maximumMatrixResidual": 1.1102230246251565e-16,
+      "maximumOrthonormalResidual": 1.3067664017540892e-7
+    },
+    "authority": "measured-candidate",
+    "untrustedNameCollisions": [
+      {
+        "name": "Cube",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.001",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.002",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.003",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.004",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.005",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.006",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.007",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.008",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.009",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.010",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.011",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.012",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Cube.013",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Icosphere",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      },
+      {
+        "name": "Segment Axis",
+        "disposition": "excluded-from-frame-fit",
+        "reason": "generic name coincidence is not source-object correspondence authority"
+      }
+    ]
+  },
+  "skeletonToEnvelope": {
+    "method": "content-bound-consumed-frame-link",
+    "transform": {
+      "scale": 1,
+      "rotation": [
+        [
+          0.9999973343244632,
+          -0.0005648885216679898,
+          0.002238804351880802
+        ],
+        [
+          0.0005428292799864085,
+          0.9999514236834568,
+          0.009841524770076287
+        ],
+        [
+          -0.0022442549633904137,
+          -0.00984028324721027,
+          0.999949064775438
+        ]
+      ],
+      "translation": [
+        -59.3660538094313,
+        24.36251889862305,
+        -0.016053850531601924
+      ]
+    },
+    "fit": {
+      "converged": false,
+      "iterations": 120,
+      "after": {
+        "sampleCount": 2000,
+        "insideFraction": 0.9915,
+        "outsideCount": 17,
+        "outsideQ50": 0.08715356343729075,
+        "outsideQ95": 0.1580035324418672,
+        "outsideMax": 0.1580035324418672
+      }
+    },
+    "authority": "fit-derived-provisional"
+  },
+  "sourceToEnvelope": {
+    "method": "skeleton-to-envelope-after-source-to-skeleton",
+    "transform": {
+      "scale": 0.8618723121154453,
+      "rotation": [
+        [
+          0.9999972689863152,
+          -0.0005648887434890548,
+          0.0022388043737077822
+        ],
+        [
+          0.0005428292445188542,
+          0.9999514554570506,
+          0.00984161592433988
+        ],
+        [
+          -0.0022442548167545596,
+          -0.009840374401219027,
+          0.9999490965490675
+        ]
+      ],
+      "translation": [
+        -39.92847317344699,
+        -4.8342318424334465,
+        1.551313394956415
+      ]
+    },
+    "authority": "fit-derived-provisional"
+  },
+  "claimCeiling": "metric-mechanism-only",
+  "heldClaims": [
+    "operator-authored-frame-binding",
+    "anatomical-registration",
+    "production-admission",
+    "source-authorized-envelope-fit"
+  ],
+  "receiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa"
+}

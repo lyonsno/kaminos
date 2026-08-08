@@ -1,0 +1,47 @@
+{
+  "schema": "kaminos.k4-envelope-fit-metric-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "claimCeiling": "metric-mechanism-only",
+  "frameAuthority": "fit-derived-provisional",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carriers": [
+      {
+        "id": "reference",
+        "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+        "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+        "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+      },
+      {
+        "id": "restoration-knee",
+        "requestedPath": "repo://artifacts/current-k4-m12-volume-restoration-solve-v0/candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "effectivePath": "repo://artifacts/current-k4-m12-volume-restoration-solve-v0/candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "sha256": "0ec05e24ffb0d0c7d4b1b7148e9505b51236aa5c3e39bfe9166bead97d1eea4c"
+      }
+    ]
+  },
+  "outputs": {
+    "envelopeFitMetric": {
+      "path": "envelope-fit-metric.json",
+      "sha256": "f17636b4511da43d89ca084928cc13a9db4cd0cb12d2f525b3a0addaa475f05e"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "envelope-fit-metric-written",
+    "envelopeFitMetricSha256": "f17636b4511da43d89ca084928cc13a9db4cd0cb12d2f525b3a0addaa475f05e",
+    "rowIds": [
+      "reference",
+      "restoration-knee"
+    ]
+  }
+}

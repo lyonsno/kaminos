@@ -1,0 +1,201 @@
+{
+  "schema": "kaminos.k4-envelope-fit-metric-result.v0",
+  "status": "completed-provisional",
+  "claimCeiling": "metric-mechanism-only",
+  "frameAuthority": "fit-derived-provisional",
+  "heldClaims": [
+    "operator-authored-frame-binding",
+    "anatomical-registration",
+    "production-admission",
+    "source-authorized-envelope-fit"
+  ],
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carriers": [
+      {
+        "id": "reference",
+        "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+        "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+        "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+      },
+      {
+        "id": "restoration-knee",
+        "requestedPath": "repo://artifacts/current-k4-m12-volume-restoration-solve-v0/candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "effectivePath": "repo://artifacts/current-k4-m12-volume-restoration-solve-v0/candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "sha256": "0ec05e24ffb0d0c7d4b1b7148e9505b51236aa5c3e39bfe9166bead97d1eea4c"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "id": "reference",
+      "metric": {
+        "schema": "kaminos.k4-envelope-fit-metric.v0",
+        "status": "completed-provisional",
+        "claimCeiling": "metric-mechanism-only",
+        "frameAuthority": "fit-derived-provisional",
+        "heldClaims": [
+          "operator-authored-frame-binding",
+          "anatomical-registration",
+          "production-admission",
+          "source-authorized-envelope-fit"
+        ],
+        "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled",
+        "constructions": [
+          {
+            "constructionId": "muscle-34",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6602564102564102,
+            "meanSignedDistance": -1.1978436954453795,
+            "maximumOutsideExcursion": 2.480402521608233,
+            "maximumInsideDepth": 3.885054904785619
+          },
+          {
+            "constructionId": "muscle-13",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.9358974358974359,
+            "meanSignedDistance": -1.391692200795551,
+            "maximumOutsideExcursion": 0.47652943933606107,
+            "maximumInsideDepth": 3.3297260085128775
+          },
+          {
+            "constructionId": "muscle-12",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.5961538461538461,
+            "meanSignedDistance": -0.7467127027818474,
+            "maximumOutsideExcursion": 2.527441861573392,
+            "maximumInsideDepth": 3.9130394575440377
+          },
+          {
+            "constructionId": "muscle-45",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6089743589743589,
+            "meanSignedDistance": -0.6767319872520196,
+            "maximumOutsideExcursion": 2.822790688719696,
+            "maximumInsideDepth": 3.7667818595929248
+          }
+        ]
+      }
+    },
+    {
+      "id": "restoration-knee",
+      "metric": {
+        "schema": "kaminos.k4-envelope-fit-metric.v0",
+        "status": "completed-provisional",
+        "claimCeiling": "metric-mechanism-only",
+        "frameAuthority": "fit-derived-provisional",
+        "heldClaims": [
+          "operator-authored-frame-binding",
+          "anatomical-registration",
+          "production-admission",
+          "source-authorized-envelope-fit"
+        ],
+        "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+        "sourceCarrierSha256": "cce1219881affdcf18e37fcb46b15fb861f0475e573d51c0668d045f0ba0557b",
+        "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled",
+        "constructions": [
+          {
+            "constructionId": "muscle-34",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6602564102564102,
+            "meanSignedDistance": -1.2016021966055153,
+            "maximumOutsideExcursion": 2.480402521608233,
+            "maximumInsideDepth": 3.8854963436473042
+          },
+          {
+            "constructionId": "muscle-13",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.9358974358974359,
+            "meanSignedDistance": -1.391692200795551,
+            "maximumOutsideExcursion": 0.47652943933606107,
+            "maximumInsideDepth": 3.3297260085128775
+          },
+          {
+            "constructionId": "muscle-12",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.5897435897435898,
+            "meanSignedDistance": -0.7197022156816106,
+            "maximumOutsideExcursion": 2.527441861573392,
+            "maximumInsideDepth": 3.8569051973558928
+          },
+          {
+            "constructionId": "muscle-45",
+            "boundaryNodeCount": 156,
+            "insideFraction": 0.6089743589743589,
+            "meanSignedDistance": -0.6711038571322889,
+            "maximumOutsideExcursion": 2.822790688719696,
+            "maximumInsideDepth": 3.7732975430654534
+          }
+        ]
+      }
+    }
+  ],
+  "sectionOverlays": [
+    {
+      "path": "overlays/section-x-reference.svg",
+      "sha256": "30833ae17b1fa244fea85ec9d62d4d03eb14357cebfc47460b99bb8f61c2d8d7",
+      "axis": "x",
+      "level": -34.90884366182076,
+      "rowId": "reference",
+      "sampleCount": 85,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-x-restoration-knee.svg",
+      "sha256": "a5a1e46275a26d1ee1de2b0a6e286624855a4b6b189da8bb00500eb3d1de728d",
+      "axis": "x",
+      "level": -34.90884366182076,
+      "rowId": "restoration-knee",
+      "sampleCount": 83,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-y-reference.svg",
+      "sha256": "e0cb24d70f03bc6704d19275d44cbe5a1cfe84742e0925d242527eb6914c8765",
+      "axis": "y",
+      "level": -1.6184447523666703,
+      "rowId": "reference",
+      "sampleCount": 37,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-y-restoration-knee.svg",
+      "sha256": "3ed52bc4bfcda17e733500bf1e6fcd36479e9fce75f991ec5d1eaa1d180049c1",
+      "axis": "y",
+      "level": -1.6184447523666703,
+      "rowId": "restoration-knee",
+      "sampleCount": 38,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-z-reference.svg",
+      "sha256": "84ea5f0b71af8adde0ad7d99d104347dd7ecc9f1a095ab9618eb90dc54db84e6",
+      "axis": "z",
+      "level": 3.8873417675895108,
+      "rowId": "reference",
+      "sampleCount": 37,
+      "slab": 0.35
+    },
+    {
+      "path": "overlays/section-z-restoration-knee.svg",
+      "sha256": "bf3078c5a18ef5d02f8780265060a66f40c2781e799d9916412f84c0f4cdf8aa",
+      "axis": "z",
+      "level": 3.8873417675895108,
+      "rowId": "restoration-knee",
+      "sampleCount": 35,
+      "slab": 0.35
+    }
+  ],
+  "boundarySampleBasis": "cage boundary and ring nodes only; body interiors are not sampled"
+}
