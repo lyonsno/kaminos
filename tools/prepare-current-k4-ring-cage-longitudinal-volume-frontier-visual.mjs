@@ -18,6 +18,8 @@ const RAMP_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-ramp-frontier-result.v0';
 const CONTACT_NORMAL_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0';
+const POST_COMPOSITION_SOLVE_SCHEMA =
+  'kaminos.current-k4-post-composition-contact-solve-result.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const REPORT_SCHEMA =
@@ -174,6 +176,12 @@ function candidateSubtitle(candidate) {
   if (Number.isFinite(candidate.compressionAreaScale)) {
     return `M45 section 11 area scale ${candidate.compressionAreaScale}`;
   }
+  if (candidate.requested && 'seedCandidateId' in candidate.requested) {
+    const seed = candidate.requested.seedCandidateId ?? 'curvature-12 reference';
+    return `${candidate.status} · solve seed ${seed} · ` +
+      `${candidate.metrics.iterationsAccepted} iterations · ` +
+      `${candidate.metrics.terminationReason}`;
+  }
   const compression = candidate.requested.compressionSections
     .map(row => `${row.sectionId.split(':').at(-1)}=${row.areaScale}`)
     .join(', ');
@@ -188,9 +196,13 @@ function candidateSubtitle(candidate) {
 }
 
 function frontierFamilyLabel(frontier) {
-  return frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
-    ? 'contact-normal ramp frontier'
-    : 'longitudinal volume frontier';
+  if (frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA) {
+    return 'contact-normal ramp frontier';
+  }
+  if (frontier.schema === POST_COMPOSITION_SOLVE_SCHEMA) {
+    return 'post-composition contact solve';
+  }
+  return 'longitudinal volume frontier';
 }
 
 function contactSheetHtml(frontier, manifest) {
@@ -277,10 +289,12 @@ try {
     AMPLITUDE_FRONTIER_SCHEMA,
     RAMP_FRONTIER_SCHEMA,
     CONTACT_NORMAL_FRONTIER_SCHEMA,
+    POST_COMPOSITION_SOLVE_SCHEMA,
   ].includes(frontier?.schema) || frontier.status !== 'completed') {
     throw new Error(
       `visual preparation requires completed ${AMPLITUDE_FRONTIER_SCHEMA}, ` +
-      `${RAMP_FRONTIER_SCHEMA}, or ${CONTACT_NORMAL_FRONTIER_SCHEMA}`,
+      `${RAMP_FRONTIER_SCHEMA}, ${CONTACT_NORMAL_FRONTIER_SCHEMA}, or ` +
+      `${POST_COMPOSITION_SOLVE_SCHEMA}`,
     );
   }
   if (frontier.inputs.source.sha256 !== sha256(sourceBytes) ||
@@ -300,7 +314,8 @@ try {
   }
   const compressionSectionId = frontier.schema === AMPLITUDE_FRONTIER_SCHEMA
     ? frontier.pressureSelection.compressionSectionIds[0]
-    : frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
+    : [CONTACT_NORMAL_FRONTIER_SCHEMA, POST_COMPOSITION_SOLVE_SCHEMA]
+      .includes(frontier.schema)
       ? frontier.anisotropyContract.peakSectionId
       : frontier.candidates
         .flatMap(candidate => candidate.requested.compressionSections)
@@ -373,7 +388,9 @@ try {
             ? 'pressure-directed-longitudinal-amplitude-frontier'
             : frontier.schema === CONTACT_NORMAL_FRONTIER_SCHEMA
               ? 'contact-normal-cross-section-ramp-frontier'
-              : 'smooth-longitudinal-ramp-frontier',
+              : frontier.schema === POST_COMPOSITION_SOLVE_SCHEMA
+                ? 'post-composition-contact-solve'
+                : 'smooth-longitudinal-ramp-frontier',
         },
         metrics: { initial: initialMeasurement, packed: packedMeasurement },
         packedCarrier,
