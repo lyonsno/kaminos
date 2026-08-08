@@ -1,0 +1,17 @@
+{
+  "name": "operator-blender-front-square-512",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "34486b07b097",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+  "input_name": "operator-blender-front-square-512.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/triradial-skeleton-proposal-fan-v0/prompts/p01-structure-neutral.txt",
+    "seed": "80413"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786166513.970745,
+  "duration_s": 34.1
+}

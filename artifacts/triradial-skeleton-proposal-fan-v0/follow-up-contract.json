@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.generator-follow-up-contract.v0",
+  "parentCampaign": "triradial-skeleton-proposal-fan-v0",
+  "triggeringObservation": "Armature language preserved source geometry, literal skeleton language selected exposed-bone humanoids, and the front plate encouraged upright interpretation.",
+  "question": "Can a targeted animal or lower-body clause preserve the armature correspondence while removing the upright character prior?",
+  "fixedVariables": {
+    "conditioningPlate": "artifacts/triradial-skeleton-proposal-fan-v0/source/operator-blender-front-square-512.png",
+    "route": "mflux_flux2_edit_promptfile",
+    "seeds": [80301, 80302, 80413]
+  },
+  "prompts": [
+    {"id": "p07", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p07-armature-friendly-animal.txt"},
+    {"id": "p08", "path": "artifacts/triradial-skeleton-proposal-fan-v0/prompts/p08-lower-body-friendly.txt"}
+  ],
+  "claimCeiling": "This pulse compares semantic interpretation only; it cannot establish 3D support topology or anatomical validity."
+}
