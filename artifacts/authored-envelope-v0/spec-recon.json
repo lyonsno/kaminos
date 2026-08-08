@@ -1,0 +1,52 @@
+{
+ "title": "Reconstruction survival: SF3D vs Trellis on two elaboration cells",
+ "subtitle": "Rows are the elaboration cell fed to the reconstructor. Columns are the reconstructor. Both reconstructors consumed the identical image; the plate shown in each row IS the reconstructor input. Casts rendered on the same orthographic construction.",
+ "footer": "Trellis maquette cast is 9.1 MB against SF3D 908 KB - roughly ten times the geometry for the same input, which matters for downstream rigging cost.",
+ "prompts": [
+  {
+   "id": "sf3d",
+   "name": "SF3D",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt"
+  },
+  {
+   "id": "trellis",
+   "name": "Trellis (trellis2mlx_fast)",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "skin",
+   "name": "skin elaboration",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-env-skin/output.png"
+  },
+  {
+   "id": "maq",
+   "name": "maquette elaboration",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-maquette/output.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "skin",
+   "prompt": "sf3d",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-skin-render2/plate.png",
+   "note": "Operator verified the authored skeleton REGISTERS to this cast across six views."
+  },
+  {
+   "plate": "maq",
+   "prompt": "sf3d",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-maquette-render/plate.png",
+   "note": "Clean silhouette, faceted surface, 908 KB."
+  },
+  {
+   "plate": "maq",
+   "prompt": "trellis",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-trellis-maquette-render/plate.png",
+   "note": "Best surface fidelity of any cast - muscle definition, ear detail, clean limb separation. 9.1 MB."
+  }
+ ]
+}

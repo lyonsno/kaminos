@@ -1,0 +1,168 @@
+{
+ "title": "Armature-framing elaboration, multi-seed, baseline vs perturbed envelope",
+ "subtitle": "Quality-naming rather than species substitution: \"Elaborate this armature into a finished creature with <qualities>\". Rows are the baseline authored envelope at three seeds and the long-neck perturbed envelope at two. The perturbed rows test whether an authored edit survives heavy surface restyling.",
+ "footer": "All cells ran on the shared capable worker under the queue protocol adopted with the peer lane; no worker was spawned for this batch.",
+ "prompts": [
+  {
+   "id": "dragon",
+   "name": "scaly hide, ridged spine, horned head",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-dragon.txt"
+  },
+  {
+   "id": "golem",
+   "name": "mossy weathered stone, lichen, cracked plates",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-golem.txt"
+  },
+  {
+   "id": "phantom",
+   "name": "translucent drifting form, hollow glowing eyes",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-phantom.txt"
+  },
+  {
+   "id": "maquette",
+   "name": "FRAMING: partially finished maquette",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-maquette.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "b1",
+   "name": "baseline seed 80301",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  },
+  {
+   "id": "b2",
+   "name": "baseline seed 80302",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  },
+  {
+   "id": "b3",
+   "name": "baseline seed 80413",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  },
+  {
+   "id": "p1",
+   "name": "LONG-NECK seed 80301",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png"
+  },
+  {
+   "id": "p2",
+   "name": "LONG-NECK seed 80302",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "b1",
+   "prompt": "dragon",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-dragon/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b1",
+   "prompt": "golem",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-golem/output.png",
+   "note": "Cracked stone plates with moss and lichen over the exact authored silhouette."
+  },
+  {
+   "plate": "b1",
+   "prompt": "phantom",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-phantom/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b1",
+   "prompt": "maquette",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-maquette/output.png",
+   "note": "Strongest single output of the session."
+  },
+  {
+   "plate": "b2",
+   "prompt": "dragon",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-dragon-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b2",
+   "prompt": "golem",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-golem-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b2",
+   "prompt": "phantom",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-phantom-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b2",
+   "prompt": "maquette",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-maquette-s80302/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b3",
+   "prompt": "dragon",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-dragon-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b3",
+   "prompt": "golem",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-golem-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b3",
+   "prompt": "phantom",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-el-armature-phantom-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "b3",
+   "prompt": "maquette",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/gen-fr-maquette-s80413/output.png",
+   "note": ""
+  },
+  {
+   "plate": "p1",
+   "prompt": "dragon",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-el-armature-dragon-s80301/output.png",
+   "note": "Does the authored neck edit survive heavy restyling?"
+  },
+  {
+   "plate": "p1",
+   "prompt": "golem",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-el-armature-golem-s80301/output.png",
+   "note": "Does the authored neck edit survive heavy restyling?"
+  },
+  {
+   "plate": "p2",
+   "prompt": "dragon",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-el-armature-dragon-s80302/output.png",
+   "note": "Does the authored neck edit survive heavy restyling?"
+  },
+  {
+   "plate": "p2",
+   "prompt": "golem",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/lb-el-armature-golem-s80302/output.png",
+   "note": "Does the authored neck edit survive heavy restyling?"
+  }
+ ]
+}

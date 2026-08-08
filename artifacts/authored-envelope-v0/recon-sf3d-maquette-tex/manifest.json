@@ -1,0 +1,32 @@
+{
+  "derivedFrame": {
+    "extents": [
+      0.9099129736423492,
+      0.5129988789558411,
+      0.7624347805976868
+    ],
+    "longAxisIndex": 0,
+    "note": "axes derived from imported geometry, not assumed to match the Blender source frame",
+    "shortAxisIndex": 1,
+    "upAxisIndex": 2
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "orthoScale": 1.0191023349761963,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-maquette/output.glb",
+    "sha256": "a36ebe6f2512755f9b6cbb09a58c8ffd4b9a31b75a4ce298bbaaf1359ed8d7f2"
+  },
+  "meshCount": 1,
+  "output": {
+    "byteLength": 928701,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-maquette-tex/plate.png",
+    "sha256": "d3379c807bac4e7f00882be92ba8703cb926631fa4edd54913a6ccf6149043c2"
+  },
+  "rendererId": "blender-glb-lateral-plate-v0",
+  "schema": "kaminos.glb-plate-render.v0",
+  "status": "completed",
+  "totalVertexCount": 13360
+}

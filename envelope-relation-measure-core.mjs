@@ -228,6 +228,56 @@ export function proportionalRelations(profile) {
 }
 
 /**
+ * Depth-sensitive relations, for comparing a reconstructed cast against the
+ * envelope it came from.
+ *
+ * The axial profile above is blind to a specific and likely failure: a
+ * single-view reconstruction can collapse in depth while its axial profile
+ * stays correct, because the profile integrates area per slice without caring
+ * how that area is distributed between the mediolateral and dorsoventral axes.
+ * A flattened cast and a round one can share an axial profile exactly.
+ *
+ * These relations are therefore all about cross-section SHAPE rather than
+ * cross-section size, and about the mediolateral axis specifically, which is
+ * the axis a lateral-view reconstruction has to invent rather than observe.
+ */
+export function depthRelations(profile) {
+  if (!profile || !Array.isArray(profile.slices) || profile.slices.length === 0) {
+    throw new Error('profile must supply slices');
+  }
+  const slices = profile.slices.filter((slice) => slice.area > 0);
+  if (slices.length === 0) throw new Error('profile has no positive-area slices');
+
+  // Per-slice aspect: mediolateral extent over dorsoventral extent. A cast that
+  // collapsed toward the viewing plane drives this toward zero while leaving the
+  // dorsoventral silhouette -- the thing visible in the source plate -- intact.
+  const aspects = slices
+    .filter((slice) => slice.dorsoVentralExtent > 0)
+    .map((slice) => slice.medioLateralExtent / slice.dorsoVentralExtent);
+  if (aspects.length === 0) throw new Error('profile has no measurable cross-sections');
+
+  const meanAspect = aspects.reduce((sum, value) => sum + value, 0) / aspects.length;
+  const variance =
+    aspects.reduce((sum, value) => sum + (value - meanAspect) ** 2, 0) / aspects.length;
+
+  // Area-weighted mediolateral extent, normalised against axial span. Captures
+  // overall thickness independently of where the thickness sits.
+  const totalArea = slices.reduce((sum, slice) => sum + slice.area, 0);
+  const weightedWidth =
+    slices.reduce((sum, slice) => sum + slice.medioLateralExtent * slice.area, 0) / totalArea;
+
+  return {
+    // Mean cross-sectional aspect. Near 1 is round; near 0 is a slab.
+    meanCrossSectionAspect: meanAspect,
+    // Spread of that aspect along the body. A real animal varies; a collapsed
+    // cast tends toward uniformity.
+    crossSectionAspectSpread: Math.sqrt(variance),
+    // Normalised mean width, comparable across scale.
+    widthToAxialRatio: weightedWidth / profile.axialSpan,
+  };
+}
+
+/**
  * Compare source relations against envelope relations.
  *
  * Reports source value, envelope value, signed delta, and relative delta for

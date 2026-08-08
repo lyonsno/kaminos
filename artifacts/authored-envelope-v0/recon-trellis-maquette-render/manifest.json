@@ -1,0 +1,32 @@
+{
+  "derivedFrame": {
+    "extents": [
+      0.27273285388946533,
+      1.0005016922950745,
+      0.6800845861434937
+    ],
+    "longAxisIndex": 1,
+    "note": "axes derived from imported geometry, not assumed to match the Blender source frame",
+    "shortAxisIndex": 0,
+    "upAxisIndex": 2
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "orthoScale": 1.120561957359314,
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-trellis-maquette/output.glb",
+    "sha256": "372887134a3994e2d980f14419ef7bc8bdcbc36c275feaeeaf53c311fffcf24d"
+  },
+  "meshCount": 1,
+  "output": {
+    "byteLength": 907375,
+    "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-trellis-maquette-render/plate.png",
+    "sha256": "d04b8d629ba52bf3535c57b155d7d84992e6de8ec8eb4d3fb3724d14a1f4eca7"
+  },
+  "rendererId": "blender-glb-lateral-plate-v0",
+  "schema": "kaminos.glb-plate-render.v0",
+  "status": "completed",
+  "totalVertexCount": 171515
+}

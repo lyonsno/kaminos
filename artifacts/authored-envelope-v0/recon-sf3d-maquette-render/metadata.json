@@ -1,0 +1,14 @@
+{
+  "name": "output",
+  "job_type": "kaminos_render_glb_plate_noflip",
+  "job_id": "af7733a5bb0f",
+  "input_path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-maquette/output.glb",
+  "input_name": "output.glb",
+  "params": {},
+  "output_files": [
+    "manifest.json",
+    "plate.png"
+  ],
+  "created_at": 1786154255.200937,
+  "duration_s": 0.9
+}

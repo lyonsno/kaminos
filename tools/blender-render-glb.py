@@ -103,8 +103,10 @@ def main() -> int:
     scene.render.film_transparent = False
     scene.world.color = (0.018, 0.022, 0.021)
     scene.display.shading.light = "STUDIO"
-    scene.display.shading.color_type = "SINGLE"
-    scene.display.shading.single_color = (0.70, 0.76, 0.67)
+    # TEXTURE, not SINGLE: a flat clay override silently hides real material
+    # data, which made textured SF3D and Trellis casts look untextured and
+    # invited the false conclusion that the route was broken.
+    scene.display.shading.color_type = "TEXTURE"
     scene.display.shading.show_shadows = True
     scene.display.shading.show_cavity = True
     scene.display.shading.cavity_type = "BOTH"

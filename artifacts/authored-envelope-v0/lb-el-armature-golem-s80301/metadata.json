@@ -1,0 +1,17 @@
+{
+  "name": "plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "9c1e0291ec89",
+  "input_path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate-longboi/plate.png",
+  "input_name": "plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-golem.txt",
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786149648.4708679,
+  "duration_s": 47.0
+}
