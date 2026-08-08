@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.current-k4-post-composition-contact-solve-visual-disposition.v0",
+  "status": "no-new-geometry-identity-equal-no-capture",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "solveResultSha256": "a84093fe181b2ec98f80b89dbb175d3f77fc5b62266097a84315fc0bc08196c0",
+  "rationale": "Zero solver iterations were accepted from every seed including the reference control; every line-search attempt was rejected solely by maximum-relative-volume-error. Each output carrier is identity-equal to its seed, so no new visual state exists and a capture would imply evidence the substrate does not carry. The retained contact-normal frontier contact sheet remains the current visual authority for these carriers.",
+  "ceilingLocalization": {
+    "boundConstructionId": "muscle-12",
+    "relativeVolumeErrorAtCeiling": 0.015,
+    "otherCages": {
+      "muscle-34": 0.001539,
+      "muscle-13": 0.000169,
+      "muscle-45": 0.006714
+    }
+  },
+  "rows": [
+    {
+      "id": "solve-ramp-a092-a096-repay-789-cn098",
+      "seedCarrierSha256": "6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a",
+      "outputCarrierSha256": "6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a",
+      "identityEqual": true,
+      "iterationsAccepted": 0,
+      "terminationReason": "line-search-exhausted",
+      "soleRejectionReason": "maximum-relative-volume-error"
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn098",
+      "seedCarrierSha256": "d9b3e02827fcd0571e24349d04d875ef655d7040097f817827f7c200d9ec6751",
+      "outputCarrierSha256": "d9b3e02827fcd0571e24349d04d875ef655d7040097f817827f7c200d9ec6751",
+      "identityEqual": true,
+      "iterationsAccepted": 0,
+      "terminationReason": "line-search-exhausted",
+      "soleRejectionReason": "maximum-relative-volume-error"
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn096",
+      "seedCarrierSha256": "b118b79435138c2bb0b1fee73636f0016d33be368bfa412aef4f44720b0bd32c",
+      "outputCarrierSha256": "b118b79435138c2bb0b1fee73636f0016d33be368bfa412aef4f44720b0bd32c",
+      "identityEqual": true,
+      "iterationsAccepted": 0,
+      "terminationReason": "line-search-exhausted",
+      "soleRejectionReason": "maximum-relative-volume-error"
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn094",
+      "seedCarrierSha256": "c9f9518ad63bdb83cb2c95553b623312da8e72ab2726162fc9ef76575db595ea",
+      "outputCarrierSha256": "c9f9518ad63bdb83cb2c95553b623312da8e72ab2726162fc9ef76575db595ea",
+      "identityEqual": true,
+      "iterationsAccepted": 0,
+      "terminationReason": "line-search-exhausted",
+      "soleRejectionReason": "maximum-relative-volume-error"
+    },
+    {
+      "id": "solve-reference-control",
+      "seedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "outputCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "identityEqual": true,
+      "iterationsAccepted": 0,
+      "terminationReason": "line-search-exhausted",
+      "soleRejectionReason": "maximum-relative-volume-error"
+    }
+  ]
+}

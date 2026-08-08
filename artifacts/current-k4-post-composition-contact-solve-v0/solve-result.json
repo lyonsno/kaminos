@@ -1,0 +1,387 @@
+{
+  "schema": "kaminos.current-k4-post-composition-contact-solve-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requestedPath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-post-composition-contact-solve-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-post-composition-contact-solve-v0.json",
+      "sha256": "277cf6a4daa9b9e21ed0b4f3a5a0c968f33a6bf72f3a813f1e50432d7d6a1e02"
+    },
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    }
+  },
+  "requestedCandidateIds": [
+    "solve-ramp-a092-a096-repay-789-cn098",
+    "solve-ramp-a090-a094-repay-6789-cn098",
+    "solve-ramp-a090-a094-repay-6789-cn096",
+    "solve-ramp-a090-a094-repay-6789-cn094",
+    "solve-reference-control"
+  ],
+  "selectedReference": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    }
+  },
+  "solverContract": {
+    "convergenceTolerance": 0.0001,
+    "curvatureRegularization": 12,
+    "maxIterations": 96,
+    "maximumLocalTurningAngleChange": 0.25,
+    "maximumRelativeVolumeError": 0.015,
+    "maximumTotalTurningAngleChange": 1.25,
+    "relaxationStep": 0.32
+  },
+  "anisotropyContract": {
+    "obstacleConstructionId": "muscle-12",
+    "peakSectionId": "muscle-45:section:0011",
+    "shoulderSectionId": "muscle-45:section:0010",
+    "peakCompressionScales": [
+      0.98,
+      0.96,
+      0.94
+    ]
+  },
+  "candidates": [
+    {
+      "id": "solve-ramp-a092-a096-repay-789-cn098",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a092-a096-repay-789-cn098",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.98,
+        "anisotropyShoulderScale": 0.99
+      },
+      "seedMetrics": {
+        "pairwiseMovableTotalPenetration": 10.184414884548108,
+        "pairwiseMovableMaximumPenetration": 0.30407347222555475,
+        "pairwiseFixedTotalPenetration": 3.6262858975927155,
+        "pairwiseFixedMaximumPenetration": 0.4493772408354102,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.184414884548108,
+        "pairwiseMovableMaximumPenetration": 0.30407347222555475,
+        "pairwiseFixedTotalPenetration": 3.6262858975927155,
+        "pairwiseFixedMaximumPenetration": 0.4493772408354102,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "iterationsAccepted": 0,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/solve-ramp-a092-a096-repay-789-cn098-packed-carrier.json",
+        "sha256": "63ae5c00b211f9bf7bf6052f45b17a8dbbf3de1ae6430c3c249962fcdbf80437"
+      },
+      "residualLedger": {
+        "path": "candidates/solve-ramp-a092-a096-repay-789-cn098-residual-ledger.json",
+        "sha256": "dad02fc4b1316c732e62ad2768f1d112059cc524f8d36fa5790229f7d3f01da4"
+      },
+      "solveApplication": {
+        "path": "candidates/solve-ramp-a092-a096-repay-789-cn098-solve-application.json",
+        "sha256": "16719810f87c368b82db15f5ef1fc6051449a55b2c79ca345be96d4c870dcb90"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn098",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a090-a094-repay-6789-cn098",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.98,
+        "anisotropyShoulderScale": 0.99
+      },
+      "seedMetrics": {
+        "pairwiseMovableTotalPenetration": 10.193377355785046,
+        "pairwiseMovableMaximumPenetration": 0.29592255689437713,
+        "pairwiseFixedTotalPenetration": 3.5977016663103782,
+        "pairwiseFixedMaximumPenetration": 0.4468102324374639,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.193377355785046,
+        "pairwiseMovableMaximumPenetration": 0.29592255689437713,
+        "pairwiseFixedTotalPenetration": 3.5977016663103782,
+        "pairwiseFixedMaximumPenetration": 0.4468102324374639,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "iterationsAccepted": 0,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn098-packed-carrier.json",
+        "sha256": "86a1d9b19c475d652e4a0ac9d4932c31f362de8da8fb8eb06618136641f04798"
+      },
+      "residualLedger": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn098-residual-ledger.json",
+        "sha256": "c5ffeb2fe7de6f6d288f7deff74f7caa33a711253d494d0470b76cbfc47cea54"
+      },
+      "solveApplication": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn098-solve-application.json",
+        "sha256": "317e2dd50e7c6d2707952a3546d0b3199a1052a354001401b4e76d271321f35a"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn096",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a090-a094-repay-6789-cn096",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.96,
+        "anisotropyShoulderScale": 0.98
+      },
+      "seedMetrics": {
+        "pairwiseMovableTotalPenetration": 10.234748823074113,
+        "pairwiseMovableMaximumPenetration": 0.28927163697577996,
+        "pairwiseFixedTotalPenetration": 3.589956472874767,
+        "pairwiseFixedMaximumPenetration": 0.4446478607333008,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.234748823074113,
+        "pairwiseMovableMaximumPenetration": 0.28927163697577996,
+        "pairwiseFixedTotalPenetration": 3.589956472874767,
+        "pairwiseFixedMaximumPenetration": 0.4446478607333008,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "iterationsAccepted": 0,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn096-packed-carrier.json",
+        "sha256": "1c59703709755a4aaa4a6451237e237cfd8ee17580d892445d762f341aa87ec7"
+      },
+      "residualLedger": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn096-residual-ledger.json",
+        "sha256": "89a86460dbe45bcd9c8fd14da202c0376fe12025b65d102310fa438b8b70f58e"
+      },
+      "solveApplication": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn096-solve-application.json",
+        "sha256": "12ad42a445bb56dfc32d01dd03017f4b0f2308bd7825236dc501a81d4d7a8502"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "solve-ramp-a090-a094-repay-6789-cn094",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a090-a094-repay-6789-cn094",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.94,
+        "anisotropyShoulderScale": 0.97
+      },
+      "seedMetrics": {
+        "pairwiseMovableTotalPenetration": 10.274053273504085,
+        "pairwiseMovableMaximumPenetration": 0.28279378508205544,
+        "pairwiseFixedTotalPenetration": 3.5818415882624572,
+        "pairwiseFixedMaximumPenetration": 0.4425538573964366,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.274053273504085,
+        "pairwiseMovableMaximumPenetration": 0.28279378508205544,
+        "pairwiseFixedTotalPenetration": 3.5818415882624572,
+        "pairwiseFixedMaximumPenetration": 0.4425538573964366,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "iterationsAccepted": 0,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "sha256": "00dbfff8ea66327628ebb4f5698d1eb339bfecdaa4adbfa4a80c4db8efcf0348"
+      },
+      "residualLedger": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn094-residual-ledger.json",
+        "sha256": "1da2b0f4490afe2c3238085d7376d42146c4530735e517171bde350ffeea63a8"
+      },
+      "solveApplication": {
+        "path": "candidates/solve-ramp-a090-a094-repay-6789-cn094-solve-application.json",
+        "sha256": "833a3f9d77cbdd5f082423b3fc0d3ffef283e0ef8ea71393f223aef666c00815"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "solve-reference-control",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": null,
+        "compressionSections": [],
+        "repaymentSectionIds": [],
+        "anisotropyPeakScale": null,
+        "anisotropyShoulderScale": null
+      },
+      "seedMetrics": {
+        "pairwiseMovableTotalPenetration": 10.164116328174828,
+        "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.164116328174828,
+        "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "iterationsAccepted": 0,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/solve-reference-control-packed-carrier.json",
+        "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+      },
+      "residualLedger": {
+        "path": "candidates/solve-reference-control-residual-ledger.json",
+        "sha256": "8adc5345e958c9fa057acd7bac5f10f19b19a54b0ac6c88616d6697f6701cf8d"
+      },
+      "solveApplication": {
+        "path": "candidates/solve-reference-control-solve-application.json",
+        "sha256": "74667d4aed81c463982dc89a639351bd7882b437ff5c0876f888312b91009a88"
+      },
+      "refusalReasons": [],
+      "error": null
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "solve-ramp-a092-a096-repay-789-cn098",
+    "solve-ramp-a090-a094-repay-6789-cn098",
+    "solve-ramp-a090-a094-repay-6789-cn096",
+    "solve-ramp-a090-a094-repay-6789-cn094",
+    "solve-reference-control"
+  ],
+  "visual": {
+    "status": "pending-agent-inspection",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ]
+  }
+}

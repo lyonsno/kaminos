@@ -1,0 +1,96 @@
+{
+  "schema": "kaminos.current-k4-post-composition-contact-solve-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requestedPath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-post-composition-contact-solve-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-post-composition-contact-solve-v0.json",
+      "sha256": "277cf6a4daa9b9e21ed0b4f3a5a0c968f33a6bf72f3a813f1e50432d7d6a1e02",
+      "requested": {
+        "schema": "kaminos.current-k4-post-composition-contact-solve-config.v0",
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 96,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "includeReferenceControl": true
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-post-composition-contact-solve-config.v0",
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 96,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "includeReferenceControl": true
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 5,
+  "effectiveCandidateCount": 5,
+  "candidateCapApplied": false,
+  "outputs": {
+    "solveResult": {
+      "path": "solve-result.json",
+      "sha256": "a84093fe181b2ec98f80b89dbb175d3f77fc5b62266097a84315fc0bc08196c0"
+    }
+  },
+  "visual": {
+    "status": "pending-agent-inspection",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ]
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "solve-result-written",
+    "solveResultSha256": "a84093fe181b2ec98f80b89dbb175d3f77fc5b62266097a84315fc0bc08196c0",
+    "candidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "solve-ramp-a092-a096-repay-789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn098",
+      "solve-ramp-a090-a094-repay-6789-cn096",
+      "solve-ramp-a090-a094-repay-6789-cn094",
+      "solve-reference-control"
+    ]
+  }
+}
