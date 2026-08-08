@@ -22,6 +22,8 @@ export const MUSCLE_COMPARTMENT_RING_CAGE_LONGITUDINAL_VOLUME_RAMP_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-longitudinal-volume-ramp.v0';
 export const MUSCLE_COMPARTMENT_RING_CAGE_PRESSURE_VOLUME_REDISTRIBUTION_SELECTION_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-pressure-volume-redistribution-selection.v0';
+export const MUSCLE_COMPARTMENT_RING_CAGE_VOLUME_RESTORATION_SCHEMA =
+  'kaminos.muscle-compartment-ring-cage-volume-restoration.v0';
 
 const EPSILON = 1e-10;
 
@@ -1986,6 +1988,177 @@ export function applyLongitudinalRingCageSectionVolumeRamp(
     nonPositiveCellCount,
     iterationCount,
     sectionReceipts,
+    outputCarrier: solved.outputCarrier,
+  };
+}
+
+export function applyRingCageSectionVolumeRestoration(
+  solverCarrier,
+  requestedConfig,
+) {
+  if (!solverCarrier || solverCarrier.schema !==
+      'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error('volume restoration requires the admitted solver carrier schema');
+  }
+  const { identity: _recordedIdentity, ...identityDomain } = solverCarrier;
+  const actualCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
+  if (solverCarrier.identity?.sha256 !== actualCarrierSha256) {
+    throw new Error(
+      `volume restoration source carrier identity mismatch: recorded ` +
+      `${solverCarrier.identity?.sha256 || 'missing'}, actual ${actualCarrierSha256}`,
+    );
+  }
+  const configKeys = [
+    'compressionSectionIds',
+    'constructionId',
+    'maximumSectionAreaScaleReduction',
+    'targetRelativeVolumeError',
+    'volumeRelativeTolerance',
+  ];
+  if (!requestedConfig || typeof requestedConfig !== 'object' ||
+      Array.isArray(requestedConfig) ||
+      JSON.stringify(Object.keys(requestedConfig).sort()) !== JSON.stringify(configKeys)) {
+    throw new Error(`volume restoration config requires exactly ${configKeys.join(', ')}`);
+  }
+  if (typeof requestedConfig.constructionId !== 'string' ||
+      !Array.isArray(requestedConfig.compressionSectionIds) ||
+      requestedConfig.compressionSectionIds.length === 0 ||
+      !requestedConfig.compressionSectionIds.every(id => typeof id === 'string') ||
+      new Set(requestedConfig.compressionSectionIds).size !==
+        requestedConfig.compressionSectionIds.length ||
+      !Number.isFinite(requestedConfig.targetRelativeVolumeError) ||
+      !(requestedConfig.targetRelativeVolumeError >= 0) ||
+      !Number.isFinite(requestedConfig.maximumSectionAreaScaleReduction) ||
+      !(requestedConfig.maximumSectionAreaScaleReduction > 0 &&
+        requestedConfig.maximumSectionAreaScaleReduction < 1) ||
+      !Number.isFinite(requestedConfig.volumeRelativeTolerance) ||
+      !(requestedConfig.volumeRelativeTolerance > 0)) {
+    throw new Error('volume restoration config contains an invalid value');
+  }
+  const cageIndex = solverCarrier.cages.findIndex(
+    cage => cage.constructionId === requestedConfig.constructionId,
+  );
+  if (cageIndex < 0) {
+    throw new Error(
+      `volume restoration lacks construction ${requestedConfig.constructionId}`,
+    );
+  }
+  const sourcePrepared = prepareCage(solverCarrier.cages[cageIndex]);
+  const rows = sectionRows(sourcePrepared);
+  for (const sectionId of requestedConfig.compressionSectionIds) {
+    const row = rows.get(sectionId);
+    if (!row) throw new Error(`volume restoration lacks section ${sectionId}`);
+    if (row.fixed) {
+      throw new Error(`volume restoration refuses fixed section ${sectionId}`);
+    }
+  }
+  const restVolume = sourcePrepared.manifest.cells.reduce(
+    (sum, cell) => sum + cell.restRawSignedVolume * cell.restOrientationParity,
+    0,
+  );
+  if (!(restVolume > EPSILON)) {
+    throw new Error('volume restoration construction has no positive rest volume');
+  }
+  const sourceVolume = cageCurrentPositiveVolume(sourcePrepared);
+  const sourceRelativeVolumeError = Math.abs(sourceVolume - restVolume) / restVolume;
+  const targetVolume = restVolume * (1 + requestedConfig.targetRelativeVolumeError);
+  if (!(sourceVolume > targetVolume * (1 + requestedConfig.volumeRelativeTolerance))) {
+    throw new Error(
+      `volume restoration already-within-target: current relative error ` +
+      `${sourceRelativeVolumeError} does not exceed target ` +
+      `${requestedConfig.targetRelativeVolumeError}`,
+    );
+  }
+  const fixedReference = fixedNodeReference(solverCarrier);
+  const axisReference = axisNodeReference(solverCarrier);
+  const areaScaleMap = areaScale => new Map(
+    requestedConfig.compressionSectionIds.map(sectionId => [sectionId, areaScale]),
+  );
+  const floor = applyRingCageSectionAreaScales(
+    solverCarrier,
+    cageIndex,
+    areaScaleMap(requestedConfig.maximumSectionAreaScaleReduction),
+  );
+  if (floor.currentVolume >
+      targetVolume * (1 + requestedConfig.volumeRelativeTolerance)) {
+    throw new Error(
+      `volume restoration insufficient-compression-authority: floor scale ` +
+      `${requestedConfig.maximumSectionAreaScaleReduction} reaches volume ` +
+      `${floor.currentVolume}, above target ${targetVolume}`,
+    );
+  }
+  let lower = requestedConfig.maximumSectionAreaScaleReduction;
+  let upper = 1;
+  let solved = floor;
+  let effectiveSectionAreaScale = lower;
+  let iterationCount = 0;
+  for (; iterationCount < 80; iterationCount += 1) {
+    const candidateScale = (lower + upper) / 2;
+    const candidate = applyRingCageSectionAreaScales(
+      solverCarrier,
+      cageIndex,
+      areaScaleMap(candidateScale),
+    );
+    const relativeGap = Math.abs(candidate.currentVolume - targetVolume) / restVolume;
+    if (relativeGap <= requestedConfig.volumeRelativeTolerance) {
+      solved = candidate;
+      effectiveSectionAreaScale = candidateScale;
+      break;
+    }
+    if (candidate.currentVolume > targetVolume) upper = candidateScale;
+    else lower = candidateScale;
+    solved = candidate;
+    effectiveSectionAreaScale = candidateScale;
+  }
+  const finalVolume = solved.currentVolume;
+  const finalRelativeGap = Math.abs(finalVolume - targetVolume) / restVolume;
+  if (finalRelativeGap > requestedConfig.volumeRelativeTolerance) {
+    throw new Error(
+      `volume restoration failed to reach target within tolerance: gap ` +
+      `${finalRelativeGap} > ${requestedConfig.volumeRelativeTolerance}`,
+    );
+  }
+  const fixedNodeMaximumDrift = measureFixedNodeMaximumDrift(
+    solved.outputCarrier,
+    fixedReference,
+  );
+  const centerlineMaximumDrift = measureAxisNodeMaximumDrift(
+    solved.outputCarrier,
+    axisReference,
+  );
+  if (fixedNodeMaximumDrift !== 0 || centerlineMaximumDrift !== 0) {
+    throw new Error('volume restoration violated fixed-node or centerline immutability');
+  }
+  const nonPositiveCellCount = solved.prepared.cellGeometry.filter(
+    cell => !(cell.orientedVolume > EPSILON),
+  ).length;
+  if (nonPositiveCellCount !== 0) {
+    throw new Error(
+      `volume restoration produced ${nonPositiveCellCount} nonpositive cells`,
+    );
+  }
+  return {
+    schema: MUSCLE_COMPARTMENT_RING_CAGE_VOLUME_RESTORATION_SCHEMA,
+    status: 'completed',
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: solved.outputCarrier.identity.sha256,
+    requested: structuredClone(requestedConfig),
+    effective: {
+      ...structuredClone(requestedConfig),
+      sectionAreaScale: effectiveSectionAreaScale,
+    },
+    fallbackUsed: false,
+    restVolume,
+    sourceVolume,
+    sourceRelativeVolumeError,
+    targetVolume,
+    finalVolume,
+    finalRelativeVolumeError: Math.abs(finalVolume - restVolume) / restVolume,
+    effectiveSectionAreaScale,
+    iterationCount,
+    fixedNodeMaximumDrift,
+    centerlineMaximumDrift,
+    nonPositiveCellCount,
     outputCarrier: solved.outputCarrier,
   };
 }

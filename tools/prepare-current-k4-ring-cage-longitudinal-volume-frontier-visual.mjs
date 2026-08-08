@@ -20,6 +20,8 @@ const CONTACT_NORMAL_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0';
 const POST_COMPOSITION_SOLVE_SCHEMA =
   'kaminos.current-k4-post-composition-contact-solve-result.v0';
+const M12_RESTORATION_SOLVE_SCHEMA =
+  'kaminos.current-k4-m12-volume-restoration-solve-result.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const REPORT_SCHEMA =
@@ -202,6 +204,9 @@ function frontierFamilyLabel(frontier) {
   if (frontier.schema === POST_COMPOSITION_SOLVE_SCHEMA) {
     return 'post-composition contact solve';
   }
+  if (frontier.schema === M12_RESTORATION_SOLVE_SCHEMA) {
+    return 'M12 volume-restoration contact solve';
+  }
   return 'longitudinal volume frontier';
 }
 
@@ -290,11 +295,12 @@ try {
     RAMP_FRONTIER_SCHEMA,
     CONTACT_NORMAL_FRONTIER_SCHEMA,
     POST_COMPOSITION_SOLVE_SCHEMA,
+    M12_RESTORATION_SOLVE_SCHEMA,
   ].includes(frontier?.schema) || frontier.status !== 'completed') {
     throw new Error(
       `visual preparation requires completed ${AMPLITUDE_FRONTIER_SCHEMA}, ` +
-      `${RAMP_FRONTIER_SCHEMA}, ${CONTACT_NORMAL_FRONTIER_SCHEMA}, or ` +
-      `${POST_COMPOSITION_SOLVE_SCHEMA}`,
+      `${RAMP_FRONTIER_SCHEMA}, ${CONTACT_NORMAL_FRONTIER_SCHEMA}, ` +
+      `${POST_COMPOSITION_SOLVE_SCHEMA}, or ${M12_RESTORATION_SOLVE_SCHEMA}`,
     );
   }
   if (frontier.inputs.source.sha256 !== sha256(sourceBytes) ||
@@ -314,8 +320,11 @@ try {
   }
   const compressionSectionId = frontier.schema === AMPLITUDE_FRONTIER_SCHEMA
     ? frontier.pressureSelection.compressionSectionIds[0]
-    : [CONTACT_NORMAL_FRONTIER_SCHEMA, POST_COMPOSITION_SOLVE_SCHEMA]
-      .includes(frontier.schema)
+    : [
+      CONTACT_NORMAL_FRONTIER_SCHEMA,
+      POST_COMPOSITION_SOLVE_SCHEMA,
+      M12_RESTORATION_SOLVE_SCHEMA,
+    ].includes(frontier.schema)
       ? frontier.anisotropyContract.peakSectionId
       : frontier.candidates
         .flatMap(candidate => candidate.requested.compressionSections)
@@ -390,7 +399,9 @@ try {
               ? 'contact-normal-cross-section-ramp-frontier'
               : frontier.schema === POST_COMPOSITION_SOLVE_SCHEMA
                 ? 'post-composition-contact-solve'
-                : 'smooth-longitudinal-ramp-frontier',
+                : frontier.schema === M12_RESTORATION_SOLVE_SCHEMA
+                  ? 'm12-volume-restoration-contact-solve'
+                  : 'smooth-longitudinal-ramp-frontier',
         },
         metrics: { initial: initialMeasurement, packed: packedMeasurement },
         packedCarrier,

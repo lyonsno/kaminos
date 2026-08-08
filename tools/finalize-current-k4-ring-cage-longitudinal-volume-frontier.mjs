@@ -17,6 +17,10 @@ const CONTACT_NORMAL_FRONTIER_SCHEMA =
   'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0';
 const CONTACT_NORMAL_FRONTIER_REPORT_SCHEMA =
   'kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-run-report.v0';
+const M12_RESTORATION_SOLVE_SCHEMA =
+  'kaminos.current-k4-m12-volume-restoration-solve-result.v0';
+const M12_RESTORATION_SOLVE_REPORT_SCHEMA =
+  'kaminos.current-k4-m12-volume-restoration-solve-run-report.v0';
 const MANIFEST_SCHEMA =
   'kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0';
 const VISUAL_REPORT_SCHEMA =
@@ -34,11 +38,17 @@ const RESULT_STATUS_BY_FRONTIER_SCHEMA = Object.freeze({
     'smooth-ramp-frontier-retained-scalar-advance-no-visual-selection',
   [CONTACT_NORMAL_FRONTIER_SCHEMA]:
     'contact-normal-frontier-retained-first-visible-directional-displacement-no-selection',
+  [M12_RESTORATION_SOLVE_SCHEMA]:
+    'm12-restoration-solve-first-formation-level-relief-provisional-knee-selection',
 });
 const REPORT_SCHEMA_BY_FRONTIER_SCHEMA = Object.freeze({
   [AMPLITUDE_FRONTIER_SCHEMA]: AMPLITUDE_FRONTIER_REPORT_SCHEMA,
   [RAMP_FRONTIER_SCHEMA]: RAMP_FRONTIER_REPORT_SCHEMA,
   [CONTACT_NORMAL_FRONTIER_SCHEMA]: CONTACT_NORMAL_FRONTIER_REPORT_SCHEMA,
+  [M12_RESTORATION_SOLVE_SCHEMA]: M12_RESTORATION_SOLVE_REPORT_SCHEMA,
+});
+const RESULT_FILE_BY_FRONTIER_SCHEMA = Object.freeze({
+  [M12_RESTORATION_SOLVE_SCHEMA]: 'assay-result.json',
 });
 
 function sha256(bytes) {
@@ -96,8 +106,15 @@ function equal(left, right) {
 async function main() {
   const outputDirectory = parseArguments(process.argv.slice(2));
   const visualDirectory = path.join(outputDirectory, 'visual');
+  let frontierFileName = 'frontier-result.json';
+  try {
+    await readFile(path.join(outputDirectory, frontierFileName));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    frontierFileName = 'assay-result.json';
+  }
   const paths = {
-    frontier: path.join(outputDirectory, 'frontier-result.json'),
+    frontier: path.join(outputDirectory, frontierFileName),
     frontierReport: path.join(outputDirectory, 'run-report.json'),
     manifest: path.join(visualDirectory, 'visual-manifest.json'),
     visualReport: path.join(visualDirectory, 'run-report.json'),
@@ -120,6 +137,14 @@ async function main() {
     const { frontier, frontierReport, manifest, visualReport, inspection } = values;
     phase = 'verify-primary-custody';
     const finalResultStatus = RESULT_STATUS_BY_FRONTIER_SCHEMA[frontier?.schema];
+    const expectedResultFile =
+      RESULT_FILE_BY_FRONTIER_SCHEMA[frontier?.schema] || 'frontier-result.json';
+    if (frontierFileName !== expectedResultFile) {
+      throw new Error(
+        `frontier finalization read ${frontierFileName} but schema owns ` +
+        `${expectedResultFile}`,
+      );
+    }
     if (!finalResultStatus || frontier.status !== 'completed' ||
         frontierReport?.schema !== REPORT_SCHEMA_BY_FRONTIER_SCHEMA[frontier.schema] ||
         frontierReport.status !== 'completed' ||
@@ -146,7 +171,9 @@ async function main() {
         throw new Error('frontier finalization existing disposition identity mismatch');
       }
     } else if (sha256(bytes.frontier) !== inspection.frontierResultSha256 ||
-        frontierReport.outputs?.frontierResult?.sha256 !== inspection.frontierResultSha256) {
+        (frontierReport.outputs?.frontierResult?.sha256 ??
+          frontierReport.outputs?.assayResult?.sha256) !==
+          inspection.frontierResultSha256) {
       throw new Error('frontier finalization source primary identity mismatch');
     }
     if (!equal(manifest.candidateIds, frontier.visual.candidateIds) ||
@@ -260,10 +287,13 @@ async function main() {
     const finalizedReport = structuredClone(frontierReport);
     finalizedReport.resultStatus = finalResultStatus;
     finalizedReport.visual = finalizedFrontier.visual;
+    const primaryOutputKey = finalizedReport.outputs?.assayResult
+      ? 'assayResult'
+      : 'frontierResult';
     finalizedReport.outputs = {
       ...finalizedReport.outputs,
-      frontierResult: {
-        path: 'frontier-result.json',
+      [primaryOutputKey]: {
+        path: frontierFileName,
         sha256: sha256(finalizedFrontierBytes),
       },
       visualInspection: finalizedFrontier.visual.inspection,
@@ -276,7 +306,7 @@ async function main() {
       visualStatus: inspection.status,
       visualDisposition: inspection.visualDisposition,
       originalFrontierSha256: inspection.frontierResultSha256,
-      finalizedFrontierSha256: finalizedReport.outputs.frontierResult.sha256,
+      finalizedFrontierSha256: finalizedReport.outputs[primaryOutputKey].sha256,
       visualInspectionSha256: inspectionSha256,
       captureRouteVerificationSha256: verificationSha256,
     };
@@ -290,7 +320,7 @@ async function main() {
       visualDisposition: inspection.visualDisposition,
       outputs: {
         frontierResult: {
-          path: '../frontier-result.json',
+          path: `../${frontierFileName}`,
           sha256: sha256(finalizedFrontierBytes),
         },
         frontierRunReport: {

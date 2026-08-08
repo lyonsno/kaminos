@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos.current-k4-m12-volume-restoration-solve-config.v0",
+  "restoration": {
+    "constructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45",
+    "targetRelativeVolumeErrors": [0.01, 0.005, 0.002],
+    "maximumSectionAreaScaleReduction": 0.85,
+    "volumeRelativeTolerance": 1e-10
+  },
+  "solver": {
+    "convergenceTolerance": 0.0001,
+    "curvatureRegularization": 12,
+    "maxIterations": 96,
+    "maximumLocalTurningAngleChange": 0.25,
+    "maximumRelativeVolumeError": 0.015,
+    "maximumTotalTurningAngleChange": 1.25,
+    "relaxationStep": 0.32
+  },
+  "seedCandidateIds": [
+    "ramp-a092-a096-repay-789-cn098",
+    "ramp-a090-a094-repay-6789-cn094"
+  ],
+  "includeReferenceControl": true
+}
