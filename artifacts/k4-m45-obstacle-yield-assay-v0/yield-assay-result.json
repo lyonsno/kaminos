@@ -1,0 +1,509 @@
+{
+  "schema": "kaminos.k4-m45-obstacle-yield-assay-result.v0",
+  "status": "completed-provisional",
+  "claimCeiling": "provisional route-local mechanical claim only; no anatomy, authored intent, stiffness, or final objective weights",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/k4-coupled-envelope-contact-frontier-v0/states/endpoint-contained-rollback-carrier.json",
+      "effectivePath": "repo://artifacts/k4-coupled-envelope-contact-frontier-v0/states/endpoint-contained-rollback-carrier.json",
+      "sha256": "67bf6af88d84c7a6f34df79133293a855dbf06afe0da0f7cef904c2fd2593599"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "control": {
+    "heldConstructionId": "muscle-34"
+  },
+  "contactNeighborhood": {
+    "obstacleConstructionId": "muscle-45",
+    "sectionIds": [
+      "muscle-45:section:0001",
+      "muscle-45:section:0008",
+      "muscle-45:section:0009",
+      "muscle-45:section:0011"
+    ],
+    "reciprocalContactCount": 15,
+    "directionSourceSectionId": "muscle-45:section:0008"
+  },
+  "shamSectionIds": [
+    "muscle-45:section:0010",
+    "muscle-45:section:0007",
+    "muscle-45:section:0006"
+  ],
+  "repaymentSectionIds": [
+    "muscle-45:section:0002",
+    "muscle-45:section:0003",
+    "muscle-45:section:0004",
+    "muscle-45:section:0005"
+  ],
+  "baselineS8AxisSignedDistance": -0.050000000000585125,
+  "arms": [
+    {
+      "id": "baseline-contained",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 14.442842177358518,
+        "pairwiseMovableMaximumPenetration": 0.9416539821476075,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 3.1912157439675535,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.686739443133755,
+          "maximumPenetration": 0.9416539821476075
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 1.9498891298403622,
+          "maximumPenetration": 0.675470043413067
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 16,
+          "totalPenetration": 3.144600630376901,
+          "maximumPenetration": 0.46094852180370144
+        }
+      },
+      "carrier": {
+        "path": "arms/baseline-contained-carrier.json",
+        "sha256": "67bf6af88d84c7a6f34df79133293a855dbf06afe0da0f7cef904c2fd2593599"
+      }
+    },
+    {
+      "id": "treatment-s090",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 16.487803743508753,
+        "pairwiseMovableMaximumPenetration": 0.8564310459203525,
+        "pairwiseFixedTotalPenetration": 3.5302765566714407,
+        "pairwiseFixedMaximumPenetration": 0.4268585586884318,
+        "skeletalTotalPenetration": 3.3936510646553737,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.6595661646348687,
+          "maximumPenetration": 0.8564310459203525
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 2.118141688108587,
+          "maximumPenetration": 0.8185415633893736
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 15,
+          "totalPenetration": 2.9308054730694266,
+          "maximumPenetration": 0.4268585586884318
+        }
+      },
+      "carrier": {
+        "path": "arms/treatment-s090-carrier.json",
+        "sha256": "a24d0a8d90245228c2e79fbd515a82c19ca06cfb12469b09f13cd3a6d568b2d4"
+      },
+      "yield": {
+        "kind": "contact-neighborhood",
+        "sectionIds": [
+          "muscle-45:section:0001",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009",
+          "muscle-45:section:0011"
+        ],
+        "shamSectionIds": [],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.9,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "7e03d6d2382fa641ceb6c3af60407857404b070d7ffefba4a6bffb3f11a02e42",
+          "repaymentAreaScale": 1.073157784901559
+        },
+        "anisotropyOutputCarrierSha256": "896d3f2df32db63469f00520b94a5de06cc125d0b0f6f15b96644baa86bd3d18"
+      }
+    },
+    {
+      "id": "sham-s090",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 16.893473307054975,
+        "pairwiseMovableMaximumPenetration": 0.9416539821476075,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 3.4407420828448063,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.687062242402073,
+          "maximumPenetration": 0.9416539821476075
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 1.9498891298403622,
+          "maximumPenetration": 0.675470043413067
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 17,
+          "totalPenetration": 3.118331714608531,
+          "maximumPenetration": 0.46094852180370144
+        }
+      },
+      "carrier": {
+        "path": "arms/sham-s090-carrier.json",
+        "sha256": "d1827af46ea6ce081976fce2d5c08722c2c6aad5ceb455770bfbc080a96b61c0"
+      },
+      "yield": {
+        "kind": "sham-non-contact",
+        "sectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "shamSectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.9,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "0f8012ff80a99218b61ea72978fd1c8d51e1c02731817099242ad19e88eaa7e5",
+          "repaymentAreaScale": 1.0848163669928907
+        },
+        "anisotropyOutputCarrierSha256": "a24df02ad14bec00cd23c5960cc24de5554cc9f369aec289aa425cc650b4dd07"
+      }
+    },
+    {
+      "id": "treatment-s080",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 18.840797716878342,
+        "pairwiseMovableMaximumPenetration": 0.9336266298509319,
+        "pairwiseFixedTotalPenetration": 3.2906742566414366,
+        "pairwiseFixedMaximumPenetration": 0.42240468065408737,
+        "skeletalTotalPenetration": 3.7387574058768487,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.45534315252358,
+          "maximumPenetration": 0.7159268529445988
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 2.0941395091561676,
+          "maximumPenetration": 0.9336266298509319
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 15,
+          "totalPenetration": 2.642285204490219,
+          "maximumPenetration": 0.42240468065408737
+        }
+      },
+      "carrier": {
+        "path": "arms/treatment-s080-carrier.json",
+        "sha256": "cb12cf88d59a2e0a2f0ccffd5245bf05ef8a14467f106ce14505df3f4ffdb382"
+      },
+      "yield": {
+        "kind": "contact-neighborhood",
+        "sectionIds": [
+          "muscle-45:section:0001",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009",
+          "muscle-45:section:0011"
+        ],
+        "shamSectionIds": [],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.8,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "50d9b16b93c8a9a40fb76366fe8166ceb7cd9c20f94b2cf80634df528f8276e6",
+          "repaymentAreaScale": 1.1475423390045765
+        },
+        "anisotropyOutputCarrierSha256": "6002cd7e9b74dbd840ea72a625202da0b2da4f8d0093f00c65025ea85232e026"
+      }
+    },
+    {
+      "id": "sham-s080",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 21.062730400729883,
+        "pairwiseMovableMaximumPenetration": 0.9416539821476075,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 3.8076225791933775,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.687062242402073,
+          "maximumPenetration": 0.9416539821476075
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 1.9498891298403622,
+          "maximumPenetration": 0.675470043413067
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 17,
+          "totalPenetration": 3.1038727219040663,
+          "maximumPenetration": 0.46094852180370144
+        }
+      },
+      "carrier": {
+        "path": "arms/sham-s080-carrier.json",
+        "sha256": "2f11ec1d8304464c6c72d73b7e37c0a86f76f5090b1369a8098ae5c3a84a772e"
+      },
+      "yield": {
+        "kind": "sham-non-contact",
+        "sectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "shamSectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.8,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "edf1b1f48e2b3acec86f2971f2c2a531814441a46c5c9c6d3e6807bbe789d0bd",
+          "repaymentAreaScale": 1.1713464852422477
+        },
+        "anisotropyOutputCarrierSha256": "15dbb86cb34bbee9608be359f47f84ad89242b6696906ff89b61ddff81e72dc0"
+      }
+    },
+    {
+      "id": "treatment-s070",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 20.478939342774602,
+        "pairwiseMovableMaximumPenetration": 0.826536270694411,
+        "pairwiseFixedTotalPenetration": 3.033587764972252,
+        "pairwiseFixedMaximumPenetration": 0.4045341303162103,
+        "skeletalTotalPenetration": 4.1488877523196015,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013656856250207985,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.1218327766495926,
+          "maximumPenetration": 0.5674341081971847
+        },
+        "m45s8ToM12": {
+          "contactCount": 3,
+          "totalPenetration": 1.6584447531757738,
+          "maximumPenetration": 0.826536270694411
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 13,
+          "totalPenetration": 2.3163314693188872,
+          "maximumPenetration": 0.4045341303162103
+        }
+      },
+      "carrier": {
+        "path": "arms/treatment-s070-carrier.json",
+        "sha256": "f91093bc0824d5d8e1036b73f71e628aa90e0d22493bcf2e4d2bde5a6f1252ef"
+      },
+      "yield": {
+        "kind": "contact-neighborhood",
+        "sectionIds": [
+          "muscle-45:section:0001",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009",
+          "muscle-45:section:0011"
+        ],
+        "shamSectionIds": [],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.7,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "7653564bf0a82e1b410991311d09b7262aeb90258f1bece71468211739e0a912",
+          "repaymentAreaScale": 1.2233275498263536
+        },
+        "anisotropyOutputCarrierSha256": "f351df997d190ab122635ac9ae331ae0fe435b10731596150a11ecc7a70ae543"
+      }
+    },
+    {
+      "id": "sham-s070",
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 24.86545003107938,
+        "pairwiseMovableMaximumPenetration": 0.9416539821476075,
+        "pairwiseFixedTotalPenetration": 3.74533272446409,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 4.1867002827928275,
+        "compartmentMaximumEscape": 0,
+        "maximumRelativeVolumeError": 0.013800198443136503,
+        "maximumLocalTurn": null,
+        "s8AxisSignedDistance": -0.050000000000585125
+      },
+      "ledgerRows": {
+        "m12s8ToM45": {
+          "contactCount": 4,
+          "totalPenetration": 2.687062242402073,
+          "maximumPenetration": 0.9416539821476075
+        },
+        "m45s8ToM12": {
+          "contactCount": 4,
+          "totalPenetration": 1.9498891298403622,
+          "maximumPenetration": 0.675470043413067
+        },
+        "m12s8ToM13": {
+          "contactCount": 1,
+          "totalPenetration": 0.05394670578643632,
+          "maximumPenetration": 0.05394670578643632
+        },
+        "m34Linked": {
+          "contactCount": 17,
+          "totalPenetration": 3.096964549480562,
+          "maximumPenetration": 0.46094852180370144
+        }
+      },
+      "carrier": {
+        "path": "arms/sham-s070-carrier.json",
+        "sha256": "a70e0056967a38c50520482a35d7cdd49fe43fdc7ff0e0b8bd13b47dc8f923b4"
+      },
+      "yield": {
+        "kind": "sham-non-contact",
+        "sectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "shamSectionIds": [
+          "muscle-45:section:0010",
+          "muscle-45:section:0007",
+          "muscle-45:section:0006"
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0002",
+          "muscle-45:section:0003",
+          "muscle-45:section:0004",
+          "muscle-45:section:0005"
+        ],
+        "scale": 0.7,
+        "heldConstructionIds": [
+          "muscle-34"
+        ],
+        "rampReceipt": {
+          "sourceCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+          "outputCarrierSha256": "aeb6b52c21857fef916d77977411b62dbc5f6858c7a6df20e2926634b6379ab7",
+          "repaymentAreaScale": 1.2598026185296478
+        },
+        "anisotropyOutputCarrierSha256": "04c49a9b974fccbdd077a3fbf1af55fc5b6b81374d8e6ab55c9f61fcc770bf31"
+      }
+    }
+  ],
+  "solveProbe": {
+    "fromArmId": "treatment-s070",
+    "releasesHeldConstruction": true,
+    "acceptedIterations": 0,
+    "termination": "line-search-exhausted",
+    "finalMovableTotal": 20.478939342774602,
+    "finalSkeletalTotal": 4.1488877523196015,
+    "finalS8AxisSignedDistance": -0.050000000000585125
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "kaminos.k4-m45-obstacle-yield-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "claimCeiling": "provisional route-local mechanical claim only; no anatomy, authored intent, stiffness, or final objective weights",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/k4-coupled-envelope-contact-frontier-v0/states/endpoint-contained-rollback-carrier.json",
+      "effectivePath": "repo://artifacts/k4-coupled-envelope-contact-frontier-v0/states/endpoint-contained-rollback-carrier.json",
+      "sha256": "67bf6af88d84c7a6f34df79133293a855dbf06afe0da0f7cef904c2fd2593599"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "outputs": {
+    "yieldAssayResult": {
+      "path": "yield-assay-result.json",
+      "sha256": "a2e869ba4ee1ef57ad6e2d5ac285f80f1b5cf56714f12226649426a84d2e0d95"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "yield-assay-result-written",
+    "yieldAssayResultSha256": "a2e869ba4ee1ef57ad6e2d5ac285f80f1b5cf56714f12226649426a84d2e0d95",
+    "armIds": [
+      "baseline-contained",
+      "treatment-s090",
+      "sham-s090",
+      "treatment-s080",
+      "sham-s080",
+      "treatment-s070",
+      "sham-s070"
+    ]
+  }
+}
