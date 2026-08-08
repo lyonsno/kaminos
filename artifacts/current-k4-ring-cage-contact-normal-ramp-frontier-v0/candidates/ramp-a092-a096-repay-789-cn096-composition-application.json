@@ -1,0 +1,306 @@
+{
+  "schema": "kaminos.current-k4-contact-normal-composition-application.v0",
+  "candidateId": "ramp-a092-a096-repay-789-cn096",
+  "ramp": {
+    "schema": "kaminos.muscle-compartment-ring-cage-longitudinal-volume-ramp.v0",
+    "status": "completed",
+    "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "outputCarrierSha256": "83d326169d46d4330ba04e8c2e79e4cc0d868151eee3b3ed8501cbd85378ade7",
+    "requested": {
+      "constructionId": "muscle-45",
+      "compressionSections": [
+        {
+          "sectionId": "muscle-45:section:0010",
+          "areaScale": 0.96
+        },
+        {
+          "sectionId": "muscle-45:section:0011",
+          "areaScale": 0.92
+        }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ],
+      "maximumRepaymentAreaScale": 1.2,
+      "maximumAdjacentAreaScaleDelta": 0.1,
+      "volumeRelativeTolerance": 1e-10
+    },
+    "effective": {
+      "constructionId": "muscle-45",
+      "compressionSections": [
+        {
+          "sectionId": "muscle-45:section:0010",
+          "areaScale": 0.96
+        },
+        {
+          "sectionId": "muscle-45:section:0011",
+          "areaScale": 0.92
+        }
+      ],
+      "repaymentSectionIds": [
+        "muscle-45:section:0007",
+        "muscle-45:section:0008",
+        "muscle-45:section:0009"
+      ],
+      "maximumRepaymentAreaScale": 1.2,
+      "maximumAdjacentAreaScaleDelta": 0.1,
+      "volumeRelativeTolerance": 1e-10,
+      "repaymentAreaScale": 1.0171848531812429
+    },
+    "fallbackUsed": false,
+    "sourceVolume": 89.90172345497456,
+    "compressedVolume": 89.39293913089331,
+    "finalVolume": 89.90172345379398,
+    "displacedVolume": 0.5087843240812475,
+    "repaidVolume": 0.5087843229006666,
+    "finalVolumeRelativeError": 1.3131905829496045e-11,
+    "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+    "fixedNodeMaximumDrift": 0,
+    "centerlineMaximumDrift": 0,
+    "nonPositiveCellCount": 0,
+    "iterationCount": 28,
+    "sectionReceipts": [
+      {
+        "sectionId": "muscle-45:section:0000",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 0.70442998176588,
+        "areaAfter": 0.70442998176588
+      },
+      {
+        "sectionId": "muscle-45:section:0001",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 2.085687889802701,
+        "areaAfter": 2.085687889802701
+      },
+      {
+        "sectionId": "muscle-45:section:0002",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 3.4732517126920293,
+        "areaAfter": 3.4732517126920293
+      },
+      {
+        "sectionId": "muscle-45:section:0003",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 4.800298105091512,
+        "areaAfter": 4.800298105091512
+      },
+      {
+        "sectionId": "muscle-45:section:0004",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 5.899828956511514,
+        "areaAfter": 5.899828956511514
+      },
+      {
+        "sectionId": "muscle-45:section:0005",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 6.625667512413162,
+        "areaAfter": 6.625667512413162
+      },
+      {
+        "sectionId": "muscle-45:section:0006",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 6.879199040682422,
+        "areaAfter": 6.879199040682422
+      },
+      {
+        "sectionId": "muscle-45:section:0007",
+        "role": "repayment",
+        "requestedAreaScale": 1.0171848531812429,
+        "effectiveAreaScale": 1.0171848531812426,
+        "areaBefore": 6.625667512413121,
+        "areaAfter": 6.73952863584167
+      },
+      {
+        "sectionId": "muscle-45:section:0008",
+        "role": "repayment",
+        "requestedAreaScale": 1.0171848531812429,
+        "effectiveAreaScale": 1.0171848531812426,
+        "areaBefore": 5.8998289565114685,
+        "areaAfter": 6.0012166509235625
+      },
+      {
+        "sectionId": "muscle-45:section:0009",
+        "role": "repayment",
+        "requestedAreaScale": 1.0171848531812429,
+        "effectiveAreaScale": 1.0171848531812426,
+        "areaBefore": 4.800298105091535,
+        "areaAfter": 4.88279052325373
+      },
+      {
+        "sectionId": "muscle-45:section:0010",
+        "role": "compression",
+        "requestedAreaScale": 0.96,
+        "effectiveAreaScale": 0.96,
+        "areaBefore": 3.4732517126919946,
+        "areaAfter": 3.334321644184315
+      },
+      {
+        "sectionId": "muscle-45:section:0011",
+        "role": "compression",
+        "requestedAreaScale": 0.92,
+        "effectiveAreaScale": 0.9200000000000002,
+        "areaBefore": 2.085687889802644,
+        "areaAfter": 1.918832858618433
+      },
+      {
+        "sectionId": "muscle-45:section:0012",
+        "role": "unchanged",
+        "requestedAreaScale": 1,
+        "effectiveAreaScale": 1,
+        "areaBefore": 0.7044299817664381,
+        "areaAfter": 0.7044299817664381
+      }
+    ]
+  },
+  "rampLedgerSourceCarrierSha256": "83d326169d46d4330ba04e8c2e79e4cc0d868151eee3b3ed8501cbd85378ade7",
+  "anisotropySelection": {
+    "schema": "kaminos.muscle-compartment-ring-cage-pressure-anisotropy-selection.v0",
+    "status": "completed",
+    "sourceCarrierSha256": "83d326169d46d4330ba04e8c2e79e4cc0d868151eee3b3ed8501cbd85378ade7",
+    "residualLedgerSha256": "d9ad3bbe4f471e52a6b72f4d8b5ec6f0587857614163562f698b40d8b98ca8f2",
+    "requested": {
+      "subjectConstructionId": "muscle-45",
+      "obstacleConstructionId": "muscle-12",
+      "compressionScale": 0.96
+    },
+    "effective": {
+      "subjectConstructionId": "muscle-45",
+      "obstacleConstructionId": "muscle-12",
+      "compressionScale": 0.96
+    },
+    "fallbackUsed": false,
+    "contactCount": 8,
+    "totalPenetration": 0.8033364862459365,
+    "adjustments": [
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0001",
+        "pressureDirection": [
+          -0.5464968646592822,
+          -0.6543298738829844,
+          -0.5226792449120701
+        ],
+        "compressionScale": 0.96
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0011",
+        "pressureDirection": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "compressionScale": 0.96
+      }
+    ]
+  },
+  "anisotropyApplication": {
+    "schema": "kaminos.muscle-compartment-ring-cage-section-anisotropy.v0",
+    "status": "completed",
+    "sourceCarrierSha256": "83d326169d46d4330ba04e8c2e79e4cc0d868151eee3b3ed8501cbd85378ade7",
+    "outputCarrierSha256": "5f10d024c4e3bfda461bb5c72e1b9ad3d2cb890169d35168c8d2ab6431d46616",
+    "requested": [
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0011",
+        "pressureDirection": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "compressionScale": 0.96
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0010",
+        "pressureDirection": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "compressionScale": 0.98
+      }
+    ],
+    "effective": [
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0011",
+        "pressureDirection": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "compressionScale": 0.96
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0010",
+        "pressureDirection": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "compressionScale": 0.98
+      }
+    ],
+    "fallbackUsed": false,
+    "centerlineMaximumDrift": 0,
+    "fixedNodeMaximumDrift": 0,
+    "sectionReceipts": [
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0011",
+        "requestedCompressionScale": 0.96,
+        "effectiveCompressionScale": 0.96,
+        "effectiveCompressionAxis": [
+          -0.11261039281054916,
+          0.6449053519516652,
+          0.7559206217951412
+        ],
+        "effectiveExpansionAxis": [
+          -0.9640978910261863,
+          -0.2550392348397986,
+          0.0739611060706245
+        ],
+        "areaBefore": 1.918832858618433,
+        "areaAfter": 1.9188328586184342,
+        "relativeAreaError": 6.943114526970451e-16
+      },
+      {
+        "constructionId": "muscle-45",
+        "sectionId": "muscle-45:section:0010",
+        "requestedCompressionScale": 0.98,
+        "effectiveCompressionScale": 0.98,
+        "effectiveCompressionAxis": [
+          -0.11261037087459008,
+          0.6449052862358134,
+          0.7559206811277164
+        ],
+        "effectiveExpansionAxis": [
+          -0.9640979214586598,
+          -0.25503914367007513,
+          0.07396102375661738
+        ],
+        "areaBefore": 3.334321644184315,
+        "areaAfter": 3.334321644184316,
+        "relativeAreaError": 3.995618214799144e-16
+      }
+    ]
+  }
+}

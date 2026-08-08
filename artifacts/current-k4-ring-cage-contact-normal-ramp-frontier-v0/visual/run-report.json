@@ -1,0 +1,182 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "inputs": {
+    "frontier": {
+      "requested": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effective": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+      "fallbackUsed": false
+    },
+    "source": {
+      "requested": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effective": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "fallbackUsed": false
+    }
+  },
+  "outputs": {
+    "visualManifest": {
+      "path": "visual-manifest.json",
+      "sha256": "e5b696a3a2afdc6276eb0bfb7ac2100e4e53193a40dd26b11b6f49e1db408910"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.html",
+      "sha256": "5151d6df97340738d56f2e013b8f55d10a2aade71ce2198dde9418ada750a1c3"
+    }
+  },
+  "visual": {
+    "status": "pending-agent-inspection",
+    "route": {
+      "requested": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "effective": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "identity": {
+      "schema": "kaminos.current-k4-ring-cage-longitudinal-volume-frontier-visual-manifest.v0",
+      "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+      "frontierSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+      "sourceSha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad",
+      "selectedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+      "candidateIds": [
+        "ramp-a092-a096-repay-789-cn098",
+        "ramp-a092-a096-repay-789-cn096",
+        "ramp-a092-a096-repay-789-cn094",
+        "ramp-a090-a094-repay-6789-cn098",
+        "ramp-a090-a094-repay-6789-cn096",
+        "ramp-a090-a094-repay-6789-cn094"
+      ],
+      "bundles": {
+        "ramp-a092-a096-repay-789-cn098": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "dad02fc4b1316c732e62ad2768f1d112059cc524f8d36fa5790229f7d3f01da4",
+          "sha256": "e4cebc3c601a8a0444694891845697caa46863ac486f2a304db883ab25a9db4c"
+        },
+        "ramp-a092-a096-repay-789-cn096": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "5f10d024c4e3bfda461bb5c72e1b9ad3d2cb890169d35168c8d2ab6431d46616",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "5a92de88470c39a8be0c5642807e248031973000a803c62cd40ee96b568066b5",
+          "sha256": "af6e9ef2de99fe33bc3a0e2b1786dfd50f65478a567fe572ed312a774f997d89"
+        },
+        "ramp-a092-a096-repay-789-cn094": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "c48b09bb2221cae32d7319f7c66afc89c06c411d7c726418afa4ecbcf9168ba8",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "5f16072c348b3318be0d7bc342114d73897a71f145e90edd6c0dd61aad320910",
+          "sha256": "e6b2284855fda20d914f53bad90d002569d242196774b7740e7a6d14f7cd1177"
+        },
+        "ramp-a090-a094-repay-6789-cn098": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "d9b3e02827fcd0571e24349d04d875ef655d7040097f817827f7c200d9ec6751",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "c5ffeb2fe7de6f6d288f7deff74f7caa33a711253d494d0470b76cbfc47cea54",
+          "sha256": "79bbda3b621a7270ba14c1b44e741e5f206f43b65c11f42bcdca9074d5c2d1dd"
+        },
+        "ramp-a090-a094-repay-6789-cn096": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "b118b79435138c2bb0b1fee73636f0016d33be368bfa412aef4f44720b0bd32c",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "89a86460dbe45bcd9c8fd14da202c0376fe12025b65d102310fa438b8b70f58e",
+          "sha256": "13d8c9debbda083880b3ade2ed22cf6c84ddb2debedb960194a8566e406ce6fc"
+        },
+        "ramp-a090-a094-repay-6789-cn094": {
+          "schema": "kaminos.current-k4-ring-cage-contact-visual-bundle.v0",
+          "route": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+          "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+          "packedCarrierSha256": "c9f9518ad63bdb83cb2c95553b623312da8e72ab2726162fc9ef76575db595ea",
+          "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+          "residualLedgerSha256": "1da2b0f4490afe2c3238085d7376d42146c4530735e517171bde350ffeea63a8",
+          "sha256": "9a9cb52432fd7308921789d1681aa44b7f2555401962d803dbebf759f1a9689a"
+        }
+      },
+      "focus": {
+        "sectionId": "muscle-45:section:0011",
+        "point": [
+          8.396755744615195,
+          -1.7105116328208096,
+          8.383702852785943
+        ],
+        "radius": 2.2
+      },
+      "sha256": "565eaae31453ea4c1fa25e25b13968ce7a1a38b7f9859ecd32be8bd8620cdded"
+    },
+    "captureUrls": [
+      {
+        "id": "selected-reference",
+        "state": "before",
+        "url": "candidates/ramp-a092-a096-repay-789-cn098/index.html?bundle=e4cebc3c601a8a0444694891845697caa46863ac486f2a304db883ab25a9db4c&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a&ledger=dad02fc4b1316c732e62ad2768f1d112059cc524f8d36fa5790229f7d3f01da4&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=before&view=contact",
+        "output": "selected-reference-contact.png",
+        "report": "selected-reference-contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a092-a096-repay-789-cn098",
+        "state": "packed",
+        "url": "candidates/ramp-a092-a096-repay-789-cn098/index.html?bundle=e4cebc3c601a8a0444694891845697caa46863ac486f2a304db883ab25a9db4c&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a&ledger=dad02fc4b1316c732e62ad2768f1d112059cc524f8d36fa5790229f7d3f01da4&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a092-a096-repay-789-cn098/contact.png",
+        "report": "candidates/ramp-a092-a096-repay-789-cn098/contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a092-a096-repay-789-cn096",
+        "state": "packed",
+        "url": "candidates/ramp-a092-a096-repay-789-cn096/index.html?bundle=af6e9ef2de99fe33bc3a0e2b1786dfd50f65478a567fe572ed312a774f997d89&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=5f10d024c4e3bfda461bb5c72e1b9ad3d2cb890169d35168c8d2ab6431d46616&ledger=5a92de88470c39a8be0c5642807e248031973000a803c62cd40ee96b568066b5&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a092-a096-repay-789-cn096/contact.png",
+        "report": "candidates/ramp-a092-a096-repay-789-cn096/contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a092-a096-repay-789-cn094",
+        "state": "packed",
+        "url": "candidates/ramp-a092-a096-repay-789-cn094/index.html?bundle=e6b2284855fda20d914f53bad90d002569d242196774b7740e7a6d14f7cd1177&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=c48b09bb2221cae32d7319f7c66afc89c06c411d7c726418afa4ecbcf9168ba8&ledger=5f16072c348b3318be0d7bc342114d73897a71f145e90edd6c0dd61aad320910&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a092-a096-repay-789-cn094/contact.png",
+        "report": "candidates/ramp-a092-a096-repay-789-cn094/contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a090-a094-repay-6789-cn098",
+        "state": "packed",
+        "url": "candidates/ramp-a090-a094-repay-6789-cn098/index.html?bundle=79bbda3b621a7270ba14c1b44e741e5f206f43b65c11f42bcdca9074d5c2d1dd&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=d9b3e02827fcd0571e24349d04d875ef655d7040097f817827f7c200d9ec6751&ledger=c5ffeb2fe7de6f6d288f7deff74f7caa33a711253d494d0470b76cbfc47cea54&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a090-a094-repay-6789-cn098/contact.png",
+        "report": "candidates/ramp-a090-a094-repay-6789-cn098/contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a090-a094-repay-6789-cn096",
+        "state": "packed",
+        "url": "candidates/ramp-a090-a094-repay-6789-cn096/index.html?bundle=13d8c9debbda083880b3ade2ed22cf6c84ddb2debedb960194a8566e406ce6fc&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=b118b79435138c2bb0b1fee73636f0016d33be368bfa412aef4f44720b0bd32c&ledger=89a86460dbe45bcd9c8fd14da202c0376fe12025b65d102310fa438b8b70f58e&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a090-a094-repay-6789-cn096/contact.png",
+        "report": "candidates/ramp-a090-a094-repay-6789-cn096/contact-capture-report.json"
+      },
+      {
+        "id": "ramp-a090-a094-repay-6789-cn094",
+        "state": "packed",
+        "url": "candidates/ramp-a090-a094-repay-6789-cn094/index.html?bundle=9a9cb52432fd7308921789d1681aa44b7f2555401962d803dbebf759f1a9689a&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=c9f9518ad63bdb83cb2c95553b623312da8e72ab2726162fc9ef76575db595ea&ledger=1da2b0f4490afe2c3238085d7376d42146c4530735e517171bde350ffeea63a8&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+        "output": "candidates/ramp-a090-a094-repay-6789-cn094/contact.png",
+        "report": "candidates/ramp-a090-a094-repay-6789-cn094/contact-capture-report.json"
+      }
+    ]
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-primary-written",
+    "visualManifestSha256": "e5b696a3a2afdc6276eb0bfb7ac2100e4e53193a40dd26b11b6f49e1db408910",
+    "contactSheetSha256": "5151d6df97340738d56f2e013b8f55d10a2aade71ce2198dde9418ada750a1c3",
+    "candidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a092-a096-repay-789-cn096",
+      "ramp-a092-a096-repay-789-cn094",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ]
+  }
+}

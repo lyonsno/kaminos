@@ -1,0 +1,485 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-contact-normal-ramp-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-contact-normal-ramp-frontier-v0.json",
+      "sha256": "5c4b3ec8c9c0f91ddb82adb225e6d4c677fdbc85607b7518f3a321bb89a6e93d"
+    }
+  },
+  "requestedCandidateIds": [
+    "ramp-a092-a096-repay-789-cn098",
+    "ramp-a092-a096-repay-789-cn096",
+    "ramp-a092-a096-repay-789-cn094",
+    "ramp-a090-a094-repay-6789-cn098",
+    "ramp-a090-a094-repay-6789-cn096",
+    "ramp-a090-a094-repay-6789-cn094"
+  ],
+  "selectedReference": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    }
+  },
+  "sharedContract": {
+    "constructionId": "muscle-45",
+    "maximumRepaymentAreaScale": 1.2,
+    "maximumAdjacentAreaScaleDelta": 0.1,
+    "volumeRelativeTolerance": 1e-10,
+    "maximumSkeletalPenetrationIncrease": 1e-12,
+    "maximumSectionAreaRelativeError": 1e-12
+  },
+  "anisotropyContract": {
+    "obstacleConstructionId": "muscle-12",
+    "peakSectionId": "muscle-45:section:0011",
+    "shoulderSectionId": "muscle-45:section:0010",
+    "peakCompressionScales": [
+      0.98,
+      0.96,
+      0.94
+    ]
+  },
+  "candidates": [
+    {
+      "id": "ramp-a092-a096-repay-789-cn098",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a092-a096-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.98,
+        "anisotropyShoulderScale": 0.99,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.184414884548108,
+        "pairwiseMovableMaximumPenetration": 0.30407347222555475,
+        "pairwiseFixedTotalPenetration": 3.6262858975927155,
+        "pairwiseFixedMaximumPenetration": 0.4493772408354102,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 1.3131905829496045e-11,
+        "repaymentAreaScale": 1.0171848531812429,
+        "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+        "maximumSectionAreaRelativeError": 6.943114526970451e-16,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn098-packed-carrier.json",
+        "sha256": "63ae5c00b211f9bf7bf6052f45b17a8dbbf3de1ae6430c3c249962fcdbf80437"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn098-residual-ledger.json",
+        "sha256": "dad02fc4b1316c732e62ad2768f1d112059cc524f8d36fa5790229f7d3f01da4"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn098-composition-application.json",
+        "sha256": "3f9e37e28491a85dea7cdaa5bf2c855742f2fd26cbd3f90be57fc3ca4ddef61b"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a092-a096-repay-789-cn096",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a092-a096-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.96,
+        "anisotropyShoulderScale": 0.98,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.213026153001106,
+        "pairwiseMovableMaximumPenetration": 0.29754347871513526,
+        "pairwiseFixedTotalPenetration": 3.6182860266419543,
+        "pairwiseFixedMaximumPenetration": 0.44726707688213574,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 1.3131905829496045e-11,
+        "repaymentAreaScale": 1.0171848531812429,
+        "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+        "maximumSectionAreaRelativeError": 6.943114526970451e-16,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn096-packed-carrier.json",
+        "sha256": "9b17c13540b070a11e8e02e3128234010854b4f1767c37406dde6d480e21d660"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn096-residual-ledger.json",
+        "sha256": "5a92de88470c39a8be0c5642807e248031973000a803c62cd40ee96b568066b5"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn096-composition-application.json",
+        "sha256": "efce94d5135199047214f3bb992b2a1dc68522fa36573d44d3d3a86f5b5fb86e"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a092-a096-repay-789-cn094",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a092-a096-repay-789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.96
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.92
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.94,
+        "anisotropyShoulderScale": 0.97,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.247601134564592,
+        "pairwiseMovableMaximumPenetration": 0.29119272840367594,
+        "pairwiseFixedTotalPenetration": 3.609889757917322,
+        "pairwiseFixedMaximumPenetration": 0.4452287663711177,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 1.3131905829496045e-11,
+        "repaymentAreaScale": 1.0171848531812429,
+        "maximumAdjacentAreaScaleDelta": 0.07999999999999996,
+        "maximumSectionAreaRelativeError": 1.1571857544950751e-15,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn094-packed-carrier.json",
+        "sha256": "e5f3f9a49df4d48808d64a219bc7cfb2b270a1ce154d55d9301014663bc6bd78"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn094-residual-ledger.json",
+        "sha256": "5f16072c348b3318be0d7bc342114d73897a71f145e90edd6c0dd61aad320910"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a092-a096-repay-789-cn094-composition-application.json",
+        "sha256": "64920751634ebaf70f7ec7746dae67fcc7dd7942c9ee52a87ae57e89010e276f"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn098",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a090-a094-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.98,
+        "anisotropyShoulderScale": 0.99,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.193377355785046,
+        "pairwiseMovableMaximumPenetration": 0.29592255689437713,
+        "pairwiseFixedTotalPenetration": 3.5977016663103782,
+        "pairwiseFixedMaximumPenetration": 0.4468102324374639,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 5.4584759223240345e-11,
+        "repaymentAreaScale": 1.0168099287897348,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "maximumSectionAreaRelativeError": 4.080631368305509e-16,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn098-packed-carrier.json",
+        "sha256": "86a1d9b19c475d652e4a0ac9d4932c31f362de8da8fb8eb06618136641f04798"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn098-residual-ledger.json",
+        "sha256": "c5ffeb2fe7de6f6d288f7deff74f7caa33a711253d494d0470b76cbfc47cea54"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn098-composition-application.json",
+        "sha256": "a996bf3f4c34fe80057f9638c209f4518198dd3026aee5e2514a499f4e0101a4"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn096",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a090-a094-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.96,
+        "anisotropyShoulderScale": 0.98,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.234748823074113,
+        "pairwiseMovableMaximumPenetration": 0.28927163697577996,
+        "pairwiseFixedTotalPenetration": 3.589956472874767,
+        "pairwiseFixedMaximumPenetration": 0.4446478607333008,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 5.4584759223240345e-11,
+        "repaymentAreaScale": 1.0168099287897348,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "maximumSectionAreaRelativeError": 5.914504967419273e-16,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn096-packed-carrier.json",
+        "sha256": "1c59703709755a4aaa4a6451237e237cfd8ee17580d892445d762f341aa87ec7"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn096-residual-ledger.json",
+        "sha256": "89a86460dbe45bcd9c8fd14da202c0376fe12025b65d102310fa438b8b70f58e"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn096-composition-application.json",
+        "sha256": "23beb4750bcea268e79f5c158636beac8ef9e56250291d252365599f17bf63cb"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn094",
+      "status": "admissible",
+      "requested": {
+        "rampId": "ramp-a090-a094-repay-6789",
+        "compressionSections": [
+          {
+            "sectionId": "muscle-45:section:0010",
+            "areaScale": 0.94
+          },
+          {
+            "sectionId": "muscle-45:section:0011",
+            "areaScale": 0.9
+          }
+        ],
+        "repaymentSectionIds": [
+          "muscle-45:section:0006",
+          "muscle-45:section:0007",
+          "muscle-45:section:0008",
+          "muscle-45:section:0009"
+        ],
+        "anisotropyPeakScale": 0.94,
+        "anisotropyShoulderScale": 0.97,
+        "peakSectionId": "muscle-45:section:0011",
+        "shoulderSectionId": "muscle-45:section:0010",
+        "obstacleConstructionId": "muscle-12"
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 10.274053273504085,
+        "pairwiseMovableMaximumPenetration": 0.28279378508205544,
+        "pairwiseFixedTotalPenetration": 3.5818415882624572,
+        "pairwiseFixedMaximumPenetration": 0.4425538573964366,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.014999833625267148,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineMaximumDrift": 0,
+        "transferVolumeRelativeError": 5.4584759223240345e-11,
+        "repaymentAreaScale": 1.0168099287897348,
+        "maximumAdjacentAreaScaleDelta": 0.09999999999999998,
+        "maximumSectionAreaRelativeError": 2.365801986967709e-16,
+        "skeletalPenetrationIncrease": 0
+      },
+      "packedCarrier": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "sha256": "00dbfff8ea66327628ebb4f5698d1eb339bfecdaa4adbfa4a80c4db8efcf0348"
+      },
+      "residualLedger": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn094-residual-ledger.json",
+        "sha256": "1da2b0f4490afe2c3238085d7376d42146c4530735e517171bde350ffeea63a8"
+      },
+      "compositionApplication": {
+        "path": "candidates/ramp-a090-a094-repay-6789-cn094-composition-application.json",
+        "sha256": "70525d3815b98bce38c696a2431fe24bfd1ac423d79f4131bec4d6d0f30e5751"
+      },
+      "refusalReasons": [],
+      "error": null
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "ramp-a092-a096-repay-789-cn098",
+    "ramp-a090-a094-repay-6789-cn098",
+    "ramp-a090-a094-repay-6789-cn096",
+    "ramp-a090-a094-repay-6789-cn094"
+  ],
+  "visual": {
+    "status": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a092-a096-repay-789-cn096",
+      "ramp-a092-a096-repay-789-cn094",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "nondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "disposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+    "decision": {
+      "retainedNondominatedCandidateIds": [
+        "ramp-a092-a096-repay-789-cn098",
+        "ramp-a090-a094-repay-6789-cn098",
+        "ramp-a090-a094-repay-6789-cn096",
+        "ramp-a090-a094-repay-6789-cn094"
+      ],
+      "selectedCandidateId": null,
+      "inspectedAtFullResolution": [
+        "selected-reference",
+        "ramp-a092-a096-repay-789-cn098",
+        "ramp-a090-a094-repay-6789-cn094"
+      ],
+      "inspectedContactSheet": true,
+      "visibleDelta": "M12/M45 interface waist narrows monotonically with contact-normal peak depth; carrier-surface silhouette change is discernible at full resolution without pressure markers; formation-level crowding remains; movable total worsens as the cost axis.",
+      "redirect": "Re-run the ring-cage contact solver from the retained composed carriers so directional displacement can convert into contact-row reduction; alternatively extend the derived-normal anisotropy along the full M45 contact span."
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "45c09835124ec7933ba4d2ecd1f4fffbf3d201329b65a2ca44d3bf61d4e8e972",
+      "sizeBytes": 888975,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 220,
+        "idatBytes": 886314
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+      "manifestIdentitySha256": "565eaae31453ea4c1fa25e25b13968ce7a1a38b7f9859ecd32be8bd8620cdded"
+    }
+  },
+  "resultStatus": "contact-normal-frontier-retained-first-visible-directional-displacement-no-selection"
+}

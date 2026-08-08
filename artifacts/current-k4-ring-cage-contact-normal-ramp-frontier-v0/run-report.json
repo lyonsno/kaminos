@@ -1,0 +1,255 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-normal-ramp-frontier-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-contact-normal-ramp-frontier-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-contact-normal-ramp-frontier-v0.json",
+      "sha256": "5c4b3ec8c9c0f91ddb82adb225e6d4c677fdbc85607b7518f3a321bb89a6e93d",
+      "requested": {
+        "schema": "kaminos.current-k4-contact-normal-ramp-frontier-config.v0",
+        "shared": {
+          "constructionId": "muscle-45",
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10,
+          "maximumSkeletalPenetrationIncrease": 1e-12,
+          "maximumSectionAreaRelativeError": 1e-12
+        },
+        "anisotropy": {
+          "obstacleConstructionId": "muscle-12",
+          "peakSectionId": "muscle-45:section:0011",
+          "shoulderSectionId": "muscle-45:section:0010",
+          "peakCompressionScales": [
+            0.98,
+            0.96,
+            0.94
+          ]
+        },
+        "ramps": [
+          {
+            "id": "ramp-a092-a096-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          }
+        ]
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-contact-normal-ramp-frontier-config.v0",
+        "shared": {
+          "constructionId": "muscle-45",
+          "maximumRepaymentAreaScale": 1.2,
+          "maximumAdjacentAreaScaleDelta": 0.1,
+          "volumeRelativeTolerance": 1e-10,
+          "maximumSkeletalPenetrationIncrease": 1e-12,
+          "maximumSectionAreaRelativeError": 1e-12
+        },
+        "anisotropy": {
+          "obstacleConstructionId": "muscle-12",
+          "peakSectionId": "muscle-45:section:0011",
+          "shoulderSectionId": "muscle-45:section:0010",
+          "peakCompressionScales": [
+            0.98,
+            0.96,
+            0.94
+          ]
+        },
+        "ramps": [
+          {
+            "id": "ramp-a092-a096-repay-789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.96
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.92
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          },
+          {
+            "id": "ramp-a090-a094-repay-6789",
+            "compressionSections": [
+              {
+                "sectionId": "muscle-45:section:0010",
+                "areaScale": 0.94
+              },
+              {
+                "sectionId": "muscle-45:section:0011",
+                "areaScale": 0.9
+              }
+            ],
+            "repaymentSectionIds": [
+              "muscle-45:section:0006",
+              "muscle-45:section:0007",
+              "muscle-45:section:0008",
+              "muscle-45:section:0009"
+            ]
+          }
+        ]
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 6,
+  "effectiveCandidateCount": 6,
+  "candidateCapApplied": false,
+  "outputs": {
+    "frontierResult": {
+      "path": "frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "visualInspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66"
+    },
+    "captureRouteVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "45c09835124ec7933ba4d2ecd1f4fffbf3d201329b65a2ca44d3bf61d4e8e972",
+      "sizeBytes": 888975,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 220,
+        "idatBytes": 886314
+      }
+    }
+  },
+  "visual": {
+    "status": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a092-a096-repay-789-cn096",
+      "ramp-a092-a096-repay-789-cn094",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "nondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "disposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+    "decision": {
+      "retainedNondominatedCandidateIds": [
+        "ramp-a092-a096-repay-789-cn098",
+        "ramp-a090-a094-repay-6789-cn098",
+        "ramp-a090-a094-repay-6789-cn096",
+        "ramp-a090-a094-repay-6789-cn094"
+      ],
+      "selectedCandidateId": null,
+      "inspectedAtFullResolution": [
+        "selected-reference",
+        "ramp-a092-a096-repay-789-cn098",
+        "ramp-a090-a094-repay-6789-cn094"
+      ],
+      "inspectedContactSheet": true,
+      "visibleDelta": "M12/M45 interface waist narrows monotonically with contact-normal peak depth; carrier-surface silhouette change is discernible at full resolution without pressure markers; formation-level crowding remains; movable total worsens as the cost axis.",
+      "redirect": "Re-run the ring-cage contact solver from the retained composed carriers so directional displacement can convert into contact-row reduction; alternatively extend the derived-normal anisotropy along the full M45 contact span."
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "45c09835124ec7933ba4d2ecd1f4fffbf3d201329b65a2ca44d3bf61d4e8e972",
+      "sizeBytes": 888975,
+      "png": {
+        "width": 1600,
+        "height": 3000,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 220,
+        "idatBytes": 886314
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+      "manifestIdentitySha256": "565eaae31453ea4c1fa25e25b13968ce7a1a38b7f9859ecd32be8bd8620cdded"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "contact-normal-frontier-retained-first-visible-directional-displacement-no-selection",
+    "visualStatus": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+    "visualDisposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+    "originalFrontierSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+    "finalizedFrontierSha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503",
+    "visualInspectionSha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66",
+    "captureRouteVerificationSha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1"
+  },
+  "resultStatus": "contact-normal-frontier-retained-first-visible-directional-displacement-no-selection"
+}

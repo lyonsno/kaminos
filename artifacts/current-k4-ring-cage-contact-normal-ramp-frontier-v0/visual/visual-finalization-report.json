@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-finalization-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "resultStatus": "contact-normal-frontier-retained-first-visible-directional-displacement-no-selection",
+  "visualStatus": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+  "visualDisposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+  "outputs": {
+    "frontierResult": {
+      "path": "../frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "frontierRunReport": {
+      "path": "../run-report.json",
+      "sha256": "dc17b685cdca6d751c3524c335ea66bb465a31e47858f6ca55c65f89b6c5571e"
+    },
+    "captureRouteVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1"
+    },
+    "visualInspection": {
+      "path": "visual-inspection.json",
+      "sha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "contact-normal-frontier-retained-first-visible-directional-displacement-no-selection",
+    "visualStatus": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+    "visualDisposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+    "originalFrontierSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+    "finalizedFrontierSha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503",
+    "visualInspectionSha256": "fa65f4cbc51828935125aa7631a2a89785261b34049f3318a1eea8f8a9647a66",
+    "captureRouteVerificationSha256": "28e4e9d20680cc24e6f5071289536ad9a5ee4c202eebf45945ddab8ef097a0e1"
+  }
+}

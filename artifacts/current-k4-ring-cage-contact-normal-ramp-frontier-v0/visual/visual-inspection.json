@@ -1,0 +1,71 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-visual-inspection.v0",
+  "status": "agent-inspected-contact-normal-frontier-first-visible-directional-displacement",
+  "visualDisposition": "retain-nondominated-set-no-single-selection-redirect-to-post-composition-contact-solve",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "manifestIdentitySha256": "565eaae31453ea4c1fa25e25b13968ce7a1a38b7f9859ecd32be8bd8620cdded",
+  "manifestFileSha256": "e5b696a3a2afdc6276eb0bfb7ac2100e4e53193a40dd26b11b6f49e1db408910",
+  "frontierResultSha256": "f7a0d2d5df7f202a3c1905bcad58ba6364baefff2b1bb78b8b21f6606912168b",
+  "captures": [
+    {
+      "id": "selected-reference",
+      "reportSha256": "bda7b3bf899bd1576cb919f5e7af5d71bf856cda8ec62087e8146fb0c64186f9",
+      "sha256": "09c2d4fd4d86f9462e7e9fdab1212b6eb31916441ae7d16edfd37dd7c9ca0b55"
+    },
+    {
+      "id": "ramp-a092-a096-repay-789-cn098",
+      "reportSha256": "b9f9e0d709ba7f5497c8c0e7ca05c2b63c81108105dd3e540cde669acfe693d6",
+      "sha256": "9f1101dc79a42c568987929e52dbb54f56f4cd33f49cbf588ed458b92d497ec0"
+    },
+    {
+      "id": "ramp-a092-a096-repay-789-cn096",
+      "reportSha256": "1d282f9965ef1ae0c29abd25359c86fc50a07f42c117470f5949adc66611db15",
+      "sha256": "d3f23adfc6582bda02ee7631ec05a1a79e035f33b998d7c8853c38dceb7a506e"
+    },
+    {
+      "id": "ramp-a092-a096-repay-789-cn094",
+      "reportSha256": "81f0547243f3661c7229212bb0d5911f18ccf0bb3b0af156fbe84d3351be362c",
+      "sha256": "dd071a31e47e39e300080ae8fb9725587a04f2b63150eace5ad7c09646fb7fdd"
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn098",
+      "reportSha256": "510f30ce8fa4b51ec6b6464cfaf18c4301f85b17e381430c61681e8b518368a3",
+      "sha256": "e761f2aab0a04eee9b685fb0b1be08fa9d78eec9ecfa78fe0053e5099eaaa7ae"
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn096",
+      "reportSha256": "42f40281d03bd724e4c3c8c5a1674bc9b9221f6c1c063d611a65709add69c471",
+      "sha256": "578f72a54a74bd7e737080e4043f9d41ad395ecf5142312fc32024fae7124775"
+    },
+    {
+      "id": "ramp-a090-a094-repay-6789-cn094",
+      "reportSha256": "8211624dcb81ab8e73379868932ba3f6e3af00528be801e963de9361d2d9b37f",
+      "sha256": "0a82d6d86929d082b55f81d01e6886de841fa57355a9fe18a5a078d183ce372d"
+    }
+  ],
+  "contactSheet": {
+    "reportSha256": "b6a9bb0654859e0933dbb7c2091dce4827f272c7c73a2e3ba3045ed6a2b1754c",
+    "sha256": "45c09835124ec7933ba4d2ecd1f4fffbf3d201329b65a2ca44d3bf61d4e8e972",
+    "viewport": {
+      "width": 1600,
+      "height": 3000
+    }
+  },
+  "decision": {
+    "retainedNondominatedCandidateIds": [
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a090-a094-repay-6789-cn098",
+      "ramp-a090-a094-repay-6789-cn096",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "selectedCandidateId": null,
+    "inspectedAtFullResolution": [
+      "selected-reference",
+      "ramp-a092-a096-repay-789-cn098",
+      "ramp-a090-a094-repay-6789-cn094"
+    ],
+    "inspectedContactSheet": true,
+    "visibleDelta": "M12/M45 interface waist narrows monotonically with contact-normal peak depth; carrier-surface silhouette change is discernible at full resolution without pressure markers; formation-level crowding remains; movable total worsens as the cost axis.",
+    "redirect": "Re-run the ring-cage contact solver from the retained composed carriers so directional displacement can convert into contact-row reduction; alternatively extend the derived-normal anisotropy along the full M45 contact span."
+  }
+}
