@@ -174,6 +174,14 @@ def main():
     ml_ax = rest[int(np.argmin(span[rest]))]
     up_ax = [i for i in range(3) if i not in (lat_ax, ml_ax)][0]
 
+    # Color by MANIFEST REGION — same palette and semantics as the canonical
+    # scatter-check derivation artifact, with a legend. (Coloring by
+    # refinement group without a legend caused an operator misread during
+    # manifest sign review; artifact-defect report 2026-08-08T065316Z.)
+    REGION_COLORS = {"skull_mandible": "red", "spine": "orange",
+                     "ribcage": "green", "scapulae": "purple",
+                     "pelvis": "black", "forelimb": "blue",
+                     "hindlimb": "cyan", "pedal": "brown", "caudal": "magenta"}
     for row, mode in enumerate(["global fit", "articulated refined"]):
         for col, (a1, a2, ttl) in enumerate([(lat_ax, up_ax, "lateral"), (lat_ax, ml_ax, "dorsal")]):
             ax = axes[row][col]
@@ -181,11 +189,14 @@ def main():
             for n, pts in bones:
                 q = to_cast(pts[:: max(1, len(pts)//120)])
                 if row == 1: q = refine(n, q)
-                col_c = {"tail": "magenta", "head": "red", "core": "orange"}.get(
-                    group_of(n).split("-")[0], "royalblue")
-                ax.scatter(q[:, a1], q[:, a2], s=2, c=col_c)
-            ax.set_aspect("equal"); ax.set_title(f"{ttl} — {mode}")
-    plt.tight_layout()
+                ax.scatter(q[:, a1], q[:, a2], s=2, c=REGION_COLORS[man[n]])
+            ax.set_aspect("equal")
+            ax.set_title(f"{ttl} — {mode} (colors = manifest regions)")
+    import matplotlib.patches as mpatches
+    fig.legend(handles=[mpatches.Patch(color=v, label=k)
+                        for k, v in REGION_COLORS.items()],
+               loc="lower center", ncol=9)
+    plt.tight_layout(rect=(0, 0.04, 1, 1))
     plt.savefig("fitted-overlay-sf3d-skin.png", dpi=75)
 
     # ---- calibration (one-shot, per preregistration + supersession) ----
