@@ -1,0 +1,116 @@
+{
+  "title": "Happy-parent three-leg edit assay",
+  "subtitle": "All ten outputs are positively aesthetic and safe to inspect. Every cell is topology-rejected because four distinct legs remain.",
+  "route": "mflux_flux2_edit_promptfile",
+  "settings": {
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 1024,
+    "height": 1024,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "cells": [
+    {
+      "id": "e01-d05-seed80301-edit80301",
+      "jobId": "4647a27c4439",
+      "seed": 80301,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e01-d05-seed80301-edit80301/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; four distinct legs remain."
+    },
+    {
+      "id": "e01-d05-seed80301-edit80302",
+      "jobId": "9532876053f2",
+      "seed": 80302,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e01-d05-seed80301-edit80302/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; four distinct legs remain."
+    },
+    {
+      "id": "e02-d05-seed80301-edit80301",
+      "jobId": "fa70ecfba037",
+      "seed": 80301,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e02-remove-right-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e02-d05-seed80301-edit80301/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; four distinct legs remain."
+    },
+    {
+      "id": "e02-d05-seed80301-edit80302",
+      "jobId": "fa3d647ea3df",
+      "seed": 80302,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e02-remove-right-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e02-d05-seed80301-edit80302/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; four distinct legs remain."
+    },
+    {
+      "id": "e01-d08-seed80302-edit80301",
+      "jobId": "208b93f7b066",
+      "seed": 80301,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e01-d08-seed80302-edit80301/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; all four feet remain explicit."
+    },
+    {
+      "id": "e01-d08-seed80302-edit80302",
+      "jobId": "a3e9c38041cf",
+      "seed": 80302,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e01-d08-seed80302-edit80302/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; all four feet remain explicit."
+    },
+    {
+      "id": "e02-d08-seed80302-edit80301",
+      "jobId": "ef195e1f476c",
+      "seed": 80301,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e02-remove-right-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e02-d08-seed80302-edit80301/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; all four feet remain explicit."
+    },
+    {
+      "id": "e02-d08-seed80302-edit80302",
+      "jobId": "7423e5382cc6",
+      "seed": 80302,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e02-remove-right-rear.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e02-d08-seed80302-edit80302/output.png",
+      "verdict": "rejected",
+      "note": "Happy and identity-preserving; all four feet remain explicit."
+    },
+    {
+      "id": "e03-d05-seed80301-edit80301",
+      "jobId": "fa1e82989376",
+      "seed": 80301,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e03-three-legged-version-left-absent.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e03-d05-seed80301-edit80301/output.png",
+      "verdict": "rejected",
+      "note": "Declarative target-state language preserves the happy parent but restores four legs."
+    },
+    {
+      "id": "e03-d05-seed80301-edit80302",
+      "jobId": "52b18c92f1a6",
+      "seed": 80302,
+      "platePath": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "promptPath": "artifacts/direct-three-legged-creature-basin-v0/prompts/e03-three-legged-version-left-absent.txt",
+      "outputPath": "artifacts/direct-three-legged-creature-basin-v0/edit-runs/e03-d05-seed80301-edit80302/output.png",
+      "verdict": "rejected",
+      "note": "Declarative target-state language preserves the happy parent but restores four legs."
+    }
+  ],
+  "footer": "No cell cleared the exact-three-leg gate, so no output was submitted to Trellis."
+}

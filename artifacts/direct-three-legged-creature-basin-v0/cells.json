@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.direct-creature-basin-cells.v0",
+  "campaign": "direct-three-legged-creature-basin-v0",
+  "cells": [
+    {"id": "d01-seed80301", "prompt": "d01", "seed": 80301},
+    {"id": "d01-seed80302", "prompt": "d01", "seed": 80302},
+    {"id": "d01-seed80413", "prompt": "d01", "seed": 80413},
+    {"id": "d02-seed80301", "prompt": "d02", "seed": 80301},
+    {"id": "d02-seed80302", "prompt": "d02", "seed": 80302},
+    {"id": "d02-seed80413", "prompt": "d02", "seed": 80413},
+    {"id": "d03-seed80301", "prompt": "d03", "seed": 80301},
+    {"id": "d03-seed80302", "prompt": "d03", "seed": 80302},
+    {"id": "d03-seed80413", "prompt": "d03", "seed": 80413},
+    {"id": "d04-seed80301", "prompt": "d04", "seed": 80301},
+    {"id": "d04-seed80302", "prompt": "d04", "seed": 80302},
+    {"id": "d04-seed80413", "prompt": "d04", "seed": 80413},
+    {"id": "d05-seed80301", "prompt": "d05", "seed": 80301},
+    {"id": "d05-seed80302", "prompt": "d05", "seed": 80302},
+    {"id": "d05-seed80413", "prompt": "d05", "seed": 80413},
+    {"id": "d06-seed80301", "prompt": "d06", "seed": 80301},
+    {"id": "d06-seed80302", "prompt": "d06", "seed": 80302},
+    {"id": "d06-seed80413", "prompt": "d06", "seed": 80413},
+    {"id": "d07-seed80301", "prompt": "d07", "seed": 80301},
+    {"id": "d07-seed80302", "prompt": "d07", "seed": 80302},
+    {"id": "d07-seed80413", "prompt": "d07", "seed": 80413},
+    {"id": "d08-seed80301", "prompt": "d08", "seed": 80301},
+    {"id": "d08-seed80302", "prompt": "d08", "seed": 80302},
+    {"id": "d08-seed80413", "prompt": "d08", "seed": 80413}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "d05-cute-animal",
+  "job_type": "mflux_flux2_t2i",
+  "job_id": "15793c6d827c",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/prompts/d05-cute-animal.txt",
+  "input_name": "d05-cute-animal.txt",
+  "params": {
+    "seed": "80302",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786179166.1135528,
+  "duration_s": 33.0
+}

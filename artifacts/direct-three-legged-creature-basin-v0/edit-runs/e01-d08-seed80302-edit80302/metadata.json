@@ -1,0 +1,25 @@
+{
+  "name": "output",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "a3e9c38041cf",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+  "input_name": "output.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt",
+    "seed": "80302",
+    "width": "1024",
+    "height": "1024",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786180781.5724,
+  "duration_s": 153.7
+}

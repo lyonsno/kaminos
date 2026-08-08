@@ -1,0 +1,45 @@
+{
+  "schema": "kaminos.direct-creature-local-topology-edit-cells.v0",
+  "campaign": "direct-three-legged-creature-basin-v0",
+  "route": "mflux_flux2_edit_promptfile",
+  "parents": [
+    {
+      "id": "d05-seed80301",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/runs/d05-seed80301/output.png",
+      "reason": "Happy photoreal animal with four individually visible legs."
+    },
+    {
+      "id": "d08-seed80302",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/runs/d08-seed80302/output.png",
+      "reason": "Happy three-quarter fantasy animal with four spatially separable legs."
+    }
+  ],
+  "prompts": [
+    {
+      "id": "e01",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/e01-remove-left-rear.txt"
+    },
+    {
+      "id": "e02",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/e02-remove-right-rear.txt"
+    },
+    {
+      "id": "e03",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/e03-three-legged-version-left-absent.txt"
+    }
+  ],
+  "seeds": [80301, 80302],
+  "cells": [
+    {"id":"e01-d05-seed80301-edit80301","parent":"d05-seed80301","prompt":"e01","seed":80301},
+    {"id":"e01-d05-seed80301-edit80302","parent":"d05-seed80301","prompt":"e01","seed":80302},
+    {"id":"e02-d05-seed80301-edit80301","parent":"d05-seed80301","prompt":"e02","seed":80301},
+    {"id":"e02-d05-seed80301-edit80302","parent":"d05-seed80301","prompt":"e02","seed":80302},
+    {"id":"e01-d08-seed80302-edit80301","parent":"d08-seed80302","prompt":"e01","seed":80301},
+    {"id":"e01-d08-seed80302-edit80302","parent":"d08-seed80302","prompt":"e01","seed":80302},
+    {"id":"e02-d08-seed80302-edit80301","parent":"d08-seed80302","prompt":"e02","seed":80301},
+    {"id":"e02-d08-seed80302-edit80302","parent":"d08-seed80302","prompt":"e02","seed":80302},
+    {"id":"e03-d05-seed80301-edit80301","parent":"d05-seed80301","prompt":"e03","seed":80301},
+    {"id":"e03-d05-seed80301-edit80302","parent":"d05-seed80301","prompt":"e03","seed":80302}
+  ],
+  "claimCeiling": "A passing edit establishes only a local 2D topology correction under the exact parent, prompt, seed, model, and route. It does not establish 3D topology or reconstruction fidelity."
+}

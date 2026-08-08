@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.direct-creature-local-topology-edit-classification.v0",
+  "campaign": "direct-three-legged-creature-basin-v0",
+  "inspection": "Every edit output received internal visual inspection before operator exposure.",
+  "cells": [
+    {"id":"e01-d05-seed80301-edit80301","jobId":"4647a27c4439","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"The happy parent identity and frontal camera persist, but four separate legs remain."},
+    {"id":"e01-d05-seed80301-edit80302","jobId":"9532876053f2","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"The happy parent identity and frontal camera persist, but four separate legs remain."},
+    {"id":"e02-d05-seed80301-edit80301","jobId":"fa70ecfba037","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Changing the named rear side does not change the result: four separate legs remain."},
+    {"id":"e02-d05-seed80301-edit80302","jobId":"fa3d647ea3df","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Changing the named rear side does not change the result: four separate legs remain."},
+    {"id":"e01-d08-seed80302-edit80301","jobId":"208b93f7b066","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"The happy fantasy parent and camera persist, but all four feet remain explicit."},
+    {"id":"e01-d08-seed80302-edit80302","jobId":"a3e9c38041cf","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"The happy fantasy parent and camera persist, but all four feet remain explicit."},
+    {"id":"e02-d08-seed80302-edit80301","jobId":"ef195e1f476c","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Changing the named rear side preserves the same ordinary four-leg organization."},
+    {"id":"e02-d08-seed80302-edit80302","jobId":"7423e5382cc6","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Changing the named rear side preserves the same ordinary four-leg organization."},
+    {"id":"e03-d05-seed80301-edit80301","jobId":"fa1e82989376","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Declarative target-state language still restores the ordinary four-leg parent anatomy."},
+    {"id":"e03-d05-seed80301-edit80302","jobId":"52b18c92f1a6","positiveAesthetic":true,"exactThreeLegs":false,"parentIdentityPreserved":true,"envelopeAuthorable":true,"disposition":"topology-rejected","note":"Declarative target-state language still restores the ordinary four-leg parent anatomy."}
+  ],
+  "summary": {
+    "total": 10,
+    "positiveAesthetic": 10,
+    "exactThreeLegs": 0,
+    "parentIdentityPreserved": 10,
+    "passesBoth": 0,
+    "trellisCandidates": 0,
+    "imperativeDeletion": {"total": 8, "exactThreeLegs": 0},
+    "declarativeTargetState": {"total": 2, "exactThreeLegs": 0}
+  },
+  "disposition": "Do not send any edit output to Trellis. Semantic prompting preserves happy organism identity but does not carry the requested support cardinality. Continue with a spatial control surface such as an authored envelope or explicit mask."
+}

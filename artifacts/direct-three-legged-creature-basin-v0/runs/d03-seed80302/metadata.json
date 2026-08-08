@@ -1,0 +1,23 @@
+{
+  "name": "d03-two-front-one-rear",
+  "job_type": "mflux_flux2_t2i",
+  "job_id": "614ae9f0294e",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/prompts/d03-two-front-one-rear.txt",
+  "input_name": "d03-two-front-one-rear.txt",
+  "params": {
+    "seed": "80302",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786178641.621035,
+  "duration_s": 64.2
+}

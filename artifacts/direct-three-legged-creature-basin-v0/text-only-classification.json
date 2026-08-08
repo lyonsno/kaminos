@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.direct-creature-basin-classification.v0",
+  "campaign": "direct-three-legged-creature-basin-v0",
+  "inspection": "Every output received internal visual inspection before operator exposure.",
+  "cells": [
+    {"id":"d01-seed80301","positiveAesthetic":false,"exactThreeLegs":true,"envelopeAuthorable":true,"disposition":"topology-only","note":"Three connected legs are explicit, but the frontal reptilian humanoid does not meet the positive-aesthetic gate."},
+    {"id":"d01-seed80302","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"Conventional paired hind legs plus two weight-bearing forelimbs."},
+    {"id":"d01-seed80413","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"Three lower legs plus two weight-bearing forelimbs."},
+    {"id":"d02-seed80301","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy biped; the central appendage has no separate distal foot."},
+    {"id":"d02-seed80302","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy biped."},
+    {"id":"d02-seed80413","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy biped."},
+    {"id":"d03-seed80301","positiveAesthetic":false,"exactThreeLegs":true,"envelopeAuthorable":true,"disposition":"topology-only","note":"Two lateral legs and one medial leg are explicit; affect gate fails."},
+    {"id":"d03-seed80302","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"Placement language expands into multiple arthropod-like appendages."},
+    {"id":"d03-seed80413","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"Placement language expands into multiple arthropod-like appendages."},
+    {"id":"d04-seed80301","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"At least four weight-bearing legs are visible."},
+    {"id":"d04-seed80302","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"At least five weight-bearing legs are visible."},
+    {"id":"d04-seed80413","positiveAesthetic":false,"exactThreeLegs":false,"envelopeAuthorable":false,"disposition":"rejected","note":"At least four weight-bearing legs are visible."},
+    {"id":"d05-seed80301","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"edit-parent","note":"Happy photoreal animal with four individually visible legs."},
+    {"id":"d05-seed80302","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy illustrated animal with four legs."},
+    {"id":"d05-seed80413","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy biped."},
+    {"id":"d06-seed80301","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy furry biped."},
+    {"id":"d06-seed80302","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy furry biped."},
+    {"id":"d06-seed80413","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy furry biped."},
+    {"id":"d07-seed80301","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy dog with four explicit legs."},
+    {"id":"d07-seed80302","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Conventional quadruped; the fourth leg is occluded rather than absent."},
+    {"id":"d07-seed80413","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy dog with four legs."},
+    {"id":"d08-seed80301","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy fantasy quadruped; a fourth foot remains visible behind the right foreleg."},
+    {"id":"d08-seed80302","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"edit-parent","note":"Happy three-quarter fantasy animal with four spatially separable legs."},
+    {"id":"d08-seed80413","positiveAesthetic":true,"exactThreeLegs":false,"envelopeAuthorable":true,"disposition":"affect-only","note":"Happy fantasy quadruped with four legs."}
+  ],
+  "summary": {
+    "total": 24,
+    "positiveAesthetic": 15,
+    "exactThreeLegs": 2,
+    "passesBoth": 0,
+    "editParents": ["d05-seed80301", "d08-seed80302"]
+  }
+}

@@ -50,14 +50,17 @@ const spec = JSON.parse(readFileSync(specPath, 'utf8'));
 const rows = spec.cells.map((cell) => {
   const promptText = readFileSync(resolve(cell.promptPath), 'utf8');
   const { positive, exclusion } = splitPrompt(promptText);
+  const hasPlate = Boolean(cell.platePath);
   return {
     ...cell,
     promptName: basename(cell.promptPath),
     promptSha: sha256(resolve(cell.promptPath)),
-    plateSha: sha256(resolve(cell.platePath)),
     outputSha: sha256(resolve(cell.outputPath)),
-    plateUri: dataUri(resolve(cell.platePath)),
     outputUri: dataUri(resolve(cell.outputPath)),
+    hasPlate,
+    plateSha: hasPlate ? sha256(resolve(cell.platePath)) : null,
+    plateUri: hasPlate ? dataUri(resolve(cell.platePath)) : null,
+    settings: { ...(spec.settings || {}), ...(cell.settings || {}) },
     positive,
     exclusion,
   };
@@ -75,9 +78,12 @@ const html = `<!doctype html>
   .id { font-weight:600; font-size:15px; }
   .verdict { font-size:12px; padding:2px 9px; border-radius:20px; font-weight:600; }
   .adhered { background:#1d3a24; color:#7ee08f; }
+  .rejected { background:#3a291d; color:#f1b676; }
   .collapsed { background:#3a1d1d; color:#ef8b8b; }
   .unscored { background:#2c3034; color:#9aa0a6; }
-  .body { display:grid; grid-template-columns:260px 260px 1fr; gap:16px; padding:16px; }
+  .body { display:grid; gap:16px; padding:16px; }
+  .body.with-plate { grid-template-columns:260px 260px 1fr; }
+  .body.text-only { grid-template-columns:320px 1fr; }
   .body img { width:100%; border-radius:6px; background:#000; display:block; }
   .lbl { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:#8a9098; margin-bottom:6px; }
   .prompt { font-size:13px; }
@@ -85,7 +91,7 @@ const html = `<!doctype html>
   .exc { background:#201a1a; border-left:3px solid #d97b4a; padding:9px 12px; margin-top:9px; border-radius:0 5px 5px 0; white-space:pre-wrap; }
   .meta { font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:#767c84; margin-top:10px; line-height:1.7; }
   .note { font-size:12.5px; color:#b9bec4; margin-top:9px; font-style:italic; }
-  @media (max-width:1100px){ .body{ grid-template-columns:1fr; } }
+  @media (max-width:1100px){ .body.with-plate,.body.text-only{ grid-template-columns:1fr; } }
 </style>
 <h1>${escapeHtml(spec.title)}</h1>
 <div class="sub">${escapeHtml(spec.subtitle || '')}</div>
@@ -96,12 +102,12 @@ ${rows.map((r) => `
     <span class="verdict ${r.verdict || 'unscored'}">${escapeHtml((r.verdict || 'unscored').toUpperCase())}</span>
     <span style="color:#767c84;font-size:12px">seed ${escapeHtml(String(r.seed))}</span>
   </div>
-  <div class="body">
-    <div>
+  <div class="body ${r.hasPlate ? 'with-plate' : 'text-only'}">
+    ${r.hasPlate ? `<div>
       <div class="lbl">Conditioning plate</div>
       <img src="${r.plateUri}" alt="plate">
       <div class="meta">${escapeHtml(basename(r.platePath))}<br>${r.plateSha.slice(0, 16)}…</div>
-    </div>
+    </div>` : ''}
     <div>
       <div class="lbl">Output</div>
       <img src="${r.outputUri}" alt="output">
@@ -114,11 +120,12 @@ ${rows.map((r) => `
         ${r.exclusion ? `<div class="exc"><b>Inline exclusion clause:</b> ${escapeHtml(r.exclusion)}</div>` : '<div class="note">No exclusion clause in this prompt.</div>'}
       </div>
       ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
-      <div class="meta">prompt sha ${r.promptSha.slice(0, 16)}…<br>${escapeHtml(spec.route || '')}</div>
+      ${r.hasPlate ? '' : '<div class="note">No conditioning image; this is a text-to-image cell.</div>'}
+      <div class="meta">prompt sha ${r.promptSha.slice(0, 16)}…${r.jobId ? `<br>job ${escapeHtml(String(r.jobId))}` : ''}<br>${escapeHtml(spec.route || '')}${Object.keys(r.settings).length ? `<br>${Object.entries(r.settings).map(([key, value]) => `${escapeHtml(key)} ${escapeHtml(String(value))}`).join(' · ')}` : ''}</div>
     </div>
   </div>
 </div>`).join('')}
-<div class="sub" style="margin-top:20px">This route has no separate negative-prompt field. <code>mflux-generate-flux2-edit</code> accepts <code>--prompt-file</code> only; exclusions shown above are inline clauses within each prompt's own text.</div>
+${spec.footer ? `<div class="sub" style="margin-top:20px">${escapeHtml(spec.footer)}</div>` : ''}
 `;
 
 mkdirSync(dirname(outPath), { recursive: true });

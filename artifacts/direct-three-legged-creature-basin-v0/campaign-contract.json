@@ -1,0 +1,89 @@
+{
+  "schema": "kaminos.direct-creature-basin-campaign.v0",
+  "campaign": "direct-three-legged-creature-basin-v0",
+  "campaignQuestion": "Can direct text-to-image generation find a pleasant creature whose three-leg organization is visually explicit enough to justify Trellis reconstruction and operator envelope authorship?",
+  "namedConsumer": "operator-authored low-frequency envelope followed by Trellis reconstruction",
+  "relationshipToParent": {
+    "parent": "artifacts/triradial-skeleton-proposal-fan-v0/RESULT.md",
+    "disposition": "The naked-skeleton campaign is settled. This campaign removes skeleton conditioning and searches directly for a friendly organism basin with unusual topology."
+  },
+  "effectiveRoute": {
+    "jobType": "mflux_flux2_t2i",
+    "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 1024,
+    "height": 1024,
+    "steps": 4,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "prompts": [
+    {
+      "id": "d01",
+      "class": "neutral-three-legged-creature",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d01-neutral.txt"
+    },
+    {
+      "id": "d02",
+      "class": "friendly-three-legged-creature",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d02-friendly.txt"
+    },
+    {
+      "id": "d03",
+      "class": "two-front-one-rear",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d03-two-front-one-rear.txt"
+    },
+    {
+      "id": "d04",
+      "class": "one-front-two-rear",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d04-one-front-two-rear.txt"
+    },
+    {
+      "id": "d05",
+      "class": "cute-three-legged-animal",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d05-cute-animal.txt"
+    },
+    {
+      "id": "d06",
+      "class": "friendly-furry-three-legged-animal",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d06-friendly-furry-animal.txt"
+    },
+    {
+      "id": "d07",
+      "class": "charming-three-legged-pet",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d07-charming-pet.txt"
+    },
+    {
+      "id": "d08",
+      "class": "small-friendly-three-legged-fantasy-animal",
+      "path": "artifacts/direct-three-legged-creature-basin-v0/prompts/d08-friendly-fantasy-animal.txt"
+    }
+  ],
+  "seeds": [80301, 80302, 80413],
+  "firstInformativeResult": "At least one happy candidate presents exactly three continuous legs, each visibly connected from body to a separate distal foot, without an occluded region that could conceal a conventional fourth leg.",
+  "admission": [
+    "The output is positively classified as happy or aesthetically pleasing before operator exposure.",
+    "Exactly three continuous legs are visible from body attachment to distal foot.",
+    "The three feet are spatially separable and no body region plausibly hides a conventional fourth leg.",
+    "The exterior has enough coherent low-frequency organization for rapid operator envelope authorship."
+  ],
+  "claimCeiling": "A positive cell establishes only one coherent 2D candidate basin under this exact prompt, seed, model, and route. It does not establish 3D topology, reconstruction fidelity, anatomical correctness, authored control, or production admission.",
+  "inspectionPolicy": "Inspect every output internally. Expose only positively classified outputs to the operator unless the operator explicitly requests rejected evidence.",
+  "redirectAfterTwentyFourTextCells": "Text-only generation separated positive affect from exact topology. The next phase performs a local named-leg removal edit against two happy four-legged parents rather than expanding the synonym search.",
+  "localEditPhase": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantization": 4,
+    "width": 1024,
+    "height": 1024,
+    "steps": 8,
+    "guidance": 1.0,
+    "cells": 10,
+    "positiveAesthetic": 10,
+    "exactThreeLegs": 0,
+    "passesBoth": 0,
+    "trellisCandidates": 0
+  },
+  "settledRedirect": "Semantic generation and unmasked semantic editing do not compose positive affect with exact three-leg topology in this campaign. Continue with an authored spatial control surface rather than additional prompt synonyms."
+}

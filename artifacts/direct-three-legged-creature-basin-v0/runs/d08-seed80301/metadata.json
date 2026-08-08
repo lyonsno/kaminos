@@ -1,0 +1,24 @@
+{
+  "name": "d08-friendly-fantasy-animal",
+  "job_type": "mflux_flux2_t2i",
+  "job_id": "fc303008f60d",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/prompts/d08-friendly-fantasy-animal.txt",
+  "input_name": "d08-friendly-fantasy-animal.txt",
+  "params": {
+    "seed": "80301",
+    "width": "1024",
+    "height": "1024",
+    "steps": "4",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786179529.929303,
+  "duration_s": 48.9
+}
