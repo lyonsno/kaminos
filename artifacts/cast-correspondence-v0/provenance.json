@@ -1,0 +1,79 @@
+{
+  "schema": "kaminos.cast-correspondence-provenance.v0",
+  "purpose": "Frozen artifact set for the first cast-era envelope/cast correspondence assay: 2x2 cross-fit (baseline vs LONG-NECK envelope x their SF3D casts), per-bone medial agreement, residual field, and semantic projection.",
+  "matched_cell_identity": {
+    "prompt_file": "steerability-assay-v0/prompts/env-skin.txt (\"This shape covered in skin.\")",
+    "generator": "mflux_flux2_edit_promptfile",
+    "seed": "80301",
+    "only_varied_control": "envelope plate (baseline vs LONG-NECK)"
+  },
+  "frozen": {
+    "envelope-baseline.glb": {
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
+      "source": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
+      "role": "authored baseline envelope; co-registered with authored skeleton by construction"
+    },
+    "envelope-longneck.glb": {
+      "sha256": "059e375c90833167c1eaacfca1d1645b3920011390c983127afed6618df442b0",
+      "source": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope_longboi.glb",
+      "role": "LONG-NECK perturbed envelope; topology identical to baseline (3764 verts), one relation edited (body axis 7.36->8.14, height 8.58->10.44, width 2.91 unchanged)"
+    },
+    "image-skin-baseline.png": {
+      "sha256": "1e013cf528a2b6746798eb18af4de9461157e4d915a4722d57559d8a3809a867",
+      "source": "prometheus authored-envelope-v0/gen-env-skin/output.png (via recon-sf3d-skin/input.png)",
+      "role": "baseline envelope, skin prompt, seed 80301 generated image"
+    },
+    "image-skin-longneck-s80301.png": {
+      "sha256": "85e7acac2349e0ffa3e2c098da9eb704d15cff1e640991d3919b583127e4e133",
+      "source": "prometheus authored-envelope-v0/lb-env-skin-s80301/output.png",
+      "role": "LONG-NECK envelope, same skin prompt, same seed 80301 generated image; hash matches operator-shown assay cell"
+    },
+    "cast-sf3d-skin-baseline.glb": {
+      "sha256": "bcc51bb15fd7e4fae8e6c67990416a7f7f09d3b9b9b39a4ae793ca3c5b5770f2",
+      "source": "prometheus authored-envelope-v0/recon-sf3d-skin/output.glb (greenroom job cdb3a5117aff, 38.4s)",
+      "role": "PRIMARY baseline cast for the 2x2"
+    },
+    "cast-sf3d-skin-baseline.receipt.json": {
+      "sha256": "b6a6e956ca8faf462749d0d2b8f811d00d636b03f995a74180505be6ee181132",
+      "role": "SF3D route receipt for the baseline skin cast"
+    },
+    "cast-sf3d-maquette-baseline.glb": {
+      "sha256": "a36ebe6f2512755f9b6cbb09a58c8ffd4b9a31b75a4ce298bbaaf1359ed8d7f2",
+      "source": "prometheus authored-envelope-v0/recon-sf3d-maquette/output.glb",
+      "role": "secondary cell: maquette-prompt baseline cast (different prompt; NOT part of the matched 2x2)"
+    },
+    "cast-trellis-maquette-baseline.glb": {
+      "sha256": "372887134a3994e2d980f14419ef7bc8bdcbc36c275feaeeaf53c311fffcf24d",
+      "source": "prometheus authored-envelope-v0/recon-trellis-maquette/output.glb (trellis2mlx_fast seed 80301)",
+      "role": "secondary cell: separate reconstructor; runs as its own cell, never averaged with SF3D"
+    }
+  },
+  "pending": {
+    "recon-trellis-skin-baseline/output.glb": {
+      "greenroom_job": "8ce3dfe61650",
+      "input_sha256": "1e013cf528a2b6746798eb18af4de9461157e4d915a4722d57559d8a3809a867",
+      "role": "Trellis-cell baseline cast (honest-geometry reconstructor); freeze hash on completion"
+    },
+    "recon-trellis-skin-longneck/output.glb": {
+      "greenroom_job": "aace0378cf52",
+      "input_sha256": "85e7acac2349e0ffa3e2c098da9eb704d15cff1e640991d3919b583127e4e133",
+      "role": "Trellis-cell LONG-NECK cast; freeze hash on completion"
+    }
+  },
+  "frozen_addendum": {
+    "cast-sf3d-skin-longneck.glb": {
+      "sha256": "dfd42669ba7527c239157c0b590cf647505bcec76d6fed985f444fa24955f2ea",
+      "source": "greenroom job d8d510626a8b (sf3d, 32.5s, exit 0), effective route sf3d run_greenroom.py --texture-resolution 1024 --remesh none --dtype float16",
+      "role": "PRIMARY LONG-NECK cast for the SF3D 2x2"
+    }
+  },
+  "consumed_pressure": [
+    "prometheus packet for-the-motion-lane...2026-08-08T024201Z: SF3D paints structure into texture (deformation trap: painted form slides under pose); Trellis builds it as geometry at ~10x size. Correspondence 2x2 runs on both reconstructors as separate cells; deformation-substrate choice weighs the trap, not file size.",
+    "prometheus report ecorche-registers-to-reconstructed-cast_2026-08-08: registration must be fit-based, never longest-extent axis heuristics (cross-frame trap); measure by triangle area, not vertex sampling (authoring-density artifact); plate-forge bilateral-symmetry frame detector exists at cc/plateforge@110513d9 with thin confidence and sane:false on the maquette cast."
+  ],
+  "custody_notes": [
+    "Envelope GLBs and generated images are operator/Prometheus artifacts consumed read-only; Mushfinger owns the correspondence assay and any deformation mechanics built on it.",
+    "Operator six-view skeleton registration (2026-08-07) is perception evidence motivating this assay, not an input to it.",
+    "Authored skeleton source: not yet frozen here; skeleton-vs-cast medial probe binds it when the exact skeleton export is named."
+  ]
+}

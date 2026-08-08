@@ -1,0 +1,15 @@
+{
+  "name": "image-skin-longneck-s80301",
+  "job_type": "sf3d",
+  "job_id": "d8d510626a8b",
+  "input_path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-correspondence-v0/frozen/image-skin-longneck-s80301.png",
+  "input_name": "image-skin-longneck-s80301.png",
+  "params": {},
+  "output_files": [
+    "input.png",
+    "output.glb",
+    "receipt.json"
+  ],
+  "created_at": 1786156950.003283,
+  "duration_s": 32.5
+}

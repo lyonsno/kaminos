@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "image-skin-longneck-s80301.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 9.33,
+  "inference_time_s": 10.93,
+  "total_time_s": 27.71,
+  "output_glb": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-correspondence-v0/recon-sf3d-skin-longneck/output.glb",
+  "output_size_mb": 0.68,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 20713.0
+}

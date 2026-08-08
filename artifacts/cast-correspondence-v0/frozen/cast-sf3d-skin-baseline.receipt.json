@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "output.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 6.51,
+  "inference_time_s": 13.29,
+  "total_time_s": 28.3,
+  "output_glb": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/recon-sf3d-skin/output.glb",
+  "output_size_mb": 0.81,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 20713.0
+}
