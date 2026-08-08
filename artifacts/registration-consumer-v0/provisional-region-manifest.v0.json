@@ -1,6 +1,6 @@
 {
- "schema": "kaminos.provisional-region-manifest.v0",
- "authority": "provisional-spatial-derivation; operator visual sign pending",
+ "schema": "kaminos.region-manifest.v1",
+ "authority": "operator-signed 2026-08-08 via inspectable review chain (full-color 3D route + pedal-isolation route; sign chain preserved in durable coordination state); promoted to canonical region authority",
  "source_glb_sha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7",
  "frame": {
   "ML": "X",

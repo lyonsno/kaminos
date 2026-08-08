@@ -36,7 +36,23 @@
     "skull_mandible": "REGISTERS-CONTAINMENT-ONLY",
     "spine": "REGISTERS"
    },
-   "guards": []
+   "guards": [],
+   "rescored_under_regenerated_receipts": {
+    "insideTestRoute": "exact-winding",
+    "containment_mean_by_region": {
+     "caudal": 0.26,
+     "forelimb": 0.7286,
+     "hindlimb": 0.8611,
+     "pedal": 0.3493,
+     "pelvis": 0.9,
+     "ribcage": 0.0,
+     "scapulae": 0.3125,
+     "skull_mandible": 0.6333,
+     "spine": 1.0
+    },
+    "deltas_vs_frozen_scoring": {},
+    "verdict_flips": []
+   }
   },
   "trellis-skin-baseline": {
    "containment_mean_by_region": {
@@ -72,7 +88,25 @@
    },
    "guards": [
     "no operator ground truth for this cast; verdicts are instrument-only"
-   ]
+   ],
+   "rescored_under_regenerated_receipts": {
+    "insideTestRoute": "fast-winding-dipole-bvh (2pct agreement contract)",
+    "containment_mean_by_region": {
+     "caudal": 0.31,
+     "forelimb": 0.8036,
+     "hindlimb": 0.8667,
+     "pedal": 0.3846,
+     "pelvis": 0.9,
+     "ribcage": 0.0,
+     "scapulae": 0.6625,
+     "skull_mandible": 0.9583,
+     "spine": 1.0
+    },
+    "deltas_vs_frozen_scoring": {
+     "pedal": -0.0007
+    },
+    "verdict_flips": []
+   }
   },
   "trellis-maquette-baseline": {
    "containment_mean_by_region": {
@@ -109,7 +143,31 @@
    "guards": [
     "no operator ground truth for this cast; verdicts are instrument-only",
     "paw band barred from ground-truth-positive at global fit (calibration guard)"
-   ]
+   ],
+   "rescored_under_regenerated_receipts": {
+    "insideTestRoute": "fast-winding-dipole-bvh (2pct agreement contract)",
+    "containment_mean_by_region": {
+     "caudal": 0.8975,
+     "forelimb": 0.6643,
+     "hindlimb": 0.7306,
+     "pedal": 0.1338,
+     "pelvis": 0.975,
+     "ribcage": 0.975,
+     "scapulae": 0.8,
+     "skull_mandible": 0.8833,
+     "spine": 0.9435
+    },
+    "deltas_vs_frozen_scoring": {
+     "caudal": 0.0275,
+     "forelimb": -0.0071,
+     "hindlimb": -0.0027,
+     "pedal": 0.0022,
+     "scapulae": -0.025,
+     "spine": -0.0167
+    },
+    "verdict_flips": []
+   }
   }
- }
+ },
+ "backend_disposition": "Dual-backend provenance recorded: frozen thresholds were bound on the exact-winding SF3D anchor (unchanged under regeneration). Trellis rescores under declared fast-winding differ by <=0.0275 with zero verdict flips. Scoring now records insideTestRoute per cast; future receipts must declare it or fail intake."
 }
