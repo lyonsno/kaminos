@@ -1,6 +1,6 @@
 {
  "title": "Foot clause: can prompt content correct a LOCAL anatomical defect?",
- "subtitle": "Same authored envelope plate, same route, seeds 80301 and 80302. Motivated by a real rigging failure: the authored foot skeleton punched through the paws of the maquette cast. Everything established until now was GLOBAL - proportion, stance, mass. This asks whether the generator responds to a local structural request.",
+ "subtitle": "Same authored envelope plate, same route, seeds 80301 and 80302. Motivated by a real rigging failure: the authored foot skeleton punched through the paws of the maquette cast. Everything established until now was GLOBAL - proportion, stance, mass. This asks whether the generator responds to a local structural request.  VERDICT VOCABULARY: adhered = source governed AND the specific request landed. elaborated = source governed but the model added content we did not request - NOT a failure, since nothing asked for was withheld. collapsed is reserved for the source failing to govern at all.",
  "footer": "Baseline also invented horns, which is a reminder that a bare finished-creature instruction leaves the model free to add. The foot clause both fixed the paws and anchored the result closer to a cat.",
  "prompts": [
   {
@@ -35,30 +35,30 @@
   {
    "plate": "s1",
    "prompt": "base",
-   "verdict": "collapsed",
+   "verdict": "elaborated",
    "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-baseline-s80301/output.png",
-   "note": "Small tucked paws - the failure mode. Also invented horns."
+   "note": "Source governs - spine line, shoulder-to-haunch ratio, limb placement, stance and head carriage all track the plate. Added horns unrequested. Paws are small and tucked, but no foot property was requested here, so this is elaboration beyond the brief rather than failure to meet it."
   },
   {
    "plate": "s2",
    "prompt": "base",
-   "verdict": "collapsed",
+   "verdict": "elaborated",
    "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-baseline-s80302/output.png",
-   "note": "Baseline, second seed."
+   "note": "Same: source governs, adds a mane. Elaborates beyond the request without deviating from the authored landmarks."
   },
   {
    "plate": "s1",
    "prompt": "planted",
    "verdict": "adhered",
    "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-planted-s80301/output.png",
-   "note": "Large flat splayed paws with separated toes, planted. Substantially more foot volume than baseline."
+   "note": "Large flat splayed paws with separated toes, planted. The requested local property landed on top of the same governed structure."
   },
   {
    "plate": "s2",
    "prompt": "planted",
    "verdict": "adhered",
    "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-planted-s80302/output.png",
-   "note": "Replicates on second seed."
+   "note": "Requested foot property replicates on the second seed."
   },
   {
    "plate": "s1",

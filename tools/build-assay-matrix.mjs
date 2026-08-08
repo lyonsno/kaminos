@@ -61,6 +61,10 @@ const html = `<!doctype html>
  .v{font-size:10px;padding:2px 8px;border-radius:12px;font-weight:700;display:inline-block;margin-top:7px}
  .adhered{background:#1d3a24;color:#7ee08f} .collapsed{background:#3a1d1d;color:#ef8b8b}
  .unscored{background:#2c3034;color:#9aa0a6} .control{background:#2a2440;color:#b39ae0}
+ /* Source governed the output, but the model added unrequested content. NOT a
+    failure: nothing was asked for that was not delivered. Scoring these as
+    collapsed measures a cell against a spec it was never given. */
+ .elaborated{background:#3a3320;color:#e0c87e}
  .sh{font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#5f656c;margin-top:4px}
  .nt{font-size:10.5px;color:#a8aeb4;font-style:italic;margin-top:5px;text-align:left;line-height:1.4}
 </style>
