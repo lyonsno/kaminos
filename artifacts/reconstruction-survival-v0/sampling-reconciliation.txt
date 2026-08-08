@@ -1,0 +1,8 @@
+
+envelope  tris=1891
+  triangle  n=48: aspect 0.629 spread 0.194 w/axial 0.252 (48 slices)
+  vertex    n=48: aspect 0.820 spread 0.424 w/axial 0.237 (48 slices)
+
+sf3d-skin  tris=19992
+  triangle  n=48: aspect 0.626 spread 0.176 w/axial 0.277 (48 slices)
+  vertex    n=48: aspect 0.618 spread 0.176 w/axial 0.268 (48 slices)
