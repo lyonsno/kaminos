@@ -242,6 +242,9 @@ def fit_modes(
     background_state: dict[str, np.ndarray] | None = None,
     confine_to_medium: bool = True,
     high_frequency_weight: float = 0.0,
+    checkpoint_path: Path | None = None,
+    yield_pending_dir: Path | None = None,
+    yield_check_steps: int = 50,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -300,6 +303,19 @@ def fit_modes(
         )
         target_images.append(target_linear)
 
+    # Checkpoint-resume: restore raw parameters, Adam moments, and the step
+    # counter so a yielded fit continues as one optimization, not a warm
+    # restart with fresh moments (the characterized shatter mode).
+    start_step = 0
+    loaded_optimizer_state = None
+    if checkpoint_path is not None and Path(checkpoint_path).is_file():
+        archive = np.load(checkpoint_path, allow_pickle=False)
+        start_step = int(archive["__step__"])
+        for key in ("centers", "rawCholesky", "rawEmission", "rawExtinction"):
+            raw[key] = archive[f"param.{key}"].astype(np.float64)
+        loaded_optimizer_state = {
+            name[len("opt."):]: archive[name] for name in archive.files if name.startswith("opt.")
+        }
     image_dims = {(batch["height"], batch["width"]) for batch in camera_batches}
     require(len(image_dims) == 1, "fit cameras disagree on image dimensions")
     (image_height, image_width) = next(iter(image_dims))
@@ -450,6 +466,16 @@ def fit_modes(
 
     loss_and_grad = mx.value_and_grad(loss_fn)
     optimizer = optim.Adam(learning_rate=learning_rate)
+    if loaded_optimizer_state is not None:
+        from mlx.utils import tree_flatten, tree_unflatten
+        optimizer.init(parameters)
+        restored = []
+        for path_key, value in tree_flatten(optimizer.state):
+            if path_key in loaded_optimizer_state:
+                restored.append((path_key, mx.array(loaded_optimizer_state[path_key])))
+            else:
+                restored.append((path_key, value))
+        optimizer.state = tree_unflatten(restored)
     compile_state = [parameters, optimizer.state]
 
     # Compile the whole train step so the chunked autograd graph is built once
@@ -464,7 +490,38 @@ def fit_modes(
     initial_loss = None
     arm_label = f"n{mode_count}-{init}-s{seed}"
     log_every = max(1, iterations // 15)
-    for step in range(iterations):
+    finished = True
+    step = start_step - 1
+
+    def save_checkpoint(at_step: int) -> None:
+        from mlx.utils import tree_flatten
+        payload: dict[str, np.ndarray] = {"__step__": np.asarray(at_step)}
+        for key, value in parameters.items():
+            payload[f"param.{key}"] = np.asarray(value, dtype=np.float32)
+        for path_key, value in tree_flatten(optimizer.state):
+            payload[f"opt.{path_key}"] = np.asarray(value)
+        Path(checkpoint_path).parent.mkdir(parents=True, exist_ok=True)
+        tmp = Path(str(checkpoint_path) + ".tmp.npz")
+        np.savez(tmp, **payload)
+        tmp.replace(checkpoint_path)
+
+    def someone_is_waiting() -> bool:
+        if yield_pending_dir is None:
+            return False
+        pending = Path(yield_pending_dir)
+        return pending.is_dir() and any(pending.iterdir())
+
+    for step in range(start_step, iterations):
+        if (
+            checkpoint_path is not None
+            and step > start_step
+            and (step - start_step) % yield_check_steps == 0
+            and someone_is_waiting()
+        ):
+            save_checkpoint(step)
+            print(f"[fit {arm_label}] YIELDING at step {step}/{iterations} — queue has waiters", flush=True)
+            finished = False
+            break
         batch = camera_batches[step % len(camera_batches)]
         loss = train_step(batch["points"], batch["segment"], batch["target"])
         mx.eval(compile_state)
@@ -502,8 +559,11 @@ def fit_modes(
         "highFrequencyWeight": float(high_frequency_weight),
         "cameraCount": len(cameras),
         "targetLatticeSha256": digest,
-        "initialLoss": float(initial_loss),
-        "finalLoss": float(history[-1]),
+        "finished": finished,
+        "completedSteps": int(step + 1) if history or start_step else 0,
+        "startStep": int(start_step),
+        "initialLoss": float(initial_loss) if initial_loss is not None else None,
+        "finalLoss": float(history[-1]) if history else None,
         "lossHistory": history,
         "state": fitted,
     }
