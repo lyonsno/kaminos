@@ -171,12 +171,19 @@ export function probeBoneContainment({
   cast,
   transforms,
   samplesPerBone = 40,
+  regionAuthority = null, // { name, map: {boneName: region}, sha256 } - overrides provisional tags
 }) {
   const castIndex = buildSurfaceIndex(cast);
-  // Large casts (Trellis ~200k tris) use hierarchical fast winding.
-  const insideTest = (cast.triangles.length / 3) > 50000
+  // Large casts (Trellis ~200k tris) use hierarchical fast winding. The
+  // effective route is receipt-carried: backend identity changes numbers
+  // within the fast-winding agreement contract, and consumers must see it.
+  const useFastWinding = (cast.triangles.length / 3) > 50000;
+  const insideTest = useFastWinding
     ? buildWindingIndex(cast).inside
     : (px, py, pz) => pointInsideMesh(px, py, pz, cast);
+  const insideTestRoute = useFastWinding
+    ? 'fast-winding-dipole-bvh (2pct agreement contract)'
+    : 'exact-winding';
   const boundsOf = geometries => {
     const min = [Infinity, Infinity, Infinity];
     const max = [-Infinity, -Infinity, -Infinity];
@@ -217,7 +224,7 @@ export function probeBoneContainment({
     outsideDistances.sort((a, b) => a - b);
     perBone.push({
       name: bone.name,
-      regionTag: provisionalRegionTag(centroid, bounds),
+      regionTag: regionAuthority ? (regionAuthority.map[bone.name] ?? 'unmapped') : provisionalRegionTag(centroid, bounds),
       centroid: centroid.map(v => Number(v.toPrecision(6))),
       sampleCount: samplesPerBone,
       insideFraction: inside / samplesPerBone,
@@ -240,7 +247,7 @@ export function probeBoneContainment({
       (byRegion[tag].meanInsideFraction / byRegion[tag].bones).toPrecision(6),
     );
   }
-  return { perBone, overallMeanInsideFraction: Number(overall.toPrecision(6)), byRegion };
+  return { perBone, overallMeanInsideFraction: Number(overall.toPrecision(6)), byRegion, insideTestRoute, regionAuthority: regionAuthority ? { name: regionAuthority.name, sha256: regionAuthority.sha256 } : 'provisional-spatial-tags' };
 }
 
 // --- receipt -------------------------------------------------------------------

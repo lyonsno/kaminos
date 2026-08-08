@@ -14,7 +14,7 @@
     "perBone": [
       {
         "name": "Cube.058",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.8277,
           1.07277,
@@ -27,7 +27,7 @@
       },
       {
         "name": "Cube.059",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.0888,
           1.06528,
@@ -40,7 +40,7 @@
       },
       {
         "name": "Cube.060",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           24.3551,
           1.04162,
@@ -53,7 +53,7 @@
       },
       {
         "name": "Cube.061",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           23.5792,
           1.01936,
@@ -66,7 +66,7 @@
       },
       {
         "name": "Cube.046",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.911,
           2.64286,
@@ -79,7 +79,7 @@
       },
       {
         "name": "Cube.047",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.0864,
           2.63894,
@@ -92,7 +92,7 @@
       },
       {
         "name": "Cube.048",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           24.3063,
           2.68391,
@@ -105,7 +105,7 @@
       },
       {
         "name": "Cube.049",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           23.5279,
           2.66258,
@@ -118,7 +118,7 @@
       },
       {
         "name": "Cube.067",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           23.7305,
           -0.703144,
@@ -131,7 +131,7 @@
       },
       {
         "name": "Cube.016",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.0904,
           1.07277,
@@ -144,7 +144,7 @@
       },
       {
         "name": "Cube.022",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.8294,
           1.06528,
@@ -157,7 +157,7 @@
       },
       {
         "name": "Cube.023",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           15.5635,
           1.04085,
@@ -170,7 +170,7 @@
       },
       {
         "name": "Cube.044",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           16.3393,
           1.01871,
@@ -183,7 +183,7 @@
       },
       {
         "name": "Cube.062",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.0072,
           2.64218,
@@ -196,7 +196,7 @@
       },
       {
         "name": "Cube.063",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.8357,
           2.63837,
@@ -209,7 +209,7 @@
       },
       {
         "name": "Cube.064",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           15.6119,
           2.68378,
@@ -222,7 +222,7 @@
       },
       {
         "name": "Cube.065",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           16.3903,
           2.66238,
@@ -235,7 +235,7 @@
       },
       {
         "name": "Cube.084",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.8716,
           2.69967,
@@ -248,7 +248,7 @@
       },
       {
         "name": "Cube.085",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           15.6425,
           2.66898,
@@ -261,7 +261,7 @@
       },
       {
         "name": "Cube.019",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           24.6593,
           -0.994988,
@@ -274,7 +274,7 @@
       },
       {
         "name": "Cube.093",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           15.2586,
           -0.994733,
@@ -286,8 +286,21 @@
         "outsideQ50": 0.0182962
       },
       {
+        "name": "Cube.042",
+        "regionTag": "spine",
+        "centroid": [
+          19.7298,
+          -35.9537,
+          39.5179
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.075,
+        "outsideMax": 0.0561983,
+        "outsideQ50": 0.0468661
+      },
+      {
         "name": "Cube.082",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.102,
           2.6445,
@@ -299,21 +312,8 @@
         "outsideQ50": 0.0122097
       },
       {
-        "name": "Cube.042",
-        "regionTag": "head-end",
-        "centroid": [
-          19.7298,
-          -35.9537,
-          39.5179
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.2,
-        "outsideMax": 0.0561983,
-        "outsideQ50": 0.047325
-      },
-      {
         "name": "Cube.068",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.0932,
           -1.12012,
@@ -326,7 +326,7 @@
       },
       {
         "name": "Cube.003",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           24.0789,
           -6.83467,
@@ -338,21 +338,8 @@
         "outsideQ50": 0.0111912
       },
       {
-        "name": "Cube.071",
-        "regionTag": "axial/dorsal-band",
-        "centroid": [
-          16.2026,
-          -0.704341,
-          -1.02839
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.225,
-        "outsideMax": 0.0342146,
-        "outsideQ50": 0.0220874
-      },
-      {
         "name": "Cube.066",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           24.3809,
           -0.949391,
@@ -364,8 +351,21 @@
         "outsideQ50": 0.00522957
       },
       {
+        "name": "Cube.071",
+        "regionTag": "pedal",
+        "centroid": [
+          16.2026,
+          -0.704341,
+          -1.02839
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.25,
+        "outsideMax": 0.0342146,
+        "outsideQ50": 0.0221325
+      },
+      {
         "name": "Cube.069",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           14.8765,
           -0.976367,
@@ -378,7 +378,7 @@
       },
       {
         "name": "Cube.081",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           13.2901,
           2.64876,
@@ -391,7 +391,7 @@
       },
       {
         "name": "Cube.018",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "forelimb",
         "centroid": [
           24.2057,
           -8.91929,
@@ -404,7 +404,7 @@
       },
       {
         "name": "Cube.074",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.0611,
           2.69965,
@@ -416,21 +416,8 @@
         "outsideQ50": 0.00486408
       },
       {
-        "name": "Cube.070",
-        "regionTag": "axial/dorsal-band",
-        "centroid": [
-          15.5522,
-          -0.949948,
-          -1.11751
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.375,
-        "outsideMax": 0.0282176,
-        "outsideQ50": 0.0211182
-      },
-      {
         "name": "Cube.050",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.7957,
           -24.9875,
@@ -443,7 +430,7 @@
       },
       {
         "name": "Cube.072",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           26.6428,
           2.64862,
@@ -456,7 +443,7 @@
       },
       {
         "name": "Cube.073",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.8307,
           2.64449,
@@ -469,7 +456,7 @@
       },
       {
         "name": "Cube.075",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           24.2903,
           2.66897,
@@ -481,8 +468,21 @@
         "outsideQ50": 0.00530181
       },
       {
+        "name": "Cube.070",
+        "regionTag": "pedal",
+        "centroid": [
+          15.5522,
+          -0.949948,
+          -1.11751
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.425,
+        "outsideMax": 0.0282176,
+        "outsideQ50": 0.0211222
+      },
+      {
         "name": "Cube.045",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.0566,
           -0.976516,
@@ -495,7 +495,7 @@
       },
       {
         "name": "Cube.004",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "pedal",
         "centroid": [
           25.8401,
           -1.12012,
@@ -508,33 +508,20 @@
       },
       {
         "name": "Cube.088",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           15.8542,
           -6.83467,
           -4.02505
         ],
         "sampleCount": 40,
-        "insideFraction": 0.55,
+        "insideFraction": 0.575,
         "outsideMax": 0.0268212,
         "outsideQ50": 0.0171327
       },
       {
-        "name": "Cube.092",
-        "regionTag": "axial/dorsal-band",
-        "centroid": [
-          15.6957,
-          -8.72142,
-          23.9379
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.6,
-        "outsideMax": 0.020323,
-        "outsideQ50": 0.0131981
-      },
-      {
         "name": "Cube.051",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9077,
           -25.749,
@@ -547,7 +534,7 @@
       },
       {
         "name": "Cube.086",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           14.5304,
           -12.9568,
@@ -559,8 +546,34 @@
         "outsideQ50": 0.0187966
       },
       {
+        "name": "Cube.092",
+        "regionTag": "forelimb",
+        "centroid": [
+          15.6957,
+          -8.72142,
+          23.9379
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.625,
+        "outsideMax": 0.020323,
+        "outsideQ50": 0.0131981
+      },
+      {
+        "name": "Cube.087",
+        "regionTag": "hindlimb",
+        "centroid": [
+          15.1439,
+          -23.1803,
+          1.08528
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.65,
+        "outsideMax": 0.0606527,
+        "outsideQ50": 0.0456206
+      },
+      {
         "name": "Cube.011",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "forelimb",
         "centroid": [
           19.5518,
           -28.0124,
@@ -573,46 +586,46 @@
       },
       {
         "name": "Cube.020",
-        "regionTag": "head-end",
+        "regionTag": "skull_mandible",
         "centroid": [
           21.6306,
           -38.2796,
           42.4451
         ],
         "sampleCount": 40,
-        "insideFraction": 0.7,
+        "insideFraction": 0.675,
         "outsideMax": 0.050935,
         "outsideQ50": 0.0105386
       },
       {
-        "name": "Cube.087",
-        "regionTag": "mid-body/limb-band",
-        "centroid": [
-          15.1439,
-          -23.1803,
-          1.08528
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.7,
-        "outsideMax": 0.0606527,
-        "outsideQ50": 0.0463978
-      },
-      {
         "name": "Cube.014",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "forelimb",
         "centroid": [
           27.0745,
           -21.138,
           28.5799
         ],
         "sampleCount": 40,
-        "insideFraction": 0.725,
+        "insideFraction": 0.7,
         "outsideMax": 0.0253103,
-        "outsideQ50": 0.017823
+        "outsideQ50": 0.0179547
+      },
+      {
+        "name": "Cube.090",
+        "regionTag": "forelimb",
+        "centroid": [
+          12.8334,
+          -21.1514,
+          28.5849
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.7,
+        "outsideMax": 0.022148,
+        "outsideQ50": 0.0141203
       },
       {
         "name": "Cube.089",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           15.9516,
           -13.4249,
@@ -624,34 +637,34 @@
         "outsideQ50": 0.0264768
       },
       {
-        "name": "Cube.090",
-        "regionTag": "mid-body/limb-band",
-        "centroid": [
-          12.8334,
-          -21.1514,
-          28.5849
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.75,
-        "outsideMax": 0.022148,
-        "outsideQ50": 0.014527
-      },
-      {
         "name": "Cube.013",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "scapulae",
         "centroid": [
           25.9632,
           -30.5812,
           30.8442
         ],
         "sampleCount": 40,
-        "insideFraction": 0.775,
+        "insideFraction": 0.75,
         "outsideMax": 0.0147856,
         "outsideQ50": 0.00817089
       },
       {
+        "name": "Cube.025",
+        "regionTag": "spine",
+        "centroid": [
+          19.7105,
+          -32.3383,
+          32.9315
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.75,
+        "outsideMax": 0.0566922,
+        "outsideQ50": 0.0504627
+      },
+      {
         "name": "Cube.017",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "forelimb",
         "centroid": [
           25.6189,
           -9.20873,
@@ -663,8 +676,21 @@
         "outsideQ50": 0.00594812
       },
       {
+        "name": "Cube.055",
+        "regionTag": "spine",
+        "centroid": [
+          19.7383,
+          -34.7477,
+          39.6409
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.8,
+        "outsideMax": 0.045172,
+        "outsideQ50": 0.0405798
+      },
+      {
         "name": "Cube.005",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           23.9443,
           -12.6288,
@@ -676,47 +702,21 @@
         "outsideQ50": 0.00393654
       },
       {
-        "name": "Cube.007",
-        "regionTag": "tail-end",
-        "centroid": [
-          19.9852,
-          -31.3326,
-          -8.69615
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.85,
-        "outsideMax": 0.00395099,
-        "outsideQ50": 0.00211981
-      },
-      {
-        "name": "Cube.025",
-        "regionTag": "mid-body/limb-band",
-        "centroid": [
-          19.7105,
-          -32.3383,
-          32.9315
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.875,
-        "outsideMax": 0.053567,
-        "outsideQ50": 0.0497354
-      },
-      {
         "name": "Cube.015",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "scapulae",
         "centroid": [
           13.9584,
           -30.5812,
           30.8442
         ],
         "sampleCount": 40,
-        "insideFraction": 0.875,
+        "insideFraction": 0.85,
         "outsideMax": 0.0117878,
-        "outsideQ50": 0.00752887
+        "outsideQ50": 0.00811211
       },
       {
         "name": "Cube.091",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "forelimb",
         "centroid": [
           14.3049,
           -9.2512,
@@ -728,21 +728,8 @@
         "outsideQ50": 0.00297733
       },
       {
-        "name": "Cube.008",
-        "regionTag": "tail-end",
-        "centroid": [
-          19.9807,
-          -30.4211,
-          -9.48139
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.9,
-        "outsideMax": 0.00210625,
-        "outsideQ50": 0.000775236
-      },
-      {
         "name": "Cube.043",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7025,
           -30.8863,
@@ -754,8 +741,21 @@
         "outsideQ50": 0.0018992
       },
       {
+        "name": "Cube.024",
+        "regionTag": "spine",
+        "centroid": [
+          19.7545,
+          -32.8905,
+          30.5153
+        ],
+        "sampleCount": 40,
+        "insideFraction": 0.95,
+        "outsideMax": 0.0335866,
+        "outsideQ50": 0.0335866
+      },
+      {
         "name": "Cube.052",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9048,
           -26.3908,
@@ -767,21 +767,8 @@
         "outsideQ50": 0.000815237
       },
       {
-        "name": "Cube.055",
-        "regionTag": "head-end",
-        "centroid": [
-          19.7383,
-          -34.7477,
-          39.6409
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.95,
-        "outsideMax": 0.045172,
-        "outsideQ50": 0.045172
-      },
-      {
         "name": "SRC_PELVIS",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "pelvis",
         "centroid": [
           22.4226,
           -30.6276,
@@ -794,7 +781,7 @@
       },
       {
         "name": "Cube",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "ribcage",
         "centroid": [
           25.7444,
           -17.1986,
@@ -806,34 +793,21 @@
         "outsideQ50": 0.000193962
       },
       {
-        "name": "Cube.024",
-        "regionTag": "distal-limb/paw-band",
+        "name": "Cube.027",
+        "regionTag": "spine",
         "centroid": [
-          19.7545,
-          -32.8905,
-          30.5153
+          19.7557,
+          -31.3182,
+          34.2558
         ],
         "sampleCount": 40,
         "insideFraction": 0.975,
-        "outsideMax": 0.0335866,
-        "outsideQ50": 0.0335866
-      },
-      {
-        "name": "Cube.006",
-        "regionTag": "tail-end",
-        "centroid": [
-          19.9693,
-          -32.0058,
-          -7.88642
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.975,
-        "outsideMax": 0.00363679,
-        "outsideQ50": 0.00363679
+        "outsideMax": 0.0473225,
+        "outsideQ50": 0.0473225
       },
       {
         "name": "Cube.028",
-        "regionTag": "head-end",
+        "regionTag": "skull_mandible",
         "centroid": [
           20.9223,
           -35.6366,
@@ -845,21 +819,8 @@
         "outsideQ50": 0.000511221
       },
       {
-        "name": "Cube.094",
-        "regionTag": "head-end",
-        "centroid": [
-          18.6453,
-          -35.5869,
-          46.208
-        ],
-        "sampleCount": 40,
-        "insideFraction": 0.975,
-        "outsideMax": 0.000583046,
-        "outsideQ50": 0.000583046
-      },
-      {
         "name": "Icosphere",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "hindlimb",
         "centroid": [
           23.8889,
           -29.3308,
@@ -872,7 +833,7 @@
       },
       {
         "name": "Cube.026",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.704,
           -33.757,
@@ -884,21 +845,8 @@
         "outsideQ50": 0
       },
       {
-        "name": "Cube.027",
-        "regionTag": "mid-body/limb-band",
-        "centroid": [
-          19.7557,
-          -31.3182,
-          34.2558
-        ],
-        "sampleCount": 40,
-        "insideFraction": 1,
-        "outsideMax": 0,
-        "outsideQ50": 0
-      },
-      {
         "name": "Cube.029",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7139,
           -30.4456,
@@ -911,7 +859,7 @@
       },
       {
         "name": "Cube.030",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7162,
           -34.4508,
@@ -924,7 +872,7 @@
       },
       {
         "name": "Cube.031",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7704,
           -34.2578,
@@ -937,7 +885,7 @@
       },
       {
         "name": "Cube.032",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7704,
           -34.3161,
@@ -950,7 +898,7 @@
       },
       {
         "name": "Cube.033",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7159,
           -33.9253,
@@ -963,7 +911,7 @@
       },
       {
         "name": "Cube.034",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7143,
           -33.5079,
@@ -976,7 +924,7 @@
       },
       {
         "name": "Cube.036",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.8808,
           -33.5886,
@@ -989,7 +937,7 @@
       },
       {
         "name": "Cube.039",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7121,
           -32.2704,
@@ -1002,7 +950,7 @@
       },
       {
         "name": "Cube.040",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7126,
           -33.1164,
@@ -1015,7 +963,7 @@
       },
       {
         "name": "Cube.041",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.71,
           -32.6662,
@@ -1027,8 +975,47 @@
         "outsideQ50": 0
       },
       {
+        "name": "Cube.006",
+        "regionTag": "caudal",
+        "centroid": [
+          19.9693,
+          -32.0058,
+          -7.88642
+        ],
+        "sampleCount": 40,
+        "insideFraction": 1,
+        "outsideMax": 0,
+        "outsideQ50": 0
+      },
+      {
+        "name": "Cube.007",
+        "regionTag": "caudal",
+        "centroid": [
+          19.9852,
+          -31.3326,
+          -8.69615
+        ],
+        "sampleCount": 40,
+        "insideFraction": 1,
+        "outsideMax": 0,
+        "outsideQ50": 0
+      },
+      {
+        "name": "Cube.008",
+        "regionTag": "caudal",
+        "centroid": [
+          19.9807,
+          -30.4211,
+          -9.48139
+        ],
+        "sampleCount": 40,
+        "insideFraction": 1,
+        "outsideMax": 0,
+        "outsideQ50": 0
+      },
+      {
         "name": "Cube.009",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9515,
           -29.5643,
@@ -1041,7 +1028,7 @@
       },
       {
         "name": "Cube.010",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9134,
           -26.9958,
@@ -1054,7 +1041,7 @@
       },
       {
         "name": "Cube.053",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9273,
           -27.8555,
@@ -1067,7 +1054,7 @@
       },
       {
         "name": "Cube.054",
-        "regionTag": "tail-end",
+        "regionTag": "caudal",
         "centroid": [
           19.9332,
           -28.7801,
@@ -1080,7 +1067,7 @@
       },
       {
         "name": "Cube.056",
-        "regionTag": "head-end",
+        "regionTag": "spine",
         "centroid": [
           19.7637,
           -33.4923,
@@ -1093,7 +1080,7 @@
       },
       {
         "name": "Cube.057",
-        "regionTag": "head-end",
+        "regionTag": "spine",
         "centroid": [
           19.7369,
           -31.9745,
@@ -1106,7 +1093,7 @@
       },
       {
         "name": "Cube.076",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7826,
           -31.9942,
@@ -1119,7 +1106,7 @@
       },
       {
         "name": "Cube.077",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7345,
           -31.8461,
@@ -1132,7 +1119,7 @@
       },
       {
         "name": "Cube.079",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7274,
           -31.6799,
@@ -1145,7 +1132,7 @@
       },
       {
         "name": "Cube.080",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7211,
           -31.6669,
@@ -1158,7 +1145,7 @@
       },
       {
         "name": "Cube.078",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7135,
           -31.91,
@@ -1171,7 +1158,7 @@
       },
       {
         "name": "Cube.037",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "spine",
         "centroid": [
           19.7867,
           -32.2937,
@@ -1184,7 +1171,7 @@
       },
       {
         "name": "Cube.038",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.8051,
           -32.8886,
@@ -1197,7 +1184,7 @@
       },
       {
         "name": "Cube.035",
-        "regionTag": "distal-limb/paw-band",
+        "regionTag": "spine",
         "centroid": [
           19.7767,
           -33.7546,
@@ -1209,8 +1196,21 @@
         "outsideQ50": 0
       },
       {
+        "name": "Cube.094",
+        "regionTag": "skull_mandible",
+        "centroid": [
+          18.6453,
+          -35.5869,
+          46.208
+        ],
+        "sampleCount": 40,
+        "insideFraction": 1,
+        "outsideMax": 0,
+        "outsideQ50": 0
+      },
+      {
         "name": "Cube.001",
-        "regionTag": "axial/dorsal-band",
+        "regionTag": "hindlimb",
         "centroid": [
           25.3255,
           -12.2093,
@@ -1223,7 +1223,7 @@
       },
       {
         "name": "Cube.002",
-        "regionTag": "mid-body/limb-band",
+        "regionTag": "hindlimb",
         "centroid": [
           24.6789,
           -22.2255,
@@ -1235,31 +1235,52 @@
         "outsideQ50": 0
       }
     ],
-    "overallMeanInsideFraction": 0.60266,
+    "overallMeanInsideFraction": 0.600266,
     "byRegion": {
-      "axial/dorsal-band": {
-        "bones": 45,
-        "meanInsideFraction": 0.264444
+      "pedal": {
+        "bones": 34,
+        "meanInsideFraction": 0.133824
       },
-      "head-end": {
+      "spine": {
+        "bones": 27,
+        "meanInsideFraction": 0.943519
+      },
+      "hindlimb": {
+        "bones": 9,
+        "meanInsideFraction": 0.730556
+      },
+      "forelimb": {
         "bones": 7,
-        "meanInsideFraction": 0.828571
+        "meanInsideFraction": 0.664286
       },
-      "tail-end": {
+      "caudal": {
         "bones": 10,
-        "meanInsideFraction": 0.87
+        "meanInsideFraction": 0.8975
       },
-      "mid-body/limb-band": {
-        "bones": 20,
-        "meanInsideFraction": 0.91375
+      "skull_mandible": {
+        "bones": 3,
+        "meanInsideFraction": 0.883333
       },
-      "distal-limb/paw-band": {
-        "bones": 12,
-        "meanInsideFraction": 0.997917
+      "scapulae": {
+        "bones": 2,
+        "meanInsideFraction": 0.8
+      },
+      "pelvis": {
+        "bones": 1,
+        "meanInsideFraction": 0.975
+      },
+      "ribcage": {
+        "bones": 1,
+        "meanInsideFraction": 0.975
       }
+    },
+    "insideTestRoute": "fast-winding-dipole-bvh (2pct agreement contract)",
+    "regionAuthority": {
+      "name": "golden-region-manifest OPERATOR-SIGNED 2026-08-08",
+      "sha256": "5ca8341685db9650e09d88ce75c7aa75906e171483561ca399c02b9eda6036dd"
     }
   },
-  "regionTagsProvisional": true,
-  "generatedAt": "2026-08-08T03:47:53.480Z",
-  "receiptSha256": "461afe833cf4b429e0fbb6ba731c932c33ebdf9470057124038bf0b99ddfc6f8"
+  "regionTagsProvisional": false,
+  "generatedAt": "2026-08-08T07:15:24.399Z",
+  "receiptSha256": "5f25aa9bbc580a86106db10fc9ba137f434550c3f49b206dcb984f34e9726c02"
 }
