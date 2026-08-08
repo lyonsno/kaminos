@@ -1,0 +1,2858 @@
+{
+  "schema": "kaminos.current-k4-m12-volume-restoration-solve-application.v0",
+  "rowId": "restore-e005-ramp-a092-a096-repay-789-cn098",
+  "compressionSectionIds": [
+    "muscle-12:section:0001",
+    "muscle-12:section:0002",
+    "muscle-12:section:0003",
+    "muscle-12:section:0004",
+    "muscle-12:section:0005",
+    "muscle-12:section:0006",
+    "muscle-12:section:0007",
+    "muscle-12:section:0008",
+    "muscle-12:section:0009",
+    "muscle-12:section:0010",
+    "muscle-12:section:0011"
+  ],
+  "pressureBySectionId": {
+    "muscle-12:section:0001": 1.216397882142377,
+    "muscle-12:section:0002": 1.0263568445390412,
+    "muscle-12:section:0003": 0.8910942137689337,
+    "muscle-12:section:0004": 0.8329877042212239,
+    "muscle-12:section:0005": 0.74938047286354,
+    "muscle-12:section:0006": 0.6964024590643609,
+    "muscle-12:section:0007": 0.7530040234032744,
+    "muscle-12:section:0008": 0.7100422866183768,
+    "muscle-12:section:0009": 0.7005300244310381,
+    "muscle-12:section:0010": 0.4175048856672443,
+    "muscle-12:section:0011": 0.8044822030448002
+  },
+  "restoration": {
+    "schema": "kaminos.muscle-compartment-ring-cage-volume-restoration.v0",
+    "status": "completed",
+    "sourceCarrierSha256": "6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a",
+    "outputCarrierSha256": "01d61bc3baca4e71aa78300d0d4b1eb1e2be743f3187ec84be2837c41e94cd08",
+    "requested": {
+      "constructionId": "muscle-12",
+      "compressionSectionIds": [
+        "muscle-12:section:0001",
+        "muscle-12:section:0002",
+        "muscle-12:section:0003",
+        "muscle-12:section:0004",
+        "muscle-12:section:0005",
+        "muscle-12:section:0006",
+        "muscle-12:section:0007",
+        "muscle-12:section:0008",
+        "muscle-12:section:0009",
+        "muscle-12:section:0010",
+        "muscle-12:section:0011"
+      ],
+      "targetRelativeVolumeError": 0.005,
+      "maximumSectionAreaScaleReduction": 0.85,
+      "volumeRelativeTolerance": 1e-10
+    },
+    "effective": {
+      "constructionId": "muscle-12",
+      "compressionSectionIds": [
+        "muscle-12:section:0001",
+        "muscle-12:section:0002",
+        "muscle-12:section:0003",
+        "muscle-12:section:0004",
+        "muscle-12:section:0005",
+        "muscle-12:section:0006",
+        "muscle-12:section:0007",
+        "muscle-12:section:0008",
+        "muscle-12:section:0009",
+        "muscle-12:section:0010",
+        "muscle-12:section:0011"
+      ],
+      "targetRelativeVolumeError": 0.005,
+      "maximumSectionAreaScaleReduction": 0.85,
+      "volumeRelativeTolerance": 1e-10,
+      "sectionAreaScale": 0.989994579879567
+    },
+    "fallbackUsed": false,
+    "restVolume": 76.82655530099983,
+    "sourceVolume": 77.97894084851721,
+    "sourceRelativeVolumeError": 0.014999833625267148,
+    "targetVolume": 77.21068807750481,
+    "finalVolume": 77.21068807866483,
+    "finalRelativeVolumeError": 0.005000000015098981,
+    "effectiveSectionAreaScale": 0.989994579879567,
+    "iterationCount": 29,
+    "fixedNodeMaximumDrift": 0,
+    "centerlineMaximumDrift": 0,
+    "nonPositiveCellCount": 0
+  },
+  "solve": {
+    "schema": "kaminos.muscle-compartment-ring-cage-contact-result.v0",
+    "status": "residual-constraint",
+    "sourceCarrierSha256": "01d61bc3baca4e71aa78300d0d4b1eb1e2be743f3187ec84be2837c41e94cd08",
+    "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+    "config": {
+      "requested": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 12,
+        "maxIterations": 96,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      },
+      "effective": {
+        "convergenceTolerance": 0.0001,
+        "curvatureRegularization": 12,
+        "maxIterations": 96,
+        "maximumLocalTurningAngleChange": 0.25,
+        "maximumRelativeVolumeError": 0.015,
+        "maximumTotalTurningAngleChange": 1.25,
+        "relaxationStep": 0.32
+      },
+      "fallbackUsed": false
+    },
+    "iterations": 80,
+    "fixedNodeMaximumDrift": 0,
+    "metrics": {
+      "initial": {
+        "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+        "sourceCarrierSha256": "01d61bc3baca4e71aa78300d0d4b1eb1e2be743f3187ec84be2837c41e94cd08",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "orderedConstructionIds": [
+          "muscle-34",
+          "muscle-13",
+          "muscle-12",
+          "muscle-45"
+        ],
+        "cages": [
+          {
+            "cageId": "muscle-34:cage",
+            "constructionId": "muscle-34",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.017195030278072544,
+                0.029705288201992416,
+                0.031318173268467864,
+                0.016443063102548058,
+                0.008684134343569187,
+                0.03041219138181459,
+                0.05383087296116411,
+                0.07895794904995443,
+                0.10661295868398726,
+                0.1324664025719486,
+                0.1249337137256511
+              ],
+              "maximumTurningAngle": 0.1324664025719486,
+              "totalTurningAngle": 0.6305597775691701,
+              "bendingEnergy": 0.05708381528536295
+            },
+            "referenceVolume": 64.0255025100002,
+            "currentVolume": 63.926969031683306,
+            "relativeVolumeError": 0.0015389723540474838,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-13:cage",
+            "constructionId": "muscle-13",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.002269267964129327,
+                0.003251001485847895,
+                0.0015089682875116636,
+                0.0045856371242381355,
+                0.011284316037844551,
+                0.014199891977711973,
+                0.010927240865042577,
+                0.004312263214735542,
+                0.001894419206228449,
+                0.0034328501046347166,
+                0.002339042131607892
+              ],
+              "maximumTurningAngle": 0.014199891977711973,
+              "totalTurningAngle": 0.06000489839953272,
+              "bendingEnergy": 0.0005268409705216327
+            },
+            "referenceVolume": 64.51226816799996,
+            "currentVolume": 64.52316129591189,
+            "relativeVolumeError": 0.0001688535874069741,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-12:cage",
+            "constructionId": "muscle-12",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.10328982299041875,
+                0.060261838732274225,
+                0.016559471118113834,
+                0.02755376273812253,
+                0.04846404538008139,
+                0.06820012490151058,
+                0.07736413036689867,
+                0.06499449021619842,
+                0.015277220809913299,
+                0.047036353720342663,
+                0.07328198520606817
+              ],
+              "maximumTurningAngle": 0.10328982299041875,
+              "totalTurningAngle": 0.6022832461799426,
+              "bendingEnergy": 0.040359277225323724
+            },
+            "referenceVolume": 76.82655530099983,
+            "currentVolume": 77.21068807866483,
+            "relativeVolumeError": 0.005000000015098981,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-45:cage",
+            "constructionId": "muscle-45",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.10576247835865628,
+                0.09418713837483755,
+                0.04871368621559606,
+                0.028691620268155592,
+                0.06789970196921773,
+                0.07449979846376835,
+                0.0747657943325727,
+                0.07039855608184498,
+                0.05529312145999902,
+                0.08148622498459346,
+                0.08349590131936667
+              ],
+              "maximumTurningAngle": 0.10576247835865628,
+              "totalTurningAngle": 0.7851940218286084,
+              "bendingEnergy": 0.06062852104153295
+            },
+            "referenceVolume": 89.30211863800002,
+            "currentVolume": 89.90204395874515,
+            "relativeVolumeError": 0.006717929315619254,
+            "nonPositiveCellCount": 0
+          }
+        ],
+        "pairwise": {
+          "penetratingBoundaryNodeCount": 147,
+          "fixedPenetratingBoundaryNodeCount": 18,
+          "maximumPenetration": 0.4493772408354102,
+          "totalPenetration": 14.456013921421988,
+          "movableMaximumPenetration": 0.30407347222555475,
+          "movableTotalPenetration": 10.833062188386336,
+          "fixedMaximumPenetration": 0.4493772408354102,
+          "fixedTotalPenetration": 3.622951733035656
+        },
+        "skeletal": {
+          "penetratingBoundaryNodeCount": 2,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 0.03038764289015325,
+          "totalPenetration": 0.04502050065172025,
+          "movableMaximumPenetration": 0.03038764289015325,
+          "movableTotalPenetration": 0.04502050065172025,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0,
+          "penetratingAxisSampleCount": 2,
+          "axisSampleCount": 132
+        },
+        "compartment": {
+          "escapingBoundaryNodeCount": 0,
+          "fixedEscapingBoundaryNodeCount": 0,
+          "maximumEscape": 0
+        }
+      },
+      "packed": {
+        "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+        "sourceCarrierSha256": "32af433618f8602cff85d57cf4cc20c2a4e0e0e277b18e5d1e3a91afbaa0ff8d",
+        "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+        "orderedConstructionIds": [
+          "muscle-34",
+          "muscle-13",
+          "muscle-12",
+          "muscle-45"
+        ],
+        "cages": [
+          {
+            "cageId": "muscle-34:cage",
+            "constructionId": "muscle-34",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.017447649864539266,
+                0.030262618088801575,
+                0.03226329564046868,
+                0.017885835109926473,
+                0.00785890180973996,
+                0.02885760055845666,
+                0.05272120598538946,
+                0.07946972985387975,
+                0.11045824996864428,
+                0.14116158160702938,
+                0.1388589966278431
+              ],
+              "maximumTurningAngle": 0.14116158160702938,
+              "totalTurningAngle": 0.6572456651147186,
+              "bendingEnergy": 0.0639799949062219
+            },
+            "referenceVolume": 64.0255025100002,
+            "currentVolume": 63.89292903342764,
+            "relativeVolumeError": 0.0020706354714177533,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-13:cage",
+            "constructionId": "muscle-13",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.002269267964129327,
+                0.003251001485847895,
+                0.0015089682875116636,
+                0.0045856371242381355,
+                0.011284316037844551,
+                0.014199891977711973,
+                0.010927240865042577,
+                0.004312263214735542,
+                0.001894419206228449,
+                0.0034328501046347166,
+                0.002339042131607892
+              ],
+              "maximumTurningAngle": 0.014199891977711973,
+              "totalTurningAngle": 0.06000489839953272,
+              "bendingEnergy": 0.0005268409705216327
+            },
+            "referenceVolume": 64.51226816799996,
+            "currentVolume": 64.52316129591189,
+            "relativeVolumeError": 0.0001688535874069741,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-12:cage",
+            "constructionId": "muscle-12",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.13307435869762665,
+                0.03850405021070939,
+                0.02145367281783129,
+                0.026501253102436752,
+                0.05359962819784353,
+                0.07554787763053955,
+                0.08590374297120126,
+                0.08338928718633179,
+                0.04520508899601116,
+                0.024899911239719033,
+                0.10152881310420772
+              ],
+              "maximumTurningAngle": 0.13307435869762665,
+              "totalTurningAngle": 0.6896076841544581,
+              "bendingEnergy": 0.05623915709135248
+            },
+            "referenceVolume": 76.82655530099983,
+            "currentVolume": 77.97891972014516,
+            "relativeVolumeError": 0.014999558611348173,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-45:cage",
+            "constructionId": "muscle-45",
+            "boundaryFaceCount": 312,
+            "boundaryNodeCount": 158,
+            "fixedBoundaryNodeCount": 26,
+            "centerline": {
+              "turningAngles": [
+                0.15992893911471032,
+                0.12327639171533472,
+                0.05722902171436721,
+                0.03852712255705805,
+                0.07206052777995765,
+                0.07518702770283596,
+                0.07429828176146752,
+                0.07224873355071232,
+                0.06663072491117217,
+                0.10737318421114142,
+                0.14076969324990032
+              ],
+              "maximumTurningAngle": 0.15992893911471032,
+              "totalTurningAngle": 0.9875296482686575,
+              "bendingEnergy": 0.10290451811821981
+            },
+            "referenceVolume": 89.30211863800002,
+            "currentVolume": 89.90206824365949,
+            "relativeVolumeError": 0.006718201256696379,
+            "nonPositiveCellCount": 0
+          }
+        ],
+        "pairwise": {
+          "penetratingBoundaryNodeCount": 149,
+          "fixedPenetratingBoundaryNodeCount": 18,
+          "maximumPenetration": 0.4820207008727689,
+          "totalPenetration": 12.748828490923808,
+          "movableMaximumPenetration": 0.19775061027450627,
+          "movableTotalPenetration": 9.066619368513413,
+          "fixedMaximumPenetration": 0.4820207008727689,
+          "fixedTotalPenetration": 3.682209122410397
+        },
+        "skeletal": {
+          "penetratingBoundaryNodeCount": 2,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 0.028172744298093855,
+          "totalPenetration": 0.037215665736208436,
+          "movableMaximumPenetration": 0.028172744298093855,
+          "movableTotalPenetration": 0.037215665736208436,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0,
+          "penetratingAxisSampleCount": 2,
+          "axisSampleCount": 132
+        },
+        "compartment": {
+          "escapingBoundaryNodeCount": 0,
+          "fixedEscapingBoundaryNodeCount": 0,
+          "maximumEscape": 0
+        }
+      }
+    },
+    "iterationHistory": [
+      {
+        "iteration": 1,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.01034735832727771,
+        "pairwiseMovableTotalPenetration": 10.791753265774764,
+        "skeletalMovableTotalPenetration": 0.044810974983023416,
+        "maximumRelativeVolumeError": 0.006708589748183522
+      },
+      {
+        "iteration": 2,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010004665154794888,
+        "pairwiseMovableTotalPenetration": 10.751868332523447,
+        "skeletalMovableTotalPenetration": 0.04464664690270112,
+        "maximumRelativeVolumeError": 0.006699760910301457
+      },
+      {
+        "iteration": 3,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.01062394183933064,
+        "pairwiseMovableTotalPenetration": 10.71109091441575,
+        "skeletalMovableTotalPenetration": 0.04449415127934084,
+        "maximumRelativeVolumeError": 0.0066893764754196675
+      },
+      {
+        "iteration": 4,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010377219183980133,
+        "pairwiseMovableTotalPenetration": 10.671118028884333,
+        "skeletalMovableTotalPenetration": 0.044381548178440255,
+        "maximumRelativeVolumeError": 0.006679464600328335
+      },
+      {
+        "iteration": 5,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010285575890798305,
+        "pairwiseMovableTotalPenetration": 10.631317154911676,
+        "skeletalMovableTotalPenetration": 0.044303485186829555,
+        "maximumRelativeVolumeError": 0.006670024274623061
+      },
+      {
+        "iteration": 6,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009948094981277966,
+        "pairwiseMovableTotalPenetration": 10.59211740841179,
+        "skeletalMovableTotalPenetration": 0.04425519059867039,
+        "maximumRelativeVolumeError": 0.0066610522968328905
+      },
+      {
+        "iteration": 7,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009951984679054558,
+        "pairwiseMovableTotalPenetration": 10.554053231000657,
+        "skeletalMovableTotalPenetration": 0.04418933961315369,
+        "maximumRelativeVolumeError": 0.006652422804176772
+      },
+      {
+        "iteration": 8,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00999678985974209,
+        "pairwiseMovableTotalPenetration": 10.516937007521777,
+        "skeletalMovableTotalPenetration": 0.04410227540170075,
+        "maximumRelativeVolumeError": 0.00664411074082289
+      },
+      {
+        "iteration": 9,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009957222330903116,
+        "pairwiseMovableTotalPenetration": 10.48167578766825,
+        "skeletalMovableTotalPenetration": 0.043999131121392254,
+        "maximumRelativeVolumeError": 0.006636229104149964
+      },
+      {
+        "iteration": 10,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010185669379849912,
+        "pairwiseMovableTotalPenetration": 10.447564843171023,
+        "skeletalMovableTotalPenetration": 0.04388316784489288,
+        "maximumRelativeVolumeError": 0.006628814146974739
+      },
+      {
+        "iteration": 11,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010105896439838316,
+        "pairwiseMovableTotalPenetration": 10.41107769737683,
+        "skeletalMovableTotalPenetration": 0.04432187587934647,
+        "maximumRelativeVolumeError": 0.006619070742789552
+      },
+      {
+        "iteration": 12,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.010013485745247677,
+        "pairwiseMovableTotalPenetration": 10.375804240774762,
+        "skeletalMovableTotalPenetration": 0.04469636252779319,
+        "maximumRelativeVolumeError": 0.006682745499743649
+      },
+      {
+        "iteration": 13,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009916065013415845,
+        "pairwiseMovableTotalPenetration": 10.341857107899235,
+        "skeletalMovableTotalPenetration": 0.04499962875402683,
+        "maximumRelativeVolumeError": 0.006822616558677974
+      },
+      {
+        "iteration": 14,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009845379124932047,
+        "pairwiseMovableTotalPenetration": 10.308691266315462,
+        "skeletalMovableTotalPenetration": 0.045247008492844215,
+        "maximumRelativeVolumeError": 0.006961995376877856
+      },
+      {
+        "iteration": 15,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00976705750291579,
+        "pairwiseMovableTotalPenetration": 10.276129851436929,
+        "skeletalMovableTotalPenetration": 0.04544293979477701,
+        "maximumRelativeVolumeError": 0.0071009111359745455
+      },
+      {
+        "iteration": 16,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009680170459773124,
+        "pairwiseMovableTotalPenetration": 10.243277114882323,
+        "skeletalMovableTotalPenetration": 0.04559151835623079,
+        "maximumRelativeVolumeError": 0.007239363319187479
+      },
+      {
+        "iteration": 17,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009575798592909255,
+        "pairwiseMovableTotalPenetration": 10.211175704201775,
+        "skeletalMovableTotalPenetration": 0.04569578475551242,
+        "maximumRelativeVolumeError": 0.007377364843222143
+      },
+      {
+        "iteration": 18,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009471089396419238,
+        "pairwiseMovableTotalPenetration": 10.180185687178396,
+        "skeletalMovableTotalPenetration": 0.04575933800220647,
+        "maximumRelativeVolumeError": 0.007514935628677619
+      },
+      {
+        "iteration": 19,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009846250854130333,
+        "pairwiseMovableTotalPenetration": 10.149520551269292,
+        "skeletalMovableTotalPenetration": 0.045785498489267606,
+        "maximumRelativeVolumeError": 0.007654949872668045
+      },
+      {
+        "iteration": 20,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009698468054024023,
+        "pairwiseMovableTotalPenetration": 10.119485789283754,
+        "skeletalMovableTotalPenetration": 0.0457769829694451,
+        "maximumRelativeVolumeError": 0.00779448816246909
+      },
+      {
+        "iteration": 21,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00955714402479234,
+        "pairwiseMovableTotalPenetration": 10.089889979046443,
+        "skeletalMovableTotalPenetration": 0.045736683322886856,
+        "maximumRelativeVolumeError": 0.007933570674292836
+      },
+      {
+        "iteration": 22,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009421369027140743,
+        "pairwiseMovableTotalPenetration": 10.059658848497627,
+        "skeletalMovableTotalPenetration": 0.04561919646630311,
+        "maximumRelativeVolumeError": 0.008072214381308979
+      },
+      {
+        "iteration": 23,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009314875951387625,
+        "pairwiseMovableTotalPenetration": 10.030001795784543,
+        "skeletalMovableTotalPenetration": 0.04547686185400987,
+        "maximumRelativeVolumeError": 0.008210721714040591
+      },
+      {
+        "iteration": 24,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00921225954366302,
+        "pairwiseMovableTotalPenetration": 10.000876798468395,
+        "skeletalMovableTotalPenetration": 0.04531181465127987,
+        "maximumRelativeVolumeError": 0.008348971112455215
+      },
+      {
+        "iteration": 25,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.009111086762063719,
+        "pairwiseMovableTotalPenetration": 9.973042011435778,
+        "skeletalMovableTotalPenetration": 0.04512611378929954,
+        "maximumRelativeVolumeError": 0.008487034116041594
+      },
+      {
+        "iteration": 26,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00901828228696901,
+        "pairwiseMovableTotalPenetration": 9.947140679329955,
+        "skeletalMovableTotalPenetration": 0.04492158522181233,
+        "maximumRelativeVolumeError": 0.008621712926974863
+      },
+      {
+        "iteration": 27,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008926179260984043,
+        "pairwiseMovableTotalPenetration": 9.921316906285925,
+        "skeletalMovableTotalPenetration": 0.04468495475795606,
+        "maximumRelativeVolumeError": 0.00875630444990388
+      },
+      {
+        "iteration": 28,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008852096821789683,
+        "pairwiseMovableTotalPenetration": 9.895896823192302,
+        "skeletalMovableTotalPenetration": 0.044435340609840196,
+        "maximumRelativeVolumeError": 0.008890852608168989
+      },
+      {
+        "iteration": 29,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00877631905553624,
+        "pairwiseMovableTotalPenetration": 9.870867694661792,
+        "skeletalMovableTotalPenetration": 0.04417385774059293,
+        "maximumRelativeVolumeError": 0.009025325086361254
+      },
+      {
+        "iteration": 30,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008699023159622418,
+        "pairwiseMovableTotalPenetration": 9.846239919598927,
+        "skeletalMovableTotalPenetration": 0.04390155742484819,
+        "maximumRelativeVolumeError": 0.009159694373811778
+      },
+      {
+        "iteration": 31,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008611207086321845,
+        "pairwiseMovableTotalPenetration": 9.822231168105679,
+        "skeletalMovableTotalPenetration": 0.04361942896090143,
+        "maximumRelativeVolumeError": 0.009293696570416461
+      },
+      {
+        "iteration": 32,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008531466178558525,
+        "pairwiseMovableTotalPenetration": 9.794892525083315,
+        "skeletalMovableTotalPenetration": 0.04420314158208272,
+        "maximumRelativeVolumeError": 0.00942755562298674
+      },
+      {
+        "iteration": 33,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008431622595986428,
+        "pairwiseMovableTotalPenetration": 9.76919296784385,
+        "skeletalMovableTotalPenetration": 0.04470204604607739,
+        "maximumRelativeVolumeError": 0.009562435440622621
+      },
+      {
+        "iteration": 34,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008361382145059505,
+        "pairwiseMovableTotalPenetration": 9.744059200236153,
+        "skeletalMovableTotalPenetration": 0.0451240970690113,
+        "maximumRelativeVolumeError": 0.009697437356651791
+      },
+      {
+        "iteration": 35,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008278746220171815,
+        "pairwiseMovableTotalPenetration": 9.719853582470787,
+        "skeletalMovableTotalPenetration": 0.045475516062003646,
+        "maximumRelativeVolumeError": 0.009832079899499274
+      },
+      {
+        "iteration": 36,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008200254983171692,
+        "pairwiseMovableTotalPenetration": 9.696255355959398,
+        "skeletalMovableTotalPenetration": 0.04575575644782273,
+        "maximumRelativeVolumeError": 0.009966386692112309
+      },
+      {
+        "iteration": 37,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00816086296122791,
+        "pairwiseMovableTotalPenetration": 9.673775691965623,
+        "skeletalMovableTotalPenetration": 0.045977961042744264,
+        "maximumRelativeVolumeError": 0.010100415374921927
+      },
+      {
+        "iteration": 38,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008117276679881312,
+        "pairwiseMovableTotalPenetration": 9.652698496139045,
+        "skeletalMovableTotalPenetration": 0.04614682911954296,
+        "maximumRelativeVolumeError": 0.010234172698215489
+      },
+      {
+        "iteration": 39,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008069857150794248,
+        "pairwiseMovableTotalPenetration": 9.631901221811676,
+        "skeletalMovableTotalPenetration": 0.04626670464418492,
+        "maximumRelativeVolumeError": 0.010367664151355153
+      },
+      {
+        "iteration": 40,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008018913113422744,
+        "pairwiseMovableTotalPenetration": 9.612313634489581,
+        "skeletalMovableTotalPenetration": 0.046341607824355285,
+        "maximumRelativeVolumeError": 0.010500894583253118
+      },
+      {
+        "iteration": 41,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007972444347349653,
+        "pairwiseMovableTotalPenetration": 9.594921878505396,
+        "skeletalMovableTotalPenetration": 0.04637525360645453,
+        "maximumRelativeVolumeError": 0.010629289588612381
+      },
+      {
+        "iteration": 42,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007922630317588629,
+        "pairwiseMovableTotalPenetration": 9.57765664388753,
+        "skeletalMovableTotalPenetration": 0.04637417088143514,
+        "maximumRelativeVolumeError": 0.010757592648237028
+      },
+      {
+        "iteration": 43,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007868013789178625,
+        "pairwiseMovableTotalPenetration": 9.560517317647749,
+        "skeletalMovableTotalPenetration": 0.04634113979366203,
+        "maximumRelativeVolumeError": 0.010885791653528284
+      },
+      {
+        "iteration": 44,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007809415775560146,
+        "pairwiseMovableTotalPenetration": 9.543384769851006,
+        "skeletalMovableTotalPenetration": 0.04627874996029724,
+        "maximumRelativeVolumeError": 0.011013876017035674
+      },
+      {
+        "iteration": 45,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007718220007310383,
+        "pairwiseMovableTotalPenetration": 9.526506868779403,
+        "skeletalMovableTotalPenetration": 0.046189412836647376,
+        "maximumRelativeVolumeError": 0.011141073663551269
+      },
+      {
+        "iteration": 46,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.0076717077844677605,
+        "pairwiseMovableTotalPenetration": 9.50971917141238,
+        "skeletalMovableTotalPenetration": 0.04607673334798046,
+        "maximumRelativeVolumeError": 0.011268157201975663
+      },
+      {
+        "iteration": 47,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007622280929653808,
+        "pairwiseMovableTotalPenetration": 9.493020662069668,
+        "skeletalMovableTotalPenetration": 0.045942517944664474,
+        "maximumRelativeVolumeError": 0.011395141814480234
+      },
+      {
+        "iteration": 48,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007566600286346853,
+        "pairwiseMovableTotalPenetration": 9.476783305341208,
+        "skeletalMovableTotalPenetration": 0.04578846974125303,
+        "maximumRelativeVolumeError": 0.011522014662381197
+      },
+      {
+        "iteration": 49,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.0075164700984873606,
+        "pairwiseMovableTotalPenetration": 9.461150817520801,
+        "skeletalMovableTotalPenetration": 0.04558611925906558,
+        "maximumRelativeVolumeError": 0.01164883753243618
+      },
+      {
+        "iteration": 50,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008261976362773656,
+        "pairwiseMovableTotalPenetration": 9.445472669423046,
+        "skeletalMovableTotalPenetration": 0.04532497843130673,
+        "maximumRelativeVolumeError": 0.011775731890671664
+      },
+      {
+        "iteration": 51,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008028834129862942,
+        "pairwiseMovableTotalPenetration": 9.430153550191651,
+        "skeletalMovableTotalPenetration": 0.045054633982673564,
+        "maximumRelativeVolumeError": 0.011903118075821555
+      },
+      {
+        "iteration": 52,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.0078121260209667075,
+        "pairwiseMovableTotalPenetration": 9.414848001916857,
+        "skeletalMovableTotalPenetration": 0.044775741203187835,
+        "maximumRelativeVolumeError": 0.01203020684320041
+      },
+      {
+        "iteration": 53,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008259695852076771,
+        "pairwiseMovableTotalPenetration": 9.399444866729068,
+        "skeletalMovableTotalPenetration": 0.044488123755643344,
+        "maximumRelativeVolumeError": 0.01215755112509704
+      },
+      {
+        "iteration": 54,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00826573804461543,
+        "pairwiseMovableTotalPenetration": 9.384040463869786,
+        "skeletalMovableTotalPenetration": 0.04419208049710499,
+        "maximumRelativeVolumeError": 0.012284977363425684
+      },
+      {
+        "iteration": 55,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008257773714924971,
+        "pairwiseMovableTotalPenetration": 9.368649389206944,
+        "skeletalMovableTotalPenetration": 0.043888480190386686,
+        "maximumRelativeVolumeError": 0.012412449290965126
+      },
+      {
+        "iteration": 56,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008237980162152861,
+        "pairwiseMovableTotalPenetration": 9.353283651121332,
+        "skeletalMovableTotalPenetration": 0.04357814651818201,
+        "maximumRelativeVolumeError": 0.012539935822181103
+      },
+      {
+        "iteration": 57,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00820823112929824,
+        "pairwiseMovableTotalPenetration": 9.33795310052762,
+        "skeletalMovableTotalPenetration": 0.043261857644729285,
+        "maximumRelativeVolumeError": 0.01266741027696108
+      },
+      {
+        "iteration": 58,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008176117462783631,
+        "pairwiseMovableTotalPenetration": 9.322672764849044,
+        "skeletalMovableTotalPenetration": 0.0429403464403571,
+        "maximumRelativeVolumeError": 0.012793619812139712
+      },
+      {
+        "iteration": 59,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008179676012625531,
+        "pairwiseMovableTotalPenetration": 9.307612277986458,
+        "skeletalMovableTotalPenetration": 0.04261437498757292,
+        "maximumRelativeVolumeError": 0.012921337102083123
+      },
+      {
+        "iteration": 60,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00813026527640049,
+        "pairwiseMovableTotalPenetration": 9.293157501479197,
+        "skeletalMovableTotalPenetration": 0.04228455172071341,
+        "maximumRelativeVolumeError": 0.013047251853803557
+      },
+      {
+        "iteration": 61,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00860854528496252,
+        "pairwiseMovableTotalPenetration": 9.27778974582675,
+        "skeletalMovableTotalPenetration": 0.04195244500256007,
+        "maximumRelativeVolumeError": 0.013173273025703054
+      },
+      {
+        "iteration": 62,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008489270247477613,
+        "pairwiseMovableTotalPenetration": 9.262512304289263,
+        "skeletalMovableTotalPenetration": 0.04161837161313389,
+        "maximumRelativeVolumeError": 0.013299241970272735
+      },
+      {
+        "iteration": 63,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008423631681554791,
+        "pairwiseMovableTotalPenetration": 9.247144175154352,
+        "skeletalMovableTotalPenetration": 0.04128275585010885,
+        "maximumRelativeVolumeError": 0.013427634494261306
+      },
+      {
+        "iteration": 64,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008316051881021193,
+        "pairwiseMovableTotalPenetration": 9.231891273171563,
+        "skeletalMovableTotalPenetration": 0.040946044149425764,
+        "maximumRelativeVolumeError": 0.013555928156173189
+      },
+      {
+        "iteration": 65,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008212274540437296,
+        "pairwiseMovableTotalPenetration": 9.21674789605093,
+        "skeletalMovableTotalPenetration": 0.04060860784421008,
+        "maximumRelativeVolumeError": 0.013684107680169345
+      },
+      {
+        "iteration": 66,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008111810837710717,
+        "pairwiseMovableTotalPenetration": 9.201722647278988,
+        "skeletalMovableTotalPenetration": 0.04027079521984622,
+        "maximumRelativeVolumeError": 0.01381216001574891
+      },
+      {
+        "iteration": 67,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.008015293245365861,
+        "pairwiseMovableTotalPenetration": 9.186935029222893,
+        "skeletalMovableTotalPenetration": 0.03993293206785126,
+        "maximumRelativeVolumeError": 0.013941654785521734
+      },
+      {
+        "iteration": 68,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007925050340492424,
+        "pairwiseMovableTotalPenetration": 9.172053342224466,
+        "skeletalMovableTotalPenetration": 0.03959665959487796,
+        "maximumRelativeVolumeError": 0.014069500328162109
+      },
+      {
+        "iteration": 69,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007830818306652795,
+        "pairwiseMovableTotalPenetration": 9.157336854623388,
+        "skeletalMovableTotalPenetration": 0.039260703486186405,
+        "maximumRelativeVolumeError": 0.014197178019571313
+      },
+      {
+        "iteration": 70,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007740164283800625,
+        "pairwiseMovableTotalPenetration": 9.142746067192332,
+        "skeletalMovableTotalPenetration": 0.03892535790982066,
+        "maximumRelativeVolumeError": 0.014326255227894592
+      },
+      {
+        "iteration": 71,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.00765543878840419,
+        "pairwiseMovableTotalPenetration": 9.127923513096501,
+        "skeletalMovableTotalPenetration": 0.0385922265415741,
+        "maximumRelativeVolumeError": 0.014453661835773323
+      },
+      {
+        "iteration": 72,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007890195868825443,
+        "pairwiseMovableTotalPenetration": 9.112881982312139,
+        "skeletalMovableTotalPenetration": 0.03826000499320156,
+        "maximumRelativeVolumeError": 0.014583316815460674
+      },
+      {
+        "iteration": 73,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007390235991636671,
+        "pairwiseMovableTotalPenetration": 9.098421258560379,
+        "skeletalMovableTotalPenetration": 0.03792988973266129,
+        "maximumRelativeVolumeError": 0.014711195901332944
+      },
+      {
+        "iteration": 74,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007394091438027965,
+        "pairwiseMovableTotalPenetration": 9.083823950395276,
+        "skeletalMovableTotalPenetration": 0.03760101327846538,
+        "maximumRelativeVolumeError": 0.014843494024928721
+      },
+      {
+        "iteration": 75,
+        "lineSearchScale": 0.32,
+        "maximumRequestedDelta": 0.007323953802157768,
+        "pairwiseMovableTotalPenetration": 9.069304026523534,
+        "skeletalMovableTotalPenetration": 0.03727497466767879,
+        "maximumRelativeVolumeError": 0.01497562080346177
+      },
+      {
+        "iteration": 76,
+        "lineSearchScale": 0.04,
+        "maximumRequestedDelta": 0.007251764613505078,
+        "pairwiseMovableTotalPenetration": 9.067475711551964,
+        "skeletalMovableTotalPenetration": 0.037234585147473825,
+        "maximumRelativeVolumeError": 0.014991920407744462
+      },
+      {
+        "iteration": 77,
+        "lineSearchScale": 0.01,
+        "maximumRequestedDelta": 0.007242108950665808,
+        "pairwiseMovableTotalPenetration": 9.067018949304442,
+        "skeletalMovableTotalPenetration": 0.037224493898718625,
+        "maximumRelativeVolumeError": 0.014995994267895631
+      },
+      {
+        "iteration": 78,
+        "lineSearchScale": 0.005,
+        "maximumRequestedDelta": 0.0072397001923691535,
+        "pairwiseMovableTotalPenetration": 9.066790607581082,
+        "skeletalMovableTotalPenetration": 0.03721944904168997,
+        "maximumRelativeVolumeError": 0.01499803106805075
+      },
+      {
+        "iteration": 79,
+        "lineSearchScale": 0.0025,
+        "maximumRequestedDelta": 0.007238496474266452,
+        "pairwiseMovableTotalPenetration": 9.066676446562658,
+        "skeletalMovableTotalPenetration": 0.03721692680585231,
+        "maximumRelativeVolumeError": 0.014999049435658574
+      },
+      {
+        "iteration": 80,
+        "lineSearchScale": 0.00125,
+        "maximumRequestedDelta": 0.0072378947801921495,
+        "pairwiseMovableTotalPenetration": 9.066619368513413,
+        "skeletalMovableTotalPenetration": 0.037215665736208436,
+        "maximumRelativeVolumeError": 0.014999558611348173
+      }
+    ],
+    "lineSearchHistory": [
+      {
+        "iteration": 1,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006708589748183522,
+            "maximumLocalTurningAngleChange": 0.0009107997967758852,
+            "maximumTotalTurningAngleChange": 0.0033882376661372067,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006699760910301457,
+            "maximumLocalTurningAngleChange": 0.0017979879859835735,
+            "maximumTotalTurningAngleChange": 0.006726029319049967,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.0066893764754196675,
+            "maximumLocalTurningAngleChange": 0.0028230618737889873,
+            "maximumTotalTurningAngleChange": 0.010034908803276994,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 4,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006679464600328335,
+            "maximumLocalTurningAngleChange": 0.003832206795909371,
+            "maximumTotalTurningAngleChange": 0.013319592343403384,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 5,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006670024274623061,
+            "maximumLocalTurningAngleChange": 0.004825965597764215,
+            "maximumTotalTurningAngleChange": 0.016576590836346626,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 6,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.0066610522968328905,
+            "maximumLocalTurningAngleChange": 0.00580484700487556,
+            "maximumTotalTurningAngleChange": 0.019773349771724118,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 7,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006652422804176772,
+            "maximumLocalTurningAngleChange": 0.006768885232166358,
+            "maximumTotalTurningAngleChange": 0.022937305818097768,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 8,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.00664411074082289,
+            "maximumLocalTurningAngleChange": 0.007718490093907987,
+            "maximumTotalTurningAngleChange": 0.025987057656702804,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 9,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006636229104149964,
+            "maximumLocalTurningAngleChange": 0.008649725225059038,
+            "maximumTotalTurningAngleChange": 0.029009738692580993,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 10,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006628814146974739,
+            "maximumLocalTurningAngleChange": 0.009561387724132037,
+            "maximumTotalTurningAngleChange": 0.032027868903004145,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 11,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006619070742789552,
+            "maximumLocalTurningAngleChange": 0.010457244932127283,
+            "maximumTotalTurningAngleChange": 0.03501465977304344,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 12,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006682745499743649,
+            "maximumLocalTurningAngleChange": 0.011336090703386162,
+            "maximumTotalTurningAngleChange": 0.037982887897820665,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 13,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006822616558677974,
+            "maximumLocalTurningAngleChange": 0.012210451319528734,
+            "maximumTotalTurningAngleChange": 0.040928612782797184,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 14,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.006961995376877856,
+            "maximumLocalTurningAngleChange": 0.013068759606572666,
+            "maximumTotalTurningAngleChange": 0.04385075898535755,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 15,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.0071009111359745455,
+            "maximumLocalTurningAngleChange": 0.01391179998908551,
+            "maximumTotalTurningAngleChange": 0.046746106331814745,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 16,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.007239363319187479,
+            "maximumLocalTurningAngleChange": 0.014740288720614225,
+            "maximumTotalTurningAngleChange": 0.04956226427728775,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 17,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.007377364843222143,
+            "maximumLocalTurningAngleChange": 0.015554830996919941,
+            "maximumTotalTurningAngleChange": 0.05234998088681615,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 18,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.007514935628677619,
+            "maximumLocalTurningAngleChange": 0.01635601990581026,
+            "maximumTotalTurningAngleChange": 0.05510652380905578,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 19,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.007654949872668045,
+            "maximumLocalTurningAngleChange": 0.01714440689826044,
+            "maximumTotalTurningAngleChange": 0.05786259845681456,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 20,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.00779448816246909,
+            "maximumLocalTurningAngleChange": 0.017921406855603228,
+            "maximumTotalTurningAngleChange": 0.06057975677175245,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 21,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.007933570674292836,
+            "maximumLocalTurningAngleChange": 0.0186873672373684,
+            "maximumTotalTurningAngleChange": 0.06325622490822835,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 22,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008072214381308979,
+            "maximumLocalTurningAngleChange": 0.019466786590892612,
+            "maximumTotalTurningAngleChange": 0.06589040552033563,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 23,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008210721714040591,
+            "maximumLocalTurningAngleChange": 0.02023515809418082,
+            "maximumTotalTurningAngleChange": 0.06849239411485333,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 24,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008348971112455215,
+            "maximumLocalTurningAngleChange": 0.02099280269917793,
+            "maximumTotalTurningAngleChange": 0.07106586015305677,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 25,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008487034116041594,
+            "maximumLocalTurningAngleChange": 0.021740031567738835,
+            "maximumTotalTurningAngleChange": 0.07360159962051857,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 26,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008621712926974863,
+            "maximumLocalTurningAngleChange": 0.022477145263081436,
+            "maximumTotalTurningAngleChange": 0.07608007296859828,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 27,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.00875630444990388,
+            "maximumLocalTurningAngleChange": 0.023211059745666715,
+            "maximumTotalTurningAngleChange": 0.07851067860141941,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 28,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.008890852608168989,
+            "maximumLocalTurningAngleChange": 0.023935540571742617,
+            "maximumTotalTurningAngleChange": 0.08089564802398425,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 29,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009025325086361254,
+            "maximumLocalTurningAngleChange": 0.02465083277780622,
+            "maximumTotalTurningAngleChange": 0.08334345738149763,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 30,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009159694373811778,
+            "maximumLocalTurningAngleChange": 0.02535717329568145,
+            "maximumTotalTurningAngleChange": 0.08577092741472717,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 31,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009293696570416461,
+            "maximumLocalTurningAngleChange": 0.026054791007502853,
+            "maximumTotalTurningAngleChange": 0.08818337557364671,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 32,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.00942755562298674,
+            "maximumLocalTurningAngleChange": 0.026746973481797734,
+            "maximumTotalTurningAngleChange": 0.09116556518734957,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 33,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009562435440622621,
+            "maximumLocalTurningAngleChange": 0.027430527693051363,
+            "maximumTotalTurningAngleChange": 0.09410612827192778,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 34,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009697437356651791,
+            "maximumLocalTurningAngleChange": 0.028105683376710627,
+            "maximumTotalTurningAngleChange": 0.09700680423029263,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 35,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009832079899499274,
+            "maximumLocalTurningAngleChange": 0.028772658004157084,
+            "maximumTotalTurningAngleChange": 0.09986850889971192,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 36,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.009966386692112309,
+            "maximumLocalTurningAngleChange": 0.029447318463672156,
+            "maximumTotalTurningAngleChange": 0.1027739344665426,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 37,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010100415374921927,
+            "maximumLocalTurningAngleChange": 0.03011288893259703,
+            "maximumTotalTurningAngleChange": 0.10563741010218283,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 38,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010234172698215489,
+            "maximumLocalTurningAngleChange": 0.030769711358388296,
+            "maximumTotalTurningAngleChange": 0.10846025107518326,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 39,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010367664151355153,
+            "maximumLocalTurningAngleChange": 0.031418087829220634,
+            "maximumTotalTurningAngleChange": 0.11124364622976816,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 40,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010500894583253118,
+            "maximumLocalTurningAngleChange": 0.032058274233604064,
+            "maximumTotalTurningAngleChange": 0.11398865219169504,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 41,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010629289588612381,
+            "maximumLocalTurningAngleChange": 0.03269050925741848,
+            "maximumTotalTurningAngleChange": 0.11669625214478112,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 42,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010757592648237028,
+            "maximumLocalTurningAngleChange": 0.033315057342650695,
+            "maximumTotalTurningAngleChange": 0.11936961084579267,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 43,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.010885791653528284,
+            "maximumLocalTurningAngleChange": 0.03393212868087117,
+            "maximumTotalTurningAngleChange": 0.12200947441982654,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 44,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011013876017035674,
+            "maximumLocalTurningAngleChange": 0.034541918154787604,
+            "maximumTotalTurningAngleChange": 0.12461653867563746,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 45,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011141073663551269,
+            "maximumLocalTurningAngleChange": 0.03514460712953563,
+            "maximumTotalTurningAngleChange": 0.12719145521564507,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 46,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011268157201975663,
+            "maximumLocalTurningAngleChange": 0.03574038304463109,
+            "maximumTotalTurningAngleChange": 0.1297360077075687,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 47,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011395141814480234,
+            "maximumLocalTurningAngleChange": 0.03632941932012279,
+            "maximumTotalTurningAngleChange": 0.132250695270533,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 48,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011522014662381197,
+            "maximumLocalTurningAngleChange": 0.03691187840820184,
+            "maximumTotalTurningAngleChange": 0.134735997495261,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 49,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01164883753243618,
+            "maximumLocalTurningAngleChange": 0.037612201128274195,
+            "maximumTotalTurningAngleChange": 0.13741781623302202,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 50,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011775731890671664,
+            "maximumLocalTurningAngleChange": 0.038487890116652934,
+            "maximumTotalTurningAngleChange": 0.14039712553310663,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 51,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.011903118075821555,
+            "maximumLocalTurningAngleChange": 0.03934909550090725,
+            "maximumTotalTurningAngleChange": 0.1433242724463826,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 52,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01203020684320041,
+            "maximumLocalTurningAngleChange": 0.040196622175906235,
+            "maximumTotalTurningAngleChange": 0.14620189176449894,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 53,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01215755112509704,
+            "maximumLocalTurningAngleChange": 0.041031176397008484,
+            "maximumTotalTurningAngleChange": 0.1490317313778856,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 54,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.012284977363425684,
+            "maximumLocalTurningAngleChange": 0.04185453411153418,
+            "maximumTotalTurningAngleChange": 0.15181983772102306,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 55,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.012412449290965126,
+            "maximumLocalTurningAngleChange": 0.04266713690229658,
+            "maximumTotalTurningAngleChange": 0.1545677121408283,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 56,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.012539935822181103,
+            "maximumLocalTurningAngleChange": 0.043469386221419035,
+            "maximumTotalTurningAngleChange": 0.1572767242307817,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 57,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01266741027696108,
+            "maximumLocalTurningAngleChange": 0.04426164842039791,
+            "maximumTotalTurningAngleChange": 0.1599481279164895,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 58,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.012793619812139712,
+            "maximumLocalTurningAngleChange": 0.045044259079903906,
+            "maximumTotalTurningAngleChange": 0.1625830753874868,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 59,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.012921337102083123,
+            "maximumLocalTurningAngleChange": 0.04581752725693673,
+            "maximumTotalTurningAngleChange": 0.1651826683579307,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 60,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013047251853803557,
+            "maximumLocalTurningAngleChange": 0.04658173739035769,
+            "maximumTotalTurningAngleChange": 0.1677478404389079,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 61,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013173273025703054,
+            "maximumLocalTurningAngleChange": 0.04733716501009562,
+            "maximumTotalTurningAngleChange": 0.17028020132770633,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 62,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013299241970272735,
+            "maximumLocalTurningAngleChange": 0.04808499299951914,
+            "maximumTotalTurningAngleChange": 0.17278420079612997,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 63,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013427634494261306,
+            "maximumLocalTurningAngleChange": 0.048825301695277726,
+            "maximumTotalTurningAngleChange": 0.17526005494557229,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 64,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013555928156173189,
+            "maximumLocalTurningAngleChange": 0.049558124996268674,
+            "maximumTotalTurningAngleChange": 0.17770775568276964,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 65,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013684107680169345,
+            "maximumLocalTurningAngleChange": 0.0502835577033557,
+            "maximumTotalTurningAngleChange": 0.18012758365990866,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 66,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01381216001574891,
+            "maximumLocalTurningAngleChange": 0.05100169745802409,
+            "maximumTotalTurningAngleChange": 0.18251983601178884,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 67,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.013941654785521734,
+            "maximumLocalTurningAngleChange": 0.051712643885300405,
+            "maximumTotalTurningAngleChange": 0.18488482269020912,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 68,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014069500328162109,
+            "maximumLocalTurningAngleChange": 0.0524165190447828,
+            "maximumTotalTurningAngleChange": 0.18722384275932974,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 69,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014197178019571313,
+            "maximumLocalTurningAngleChange": 0.05311340615988104,
+            "maximumTotalTurningAngleChange": 0.1895361747329612,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 70,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014326255227894592,
+            "maximumLocalTurningAngleChange": 0.053803405179460737,
+            "maximumTotalTurningAngleChange": 0.19182215288174248,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 71,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014453661835773323,
+            "maximumLocalTurningAngleChange": 0.054486637424854115,
+            "maximumTotalTurningAngleChange": 0.19408309169237797,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 72,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014583316815460674,
+            "maximumLocalTurningAngleChange": 0.055163184816996655,
+            "maximumTotalTurningAngleChange": 0.1963182866435509,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 73,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014711195901332944,
+            "maximumLocalTurningAngleChange": 0.05583362601267085,
+            "maximumTotalTurningAngleChange": 0.19853077591219814,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 74,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014843494024928721,
+            "maximumLocalTurningAngleChange": 0.0564973313313679,
+            "maximumTotalTurningAngleChange": 0.20071715641508953,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 75,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01497562080346177,
+            "maximumLocalTurningAngleChange": 0.057154382890036784,
+            "maximumTotalTurningAngleChange": 0.20287853591255123,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 76,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015106017637720535,
+            "maximumLocalTurningAngleChange": 0.05780490956690908,
+            "maximumTotalTurningAngleChange": 0.20501530343711943,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01504081922059106,
+            "maximumLocalTurningAngleChange": 0.05747969183249187,
+            "maximumTotalTurningAngleChange": 0.20394696492667885,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015008220012028634,
+            "maximumLocalTurningAngleChange": 0.05731704874958492,
+            "maximumTotalTurningAngleChange": 0.20341276170802408,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014991920407744462,
+            "maximumLocalTurningAngleChange": 0.05723571866530304,
+            "maximumTotalTurningAngleChange": 0.20314565162931647,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 77,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015122283932548802,
+            "maximumLocalTurningAngleChange": 0.05788544167102268,
+            "maximumTotalTurningAngleChange": 0.20527926664384744,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.0150571021701495,
+            "maximumLocalTurningAngleChange": 0.0575606256405025,
+            "maximumTotalTurningAngleChange": 0.20421250427467147,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015024511288946241,
+            "maximumLocalTurningAngleChange": 0.0573981835083877,
+            "maximumTotalTurningAngleChange": 0.2036790892121096,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015008215848346738,
+            "maximumLocalTurningAngleChange": 0.057316953924135786,
+            "maximumTotalTurningAngleChange": 0.20341237323267403,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.02,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000068128043657,
+            "maximumLocalTurningAngleChange": 0.05727633700384431,
+            "maximumTotalTurningAngleChange": 0.2032790131336083,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.01,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014995994267895631,
+            "maximumLocalTurningAngleChange": 0.05725602801182968,
+            "maximumTotalTurningAngleChange": 0.203212332557065,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 78,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015126349477788764,
+            "maximumLocalTurningAngleChange": 0.057905550524411945,
+            "maximumTotalTurningAngleChange": 0.2053451610869123,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015061171872841273,
+            "maximumLocalTurningAngleChange": 0.05758083470762994,
+            "maximumTotalTurningAngleChange": 0.20427879193169496,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015028583070368638,
+            "maximumLocalTurningAngleChange": 0.057418442707027076,
+            "maximumTotalTurningAngleChange": 0.20374557349742883,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015012288669132135,
+            "maximumLocalTurningAngleChange": 0.05733723819467547,
+            "maximumTotalTurningAngleChange": 0.2034789558374528,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.02,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015004141468514068,
+            "maximumLocalTurningAngleChange": 0.05729663381186799,
+            "maximumTotalTurningAngleChange": 0.20334564489943008,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.01,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000067868202724,
+            "maximumLocalTurningAngleChange": 0.057276331088978075,
+            "maximumTotalTurningAngleChange": 0.20327898890374346,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.005,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01499803106805075,
+            "maximumLocalTurningAngleChange": 0.05726617959468326,
+            "maximumTotalTurningAngleChange": 0.20324566077427103,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 79,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015128382122042143,
+            "maximumLocalTurningAngleChange": 0.05791560191436264,
+            "maximumTotalTurningAngleChange": 0.20537809626762654,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015063206595045984,
+            "maximumLocalTurningAngleChange": 0.05759093617762946,
+            "maximumTotalTurningAngleChange": 0.20431192361649975,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01503061883154698,
+            "maximumLocalTurningAngleChange": 0.057428569229363916,
+            "maximumTotalTurningAngleChange": 0.2037788034449115,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01501432494979905,
+            "maximumLocalTurningAngleChange": 0.05734737724624968,
+            "maximumTotalTurningAngleChange": 0.20351223491891873,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.02,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015006178008925732,
+            "maximumLocalTurningAngleChange": 0.05730677912882444,
+            "maximumTotalTurningAngleChange": 0.20337894854854616,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.01,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01500210453848519,
+            "maximumLocalTurningAngleChange": 0.0572864795388187,
+            "maximumTotalTurningAngleChange": 0.20331230483685253,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.005,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000067803269356,
+            "maximumLocalTurningAngleChange": 0.057276329611012575,
+            "maximumTotalTurningAngleChange": 0.20327898284939694,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.0025,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014999049435658574,
+            "maximumLocalTurningAngleChange": 0.057271254613915176,
+            "maximumTotalTurningAngleChange": 0.2032623218228088,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 80,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015129398412091705,
+            "maximumLocalTurningAngleChange": 0.057920626850549176,
+            "maximumTotalTurningAngleChange": 0.20539456084931296,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015064223923873844,
+            "maximumLocalTurningAngleChange": 0.057595986147138886,
+            "maximumTotalTurningAngleChange": 0.20432848642453327,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01503163667976815,
+            "maximumLocalTurningAngleChange": 0.05743363172168882,
+            "maximumTotalTurningAngleChange": 0.2037954153714226,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015015343057712438,
+            "maximumLocalTurningAngleChange": 0.05735244600151805,
+            "maximumTotalTurningAngleChange": 0.20352887140599368,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.02,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015007196246685875,
+            "maximumLocalTurningAngleChange": 0.057311851015946644,
+            "maximumTotalTurningAngleChange": 0.20339559731624218,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.01,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01500312284117315,
+            "maximumLocalTurningAngleChange": 0.05729155299196541,
+            "maximumTotalTurningAngleChange": 0.20332895974493687,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.005,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015001086138416046,
+            "maximumLocalTurningAngleChange": 0.05728140384719303,
+            "maximumTotalTurningAngleChange": 0.20329564082772766,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.0025,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000067787036848,
+            "maximumLocalTurningAngleChange": 0.05727632924161834,
+            "maximumTotalTurningAngleChange": 0.20327898133621813,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.00125,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.014999558611348173,
+            "maximumLocalTurningAngleChange": 0.057273791930533655,
+            "maximumTotalTurningAngleChange": 0.20327065158225965,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 81,
+        "attempts": [
+          {
+            "scale": 0.32,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015129906549095122,
+            "maximumLocalTurningAngleChange": 0.05792313912899501,
+            "maximumTotalTurningAngleChange": 0.20540279238817438,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.16,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015064732580221925,
+            "maximumLocalTurningAngleChange": 0.05759851094057185,
+            "maximumTotalTurningAngleChange": 0.20433676707013887,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.08,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015032145595784032,
+            "maximumLocalTurningAngleChange": 0.057436162775691316,
+            "maximumTotalTurningAngleChange": 0.20380372057307206,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.04,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015015852103566379,
+            "maximumLocalTurningAngleChange": 0.057354980186573715,
+            "maximumTotalTurningAngleChange": 0.20353718888633687,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.02,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015007705357458202,
+            "maximumLocalTurningAngleChange": 0.05731438676671845,
+            "maximumTotalTurningAngleChange": 0.203403920936072,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.01,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.01500363198440291,
+            "maximumLocalTurningAngleChange": 0.057294089525643646,
+            "maximumTotalTurningAngleChange": 0.20333728643457166,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.005,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015001595297874986,
+            "maximumLocalTurningAngleChange": 0.057283940772340905,
+            "maximumTotalTurningAngleChange": 0.2033039690522545,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.0025,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000576954612967,
+            "maximumLocalTurningAngleChange": 0.05727886636249825,
+            "maximumTotalTurningAngleChange": 0.20328731032822045,
+            "compartmentMaximumEscape": 0
+          },
+          {
+            "scale": 0.00125,
+            "accepted": false,
+            "rejectionReasons": [
+              "maximum-relative-volume-error"
+            ],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.015000067782979831,
+            "maximumLocalTurningAngleChange": 0.05727632914928342,
+            "maximumTotalTurningAngleChange": 0.20327898095797886,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      }
+    ],
+    "termination": {
+      "reason": "line-search-exhausted",
+      "attemptedIteration": 81,
+      "lineSearchAttempts": [
+        {
+          "scale": 0.32,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015129906549095122,
+          "maximumLocalTurningAngleChange": 0.05792313912899501,
+          "maximumTotalTurningAngleChange": 0.20540279238817438,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.16,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015064732580221925,
+          "maximumLocalTurningAngleChange": 0.05759851094057185,
+          "maximumTotalTurningAngleChange": 0.20433676707013887,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.08,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015032145595784032,
+          "maximumLocalTurningAngleChange": 0.057436162775691316,
+          "maximumTotalTurningAngleChange": 0.20380372057307206,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.04,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015015852103566379,
+          "maximumLocalTurningAngleChange": 0.057354980186573715,
+          "maximumTotalTurningAngleChange": 0.20353718888633687,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.02,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015007705357458202,
+          "maximumLocalTurningAngleChange": 0.05731438676671845,
+          "maximumTotalTurningAngleChange": 0.203403920936072,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.01,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.01500363198440291,
+          "maximumLocalTurningAngleChange": 0.057294089525643646,
+          "maximumTotalTurningAngleChange": 0.20333728643457166,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.005,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015001595297874986,
+          "maximumLocalTurningAngleChange": 0.057283940772340905,
+          "maximumTotalTurningAngleChange": 0.2033039690522545,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.0025,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015000576954612967,
+          "maximumLocalTurningAngleChange": 0.05727886636249825,
+          "maximumTotalTurningAngleChange": 0.20328731032822045,
+          "compartmentMaximumEscape": 0
+        },
+        {
+          "scale": 0.00125,
+          "accepted": false,
+          "rejectionReasons": [
+            "maximum-relative-volume-error"
+          ],
+          "nonPositiveCellCount": 0,
+          "maximumRelativeVolumeError": 0.015000067782979831,
+          "maximumLocalTurningAngleChange": 0.05727632914928342,
+          "maximumTotalTurningAngleChange": 0.20327898095797886,
+          "compartmentMaximumEscape": 0
+        }
+      ]
+    },
+    "outputCarrierSha256": "32af433618f8602cff85d57cf4cc20c2a4e0e0e277b18e5d1e3a91afbaa0ff8d"
+  },
+  "restoredMetrics": {
+    "pairwiseMovableTotalPenetration": 10.833062188386336,
+    "pairwiseMovableMaximumPenetration": 0.30407347222555475,
+    "pairwiseFixedTotalPenetration": 3.622951733035656,
+    "pairwiseFixedMaximumPenetration": 0.4493772408354102,
+    "skeletalTotalPenetration": 0.04502050065172025,
+    "maximumRelativeVolumeError": 0.006717929315619254
+  }
+}

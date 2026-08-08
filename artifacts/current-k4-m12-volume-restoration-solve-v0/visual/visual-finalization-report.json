@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-finalization-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "resultStatus": "m12-restoration-solve-first-formation-level-relief-provisional-knee-selection",
+  "visualStatus": "agent-inspected-m12-restoration-first-formation-level-relief",
+  "visualDisposition": "retain-all-nine-nondominated-provisionally-select-composition-preserving-knee-restore-e002-ramp-a090-a094-repay-6789-cn094",
+  "outputs": {
+    "frontierResult": {
+      "path": "../assay-result.json",
+      "sha256": "ef541a57b8b0aec74c2d44f8d5111187512664b9cd8e9f675638eaf2b3a7efb0"
+    },
+    "frontierRunReport": {
+      "path": "../run-report.json",
+      "sha256": "bd413f321142bdf5c7d382ba1d4376d8beb8dc72dd07979cff942bfa41f8ef2b"
+    },
+    "captureRouteVerification": {
+      "path": "capture-route-verification.json",
+      "sha256": "c0592e2497437cdbcacd44651ee0780b7e00b507bbe5604559cf18dd95f0b1d9"
+    },
+    "visualInspection": {
+      "path": "visual-inspection.json",
+      "sha256": "3cb260cc3a31af2c6d9d9e9bef776f83465f4d519fb18215f2f3a98dcf7fa8df"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "m12-restoration-solve-first-formation-level-relief-provisional-knee-selection",
+    "visualStatus": "agent-inspected-m12-restoration-first-formation-level-relief",
+    "visualDisposition": "retain-all-nine-nondominated-provisionally-select-composition-preserving-knee-restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "originalFrontierSha256": "997cb07275ef0fc7665075b618260589dac12bd1943cc3056f5eca6a758a29d3",
+    "finalizedFrontierSha256": "ef541a57b8b0aec74c2d44f8d5111187512664b9cd8e9f675638eaf2b3a7efb0",
+    "visualInspectionSha256": "3cb260cc3a31af2c6d9d9e9bef776f83465f4d519fb18215f2f3a98dcf7fa8df",
+    "captureRouteVerificationSha256": "c0592e2497437cdbcacd44651ee0780b7e00b507bbe5604559cf18dd95f0b1d9"
+  }
+}

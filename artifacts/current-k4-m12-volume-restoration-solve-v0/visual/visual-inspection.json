@@ -1,0 +1,92 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-visual-inspection.v0",
+  "status": "agent-inspected-m12-restoration-first-formation-level-relief",
+  "visualDisposition": "retain-all-nine-nondominated-provisionally-select-composition-preserving-knee-restore-e002-ramp-a090-a094-repay-6789-cn094",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "manifestIdentitySha256": "608128b089f1ac2b5d93d17761c6d980a68f6944f69581f3b88b20b0d73401d8",
+  "manifestFileSha256": "11bb519a71f89adf2e46dda4d21091d86fb607e591a76051f69cb5b3cadf4db0",
+  "frontierResultSha256": "997cb07275ef0fc7665075b618260589dac12bd1943cc3056f5eca6a758a29d3",
+  "captures": [
+    {
+      "id": "selected-reference",
+      "reportSha256": "8a8c62d2aad99f0d6a3f336b578b8fe1ff697d1b6858fec185215067192fc970",
+      "sha256": "a9f4c3bdedeb7d14aba2b29b6e1c1296012b9020600d521c2a65ee0819257f7e"
+    },
+    {
+      "id": "restore-e010-ramp-a092-a096-repay-789-cn098",
+      "reportSha256": "30304c4bee9a2d7bbb17032eafea97fc9551102aee9241685e2be6609f28a1b9",
+      "sha256": "b408a73f49bed7e20f63a22369980a1e0b291feb1a173aaa6fa07b90ac3fd824"
+    },
+    {
+      "id": "restore-e005-ramp-a092-a096-repay-789-cn098",
+      "reportSha256": "97344047d0cbd0678ff64a36e147c586207032944a91f9381ebac6fc1a00aad5",
+      "sha256": "fd67837ea2dfae56dca2f3d00d975be997bd0adabb4216c5e1b09d7a4db4fb5f"
+    },
+    {
+      "id": "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "reportSha256": "29fd5b1f8306bdedf9ea7c8728b663e1a5896e8234647a6ed528c9ddac4aa646",
+      "sha256": "4ca5eb08a144da4e5bab68b914a8b53334d443badec27ea0161e5ce6192a7825"
+    },
+    {
+      "id": "restore-e010-ramp-a090-a094-repay-6789-cn094",
+      "reportSha256": "c24fd8d5223127d1cb758b36d8e34be7ea82bf9c4f400fba7b9ce742e5d86937",
+      "sha256": "5ccf6ea4f6a8ab6a736770bc57f1b09624995305aa349dd93287ad8fa4ff8a64"
+    },
+    {
+      "id": "restore-e005-ramp-a090-a094-repay-6789-cn094",
+      "reportSha256": "86f4e092e5a8ef951d68da5e52f49cdcde6b9b8d594515507fafbf1099ee73df",
+      "sha256": "74a8ee738e1c51ffb1ea38638862eb3a0a2df2395603d7c9de896742ccecbe4a"
+    },
+    {
+      "id": "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "reportSha256": "f57fa53c84b6601f9229a8cacd4019e4554a1ac8ad1c73daa39cfcd60393ca69",
+      "sha256": "ac1e40389dd4ade8504174f21a416f40f6fbe79cdab04d7278d3ad414767da68"
+    },
+    {
+      "id": "restore-e010-reference-control",
+      "reportSha256": "3b782c707c4bbb1ffa16c2a3b248ec23a421e8cfcf1478e8f8b778814f96b89a",
+      "sha256": "6eef3ef38462e037bd118264aeff7b6448af4c3e78c9555979ebe70daefd114f"
+    },
+    {
+      "id": "restore-e005-reference-control",
+      "reportSha256": "05aa2a1573846f2c677b337242c728b9c42a9f8bb9b9a12bb97869267d85811e",
+      "sha256": "c59f2e9ac1b19c88dc213e46329c6731d44e21cec589545faf285372e857fb87"
+    },
+    {
+      "id": "restore-e002-reference-control",
+      "reportSha256": "bcb57cdc71131236f194af07fd9423b8c8abd2e12747d9bc5f9a1eb8bac38275",
+      "sha256": "20516d1f41bcd4e520b718aac0816b91431301ddfd8f213df703a8444c0dc9d6"
+    }
+  ],
+  "contactSheet": {
+    "reportSha256": "335cc0efdf663a631484cff7ec3d7cb5d394544f1c3ceb96fff919a7c873e4aa",
+    "sha256": "c47141e60b6ba951aa7d9a96770a0a788923150842b0aadd15cc034f3f413cbd",
+    "viewport": {
+      "width": 1600,
+      "height": 4200
+    }
+  },
+  "decision": {
+    "retainedNondominatedCandidateIds": [
+      "restore-e010-ramp-a092-a096-repay-789-cn098",
+      "restore-e005-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e010-ramp-a090-a094-repay-6789-cn094",
+      "restore-e005-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e010-reference-control",
+      "restore-e005-reference-control",
+      "restore-e002-reference-control"
+    ],
+    "selectedCandidateId": "restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "selectionBasis": "Provisional composition-preserving knee: matches the best movable maximum 0.1893 while holding fixed total 3.6666 below reference, unlike the reference-control e002 row whose fixed metrics worsen past reference.",
+    "inspectedAtFullResolution": [
+      "selected-reference",
+      "restore-e002-reference-control",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094"
+    ],
+    "inspectedContactSheet": true,
+    "visibleDelta": "First formation-level relief of the campaign: the M12 member narrows to a distinct slender volume, the serrated M12/M45 interpenetration texture largely disappears, and the members read as adjacent packed volumes; separation deepens monotonically e010->e005->e002 across both composed seeds and the reference control, with no fold, kink, attachment jump, or compartment escape in any of the ten inspected panels.",
+    "redirect": "Extend the solver budget past 96 for the e002 family (both e002 rows terminate at iteration-limit still moving), and assay iterated restoration->solve cycles as a headroom-refill loop; skeletal total also fell 0.045->0.030, reopening that axis."
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "schema": "kaminos.current-k4-m12-volume-restoration-solve-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requestedPath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-solve-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-solve-v0.json",
+      "sha256": "ef7c1b6fb7a14957364b29b7a5bf932fab6df1bbe2c206fec914eb1e5cadffe7",
+      "requested": {
+        "schema": "kaminos.current-k4-m12-volume-restoration-solve-config.v0",
+        "restoration": {
+          "constructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "targetRelativeVolumeErrors": [
+            0.01,
+            0.005,
+            0.002
+          ],
+          "maximumSectionAreaScaleReduction": 0.85,
+          "volumeRelativeTolerance": 1e-10
+        },
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 96,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "seedCandidateIds": [
+          "ramp-a092-a096-repay-789-cn098",
+          "ramp-a090-a094-repay-6789-cn094"
+        ],
+        "includeReferenceControl": true
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-m12-volume-restoration-solve-config.v0",
+        "restoration": {
+          "constructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "targetRelativeVolumeErrors": [
+            0.01,
+            0.005,
+            0.002
+          ],
+          "maximumSectionAreaScaleReduction": 0.85,
+          "volumeRelativeTolerance": 1e-10
+        },
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 96,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "seedCandidateIds": [
+          "ramp-a092-a096-repay-789-cn098",
+          "ramp-a090-a094-repay-6789-cn094"
+        ],
+        "includeReferenceControl": true
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 9,
+  "effectiveCandidateCount": 9,
+  "candidateCapApplied": false,
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "ef541a57b8b0aec74c2d44f8d5111187512664b9cd8e9f675638eaf2b3a7efb0"
+    },
+    "visualInspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "3cb260cc3a31af2c6d9d9e9bef776f83465f4d519fb18215f2f3a98dcf7fa8df"
+    },
+    "captureRouteVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "c0592e2497437cdbcacd44651ee0780b7e00b507bbe5604559cf18dd95f0b1d9",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "c47141e60b6ba951aa7d9a96770a0a788923150842b0aadd15cc034f3f413cbd",
+      "sizeBytes": 1290799,
+      "png": {
+        "width": 1600,
+        "height": 4200,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 318,
+        "idatBytes": 1286962
+      }
+    }
+  },
+  "visual": {
+    "status": "agent-inspected-m12-restoration-first-formation-level-relief",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "restore-e010-ramp-a092-a096-repay-789-cn098",
+      "restore-e005-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e010-ramp-a090-a094-repay-6789-cn094",
+      "restore-e005-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e010-reference-control",
+      "restore-e005-reference-control",
+      "restore-e002-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "restore-e010-ramp-a092-a096-repay-789-cn098",
+      "restore-e005-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e010-ramp-a090-a094-repay-6789-cn094",
+      "restore-e005-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e010-reference-control",
+      "restore-e005-reference-control",
+      "restore-e002-reference-control"
+    ],
+    "disposition": "retain-all-nine-nondominated-provisionally-select-composition-preserving-knee-restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "decision": {
+      "retainedNondominatedCandidateIds": [
+        "restore-e010-ramp-a092-a096-repay-789-cn098",
+        "restore-e005-ramp-a092-a096-repay-789-cn098",
+        "restore-e002-ramp-a092-a096-repay-789-cn098",
+        "restore-e010-ramp-a090-a094-repay-6789-cn094",
+        "restore-e005-ramp-a090-a094-repay-6789-cn094",
+        "restore-e002-ramp-a090-a094-repay-6789-cn094",
+        "restore-e010-reference-control",
+        "restore-e005-reference-control",
+        "restore-e002-reference-control"
+      ],
+      "selectedCandidateId": "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "selectionBasis": "Provisional composition-preserving knee: matches the best movable maximum 0.1893 while holding fixed total 3.6666 below reference, unlike the reference-control e002 row whose fixed metrics worsen past reference.",
+      "inspectedAtFullResolution": [
+        "selected-reference",
+        "restore-e002-reference-control",
+        "restore-e002-ramp-a090-a094-repay-6789-cn094"
+      ],
+      "inspectedContactSheet": true,
+      "visibleDelta": "First formation-level relief of the campaign: the M12 member narrows to a distinct slender volume, the serrated M12/M45 interpenetration texture largely disappears, and the members read as adjacent packed volumes; separation deepens monotonically e010->e005->e002 across both composed seeds and the reference control, with no fold, kink, attachment jump, or compartment escape in any of the ten inspected panels.",
+      "redirect": "Extend the solver budget past 96 for the e002 family (both e002 rows terminate at iteration-limit still moving), and assay iterated restoration->solve cycles as a headroom-refill loop; skeletal total also fell 0.045->0.030, reopening that axis."
+    },
+    "inspection": {
+      "path": "visual/visual-inspection.json",
+      "sha256": "3cb260cc3a31af2c6d9d9e9bef776f83465f4d519fb18215f2f3a98dcf7fa8df"
+    },
+    "routeVerification": {
+      "path": "visual/capture-route-verification.json",
+      "sha256": "c0592e2497437cdbcacd44651ee0780b7e00b507bbe5604559cf18dd95f0b1d9",
+      "status": "verified"
+    },
+    "contactSheet": {
+      "path": "contact-sheet.png",
+      "sha256": "c47141e60b6ba951aa7d9a96770a0a788923150842b0aadd15cc034f3f413cbd",
+      "sizeBytes": 1290799,
+      "png": {
+        "width": 1600,
+        "height": 4200,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 318,
+        "idatBytes": 1286962
+      }
+    },
+    "finalization": {
+      "originalFrontierSha256": "997cb07275ef0fc7665075b618260589dac12bd1943cc3056f5eca6a758a29d3",
+      "manifestIdentitySha256": "608128b089f1ac2b5d93d17761c6d980a68f6944f69581f3b88b20b0d73401d8"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "visual-frontier-finalized",
+    "resultStatus": "m12-restoration-solve-first-formation-level-relief-provisional-knee-selection",
+    "visualStatus": "agent-inspected-m12-restoration-first-formation-level-relief",
+    "visualDisposition": "retain-all-nine-nondominated-provisionally-select-composition-preserving-knee-restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "originalFrontierSha256": "997cb07275ef0fc7665075b618260589dac12bd1943cc3056f5eca6a758a29d3",
+    "finalizedFrontierSha256": "ef541a57b8b0aec74c2d44f8d5111187512664b9cd8e9f675638eaf2b3a7efb0",
+    "visualInspectionSha256": "3cb260cc3a31af2c6d9d9e9bef776f83465f4d519fb18215f2f3a98dcf7fa8df",
+    "captureRouteVerificationSha256": "c0592e2497437cdbcacd44651ee0780b7e00b507bbe5604559cf18dd95f0b1d9"
+  },
+  "resultStatus": "m12-restoration-solve-first-formation-level-relief-provisional-knee-selection"
+}

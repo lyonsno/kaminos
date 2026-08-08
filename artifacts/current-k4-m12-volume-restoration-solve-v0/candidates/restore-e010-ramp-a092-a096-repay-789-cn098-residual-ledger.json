@@ -1,0 +1,3126 @@
+{
+  "schema": "kaminos.muscle-compartment-ring-cage-contact-residual-ledger.v0",
+  "sourceCarrierSha256": "aba2b9cdc13e81f797c2448bfc72471289458fc513c4ad2ea334d8c068b09931",
+  "sourceInputSha256": "d3638918a8340847f61a13acae431eb5c71827cb99bfb2329a1e2dc1169af84d",
+  "orderedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "pairwise": {
+    "penetratingBoundaryNodeCount": 145,
+    "fixedPenetratingBoundaryNodeCount": 18,
+    "maximumPenetration": 0.4683207998814728,
+    "totalPenetration": 13.029752757972483,
+    "movableMaximumPenetration": 0.2249727019102705,
+    "movableTotalPenetration": 9.373538311448856,
+    "fixedMaximumPenetration": 0.4683207998814728,
+    "fixedTotalPenetration": 3.6562144465236344,
+    "contacts": [
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-34:section:0012:vertex:00",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.201284280616804,
+          -2.4713564425261247,
+          9.013963045043829
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.16604473870012,
+          -2.534220015186557,
+          8.980903710083828
+        ],
+        "penetration": 0.07928791654551612
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-34:section:0012:vertex:10",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.610982065671784,
+          -2.4932139203651444,
+          8.875226162259118
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.637356909036415,
+          -2.5272866216285363,
+          8.851907386867476
+        ],
+        "penetration": 0.048993332400021385
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-34:section:0012:vertex:11",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.419509705459598,
+          -2.4359010547091033,
+          8.976788606784735
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.428610746702192,
+          -2.5755324561535042,
+          8.887001752778879
+        ],
+        "penetration": 0.16625713931526614
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-34:cage",
+        "obstacleConstructionId": "muscle-34",
+        "nodeId": "muscle-12:section:0011:vertex:05",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          8.170871311039361,
+          -2.0170959969285014,
+          7.992428003176199
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.182163203070036,
+          -1.9934746333234736,
+          8.000386428982532
+        ],
+        "penetration": 0.02736443285559297
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:axis",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.17964307892934,
+          -2.9320228451222476,
+          8.573376044105736
+        ],
+        "penetration": 0.2620765561160171
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:00",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.201284280616804,
+          -2.4713564425261247,
+          9.013963045043829
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.022657300471543,
+          -2.4629495657159333,
+          9.178272996432622
+        ],
+        "penetration": 0.24284981725112434
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:01",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.01477911749797,
+          -2.590079841283305,
+          8.976788616325793
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.938163045771,
+          -2.606887914741854,
+          8.997915539323978
+        ],
+        "penetration": 0.08123349466587904
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:07",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.62455270050203,
+          -2.9741539387166953,
+          8.496189975674207
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.621398861027227,
+          -2.999046241261388,
+          8.462129510222656
+        ],
+        "penetration": 0.042304712931133984
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:08",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.729363694054978,
+          -2.8039743678390203,
+          8.59775241321529
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.805859547743058,
+          -2.890565534397602,
+          8.467021083725669
+        ],
+        "penetration": 0.17447156291948518
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:09",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.724396496961626,
+          -2.6279381034257985,
+          8.736489286458944
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.011284441962522,
+          -2.73496334030007,
+          8.574822319361644
+        ],
+        "penetration": 0.34625901080732946
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:10",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.610982065671784,
+          -2.4932139203651444,
+          8.875226162259118
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.87455485005855,
+          -2.3613020271329397,
+          9.239167107133593
+        ],
+        "penetration": 0.4683207998814728
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-34:cage",
+        "subjectConstructionId": "muscle-34",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-34:section:0012:vertex:11",
+        "sectionId": "muscle-34:section:0012",
+        "fixed": true,
+        "point": [
+          8.419509705459598,
+          -2.4359010547091033,
+          8.976788606784735
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.293018263680636,
+          -2.3447142929235296,
+          9.340765505690504
+        ],
+        "penetration": 0.39597259160871157
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-34:cage",
+        "obstacleConstructionId": "muscle-34",
+        "nodeId": "muscle-45:section:0011:vertex:04",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          7.816720300849197,
+          -2.119061599134624,
+          8.137787538891475
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.810288375774626,
+          -2.110919129876357,
+          8.144052210957453
+        ],
+        "penetration": 0.012120873808474156
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-34:cage",
+        "obstacleConstructionId": "muscle-34",
+        "nodeId": "muscle-45:section:0011:vertex:05",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          8.160381764569307,
+          -2.201937119436388,
+          7.918940104396294
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.24812030594277,
+          -2.0183979995758685,
+          7.980777450641161
+        ],
+        "penetration": 0.21262294690866393
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0000:vertex:00",
+        "sectionId": "muscle-12:section:0000",
+        "fixed": true,
+        "point": [
+          3.417840897701433,
+          10.625424951958104,
+          -3.560021652456419
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.3438675848935127,
+          10.603138920157564,
+          -3.5892196029646417
+        ],
+        "penetration": 0.08259078965038276
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0000:vertex:09",
+        "sectionId": "muscle-12:section:0000",
+        "fixed": true,
+        "point": [
+          3.9635224609603723,
+          10.492507779900514,
+          -3.888942957
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.947751502065696,
+          10.43098698447807,
+          -4.012461741199276
+        ],
+        "penetration": 0.13888996171046783
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0000:vertex:10",
+        "sectionId": "muscle-12:section:0000",
+        "fixed": true,
+        "point": [
+          3.847650961809944,
+          10.620106447379388,
+          -3.7244823047282094
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.810348462792599,
+          10.47459343238673,
+          -4.01663702390241
+        ],
+        "penetration": 0.3285116343464091
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0000:vertex:11",
+        "sectionId": "muscle-12:section:0000",
+        "fixed": true,
+        "point": [
+          3.647917647280367,
+          10.668757508951654,
+          -3.604088751419341
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.39285561291573,
+          10.591914653154177,
+          -3.7047640946372793
+        ],
+        "penetration": 0.28477533354100165
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:00",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.02446590413044,
+          10.121628035522104,
+          -2.1631377599096218
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.942900814451778,
+          10.225471649997942,
+          -2.0510103471458008
+        ],
+        "penetration": 0.1732308194716029
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:01",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          3.683296231259213,
+          9.909301280667263,
+          -2.2387742741689745
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.5927284155030983,
+          9.939561353363686,
+          -2.1874223581521264
+        ],
+        "penetration": 0.10842149477399665
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:02",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          3.487275129683627,
+          9.615916208983105,
+          -2.445416976081062
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.445664690227424,
+          9.612091623409311,
+          -2.4392418814943277
+        ],
+        "penetration": 0.042239648669285985
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:06",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.425530243830706,
+          9.091947012246383,
+          -3.292254285280142
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.424755902743612,
+          9.086051053916602,
+          -3.3004565786082942
+        ],
+        "penetration": 0.010131117637591771
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:07",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.7666999167019295,
+          9.304273767101224,
+          -3.2166177710207893
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.78905453901521,
+          9.282382791163796,
+          -3.2629062131123465
+        ],
+        "penetration": 0.05587095701279801
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:08",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.9627210182775165,
+          9.597658838785382,
+          -3.0099750691087017
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.051152120257316,
+          9.589254645819983,
+          -3.086103658779898
+        ],
+        "penetration": 0.11698825762480064
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:09",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.961069852690826,
+          9.893489934269736,
+          -2.7276959246430086
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.121287070795642,
+          9.945447550895414,
+          -2.785876298506099
+        ],
+        "penetration": 0.1781968204135983
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:10",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.762188848427384,
+          10.11249935042324,
+          -2.445416806423441
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.941033785485057,
+          10.248344602169423,
+          -2.4322534986453426
+        ],
+        "penetration": 0.2249727019102705
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0001:vertex:11",
+        "sectionId": "muscle-12:section:0001",
+        "fixed": false,
+        "point": [
+          4.41936800996947,
+          10.196003691052752,
+          -2.2387741762171016
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.42107076740579,
+          10.36729587137166,
+          -2.103031858096242
+        ],
+        "penetration": 0.21856323421407522
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:00",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          4.581263399369111,
+          9.377548325384984,
+          -0.8793137021519959
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.581074032651754,
+          9.404295164835998,
+          -0.8603631621521992
+        ],
+        "penetration": 0.03278036373586921
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:01",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          4.140998665431941,
+          9.103549848486146,
+          -0.9769193845999822
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.1053658792571355,
+          9.149336359516315,
+          -0.9289321650030932
+        ],
+        "penetration": 0.07529192046650998
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:02",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          3.8880418878966405,
+          8.724949126022914,
+          -1.2435829032654728
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.7867979254305966,
+          8.75546689655236,
+          -1.1821096723443199
+        ],
+        "penetration": 0.12231366388837776
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:03",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          3.89017263102377,
+          8.343191915833149,
+          -1.607851983671209
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.7353315934069244,
+          8.317585174559856,
+          -1.5743624017454545
+        ],
+        "penetration": 0.16047742590925534
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:04",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          4.146819963913135,
+          8.060569754091953,
+          -1.9721210198948451
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.059162784903689,
+          7.942444675684319,
+          -2.058646230361506
+        ],
+        "penetration": 0.17065733862627602
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:05",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          4.5892154409774335,
+          7.952811020801026,
+          -2.2387844178525937
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.58169595522807,
+          7.847080937032899,
+          -2.3544737080157296
+        ],
+        "penetration": 0.15690572053943821
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:06",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          5.098819551402104,
+          8.048789581523065,
+          -2.3363899354107387
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.152088985695992,
+          7.991913979942848,
+          -2.4355356186406447
+        ],
+        "penetration": 0.1261044534829257
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:07",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          5.539084285339274,
+          8.322788058421905,
+          -2.2387842529627524
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.60228611001156,
+          8.31556648600708,
+          -2.291699846316672
+        ],
+        "penetration": 0.08274467819773261
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:08",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          5.792041062874576,
+          8.70138878088514,
+          -1.9721207342972624
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.82520513935907,
+          8.713067409244957,
+          -1.9850172862419326
+        ],
+        "penetration": 0.037450866231606025
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:09",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          5.789910319747448,
+          9.083145991074904,
+          -1.607851653891526
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.793201358872095,
+          9.085899221984551,
+          -1.6077870119021482
+        ],
+        "penetration": 0.004291316528594421
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0002:vertex:11",
+        "sectionId": "muscle-12:section:0002",
+        "fixed": false,
+        "point": [
+          5.090867509793782,
+          9.473526886107024,
+          -0.9769192197101406
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.095119100113107,
+          9.48141590856676,
+          -0.9735766363837207
+        ],
+        "penetration": 0.009564808357079374
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:00",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          5.129450479205707,
+          8.500451142316336,
+          0.3769743071177294
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.129172405387037,
+          8.52478162507637,
+          0.39369094427397466
+        ],
+        "penetration": 0.029521105572090055
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:01",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          4.611867655434067,
+          8.178333731625145,
+          0.26222743552072136
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.579020132162113,
+          8.220402164517322,
+          0.3067932055529708
+        ],
+        "penetration": 0.06953287488427728
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:02",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          4.314487308518985,
+          7.733244110745229,
+          -0.05126675729434549
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.222574111900656,
+          7.758588188625121,
+          0.007443390705934139
+        ],
+        "penetration": 0.11196981501456761
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:03",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          4.316992262261244,
+          7.284443684150857,
+          -0.4795077555308275
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.181183936140399,
+          7.255480782473095,
+          -0.44412489807370076
+        ],
+        "penetration": 0.14329932909533408
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:04",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          4.618711316328529,
+          6.95218816371072,
+          -0.907748729545361
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.546971981152695,
+          6.842396094179786,
+          -0.9733739193763641
+        ],
+        "penetration": 0.14665434287368156
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:05",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          5.138799093842429,
+          6.825505147807536,
+          -1.2212428561848347
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.134792095106464,
+          6.724808017540318,
+          -1.3158669372452136
+        ],
+        "penetration": 0.13823778354503588
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:06",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          5.737898494824795,
+          6.9383392482473,
+          -1.3359896373843017
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.789097750375074,
+          6.880535624201258,
+          -1.4238502493039158
+        ],
+        "penetration": 0.11697055120263401
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:07",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          6.255481318596434,
+          7.260456658938487,
+          -1.221242765787294
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.318892653955843,
+          7.251512443172178,
+          -1.2722456854720134
+        ],
+        "penetration": 0.08186754096773445
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:08",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          6.552861665511517,
+          7.70554627981839,
+          -0.9077485729722274
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.588152799088136,
+          7.7178833434079195,
+          -0.9213885553613796
+        ],
+        "penetration": 0.0397959340474784
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:09",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          6.550356711769258,
+          8.154346706412776,
+          -0.47950757473574535
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.554204101375386,
+          8.157640556247088,
+          -0.47948468340078826
+        ],
+        "penetration": 0.005064817620167537
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0003:vertex:11",
+        "sectionId": "muscle-12:section:0003",
+        "fixed": false,
+        "point": [
+          5.7285498801880745,
+          8.613285242756103,
+          0.26222752591826226
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.728482567246056,
+          8.619174888213395,
+          0.26627409857598827
+        ],
+        "penetration": 0.00714613216495666
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:00",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          5.700116109413312,
+          7.5672665587096555,
+          1.6422350006010447
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.6706625397142805,
+          7.604388617804025,
+          1.6836161461489116
+        ],
+        "penetration": 0.06291231394786956
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:01",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          5.126309590078501,
+          7.210158427874428,
+          1.5150234172334283
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.066447470714476,
+          7.2262796815385775,
+          1.5537340860164146
+        ],
+        "penetration": 0.07308819352044907
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:02",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          4.796625579607373,
+          6.7167199090413945,
+          1.1674751370561383
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.723978293648612,
+          6.70125874442179,
+          1.1863729139457584
+        ],
+        "penetration": 0.07664073159840286
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:03",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          4.799402642363121,
+          6.219167454846277,
+          0.6927154410735054
+        ],
+        "closestObstacleBoundaryPoint": [
+          4.737907199513135,
+          6.1775801501486916,
+          0.6845999785252594
+        ],
+        "penetration": 0.07467967685855137
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:04",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          5.133896666623009,
+          5.850819843582779,
+          0.21795580642292064
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.097942977097727,
+          5.795086153027409,
+          0.1853467722369277
+        ],
+        "penetration": 0.07390711172779937
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:05",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          5.710480248713567,
+          5.710375520222889,
+          -0.12959230619209644
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.708666513151712,
+          5.651886320030904,
+          -0.1820204539051526
+        ],
+        "penetration": 0.07856835780648859
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:06",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          6.3746582834445835,
+          5.835466427792425,
+          -0.25680366066539073
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.412901546387071,
+          5.790675413234562,
+          -0.31860746517960564
+        ],
+        "penetration": 0.0853726677458436
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:07",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          6.9484648027793945,
+          6.192574558627652,
+          -0.1295920772977746
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.01685339985719,
+          6.1795472596005165,
+          -0.18044225464400243
+        ],
+        "penetration": 0.08621166548880915
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:08",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          7.278148813250522,
+          6.686013077460686,
+          0.21795620287951503
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.348429962272423,
+          6.706564301688005,
+          0.19450512465685904
+        ],
+        "penetration": 0.07688787807506046
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:09",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          7.275371750494775,
+          7.183565531655804,
+          0.6927158988621486
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.3244376862518,
+          7.221880244709629,
+          0.6955945692881043
+        ],
+        "penetration": 0.062319900766374746
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:10",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          6.940877726234886,
+          7.551913142919301,
+          1.1674755335127338
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.96469824322922,
+          7.594160530386244,
+          1.186975375738415
+        ],
+        "penetration": 0.05227334525822702
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0004:vertex:11",
+        "sectionId": "muscle-12:section:0004",
+        "fixed": false,
+        "point": [
+          6.3642941441443295,
+          7.692357466279192,
+          1.51502364612775
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.364303567386136,
+          7.73497222610371,
+          1.5467513578463112
+        ],
+        "penetration": 0.05312876372168844
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:00",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          6.257647160004606,
+          6.581012561843206,
+          2.9103234714684314
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.227805947026014,
+          6.617800852197989,
+          2.9541966504095534
+        ],
+        "penetration": 0.06456571946212063
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:01",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          5.649567352312339,
+          6.202574450298854,
+          2.775513595319549
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.602281111826427,
+          6.215492175699346,
+          2.8058666590079473
+        ],
+        "penetration": 0.05765556906393328
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:02",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          5.300191420936113,
+          5.679662972421847,
+          2.4072063806480513
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.2529779829454375,
+          5.670772275646995,
+          2.4184184408835656
+        ],
+        "penetration": 0.04933420224110805
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:03",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          5.303134364543059,
+          5.152391836422293,
+          1.9040894481917194
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.267680680105897,
+          5.129880353690117,
+          1.8983844662748788
+        ],
+        "penetration": 0.04238251306426222
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:04",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          5.657607623770326,
+          4.762042917383516,
+          1.400972573700657
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.636782251753972,
+          4.731088788878859,
+          1.3815591757629524
+        ],
+        "penetration": 0.04205632188613315
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:05",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          6.268630375069539,
+          4.6132098929283165,
+          1.0326655173932102
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.2674142402581285,
+          4.57506447474367,
+          0.9983089766422022
+        ],
+        "penetration": 0.05135098640471018
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:06",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          6.972479565673033,
+          4.7457724517665465,
+          0.8978558575736472
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.003179502367838,
+          4.708831010898565,
+          0.8505758521251026
+        ],
+        "penetration": 0.06739847981729312
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:07",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          7.5805593733653005,
+          5.124210563310901,
+          1.0326657337225287
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.647553476311297,
+          5.107621448180506,
+          0.98755722037928
+        ],
+        "penetration": 0.0824511161015202
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:08",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          7.929935304741526,
+          5.647122041187908,
+          1.4009729483940265
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.014598905922737,
+          5.665228795781465,
+          1.3788678443505233
+        ],
+        "penetration": 0.08935555691537388
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:09",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          7.92699236113458,
+          6.17439317718746,
+          1.904089880850356
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.998689647987395,
+          6.222303012388043,
+          1.9139556851407349
+        ],
+        "penetration": 0.08679393610902719
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:10",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          7.5725191019073135,
+          6.564742096226238,
+          2.4072067553414214
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.6109107425064755,
+          6.62448196451312,
+          2.44193717895003
+        ],
+        "penetration": 0.07905044120599604
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0005:vertex:11",
+        "sectionId": "muscle-12:section:0005",
+        "fixed": false,
+        "point": [
+          6.9614963506081,
+          6.713575120681438,
+          2.775513811648867
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.962636650088088,
+          6.76784095961579,
+          2.821480792942449
+        ],
+        "penetration": 0.07112696343439404
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:00",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          6.754883613062309,
+          5.52145654673846,
+          4.14926259799681
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.731508984215682,
+          5.549754816941736,
+          4.184855176441475
+        ],
+        "penetration": 0.05112726288933156
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:01",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          6.135278940251664,
+          5.135845868094803,
+          4.01189774356774
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.0960973175067465,
+          5.146974978413308,
+          4.036525517138272
+        ],
+        "penetration": 0.04759815005278927
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:02",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          5.779281326476151,
+          4.603023659926786,
+          3.636610063575137
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.7336163833583145,
+          4.595906417853862,
+          3.6460850783701595
+        ],
+        "penetration": 0.047177516573530656
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:03",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          5.782280044854328,
+          4.065759202622402,
+          3.1239575888023716
+        ],
+        "closestObstacleBoundaryPoint": [
+          5.740662529413659,
+          4.041500567114522,
+          3.1157427311674355
+        ],
+        "penetration": 0.04886699166227467
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:04",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          6.143471591218433,
+          3.668012073638297,
+          2.6113051358626245
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.116828632440532,
+          3.6306974518441044,
+          2.5855642933349157
+        ],
+        "penetration": 0.052581548342749224
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:05",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          6.7660749824072575,
+          3.5163582949775662,
+          2.236017515518934
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.764502157543935,
+          3.4731570537582384,
+          2.1961431127245143
+        ],
+        "penetration": 0.058811470132558955
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:06",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          7.483264142546874,
+          3.651433374161479,
+          2.0986527425717907
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.514148752432064,
+          3.6135469470175052,
+          2.052799942610436
+        ],
+        "penetration": 0.06702029359673077
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:07",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          8.102868815357514,
+          4.037044052805139,
+          2.236017597000865
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.164591056795228,
+          4.018671486926968,
+          2.198255648286221
+        ],
+        "penetration": 0.07465354000829799
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:08",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          8.458866429133026,
+          4.569866260973151,
+          2.6113052769934684
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.53483277050681,
+          4.580681888422508,
+          2.596489558729382
+        ],
+        "penetration": 0.07814965339988598
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:09",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          8.45586771075485,
+          5.107130718277539,
+          3.1239577517662336
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.520452671267401,
+          5.143654764197865,
+          3.137492407160827
+        ],
+        "penetration": 0.07542154832306366
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:10",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          8.094676164390743,
+          5.504877847261643,
+          3.636610204705981
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.12924634557072,
+          5.552060637473774,
+          3.670497979465811
+        ],
+        "penetration": 0.06759951477038484
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0006:vertex:11",
+        "sectionId": "muscle-12:section:0006",
+        "fixed": false,
+        "point": [
+          7.472072773201927,
+          5.656531625922372,
+          4.011897825049671
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.473875982716977,
+          5.698689314083501,
+          4.052132669242772
+        ],
+        "penetration": 0.05830407295283337
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:00",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          7.162353521076926,
+          4.3686480943752635,
+          5.3209083768422225
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.138749629226791,
+          4.396320540231265,
+          5.358989381299862
+        ],
+        "penetration": 0.05265995509520469
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:01",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          6.554273709117721,
+          3.9902099937857374,
+          5.1860984891876205
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.511244733416471,
+          4.002350607152173,
+          5.2132444627112955
+        ],
+        "penetration": 0.05230479061577538
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:02",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          6.204897770937294,
+          3.4672985333776563,
+          4.817791256168735
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.148849117234932,
+          3.459674797530099,
+          4.828393342725958
+        ],
+        "penetration": 0.05754977992562172
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:03",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          6.207840707025959,
+          2.940027416680339,
+          4.314674303439516
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.152293104245342,
+          2.909658827626796,
+          4.302301610070608
+        ],
+        "penetration": 0.0645048131303171
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:04",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          6.562313960035379,
+          2.549678513605087,
+          3.81155741218217
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.527021647319354,
+          2.502199214421875,
+          3.7766892421564062
+        ],
+        "penetration": 0.06867037548113594
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:05",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          7.173336708083249,
+          2.4008454974972886,
+          3.4432503471075524
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.17149706362364,
+          2.350315952195155,
+          3.396611890635324
+        ],
+        "penetration": 0.06878782495681977
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:06",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          7.877185899273097,
+          2.5334080548301174,
+          3.3084406888690894
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.908706828035886,
+          2.4936816043572607,
+          3.2641520880296264
+        ],
+        "penetration": 0.0673293396786158
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:07",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          8.4852657112323,
+          2.911846155419637,
+          3.443250576523691
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.541767645761938,
+          2.8917851582049128,
+          3.4126679876022723
+        ],
+        "penetration": 0.06730681213649327
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:08",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          8.834641649412728,
+          3.4347576158277175,
+          3.811557809542577
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.902844892987838,
+          3.43916636267738,
+          3.803155097581445
+        ],
+        "penetration": 0.06886018480407997
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:09",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          8.831698713324062,
+          3.9620287325250354,
+          4.314674762271793
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.892544858683461,
+          3.989753786734396,
+          4.3321094832633
+        ],
+        "penetration": 0.0691006623127504
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:10",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          8.47722546031464,
+          4.352377635600294,
+          4.8177916535291425
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.512271272004892,
+          4.393090780051033,
+          4.854961014452466
+        ],
+        "penetration": 0.06532480722928745
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0007:vertex:11",
+        "sectionId": "muscle-12:section:0007",
+        "fixed": false,
+        "point": [
+          7.866202712266776,
+          4.501210651708091,
+          5.186098718603758
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.86909582322378,
+          4.540268958013478,
+          5.2294047569775515
+        ],
+        "penetration": 0.058389505410539076
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:00",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          7.474902181395163,
+          3.115165890684086,
+          6.390972066462011
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.443429808148488,
+          3.150668636727594,
+          6.445049833883895
+        ],
+        "penetration": 0.07193997625620482
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:01",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          6.901095666721632,
+          2.7580577478816344,
+          6.263760495663427
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.849223144115086,
+          2.7724049757747142,
+          6.296840397009077
+        ],
+        "penetration": 0.06317342339006567
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:02",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          6.571411664344474,
+          2.2646192082683645,
+          5.91621223731137
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.514706408868522,
+          2.2579485172877636,
+          5.925975335126231
+        ],
+        "penetration": 0.057924970398734225
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:03",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          6.574188736458113,
+          1.7670667300480438,
+          5.441452566562118
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.526723371720315,
+          1.7429854837974261,
+          5.42957082179652
+        ],
+        "penetration": 0.05453478824887757
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:04",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          6.908682768832372,
+          1.3987190979519128,
+          4.966692953791797
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.883116491480679,
+          1.3662419704583688,
+          4.940675565304485
+        ],
+        "penetration": 0.048839562360399276
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:05",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          7.485266355619541,
+          1.2582747625340451,
+          4.619144853841125
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.484022190835055,
+          1.2290402894171222,
+          4.591274764092257
+        ],
+        "penetration": 0.04040970510960209
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:06",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          8.149444390370965,
+          1.3833656700511832,
+          4.49193349942286
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.1657782352222,
+          1.362538286133639,
+          4.469555511114484
+        ],
+        "penetration": 0.034660478490679096
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:07",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          8.723250905044498,
+          1.7404738128536346,
+          4.6191450702214425
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.755468299730396,
+          1.7277471825535715,
+          4.603289940171644
+        ],
+        "penetration": 0.038096099380873695
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:08",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          9.052934907421653,
+          2.233912352466907,
+          4.966693328573499
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.104379271258733,
+          2.2340752802166124,
+          4.963277644700471
+        ],
+        "penetration": 0.051557889913900784
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:09",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          9.050157835308015,
+          2.7314648306872256,
+          5.4414529993227525
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.11128211691572,
+          2.7536582457450716,
+          5.4629319624864605
+        ],
+        "penetration": 0.06848409547169212
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:10",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          8.715663802933758,
+          3.099812462783357,
+          5.916212612093075
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.759811151803236,
+          3.1433347501475777,
+          5.966105599727211
+        ],
+        "penetration": 0.07957693211400683
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0008:vertex:11",
+        "sectionId": "muscle-12:section:0008",
+        "fixed": false,
+        "point": [
+          8.139080216146585,
+          3.2402567982012243,
+          6.263760712043744
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.144505079080645,
+          3.2889735589936193,
+          6.326733738727177
+        ],
+        "penetration": 0.07980196745462552
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:00",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          7.712780394855362,
+          1.7769082809304058,
+          7.343603321923678
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.666017790732562,
+          1.82432659409837,
+          7.436582361442859
+        ],
+        "penetration": 0.11436931125940356
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:01",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          7.195197571266608,
+          1.4547908697697172,
+          7.228856450819797
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.123733214735244,
+          1.4701886404390565,
+          7.279799964801171
+        ],
+        "penetration": 0.08910380021524239
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:02",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          6.8978172238861335,
+          1.009701250084666,
+          6.915362256749812
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.839733300429459,
+          1.001177128567018,
+          6.926925523093594
+        ],
+        "penetration": 0.05983403663723277
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:03",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          6.900322176639427,
+          0.5609008260293383,
+          6.487121255846623
+        ],
+        "closestObstacleBoundaryPoint": [
+          6.872134265500726,
+          0.5464137196432983,
+          6.480195557900114
+        ],
+        "penetration": 0.03244071327591299
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:04",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          7.202041229459162,
+          0.22864530879210387,
+          6.058880278468135
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.197821220658515,
+          0.2233598629692621,
+          6.0545560374464475
+        ],
+        "penetration": 0.008027669165914984
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:07",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          8.83881122959017,
+          0.5369138095059705,
+          5.745386236464205
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.84176276501976,
+          0.53570345185765,
+          5.743988315097254
+        ],
+        "penetration": 0.0034829170499958676
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:08",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          9.136191576970646,
+          0.982003429191021,
+          6.05888043053419
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.163283083358964,
+          0.970712594429963,
+          6.045690766304093
+        ],
+        "penetration": 0.03217763059164731
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:09",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          9.13368662421735,
+          1.430803853246349,
+          6.487121431437378
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.203391944714081,
+          1.4287284000404767,
+          6.484615118633377
+        ],
+        "penetration": 0.06978123541062575
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:10",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          8.831967571397616,
+          1.7630593704835835,
+          6.915362408815867
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.929855504274961,
+          1.7920240926287943,
+          6.954368293665436
+        ],
+        "penetration": 0.10928157019757118
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0009:vertex:11",
+        "sectionId": "muscle-12:section:0009",
+        "fixed": false,
+        "point": [
+          8.311879795055571,
+          1.8897423833782225,
+          7.228856538615174
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.323596664632127,
+          1.954511305301676,
+          7.334795378197963
+        ],
+        "penetration": 0.12472103275690266
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:00",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          7.935097083972949,
+          0.4114543469231184,
+          8.204410668304224
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.906068013914231,
+          0.4415638324547351,
+          8.262917066103816
+        ],
+        "penetration": 0.07191847197303834
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:01",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          7.4948323670129575,
+          0.1374558264375742,
+          8.106805031634813
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.450339099869302,
+          0.14754885681058272,
+          8.138924409719019
+        ],
+        "penetration": 0.05579582898159441
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:02",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          7.241875599742444,
+          -0.24114492237917737,
+          7.840141540648114
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.206302975346552,
+          -0.24736224935087264,
+          7.848309559412737
+        ],
+        "penetration": 0.03702409069272938
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:03",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          7.244006343671529,
+          -0.6229021346278706,
+          7.475872462404868
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.2323141950088825,
+          -0.6288253815826838,
+          7.472817337310523
+        ],
+        "penetration": 0.01345826824592349
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:08",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          9.145874704088842,
+          -0.26470508617965055,
+          7.11160351916007
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.161286586379266,
+          -0.27069272328475996,
+          7.103561176410278
+        ],
+        "penetration": 0.01838633162818238
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:09",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          9.143743960159757,
+          0.1170521260690422,
+          7.475872597403316
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.201441096955724,
+          0.11526502281719031,
+          7.4736115402029615
+        ],
+        "penetration": 0.05776907228049147
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:10",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          8.887096636146149,
+          0.399674265022882,
+          7.840141657560199
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.934693453558689,
+          0.439053445591032,
+          7.8984242066546715
+        ],
+        "penetration": 0.08492957328852647
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0010:vertex:11",
+        "sectionId": "muscle-12:section:0010",
+        "fixed": false,
+        "point": [
+          8.444701175257071,
+          0.5074329567860303,
+          8.10680509913404
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.452372692838802,
+          0.5510959859493147,
+          8.178449874285773
+        ],
+        "penetration": 0.08425132701781703
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:03",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          7.6291694603945315,
+          -1.7145822198029186,
+          8.481349730236541
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.608984198514478,
+          -1.7180569611136929,
+          8.486031896948727
+        ],
+        "penetration": 0.0210105047408157
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:04",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          7.82805046736357,
+          -1.93359164290272,
+          8.199070619312597
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.735950498612202,
+          -1.9809029185494351,
+          8.174468213522324
+        ],
+        "penetration": 0.10642386676865145
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:05",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          8.170871311039361,
+          -2.0170959969285014,
+          7.992428003176199
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.08561988339994,
+          -2.1189430404219163,
+          7.89712415036115
+        ],
+        "penetration": 0.16347308813471934
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:06",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          8.565773423210418,
+          -1.9427203576545762,
+          7.916791603942945
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.639537867606526,
+          -2.034921934934404,
+          7.800298027453655
+        ],
+        "penetration": 0.16587066489654126
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:07",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          8.906943101831164,
+          -1.730393617560937,
+          7.992428133705787
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.013344304356023,
+          -1.7724412196245247,
+          7.935402412962865
+        ],
+        "penetration": 0.1278325058984752
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0011:vertex:08",
+        "sectionId": "muscle-12:section:0011",
+        "fixed": false,
+        "point": [
+          9.102964207033184,
+          -1.4370085551872085,
+          8.199070845396474
+        ],
+        "closestObstacleBoundaryPoint": [
+          9.16937697942162,
+          -1.439528535258177,
+          8.196600032573933
+        ],
+        "penetration": 0.06650647751821244
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0012:vertex:05",
+        "sectionId": "muscle-12:section:0012",
+        "fixed": true,
+        "point": [
+          8.412993268562929,
+          -2.833019740932671,
+          9.28584828228132
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.347008687843381,
+          -2.7880792506424603,
+          9.469073209815589
+        ],
+        "penetration": 0.1998624192543388
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0012:vertex:06",
+        "sectionId": "muscle-12:section:0012",
+        "fixed": true,
+        "point": [
+          8.643070040933914,
+          -2.7896872424545807,
+          9.24178124477645
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.678231351923023,
+          -2.713623486251462,
+          9.471744697521471
+        ],
+        "penetration": 0.24475539298779933
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-12:cage",
+        "subjectConstructionId": "muscle-12",
+        "obstacleCageId": "muscle-45:cage",
+        "obstacleConstructionId": "muscle-45",
+        "nodeId": "muscle-12:section:0012:vertex:07",
+        "sectionId": "muscle-12:section:0012",
+        "fixed": true,
+        "point": [
+          8.841841369473062,
+          -2.66598205000184,
+          9.285848406183469
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.881569670178443,
+          -2.646602417693071,
+          9.338572257597438
+        ],
+        "penetration": 0.06880198059127751
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0001:vertex:04",
+        "sectionId": "muscle-45:section:0001",
+        "fixed": false,
+        "point": [
+          3.541253603307596,
+          9.564429838348484,
+          -3.2964796762168302
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.458137117597672,
+          9.507025210852433,
+          -3.310501741403172
+        ],
+        "penetration": 0.10198166387551491
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0001:vertex:05",
+        "sectionId": "muscle-45:section:0001",
+        "fixed": false,
+        "point": [
+          3.8936015779593838,
+          9.472756135236228,
+          -3.528283398135048
+        ],
+        "closestObstacleBoundaryPoint": [
+          3.8933082711209046,
+          9.40243933048059,
+          -3.598959485100382
+        ],
+        "penetration": 0.0996977849737669
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0010:vertex:05",
+        "sectionId": "muscle-45:section:0010",
+        "fixed": false,
+        "point": [
+          7.8754012946709695,
+          -0.9402110910858985,
+          6.825510293324233
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.873840660727812,
+          -0.9422575630126193,
+          6.823748176131732
+        ],
+        "penetration": 0.0031190836236784456
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0010:vertex:06",
+        "sectionId": "muscle-45:section:0010",
+        "fixed": false,
+        "point": [
+          8.409637547915993,
+          -0.8584946180138203,
+          6.718504701636665
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.409554883457819,
+          -0.8729811196772713,
+          6.703828075602892
+        ],
+        "penetration": 0.020622049257846223
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0010:vertex:07",
+        "sectionId": "muscle-45:section:0010",
+        "fixed": false,
+        "point": [
+          8.88574286292595,
+          -0.6043672850096183,
+          6.823950456639495
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.894876408135628,
+          -0.6076621890327694,
+          6.819964388341122
+        ],
+        "penetration": 0.010496036447074532
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0011:vertex:00",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          8.240727856664346,
+          -1.172871289217928,
+          9.029012594599655
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.24888058225945,
+          -1.085200968871167,
+          9.157787427581322
+        ],
+        "penetration": 0.1559984282414061
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0011:vertex:01",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          7.875537722452374,
+          -1.3657331270816622,
+          8.950417001804842
+        ],
+        "closestObstacleBoundaryPoint": [
+          7.802346670746965,
+          -1.3521819998013578,
+          9.000606492830057
+        ],
+        "penetration": 0.08977498599098202
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0011:vertex:10",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          8.993644981266044,
+          -1.1922461794681125,
+          8.729190721544423
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.999477945010604,
+          -1.1904581020320286,
+          8.731913062184091
+        ],
+        "penetration": 0.006680705465829641
+      },
+      {
+        "kind": "pairwise-boundary-inside-cage",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "obstacleCageId": "muscle-12:cage",
+        "obstacleConstructionId": "muscle-12",
+        "nodeId": "muscle-45:section:0011:vertex:11",
+        "sectionId": "muscle-45:section:0011",
+        "fixed": false,
+        "point": [
+          8.649983517545932,
+          -1.1093706591663486,
+          8.948038156039607
+        ],
+        "closestObstacleBoundaryPoint": [
+          8.704053545557615,
+          -1.059097822822532,
+          9.017425256167781
+        ],
+        "penetration": 0.10131878240204885
+      }
+    ]
+  },
+  "skeletal": {
+    "penetratingBoundaryNodeCount": 2,
+    "fixedPenetratingBoundaryNodeCount": 0,
+    "maximumPenetration": 0.030940048616949933,
+    "totalPenetration": 0.04442448559305959,
+    "movableMaximumPenetration": 0.030940048616949933,
+    "movableTotalPenetration": 0.04442448559305959,
+    "fixedMaximumPenetration": 0,
+    "fixedTotalPenetration": 0,
+    "penetratingAxisSampleCount": 2,
+    "axisSampleCount": 132,
+    "contacts": [
+      {
+        "kind": "capsule-axis-inside-cage-clearance",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "nodeId": null,
+        "sectionId": null,
+        "fixed": false,
+        "obstacleId": "agent-authored-k4-central-pressure-capsule",
+        "axisSampleIndex": 0,
+        "axisSampleAmount": 0,
+        "point": [
+          4.816881333826592,
+          5.7143891565462095,
+          0.5600337402269847
+        ],
+        "closestCageBoundaryPoint": [
+          4.986879554365268,
+          5.829353249520173,
+          0.5824681537920644
+        ],
+        "penetration": 0.030940048616949933
+      },
+      {
+        "kind": "capsule-axis-inside-cage-clearance",
+        "subjectCageId": "muscle-45:cage",
+        "subjectConstructionId": "muscle-45",
+        "nodeId": null,
+        "sectionId": null,
+        "fixed": false,
+        "obstacleId": "agent-authored-k4-central-pressure-capsule",
+        "axisSampleIndex": 1,
+        "axisSampleAmount": 0.03125,
+        "point": [
+          4.865566636806777,
+          5.583941221603407,
+          0.6989628909167502
+        ],
+        "closestCageBoundaryPoint": [
+          5.0499387889495155,
+          5.708625922264289,
+          0.7232942109620263
+        ],
+        "penetration": 0.013484436976109654
+      }
+    ]
+  }
+}

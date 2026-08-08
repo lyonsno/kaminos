@@ -1,0 +1,585 @@
+{
+  "schema": "kaminos.current-k4-longitudinal-volume-frontier-capture-verification.v0",
+  "status": "verified",
+  "manifest": {
+    "identitySha256": "608128b089f1ac2b5d93d17761c6d980a68f6944f69581f3b88b20b0d73401d8",
+    "fileSha256": "11bb519a71f89adf2e46dda4d21091d86fb607e591a76051f69cb5b3cadf4db0"
+  },
+  "frontier": {
+    "originalSha256": "997cb07275ef0fc7665075b618260589dac12bd1943cc3056f5eca6a758a29d3"
+  },
+  "witnessRoute": {
+    "requested": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+    "effective": "current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "focus": {
+    "sectionId": "muscle-45:section:0011",
+    "point": [
+      8.396755744615195,
+      -1.7105116328208096,
+      8.383702852785943
+    ],
+    "radius": 2.2
+  },
+  "captures": [
+    {
+      "id": "selected-reference",
+      "state": "before",
+      "url": "candidates/restore-e010-ramp-a092-a096-repay-789-cn098/index.html?bundle=0652507cab038605aac8eb65cf69f232ad5cc232f17b53d25ad5841b9654aa55&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=aba2b9cdc13e81f797c2448bfc72471289458fc513c4ad2ea334d8c068b09931&ledger=25d58f27038b53521a72059b8abb7182a3da71d06d646bdd3abe95f3eb377e5c&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=before&view=contact",
+      "report": {
+        "path": "selected-reference-contact-capture-report.json",
+        "sha256": "8a8c62d2aad99f0d6a3f336b578b8fe1ff697d1b6858fec185215067192fc970"
+      },
+      "primaryOutput": {
+        "path": "selected-reference-contact.png",
+        "sha256": "a9f4c3bdedeb7d14aba2b29b6e1c1296012b9020600d521c2a65ee0819257f7e",
+        "sizeBytes": 281689,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 72,
+          "idatBytes": 280804
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58711,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e010-ramp-a092-a096-repay-789-cn098",
+      "state": "packed",
+      "url": "candidates/restore-e010-ramp-a092-a096-repay-789-cn098/index.html?bundle=0652507cab038605aac8eb65cf69f232ad5cc232f17b53d25ad5841b9654aa55&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=aba2b9cdc13e81f797c2448bfc72471289458fc513c4ad2ea334d8c068b09931&ledger=25d58f27038b53521a72059b8abb7182a3da71d06d646bdd3abe95f3eb377e5c&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e010-ramp-a092-a096-repay-789-cn098/contact-capture-report.json",
+        "sha256": "30304c4bee9a2d7bbb17032eafea97fc9551102aee9241685e2be6609f28a1b9"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e010-ramp-a092-a096-repay-789-cn098/contact.png",
+        "sha256": "b408a73f49bed7e20f63a22369980a1e0b291feb1a173aaa6fa07b90ac3fd824",
+        "sizeBytes": 287867,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 74,
+          "idatBytes": 286958
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58768,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e005-ramp-a092-a096-repay-789-cn098",
+      "state": "packed",
+      "url": "candidates/restore-e005-ramp-a092-a096-repay-789-cn098/index.html?bundle=a7fe4928a5a6067b503dceb22858c874fe1e180d6456df114a4e0e1881323305&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=32af433618f8602cff85d57cf4cc20c2a4e0e0e277b18e5d1e3a91afbaa0ff8d&ledger=1503cf65f56c6ddb0f1c854f2e28e3a068991200ab357449efebf467c6ecdbe8&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e005-ramp-a092-a096-repay-789-cn098/contact-capture-report.json",
+        "sha256": "97344047d0cbd0678ff64a36e147c586207032944a91f9381ebac6fc1a00aad5"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e005-ramp-a092-a096-repay-789-cn098/contact.png",
+        "sha256": "fd67837ea2dfae56dca2f3d00d975be997bd0adabb4216c5e1b09d7a4db4fb5f",
+        "sizeBytes": 287441,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 73,
+          "idatBytes": 286544
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58779,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "state": "packed",
+      "url": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098/index.html?bundle=ed819c37a9ba33cd61d039d91e53cd56950be8f2c93d1f6475388c4ac0f8a7f1&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=811cfd9a0d4752355f1cceb4914d3986d2e5947f3196a4e3b482d9dc64fa237f&ledger=0135fc0ac9a3f58805aec8af46b8f76a2e178eaa3f384c2c28c153224fe26ab6&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098/contact-capture-report.json",
+        "sha256": "29fd5b1f8306bdedf9ea7c8728b663e1a5896e8234647a6ed528c9ddac4aa646"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098/contact.png",
+        "sha256": "4ca5eb08a144da4e5bab68b914a8b53334d443badec27ea0161e5ce6192a7825",
+        "sizeBytes": 284881,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 73,
+          "idatBytes": 283984
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58833,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e010-ramp-a090-a094-repay-6789-cn094",
+      "state": "packed",
+      "url": "candidates/restore-e010-ramp-a090-a094-repay-6789-cn094/index.html?bundle=82031617505d2bcb3c4caf24abd038d946051948ad5bef083b62fbbe8093993e&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=4199576eaf21ae91d3344259e5d6f26b76aa69e7a4d007212bdbf0a256f4c766&ledger=31b37c384e9adb866394e26f6db585465021cb6f6efb6628fef2af05c702aa7d&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e010-ramp-a090-a094-repay-6789-cn094/contact-capture-report.json",
+        "sha256": "c24fd8d5223127d1cb758b36d8e34be7ea82bf9c4f400fba7b9ce742e5d86937"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e010-ramp-a090-a094-repay-6789-cn094/contact.png",
+        "sha256": "5ccf6ea4f6a8ab6a736770bc57f1b09624995305aa349dd93287ad8fa4ff8a64",
+        "sizeBytes": 290656,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 74,
+          "idatBytes": 289747
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58851,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e005-ramp-a090-a094-repay-6789-cn094",
+      "state": "packed",
+      "url": "candidates/restore-e005-ramp-a090-a094-repay-6789-cn094/index.html?bundle=58d7a5b8d098d624ede6a5ba3d780f122f643e7afcddbd215739c328f08a1e08&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=fff117bfa4b85c71446f1a14c9f83cafa79442dc3432c04e163ddf5a694e532b&ledger=4ce009069584a82778fbefe81d3d0cbaa8cfd1ad22584b1099db1df783029344&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e005-ramp-a090-a094-repay-6789-cn094/contact-capture-report.json",
+        "sha256": "86f4e092e5a8ef951d68da5e52f49cdcde6b9b8d594515507fafbf1099ee73df"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e005-ramp-a090-a094-repay-6789-cn094/contact.png",
+        "sha256": "74a8ee738e1c51ffb1ea38638862eb3a0a2df2395603d7c9de896742ccecbe4a",
+        "sizeBytes": 289184,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 74,
+          "idatBytes": 288275
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58896,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "state": "packed",
+      "url": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094/index.html?bundle=75d43de746f2487ff3f588b6a2c3997ce73f14b0c7f3dc5c97836b21bdad4d56&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=cce1219881affdcf18e37fcb46b15fb861f0475e573d51c0668d045f0ba0557b&ledger=c4c328250509099aa232e02297362817f923584d49b4a39b4963202ca03d0bfd&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094/contact-capture-report.json",
+        "sha256": "f57fa53c84b6601f9229a8cacd4019e4554a1ac8ad1c73daa39cfcd60393ca69"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094/contact.png",
+        "sha256": "ac1e40389dd4ade8504174f21a416f40f6fbe79cdab04d7278d3ad414767da68",
+        "sizeBytes": 286808,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 73,
+          "idatBytes": 285911
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58904,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e010-reference-control",
+      "state": "packed",
+      "url": "candidates/restore-e010-reference-control/index.html?bundle=d1f01a7537fada2f041a36169a0599df01dd5b1e6225df9ce8ef576e9f96af7a&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=d121d840f47e29799bcc0d0f8ce65d69b10c28617a26dc989f44e3ab3522f2c9&ledger=8b3fe2500ddc4f9005b832b77e35cbfa6a778293de28464e0b161b74e63e48cd&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e010-reference-control/contact-capture-report.json",
+        "sha256": "3b782c707c4bbb1ffa16c2a3b248ec23a421e8cfcf1478e8f8b778814f96b89a"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e010-reference-control/contact.png",
+        "sha256": "6eef3ef38462e037bd118264aeff7b6448af4c3e78c9555979ebe70daefd114f",
+        "sizeBytes": 283722,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 73,
+          "idatBytes": 282825
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 58977,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e005-reference-control",
+      "state": "packed",
+      "url": "candidates/restore-e005-reference-control/index.html?bundle=bc6b127f5748a30abbe74455c073a90a86161e30733da7b8e8a619d286984b6d&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=6058dc52f2a02b4b4eb2a67cc2145b07623edeef46c94e650470f5b839949834&ledger=eafe0f6b1e9afa8782e5680984689756d634a8b6db965a43f7fb714c8bc80a42&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e005-reference-control/contact-capture-report.json",
+        "sha256": "05aa2a1573846f2c677b337242c728b9c42a9f8bb9b9a12bb97869267d85811e"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e005-reference-control/contact.png",
+        "sha256": "c59f2e9ac1b19c88dc213e46329c6731d44e21cec589545faf285372e857fb87",
+        "sizeBytes": 281926,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 72,
+          "idatBytes": 281041
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 59175,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    },
+    {
+      "id": "restore-e002-reference-control",
+      "state": "packed",
+      "url": "candidates/restore-e002-reference-control/index.html?bundle=5fff07a8a7ae44b75f1231b9da5ca454a16aae6dd0ec34baff9b7e03bae19fb1&source=1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98&packed=a8bfc91f1a3d2882223c03f3669eed6290d3fd9be1c08bbc90a42b13e6f45e60&ledger=32a470c1b0bd24b5a865a205793356b73f7c0d8372c61fc1170575f421b58494&routeRequested=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&routeEffective=current-k4-ring-cage-longitudinal-volume-frontier-orbitable-v0&state=packed&view=contact",
+      "report": {
+        "path": "candidates/restore-e002-reference-control/contact-capture-report.json",
+        "sha256": "bcb57cdc71131236f194af07fd9423b8c8abd2e12747d9bc5f9a1eb8bac38275"
+      },
+      "primaryOutput": {
+        "path": "candidates/restore-e002-reference-control/contact.png",
+        "sha256": "20516d1f41bcd4e520b718aac0816b91431301ddfd8f213df703a8444c0dc9d6",
+        "sizeBytes": 281165,
+        "png": {
+          "width": 1400,
+          "height": 900,
+          "bitDepth": 8,
+          "colorType": 2,
+          "compression": 0,
+          "filter": 0,
+          "interlace": 0,
+          "chunkCount": 72,
+          "idatBytes": 280280
+        }
+      },
+      "browser": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "cleanup": {
+        "processGroupId": 59298,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  ],
+  "contactSheet": {
+    "report": {
+      "path": "contact-sheet-capture-report.json",
+      "sha256": "335cc0efdf663a631484cff7ec3d7cb5d394544f1c3ceb96fff919a7c873e4aa"
+    },
+    "primaryOutput": {
+      "path": "contact-sheet.png",
+      "sha256": "c47141e60b6ba951aa7d9a96770a0a788923150842b0aadd15cc034f3f413cbd",
+      "sizeBytes": 1290799,
+      "png": {
+        "width": 1600,
+        "height": 4200,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 318,
+        "idatBytes": 1286962
+      }
+    },
+    "browser": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "route": {
+      "requested": "independent-headless-screenshot-v0",
+      "effective": "independent-headless-screenshot-v0",
+      "fallbackUsed": false
+    },
+    "cleanup": {
+      "processGroupId": 59480,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    }
+  }
+}
