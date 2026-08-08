@@ -2,6 +2,13 @@ const PARENT_ATLAS_SCHEMA = 'kaminos.authored-muscle-coordinate-parent-atlas.v0'
 const FRAME_RECEIPT_SCHEMA = 'kaminos.k4-envelope-frame-binding-receipt.v0';
 const SOLVER_CARRIER_SCHEMA =
   'kaminos.muscle-compartment-ring-cage-solver-carrier.v0';
+const SHAPE_ASSAY_SCHEMA =
+  'kaminos.k4-envelope-clamped-shape-assay-result.v0';
+const SHAPING_SCHEMA =
+  'kaminos.k4-envelope-clamped-section-shaping.v0';
+const SHAPE_SECTION_STATUSES = new Set([
+  'shaped', 'axis-outside-envelope', 'fixed-section',
+]);
 
 export const K4_SOURCE_ROUTE_CONTAINMENT_SCHEMA =
   'kaminos.k4-source-route-containment-assay.v0';
@@ -162,6 +169,7 @@ export function buildK4SourceRouteContainment({
   envelopeMesh,
   solverCarrier,
   shapeAssay,
+  inputFileSha256s,
   requestedConstructionIds,
   tolerance,
   signedDistance = signedEnvelopeDistance,
@@ -179,22 +187,69 @@ export function buildK4SourceRouteContainment({
   if (!Number.isFinite(tolerance) || !(tolerance > 0)) {
     throw new Error('source-route containment tolerance must be positive');
   }
+  if (shapeAssay?.schema !== SHAPE_ASSAY_SCHEMA ||
+      shapeAssay.status !== 'completed-provisional' ||
+      shapeAssay.shapeAuthority !== 'envelope-fit-derived-provisional') {
+    throw new Error(`source-route containment requires completed ${SHAPE_ASSAY_SCHEMA}`);
+  }
+  if (shapeAssay.shaping?.schema !== SHAPING_SCHEMA ||
+      shapeAssay.shaping.status !== 'completed-provisional') {
+    throw new Error(`source-route containment requires completed ${SHAPING_SCHEMA}`);
+  }
+  if (!inputFileSha256s ||
+      !['frameReceipt', 'envelope', 'solverCarrier'].every(key =>
+        typeof inputFileSha256s[key] === 'string' && inputFileSha256s[key].length > 0)) {
+    throw new Error('source-route containment requires effective input file identities');
+  }
+  if (shapeAssay.inputs?.frameReceipt?.sha256 !== inputFileSha256s.frameReceipt) {
+    throw new Error('shape assay frame receipt file identity mismatch');
+  }
+  if (shapeAssay.inputs?.envelope?.sha256 !== inputFileSha256s.envelope) {
+    throw new Error('shape assay envelope file identity mismatch');
+  }
+  if (shapeAssay.inputs?.carrier?.sha256 !== inputFileSha256s.solverCarrier) {
+    throw new Error('shape assay solver carrier file identity mismatch');
+  }
   const transform = frameReceipt.sourceToEnvelope?.transform;
   if (!transform || !Number.isFinite(transform.scale) ||
       !Array.isArray(transform.rotation) || !Array.isArray(transform.translation)) {
     throw new Error('source-route containment frame receipt lacks a transform');
   }
-  const shapeCarrierSha256 = shapeAssay?.shaping?.sourceCarrierSha256;
-  if (shapeCarrierSha256 && shapeCarrierSha256 !== solverCarrier.identity?.sha256) {
+  const shapeCarrierSha256 = shapeAssay.shaping.sourceCarrierSha256;
+  if (typeof shapeCarrierSha256 !== 'string' ||
+      shapeCarrierSha256 !== solverCarrier.identity?.sha256) {
     throw new Error(
       `shape assay carrier identity mismatch: receipt ${shapeCarrierSha256}, ` +
       `fixture ${solverCarrier.identity?.sha256 || 'missing'}`,
     );
   }
+  if (typeof frameReceipt.receiptSha256 !== 'string' ||
+      shapeAssay.shaping.frameReceiptSha256 !== frameReceipt.receiptSha256) {
+    throw new Error(
+      `shape assay frame receipt identity mismatch: shape ` +
+      `${shapeAssay.shaping.frameReceiptSha256 || 'missing'}, frame ` +
+      `${frameReceipt.receiptSha256 || 'missing'}`,
+    );
+  }
   const frameConstructions = new Set(frameReceipt.effectiveConstructionIds ||
     parentAtlas.routeInventory.map(row => row.constructionId));
-  const shapeStatuses = new Map((shapeAssay?.shaping?.sectionReceipts || [])
-    .map(row => [row.sectionId, row.status]));
+  const shapeSectionReceipts = shapeAssay.shaping.sectionReceipts;
+  if (!Array.isArray(shapeSectionReceipts) || shapeSectionReceipts.length === 0) {
+    throw new Error('shape assay section receipts must be a nonempty array');
+  }
+  const shapeStatuses = new Map();
+  for (const receipt of shapeSectionReceipts) {
+    if (typeof receipt?.constructionId !== 'string' ||
+        typeof receipt?.sectionId !== 'string' ||
+        !receipt.sectionId.startsWith(`${receipt.constructionId}:section:`) ||
+        !SHAPE_SECTION_STATUSES.has(receipt.status)) {
+      throw new Error('shape assay section receipts contain a malformed row');
+    }
+    if (shapeStatuses.has(receipt.sectionId)) {
+      throw new Error(`shape assay section receipts duplicate ${receipt.sectionId}`);
+    }
+    shapeStatuses.set(receipt.sectionId, receipt.status);
+  }
   const rows = [];
   const constructionSummaries = [];
 
@@ -214,6 +269,18 @@ export function buildK4SourceRouteContainment({
       throw new Error(
         `${constructionId} source/fixture section count mismatch: ` +
         `${samples.length} versus ${axes.length}`,
+      );
+    }
+    const expectedSectionIds = new Set(samples.map((_, index) =>
+      sectionId(constructionId, index)));
+    const receivedSectionIds = shapeSectionReceipts
+      .filter(receipt => receipt.constructionId === constructionId)
+      .map(receipt => receipt.sectionId);
+    if (receivedSectionIds.length !== expectedSectionIds.size ||
+        receivedSectionIds.some(id => !expectedSectionIds.has(id)) ||
+        [...expectedSectionIds].some(id => !shapeStatuses.has(id))) {
+      throw new Error(
+        `shape assay section receipts do not exactly cover ${constructionId}`,
       );
     }
     const fixed = fixedSectionIds(cage);
@@ -259,14 +326,25 @@ export function buildK4SourceRouteContainment({
       currentOutsideCount += Number(result.currentOutside);
       classifications[result.classification] =
         (classifications[result.classification] || 0) + 1;
+      const returnedShapeStatus = shapeStatuses.get(id);
+      const fixedAttachmentSection = fixed.has(id);
+      if (fixedAttachmentSection !== (returnedShapeStatus === 'fixed-section')) {
+        throw new Error(`shape assay fixed-section status mismatch for ${id}`);
+      }
+      if (returnedShapeStatus === 'axis-outside-envelope' && !result.currentOutside) {
+        throw new Error(`shape assay escape ${id} is inside under the effective comparison`);
+      }
+      if (returnedShapeStatus === 'shaped' && result.currentOutside) {
+        throw new Error(`shape assay shaped section ${id} has an outside current axis`);
+      }
       rows.push({
         constructionId,
         sectionId: id,
         sectionIndex: index,
         sourceSampleId: `${candidate.value.sourcePathSha256}:resampled:${String(index).padStart(4, '0')}`,
         sourcePathSha256: candidate.value.sourcePathSha256,
-        fixedAttachmentSection: fixed.has(id),
-        returnedShapeStatus: shapeStatuses.get(id) || 'unreported',
+        fixedAttachmentSection,
+        returnedShapeStatus,
         source: {
           position: sourcePosition,
           envelopePosition: sourceEnvelopePosition,

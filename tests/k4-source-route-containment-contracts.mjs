@@ -74,6 +74,40 @@ function cage(constructionId, restPositions, currentPositions, fixedSections = [
   };
 }
 
+function validShapeAssay({
+  carrierSha256,
+  frameReceiptSha256,
+  frameReceiptFileSha256 = 'frame-file',
+  envelopeFileSha256 = 'envelope-file',
+  carrierFileSha256 = 'carrier-file',
+  constructionSectionCounts,
+}) {
+  return {
+    schema: 'kaminos.k4-envelope-clamped-shape-assay-result.v0',
+    status: 'completed-provisional',
+    shapeAuthority: 'envelope-fit-derived-provisional',
+    inputs: {
+      frameReceipt: { sha256: frameReceiptFileSha256 },
+      envelope: { sha256: envelopeFileSha256 },
+      carrier: { sha256: carrierFileSha256 },
+    },
+    shaping: {
+      schema: 'kaminos.k4-envelope-clamped-section-shaping.v0',
+      status: 'completed-provisional',
+      sourceCarrierSha256: carrierSha256,
+      frameReceiptSha256,
+      sectionReceipts: Object.entries(constructionSectionCounts).flatMap(
+        ([constructionId, count]) => Array.from({ length: count }, (_, index) => ({
+          constructionId,
+          sectionId: `${constructionId}:section:${String(index).padStart(4, '0')}`,
+          status: 'shaped',
+          nodeReceipts: [],
+        })),
+      ),
+    },
+  };
+}
+
 test('a packed-current escape from a contained source/rest route is packing-induced', () => {
   const result = classifyRouteContainmentRow({
     sourceSignedDistance: -0.4,
@@ -112,6 +146,7 @@ test('requested constructions preserve caller order and never fall back to K4 de
   };
   const solverCarrier = {
     schema: 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0',
+    identity: { sha256: 'carrier-test' },
     cages: [
       cage('muscle-a', [[0, 0, 0], [0, 0, 1]], [[0, 0, 0], [0, 0, 1]]),
       cage('muscle-b', [[0, 0, 0], [0, 0, 2]], [[0, 0, 0], [0, 0, 2]]),
@@ -122,6 +157,7 @@ test('requested constructions preserve caller order and never fall back to K4 de
     parentAtlas,
     frameReceipt: {
       schema: 'kaminos.k4-envelope-frame-binding-receipt.v0',
+      receiptSha256: 'frame-test',
       sourceToEnvelope: {
         authority: 'fit-derived-provisional',
         transform: {
@@ -133,15 +169,22 @@ test('requested constructions preserve caller order and never fall back to K4 de
     },
     envelopeMesh: {},
     solverCarrier,
-    shapeAssay: {
-      shaping: { sectionReceipts: [] },
+    shapeAssay: validShapeAssay({
+      carrierSha256: 'carrier-test',
+      frameReceiptSha256: 'frame-test',
+      constructionSectionCounts: { 'muscle-c': 2, 'muscle-a': 2 },
+    }),
+    inputFileSha256s: {
+      frameReceipt: 'frame-file',
+      envelope: 'envelope-file',
+      solverCarrier: 'carrier-file',
     },
     requestedConstructionIds: ['muscle-c', 'muscle-a'],
     tolerance: 1e-9,
-    signedDistance: point => ({
-      signedDistance: point[2] > 2.5 ? 0.5 : -0.5,
-      inside: point[2] <= 2.5,
-      winding: point[2] <= 2.5 ? 1 : 0,
+    signedDistance: () => ({
+      signedDistance: -0.5,
+      inside: true,
+      winding: 1,
     }),
   });
   assert.deepEqual(result.requestedConstructionIds, ['muscle-c', 'muscle-a']);
@@ -166,6 +209,7 @@ test('shape receipts from a different carrier cannot classify the current fixtur
     parentAtlas,
     frameReceipt: {
       schema: 'kaminos.k4-envelope-frame-binding-receipt.v0',
+      receiptSha256: 'frame-test',
       effectiveConstructionIds: ['muscle-a'],
       sourceToEnvelope: {
         authority: 'fit-derived-provisional',
@@ -178,13 +222,113 @@ test('shape receipts from a different carrier cannot classify the current fixtur
     },
     envelopeMesh: {},
     solverCarrier,
-    shapeAssay: {
-      shaping: { sourceCarrierSha256: 'carrier-b', sectionReceipts: [] },
+    shapeAssay: validShapeAssay({
+      carrierSha256: 'carrier-b',
+      frameReceiptSha256: 'frame-test',
+      constructionSectionCounts: { 'muscle-a': 2 },
+    }),
+    inputFileSha256s: {
+      frameReceipt: 'frame-file',
+      envelope: 'envelope-file',
+      solverCarrier: 'carrier-file',
     },
     requestedConstructionIds: ['muscle-a'],
     tolerance: 1e-9,
     signedDistance: () => ({ signedDistance: -1, inside: true, winding: 1 }),
   }), /shape assay carrier identity mismatch/);
+});
+
+test('missing or partial shape section receipts cannot become a completed comparison', () => {
+  const parentAtlas = {
+    schema: 'kaminos.authored-muscle-coordinate-parent-atlas.v0',
+    id: 'atlas-test', source: {}, sourceGraphIdentity: {},
+    routeInventory: [sourceRoute('muscle-a', [[0, 0, 0], [0, 0, 1]])],
+  };
+  const solverCarrier = {
+    schema: 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0',
+    identity: { sha256: 'carrier-test' },
+    cages: [cage('muscle-a', [[0, 0, 0], [0, 0, 1]], [[0, 0, 0], [0, 0, 1]])],
+  };
+  const shapeAssay = validShapeAssay({
+    carrierSha256: 'carrier-test',
+    frameReceiptSha256: 'frame-test',
+    constructionSectionCounts: { 'muscle-a': 2 },
+  });
+  shapeAssay.shaping.sectionReceipts.pop();
+  assert.throws(() => buildK4SourceRouteContainment({
+    parentAtlas,
+    frameReceipt: {
+      schema: 'kaminos.k4-envelope-frame-binding-receipt.v0',
+      receiptSha256: 'frame-test',
+      effectiveConstructionIds: ['muscle-a'],
+      sourceToEnvelope: {
+        authority: 'fit-derived-provisional',
+        transform: {
+          scale: 1,
+          rotation: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+          translation: [0, 0, 0],
+        },
+      },
+    },
+    envelopeMesh: {}, solverCarrier, shapeAssay,
+    inputFileSha256s: {
+      frameReceipt: 'frame-file', envelope: 'envelope-file',
+      solverCarrier: 'carrier-file',
+    },
+    requestedConstructionIds: ['muscle-a'], tolerance: 1e-9,
+    signedDistance: () => ({ signedDistance: -1, inside: true, winding: 1 }),
+  }), /shape assay section receipts/);
+});
+
+test('shape frame and recorded input hashes must match the effective comparison', () => {
+  const parentAtlas = {
+    schema: 'kaminos.authored-muscle-coordinate-parent-atlas.v0',
+    id: 'atlas-test', source: {}, sourceGraphIdentity: {},
+    routeInventory: [sourceRoute('muscle-a', [[0, 0, 0], [0, 0, 1]])],
+  };
+  const solverCarrier = {
+    schema: 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0',
+    identity: { sha256: 'carrier-test' },
+    cages: [cage('muscle-a', [[0, 0, 0], [0, 0, 1]], [[0, 0, 0], [0, 0, 1]])],
+  };
+  const base = {
+    parentAtlas,
+    frameReceipt: {
+      schema: 'kaminos.k4-envelope-frame-binding-receipt.v0',
+      receiptSha256: 'frame-test',
+      effectiveConstructionIds: ['muscle-a'],
+      sourceToEnvelope: {
+        authority: 'fit-derived-provisional',
+        transform: {
+          scale: 1,
+          rotation: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+          translation: [0, 0, 0],
+        },
+      },
+    },
+    envelopeMesh: {}, solverCarrier,
+    inputFileSha256s: {
+      frameReceipt: 'frame-file', envelope: 'envelope-file',
+      solverCarrier: 'carrier-file',
+    },
+    requestedConstructionIds: ['muscle-a'], tolerance: 1e-9,
+    signedDistance: () => ({ signedDistance: -1, inside: true, winding: 1 }),
+  };
+  const wrongFrame = validShapeAssay({
+    carrierSha256: 'carrier-test', frameReceiptSha256: 'other-frame',
+    constructionSectionCounts: { 'muscle-a': 2 },
+  });
+  assert.throws(() => buildK4SourceRouteContainment({
+    ...base, shapeAssay: wrongFrame,
+  }), /shape assay frame receipt identity mismatch/);
+  const wrongEnvelope = validShapeAssay({
+    carrierSha256: 'carrier-test', frameReceiptSha256: 'frame-test',
+    envelopeFileSha256: 'other-envelope',
+    constructionSectionCounts: { 'muscle-a': 2 },
+  });
+  assert.throws(() => buildK4SourceRouteContainment({
+    ...base, shapeAssay: wrongEnvelope,
+  }), /shape assay envelope file identity mismatch/);
 });
 
 test('parent-atlas hash refusal writes a durable pre-output failure report', async () => {

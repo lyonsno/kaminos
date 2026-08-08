@@ -238,6 +238,11 @@ try {
     envelopeMesh,
     solverCarrier: carrierInput.value,
     shapeAssay: shapeInput.value,
+    inputFileSha256s: {
+      frameReceipt: lastTrustworthyEvidence.frameReceiptFileSha256,
+      envelope: lastTrustworthyEvidence.envelopeFileSha256,
+      solverCarrier: lastTrustworthyEvidence.solverCarrierFileSha256,
+    },
     requestedConstructionIds: args.requestedConstructionIds,
     tolerance: args.tolerance,
   });
