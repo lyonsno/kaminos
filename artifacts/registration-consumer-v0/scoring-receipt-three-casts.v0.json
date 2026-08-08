@@ -1,0 +1,115 @@
+{
+ "schema": "kaminos.registration-scoring.v0",
+ "frozen_thresholds": {
+  "containment_mean_min": 0.3125
+ },
+ "casts": {
+  "sf3d-skin-baseline": {
+   "containment_mean_by_region": {
+    "caudal": 0.26,
+    "forelimb": 0.7286,
+    "hindlimb": 0.8611,
+    "pedal": 0.3493,
+    "pelvis": 0.9,
+    "ribcage": 0.0,
+    "scapulae": 0.3125,
+    "skull_mandible": 0.6333,
+    "spine": 1.0
+   },
+   "coverage_by_group": {
+    "core": null,
+    "forelimb-left": 0.9785,
+    "forelimb-right": 1.0272,
+    "head": 0.1076,
+    "hindlimb-left": 1.0359,
+    "hindlimb-right": 1.0329,
+    "tail": 0.2908
+   },
+   "verdicts": {
+    "caudal": "UNDERSPANS (coverage 0.29)",
+    "forelimb": "REGISTERS",
+    "hindlimb": "REGISTERS",
+    "pedal": "REGISTERS",
+    "pelvis": "REGISTERS",
+    "ribcage": "UNMEASURABLE-AT-BONE-GRANULARITY",
+    "scapulae": "REGISTERS",
+    "skull_mandible": "REGISTERS-CONTAINMENT-ONLY",
+    "spine": "REGISTERS"
+   },
+   "guards": []
+  },
+  "trellis-skin-baseline": {
+   "containment_mean_by_region": {
+    "caudal": 0.31,
+    "forelimb": 0.8036,
+    "hindlimb": 0.8667,
+    "pedal": 0.3853,
+    "pelvis": 0.9,
+    "ribcage": 0.0,
+    "scapulae": 0.6625,
+    "skull_mandible": 0.9583,
+    "spine": 1.0
+   },
+   "coverage_by_group": {
+    "core": null,
+    "forelimb-left": 0.9951,
+    "forelimb-right": 1.046,
+    "head": 0.1247,
+    "hindlimb-left": 1.0221,
+    "hindlimb-right": 1.0319,
+    "tail": 0.2787
+   },
+   "verdicts": {
+    "caudal": "UNDERSPANS (coverage 0.28)",
+    "forelimb": "REGISTERS",
+    "hindlimb": "REGISTERS",
+    "pedal": "REGISTERS",
+    "pelvis": "REGISTERS",
+    "ribcage": "UNMEASURABLE-AT-BONE-GRANULARITY",
+    "scapulae": "REGISTERS",
+    "skull_mandible": "REGISTERS-CONTAINMENT-ONLY",
+    "spine": "REGISTERS"
+   },
+   "guards": [
+    "no operator ground truth for this cast; verdicts are instrument-only"
+   ]
+  },
+  "trellis-maquette-baseline": {
+   "containment_mean_by_region": {
+    "caudal": 0.87,
+    "forelimb": 0.6714,
+    "hindlimb": 0.7333,
+    "pedal": 0.1316,
+    "pelvis": 0.975,
+    "ribcage": 0.975,
+    "scapulae": 0.825,
+    "skull_mandible": 0.8833,
+    "spine": 0.9602
+   },
+   "coverage_by_group": {
+    "core": null,
+    "forelimb-left": 1.0666,
+    "forelimb-right": 1.0088,
+    "head": 0.12,
+    "hindlimb-left": 1.0126,
+    "hindlimb-right": 1.008,
+    "tail": 0.2911
+   },
+   "verdicts": {
+    "caudal": "UNDERSPANS (coverage 0.29)",
+    "forelimb": "REGISTERS",
+    "hindlimb": "REGISTERS",
+    "pedal": "FAILS-CONTAINMENT (0.132 < 0.3125)",
+    "pelvis": "REGISTERS",
+    "ribcage": "UNMEASURABLE-AT-BONE-GRANULARITY",
+    "scapulae": "REGISTERS",
+    "skull_mandible": "REGISTERS-CONTAINMENT-ONLY",
+    "spine": "REGISTERS"
+   },
+   "guards": [
+    "no operator ground truth for this cast; verdicts are instrument-only",
+    "paw band barred from ground-truth-positive at global fit (calibration guard)"
+   ]
+  }
+ }
+}
