@@ -181,6 +181,8 @@ function compareK4SourceWorld(parentAtlas, requestedConstructionIds, baselineCon
     throw new Error('k4-envelope-frame-binding: baseline construction order does not match request');
   }
   let maximumPositionDelta = 0;
+  let maximumRadiusDelta = 0;
+  let fullSampleIdentity = true;
   for (const constructionId of requestedConstructionIds) {
     const matchingRows = rows.filter(row => row.constructionId === constructionId);
     if (matchingRows.length !== 1) {
@@ -192,6 +194,7 @@ function compareK4SourceWorld(parentAtlas, requestedConstructionIds, baselineCon
       throw new Error(`k4-envelope-frame-binding: baseline centerline mismatch ${constructionId}`);
     }
     for (let index = 0; index < expected.length; index += 1) {
+      if (canonicalJson(expected[index]) !== canonicalJson(actual[index])) fullSampleIdentity = false;
       const left = expected[index].position;
       const right = actual[index].position;
       if (!Array.isArray(left) || !Array.isArray(right) || left.length !== 3 || right.length !== 3) {
@@ -200,6 +203,12 @@ function compareK4SourceWorld(parentAtlas, requestedConstructionIds, baselineCon
       for (let axis = 0; axis < 3; axis += 1) {
         maximumPositionDelta = Math.max(maximumPositionDelta, Math.abs(left[axis] - right[axis]));
       }
+      const expectedRadius = expected[index].radius;
+      const actualRadius = actual[index].radius;
+      if (!Number.isFinite(expectedRadius) || !Number.isFinite(actualRadius)) {
+        throw new Error(`k4-envelope-frame-binding: baseline radius mismatch ${constructionId}`);
+      }
+      maximumRadiusDelta = Math.max(maximumRadiusDelta, Math.abs(expectedRadius - actualRadius));
     }
   }
   if (maximumPositionDelta !== 0) {
@@ -211,7 +220,12 @@ function compareK4SourceWorld(parentAtlas, requestedConstructionIds, baselineCon
     });
     throw new Error(`k4-envelope-frame-binding: baseline centerline mismatch ${mismatch}`);
   }
-  return { effectiveConstructionIds, maximumPositionDelta };
+  return {
+    effectiveConstructionIds,
+    maximumPositionDelta,
+    maximumRadiusDelta,
+    fullSampleIdentity,
+  };
 }
 
 export function buildK4EnvelopeFrameBinding({
@@ -302,10 +316,19 @@ export function buildK4EnvelopeFrameBinding({
       skeletonEnvelopeFrameLinkFileSha256,
     },
     k4SourceWorldBinding: {
-      method: 'exact-baseline-to-parent-atlas-resampled-centerline-comparison',
+      method: 'ordered-full-sample-audit-with-exact-source-position-gate',
       maximumPositionDelta: k4.maximumPositionDelta,
+      maximumRadiusDelta: k4.maximumRadiusDelta,
+      fullSampleIdentity: k4.fullSampleIdentity,
+      comparedLoadBearingFields: ['position', 'radius'],
+      sourcePositionAuthority: 'byte-identical-measured-candidate',
+      radiusAuthority: k4.maximumRadiusDelta === 0
+        ? 'byte-identical-measured-candidate'
+        : 'baseline-derived-candidate',
       coordinateFrame: 'source-blend-world',
-      authority: 'byte-identical-measured-candidate',
+      authority: k4.fullSampleIdentity
+        ? 'byte-identical-measured-candidate'
+        : 'mixed-source-position-and-baseline-derived-sample-candidate',
     },
     sourceToSkeleton: {
       method: 'unique-semantic-object-frame-relation',

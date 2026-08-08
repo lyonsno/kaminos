@@ -154,6 +154,17 @@ test('changed K4 baseline coordinates fail source-world lineage even when route 
   assert.throws(() => build({ baselineCondition: changed }), /baseline centerline mismatch muscle-13/);
 });
 
+test('radius-only drift is explicit derived geometry and cannot pass as byte-identical source centerline authority', () => {
+  const changed = baseline();
+  changed.source.muscles[0].centerline[0].radius = 1.25;
+  const receipt = build({ baselineCondition: changed });
+  assert.equal(receipt.k4SourceWorldBinding.sourcePositionAuthority, 'byte-identical-measured-candidate');
+  assert.equal(receipt.k4SourceWorldBinding.radiusAuthority, 'baseline-derived-candidate');
+  assert.equal(receipt.k4SourceWorldBinding.fullSampleIdentity, false);
+  assert.equal(receipt.k4SourceWorldBinding.maximumRadiusDelta, 0.25);
+  assert.notEqual(receipt.k4SourceWorldBinding.authority, 'byte-identical-measured-candidate');
+});
+
 test('edited unselected atlas state still fails the declared parent file hash at the caller boundary', () => {
   assert.throws(() => build({ parentAtlasFileSha256: 'bad' }), /parentAtlasFileSha256/);
 });

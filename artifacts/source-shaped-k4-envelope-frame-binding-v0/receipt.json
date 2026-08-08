@@ -34,10 +34,18 @@
     "skeletonEnvelopeFrameLinkFileSha256": "4c4863ed1d1074472a48cee194caecf0c2d7330e933c8d88ca52aa10b3c2c78d"
   },
   "k4SourceWorldBinding": {
-    "method": "exact-baseline-to-parent-atlas-resampled-centerline-comparison",
+    "method": "ordered-full-sample-audit-with-exact-source-position-gate",
     "maximumPositionDelta": 0,
+    "maximumRadiusDelta": 0.18692406294713404,
+    "fullSampleIdentity": false,
+    "comparedLoadBearingFields": [
+      "position",
+      "radius"
+    ],
+    "sourcePositionAuthority": "byte-identical-measured-candidate",
+    "radiusAuthority": "baseline-derived-candidate",
     "coordinateFrame": "source-blend-world",
-    "authority": "byte-identical-measured-candidate"
+    "authority": "mixed-source-position-and-baseline-derived-sample-candidate"
   },
   "sourceToSkeleton": {
     "method": "unique-semantic-object-frame-relation",
@@ -236,5 +244,5 @@
     "production-admission",
     "source-authorized-envelope-fit"
   ],
-  "receiptSha256": "4eafb419ce9c8139991f2173617c65dc3541332c7b2e0863f3a5377d24fc671e"
+  "receiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa"
 }
