@@ -2167,7 +2167,15 @@ export function solveMuscleCompartmentRingCageContact(
   solverCarrier,
   source,
   requestedConfig = {},
+  options = {},
 ) {
+  if (!options || typeof options !== 'object' || Array.isArray(options) ||
+      Object.keys(options).some(key => key !== 'stepConstraint') ||
+      (options.stepConstraint !== undefined &&
+        typeof options.stepConstraint !== 'function')) {
+    throw new Error('ring cage contact options accept only a stepConstraint function');
+  }
+  const stepConstraint = options.stepConstraint ?? null;
   validateInputs(solverCarrier, source);
   const configKeys = [
     'convergenceTolerance',
@@ -2258,6 +2266,12 @@ export function solveMuscleCompartmentRingCageContact(
       }
       if (measurement.compartment.maximumEscape > config.convergenceTolerance) {
         rejectionReasons.push('compartment-escape');
+      }
+      if (stepConstraint) {
+        const constraintViolation = stepConstraint(candidate);
+        if (constraintViolation) {
+          rejectionReasons.push(`step-constraint:${constraintViolation}`);
+        }
       }
       const attempt = {
         scale: lineSearchScale,

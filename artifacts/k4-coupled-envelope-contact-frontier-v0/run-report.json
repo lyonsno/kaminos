@@ -1,0 +1,61 @@
+{
+  "schema": "kaminos.k4-coupled-envelope-contact-frontier-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "claimCeiling": "metric-mechanism-only",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "attribution": {
+      "requestedPath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "effectivePath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "sha256": "c66fe9ebd07651d9e5022004fd8a4afbd9b49141bdf7f1aa3e40bb6c420ac92a"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "outputs": {
+    "frontierResult": {
+      "path": "frontier-result.json",
+      "sha256": "6fc8006d9d9d5cfd4444544b13ffd16d9572df62804a348d1be10ed1a16cb225"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "frontier-result-written",
+    "frontierResultSha256": "6fc8006d9d9d5cfd4444544b13ffd16d9572df62804a348d1be10ed1a16cb225",
+    "stateIds": [
+      "endpoint-collision-relieved",
+      "endpoint-contained-rollback",
+      "blend-015-solved",
+      "blend-030-solved",
+      "blend-045-solved",
+      "blend-060-solved",
+      "blend-080-solved"
+    ],
+    "nondominatedStateIds": [
+      "endpoint-collision-relieved",
+      "endpoint-contained-rollback",
+      "blend-015-solved",
+      "blend-030-solved",
+      "blend-045-solved",
+      "blend-060-solved",
+      "blend-080-solved"
+    ]
+  }
+}

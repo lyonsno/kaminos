@@ -506,15 +506,20 @@ export function applyRouteRestorationTowardRest({
       hashMuscleCompartmentRingCageCanonicalJson(carrierDomain)) {
     throw new Error('route restoration carrier identity mismatch');
   }
+  const configKeys = Object.keys(config || {}).sort();
+  const baseKeys = ['constructionId', 'containmentMargin', 'maximumBlend', 'sectionId'];
+  const withExact = [...baseKeys, 'exactBlend'].sort();
   if (!config || typeof config !== 'object' || Array.isArray(config) ||
-      JSON.stringify(Object.keys(config).sort()) !== JSON.stringify([
-        'constructionId', 'containmentMargin', 'maximumBlend', 'sectionId',
-      ]) || typeof config.constructionId !== 'string' ||
+      (JSON.stringify(configKeys) !== JSON.stringify([...baseKeys].sort()) &&
+       JSON.stringify(configKeys) !== JSON.stringify(withExact)) ||
+      typeof config.constructionId !== 'string' ||
       typeof config.sectionId !== 'string' ||
       !Number.isFinite(config.containmentMargin) ||
       !(config.containmentMargin >= 0) ||
       !Number.isFinite(config.maximumBlend) ||
-      !(config.maximumBlend > 0 && config.maximumBlend <= 1)) {
+      !(config.maximumBlend > 0 && config.maximumBlend <= 1) ||
+      (config.exactBlend !== undefined && (!Number.isFinite(config.exactBlend) ||
+        !(config.exactBlend >= 0 && config.exactBlend <= config.maximumBlend)))) {
     throw new Error('route restoration config is invalid');
   }
   const transform = frameReceipt.sourceToEnvelope.transform;
@@ -546,21 +551,28 @@ export function applyRouteRestorationTowardRest({
   const axisDistanceAt = alpha =>
     signedEnvelopeDistance(toEnvelope(blendedAxis(alpha)), envelopeMesh).signedDistance;
   const target = -config.containmentMargin;
-  if (!(axisDistanceAt(config.maximumBlend) <= target)) {
-    throw new Error(
-      `route restoration insufficient-blend-authority: blend cap ` +
-      `${config.maximumBlend} reaches signed distance ` +
-      `${axisDistanceAt(config.maximumBlend)}, above target ${target}`,
-    );
+  let appliedBlend;
+  if (config.exactBlend !== undefined) {
+    // Exact-blend mode generates intermediate states for frontier work; the
+    // resulting containment state is reported, not required.
+    appliedBlend = config.exactBlend;
+  } else {
+    if (!(axisDistanceAt(config.maximumBlend) <= target)) {
+      throw new Error(
+        `route restoration insufficient-blend-authority: blend cap ` +
+        `${config.maximumBlend} reaches signed distance ` +
+        `${axisDistanceAt(config.maximumBlend)}, above target ${target}`,
+      );
+    }
+    let low = 0;
+    let high = config.maximumBlend;
+    for (let iteration = 0; iteration < 40; iteration += 1) {
+      const middle = (low + high) / 2;
+      if (axisDistanceAt(middle) <= target) high = middle;
+      else low = middle;
+    }
+    appliedBlend = high;
   }
-  let low = 0;
-  let high = config.maximumBlend;
-  for (let iteration = 0; iteration < 40; iteration += 1) {
-    const middle = (low + high) / 2;
-    if (axisDistanceAt(middle) <= target) high = middle;
-    else low = middle;
-  }
-  const appliedBlend = high;
   const originalPositions = new Map(sectionNodes.map(node =>
     [node.id, [...node.currentPosition]]));
   for (const node of sectionNodes) {
