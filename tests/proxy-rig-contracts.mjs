@@ -77,6 +77,46 @@ test('posing one limb moves that limb region and leaves the far side nearly stil
     `far-body vertices must stay nearly still: q10 ${q10} vs max ${max}`);
 });
 
+test('displacement smoothing kills a spike outlier while preserving the pose and identity', async () => {
+  const { smoothDisplacementField, buildCastAdjacency } = await import('../proxy-rig-core.mjs');
+  const { bones, manifest, envelopeInCastFrame, cast, chainTransforms } = await realSetup();
+  const skin = bindEnvelopeToSkeleton({ envelope: envelopeInCastFrame, bones, manifest, chainTransforms });
+  const castBinding = bindCastToEnvelope({ cast, envelopeInCastFrame });
+  const adjacency = buildCastAdjacency(cast);
+  // Identity + smoothing stays exact (zero displacement smooths to zero).
+  const idEnvelope = poseEnvelope({ envelopeInCastFrame, skinBinding: skin, pose: {} });
+  const idCast = poseCastThroughProxy({ cast, posedEnvelope: idEnvelope, castBinding });
+  const idSmoothed = smoothDisplacementField({ cast, posedPositions: idCast.positions, adjacency });
+  let idErr = 0;
+  for (let i = 0; i < cast.positions.length; i += 1) {
+    idErr = Math.max(idErr, Math.abs(idSmoothed[i] - cast.positions[i]));
+  }
+  assert.ok(idErr < 1e-9, `identity must survive smoothing exactly, got ${idErr}`);
+  // Pose, then inject one artificial spike (a corrupted correspondence).
+  const pose = { 'forelimb-right': { axis: [1, 0, 0], angleDeg: 25 } };
+  const posedEnvelope = poseEnvelope({ envelopeInCastFrame, skinBinding: skin, pose });
+  const posedCast = poseCastThroughProxy({ cast, posedEnvelope, castBinding });
+  const spiked = posedCast.positions.slice();
+  const spikeVertex = 1234;
+  spiked[spikeVertex * 3] += 0.15; // gross outlier, way beyond any lawful motion
+  const smoothed = smoothDisplacementField({ cast, posedPositions: spiked, adjacency });
+  const spikeBefore = Math.abs(spiked[spikeVertex * 3] - posedCast.positions[spikeVertex * 3]);
+  const spikeAfter = Math.abs(smoothed[spikeVertex * 3] - posedCast.positions[spikeVertex * 3]);
+  assert.ok(spikeAfter < spikeBefore / 5,
+    `spike must shrink >5x: ${spikeBefore} -> ${spikeAfter}`);
+  // The intended limb motion must survive smoothing.
+  const disp = [];
+  for (let v = 0; v < cast.positions.length / 3; v += 1) {
+    disp.push(Math.hypot(
+      smoothed[v * 3] - cast.positions[v * 3],
+      smoothed[v * 3 + 1] - cast.positions[v * 3 + 1],
+      smoothed[v * 3 + 2] - cast.positions[v * 3 + 2],
+    ));
+  }
+  const maxDisp = Math.max(...disp);
+  assert.ok(maxDisp > 0.01, `limb motion must survive smoothing, max disp ${maxDisp}`);
+});
+
 test('bindings are deterministic', async () => {
   const { bones, manifest, envelopeInCastFrame, cast, chainTransforms } = await realSetup();
   const a = bindEnvelopeToSkeleton({ envelope: envelopeInCastFrame, bones, manifest, chainTransforms });

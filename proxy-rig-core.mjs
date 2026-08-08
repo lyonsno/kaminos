@@ -182,6 +182,88 @@ export function poseEnvelope({ envelopeInCastFrame, skinBinding, pose }) {
   return { positions: posed, triangles: envelopeInCastFrame.triangles };
 }
 
+// --- displacement-field smoothing ------------------------------------------------
+
+// Correspondence discontinuities (adjacent cast vertices bound to envelope
+// triangles that diverge under pose - chin/chest, ear/shoulder gaps) produce
+// spike artifacts. Body motion is low-frequency; spikes are single-vertex
+// outliers - so smooth the DISPLACEMENT field over the cast's own topology,
+// never the positions, preserving surface detail exactly at identity.
+// Adjacency merges positionally-duplicated vertices (flat-shaded exports)
+// so smoothing crosses shading seams.
+export function buildCastAdjacency(cast) {
+  const vertexCount = cast.positions.length / 3;
+  const key = v => `${cast.positions[v * 3].toFixed(6)},${cast.positions[v * 3 + 1].toFixed(6)},${cast.positions[v * 3 + 2].toFixed(6)}`;
+  const canon = new Map();
+  const vid = new Int32Array(vertexCount);
+  for (let v = 0; v < vertexCount; v += 1) {
+    const k = key(v);
+    if (!canon.has(k)) canon.set(k, v);
+    vid[v] = canon.get(k);
+  }
+  const adjacency = new Map();
+  const link = (a, b) => {
+    if (!adjacency.has(a)) adjacency.set(a, new Set());
+    adjacency.get(a).add(b);
+  };
+  const { triangles } = cast;
+  for (let t = 0; t < triangles.length; t += 3) {
+    const a = vid[triangles[t]]; const b = vid[triangles[t + 1]]; const c = vid[triangles[t + 2]];
+    link(a, b); link(b, a); link(b, c); link(c, b); link(a, c); link(c, a);
+  }
+  return { vid, adjacency };
+}
+
+export function smoothDisplacementField({
+  cast,
+  posedPositions,
+  adjacency: adjacencyInput = null,
+  iterations = 15,
+  lambda = 0.6,
+}) {
+  const { vid, adjacency } = adjacencyInput ?? buildCastAdjacency(cast);
+  const vertexCount = cast.positions.length / 3;
+  // Canonical displacement (merged verts share one displacement).
+  let disp = new Map();
+  for (let v = 0; v < vertexCount; v += 1) {
+    const c = vid[v];
+    if (!disp.has(c)) {
+      disp.set(c, [
+        posedPositions[v * 3] - cast.positions[v * 3],
+        posedPositions[v * 3 + 1] - cast.positions[v * 3 + 1],
+        posedPositions[v * 3 + 2] - cast.positions[v * 3 + 2],
+      ]);
+    }
+  }
+  for (let iter = 0; iter < iterations; iter += 1) {
+    const next = new Map();
+    for (const [v, d] of disp) {
+      const neighbors = adjacency.get(v);
+      if (!neighbors || neighbors.size === 0) { next.set(v, d); continue; }
+      const mean = [0, 0, 0];
+      for (const n of neighbors) {
+        const nd = disp.get(n) ?? [0, 0, 0];
+        mean[0] += nd[0]; mean[1] += nd[1]; mean[2] += nd[2];
+      }
+      const inv = 1 / neighbors.size;
+      next.set(v, [
+        d[0] + lambda * (mean[0] * inv - d[0]),
+        d[1] + lambda * (mean[1] * inv - d[1]),
+        d[2] + lambda * (mean[2] * inv - d[2]),
+      ]);
+    }
+    disp = next;
+  }
+  const out = new Float64Array(cast.positions.length);
+  for (let v = 0; v < vertexCount; v += 1) {
+    const d = disp.get(vid[v]);
+    out[v * 3] = cast.positions[v * 3] + d[0];
+    out[v * 3 + 1] = cast.positions[v * 3 + 1] + d[1];
+    out[v * 3 + 2] = cast.positions[v * 3 + 2] + d[2];
+  }
+  return out;
+}
+
 export function poseCastThroughProxy({ cast, posedEnvelope, castBinding }) {
   const { positions, triangles } = posedEnvelope;
   const vertexCount = cast.positions.length / 3;
