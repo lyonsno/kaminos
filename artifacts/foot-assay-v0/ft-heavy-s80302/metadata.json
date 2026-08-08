@@ -1,0 +1,17 @@
+{
+  "name": "plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "713d528210ab",
+  "input_path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png",
+  "input_name": "plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/ft-heavy.txt",
+    "seed": "80302"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786158357.923977,
+  "duration_s": 50.4
+}

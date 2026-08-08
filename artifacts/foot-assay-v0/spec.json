@@ -1,0 +1,71 @@
+{
+ "title": "Foot clause: can prompt content correct a LOCAL anatomical defect?",
+ "subtitle": "Same authored envelope plate, same route, seeds 80301 and 80302. Motivated by a real rigging failure: the authored foot skeleton punched through the paws of the maquette cast. Everything established until now was GLOBAL - proportion, stance, mass. This asks whether the generator responds to a local structural request.",
+ "footer": "Baseline also invented horns, which is a reminder that a bare finished-creature instruction leaves the model free to add. The foot clause both fixed the paws and anchored the result closer to a cat.",
+ "prompts": [
+  {
+   "id": "base",
+   "name": "BASELINE: no foot clause",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/ft-baseline.txt"
+  },
+  {
+   "id": "planted",
+   "name": "large flat paws planted squarely",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/ft-planted.txt"
+  },
+  {
+   "id": "heavy",
+   "name": "heavy broad feet, thick ankles",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/ft-heavy.txt"
+  }
+ ],
+ "plates": [
+  {
+   "id": "s1",
+   "name": "seed 80301",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  },
+  {
+   "id": "s2",
+   "name": "seed 80302",
+   "path": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/authored-envelope-v0/plate3/plate.png"
+  }
+ ],
+ "cells": [
+  {
+   "plate": "s1",
+   "prompt": "base",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-baseline-s80301/output.png",
+   "note": "Small tucked paws - the failure mode. Also invented horns."
+  },
+  {
+   "plate": "s2",
+   "prompt": "base",
+   "verdict": "collapsed",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-baseline-s80302/output.png",
+   "note": "Baseline, second seed."
+  },
+  {
+   "plate": "s1",
+   "prompt": "planted",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-planted-s80301/output.png",
+   "note": "Large flat splayed paws with separated toes, planted. Substantially more foot volume than baseline."
+  },
+  {
+   "plate": "s2",
+   "prompt": "planted",
+   "verdict": "adhered",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-planted-s80302/output.png",
+   "note": "Replicates on second seed."
+  },
+  {
+   "plate": "s1",
+   "prompt": "heavy",
+   "verdict": "unscored",
+   "outputPath": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/foot-assay-v0/ft-heavy-s80301/output.png",
+   "note": "Second seed did not run."
+  }
+ ]
+}
