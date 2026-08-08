@@ -1,0 +1,114 @@
+{
+  "schema": "kaminos.current-k4-m12-volume-restoration-solve-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requestedPath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-refill-extended-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-refill-extended-v0.json",
+      "sha256": "cda592571e29caa871bb45af2d8c5d67d82e8c768e30049a579cf91917b532e3",
+      "requested": {
+        "schema": "kaminos.current-k4-m12-volume-restoration-solve-config.v0",
+        "restoration": {
+          "constructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "targetRelativeVolumeErrors": [
+            0.002
+          ],
+          "maximumSectionAreaScaleReduction": 0.85,
+          "volumeRelativeTolerance": 1e-10
+        },
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 384,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "seedCandidateIds": [
+          "ramp-a092-a096-repay-789-cn098",
+          "ramp-a090-a094-repay-6789-cn094"
+        ],
+        "includeReferenceControl": true
+      },
+      "effective": {
+        "schema": "kaminos.current-k4-m12-volume-restoration-solve-config.v0",
+        "restoration": {
+          "constructionId": "muscle-12",
+          "obstacleConstructionId": "muscle-45",
+          "targetRelativeVolumeErrors": [
+            0.002
+          ],
+          "maximumSectionAreaScaleReduction": 0.85,
+          "volumeRelativeTolerance": 1e-10
+        },
+        "solver": {
+          "convergenceTolerance": 0.0001,
+          "curvatureRegularization": 12,
+          "maxIterations": 384,
+          "maximumLocalTurningAngleChange": 0.25,
+          "maximumRelativeVolumeError": 0.015,
+          "maximumTotalTurningAngleChange": 1.25,
+          "relaxationStep": 0.32
+        },
+        "seedCandidateIds": [
+          "ramp-a092-a096-repay-789-cn098",
+          "ramp-a090-a094-repay-6789-cn094"
+        ],
+        "includeReferenceControl": true
+      },
+      "fallbackUsed": false
+    }
+  },
+  "requestedCandidateCount": 3,
+  "effectiveCandidateCount": 3,
+  "candidateCapApplied": false,
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "949746607bcf2725eab145b9b776fd32c8610ad0cfc19a5bececa80a721750a4"
+    }
+  },
+  "visual": {
+    "status": "pending-agent-inspection",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ]
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "assay-result-written",
+    "assayResultSha256": "949746607bcf2725eab145b9b776fd32c8610ad0cfc19a5bececa80a721750a4",
+    "candidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ]
+  }
+}

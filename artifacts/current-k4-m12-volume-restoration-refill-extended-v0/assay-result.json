@@ -1,0 +1,252 @@
+{
+  "schema": "kaminos.current-k4-m12-volume-restoration-solve-result.v0",
+  "status": "completed",
+  "evidenceTrack": "agent-authored-provisional",
+  "claimCeiling": "agent-authored provisional current-graph K4 mechanism selection only",
+  "inputs": {
+    "frontier": {
+      "requestedPath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "effectivePath": "repo://artifacts/current-k4-ring-cage-contact-normal-ramp-frontier-v0/frontier-result.json",
+      "sha256": "74a61c127588b632ff969306aba28291252358e1614d811e6b670199b8ad3503"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    },
+    "config": {
+      "requestedPath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-refill-extended-v0.json",
+      "effectivePath": "repo://fixtures/current-k4-packing/current-k4-m12-volume-restoration-refill-extended-v0.json",
+      "sha256": "cda592571e29caa871bb45af2d8c5d67d82e8c768e30049a579cf91917b532e3"
+    },
+    "selectedCarrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    }
+  },
+  "requestedCandidateIds": [
+    "restore-e002-ramp-a092-a096-repay-789-cn098",
+    "restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "restore-e002-reference-control"
+  ],
+  "selectedReference": {
+    "carrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+    "metrics": {
+      "pairwiseMovableTotalPenetration": 10.164116328174828,
+      "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+      "pairwiseFixedTotalPenetration": 3.74533272446409,
+      "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+      "skeletalTotalPenetration": 0.04502050065172025,
+      "maximumRelativeVolumeError": 0.014999833625267148
+    }
+  },
+  "restorationContract": {
+    "constructionId": "muscle-12",
+    "obstacleConstructionId": "muscle-45",
+    "targetRelativeVolumeErrors": [
+      0.002
+    ],
+    "maximumSectionAreaScaleReduction": 0.85,
+    "volumeRelativeTolerance": 1e-10
+  },
+  "solverContract": {
+    "convergenceTolerance": 0.0001,
+    "curvatureRegularization": 12,
+    "maxIterations": 384,
+    "maximumLocalTurningAngleChange": 0.25,
+    "maximumRelativeVolumeError": 0.015,
+    "maximumTotalTurningAngleChange": 1.25,
+    "relaxationStep": 0.32
+  },
+  "anisotropyContract": {
+    "obstacleConstructionId": "muscle-12",
+    "peakSectionId": "muscle-45:section:0011",
+    "shoulderSectionId": "muscle-45:section:0010",
+    "peakCompressionScales": [
+      0.98,
+      0.96,
+      0.94
+    ]
+  },
+  "candidates": [
+    {
+      "id": "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a092-a096-repay-789-cn098",
+        "targetRelativeVolumeError": 0.002,
+        "constructionId": "muscle-12",
+        "obstacleConstructionId": "muscle-45"
+      },
+      "restoredMetrics": {
+        "pairwiseMovableTotalPenetration": 11.030128109299138,
+        "pairwiseMovableMaximumPenetration": 0.30407347222555475,
+        "pairwiseFixedTotalPenetration": 3.6219472352563087,
+        "pairwiseFixedMaximumPenetration": 0.4493772408354102,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.006717929315619254
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 8.938068566824727,
+        "pairwiseMovableMaximumPenetration": 0.18876547045480058,
+        "pairwiseFixedTotalPenetration": 3.6901557624512398,
+        "pairwiseFixedMaximumPenetration": 0.4871533827925415,
+        "skeletalTotalPenetration": 0.03029460450000243,
+        "maximumRelativeVolumeError": 0.01499989254823843,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineRestorationDrift": 0,
+        "iterationsAccepted": 100,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "seedCarrierSha256": "6197c73d6223e169270ee76ca01883f96c2ac0c5635e34aa3c9d798620a7ec0a",
+        "restorationSectionAreaScale": 0.9869929749518633,
+        "restorationSectionCount": 11,
+        "m12RelativeVolumeErrorAfterRestore": 0.0019999999009290086,
+        "m12RelativeVolumeErrorAfterSolve": 0.01499989254823843,
+        "skeletalPenetrationIncrease": -0.014725896151717821
+      },
+      "packedCarrier": {
+        "path": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098-packed-carrier.json",
+        "sha256": "d18a5f2522cff2743d3e3a1dba864b91c8d36740c223a6e916c3bf9437cf2df5"
+      },
+      "residualLedger": {
+        "path": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098-residual-ledger.json",
+        "sha256": "55592aae46348ff1c23c76f89c983ee1ddfa85da869b64016241a6c46c17a922"
+      },
+      "solveApplication": {
+        "path": "candidates/restore-e002-ramp-a092-a096-repay-789-cn098-solve-application.json",
+        "sha256": "c8c0cd1fa04f28dfe73b9f37d21b40d54fdd7a3fdda54ca489687e4254256263"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": "ramp-a090-a094-repay-6789-cn094",
+        "targetRelativeVolumeError": 0.002,
+        "constructionId": "muscle-12",
+        "obstacleConstructionId": "muscle-45"
+      },
+      "restoredMetrics": {
+        "pairwiseMovableTotalPenetration": 11.098678411458884,
+        "pairwiseMovableMaximumPenetration": 0.28279378508205544,
+        "pairwiseFixedTotalPenetration": 3.5775029259260496,
+        "pairwiseFixedMaximumPenetration": 0.4425538573964366,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.006747473217976967
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 9.16846596760997,
+        "pairwiseMovableMaximumPenetration": 0.18787756430932867,
+        "pairwiseFixedTotalPenetration": 3.6692863351838043,
+        "pairwiseFixedMaximumPenetration": 0.48461094803670246,
+        "skeletalTotalPenetration": 0.03265446284020479,
+        "maximumRelativeVolumeError": 0.014999638370810621,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineRestorationDrift": 0,
+        "iterationsAccepted": 106,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "seedCarrierSha256": "c9f9518ad63bdb83cb2c95553b623312da8e72ab2726162fc9ef76575db595ea",
+        "restorationSectionAreaScale": 0.9869929749518633,
+        "restorationSectionCount": 11,
+        "m12RelativeVolumeErrorAfterRestore": 0.0019999999009290086,
+        "m12RelativeVolumeErrorAfterSolve": 0.014999638370810621,
+        "skeletalPenetrationIncrease": -0.012366037811515462
+      },
+      "packedCarrier": {
+        "path": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-packed-carrier.json",
+        "sha256": "e5d6b667392874505da6fb625d9f8be74edcf20bda3b2fd555e9a73990a95350"
+      },
+      "residualLedger": {
+        "path": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-residual-ledger.json",
+        "sha256": "ef5095b941d3969be2fd0e972dc4fcadbf4a0eace754690229d77dd6eebd1e56"
+      },
+      "solveApplication": {
+        "path": "candidates/restore-e002-ramp-a090-a094-repay-6789-cn094-solve-application.json",
+        "sha256": "309fd700c5efbf804c8aa690a05b3b09ad082518974967cc2b37831a73597f9c"
+      },
+      "refusalReasons": [],
+      "error": null
+    },
+    {
+      "id": "restore-e002-reference-control",
+      "status": "admissible",
+      "requested": {
+        "seedCandidateId": null,
+        "targetRelativeVolumeError": 0.002,
+        "constructionId": "muscle-12",
+        "obstacleConstructionId": "muscle-45"
+      },
+      "restoredMetrics": {
+        "pairwiseMovableTotalPenetration": 10.996220250894638,
+        "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+        "pairwiseFixedTotalPenetration": 3.740994062127683,
+        "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+        "skeletalTotalPenetration": 0.04502050065172025,
+        "maximumRelativeVolumeError": 0.0067143403327879
+      },
+      "metrics": {
+        "pairwiseMovableTotalPenetration": 8.659289586503926,
+        "pairwiseMovableMaximumPenetration": 0.18832954599465376,
+        "pairwiseFixedTotalPenetration": 3.803527027832762,
+        "pairwiseFixedMaximumPenetration": 0.49289565173269795,
+        "skeletalTotalPenetration": 0.0289579652588757,
+        "maximumRelativeVolumeError": 0.01499975658317291,
+        "nonPositiveCellCount": 0,
+        "compartmentMaximumEscape": 0,
+        "fixedNodeMaximumDrift": 0,
+        "centerlineRestorationDrift": 0,
+        "iterationsAccepted": 103,
+        "terminationReason": "line-search-exhausted",
+        "solveStatus": "residual-constraint",
+        "seedCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "restorationSectionAreaScale": 0.9869929749518633,
+        "restorationSectionCount": 11,
+        "m12RelativeVolumeErrorAfterRestore": 0.0019999999009290086,
+        "m12RelativeVolumeErrorAfterSolve": 0.01499975658317291,
+        "skeletalPenetrationIncrease": -0.01606253539284455
+      },
+      "packedCarrier": {
+        "path": "candidates/restore-e002-reference-control-packed-carrier.json",
+        "sha256": "c258645603f81e12836a8f19be1498479dc35412992c55d1386734b0c58580f0"
+      },
+      "residualLedger": {
+        "path": "candidates/restore-e002-reference-control-residual-ledger.json",
+        "sha256": "6ac13810ef9f87d22d65f221e6b024c66ae23bcec09801e5f4e870e62fd6e1ac"
+      },
+      "solveApplication": {
+        "path": "candidates/restore-e002-reference-control-solve-application.json",
+        "sha256": "4a895222b240212c8857c29895a7c1b596e3d026459707c40e58c74e187c2d40"
+      },
+      "refusalReasons": [],
+      "error": null
+    }
+  ],
+  "nondominatedCandidateIds": [
+    "restore-e002-ramp-a092-a096-repay-789-cn098",
+    "restore-e002-ramp-a090-a094-repay-6789-cn094",
+    "restore-e002-reference-control"
+  ],
+  "visual": {
+    "status": "pending-agent-inspection",
+    "requiredView": "identity-bound-contact-region-close",
+    "candidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ],
+    "nondominatedCandidateIds": [
+      "restore-e002-ramp-a092-a096-repay-789-cn098",
+      "restore-e002-ramp-a090-a094-repay-6789-cn094",
+      "restore-e002-reference-control"
+    ]
+  }
+}
