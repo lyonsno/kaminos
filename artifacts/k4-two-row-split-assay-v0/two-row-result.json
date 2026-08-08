@@ -1,0 +1,308 @@
+{
+  "schema": "kaminos.k4-two-row-split-assay-result.v0",
+  "status": "completed-provisional",
+  "claimCeiling": "metric-mechanism-only",
+  "heldClaims": [
+    "operator-authored-containment-intent",
+    "anatomical-route-correctness",
+    "anatomical-registration",
+    "production-admission"
+  ],
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "attribution": {
+      "requestedPath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "effectivePath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "sha256": "c66fe9ebd07651d9e5022004fd8a4afbd9b49141bdf7f1aa3e40bb6c420ac92a"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "rows": {
+    "belly": {
+      "comparisonClass": "belly/interior packing and shape quality",
+      "packingInducedSectionIds": [
+        "muscle-12:section:0008"
+      ],
+      "resolve": {
+        "schema": "kaminos.k4-route-restoration-toward-rest.v0",
+        "status": "completed-provisional",
+        "routeAuthority": "rest-restoring-packing-displacement-rollback",
+        "claimCeiling": "metric-mechanism-only",
+        "frameReceiptSha256": "46c66c2bfc59a9d7f8a139a8c8117bf7b65762795a2cec103e1d58b023cc25fa",
+        "sourceCarrierSha256": "1a012c5527cc5ec2509f05ca63e96e986c76c1fbf67dfa9444b677972a5c6a98",
+        "outputCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0",
+        "requested": {
+          "constructionId": "muscle-12",
+          "sectionId": "muscle-12:section:0008",
+          "containmentMargin": 0.05,
+          "maximumBlend": 1
+        },
+        "effective": {
+          "constructionId": "muscle-12",
+          "sectionId": "muscle-12:section:0008",
+          "containmentMargin": 0.05,
+          "maximumBlend": 1,
+          "appliedBlend": 0.9732814073513509
+        },
+        "fallbackUsed": false,
+        "appliedBlend": 0.9732814073513509,
+        "axisSignedDistanceBefore": 0.5964148181804584,
+        "axisSignedDistanceAfter": -0.050000000000585125,
+        "movedNodeIds": [
+          "muscle-12:section:0008:axis",
+          "muscle-12:section:0008:vertex:00",
+          "muscle-12:section:0008:vertex:01",
+          "muscle-12:section:0008:vertex:02",
+          "muscle-12:section:0008:vertex:03",
+          "muscle-12:section:0008:vertex:04",
+          "muscle-12:section:0008:vertex:05",
+          "muscle-12:section:0008:vertex:06",
+          "muscle-12:section:0008:vertex:07",
+          "muscle-12:section:0008:vertex:08",
+          "muscle-12:section:0008:vertex:09",
+          "muscle-12:section:0008:vertex:10",
+          "muscle-12:section:0008:vertex:11"
+        ],
+        "fixedNodeMaximumDrift": 0,
+        "nonPositiveCellCount": 0,
+        "contactCost": {
+          "pairwiseMovableTotalPenetrationDelta": 4.27872584918369,
+          "pairwiseMovableMaximumPenetrationDelta": 0.5995807838718836,
+          "pairwiseFixedTotalPenetrationDelta": 0,
+          "pairwiseFixedMaximumPenetrationDelta": 0,
+          "skeletalTotalPenetrationDelta": 3.1461952433158333,
+          "compartmentMaximumEscapeDelta": 0
+        },
+        "referenceContact": {
+          "pairwiseMovableTotalPenetration": 10.164116328174828,
+          "pairwiseMovableMaximumPenetration": 0.3420731982757239,
+          "pairwiseFixedTotalPenetration": 3.74533272446409,
+          "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+          "skeletalTotalPenetration": 0.04502050065172025,
+          "compartmentMaximumEscape": 0
+        },
+        "resolvedContact": {
+          "pairwiseMovableTotalPenetration": 14.442842177358518,
+          "pairwiseMovableMaximumPenetration": 0.9416539821476075,
+          "pairwiseFixedTotalPenetration": 3.74533272446409,
+          "pairwiseFixedMaximumPenetration": 0.46094852180370144,
+          "skeletalTotalPenetration": 3.1912157439675535,
+          "compartmentMaximumEscape": 0
+        }
+      },
+      "reference": [
+        {
+          "constructionId": "muscle-34",
+          "bellySampleCount": 108,
+          "insideFraction": 0.9444444444444444,
+          "meanSignedDistance": -2.386985363102914,
+          "maximumOutsideExcursion": 0.8069463942565502
+        },
+        {
+          "constructionId": "muscle-13",
+          "bellySampleCount": 144,
+          "insideFraction": 0.9791666666666666,
+          "meanSignedDistance": -1.5182823516456594,
+          "maximumOutsideExcursion": 0.25145101613521526
+        },
+        {
+          "constructionId": "muscle-12",
+          "bellySampleCount": 108,
+          "insideFraction": 0.8611111111111112,
+          "meanSignedDistance": -1.8211682172226455,
+          "maximumOutsideExcursion": 1.5032038034760873
+        },
+        {
+          "constructionId": "muscle-45",
+          "bellySampleCount": 96,
+          "insideFraction": 0.9479166666666666,
+          "meanSignedDistance": -2.0501511642569343,
+          "maximumOutsideExcursion": 0.6519278402808292
+        }
+      ],
+      "resolved": [
+        {
+          "constructionId": "muscle-34",
+          "bellySampleCount": 108,
+          "insideFraction": 0.9444444444444444,
+          "meanSignedDistance": -2.386985363102914,
+          "maximumOutsideExcursion": 0.8069463942565502
+        },
+        {
+          "constructionId": "muscle-13",
+          "bellySampleCount": 144,
+          "insideFraction": 0.9791666666666666,
+          "meanSignedDistance": -1.5182823516456594,
+          "maximumOutsideExcursion": 0.25145101613521526
+        },
+        {
+          "constructionId": "muscle-12",
+          "bellySampleCount": 108,
+          "insideFraction": 0.8888888888888888,
+          "meanSignedDistance": -1.8968350117425499,
+          "maximumOutsideExcursion": 0.8492282266757756
+        },
+        {
+          "constructionId": "muscle-45",
+          "bellySampleCount": 96,
+          "insideFraction": 0.9479166666666666,
+          "meanSignedDistance": -2.0501511642569343,
+          "maximumOutsideExcursion": 0.6519278402808292
+        }
+      ]
+    },
+    "attachmentTail": {
+      "comparisonClass": "attachment-tail source relationship",
+      "caption": "outside authored envelope in source geometry",
+      "sections": [
+        {
+          "sectionId": "muscle-34:section:0009",
+          "constructionId": "muscle-34",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 0.7419247067933836,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-34:section:0010",
+          "constructionId": "muscle-34",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.197013845607171,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-34:section:0011",
+          "constructionId": "muscle-34",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.6686060257317585,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-12:section:0009",
+          "constructionId": "muscle-12",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 0.5916531127251529,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-12:section:0010",
+          "constructionId": "muscle-12",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.1179585433822639,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-12:section:0011",
+          "constructionId": "muscle-12",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.6703391664220792,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-45:section:0008",
+          "constructionId": "muscle-45",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 0.03882422627494069,
+          "tags": [
+            "metric-evidence-only"
+          ]
+        },
+        {
+          "sectionId": "muscle-45:section:0009",
+          "constructionId": "muscle-45",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 0.7502300606025869,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-45:section:0010",
+          "constructionId": "muscle-45",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.3042037233297232,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-45:section:0011",
+          "constructionId": "muscle-45",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": false,
+          "sourceSignedDistance": 1.886026391988581,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-34:section:0012",
+          "constructionId": "muscle-34",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": true,
+          "sourceSignedDistance": 2.1253271987687925,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-13:section:0012",
+          "constructionId": "muscle-13",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": true,
+          "sourceSignedDistance": 0.12737639076204238,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-12:section:0012",
+          "constructionId": "muscle-12",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": true,
+          "sourceSignedDistance": 2.1577532052140813,
+          "tags": []
+        },
+        {
+          "sectionId": "muscle-45:section:0012",
+          "constructionId": "muscle-45",
+          "markerClass": "source-geometry-attributed",
+          "fixedAttachmentSection": true,
+          "sourceSignedDistance": 2.433647696182554,
+          "tags": []
+        }
+      ]
+    }
+  },
+  "viewer": {
+    "path": "index.html",
+    "dataPath": "viewer-data.json",
+    "route": {
+      "requested": "k4-two-row-split-comparison-v0",
+      "effective": "k4-two-row-split-comparison-v0",
+      "fallbackUsed": false
+    },
+    "dataSha256": "f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32",
+    "htmlSha256": "3ccf09ae4919b8fd921930cd975829b5671b86ba01770fe45269be834395908d"
+  },
+  "resolvedCarrier": {
+    "path": "resolved-carrier.json",
+    "sha256": "67bf6af88d84c7a6f34df79133293a855dbf06afe0da0f7cef904c2fd2593599"
+  }
+}

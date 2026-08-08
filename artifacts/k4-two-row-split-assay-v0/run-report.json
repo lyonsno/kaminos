@@ -1,0 +1,59 @@
+{
+  "schema": "kaminos.k4-two-row-split-assay-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "claimCeiling": "metric-mechanism-only",
+  "inputs": {
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "sha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "attribution": {
+      "requestedPath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "effectivePath": "repo://artifacts/k4-source-route-containment-v0/result.json",
+      "sha256": "c66fe9ebd07651d9e5022004fd8a4afbd9b49141bdf7f1aa3e40bb6c420ac92a"
+    },
+    "carrier": {
+      "requestedPath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "repo://artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "sha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "source": {
+      "requestedPath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "effectivePath": "repo://artifacts/current-k4-fixed-contact-assay-v0/contact-admitted-source.json",
+      "sha256": "12cc117b4ee6d928e3f44847595f4ab35d5ff1ad24f3a3dbb1d2bede237153ad"
+    }
+  },
+  "outputs": {
+    "twoRowResult": {
+      "path": "two-row-result.json",
+      "sha256": "74012b08feab4f9dcebb067d2a70a15342c79e52f96f53ee336242c63d6c9d63"
+    },
+    "viewer": {
+      "path": "index.html",
+      "dataPath": "viewer-data.json",
+      "route": {
+        "requested": "k4-two-row-split-comparison-v0",
+        "effective": "k4-two-row-split-comparison-v0",
+        "fallbackUsed": false
+      },
+      "dataSha256": "f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32",
+      "htmlSha256": "3ccf09ae4919b8fd921930cd975829b5671b86ba01770fe45269be834395908d"
+    },
+    "resolvedCarrier": {
+      "path": "resolved-carrier.json",
+      "sha256": "67bf6af88d84c7a6f34df79133293a855dbf06afe0da0f7cef904c2fd2593599"
+    }
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "two-row-result-written",
+    "twoRowResultSha256": "74012b08feab4f9dcebb067d2a70a15342c79e52f96f53ee336242c63d6c9d63",
+    "resolvedCarrierSha256": "40d51e1b8e4b1219bf39ee260ccc34a5cb98893219c076b7ae7b8e65f48211d0"
+  }
+}

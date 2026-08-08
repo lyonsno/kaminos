@@ -485,6 +485,148 @@ export function applyEnvelopeClampedSectionShaping({
   };
 }
 
+export function applyRouteRestorationTowardRest({
+  frameReceipt,
+  envelopeMesh,
+  solverCarrier,
+  config,
+}) {
+  if (frameReceipt?.schema !== FRAME_RECEIPT_SCHEMA) {
+    throw new Error(`route restoration requires ${FRAME_RECEIPT_SCHEMA}`);
+  }
+  const { receiptSha256: recordedReceiptSha256, ...receiptDomain } = frameReceipt;
+  if (recordedReceiptSha256 !== sha256(canonicalJson(receiptDomain))) {
+    throw new Error('route restoration frame receipt identity mismatch');
+  }
+  if (!solverCarrier || solverCarrier.schema !== SOLVER_CARRIER_SCHEMA) {
+    throw new Error('route restoration requires the admitted solver carrier schema');
+  }
+  const { identity: _identity, ...carrierDomain } = solverCarrier;
+  if (solverCarrier.identity?.sha256 !==
+      hashMuscleCompartmentRingCageCanonicalJson(carrierDomain)) {
+    throw new Error('route restoration carrier identity mismatch');
+  }
+  if (!config || typeof config !== 'object' || Array.isArray(config) ||
+      JSON.stringify(Object.keys(config).sort()) !== JSON.stringify([
+        'constructionId', 'containmentMargin', 'maximumBlend', 'sectionId',
+      ]) || typeof config.constructionId !== 'string' ||
+      typeof config.sectionId !== 'string' ||
+      !Number.isFinite(config.containmentMargin) ||
+      !(config.containmentMargin >= 0) ||
+      !Number.isFinite(config.maximumBlend) ||
+      !(config.maximumBlend > 0 && config.maximumBlend <= 1)) {
+    throw new Error('route restoration config is invalid');
+  }
+  const transform = frameReceipt.sourceToEnvelope.transform;
+  const toEnvelope = point => applySimilarity(transform, point);
+  const outputCarrier = structuredClone(solverCarrier);
+  const cage = outputCarrier.cages.find(
+    row => row.constructionId === config.constructionId,
+  );
+  if (!cage) throw new Error(`route restoration lacks construction ${config.constructionId}`);
+  const fixedNodeIds = new Set((cage.manifest.constraints?.boundaryMasks || [])
+    .filter(mask => mask.fixed === true)
+    .map(mask => mask.nodeId));
+  const sectionNodes = cage.manifest.nodes.filter(node =>
+    node.id.startsWith(`${config.sectionId}:`));
+  if (sectionNodes.length === 0) {
+    throw new Error(`route restoration lacks section ${config.sectionId}`);
+  }
+  if (sectionNodes.some(node => fixedNodeIds.has(node.id))) {
+    throw new Error(`route restoration refuses fixed section ${config.sectionId}`);
+  }
+  const axisNode = sectionNodes.find(node => node.id.endsWith(':axis'));
+  if (!axisNode) throw new Error(`route restoration lacks axis for ${config.sectionId}`);
+  const axisSignedDistanceBefore =
+    signedEnvelopeDistance(toEnvelope(axisNode.currentPosition), envelopeMesh)
+      .signedDistance;
+  const blendedAxis = alpha => [0, 1, 2].map(axisIndex =>
+    axisNode.currentPosition[axisIndex] +
+    (axisNode.restPosition[axisIndex] - axisNode.currentPosition[axisIndex]) * alpha);
+  const axisDistanceAt = alpha =>
+    signedEnvelopeDistance(toEnvelope(blendedAxis(alpha)), envelopeMesh).signedDistance;
+  const target = -config.containmentMargin;
+  if (!(axisDistanceAt(config.maximumBlend) <= target)) {
+    throw new Error(
+      `route restoration insufficient-blend-authority: blend cap ` +
+      `${config.maximumBlend} reaches signed distance ` +
+      `${axisDistanceAt(config.maximumBlend)}, above target ${target}`,
+    );
+  }
+  let low = 0;
+  let high = config.maximumBlend;
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const middle = (low + high) / 2;
+    if (axisDistanceAt(middle) <= target) high = middle;
+    else low = middle;
+  }
+  const appliedBlend = high;
+  const originalPositions = new Map(sectionNodes.map(node =>
+    [node.id, [...node.currentPosition]]));
+  for (const node of sectionNodes) {
+    node.currentPosition = [0, 1, 2].map(axisIndex =>
+      node.currentPosition[axisIndex] +
+      (node.restPosition[axisIndex] - node.currentPosition[axisIndex]) * appliedBlend);
+  }
+  const axisSignedDistanceAfter =
+    signedEnvelopeDistance(toEnvelope(axisNode.currentPosition), envelopeMesh)
+      .signedDistance;
+  // Custody checks over the whole carrier.
+  let fixedNodeMaximumDrift = 0;
+  let nonPositiveCellCount = 0;
+  for (const [cageIndex, outputCage] of outputCarrier.cages.entries()) {
+    const sourceCage = solverCarrier.cages[cageIndex];
+    const sourceById = new Map(sourceCage.manifest.nodes.map(node => [node.id, node]));
+    const cageFixed = new Set((outputCage.manifest.constraints?.boundaryMasks || [])
+      .filter(mask => mask.fixed === true)
+      .map(mask => mask.nodeId));
+    const positionById = new Map(outputCage.manifest.nodes.map(node => [node.id, node]));
+    for (const node of outputCage.manifest.nodes) {
+      if (!cageFixed.has(node.id)) continue;
+      fixedNodeMaximumDrift = Math.max(fixedNodeMaximumDrift,
+        norm(sub(node.currentPosition, sourceById.get(node.id).currentPosition)));
+    }
+    for (const cell of outputCage.manifest.cells) {
+      const [a, b, c, d] = cell.nodeIds.map(nodeId =>
+        positionById.get(nodeId).currentPosition);
+      const oriented = signedTetVolume(a, b, c, d) * cell.restOrientationParity;
+      if (!(oriented > SHAPING_EPSILON)) nonPositiveCellCount += 1;
+    }
+  }
+  if (fixedNodeMaximumDrift !== 0) {
+    throw new Error('route restoration violated fixed-node immutability');
+  }
+  if (nonPositiveCellCount !== 0) {
+    throw new Error(
+      `route restoration produced ${nonPositiveCellCount} nonpositive cells`,
+    );
+  }
+  const { identity: _priorIdentity, ...outputDomain } = outputCarrier;
+  outputCarrier.identity = {
+    domain: 'canonical-json-self-excluding-top-level-identity',
+    sha256: hashMuscleCompartmentRingCageCanonicalJson(outputDomain),
+  };
+  return {
+    schema: 'kaminos.k4-route-restoration-toward-rest.v0',
+    status: 'completed-provisional',
+    routeAuthority: 'rest-restoring-packing-displacement-rollback',
+    claimCeiling: frameReceipt.claimCeiling,
+    frameReceiptSha256: recordedReceiptSha256,
+    sourceCarrierSha256: solverCarrier.identity.sha256,
+    outputCarrierSha256: outputCarrier.identity.sha256,
+    requested: structuredClone(config),
+    effective: { ...structuredClone(config), appliedBlend },
+    fallbackUsed: false,
+    appliedBlend,
+    axisSignedDistanceBefore,
+    axisSignedDistanceAfter,
+    movedNodeIds: [...originalPositions.keys()].sort(),
+    fixedNodeMaximumDrift,
+    nonPositiveCellCount,
+    outputCarrier,
+  };
+}
+
 export function computeK4EnvelopeFitMetric({
   frameReceipt,
   envelopeMesh,

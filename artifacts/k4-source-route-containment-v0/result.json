@@ -1,0 +1,4397 @@
+{
+  "schema": "kaminos.k4-source-route-containment-assay.v0",
+  "status": "completed-provisional",
+  "claimCeiling": "source-to-assay-geometric-attribution-only",
+  "heldClaims": [
+    "operator-authored-containment-intent",
+    "anatomical-route-correctness",
+    "anatomical-registration",
+    "production-admission"
+  ],
+  "frameAuthority": "fit-derived-provisional",
+  "requestedConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "effectiveConstructionIds": [
+    "muscle-34",
+    "muscle-13",
+    "muscle-12",
+    "muscle-45"
+  ],
+  "sourceIdentity": {
+    "parentAtlasId": "coordinate-parent-atlas-3f4c65867a776edf",
+    "blend": {
+      "assetSha256": "a6a4650f0114f7bb56ffcc6a336b6fd6f2db756e3a137857d92ff6571f9568e3",
+      "byteLength": 549819,
+      "effectiveBlendPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+      "graphFileSha256": "a447fe1fffcba513e3a716e56b725a9f2e511681923c6f81540f4932405a6785",
+      "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+      "requestedBlendPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+      "routingFixtureFileSha256": "76c86f8091033b3d8faba58c90456022970098117ee4260656e69b3887004dc5",
+      "routingFixtureSha256": "d691489aa154c60f7de9aa71b670d892fc618d08986453518a0ed2a2037280c8"
+    },
+    "graph": {
+      "compilerId": "track-m-source-projection-compiler-v0",
+      "graphSha256": "3f4c65867a776edfbf87bc59ca7a882b078b350078491f1822ccc9da0e426272",
+      "schema": "kaminos.track-m-authored-source-graph.v0"
+    }
+  },
+  "tolerance": 1e-9,
+  "constructionSummaries": [
+    {
+      "constructionId": "muscle-34",
+      "sectionCount": 13,
+      "sourceOutsideCount": 5,
+      "restOutsideCount": 5,
+      "currentOutsideCount": 4,
+      "maximumSourceToRestDrift": 0,
+      "maximumRestToCurrentDisplacement": 1.2496109501412622,
+      "classifications": {
+        "contained": 8,
+        "packing-corrected-source-route": 1,
+        "source-route-outside": 4
+      }
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionCount": 13,
+      "sourceOutsideCount": 1,
+      "restOutsideCount": 1,
+      "currentOutsideCount": 1,
+      "maximumSourceToRestDrift": 0,
+      "maximumRestToCurrentDisplacement": 0.15328270041011416,
+      "classifications": {
+        "contained": 12,
+        "source-route-outside": 1
+      }
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionCount": 13,
+      "sourceOutsideCount": 4,
+      "restOutsideCount": 4,
+      "currentOutsideCount": 5,
+      "maximumSourceToRestDrift": 0,
+      "maximumRestToCurrentDisplacement": 1.2832595488304224,
+      "classifications": {
+        "contained": 8,
+        "packing-induced-route-escape": 1,
+        "source-route-outside": 4
+      }
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionCount": 13,
+      "sourceOutsideCount": 5,
+      "restOutsideCount": 5,
+      "currentOutsideCount": 5,
+      "maximumSourceToRestDrift": 0,
+      "maximumRestToCurrentDisplacement": 1.20894345959697,
+      "classifications": {
+        "contained": 8,
+        "source-route-outside": 5
+      }
+    }
+  ],
+  "returnedEscapeSectionIds": [
+    "muscle-34:section:0009",
+    "muscle-34:section:0010",
+    "muscle-34:section:0011",
+    "muscle-12:section:0008",
+    "muscle-12:section:0009",
+    "muscle-12:section:0010",
+    "muscle-12:section:0011",
+    "muscle-45:section:0008",
+    "muscle-45:section:0009",
+    "muscle-45:section:0010",
+    "muscle-45:section:0011"
+  ],
+  "returnedEscapeRows": [
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0009",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.287149441421989,
+          -0.07168701560858208,
+          5.260393184820156
+        ],
+        "envelopePosition": [
+          -33.63771282364472,
+          -4.847984815135979,
+          6.0713825848340335
+        ],
+        "signedDistance": 0.7419247067933836,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.287149441421989,
+          -0.07168701560858208,
+          5.260393184820156
+        ],
+        "envelopePosition": [
+          -33.63771282364472,
+          -4.847984815135979,
+          6.0713825848340335
+        ],
+        "signedDistance": 0.7419247067933836,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.1750431241063595,
+          -0.9955186101984074,
+          4.473808482266654
+        ],
+        "envelopePosition": [
+          -33.73540187734362,
+          -5.650895465644994,
+          5.401533511569559
+        ],
+        "signedDistance": 0.8304096217482203,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.2185024151948296,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0010",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.631321923749087,
+          -0.9751636829676339,
+          6.419091758388019
+        ],
+        "envelopePosition": [
+          -33.33840524973789,
+          -5.6166391858193006,
+          7.07697876703517
+        ],
+        "signedDistance": 1.197013845607171,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.631321923749087,
+          -0.9751636829676339,
+          6.419091758388019
+        ],
+        "envelopePosition": [
+          -33.33840524973789,
+          -5.6166391858193006,
+          7.07697876703517
+        ],
+        "signedDistance": 1.197013845607171,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.514731182839562,
+          -1.7574434873634346,
+          5.768533667798411
+        ],
+        "envelopePosition": [
+          -33.439765737610124,
+          -6.296404480936953,
+          6.523169449149602
+        ],
+        "signedDistance": 1.2875034135521841,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.0241000549081913,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0011",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.975493870669011,
+          -1.8786401960035541,
+          7.577790611320626
+        ],
+        "envelopePosition": [
+          -33.039098136818495,
+          -6.385293421383103,
+          8.082575189727567
+        ],
+        "signedDistance": 1.6686060257317585,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.975493870669011,
+          -1.8786401960035541,
+          7.577790611320626
+        ],
+        "envelopePosition": [
+          -33.039098136818495,
+          -6.385293421383103,
+          8.082575189727567
+        ],
+        "signedDistance": 1.6686060257317585,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.8865600193274545,
+          -2.352957971370927,
+          7.190255198887007
+        ],
+        "envelopePosition": [
+          -33.11626439847064,
+          -6.79740370088009,
+          7.752780929550827
+        ],
+        "signedDistance": 1.710101572865587,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.6189267144290925,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0008",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          6.8623824097390385,
+          1.7820018588047346,
+          5.0841541229033576
+        ],
+        "envelopePosition": [
+          -34.00504932261532,
+          -3.2521128807379727,
+          5.904594952981849
+        ],
+        "signedDistance": -0.06774542704622408,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.8623824097390385,
+          1.7820018588047346,
+          5.0841541229033576
+        ],
+        "envelopePosition": [
+          -34.00504932261532,
+          -3.2521128807379727,
+          5.904594952981849
+        ],
+        "signedDistance": -0.06774542704622408,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.78673957168399,
+          2.2207367048873787,
+          5.341984258758328
+        ],
+        "envelopePosition": [
+          -33.20808975765795,
+          -2.8713783898469067,
+          6.121291374230928
+        ],
+        "signedDistance": 0.5964148181804584,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.0551780925327623,
+      "classification": "packing-induced-route-escape",
+      "mechanisms": [
+        "packing-displacement"
+      ],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0009",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.278346003987788,
+          0.7140684429391182,
+          6.205791316571095
+        ],
+        "envelopePosition": [
+          -33.64385859061794,
+          -4.162781863965365,
+          6.879506502944865
+        ],
+        "signedDistance": 0.5916531127251529,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.278346003987788,
+          0.7140684429391182,
+          6.205791316571095
+        ],
+        "envelopePosition": [
+          -33.64385859061794,
+          -4.162781863965365,
+          6.879506502944865
+        ],
+        "signedDistance": 0.5916531127251529,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.995274046463751,
+          0.9705692254886775,
+          6.382264689782627
+        ],
+        "envelopePosition": [
+          -33.025744212418935,
+          -3.939889373495696,
+          7.028034128190994
+        ],
+        "signedDistance": 1.1614441209687159,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7816145603746194,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0010",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.694309688673687,
+          -0.3538651786801087,
+          7.327428280797629
+        ],
+        "envelopePosition": [
+          -33.28266778101804,
+          -5.073451026421347,
+          7.854417856739024
+        ],
+        "signedDistance": 1.1179585433822639,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.694309688673687,
+          -0.3538651786801087,
+          7.327428280797629
+        ],
+        "envelopePosition": [
+          -33.28266778101804,
+          -5.073451026421347,
+          7.854417856739024
+        ],
+        "signedDistance": 1.1179585433822639,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.17680764954486,
+          -0.2634282232993869,
+          7.398777285647242
+        ],
+        "envelopePosition": [
+          -32.86672364146588,
+          -4.994678768278574,
+          7.914208172198201
+        ],
+        "signedDistance": 1.5037999843155545,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.4960582683883072,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0011",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          8.110273384838322,
+          -1.421798767202057,
+          8.44906527227976
+        ],
+        "envelopePosition": [
+          -32.92147696148849,
+          -5.984120160116528,
+          8.829329233719927
+        ],
+        "signedDistance": 1.6703391664220792,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.110273384838322,
+          -1.421798767202057,
+          8.44906527227976
+        ],
+        "envelopePosition": [
+          -32.92147696148849,
+          -5.984120160116528,
+          8.829329233719927
+        ],
+        "signedDistance": 1.6703391664220792,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.35448259064534,
+          -1.4230575267577585,
+          8.449987971681411
+        ],
+        "envelopePosition": [
+          -32.71099799020646,
+          -5.985082917769961,
+          8.829662753665465
+        ],
+        "signedDistance": 1.8753211697124428,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.24421419297554967,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0008",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.001528682991114,
+          1.6369530477872685,
+          4.817913854801954
+        ],
+        "envelopePosition": [
+          -33.885566438640296,
+          -3.3793135741537874,
+          5.676102553057206
+        ],
+        "signedDistance": 0.03882422627494069,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.001528682991114,
+          1.6369530477872685,
+          4.817913854801954
+        ],
+        "envelopePosition": [
+          -33.885566438640296,
+          -3.3793135741537874,
+          5.676102553057206
+        ],
+        "signedDistance": 0.03882422627494069,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.770661882631844,
+          2.3686948632653735,
+          5.268680345892971
+        ],
+        "envelopePosition": [
+          -33.222160114606275,
+          -2.7444928418211307,
+          6.056892221042091
+        ],
+        "signedDistance": 0.5311996669079512,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.1533440045360652,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0009",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.405897074039865,
+          0.425545594599285,
+          5.911651906885748
+        ],
+        "envelopePosition": [
+          -33.53435324505498,
+          -4.413874926180849,
+          6.628209081798179
+        ],
+        "signedDistance": 0.7502300606025869,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.405897074039865,
+          0.425545594599285,
+          5.911651906885748
+        ],
+        "envelopePosition": [
+          -33.53435324505498,
+          -4.413874926180849,
+          6.628209081798179
+        ],
+        "signedDistance": 0.7502300606025869,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.98196765451329,
+          1.0700305952116533,
+          6.398258095359023
+        ],
+        "envelopePosition": [
+          -33.03723015556128,
+          -3.8540411000540233,
+          7.040999891581228
+        ],
+        "signedDistance": 1.1368066352307138,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.9919696630249343,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0010",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.810265025128918,
+          -0.7858619125499553,
+          7.005390061861216
+        ],
+        "envelopePosition": [
+          -33.1831404304329,
+          -5.448436324046451,
+          7.580315700522775
+        ],
+        "signedDistance": 1.3042037233297232,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.810265025128918,
+          -0.7858619125499553,
+          7.005390061861216
+        ],
+        "envelopePosition": [
+          -33.1831404304329,
+          -5.448436324046451,
+          7.580315700522775
+        ],
+        "signedDistance": 1.3042037233297232,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.180274648169043,
+          -0.28365599360089805,
+          7.450249313309584
+        ],
+        "envelopePosition": [
+          -32.863626372828136,
+          -5.011673458219469,
+          7.9587330780913135
+        ],
+        "signedDistance": 1.5103047125075681,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7661707771567412,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0011",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          8.214633062173144,
+          -1.997269614207529,
+          8.09912796962358
+        ],
+        "envelopePosition": [
+          -32.83192754211095,
+          -6.482997891601963,
+          8.53242210767548
+        ],
+        "signedDistance": 1.886026391988581,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.214633062173144,
+          -1.997269614207529,
+          8.09912796962358
+        ],
+        "envelopePosition": [
+          -32.83192754211095,
+          -6.482997891601963,
+          8.53242210767548
+        ],
+        "signedDistance": 1.886026391988581,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.396755744615195,
+          -1.7105116328208096,
+          8.383702852785943
+        ],
+        "envelopePosition": [
+          -32.67455197963048,
+          -6.233362093180776,
+          8.774892526056377
+        ],
+        "signedDistance": 1.9687348259647184,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.44314972128587227,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    }
+  ],
+  "fixedAttachmentRows": [
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0000",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0012",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0000",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0012",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0000",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0012",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0000",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0012",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    }
+  ],
+  "rows": [
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0000",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.189600945,
+          8.059602737,
+          -5.167895317
+        ],
+        "envelopePosition": [
+          -36.33147767778983,
+          2.0699042928689426,
+          -2.97898421486113
+        ],
+        "signedDistance": -3.0614971757257976,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0001",
+      "sectionIndex": 1,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0001",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.533772966134325,
+          7.156125966520925,
+          -4.009196686848691
+        ],
+        "envelopePosition": [
+          -36.03217050121181,
+          1.3012498335778266,
+          -1.973387982128128
+        ],
+        "signedDistance": -3.3608043523038162,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.533772966134325,
+          7.156125966520925,
+          -4.009196686848691
+        ],
+        "envelopePosition": [
+          -36.03217050121181,
+          1.3012498335778266,
+          -1.973387982128128
+        ],
+        "signedDistance": -3.3608043523038162,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.534247876566749,
+          7.0990138323901295,
+          -4.072036590414525
+        ],
+        "envelopePosition": [
+          -36.031854638035604,
+          1.2514960565446005,
+          -2.0270617404172824
+        ],
+        "signedDistance": -3.361120215480021,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.08491687043842414,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0002",
+      "sectionIndex": 2,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0002",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.877944946539117,
+          6.252649305584783,
+          -2.850497959184999
+        ],
+        "envelopePosition": [
+          -35.732863359602526,
+          0.5325954695022146,
+          -0.9677916662064496
+        ],
+        "signedDistance": -3.6601114939130994,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.877944946539117,
+          6.252649305584783,
+          -2.850497959184999
+        ],
+        "envelopePosition": [
+          -35.732863359602526,
+          0.5325954695022146,
+          -0.9677916662064496
+        ],
+        "signedDistance": -3.6601114939130994,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.877308369130056,
+          6.119363920528083,
+          -2.9934175494359323
+        ],
+        "envelopePosition": [
+          -35.73362288738781,
+          0.4165134903693586,
+          -1.089832189546187
+        ],
+        "signedDistance": -3.659351966127815,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.19542622233980086,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0003",
+      "sectionIndex": 3,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0003",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.222117379132663,
+          5.349172709779884,
+          -1.6917993150513546
+        ],
+        "envelopePosition": [
+          -35.433555828458225,
+          -0.23605883893827162,
+          0.03780457629961864
+        ],
+        "signedDistance": -3.9594190250574,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.222117379132663,
+          5.349172709779884,
+          -1.6917993150513546
+        ],
+        "envelopePosition": [
+          -35.433555828458225,
+          -0.23605883893827162,
+          0.03780457629961864
+        ],
+        "signedDistance": -3.9594190250574,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.217156941464912,
+          5.106351184717949,
+          -1.9440414995954536
+        ],
+        "envelopePosition": [
+          -35.438199577411744,
+          -0.44747172221746556,
+          -0.17751591242281584
+        ],
+        "signedDistance": -3.954775276103881,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.35016141797582306,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0004",
+      "sectionIndex": 4,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0004",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.566289435000541,
+          4.44569632774781,
+          -0.5331003923318636
+        ],
+        "envelopePosition": [
+          -35.13424862156899,
+          -1.0047129609560486,
+          1.0434010578145403
+        ],
+        "signedDistance": -3.471831381421081,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.566289435000541,
+          4.44569632774781,
+          -0.5331003923318636
+        ],
+        "envelopePosition": [
+          -35.13424862156899,
+          -1.0047129609560486,
+          1.0434010578145403
+        ],
+        "signedDistance": -3.471831381421081,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.552219838631058,
+          4.056781116738492,
+          -0.9240012374117267
+        ],
+        "envelopePosition": [
+          -35.14693970398443,
+          -1.343214229147517,
+          0.7098372534182754
+        ],
+        "signedDistance": -3.476889305900643,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.5515944756617618,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0005",
+      "sectionIndex": 5,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0005",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.910461436244092,
+          3.5422196121084717,
+          0.6255982864880807
+        ],
+        "envelopePosition": [
+          -34.83494146206702,
+          -1.773367372581097,
+          2.0489973320649257
+        ],
+        "signedDistance": -2.628093950255302,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.910461436244092,
+          3.5422196121084717,
+          0.6255982864880807
+        ],
+        "envelopePosition": [
+          -34.83494146206702,
+          -1.773367372581097,
+          2.0489973320649257
+        ],
+        "signedDistance": -2.628093950255302,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.881376430560847,
+          2.9850499198399065,
+          0.08463199115603022
+        ],
+        "envelopePosition": [
+          -34.860781518789956,
+          -2.2581553924824145,
+          1.5875588893864452
+        ],
+        "signedDistance": -2.6169206155525644,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7771283910806022,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0006",
+      "sectionIndex": 6,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0006",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.254633427155846,
+          2.638742923590894,
+          1.7842969895246739
+        ],
+        "envelopePosition": [
+          -34.5356343114362,
+          -2.5420217606312083,
+          3.0545936269758682
+        ],
+        "signedDistance": -1.6692045975184728,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.254633427155846,
+          2.638742923590894,
+          1.7842969895246739
+        ],
+        "envelopePosition": [
+          -34.5356343114362,
+          -2.5420217606312083,
+          3.0545936269758682
+        ],
+        "signedDistance": -1.6692045975184728,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          6.206142096200073,
+          1.916092560500716,
+          1.1068128695935588
+        ],
+        "envelopePosition": [
+          -34.57838295047985,
+          -3.170593118278185,
+          2.4769412431812694
+        ],
+        "signedDistance": -1.7152143971051745,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.9917457785194077,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0007",
+      "sectionIndex": 7,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0007",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.598805423634213,
+          1.735266339460525,
+          2.942995772301998
+        ],
+        "envelopePosition": [
+          -34.23632715590463,
+          -3.3106760580382595,
+          4.060189989713551
+        ],
+        "signedDistance": -0.7845141789590976,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.598805423634213,
+          1.735266339460525,
+          2.942995772301998
+        ],
+        "envelopePosition": [
+          -34.23632715590463,
+          -3.3106760580382595,
+          4.060189989713551
+        ],
+        "signedDistance": -0.7845141789590976,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          6.528372911824866,
+          0.8762995730903693,
+          2.1648120608834094
+        ],
+        "envelopePosition": [
+          -34.298114178560375,
+          -4.0575934668743665,
+          3.3969503934178293
+        ],
+        "signedDistance": -0.8283749628836888,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.1611866917793128,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0008",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.942977411147117,
+          0.8317897162401082,
+          4.101694527262536
+        ],
+        "envelopePosition": [
+          -33.93702000813477,
+          -4.079330389374448,
+          5.065786328826805
+        ],
+        "signedDistance": 0.03559382327670957,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          6.942977411147117,
+          0.8317897162401082,
+          4.101694527262536
+        ],
+        "envelopePosition": [
+          -33.93702000813477,
+          -4.079330389374448,
+          5.065786328826805
+        ],
+        "signedDistance": 0.03559382327670957,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          6.849790416963019,
+          -0.10517504842315477,
+          3.2801467559142123
+        ],
+        "envelopePosition": [
+          -34.0184641350151,
+          -4.893847318974012,
+          4.36587987795626
+        ],
+        "signedDistance": -0.01742688201001989,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.2496109501412622,
+      "classification": "packing-corrected-source-route",
+      "mechanisms": [
+        "source-route-outside",
+        "packing-displacement"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0009",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.287149441421989,
+          -0.07168701560858208,
+          5.260393184820156
+        ],
+        "envelopePosition": [
+          -33.63771282364472,
+          -4.847984815135979,
+          6.0713825848340335
+        ],
+        "signedDistance": 0.7419247067933836,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.287149441421989,
+          -0.07168701560858208,
+          5.260393184820156
+        ],
+        "envelopePosition": [
+          -33.63771282364472,
+          -4.847984815135979,
+          6.0713825848340335
+        ],
+        "signedDistance": 0.7419247067933836,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.1750431241063595,
+          -0.9955186101984074,
+          4.473808482266654
+        ],
+        "envelopePosition": [
+          -33.73540187734362,
+          -5.650895465644994,
+          5.401533511569559
+        ],
+        "signedDistance": 0.8304096217482203,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.2185024151948296,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0010",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.631321923749087,
+          -0.9751636829676339,
+          6.419091758388019
+        ],
+        "envelopePosition": [
+          -33.33840524973789,
+          -5.6166391858193006,
+          7.07697876703517
+        ],
+        "signedDistance": 1.197013845607171,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.631321923749087,
+          -0.9751636829676339,
+          6.419091758388019
+        ],
+        "envelopePosition": [
+          -33.33840524973789,
+          -5.6166391858193006,
+          7.07697876703517
+        ],
+        "signedDistance": 1.197013845607171,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.514731182839562,
+          -1.7574434873634346,
+          5.768533667798411
+        ],
+        "envelopePosition": [
+          -33.439765737610124,
+          -6.296404480936953,
+          6.523169449149602
+        ],
+        "signedDistance": 1.2875034135521841,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.0241000549081913,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0011",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.975493870669011,
+          -1.8786401960035541,
+          7.577790611320626
+        ],
+        "envelopePosition": [
+          -33.039098136818495,
+          -6.385293421383103,
+          8.082575189727567
+        ],
+        "signedDistance": 1.6686060257317585,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.975493870669011,
+          -1.8786401960035541,
+          7.577790611320626
+        ],
+        "envelopePosition": [
+          -33.039098136818495,
+          -6.385293421383103,
+          8.082575189727567
+        ],
+        "signedDistance": 1.6686060257317585,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.8865600193274545,
+          -2.352957971370927,
+          7.190255198887007
+        ],
+        "envelopePosition": [
+          -33.11626439847064,
+          -6.79740370088009,
+          7.752780929550827
+        ],
+        "signedDistance": 1.710101572865587,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.6189267144290925,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-34",
+      "sectionId": "muscle-34:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6:resampled:0012",
+      "sourcePathSha256": "bc2fedb883c64040a69ea092aa473e7374b4fa317547526a0a9e0af5fed8aec6",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.319665909,
+          -2.78211689,
+          8.736489296
+        ],
+        "envelopePosition": [
+          -32.73979094535121,
+          -7.153947814288594,
+          9.088171468772481
+        ],
+        "signedDistance": 2.1253271987687925,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0000",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          1.544946909,
+          9.841607094,
+          -2.553966284
+        ],
+        "envelopePosition": [
+          -38.606649389683874,
+          3.6266245619228403,
+          -0.7362238226513433
+        ],
+        "signedDistance": -0.7863254638317514,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0001",
+      "sectionIndex": 1,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0001",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          1.9383730156355294,
+          8.850090865988937,
+          -1.4823074286927833
+        ],
+        "envelopePosition": [
+          -38.26501668219658,
+          2.7813797686161035,
+          0.19501046197667882
+        ],
+        "signedDistance": -1.1279581713190439,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          1.9383730156355294,
+          8.850090865988937,
+          -1.4823074286927833
+        ],
+        "envelopePosition": [
+          -38.26501668219658,
+          2.7813797686161035,
+          0.19501046197667882
+        ],
+        "signedDistance": -1.1279581713190439,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          1.9167999737394434,
+          8.851583268674293,
+          -1.4733030749473428
+        ],
+        "envelopePosition": [
+          -38.28359319103838,
+          2.7827322506672836,
+          0.2027997407269515
+        ],
+        "signedDistance": -1.1093816624772472,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.023424384491349353,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0002",
+      "sectionIndex": 2,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0002",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          2.3317990455004756,
+          7.858574350935542,
+          -0.41064881077802584
+        ],
+        "envelopePosition": [
+          -37.92338404119386,
+          1.9361347258780075,
+          1.1262445445960707
+        ],
+        "signedDistance": -1.469590812321762,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          2.3317990455004756,
+          7.858574350935542,
+          -0.41064881077802584
+        ],
+        "envelopePosition": [
+          -37.92338404119386,
+          1.9361347258780075,
+          1.1262445445960707
+        ],
+        "signedDistance": -1.469590812321762,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          2.28560829498044,
+          7.861858225789696,
+          -0.3910757901860437
+        ],
+        "envelopePosition": [
+          -37.96315829282743,
+          1.939109281570965,
+          1.143174624344313
+        ],
+        "signedDistance": -1.4298165606881952,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.050273973413249066,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0003",
+      "sectionIndex": 3,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0003",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          2.725224954275755,
+          6.867057844668868,
+          0.6610098597206651
+        ],
+        "envelopePosition": [
+          -37.5817515044575,
+          1.0908896911019532,
+          2.0574786726934895
+        ],
+        "signedDistance": -1.8112233490581247,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          2.725224954275755,
+          6.867057844668868,
+          0.6610098597206651
+        ],
+        "envelopePosition": [
+          -37.5817515044575,
+          1.0908896911019532,
+          2.0574786726934895
+        ],
+        "signedDistance": -1.8112233490581247,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          2.6501249151673822,
+          6.872606963768251,
+          0.6935298105492721
+        ],
+        "envelopePosition": [
+          -37.64641792437928,
+          1.095912796780274,
+          2.085603491372574
+        ],
+        "signedDistance": -1.7465569291363465,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.08202655544854545,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0004",
+      "sectionIndex": 4,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0004",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          3.1186511720394186,
+          5.875541636496451,
+          1.7326686925856618
+        ],
+        "envelopePosition": [
+          -37.24011870124517,
+          0.24564491475439976,
+          2.9887129375969628
+        ],
+        "signedDistance": -2.152856152270452,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.1186511720394186,
+          5.875541636496451,
+          1.7326686925856618
+        ],
+        "envelopePosition": [
+          -37.24011870124517,
+          0.24564491475439976,
+          2.9887129375969628
+        ],
+        "signedDistance": -2.152856152270452,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.0129525803518002,
+          5.883730818272642,
+          1.7796967022806265
+        ],
+        "envelopePosition": [
+          -37.33113038552863,
+          0.25305205187358926,
+          3.0293780088459172
+        ],
+        "signedDistance": -2.061844467986994,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.11597796635041954,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0005",
+      "sectionIndex": 5,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0005",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          3.512077107359112,
+          4.884025060812062,
+          2.804327289112963
+        ],
+        "envelopePosition": [
+          -36.898486141739916,
+          -0.5996001804629802,
+          3.9199470024811323
+        ],
+        "signedDistance": -2.494488711775709,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.512077107359112,
+          4.884025060812062,
+          2.804327289112963
+        ],
+        "envelopePosition": [
+          -36.898486141739916,
+          -0.5996001804629802,
+          3.9199470024811323
+        ],
+        "signedDistance": -2.494488711775709,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.3825117698078757,
+          4.894799070766982,
+          2.8641278880971233
+        ],
+        "envelopePosition": [
+          -37.010044470218745,
+          -0.5898681858324304,
+          3.9716440966419544
+        ],
+        "signedDistance": -2.3829303832968804,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.14310614111259806,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0006",
+      "sectionIndex": 6,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0006",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          3.905503303178272,
+          3.892508907944407,
+          3.8759861812030687
+        ],
+        "envelopePosition": [
+          -36.55685335735354,
+          -1.4448449086551123,
+          4.851181317999888
+        ],
+        "signedDistance": -2.836121496162086,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.905503303178272,
+          3.892508907944407,
+          3.8759861812030687
+        ],
+        "envelopePosition": [
+          -36.55685335735354,
+          -1.4448449086551123,
+          4.851181317999888
+        ],
+        "signedDistance": -2.836121496162086,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.7681021849785212,
+          3.9054703571963323,
+          3.9426834060011413
+        ],
+        "envelopePosition": [
+          -36.675152867276935,
+          -1.4331728794750735,
+          4.908818724879115
+        ],
+        "signedDistance": -2.7178219862386896,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.15328270041011416,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0007",
+      "sectionIndex": 7,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0007",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.298929279104737,
+          2.9009924679222925,
+          4.947644888339812
+        ],
+        "envelopePosition": [
+          -36.21522076270315,
+          -2.290089885997398,
+          5.7824154769813045
+        ],
+        "signedDistance": -2.447362140557228,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.298929279104737,
+          2.9009924679222925,
+          4.947644888339812
+        ],
+        "envelopePosition": [
+          -36.21522076270315,
+          -2.290089885997398,
+          5.7824154769813045
+        ],
+        "signedDistance": -2.447362140557228,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.172873477233047,
+          2.9142230569287357,
+          5.011731732315226
+        ],
+        "envelopePosition": [
+          -36.3237472532451,
+          -2.278202737889605,
+          5.837778956011233
+        ],
+        "signedDistance": -2.541268679458099,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.142029001410632,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0008",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.692355612892896,
+          1.909476330674008,
+          6.019303744230077
+        ],
+        "envelopePosition": [
+          -35.87358785948289,
+          -3.1353346009707863,
+          6.713649760902669
+        ],
+        "signedDistance": -1.7529708361277123,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.692355612892896,
+          1.909476330674008,
+          6.019303744230077
+        ],
+        "envelopePosition": [
+          -35.87358785948289,
+          -3.1353346009707863,
+          6.713649760902669
+        ],
+        "signedDistance": -1.7529708361277123,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.591790591052089,
+          1.9209657562438263,
+          6.072439276678247
+        ],
+        "envelopePosition": [
+          -35.960164896046585,
+          -3.125029006115248,
+          6.759540549442679
+        ],
+        "signedDistance": -1.841925475703427,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.11431848199795527,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0009",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.085781589174454,
+          0.9179598907571769,
+          7.090962451333932
+        ],
+        "envelopePosition": [
+          -35.531955264526566,
+          -3.980579578222449,
+          7.644883919854163
+        ],
+        "signedDistance": -1.3209179192071347,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.085781589174454,
+          0.9179598907571769,
+          7.090962451333932
+        ],
+        "envelopePosition": [
+          -35.531955264526566,
+          -3.980579578222449,
+          7.644883919854163
+        ],
+        "signedDistance": -1.3209179192071347,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.0156798345428335,
+          0.9264630772649762,
+          7.129064250225214
+        ],
+        "envelopePosition": [
+          -35.59230448090742,
+          -3.9729608823451645,
+          7.677784612075673
+        ],
+        "signedDistance": -1.38171420086272,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.08023906319225106,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0010",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.479207478255311,
+          -0.07355632787542188,
+          8.16262139518665
+        ],
+        "envelopePosition": [
+          -35.19032274437682,
+          -4.825824362797259,
+          8.576118281134482
+        ],
+        "signedDistance": -0.802264351499509,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.479207478255311,
+          -0.07355632787542188,
+          8.16262139518665
+        ],
+        "envelopePosition": [
+          -35.19032274437682,
+          -4.825824362797259,
+          8.576118281134482
+        ],
+        "signedDistance": -0.802264351499509,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.43673854809891,
+          -0.06816347764311048,
+          8.186223173334733
+        ],
+        "envelopePosition": [
+          -35.22688252388504,
+          -4.820996313812094,
+          8.596495373220897
+        ],
+        "signedDistance": -0.8391485262436477,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.048884934223221786,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0011",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.872633986851445,
+          -1.0650729081967873,
+          9.234279776962879
+        ],
+        "envelopePosition": [
+          -34.84868969119394,
+          -5.671069463564284,
+          9.50735215987053
+        ],
+        "signedDistance": -0.3373544385190586,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.872633986851445,
+          -1.0650729081967873,
+          9.234279776962879
+        ],
+        "envelopePosition": [
+          -34.84868969119394,
+          -5.671069463564284,
+          9.50735215987053
+        ],
+        "signedDistance": -0.3373544385190586,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.853006321410007,
+          -1.0625021119171587,
+          9.245356232117185
+        ],
+        "envelopePosition": [
+          -34.86558606528942,
+          -5.6687691028960785,
+          9.516914325665446
+        ],
+        "signedDistance": -0.3551318243055682,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.022683520515514297,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-13",
+      "sectionId": "muscle-13:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843:resampled:0012",
+      "sourcePathSha256": "56f243474529c7996a7f2ada9515fcbbbd1ed677131bdf09fc3e2abb565db843",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          6.266059875,
+          -2.056589127,
+          10.305938721
+        ],
+        "envelopePosition": [
+          -34.507057171847286,
+          -6.516314248285006,
+          10.438586521313027
+        ],
+        "signedDistance": 0.12737639076204238,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0000",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.534674406,
+          10.325469971,
+          -3.888942957
+        ],
+        "envelopePosition": [
+          -36.89457453145213,
+          4.033239666183951,
+          -1.8946970502579639
+        ],
+        "signedDistance": -1.4614572224120361,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0001",
+      "sectionIndex": 1,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0001",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          3.9506381256544634,
+          9.25753670917098,
+          -2.767305663178186
+        ],
+        "envelopePosition": [
+          -36.53338369125307,
+          3.1225708166181905,
+          -0.919785415528291
+        ],
+        "signedDistance": -2.639284159492971,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.9506381256544634,
+          9.25753670917098,
+          -2.767305663178186
+        ],
+        "envelopePosition": [
+          -36.53338369125307,
+          3.1225708166181905,
+          -0.919785415528291
+        ],
+        "signedDistance": -2.639284159492971,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.232135739456952,
+          9.59048752414214,
+          -2.705534395552774
+        ],
+        "envelopePosition": [
+          -36.29081226408038,
+          3.410173630711345,
+          -0.8699174747560106
+        ],
+        "signedDistance": -2.512538112929904,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.44035535794458736,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0002",
+      "sectionIndex": 2,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0002",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.36660143617586,
+          8.18960293113717,
+          -1.6456687091167312
+        ],
+        "envelopePosition": [
+          -36.17219320407778,
+          2.21190151909808,
+          0.05512593155562007
+        ],
+        "signedDistance": -3.2207816494378463,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.36660143617586,
+          8.18960293113717,
+          -1.6456687091167312
+        ],
+        "envelopePosition": [
+          -36.17219320407778,
+          2.21190151909808,
+          0.05512593155562007
+        ],
+        "signedDistance": -3.2207816494378463,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.8643175253913125,
+          8.71127591450958,
+          -1.5601728191227804
+        ],
+        "envelopePosition": [
+          -35.743315671991446,
+          2.6624532439172386,
+          0.1234216233176848
+        ],
+        "signedDistance": -3.6496591815241786,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7260671830143905,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0003",
+      "sectionIndex": 3,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0003",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.782565073431964,
+          7.121669403855293,
+          -0.5240316374801459
+        ],
+        "envelopePosition": [
+          -35.81100243519487,
+          1.301232438833785,
+          1.0300373772104687
+        ],
+        "signedDistance": -3.5819724183207526,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.782565073431964,
+          7.121669403855293,
+          -0.5240316374801459
+        ],
+        "envelopePosition": [
+          -35.81100243519487,
+          1.301232438833785,
+          1.0300373772104687
+        ],
+        "signedDistance": -3.5819724183207526,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.463582458933069,
+          7.733657260385375,
+          -0.4217130685123027
+        ],
+        "envelopePosition": [
+          -35.22415453296641,
+          1.829848724518368,
+          1.1117108059351248
+        ],
+        "signedDistance": -3.745621377301506,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.9212941470836946,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0004",
+      "sectionIndex": 4,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0004",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.19852869997509,
+          6.053735905077779,
+          0.5976054652689633
+        ],
+        "envelopePosition": [
+          -35.449811675499,
+          0.3905633833943103,
+          2.0049488494579473
+        ],
+        "signedDistance": -3.624385579509034,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.19852869997509,
+          6.053735905077779,
+          0.5976054652689633
+        ],
+        "envelopePosition": [
+          -35.449811675499,
+          0.3905633833943103,
+          2.0049488494579473
+        ],
+        "signedDistance": -3.624385579509034,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          6.054963311829346,
+          6.717419823087087,
+          0.7384070515491317
+        ],
+        "envelopePosition": [
+          -34.71172784912367,
+          0.9641414003281099,
+          2.119010292380863
+        ],
+        "signedDistance": -2.9965509949988234,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.0926031640559846,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0005",
+      "sectionIndex": 5,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0005",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.614491881794207,
+          4.98580232343618,
+          1.7192426540491406
+        ],
+        "envelopePosition": [
+          -35.08862129889105,
+          -0.5201057429382878,
+          2.9798603974124416
+        ],
+        "signedDistance": -2.8461727041691414,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.614491881794207,
+          4.98580232343618,
+          1.7192426540491406
+        ],
+        "envelopePosition": [
+          -35.08862129889105,
+          -0.5201057429382878,
+          2.9798603974124416
+        ],
+        "signedDistance": -2.8461727041691414,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          6.612224757900704,
+          5.6692391843689665,
+          1.9189821829387954
+        ],
+        "envelopePosition": [
+          -34.2286526358462,
+          0.07106199283431902,
+          3.1442754001300193
+        ],
+        "signedDistance": -2.131736664404166,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.2257457788409742,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0006",
+      "sectionIndex": 6,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0006",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.0304555594031575,
+          3.917868928986201,
+          2.840879837192637
+        ],
+        "envelopePosition": [
+          -34.72743049507875,
+          -1.4307747077592992,
+          3.9547719379624975
+        ],
+        "signedDistance": -1.8583307206708148,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.0304555594031575,
+          3.917868928986201,
+          2.840879837192637
+        ],
+        "envelopePosition": [
+          -34.72743049507875,
+          -1.4307747077592992,
+          3.9547719379624975
+        ],
+        "signedDistance": -1.8583307206708148,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.100185222013381,
+          4.5784860536476115,
+          3.097820556426408
+        ],
+        "envelopePosition": [
+          -33.805288481259154,
+          -0.8587548395615374,
+          4.16853883024919
+        ],
+        "signedDistance": -1.1473372057148181,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.2832595488304224,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0007",
+      "sectionIndex": 7,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0007",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.446419196659252,
+          2.84993540170434,
+          3.962516908829232
+        ],
+        "envelopePosition": [
+          -34.36623972619585,
+          -2.341443788023579,
+          4.929683383617354
+        ],
+        "signedDistance": -0.9136923227361553,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.446419196659252,
+          2.84993540170434,
+          3.962516908829232
+        ],
+        "envelopePosition": [
+          -34.36623972619585,
+          -2.341443788023579,
+          4.929683383617354
+        ],
+        "signedDistance": -0.9136923227361553,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.49394009889561,
+          3.4302504291482254,
+          4.246357946109126
+        ],
+        "envelopePosition": [
+          -33.463147773845314,
+          -1.8384129302890075,
+          5.167357746407612
+        ],
+        "signedDistance": -0.17621402791722895,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.230703581754517,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0008",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          6.8623824097390385,
+          1.7820018588047346,
+          5.0841541229033576
+        ],
+        "envelopePosition": [
+          -34.00504932261532,
+          -3.2521128807379727,
+          5.904594952981849
+        ],
+        "signedDistance": -0.06774542704622408,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.8623824097390385,
+          1.7820018588047346,
+          5.0841541229033576
+        ],
+        "envelopePosition": [
+          -34.00504932261532,
+          -3.2521128807379727,
+          5.904594952981849
+        ],
+        "signedDistance": -0.06774542704622408,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.78673957168399,
+          2.2207367048873787,
+          5.341984258758328
+        ],
+        "envelopePosition": [
+          -33.20808975765795,
+          -2.8713783898469067,
+          6.121291374230928
+        ],
+        "signedDistance": 0.5964148181804584,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.0551780925327623,
+      "classification": "packing-induced-route-escape",
+      "mechanisms": [
+        "packing-displacement"
+      ],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0009",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.278346003987788,
+          0.7140684429391182,
+          6.205791316571095
+        ],
+        "envelopePosition": [
+          -33.64385859061794,
+          -4.162781863965365,
+          6.879506502944865
+        ],
+        "signedDistance": 0.5916531127251529,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.278346003987788,
+          0.7140684429391182,
+          6.205791316571095
+        ],
+        "envelopePosition": [
+          -33.64385859061794,
+          -4.162781863965365,
+          6.879506502944865
+        ],
+        "signedDistance": 0.5916531127251529,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.995274046463751,
+          0.9705692254886775,
+          6.382264689782627
+        ],
+        "envelopePosition": [
+          -33.025744212418935,
+          -3.939889373495696,
+          7.028034128190994
+        ],
+        "signedDistance": 1.1614441209687159,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7816145603746194,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0010",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.694309688673687,
+          -0.3538651786801087,
+          7.327428280797629
+        ],
+        "envelopePosition": [
+          -33.28266778101804,
+          -5.073451026421347,
+          7.854417856739024
+        ],
+        "signedDistance": 1.1179585433822639,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.694309688673687,
+          -0.3538651786801087,
+          7.327428280797629
+        ],
+        "envelopePosition": [
+          -33.28266778101804,
+          -5.073451026421347,
+          7.854417856739024
+        ],
+        "signedDistance": 1.1179585433822639,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.17680764954486,
+          -0.2634282232993869,
+          7.398777285647242
+        ],
+        "envelopePosition": [
+          -32.86672364146588,
+          -4.994678768278574,
+          7.914208172198201
+        ],
+        "signedDistance": 1.5037999843155545,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.4960582683883072,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0011",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          8.110273384838322,
+          -1.421798767202057,
+          8.44906527227976
+        ],
+        "envelopePosition": [
+          -32.92147696148849,
+          -5.984120160116528,
+          8.829329233719927
+        ],
+        "signedDistance": 1.6703391664220792,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.110273384838322,
+          -1.421798767202057,
+          8.44906527227976
+        ],
+        "envelopePosition": [
+          -32.92147696148849,
+          -5.984120160116528,
+          8.829329233719927
+        ],
+        "signedDistance": 1.6703391664220792,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.35448259064534,
+          -1.4230575267577585,
+          8.449987971681411
+        ],
+        "envelopePosition": [
+          -32.71099799020646,
+          -5.985082917769961,
+          8.829662753665465
+        ],
+        "signedDistance": 1.8753211697124428,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.24421419297554967,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-12",
+      "sectionId": "muscle-12:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861:resampled:0012",
+      "sourcePathSha256": "28bcead4dcc0055f45c405a037eeec3f80905a2f409f50fe58982d0f0b836861",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.526236534,
+          -2.489732265,
+          9.570702553
+        ],
+        "envelopePosition": [
+          -32.560286612890415,
+          -6.894789213425531,
+          9.804240860263059
+        ],
+        "signedDistance": 2.1577532052140813,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0000",
+      "sectionIndex": 0,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0000",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          3.766583204,
+          11.328212738,
+          -3.9319911
+        ],
+        "envelopePosition": [
+          -36.69527056682536,
+          4.897177294037894,
+          -1.940750144386878
+        ],
+        "signedDistance": -0.903440403073772,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0001",
+      "sectionIndex": 1,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0001",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.170951339030872,
+          10.116805157794325,
+          -2.838253093946344
+        ],
+        "envelopePosition": [
+          -36.344057593921136,
+          3.8626158320328994,
+          -0.9886436537435248
+        ],
+        "signedDistance": -2.0913715065744993,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.170951339030872,
+          10.116805157794325,
+          -2.838253093946344
+        ],
+        "envelopePosition": [
+          -36.344057593921136,
+          3.8626158320328994,
+          -0.9886436537435248
+        ],
+        "signedDistance": -2.0913715065744993,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.161703759760972,
+          10.085088939570193,
+          -2.9506847503979934
+        ],
+        "envelopePosition": [
+          -36.35222930728149,
+          3.8343238325805213,
+          -1.0852535756943422
+        ],
+        "signedDistance": -2.0841929943501767,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.11718495463691384,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0002",
+      "sectionIndex": 2,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0002",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.575319680450884,
+          8.905397674284218,
+          -1.7445150570986199
+        ],
+        "envelopePosition": [
+          -35.99284444312397,
+          2.8280544537208545,
+          -0.03653713778026835
+        ],
+        "signedDistance": -3.35118953047852,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.575319680450884,
+          8.905397674284218,
+          -1.7445150570986199
+        ],
+        "envelopePosition": [
+          -35.99284444312397,
+          2.8280544537208545,
+          -0.03653713778026835
+        ],
+        "signedDistance": -3.35118953047852,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          4.660280563341338,
+          8.951283755195513,
+          -1.8847748623303882
+        ],
+        "envelopePosition": [
+          -35.91991219091606,
+          2.866450511437036,
+          -0.15797052998772632
+        ],
+        "signedDistance": -3.326959520003364,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.17028416546049394,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0003",
+      "sectionIndex": 3,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0003",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          4.979687673891189,
+          7.693990282254728,
+          -0.6507767902761215
+        ],
+        "envelopePosition": [
+          -35.64163159184085,
+          1.7934931560374858,
+          0.9155695762790126
+        ],
+        "signedDistance": -3.7513432616747764,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          4.979687673891189,
+          7.693990282254728,
+          -0.6507767902761215
+        ],
+        "envelopePosition": [
+          -35.64163159184085,
+          1.7934931560374858,
+          0.9155695762790126
+        ],
+        "signedDistance": -3.7513432616747764,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.256742878725829,
+          7.912177164233559,
+          -0.742044087639412
+        ],
+        "envelopePosition": [
+          -35.40312836693535,
+          1.980888730900996,
+          0.8345264518289253
+        ],
+        "signedDistance": -3.914526208893205,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.36427300416254793,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0004",
+      "sectionIndex": 4,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0004",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.384056028291318,
+          6.482582756862795,
+          0.4429611953851773
+        ],
+        "envelopePosition": [
+          -35.29041842993489,
+          0.7589317412023053,
+          1.8676760484584511
+        ],
+        "signedDistance": -3.558401672769167,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.384056028291318,
+          6.482582756862795,
+          0.4429611953851773
+        ],
+        "envelopePosition": [
+          -35.29041842993489,
+          0.7589317412023053,
+          1.8676760484584511
+        ],
+        "signedDistance": -3.558401672769167,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          5.906835887651727,
+          6.9162232762498475,
+          0.4541363872258106
+        ],
+        "envelopePosition": [
+          -34.84003973416611,
+          1.1329957277898632,
+          1.8726181852085646
+        ],
+        "signedDistance": -3.187024935112505,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.6793141882220897,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0005",
+      "sectionIndex": 5,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0005",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          5.7884240078093505,
+          5.271175406541798,
+          1.5366995135506387
+        ],
+        "envelopePosition": [
+          -34.9392055905722,
+          -0.27562952010642494,
+          2.8197828064397514
+        ],
+        "signedDistance": -2.8237914333827208,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          5.7884240078093505,
+          5.271175406541798,
+          1.5366995135506387
+        ],
+        "envelopePosition": [
+          -34.9392055905722,
+          -0.27562952010642494,
+          2.8197828064397514
+        ],
+        "signedDistance": -2.8237914333827208,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          6.524788526662128,
+          5.880865612825636,
+          1.6787632297909862
+        ],
+        "envelopePosition": [
+          -34.30457784740415,
+          0.2513696016431979,
+          2.935622164330873
+        ],
+        "signedDistance": -2.3478536868870226,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.9665076056274617,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0006",
+      "sectionIndex": 6,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0006",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.1927923676881464,
+          4.059767867732745,
+          2.63043748232581
+        ],
+        "envelopePosition": [
+          -34.58799242397039,
+          -1.310190946645557,
+          3.7718892641694404
+        ],
+        "signedDistance": -1.8708928570396541,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.1927923676881464,
+          4.059767867732745,
+          2.63043748232581
+        ],
+        "envelopePosition": [
+          -34.58799242397039,
+          -1.310190946645557,
+          3.7718892641694404
+        ],
+        "signedDistance": -1.8708928570396541,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.048437302872828,
+          4.776409295671626,
+          2.896632160478229
+        ],
+        "envelopePosition": [
+          -33.850373025257355,
+          -0.6899092920101957,
+          3.9935704268821737
+        ],
+        "signedDistance": -1.2907636779878737,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.1474157041029838,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0007",
+      "sectionIndex": 7,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0007",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "shaped",
+      "source": {
+        "position": [
+          6.597160768190308,
+          2.8483604432283123,
+          3.72417556268406
+        ],
+        "envelopePosition": [
+          -34.236779222196866,
+          -2.3447522737080075,
+          4.72399581701659
+        ],
+        "signedDistance": -0.8619530946466372,
+        "inside": true
+      },
+      "fixtureRest": {
+        "position": [
+          6.597160768190308,
+          2.8483604432283123,
+          3.72417556268406
+        ],
+        "envelopePosition": [
+          -34.236779222196866,
+          -2.3447522737080075,
+          4.72399581701659
+        ],
+        "signedDistance": -0.8619530946466372,
+        "inside": true
+      },
+      "packedCurrent": {
+        "position": [
+          7.464280763710771,
+          3.604304517552674,
+          4.0959224636324985
+        ],
+        "envelopePosition": [
+          -33.48908527895749,
+          -1.6896977153684127,
+          5.036289359969118
+        ],
+        "signedDistance": -0.2858669280615077,
+        "inside": true
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.20894345959697,
+      "classification": "contained",
+      "mechanisms": [],
+      "correspondenceImplication": null,
+      "sourceOutside": false,
+      "restOutside": false,
+      "currentOutside": false
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0008",
+      "sectionIndex": 8,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0008",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.001528682991114,
+          1.6369530477872685,
+          4.817913854801954
+        ],
+        "envelopePosition": [
+          -33.885566438640296,
+          -3.3793135741537874,
+          5.676102553057206
+        ],
+        "signedDistance": 0.03882422627494069,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.001528682991114,
+          1.6369530477872685,
+          4.817913854801954
+        ],
+        "envelopePosition": [
+          -33.885566438640296,
+          -3.3793135741537874,
+          5.676102553057206
+        ],
+        "signedDistance": 0.03882422627494069,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.770661882631844,
+          2.3686948632653735,
+          5.268680345892971
+        ],
+        "envelopePosition": [
+          -33.222160114606275,
+          -2.7444928418211307,
+          6.056892221042091
+        ],
+        "signedDistance": 0.5311996669079512,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 1.1533440045360652,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0009",
+      "sectionIndex": 9,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0009",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.405897074039865,
+          0.425545594599285,
+          5.911651906885748
+        ],
+        "envelopePosition": [
+          -33.53435324505498,
+          -4.413874926180849,
+          6.628209081798179
+        ],
+        "signedDistance": 0.7502300606025869,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.405897074039865,
+          0.425545594599285,
+          5.911651906885748
+        ],
+        "envelopePosition": [
+          -33.53435324505498,
+          -4.413874926180849,
+          6.628209081798179
+        ],
+        "signedDistance": 0.7502300606025869,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          7.98196765451329,
+          1.0700305952116533,
+          6.398258095359023
+        ],
+        "envelopePosition": [
+          -33.03723015556128,
+          -3.8540411000540233,
+          7.040999891581228
+        ],
+        "signedDistance": 1.1368066352307138,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.9919696630249343,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0010",
+      "sectionIndex": 10,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0010",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          7.810265025128918,
+          -0.7858619125499553,
+          7.005390061861216
+        ],
+        "envelopePosition": [
+          -33.1831404304329,
+          -5.448436324046451,
+          7.580315700522775
+        ],
+        "signedDistance": 1.3042037233297232,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          7.810265025128918,
+          -0.7858619125499553,
+          7.005390061861216
+        ],
+        "envelopePosition": [
+          -33.1831404304329,
+          -5.448436324046451,
+          7.580315700522775
+        ],
+        "signedDistance": 1.3042037233297232,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.180274648169043,
+          -0.28365599360089805,
+          7.450249313309584
+        ],
+        "envelopePosition": [
+          -32.863626372828136,
+          -5.011673458219469,
+          7.9587330780913135
+        ],
+        "signedDistance": 1.5103047125075681,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.7661707771567412,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0011",
+      "sectionIndex": 11,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0011",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": false,
+      "returnedShapeStatus": "axis-outside-envelope",
+      "source": {
+        "position": [
+          8.214633062173144,
+          -1.997269614207529,
+          8.09912796962358
+        ],
+        "envelopePosition": [
+          -32.83192754211095,
+          -6.482997891601963,
+          8.53242210767548
+        ],
+        "signedDistance": 1.886026391988581,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.214633062173144,
+          -1.997269614207529,
+          8.09912796962358
+        ],
+        "envelopePosition": [
+          -32.83192754211095,
+          -6.482997891601963,
+          8.53242210767548
+        ],
+        "signedDistance": 1.886026391988581,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.396755744615195,
+          -1.7105116328208096,
+          8.383702852785943
+        ],
+        "envelopePosition": [
+          -32.67455197963048,
+          -6.233362093180776,
+          8.774892526056377
+        ],
+        "signedDistance": 1.9687348259647184,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0.44314972128587227,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    },
+    {
+      "constructionId": "muscle-45",
+      "sectionId": "muscle-45:section:0012",
+      "sectionIndex": 12,
+      "sourceSampleId": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a:resampled:0012",
+      "sourcePathSha256": "11f21d34b1f7a0ee3d44309092b3224761159cb3da7e4a2ba554c6d71e9d8a6a",
+      "fixedAttachmentSection": true,
+      "returnedShapeStatus": "fixed-section",
+      "source": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "fixtureRest": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "packedCurrent": {
+        "position": [
+          8.619001389,
+          -3.208676815,
+          9.192866325
+        ],
+        "envelopePosition": [
+          -32.48071440341421,
+          -7.517559023564333,
+          9.484528895786282
+        ],
+        "signedDistance": 2.433647696182554,
+        "inside": false
+      },
+      "sourceToRestDrift": 0,
+      "restToCurrentDisplacement": 0,
+      "classification": "source-route-outside",
+      "mechanisms": [
+        "source-route-outside"
+      ],
+      "correspondenceImplication": "regional-correspondence-question",
+      "sourceOutside": true,
+      "restOutside": true,
+      "currentOutside": true
+    }
+  ],
+  "inputs": {
+    "parentAtlas": {
+      "requestedPath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+      "effectivePath": "repo://artifacts/authored-muscle-coordinate-export-v0/dense-selectors/k4-current-graph/parent-atlas.json",
+      "fileSha256": "55ddfb02318b120ab9bf0e93fefa7091811c87bc95a8991af919cb32e0197c71"
+    },
+    "frameReceipt": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-v0/receipt.json",
+      "fileSha256": "a901c429096744ca6408f5cd8e4f32fb8f4631c298d040f5aa8707755aa3ba1c"
+    },
+    "envelope": {
+      "requestedPath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "effectivePath": "repo://artifacts/source-shaped-k4-envelope-frame-binding-visual-v0/envelope-baseline.glb",
+      "fileSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+    },
+    "solverCarrier": {
+      "requestedPath": "git://3f49ef97/artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "effectivePath": "git://3f49ef97/artifacts/current-k4-curvature-contact-volume-bound-assay-v0/packed-carrier.json",
+      "fileSha256": "02a5fd87bd8ab0a35d239e5bcce84d0c1a2b5b22919fbbe0646008b96dcfa609"
+    },
+    "shapeAssay": {
+      "requestedPath": "git://3f49ef97/artifacts/k4-envelope-clamped-shape-assay-v0/shape-assay-result.json",
+      "effectivePath": "git://3f49ef97/artifacts/k4-envelope-clamped-shape-assay-v0/shape-assay-result.json",
+      "fileSha256": "df29bb724c8c9c1621cfecd93e1ec3cca2ef96b47a580fb2d7d4bed37c02c877"
+    }
+  }
+}

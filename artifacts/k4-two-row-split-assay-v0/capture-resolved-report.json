@@ -1,0 +1,134 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved",
+    "outputPath": "repo://artifacts/k4-two-row-split-assay-v0/capture-resolved.png",
+    "reportPath": "repo://artifacts/k4-two-row-split-assay-v0/capture-resolved-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 60000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": 20000,
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 98008,
+    "processGroupId": 98008,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 98008,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3466,
+    "retainedBytes": 3466,
+    "truncated": false,
+    "tail": "[0808/121952.807008:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0808/121952.843606:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved (0)\n[0808/121952.848779:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0808/121953.146936:INFO:CONSOLE:0] \"[.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved (0)\n[0808/121953.149203:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0808/121953.196570:INFO:CONSOLE:0] \"[.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved (0)\n[0808/121953.197988:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0808/121953.248764:INFO:CONSOLE:0] \"[.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved (0)\n[0808/121953.256173:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0808/121953.307642:INFO:CONSOLE:0] \"[.WebGL-0x1040050a200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8780/artifacts/k4-two-row-split-assay-v0/index.html?data=f063f34ffb412bb2228cf255f5fc162aefab2abcf186f48e6361d2773b9eac32&envelope=cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e&routeRequested=k4-two-row-split-comparison-v0&state=resolved (0)\n199647 bytes written to file repo://artifacts/k4-two-row-split-assay-v0/capture-resolved.png\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/k4-two-row-split-assay-v0/capture-resolved.png",
+    "sizeBytes": 199647,
+    "sha256": "bef765c6acd85d745dbbaa5406bdb497f4cba71dc97c0afab2bc2b21e9b0ace0",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 52,
+      "idatBytes": 199002
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "primary-output-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/k4-two-row-split-assay-v0/capture-resolved.png",
+      "sizeBytes": 199647,
+      "sha256": "bef765c6acd85d745dbbaa5406bdb497f4cba71dc97c0afab2bc2b21e9b0ace0",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 52,
+        "idatBytes": 199002
+      }
+    }
+  }
+}

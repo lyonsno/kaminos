@@ -1,0 +1,134 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>K4 two-row split comparison</title>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+</script>
+<style>
+body{margin:0;background:#07090d;color:#f4eee3;font-family:ui-monospace,Menlo,monospace;overflow:hidden}
+#panel{position:fixed;top:12px;left:12px;width:430px;background:#0c1118ee;border:1px solid #ffffff22;border-radius:12px;padding:14px;font-size:11px;line-height:1.45;z-index:2}
+h1{font-size:14px;margin:0 0 6px}
+.row{margin:8px 0;padding:8px;border-radius:8px;border:1px solid #ffffff18}
+.row h2{font-size:11px;margin:0 0 4px;color:#ffd166}
+.legend span{display:inline-block;width:10px;height:10px;border-radius:5px;margin:0 4px 0 8px;vertical-align:-1px}
+button{min-height:38px;padding:6px 10px;margin:4px 6px 0 0;border:1px solid #ffffff24;border-radius:8px;color:#dce6f0;background:#111923;cursor:pointer;font:600 11px ui-monospace,monospace}
+button[aria-pressed="true"]{color:#081016;background:#e7d1a8}
+#identity{margin-top:8px;color:#6f7d8c;font-size:9px;overflow-wrap:anywhere}
+#status{color:#8fa3b8}
+canvas{display:block}
+</style></head><body>
+<div id="panel">
+  <h1>K4 two-row split comparison</h1>
+  <div id="status">loading…</div>
+  <div class="row"><h2>Row 1 · belly / interior — packing &amp; shape quality</h2>
+    <div class="legend"><span style="background:#3ddad7"></span>interior boundary sample
+    <span style="background:#ff2d2d"></span>packing-induced escape (M12 s8, reference state)
+    <span style="background:#43d17a"></span>re-solved (restored toward rest)</div>
+    <div>Packing-induced failure styling applies only in this row.</div>
+  </div>
+  <div class="row"><h2>Row 2 · attachment-tail — source relationship</h2>
+    <div class="legend"><span style="background:#e8a13d"></span>source-geometry-attributed
+    <span style="background:#e8a13d;border:2px solid #8fa3b8"></span>metric-evidence-only</div>
+    <div>Caption: <em>outside authored envelope in source geometry</em>. This is a
+    relationship, not an error; envelope anatomical scope remains held authority.</div>
+  </div>
+  <div>
+    <button data-state="reference">Reference (pre-re-solve)</button>
+    <button data-state="resolved">Re-solved M12 s8</button>
+  </div>
+  <div id="identity"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const query = new URLSearchParams(location.search);
+const statusEl = document.getElementById('status');
+const identityEl = document.getElementById('identity');
+async function fetchExact(pathName, expectedSha256) {
+  const response = await fetch(pathName, { cache: 'no-store' });
+  if (!response.ok) throw new Error(pathName + ' HTTP ' + response.status);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+  if (expectedSha256 && hex !== expectedSha256) {
+    throw new Error(pathName + ' identity mismatch: ' + hex);
+  }
+  return bytes;
+}
+try {
+  const dataBytes = await fetchExact('viewer-data.json', query.get('data'));
+  const data = JSON.parse(new TextDecoder().decode(dataBytes));
+  if (data.schema !== 'kaminos.k4-two-row-viewer-data.v0') throw new Error('viewer data schema mismatch');
+  const routeRequested = query.get('routeRequested') || data.route.requested;
+  if (routeRequested !== data.route.effective) throw new Error('identity-bound capture route mismatch');
+  const envelopeBytes = await fetchExact('envelope-baseline.glb', query.get('envelope'));
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x07090d);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  document.body.appendChild(renderer.domElement);
+  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.01, 500);
+  const focus = new THREE.Vector3(...data.focus);
+  camera.position.set(focus.x + 7, focus.y + 4, focus.z + 9);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.copy(focus);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(5, 10, 7);
+  scene.add(key);
+  const loader = new GLTFLoader();
+  const gltf = await loader.parseAsync(envelopeBytes.buffer, '');
+  gltf.scene.traverse(node => {
+    if (node.isMesh) {
+      node.material = new THREE.MeshStandardMaterial({
+        color: 0x8fa3b8, transparent: true, opacity: 0.16,
+        side: THREE.DoubleSide, depthWrite: false,
+      });
+    }
+  });
+  scene.add(gltf.scene);
+  const stateGroups = { reference: new THREE.Group(), resolved: new THREE.Group() };
+  scene.add(stateGroups.reference, stateGroups.resolved);
+  const markerMaterialCache = new Map();
+  function markerMaterial(color) {
+    if (!markerMaterialCache.has(color)) {
+      markerMaterialCache.set(color, new THREE.MeshStandardMaterial({ color }));
+    }
+    return markerMaterialCache.get(color);
+  }
+  const sphere = new THREE.SphereGeometry(0.055, 12, 12);
+  for (const stateName of ['reference', 'resolved']) {
+    for (const marker of data.states[stateName].markers) {
+      const mesh = new THREE.Mesh(sphere, markerMaterial(marker.color));
+      mesh.position.set(...marker.position);
+      stateGroups[stateName].add(mesh);
+    }
+  }
+  function showState(state) {
+    stateGroups.reference.visible = state === 'reference';
+    stateGroups.resolved.visible = state === 'resolved';
+    document.querySelectorAll('[data-state]').forEach(button =>
+      button.setAttribute('aria-pressed', String(button.dataset.state === state)));
+    document.documentElement.dataset.witnessState = state;
+  }
+  document.querySelectorAll('[data-state]').forEach(button =>
+    button.addEventListener('click', () => showState(button.dataset.state)));
+  showState(query.get('state') === 'resolved' ? 'resolved' : 'reference');
+  identityEl.textContent =
+    'route requested ' + routeRequested + ' · route effective ' + data.route.effective +
+    ' · data ' + (query.get('data') || 'unbound') +
+    ' · frame ' + data.frameReceiptSha256.slice(0, 12) +
+    ' · reference carrier ' + data.referenceCarrierSha256.slice(0, 12) +
+    ' · resolved carrier ' + data.resolvedCarrierSha256.slice(0, 12);
+  statusEl.textContent = 'mounted · ' + data.states.reference.markers.length +
+    ' reference markers · drag to orbit';
+  document.documentElement.dataset.witnessMounted = 'true';
+  function frame() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(frame); }
+  frame();
+} catch (error) {
+  statusEl.textContent = 'FAILED: ' + error.message;
+  document.documentElement.dataset.witnessMounted = 'failed';
+  throw error;
+}
+</script></body></html>
