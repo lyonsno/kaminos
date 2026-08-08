@@ -1,0 +1,70 @@
+{
+ "schema": "kaminos.registration-success-calibration.v0",
+ "anchor": "cast-sf3d-skin-baseline (operator six-view verified)",
+ "vectors": {
+  "caudal": {
+   "containment_mean_globalfit": 0.26,
+   "bones": 10
+  },
+  "forelimb": {
+   "containment_mean_globalfit": 0.7286,
+   "bones": 7
+  },
+  "hindlimb": {
+   "containment_mean_globalfit": 0.8611,
+   "bones": 9
+  },
+  "pedal": {
+   "containment_mean_globalfit": 0.3493,
+   "bones": 34
+  },
+  "pelvis": {
+   "containment_mean_globalfit": 0.9,
+   "bones": 1
+  },
+  "ribcage": {
+   "containment_mean_globalfit": 0.0,
+   "bones": 1
+  },
+  "scapulae": {
+   "containment_mean_globalfit": 0.3125,
+   "bones": 2
+  },
+  "skull_mandible": {
+   "containment_mean_globalfit": 0.6333,
+   "bones": 3
+  },
+  "spine": {
+   "containment_mean_globalfit": 1.0,
+   "bones": 27
+  }
+ },
+ "thresholds": {
+  "containment_mean_min": 0.3125
+ },
+ "verdicts": {
+  "caudal": "UNDERSPANS (pose-corrected; coverage 0.29; operator: tail unfinished-short)",
+  "forelimb": "REGISTERS",
+  "hindlimb": "REGISTERS",
+  "pedal": "REGISTERS",
+  "pelvis": "REGISTERS",
+  "ribcage": "UNMEASURABLE-AT-BONE-GRANULARITY (ribs not separate meshes)",
+  "scapulae": "REGISTERS",
+  "skull_mandible": "REGISTERS-CONTAINMENT-ONLY (coverage NOT-YET-FORMULATED; containment 0.6333)",
+  "spine": "REGISTERS"
+ },
+ "coverage_articulated": {
+  "core": null,
+  "forelimb-left": 0.9785,
+  "forelimb-right": 1.0272,
+  "head": 0.1076,
+  "hindlimb-left": 1.0359,
+  "hindlimb-right": 1.0329,
+  "tail": 0.2908
+ },
+ "notes": [
+  "Thresholds bound once on the verified anchor; FROZEN for all later casts.",
+  "Residual-quantile leg deferred: envelope-sample region restriction pending; containment+coverage legs bound now, residual leg binds on first region-restricted residual receipt without re-fitting these.",
+  "Maquette paw band barred from GT-positive at global fit (calibration guard)."
+ ]
+}
