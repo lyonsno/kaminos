@@ -1,0 +1,10 @@
+authored envelope  frame: ML=X AP=Z DV=Y
+  meanCrossSectionAspect 0.820  spread 0.424  widthToAxial 0.256
+sf3d cast  frame: ML=Z AP=X DV=Y
+  meanCrossSectionAspect 0.618  spread 0.176  widthToAxial 0.287
+
+--- frame sanity ---
+authored envelope: AP 8.575  DV 7.363  ML 2.915
+   AP/DV 1.16 (cat lateral silhouette should be >1)   ML/AP 0.34 (should be well under 1)
+sf3d cast: AP 0.971  DV 0.763  ML 0.345
+   AP/DV 1.27 (cat lateral silhouette should be >1)   ML/AP 0.36 (should be well under 1)
