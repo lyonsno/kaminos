@@ -133,6 +133,9 @@ const packageData = createProxyRigPackage({
   skinBinding,
   castBinding,
   muscles: [m31Overlay.muscle],
+  interaction: {
+    initialControl: 'hindlimb-left-distal-support',
+  },
   source: {
     cast: 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb',
     castSha256,

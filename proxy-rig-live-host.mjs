@@ -57,7 +57,10 @@ export function resolveProxyRigTransformTarget(controls, selectedControl) {
   return controls.get(selectedControl) ?? null;
 }
 
-export function chooseProxyRigInitialControlName(controlNames) {
+export function chooseProxyRigInitialControlName(controlNames, requestedInitialControl = null) {
+  if (requestedInitialControl !== null && requestedInitialControl !== undefined) {
+    return controlNames.includes(requestedInitialControl) ? requestedInitialControl : null;
+  }
   if (controlNames.includes('hindlimb-right-hock')) return 'hindlimb-right-hock';
   return controlNames[0] ?? null;
 }
@@ -125,6 +128,55 @@ export function proxyRigMaximumVertexDisplacement(restPositions, posedPositions)
   return maximum;
 }
 
+export function proxyRigMuscleShapeChange(restPositions, posedPositions, triangles) {
+  if ((!Array.isArray(restPositions) && !ArrayBuffer.isView(restPositions))
+      || (!Array.isArray(posedPositions) && !ArrayBuffer.isView(posedPositions))
+      || restPositions.length !== posedPositions.length
+      || restPositions.length % 3 !== 0) {
+    throw new Error('Muscle shape diagnostics require matching xyz arrays');
+  }
+  if ((!Array.isArray(triangles) && !ArrayBuffer.isView(triangles)) || triangles.length % 3 !== 0) {
+    throw new Error('Muscle shape diagnostics require triangle indices');
+  }
+  const vertexCount = restPositions.length / 3;
+  const edges = new Set();
+  for (let offset = 0; offset < triangles.length; offset += 3) {
+    const triangle = [triangles[offset], triangles[offset + 1], triangles[offset + 2]];
+    for (const index of triangle) {
+      if (!Number.isInteger(index) || index < 0 || index >= vertexCount) {
+        throw new Error(`Muscle shape triangle index ${String(index)} is outside the vertex array`);
+      }
+    }
+    for (let edge = 0; edge < 3; edge += 1) {
+      const a = Math.min(triangle[edge], triangle[(edge + 1) % 3]);
+      const b = Math.max(triangle[edge], triangle[(edge + 1) % 3]);
+      edges.add(`${a}:${b}`);
+    }
+  }
+  const edgeLength = (positions, a, b) => Math.hypot(
+    positions[b * 3] - positions[a * 3],
+    positions[b * 3 + 1] - positions[a * 3 + 1],
+    positions[b * 3 + 2] - positions[a * 3 + 2],
+  );
+  const strains = [];
+  for (const key of edges) {
+    const [a, b] = key.split(':').map(Number);
+    const restLength = edgeLength(restPositions, a, b);
+    const posedLength = edgeLength(posedPositions, a, b);
+    if (!(restLength > 1e-12) || !(posedLength > 1e-12)) {
+      throw new Error(`Muscle shape edge ${a}:${b} is degenerate`);
+    }
+    strains.push(Math.abs(Math.log(posedLength / restLength)));
+  }
+  strains.sort((a, b) => a - b);
+  const q95Index = Math.max(0, Math.ceil(strains.length * 0.95) - 1);
+  return {
+    edgeCount: strains.length,
+    q95AbsLogEdgeStrain: strains[q95Index] ?? 0,
+    maxAbsLogEdgeStrain: strains.at(-1) ?? 0,
+  };
+}
+
 export function attachProxyRigTransformControl(controls, transformControls, control, visible) {
   transformControls.detach();
   transformControls.attach(control);
@@ -183,6 +235,7 @@ export function createProxyRigLiveHost({
     ghost: null,
     muscleMeshes: new Map(),
     muscleMaxDisplacements: {},
+    muscleShapeChanges: {},
     musclesVisible: true,
     controls: new Map(),
     controlsVisible: true,
@@ -220,6 +273,9 @@ export function createProxyRigLiveHost({
       muscles: state.evaluator?.muscles.map(proxyRigMuscleOverlayDescriptor) ?? [],
       musclesVisible: state.musclesVisible,
       muscleMaxDisplacements: { ...state.muscleMaxDisplacements },
+      muscleShapeChanges: Object.fromEntries(Object.entries(state.muscleShapeChanges).map(
+        ([relationId, diagnostic]) => [relationId, { ...diagnostic }],
+      )),
       controlWorldPositions: Object.fromEntries([...state.controls].map(([name, control]) => [
         name,
         control.getWorldPosition(new THREE.Vector3()).toArray(),
@@ -282,6 +338,7 @@ export function createProxyRigLiveHost({
       ghost: null,
       muscleMeshes: new Map(),
       muscleMaxDisplacements: {},
+      muscleShapeChanges: {},
       musclesVisible: true,
       controls: new Map(),
       controlsVisible: true,
@@ -368,6 +425,11 @@ export function createProxyRigLiveHost({
       state.muscleMaxDisplacements[muscle.relationId] = proxyRigMaximumVertexDisplacement(
         restMuscle.positions,
         muscle.positions,
+      );
+      state.muscleShapeChanges[muscle.relationId] = proxyRigMuscleShapeChange(
+        restMuscle.positions,
+        muscle.positions,
+        muscle.triangles,
       );
     }
     let maxDisplacement = 0;
@@ -601,7 +663,16 @@ export function createProxyRigLiveHost({
       }
       state.status = 'live';
       restorePoseRun();
-      selectControl(chooseProxyRigInitialControlName([...state.controls.keys()]));
+      const initialControl = chooseProxyRigInitialControlName(
+        [...state.controls.keys()],
+        state.evaluator.interaction?.initialControl,
+      );
+      if (!initialControl) {
+        throw new Error(`Proxy rig interaction initial control ${String(
+          state.evaluator.interaction?.initialControl,
+        )} is unavailable`);
+      }
+      selectControl(initialControl);
       evaluate(false);
       setInfo(`Live proxy rig: ${shortId(state.packageId)}`);
       updateUi();

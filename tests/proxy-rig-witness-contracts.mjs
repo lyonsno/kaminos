@@ -7,6 +7,14 @@ import test from 'node:test';
 
 import { computeProxyRigPackageId } from '../proxy-rig-runtime.mjs';
 
+test('witness binds M31 shape evidence to the visible declared skeletal control', async () => {
+  const source = await readFile(new URL('../tools/witness-proxy-rig-live.mjs', import.meta.url), 'utf8');
+  assert.match(source, /proxy-rig-control-select'\)\.selectOption\(controlName\)/);
+  assert.match(source, /selectedControl\s*===\s*controlName/);
+  assert.match(source, /muscleShapeChanges/);
+  assert.match(source, /q95AbsLogEdgeStrain/);
+});
+
 test('witness setup failure overwrites any stale pass with a terminal failure report', async () => {
   const outputDir = await mkdtemp(join(tmpdir(), 'proxy-rig-witness-failure-'));
   try {

@@ -46,6 +46,7 @@ const hierarchyPoses = {
 let expectedControlNames = [];
 let expectedHierarchy = [];
 let expectedMuscles = [];
+let expectedInteraction = null;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -193,7 +194,7 @@ async function loadWitnessPage(browser, viewport, label) {
     `${label}: live muscle identity differs from the verified package (${JSON.stringify(state.muscles)})`,
   );
   assert(
-    state.selectedControl === 'hindlimb-right-hock',
+    state.selectedControl === expectedInteraction.initialControl,
     `${label}: initial selection drifted onto ${String(state.selectedControl)}`,
   );
   assert(
@@ -272,6 +273,11 @@ try {
     fixedSupport: muscle.supportMapping.fixed,
     movingSupport: muscle.supportMapping.moving,
   }));
+  expectedInteraction = checkedPackage.interaction;
+  assert(
+    expectedInteraction?.initialControl === 'hindlimb-left-distal-support',
+    `fresh package does not declare the M31-driving skeletal assay control (${JSON.stringify(expectedInteraction)})`,
+  );
   assert(expectedControlNames.length === 11, `expected eleven controls, got ${expectedControlNames.length}`);
   assert(
     JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-left'))) === JSON.stringify([
@@ -364,6 +370,10 @@ try {
     `desktop: reported kernel does not match renderer identity (${JSON.stringify(report.effectiveRuntime)})`,
   );
   const canvas = desktop.page.locator('#viewport > canvas').first();
+  await desktop.page.screenshot({
+    path: resolve(outputDir, 'proxy-rig-public-initial-control-page.png'),
+    fullPage: true,
+  });
   await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(false));
   await desktop.page.waitForTimeout(800);
   const hiddenRestState = await desktop.page.evaluate(() => window.kaminosProxyRigDebugState());
@@ -379,6 +389,14 @@ try {
   for (const [poseName, controls] of Object.entries(hierarchyPoses)) {
     await desktop.page.locator('#proxy-rig-reset-all').click();
     for (const [controlName, quaternion] of Object.entries(controls)) {
+      await desktop.page.locator('#proxy-rig-control-select').selectOption(controlName);
+      const selectedState = await desktop.page.evaluate(() => window.kaminosProxyRigDebugState());
+      assert(
+        selectedState.selectedControl === controlName
+          && selectedState.transformTargetName === controlName
+          && selectedState.selectedControlKind === 'skeletal-support',
+        `${poseName}: visible selector is not targeting skeletal control ${controlName}`,
+      );
       await desktop.page.evaluate(({ name, value }) => {
         window.kaminosProxyRigSetControlQuaternion(name, value);
       }, { name: controlName, value: quaternion });
@@ -402,6 +420,16 @@ try {
         poseState.muscleMaxDisplacements?.['muscle-31'] > 0.005,
         `${poseName}: authenticated M31 overlay did not move with its insertion support`,
       );
+      assert(
+        poseState.muscleShapeChanges?.['muscle-31']?.q95AbsLogEdgeStrain > 0.02,
+        `${poseName}: authenticated M31 overlay moved without non-rigid shape change`,
+      );
+      await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(true));
+      await desktop.page.screenshot({
+        path: resolve(outputDir, 'proxy-rig-m31-flex-visible-control-page.png'),
+        fullPage: true,
+      });
+      await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(false));
     } else {
       const restPaw = hiddenRestState.controlWorldPositions['hindlimb-right-paw'];
       const posedPaw = poseState.controlWorldPositions['hindlimb-right-paw'];

@@ -64,6 +64,9 @@ test('real SF3D route packages the frozen geometry, bindings, and source identit
     skinBinding,
     castBinding,
     muscles: [m31Overlay.muscle],
+    interaction: {
+      initialControl: 'hindlimb-left-distal-support',
+    },
     source: {
       cast: 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb',
       envelope: 'artifacts/cast-correspondence-v0/frozen/envelope-baseline.glb',
@@ -110,6 +113,9 @@ test('real SF3D route packages the frozen geometry, bindings, and source identit
   assert.equal(a.muscles[0].requestedRoute, 'authenticated-m31-two-support-live-overlay');
   assert.equal(a.muscles[0].effectiveRoute, 'authenticated-m31-two-support-live-overlay');
   assert.equal(a.muscles[0].fallbackUsed, false);
+  assert.deepEqual(a.interaction, {
+    initialControl: 'hindlimb-left-distal-support',
+  });
   assert.deepEqual(a.source.m31AuthoredSupportProximity, input.source.m31AuthoredSupportProximity);
 });
 

@@ -47,6 +47,7 @@ export function createProxyRigPackage({
   castBinding,
   source,
   muscles = [],
+  interaction = null,
 }) {
   for (const key of ['cast', 'envelope', 'skeleton']) {
     if (typeof source?.[key] !== 'string' || !source[key].trim()) {
@@ -83,6 +84,11 @@ export function createProxyRigPackage({
       triangles: Array.from(muscle.triangles),
       sectionIndices: Array.from(muscle.sectionIndices),
     })),
+    ...(interaction ? {
+      interaction: {
+        initialControl: interaction.initialControl,
+      },
+    } : {}),
   };
   const digest = createHash('sha256').update(canonicalProxyRigJson(content)).digest('hex');
   return { ...content, packageId: `sha256:${digest}` };

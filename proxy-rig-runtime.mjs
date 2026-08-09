@@ -374,6 +374,17 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
     visited.add(group.name);
   };
   groups.forEach(visit);
+  let interaction = null;
+  if (pkg.interaction !== undefined) {
+    const interactionInput = requireObject(pkg.interaction, 'interaction');
+    if (typeof interactionInput.initialControl !== 'string' || !interactionInput.initialControl.trim()) {
+      fail('interaction initial control is required');
+    }
+    if (!names.has(interactionInput.initialControl)) {
+      fail(`interaction initial control ${interactionInput.initialControl} is missing`);
+    }
+    interaction = { initialControl: interactionInput.initialControl };
+  }
   const weightCount = envelopeVertexCount * skinInput.neighbors;
   requireArray(skinInput.weightGroups, 'skin binding weight groups', { length: weightCount });
   requireArray(skinInput.weightValues, 'skin binding weight values', { length: weightCount });
@@ -502,6 +513,7 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
       local: Float64Array.from(castBindingInput.local),
     },
     muscles,
+    interaction,
   };
 }
 
@@ -517,6 +529,7 @@ export function createProxyRigEvaluator(input, {
     packageId: packageData.packageId,
     runtimeSchema: packageData.runtimeSchema,
     source: packageData.source,
+    interaction: packageData.interaction ? { ...packageData.interaction } : null,
     groups: packageData.skinBinding.groups.map(group => ({ ...group, pivot: [...group.pivot] })),
     muscles: packageData.muscles.map(muscle => ({
       relationId: muscle.relationId,

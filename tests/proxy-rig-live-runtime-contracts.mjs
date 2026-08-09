@@ -247,8 +247,9 @@ test('muscle overlay descriptor and visibility preserve effective source identit
   assert.deepEqual(meshes.map(mesh => mesh.visible), [false, false]);
 });
 
-test('muscle displacement diagnostics measure the posed overlay against its own rest geometry', () => {
+test('muscle diagnostics distinguish rigid carriage from non-rigid shape change', () => {
   assert.equal(typeof liveHost.proxyRigMaximumVertexDisplacement, 'function');
+  assert.equal(typeof liveHost.proxyRigMuscleShapeChange, 'function');
   assert.equal(
     liveHost.proxyRigMaximumVertexDisplacement(
       [0, 0, 0, 1, 1, 1],
@@ -260,6 +261,14 @@ test('muscle displacement diagnostics measure the posed overlay against its own 
     () => liveHost.proxyRigMaximumVertexDisplacement([0, 0, 0], [0, 0]),
     /matching xyz arrays/i,
   );
+
+  const rest = [0, 0, 0, 1, 0, 0, 0, 1, 0];
+  const rigid = [2, 3, 0, 3, 3, 0, 2, 4, 0];
+  const deformed = [0, 0, 0, 2, 0, 0, 0, 1, 0];
+  const triangles = [0, 1, 2];
+  assert.ok(liveHost.proxyRigMaximumVertexDisplacement(rest, rigid) > 0);
+  assert.ok(liveHost.proxyRigMuscleShapeChange(rest, rigid, triangles).q95AbsLogEdgeStrain < 1e-12);
+  assert.ok(liveHost.proxyRigMuscleShapeChange(rest, deformed, triangles).q95AbsLogEdgeStrain > 0.4);
 });
 
 test('control visibility reaches the TransformControls scene helper', () => {
@@ -346,9 +355,17 @@ test('live transform targeting exposes skeletal controls and never muscle relati
   );
   assert.equal(liveHost.resolveProxyRigTransformTarget(controls, 'muscle-31'), null);
   assert.equal(
-    liveHost.chooseProxyRigInitialControlName([...controls.keys()]),
-    'hindlimb-right-hock',
-    'loading a muscle must not redirect initial selection onto its attachment support',
+    liveHost.chooseProxyRigInitialControlName(
+      [...controls.keys()],
+      'hindlimb-left-distal-support',
+    ),
+    'hindlimb-left-distal-support',
+    'the package-declared assay control must be the visible transform target',
+  );
+  assert.equal(
+    liveHost.chooseProxyRigInitialControlName([...controls.keys()], 'missing-control'),
+    null,
+    'a stale declared assay control must fail instead of silently selecting another limb',
   );
   assert.deepEqual(liveHost.proxyRigControlOptionDescriptor('hindlimb-left-distal-support'), {
     value: 'hindlimb-left-distal-support',

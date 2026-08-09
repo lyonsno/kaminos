@@ -75,6 +75,7 @@ function musclePackage() {
     schema: runtime.PROXY_RIG_PACKAGE_SCHEMA,
     runtimeSchema: runtime.PROXY_RIG_RUNTIME_SCHEMA,
     packageId: 'sha256:muscle-fixture',
+    interaction: { initialControl: 'moving' },
     source: { cast: 'fixture://cast', envelope: 'fixture://envelope', skeleton: 'fixture://skeleton' },
     envelope: { positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], triangles: [0, 1, 2] },
     cast: { positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], triangles: [0, 1, 2] },
@@ -184,10 +185,18 @@ test('muscle support identity and route degradation fail before live evaluation'
   const relationControlCollision = musclePackage();
   relationControlCollision.skinBinding.groups[1].name = 'muscle-31';
   relationControlCollision.muscles[0].supportMapping.moving = 'muscle-31';
+  relationControlCollision.interaction.initialControl = 'muscle-31';
   assert.throws(
     () => runtime.createProxyRigEvaluator(relationControlCollision),
     /muscle-31.*cannot also be a skeletal control/i,
     'relation identity must remain disjoint from every selectable skeletal control',
+  );
+
+  const missingInitialControl = musclePackage();
+  missingInitialControl.interaction.initialControl = 'not-a-control';
+  assert.throws(
+    () => runtime.createProxyRigEvaluator(missingInitialControl),
+    /initial control not-a-control is missing/i,
   );
 });
 
