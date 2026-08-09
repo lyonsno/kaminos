@@ -1,0 +1,1563 @@
+{
+  "schema": "kaminos.nbody-packing-assay-fixture.v0",
+  "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+  "authority": {
+    "kind": "synthetic-known-feasible",
+    "anatomicalAdmission": "none",
+    "claimCeiling": "assay-discrimination-only"
+  },
+  "dimension": 3,
+  "pressureChain": [
+    "rosette-west",
+    "rosette-center",
+    "rosette-east"
+  ],
+  "contactGraph": {
+    "schema": "kaminos.nbody-contact-graph.v0",
+    "members": [
+      "rosette-west",
+      "rosette-center",
+      "rosette-east",
+      "rosette-north",
+      "rosette-south"
+    ],
+    "edges": [
+      {
+        "key": "rosette-west|rosette-center",
+        "members": [
+          "rosette-west",
+          "rosette-center"
+        ]
+      },
+      {
+        "key": "rosette-center|rosette-east",
+        "members": [
+          "rosette-center",
+          "rosette-east"
+        ]
+      },
+      {
+        "key": "rosette-center|rosette-north",
+        "members": [
+          "rosette-center",
+          "rosette-north"
+        ]
+      },
+      {
+        "key": "rosette-center|rosette-south",
+        "members": [
+          "rosette-center",
+          "rosette-south"
+        ]
+      },
+      {
+        "key": "rosette-west|rosette-north",
+        "members": [
+          "rosette-west",
+          "rosette-north"
+        ]
+      },
+      {
+        "key": "rosette-east|rosette-north",
+        "members": [
+          "rosette-east",
+          "rosette-north"
+        ]
+      },
+      {
+        "key": "rosette-east|rosette-south",
+        "members": [
+          "rosette-east",
+          "rosette-south"
+        ]
+      },
+      {
+        "key": "rosette-west|rosette-south",
+        "members": [
+          "rosette-west",
+          "rosette-south"
+        ]
+      }
+    ],
+    "requiredCycle": [
+      "rosette-west",
+      "rosette-north",
+      "rosette-east",
+      "rosette-south"
+    ],
+    "proximityThreshold": 0.06
+  },
+  "knownFeasible": {
+    "schema": "kaminos.muscle-compartment-packing-source.v0",
+    "id": "synthetic-known-feasible-five-body-rosette-v0",
+    "authority": {
+      "kind": "synthetic-proxy",
+      "anatomicalAdmission": "none"
+    },
+    "dimension": 3,
+    "formation": {
+      "centerlineSmoothingReference": "source-displacement"
+    },
+    "compartment": {
+      "id": "asymmetric-rosette-compartment",
+      "kind": "box",
+      "minimum": [
+        -0.78,
+        -1.3,
+        -0.78
+      ],
+      "maximum": [
+        0.78,
+        1.3,
+        0.78
+      ],
+      "clearance": 0.02
+    },
+    "obstacles": [
+      {
+        "id": "rosette-bone-obstacle",
+        "kind": "capsule",
+        "start": [
+          -0.68,
+          -1.1,
+          -0.38
+        ],
+        "end": [
+          -0.68,
+          1.1,
+          -0.38
+        ],
+        "radius": 0.16,
+        "clearance": 0.02,
+        "authority": "synthetic-known-feasible"
+      }
+    ],
+    "muscles": [
+      {
+        "id": "rosette-west",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-west",
+          "constructionId": "nbody-rosette:rosette-west",
+          "lineageId": "nbody-rosette-lineage:rosette-west",
+          "instanceId": "nbody-rosette-instance:rosette-west"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-west:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-west:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              -0.42,
+              -0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              -0.42,
+              -0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              -0.42,
+              0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              -0.42,
+              0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-center",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-center",
+          "constructionId": "nbody-rosette:rosette-center",
+          "lineageId": "nbody-rosette-lineage:rosette-center",
+          "instanceId": "nbody-rosette-instance:rosette-center"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-center:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-center:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0
+            ],
+            "radius": 0.08
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              0
+            ],
+            "radius": 0.105
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              0
+            ],
+            "radius": 0.125
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              0
+            ],
+            "radius": 0.125
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              0
+            ],
+            "radius": 0.105
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0
+            ],
+            "radius": 0.08
+          }
+        ],
+        "targetVolume": 0.0882771827695464,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-east",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-east",
+          "constructionId": "nbody-rosette:rosette-east",
+          "lineageId": "nbody-rosette-lineage:rosette-east",
+          "instanceId": "nbody-rosette-instance:rosette-east"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-east:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-east:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0.42,
+              -0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0.42,
+              -0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0.42,
+              0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0.42,
+              0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-north",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-north",
+          "constructionId": "nbody-rosette:rosette-north",
+          "lineageId": "nbody-rosette-lineage:rosette-north",
+          "instanceId": "nbody-rosette-instance:rosette-north"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-north:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-north:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-south",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-south",
+          "constructionId": "nbody-rosette:rosette-south",
+          "lineageId": "nbody-rosette-lineage:rosette-south",
+          "instanceId": "nbody-rosette-instance:rosette-south"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-south:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-south:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      }
+    ],
+    "input": {
+      "requested": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-known-feasible-five-body-rosette-v0",
+        "sha256": "6f5c41c0136c7ebfe4184aba17a056053cb341562f461daa3b8a5a2bfb9010da"
+      },
+      "effective": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-known-feasible-five-body-rosette-v0",
+        "sha256": "6f5c41c0136c7ebfe4184aba17a056053cb341562f461daa3b8a5a2bfb9010da"
+      }
+    }
+  },
+  "crowded": {
+    "schema": "kaminos.muscle-compartment-packing-source.v0",
+    "id": "synthetic-crowded-five-body-rosette-v0",
+    "authority": {
+      "kind": "synthetic-proxy",
+      "anatomicalAdmission": "none"
+    },
+    "dimension": 3,
+    "formation": {
+      "centerlineSmoothingReference": "source-displacement"
+    },
+    "compartment": {
+      "id": "asymmetric-rosette-compartment",
+      "kind": "box",
+      "minimum": [
+        -0.78,
+        -1.3,
+        -0.78
+      ],
+      "maximum": [
+        0.78,
+        1.3,
+        0.78
+      ],
+      "clearance": 0.02
+    },
+    "obstacles": [
+      {
+        "id": "rosette-bone-obstacle",
+        "kind": "capsule",
+        "start": [
+          -0.68,
+          -1.1,
+          -0.38
+        ],
+        "end": [
+          -0.68,
+          1.1,
+          -0.38
+        ],
+        "radius": 0.16,
+        "clearance": 0.02,
+        "authority": "synthetic-known-feasible"
+      }
+    ],
+    "muscles": [
+      {
+        "id": "rosette-west",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-west",
+          "constructionId": "nbody-rosette:rosette-west",
+          "lineageId": "nbody-rosette-lineage:rosette-west",
+          "instanceId": "nbody-rosette-instance:rosette-west"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-west:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-west:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.10974659760820825
+          },
+          {
+            "position": [
+              -0.34946576972490323,
+              -0.75,
+              0
+            ],
+            "radius": 0.19953926837856045
+          },
+          {
+            "position": [
+              -0.30587321804458156,
+              -0.28,
+              0
+            ],
+            "radius": 0.2743664940205206
+          },
+          {
+            "position": [
+              -0.30587321804458156,
+              0.28,
+              0
+            ],
+            "radius": 0.2743664940205206
+          },
+          {
+            "position": [
+              -0.3494657697249032,
+              0.75,
+              0
+            ],
+            "radius": 0.19953926837856045
+          },
+          {
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.10974659760820825
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-center",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-center",
+          "constructionId": "nbody-rosette:rosette-center",
+          "lineageId": "nbody-rosette-lineage:rosette-center",
+          "instanceId": "nbody-rosette-instance:rosette-center"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-center:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-center:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0
+            ],
+            "radius": 0.08
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              0
+            ],
+            "radius": 0.105
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              0
+            ],
+            "radius": 0.125
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              0
+            ],
+            "radius": 0.125
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              0
+            ],
+            "radius": 0.105
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0
+            ],
+            "radius": 0.08
+          }
+        ],
+        "targetVolume": 0.0882771827695464,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-east",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-east",
+          "constructionId": "nbody-rosette:rosette-east",
+          "lineageId": "nbody-rosette-lineage:rosette-east",
+          "instanceId": "nbody-rosette-instance:rosette-east"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-east:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-east:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0.42,
+              -0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0.42,
+              -0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0.42,
+              0.28,
+              0
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0.42,
+              0.75,
+              0
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-north",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-north",
+          "constructionId": "nbody-rosette:rosette-north",
+          "lineageId": "nbody-rosette-lineage:rosette-north",
+          "instanceId": "nbody-rosette-instance:rosette-north"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-north:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-north:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-south",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-south",
+          "constructionId": "nbody-rosette:rosette-south",
+          "lineageId": "nbody-rosette-lineage:rosette-south",
+          "instanceId": "nbody-rosette-instance:rosette-south"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-south:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-south:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      }
+    ],
+    "derivation": {
+      "schema": "kaminos.nbody-rosette-crowding-continuation.v0",
+      "parent": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-known-feasible-five-body-rosette-v0",
+        "sha256": "6f5c41c0136c7ebfe4184aba17a056053cb341562f461daa3b8a5a2bfb9010da"
+      },
+      "driverMuscleId": "rosette-west",
+      "requestedTranslation": [
+        0.12,
+        0,
+        0
+      ],
+      "effectiveTranslation": [
+        0.12,
+        0,
+        0
+      ],
+      "envelope": "sine-zero-at-attachments",
+      "fallbackUsed": false,
+      "radiusScale": 0.997696341893
+    },
+    "input": {
+      "requested": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-crowded-five-body-rosette-v0",
+        "sha256": "8a86e9adbe7e3933a91cfd9cead3ca462babfa858c2c1a9ce3211af43f6f3365"
+      },
+      "effective": {
+        "kind": "synthetic-fixture",
+        "id": "synthetic-crowded-five-body-rosette-v0",
+        "sha256": "8a86e9adbe7e3933a91cfd9cead3ca462babfa858c2c1a9ce3211af43f6f3365"
+      }
+    }
+  },
+  "metrics": {
+    "knownFeasible": {
+      "pairwisePenetration": 0,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 0.026,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "knownFeasibleBelt": {
+      "sample": "paired-carrier-knots-2-and-3",
+      "pairs": [
+        {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      ],
+      "byPair": {
+        "rosette-west|rosette-center": {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-east": {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-north": {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-south": {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-east": {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-north": {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-south": {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-north": {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-south": {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-north|rosette-south": {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      },
+      "totalPenetration": 0,
+      "maximumPenetration": 0,
+      "minimumDeclaredContactGap": 0.02
+    },
+    "crowded": {
+      "pairwisePenetration": 0.153075793311,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 0.031252329215,
+      "maximumSourceKnotDisplacement": 0,
+      "rootMeanSquareSourceKnotDisplacement": 0,
+      "minimumSourceBendEnergyRetention": 1,
+      "minimumSourceCurvatureCosine": 1,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 1,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1,
+      "minimumPairwiseRelationCosine": 1,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "crowdedBelt": {
+      "sample": "paired-carrier-knots-2-and-3",
+      "pairs": [
+        {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": -0.093493275976,
+          "penetration": 0.093493275976,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.176506724024,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": -0.029791258355,
+          "penetration": 0.029791258355,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": -0.029791258355,
+          "penetration": 0.029791258355,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      ],
+      "byPair": {
+        "rosette-west|rosette-center": {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": -0.093493275976,
+          "penetration": 0.093493275976,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-east": {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.176506724024,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-north": {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": -0.029791258355,
+          "penetration": 0.029791258355,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-south": {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": -0.029791258355,
+          "penetration": 0.029791258355,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-east": {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-north": {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-south": {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-north": {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-south": {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.043969696197,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-north|rosette-south": {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      },
+      "totalPenetration": 0.153075792686,
+      "maximumPenetration": 0.093493275976,
+      "minimumDeclaredContactGap": -0.093493275976
+    }
+  },
+  "derivation": {
+    "kind": "known-feasible-witness-then-deterministic-crowding",
+    "fallbackUsed": false
+  },
+  "identity": {
+    "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+  },
+  "input": {
+    "requested": {
+      "kind": "synthetic-nbody-assay-fixture",
+      "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+      "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+    },
+    "effective": {
+      "kind": "synthetic-nbody-assay-fixture",
+      "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+      "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+    }
+  }
+}

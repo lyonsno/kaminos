@@ -1,0 +1,93 @@
+{
+  "schema": "kaminos.nbody-packing-assay-witness-report.v0",
+  "status": "complete-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-rosette-orbitable-v0",
+    "effective": "nbody-packing-rosette-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "input": {
+    "requested": {
+      "kind": "synthetic-nbody-assay-fixture",
+      "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+      "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+    },
+    "effective": {
+      "kind": "synthetic-nbody-assay-fixture",
+      "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+      "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+    }
+  },
+  "fixture": {
+    "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+    "schema": "kaminos.nbody-packing-assay-fixture.v0",
+    "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b",
+    "memberCount": 5,
+    "pressureChain": [
+      "rosette-west",
+      "rosette-center",
+      "rosette-east"
+    ]
+  },
+  "result": {
+    "schema": "kaminos.nbody-packing-counterfeit-assay-result.v0",
+    "status": "counterfeit-rejected-global-debt",
+    "sha256": "07863351aa57616ceb17026079cbd263d2956f8529df915b3d951051881f700e",
+    "selectedPair": {
+      "members": [
+        "rosette-west",
+        "rosette-center"
+      ],
+      "beforePenetration": 0.093493275976,
+      "afterPenetration": 0.017250634455,
+      "improvement": 0.076242641521
+    },
+    "exportedDebt": {
+      "members": [
+        "rosette-center",
+        "rosette-east"
+      ],
+      "beforePenetration": 0,
+      "afterPenetration": 0.055926401086,
+      "increase": 0.055926401086
+    },
+    "admission": {
+      "localSelectedPairImproved": true,
+      "aggregatePenetrationImproved": true,
+      "distalDebtExported": true,
+      "globallyAdmissible": false,
+      "rejectionReasons": [
+        "remaining-global-pairwise-penetration",
+        "distal-pressure-debt-exported"
+      ]
+    }
+  },
+  "claims": {
+    "knownFeasibility": "supported-by-manufactured-witness",
+    "deterministicCrowding": "supported-by-exact-derivation",
+    "localCounterfeitDiscrimination": "supported-by-physical-residual-contract",
+    "globalSolverCorrectness": "not-assayed",
+    "anatomicalCorrectness": "not-assayed",
+    "fasciaMechanics": "not-assayed"
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "index.html",
+    "receipt": "visual-inspection.json",
+    "receiptSha256": "f06efb99f5521f94bee2349ec0ffe2d4ad56715ecc6c8a567242b8139e259e60",
+    "summary": "Direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
+  },
+  "stalePrimaryCleanup": {
+    "status": "cleared",
+    "paths": [
+      "fixture.json",
+      "result.json",
+      "index.html"
+    ]
+  },
+  "bindings": {
+    "fixtureJsonSha256": "33a1e11d7db95977702d822c60843b803da66de6c234dcc74b3c31ee13f551da",
+    "resultJsonSha256": "a58416ef25e4e59f0d544803aa0b3962d67fca50086b1e382ac0f8e130293db0",
+    "indexHtmlSha256": "6451234d8edd104d23faad7c7bbe41cfff9b33cf5cfe6cc804fec725bc8a50b0"
+  }
+}

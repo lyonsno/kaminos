@@ -1,0 +1,187 @@
+{
+  "schema": "kaminos.nbody-packing-assay-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-09T15:35:53-04:00",
+  "route": {
+    "requested": "nbody-packing-rosette-orbitable-v0",
+    "effective": "nbody-packing-rosette-orbitable-v0",
+    "fallbackUsed": false,
+    "baseUrl": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/"
+  },
+  "bindings": {
+    "fixtureJsonSha256": "33a1e11d7db95977702d822c60843b803da66de6c234dcc74b3c31ee13f551da",
+    "resultJsonSha256": "a58416ef25e4e59f0d544803aa0b3962d67fca50086b1e382ac0f8e130293db0",
+    "indexHtmlSha256": "6451234d8edd104d23faad7c7bbe41cfff9b33cf5cfe6cc804fec725bc8a50b0",
+    "pendingReportSha256": "17f1e7048cabf22a530c65d067e2d141bd14f67b4a59de1697e44c11b4434036"
+  },
+  "images": [
+    {
+      "state": "known-feasible",
+      "mode": "volume",
+      "path": "known-feasible-volume.png",
+      "byteLength": 203331,
+      "sha256": "5017b3eef01c6216b43864f25aac6076dac8e1a896ee7bf500e2341b32d3f349",
+      "captureReportPath": "known-feasible-volume-capture-report.json",
+      "captureReportSha256": "a284c49ad8e9eee2020dc5a6a396d50ab9f5c1a29062f229361868175d2f9c36",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=known-feasible&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    },
+    {
+      "state": "known-feasible",
+      "mode": "slice",
+      "path": "known-feasible-slice.png",
+      "byteLength": 160184,
+      "sha256": "8f1bbfeb90d9c97e9ea4554b8954541a1e88fc91051e1bdfc55d190a03ff37c7",
+      "captureReportPath": "known-feasible-slice-capture-report.json",
+      "captureReportSha256": "122ea720fb95a68b92574998d6df4602d360112752af123cfbd5af2807cc7fcd",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=known-feasible&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "path": "crowded-volume.png",
+      "byteLength": 205354,
+      "sha256": "8754b6aea2ffa75dfedad72720989bea32bc2c532d7004a5c3e4362316cba05e",
+      "captureReportPath": "crowded-volume-capture-report.json",
+      "captureReportSha256": "b9c844ed8d636c146c0500f946f73983423991c65a0544982427e41201a577c7",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=crowded&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "path": "crowded-slice.png",
+      "byteLength": 160906,
+      "sha256": "fd6e92024ad4d6a592c60d44f62a2958d4e1dbbefb1d44648113b969aed78289",
+      "captureReportPath": "crowded-slice-capture-report.json",
+      "captureReportSha256": "ed98aa6c69a2076f7f110438ebfcc765c4019aec6a2319efa6f1ad4a0401ead2",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=crowded&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "volume",
+      "path": "sequential-counterfeit-volume.png",
+      "byteLength": 208974,
+      "sha256": "2b18ee33cde932465739f214e976c80a8e8608e2ba72d527de847afbda113ad4",
+      "captureReportPath": "sequential-counterfeit-volume-capture-report.json",
+      "captureReportSha256": "ccc21e4f72beee3959b07fa28299abe8cf3dda21814483659a68cc2992d9ea0b",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=sequential-counterfeit&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "slice",
+      "path": "sequential-counterfeit-slice.png",
+      "byteLength": 161649,
+      "sha256": "f3c796814d7e3ba1c9a58e0c7bba658251fa41dd26ee67c48b67509873e27797",
+      "captureReportPath": "sequential-counterfeit-slice-capture-report.json",
+      "captureReportSha256": "3e126897c2d93f43912141d6f25a606db09f23f337ecd2994cf0626a6c966a62",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/?state=sequential-counterfeit&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "statesLegible": true,
+    "opaqueOverlapTruthLegible": true,
+    "stableIdentityLegible": true,
+    "attachmentsBoneCompartmentLegible": true,
+    "metricsMatchMarkers": true,
+    "packingSemanticsNotInverted": true,
+    "textContained": true
+  },
+  "summary": "Direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
+}

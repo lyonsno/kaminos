@@ -1,0 +1,54 @@
+{
+  "observedAt": "2026-08-09T15:35:53-04:00",
+  "baseUrl": "http://127.0.0.1:18765/artifacts/nbody-packing-rosette-assay-v0/",
+  "images": [
+    {
+      "state": "known-feasible",
+      "mode": "volume",
+      "path": "known-feasible-volume.png",
+      "captureReportPath": "known-feasible-volume-capture-report.json"
+    },
+    {
+      "state": "known-feasible",
+      "mode": "slice",
+      "path": "known-feasible-slice.png",
+      "captureReportPath": "known-feasible-slice-capture-report.json"
+    },
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "path": "crowded-volume.png",
+      "captureReportPath": "crowded-volume-capture-report.json"
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "path": "crowded-slice.png",
+      "captureReportPath": "crowded-slice-capture-report.json"
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "volume",
+      "path": "sequential-counterfeit-volume.png",
+      "captureReportPath": "sequential-counterfeit-volume-capture-report.json"
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "slice",
+      "path": "sequential-counterfeit-slice.png",
+      "captureReportPath": "sequential-counterfeit-slice-capture-report.json"
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "statesLegible": true,
+    "opaqueOverlapTruthLegible": true,
+    "stableIdentityLegible": true,
+    "attachmentsBoneCompartmentLegible": true,
+    "metricsMatchMarkers": true,
+    "packingSemanticsNotInverted": true,
+    "textContained": true
+  },
+  "summary": "Direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
+}
