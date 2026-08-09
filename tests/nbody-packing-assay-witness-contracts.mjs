@@ -122,6 +122,61 @@ test('orbitable N-body witness exposes the known witness, crowded input, and rej
   }
 });
 
+test('orbitable N-body witness can compare a scalable candidate against the bounded oracle', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-candidate-render-'));
+  try {
+    const written = await writeNBodyPackingAssayWitness({ outDir:root });
+    const fixture = JSON.parse(await readFile(join(root, 'fixture.json')));
+    const result = JSON.parse(await readFile(join(root, 'result.json')));
+    const report = written.report;
+    const sparseGlobalCandidate = {
+      status:'converged-sparse-global-candidate',
+      selected:{
+        ...structuredClone(result.states.knownFeasible),
+        maximumPhysicalResidual:7.8e-8,
+        deformationEnergy:0.0031,
+        displacement:{ movedMemberCount:5 },
+      },
+      work:{ iterations:24 },
+      mechanism:{ graphEdgeCount:8, maximumDegree:4 },
+      invariance:{ candidateEnumeration:'passed' },
+    };
+    const jointReference = {
+      status:'converged-joint-reference',
+      selected:{
+        ...structuredClone(result.states.knownFeasible),
+        maximumPhysicalResidual:4.17e-10,
+        deformationEnergy:0.0028,
+      },
+      stationarity:{ projectedGradientInfinityNorm:1.76e-10, activeConstraintCount:2 },
+      multistart:{ admissibleCount:3, rows:[{}, {}, {}] },
+      invariance:{ candidateEnumeration:'passed' },
+    };
+    const html = renderNBodyPackingAssayHtml({
+      fixture,
+      result,
+      report,
+      jointReference,
+      sparseGlobalCandidate,
+    });
+    assert.match(html, /data-state="sparse-global-candidate"/);
+    assert.match(html, /Sparse global candidate/);
+    assert.match(html, /24 synchronous iterations/);
+    assert.match(html, /5 moved members/);
+    assert.match(html, /8 edges \/ degree 4/);
+    assert.match(html, /candidate versus bounded oracle/i);
+    assert.match(html, /'sparse-global-candidate':payload\.sparseGlobalCandidate\.selected/);
+    assert.match(html, /const overlapHalf=Math\.min\(distance\*\.5,pair\.penetration\*\.5\)/);
+    assert.doesNotMatch(
+      html,
+      /connector=line\(\[\[left\.position\[0\],0,left\.position\[2\]\],\[right\.position\[0\],0,right\.position\[2\]\]\]/,
+      'penetration evidence must not draw the entire member-center separation as overlap',
+    );
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
 test('witness failure clears stale primaries and preserves the failure phase', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-witness-failure-'));
   try {

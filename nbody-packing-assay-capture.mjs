@@ -7,9 +7,30 @@ const STATES = Object.freeze([
   'known-feasible',
   'crowded',
   'sequential-counterfeit',
+  'sparse-global-candidate',
   'joint-reference',
 ]);
 const MODES = Object.freeze(['volume', 'slice']);
+const EXPLICIT_WITNESS_STATES = new Set(['sparse-global-candidate', 'joint-reference']);
+export const NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT = Object.freeze({
+  width:1400,
+  height:900,
+});
+
+function requireEvidenceViewport(viewport) {
+  if (
+    !Number.isInteger(viewport?.width) ||
+    !Number.isInteger(viewport?.height) ||
+    viewport.width !== NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.width ||
+    viewport.height !== NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.height
+  ) {
+    throw new Error(
+      `N-body evidence viewport must be exactly ` +
+      `${NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.width}x` +
+      `${NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.height}`,
+    );
+  }
+}
 
 function parseArguments(argv) {
   const values = new Map();
@@ -32,22 +53,23 @@ export async function captureNBodyPackingAssayState({
   outputPath = null,
   reportPath = null,
   browserExecutable = process.env.KAMINOS_HEADLESS_BROWSER || null,
-  viewport = { width:1400, height:900 },
+  viewport = NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT,
   captureTimeoutMs = 20_000,
   cleanupGraceMs = 1_000,
   receiptRoot = process.cwd(),
 } = {}) {
   if (!STATES.includes(state)) {
     throw new Error(
-      `state must be known-feasible, crowded, sequential-counterfeit, or joint-reference, got ${state}`,
+      `state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, or joint-reference, got ${state}`,
     );
   }
   if (!MODES.includes(mode)) {
     throw new Error(`mode must be volume or slice, got ${mode}`);
   }
-  if (state === 'joint-reference' && (!baseUrl || !outputPath || !reportPath)) {
+  requireEvidenceViewport(viewport);
+  if (EXPLICIT_WITNESS_STATES.has(state) && (!baseUrl || !outputPath || !reportPath)) {
     throw new Error(
-      'joint-reference capture requires an explicit baseUrl, outputPath, and reportPath',
+      `${state} capture requires an explicit baseUrl, outputPath, and reportPath`,
     );
   }
   const effectiveBaseUrl = baseUrl ||
@@ -76,10 +98,10 @@ async function main() {
   const args = parseArguments(process.argv.slice(2));
   const state = args.get('state') || 'crowded';
   const mode = args.get('mode') || 'volume';
-  const outputPath = args.get('out') || (state === 'joint-reference'
+  const outputPath = args.get('out') || (EXPLICIT_WITNESS_STATES.has(state)
     ? null
     : `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}.png`);
-  const reportPath = args.get('report') || (state === 'joint-reference'
+  const reportPath = args.get('report') || (EXPLICIT_WITNESS_STATES.has(state)
     ? null
     : `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}-capture-report.json`);
   const captured = await captureNBodyPackingAssayState({
@@ -90,8 +112,8 @@ async function main() {
     reportPath,
     browserExecutable:args.get('browser') || process.env.KAMINOS_HEADLESS_BROWSER || null,
     viewport: {
-      width:Number(args.get('width') || 1400),
-      height:Number(args.get('height') || 900),
+      width:Number(args.get('width') || NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.width),
+      height:Number(args.get('height') || NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.height),
     },
     captureTimeoutMs:Number(args.get('timeout-ms') || 20_000),
     cleanupGraceMs:Number(args.get('cleanup-grace-ms') || 1_000),

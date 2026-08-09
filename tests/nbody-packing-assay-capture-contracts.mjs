@@ -9,11 +9,21 @@ import { captureNBodyPackingAssayState } from '../nbody-packing-assay-capture.mj
 test('N-body capture rejects state and evidence-mode substitution before browser resolution', async () => {
   await assert.rejects(
     () => captureNBodyPackingAssayState({ state:'reference' }),
-    /state must be known-feasible, crowded, sequential-counterfeit, or joint-reference/,
+    /state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, or joint-reference/,
   );
   await assert.rejects(
     () => captureNBodyPackingAssayState({ mode:'transparent-beauty' }),
     /mode must be volume or slice/,
+  );
+  await assert.rejects(
+    () => captureNBodyPackingAssayState({
+      viewport:{ width:1, height:1 },
+      browserExecutable:join(tmpdir(), 'missing-browser-that-must-not-be-resolved'),
+      outputPath:join(tmpdir(), `kaminos-invalid-viewport-${process.pid}.png`),
+      reportPath:join(tmpdir(), `kaminos-invalid-viewport-${process.pid}-report.json`),
+      receiptRoot:tmpdir(),
+    }),
+    /viewport must be exactly 1400x900/,
   );
 });
 
@@ -41,6 +51,25 @@ test('N-body capture admits the joint reference as an explicit fourth state', as
       receiptRoot:root,
     }),
     /Browser path is not an executable file/,
+  );
+});
+
+test('N-body capture admits the sparse global candidate only on an explicit witness route', async () => {
+  const root = join(tmpdir(), `kaminos-sparse-global-capture-${process.pid}`);
+  await assert.rejects(
+    () => captureNBodyPackingAssayState({
+      state:'sparse-global-candidate',
+      baseUrl:'http://127.0.0.1:18765/artifacts/nbody-packing-sparse-global-v0/',
+      browserExecutable:join(root, 'missing-independent-browser'),
+      outputPath:join(root, 'sparse-global-candidate-volume.png'),
+      reportPath:join(root, 'sparse-global-candidate-volume-capture-report.json'),
+      receiptRoot:root,
+    }),
+    /Browser path is not an executable file/,
+  );
+  await assert.rejects(
+    () => captureNBodyPackingAssayState({ state:'sparse-global-candidate' }),
+    /sparse-global-candidate capture requires an explicit baseUrl/,
   );
 });
 

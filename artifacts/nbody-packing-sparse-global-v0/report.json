@@ -1,0 +1,365 @@
+{
+  "schema": "kaminos.nbody-packing-sparse-global-comparison-witness-report.v0",
+  "status": "complete-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-sparse-global-comparison-orbitable-v0",
+    "effective": "nbody-packing-sparse-global-comparison-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "fixture": {
+    "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+    "schema": "kaminos.nbody-packing-assay-fixture.v0",
+    "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b",
+    "memberCount": 5
+  },
+  "assay": {
+    "schema": "kaminos.nbody-packing-counterfeit-assay-result.v0",
+    "status": "counterfeit-rejected-global-debt",
+    "sha256": "07863351aa57616ceb17026079cbd263d2956f8529df915b3d951051881f700e"
+  },
+  "jointReference": {
+    "schema": "kaminos.nbody-packing-joint-reference-result.v0",
+    "status": "converged-joint-reference",
+    "sha256": "0804e1fcaad77ec5dec531c6f83a322b0f1ce0932d3127f8b238a9c396e4a304",
+    "selectedPhysicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+    "maximumPhysicalResidual": 4.17e-10,
+    "projectedGradientInfinityNorm": 1.76e-10,
+    "activeConstraintCount": 2,
+    "admissibleMultistarts": 3,
+    "declaredMultistarts": 3,
+    "candidateEnumeration": "passed",
+    "candidateEnumerationReceipt": {
+      "candidateEnumeration": "passed",
+      "mechanism": "paired-full-solve-artifact-comparison",
+      "rows": [
+        {
+          "requestedConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "canonical",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              1000,
+              100000,
+              10000000,
+              1000000000,
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.02,
+              0.01,
+              0.005,
+              0.0025,
+              0.00125,
+              0.000625,
+              0.0003125,
+              0.00015625,
+              0.000078125,
+              0.0000390625,
+              0.00001953125,
+              0.000009765625,
+              0.0000048828125,
+              0.00000244140625,
+              0.000001220703125,
+              6.103515625e-7,
+              3.0517578125e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "effectiveConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "canonical",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              1000,
+              100000,
+              10000000,
+              1000000000,
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.02,
+              0.01,
+              0.005,
+              0.0025,
+              0.00125,
+              0.000625,
+              0.0003125,
+              0.00015625,
+              0.000078125,
+              0.0000390625,
+              0.00001953125,
+              0.000009765625,
+              0.0000048828125,
+              0.00000244140625,
+              0.000001220703125,
+              6.103515625e-7,
+              3.0517578125e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "fallbackUsed": false,
+          "status": "converged-joint-reference",
+          "selectedVector": [
+            -0.058628640400216,
+            2.13382e-10,
+            0.040124794654861,
+            -2.54794e-10,
+            0.019036677536757,
+            4.2148e-11,
+            0,
+            0,
+            0,
+            0
+          ],
+          "selectedPhysicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+          "selectedMetricsSha256": "d23b1cc6cde58f9e8ed827de59f9437468baa108f945d205fa2df7f5e043fafb",
+          "selectedBeltSha256": "ba63b37f1f6044024a23278fa1f4924f8cd99aa9568cf14a40def888e6554b85"
+        },
+        {
+          "requestedConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "reverse",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              1000,
+              100000,
+              10000000,
+              1000000000,
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.02,
+              0.01,
+              0.005,
+              0.0025,
+              0.00125,
+              0.000625,
+              0.0003125,
+              0.00015625,
+              0.000078125,
+              0.0000390625,
+              0.00001953125,
+              0.000009765625,
+              0.0000048828125,
+              0.00000244140625,
+              0.000001220703125,
+              6.103515625e-7,
+              3.0517578125e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "effectiveConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "reverse",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              1000,
+              100000,
+              10000000,
+              1000000000,
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.02,
+              0.01,
+              0.005,
+              0.0025,
+              0.00125,
+              0.000625,
+              0.0003125,
+              0.00015625,
+              0.000078125,
+              0.0000390625,
+              0.00001953125,
+              0.000009765625,
+              0.0000048828125,
+              0.00000244140625,
+              0.000001220703125,
+              6.103515625e-7,
+              3.0517578125e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "fallbackUsed": false,
+          "status": "converged-joint-reference",
+          "selectedVector": [
+            -0.058628640400216,
+            2.13382e-10,
+            0.040124794654861,
+            -2.54794e-10,
+            0.019036677536757,
+            4.2148e-11,
+            0,
+            0,
+            0,
+            0
+          ],
+          "selectedPhysicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+          "selectedMetricsSha256": "d23b1cc6cde58f9e8ed827de59f9437468baa108f945d205fa2df7f5e043fafb",
+          "selectedBeltSha256": "ba63b37f1f6044024a23278fa1f4924f8cd99aa9568cf14a40def888e6554b85"
+        }
+      ],
+      "comparison": {
+        "selectedVectorEqual": true,
+        "selectedPhysicalStateEqual": true,
+        "selectedMetricsEqual": true,
+        "selectedBeltEqual": true
+      },
+      "labelPermutation": "not-yet-assayed"
+    }
+  },
+  "sparseGlobalCandidate": {
+    "schema": "kaminos.nbody-packing-sparse-graph-result.v0",
+    "status": "converged-sparse-global-candidate",
+    "sha256": "b376cde365cfa9670c771649f635504879cd8639944f6c58799f0f91e92fdd0a",
+    "problemSha256": "003ffa09b1c4843acc4f1042bec42ba7d3016d8871ae01553b5de5131b58fb80",
+    "selectedPhysicalStateSha256": "940857bedf2c1cffff6e3d090e9eb762cfe5558e830e3bd73719728a0f646239",
+    "maximumPhysicalResidual": 7.8315e-8,
+    "deformationEnergy": 0.003114751328482,
+    "movedMemberCount": 5,
+    "iterations": 24,
+    "graphEdgeCount": 8,
+    "maximumDegree": 4,
+    "candidateEnumerationReceipt": {
+      "candidateEnumeration": "passed",
+      "mechanism": "paired-full-solve-traversal-comparison",
+      "rows": [
+        {
+          "requestedEnumeration": "canonical",
+          "effectiveEnumeration": "canonical",
+          "status": "converged-sparse-global-candidate",
+          "fallbackUsed": false,
+          "selectedVector": [
+            -0.049009178246829,
+            0,
+            0.049662835595288,
+            0,
+            0.028531333502949,
+            0,
+            0.009791439584435,
+            0.013330871979031,
+            0.009791439584435,
+            -0.013330871979031
+          ],
+          "selectedPhysicalStateSha256": "940857bedf2c1cffff6e3d090e9eb762cfe5558e830e3bd73719728a0f646239",
+          "selectedMetricsSha256": "c9df8d6f764b95323b48c7c347eb6a387911b112e4d16317df29afbbb86b18e6",
+          "selectedBeltSha256": "a0188a5564e3f50c12f7dd10db5f6916c2edbe08fd2b2d13c81932ead7ab6397",
+          "workSha256": "d7d344854149d80c3260838da6c2514981b18363830543e552677795e9794bda"
+        },
+        {
+          "requestedEnumeration": "reverse",
+          "effectiveEnumeration": "reverse",
+          "status": "converged-sparse-global-candidate",
+          "fallbackUsed": false,
+          "selectedVector": [
+            -0.049009178246829,
+            0,
+            0.049662835595288,
+            0,
+            0.028531333502949,
+            0,
+            0.009791439584435,
+            0.013330871979031,
+            0.009791439584435,
+            -0.013330871979031
+          ],
+          "selectedPhysicalStateSha256": "940857bedf2c1cffff6e3d090e9eb762cfe5558e830e3bd73719728a0f646239",
+          "selectedMetricsSha256": "c9df8d6f764b95323b48c7c347eb6a387911b112e4d16317df29afbbb86b18e6",
+          "selectedBeltSha256": "a0188a5564e3f50c12f7dd10db5f6916c2edbe08fd2b2d13c81932ead7ab6397",
+          "workSha256": "d7d344854149d80c3260838da6c2514981b18363830543e552677795e9794bda"
+        }
+      ],
+      "comparison": {
+        "statusEqual": true,
+        "selectedVectorEqual": true,
+        "selectedPhysicalStateEqual": true,
+        "selectedMetricsEqual": true,
+        "selectedBeltEqual": true,
+        "workEqual": true
+      }
+    }
+  },
+  "claims": {
+    "knownFeasibility": "supported-by-manufactured-witness",
+    "localCounterfeitDiscrimination": "supported-by-global-debt-ledger",
+    "boundedJointReference": "supported-by-kkt-and-continuous-admission",
+    "scalableSyntheticCandidate": "supported-only-on-bounded-five-body-assay",
+    "scalableProductionSolver": "not-assayed",
+    "anatomicalCorrectness": "not-assayed",
+    "fasciaMechanics": "not-assayed"
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "index.html",
+    "receipt": "visual-inspection.json",
+    "receiptSha256": "d60cce044b87383c0c40ffdb335f439ca34254baadf7bca5f710a02b3ebb65e5",
+    "summary": "Revision 1 re-admission: every frame is exact 1400x900 evidence under the shared capture/admission viewport contract. The sparse candidate distributes one simultaneous assembled-snapshot update across all five members and reaches the declared overlap tolerance without manufactured target coordinates. The bounded joint oracle is slightly cleaner and visibly distinct under the same camera, especially in opaque slice mode; direct state buttons make that subtle comparison repeatable. Overlap markers remain magnitude-calibrated to measured penetration; stable colors, attachments, bone, compartment bounds, and packing direction remain legible in both modes."
+  },
+  "stalePrimaryCleanup": {
+    "status": "cleared",
+    "paths": [
+      "fixture.json",
+      "assay-result.json",
+      "joint-reference.json",
+      "sparse-problem.json",
+      "sparse-candidate.json",
+      "index.html"
+    ]
+  },
+  "bindings": {
+    "fixtureJsonSha256": "33a1e11d7db95977702d822c60843b803da66de6c234dcc74b3c31ee13f551da",
+    "assayResultJsonSha256": "a58416ef25e4e59f0d544803aa0b3962d67fca50086b1e382ac0f8e130293db0",
+    "jointReferenceJsonSha256": "67dbd19008c90e23785fc3e9b6d34b0b170b8fb08456454f4937ed2adbf7a92c",
+    "sparseProblemJsonSha256": "2a59d088c09fcf7e8a35b97e1d338d95126a6f6ea8ee98916fa391c2c921d5b6",
+    "sparseCandidateJsonSha256": "9ec998b4e1bb86cc8ce795b59310b7747096b9ca6a63f96dc5944228f65526c3",
+    "indexHtmlSha256": "c4fffd5262b9e1bd40c07272e243fbb84aa5263b60ca40837b528c04ec42b669"
+  }
+}

@@ -12,24 +12,51 @@ import {
   createNBodyRosetteJointReferenceConfig,
   solveNBodyRosetteJointReference,
 } from './nbody-packing-joint-reference.mjs';
+import {
+  compileNBodySparseGraphProblem,
+  createNBodySparseGraphConfig,
+  solveNBodySparseGraphCandidate,
+} from './nbody-packing-sparse-graph.mjs';
+import { NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT } from './nbody-packing-assay-capture.mjs';
 import { validateReceiptBearingPng } from './lib/receipt-bearing-browser-capture.mjs';
 
 export const NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE =
   'nbody-packing-joint-reference-orbitable-v0';
+export const NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE =
+  'nbody-packing-sparse-global-comparison-orbitable-v0';
 
 const REPORT_SCHEMA = 'kaminos.nbody-packing-joint-reference-witness-report.v0';
+const SPARSE_REPORT_SCHEMA =
+  'kaminos.nbody-packing-sparse-global-comparison-witness-report.v0';
 const VISUAL_INSPECTION_SCHEMA =
   'kaminos.nbody-packing-joint-reference-visual-inspection.v0';
+const SPARSE_VISUAL_INSPECTION_SCHEMA =
+  'kaminos.nbody-packing-sparse-global-comparison-visual-inspection.v0';
 const PRIMARY_PATHS = Object.freeze([
   'fixture.json',
   'assay-result.json',
   'joint-reference.json',
   'index.html',
 ]);
+const SPARSE_PRIMARY_PATHS = Object.freeze([
+  'fixture.json',
+  'assay-result.json',
+  'joint-reference.json',
+  'sparse-problem.json',
+  'sparse-candidate.json',
+  'index.html',
+]);
 const VISUAL_STATES = Object.freeze([
   'known-feasible',
   'crowded',
   'sequential-counterfeit',
+  'joint-reference',
+]);
+const SPARSE_VISUAL_STATES = Object.freeze([
+  'known-feasible',
+  'crowded',
+  'sequential-counterfeit',
+  'sparse-global-candidate',
   'joint-reference',
 ]);
 const VISUAL_MODES = Object.freeze(['volume', 'slice']);
@@ -45,6 +72,11 @@ const VISUAL_VERDICT_KEYS = Object.freeze([
   'jointReferenceLegible',
   'textContained',
 ]);
+const SPARSE_VISUAL_VERDICT_KEYS = Object.freeze([
+  ...VISUAL_VERDICT_KEYS,
+  'sparseCandidateLegible',
+  'candidateOracleDifferenceLegible',
+]);
 const DEFAULT_IO = { mkdir, readFile, rename, unlink, writeFile };
 
 function sha256(bytes) {
@@ -57,8 +89,8 @@ async function writeJsonAtomically(io, path, value) {
   await io.rename(temporaryPath, path);
 }
 
-async function clearPrimaryArtifacts(io, outputRoot) {
-  const settled = await Promise.allSettled(PRIMARY_PATHS.map(async path => {
+async function clearPrimaryArtifacts(io, outputRoot, primaryPaths = PRIMARY_PATHS) {
+  const settled = await Promise.allSettled(primaryPaths.map(async path => {
     try {
       await io.unlink(resolve(outputRoot, path));
     } catch (error) {
@@ -66,11 +98,11 @@ async function clearPrimaryArtifacts(io, outputRoot) {
     }
   }));
   const failures = settled.flatMap((entry, index) => entry.status === 'rejected'
-    ? [{ path:PRIMARY_PATHS[index], error:entry.reason?.message || String(entry.reason) }]
+    ? [{ path:primaryPaths[index], error:entry.reason?.message || String(entry.reason) }]
     : []);
   return failures.length === 0
-    ? { status:'cleared', paths:[...PRIMARY_PATHS] }
-    : { status:'failed', paths:[...PRIMARY_PATHS], failures };
+    ? { status:'cleared', paths:[...primaryPaths] }
+    : { status:'failed', paths:[...primaryPaths], failures };
 }
 
 function validateReference(fixture, reference) {
@@ -106,17 +138,25 @@ export async function writeNBodyPackingJointReferenceWitness({
   fixture = createNBodyRosetteFixture(),
   requestedAssayConfig,
   requestedReferenceConfig = createNBodyRosetteJointReferenceConfig(),
+  includeSparseGlobalCandidate = false,
+  requestedSparseConfig = createNBodySparseGraphConfig(),
   io:ioOverrides = {},
 } = {}) {
   const io = { ...DEFAULT_IO, ...ioOverrides };
   const outputRoot = resolve(outDir);
+  const primaryPaths = includeSparseGlobalCandidate ? SPARSE_PRIMARY_PATHS : PRIMARY_PATHS;
+  const visualStates = includeSparseGlobalCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
+  const reportSchema = includeSparseGlobalCandidate ? SPARSE_REPORT_SCHEMA : REPORT_SCHEMA;
+  const effectiveRoute = includeSparseGlobalCandidate
+    ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
+    : NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
   const route = {
-    requested:NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
-    effective:NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
+    requested:effectiveRoute,
+    effective:effectiveRoute,
     fallbackUsed:false,
   };
   let phase = 'prepare-output';
-  let stalePrimaryCleanup = { status:'not-attempted', paths:[...PRIMARY_PATHS] };
+  let stalePrimaryCleanup = { status:'not-attempted', paths:[...primaryPaths] };
   let lastTrustworthyEvidence = {
     phase:'fixture-received',
     fixtureId:fixture?.id || null,
@@ -125,7 +165,7 @@ export async function writeNBodyPackingJointReferenceWitness({
   try {
     await io.mkdir(outputRoot, { recursive:true });
     phase = 'clear-stale-primary';
-    stalePrimaryCleanup = await clearPrimaryArtifacts(io, outputRoot);
+    stalePrimaryCleanup = await clearPrimaryArtifacts(io, outputRoot, primaryPaths);
     if (stalePrimaryCleanup.status !== 'cleared') {
       throw new Error('joint reference witness could not clear stale primary artifacts');
     }
@@ -158,8 +198,45 @@ export async function writeNBodyPackingJointReferenceWitness({
         projectedGradientInfinityNorm:jointReference.stationarity.projectedGradientInfinityNorm,
       },
     };
+    let sparseProblem = null;
+    let sparseGlobalCandidate = null;
+    if (includeSparseGlobalCandidate) {
+      phase = 'compile-sparse-global-problem';
+      sparseProblem = compileNBodySparseGraphProblem(fixture);
+      phase = 'solve-sparse-global-candidate';
+      sparseGlobalCandidate = solveNBodySparseGraphCandidate({
+        problem:sparseProblem,
+        requestedConfig:requestedSparseConfig,
+      });
+      if (
+        sparseGlobalCandidate.status !== 'converged-sparse-global-candidate' ||
+        sparseGlobalCandidate.source.fixtureSha256 !== fixture.identity.sha256 ||
+        sparseGlobalCandidate.source.problemSha256 !== sparseProblem.identity.sha256 ||
+        sparseGlobalCandidate.route.fallbackUsed !== false ||
+        sparseGlobalCandidate.mechanism.oracleTargetCoordinatesConsumed !== false ||
+        sparseGlobalCandidate.mechanism.pairwiseClosureAuthority !== false ||
+        sparseGlobalCandidate.invariance?.candidateEnumeration !== 'passed' ||
+        sparseGlobalCandidate.invariance?.rows?.length !== 2 ||
+        !Object.values(sparseGlobalCandidate.invariance?.comparison || {}).every(Boolean) ||
+        sparseGlobalCandidate.selected.maximumPhysicalResidual >
+          sparseGlobalCandidate.config.effective.convergenceTolerance
+      ) {
+        throw new Error('sparse global witness rejects substituted or inadmissible candidate evidence');
+      }
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        phase:'sparse-global-candidate-admitted',
+        sparseGlobalCandidate: {
+          status:sparseGlobalCandidate.status,
+          sha256:sparseGlobalCandidate.identity.sha256,
+          physicalStateSha256:sparseGlobalCandidate.selected.physicalStateSha256,
+          maximumPhysicalResidual:sparseGlobalCandidate.selected.maximumPhysicalResidual,
+          iterations:sparseGlobalCandidate.work.iterations,
+        },
+      };
+    }
     const reportCore = {
-      schema:REPORT_SCHEMA,
+      schema:reportSchema,
       status:'complete-pending-visual-inspection',
       route,
       fixture: {
@@ -186,10 +263,29 @@ export async function writeNBodyPackingJointReferenceWitness({
         candidateEnumeration:jointReference.invariance.candidateEnumeration,
         candidateEnumerationReceipt:structuredClone(jointReference.invariance),
       },
+      ...(sparseGlobalCandidate ? {
+        sparseGlobalCandidate: {
+          schema:sparseGlobalCandidate.schema,
+          status:sparseGlobalCandidate.status,
+          sha256:sparseGlobalCandidate.identity.sha256,
+          problemSha256:sparseProblem.identity.sha256,
+          selectedPhysicalStateSha256:sparseGlobalCandidate.selected.physicalStateSha256,
+          maximumPhysicalResidual:sparseGlobalCandidate.selected.maximumPhysicalResidual,
+          deformationEnergy:sparseGlobalCandidate.selected.deformationEnergy,
+          movedMemberCount:sparseGlobalCandidate.selected.displacement.movedMemberCount,
+          iterations:sparseGlobalCandidate.work.iterations,
+          graphEdgeCount:sparseGlobalCandidate.mechanism.graphEdgeCount,
+          maximumDegree:sparseGlobalCandidate.mechanism.maximumDegree,
+          candidateEnumerationReceipt:structuredClone(sparseGlobalCandidate.invariance),
+        },
+      } : {}),
       claims: {
         knownFeasibility:'supported-by-manufactured-witness',
         localCounterfeitDiscrimination:'supported-by-global-debt-ledger',
         boundedJointReference:'supported-by-kkt-and-continuous-admission',
+        scalableSyntheticCandidate:includeSparseGlobalCandidate
+          ? 'supported-only-on-bounded-five-body-assay'
+          : 'not-assayed',
         scalableProductionSolver:'not-assayed',
         anatomicalCorrectness:'not-assayed',
         fasciaMechanics:'not-assayed',
@@ -197,12 +293,7 @@ export async function writeNBodyPackingJointReferenceWitness({
       visualInspection: {
         status:'pending-agent-inspection',
         artifact:'index.html',
-        requiredStates:[
-          'known-feasible',
-          'crowded',
-          'sequential-counterfeit',
-          'joint-reference',
-        ],
+        requiredStates:[...visualStates],
         requiredModes:['volume', 'slice'],
       },
       stalePrimaryCleanup,
@@ -210,10 +301,17 @@ export async function writeNBodyPackingJointReferenceWitness({
     const fixtureBytes = Buffer.from(`${JSON.stringify(fixture, null, 2)}\n`);
     const assayBytes = Buffer.from(`${JSON.stringify(assayResult, null, 2)}\n`);
     const referenceBytes = Buffer.from(`${JSON.stringify(jointReference, null, 2)}\n`);
+    const sparseProblemBytes = sparseProblem
+      ? Buffer.from(`${JSON.stringify(sparseProblem, null, 2)}\n`)
+      : null;
+    const sparseCandidateBytes = sparseGlobalCandidate
+      ? Buffer.from(`${JSON.stringify(sparseGlobalCandidate, null, 2)}\n`)
+      : null;
     const htmlBytes = Buffer.from(renderNBodyPackingAssayHtml({
       fixture,
       result:assayResult,
       jointReference,
+      sparseGlobalCandidate,
       report:reportCore,
     }));
     const report = {
@@ -222,6 +320,10 @@ export async function writeNBodyPackingJointReferenceWitness({
         fixtureJsonSha256:sha256(fixtureBytes),
         assayResultJsonSha256:sha256(assayBytes),
         jointReferenceJsonSha256:sha256(referenceBytes),
+        ...(sparseProblemBytes ? {
+          sparseProblemJsonSha256:sha256(sparseProblemBytes),
+          sparseCandidateJsonSha256:sha256(sparseCandidateBytes),
+        } : {}),
         indexHtmlSha256:sha256(htmlBytes),
       },
     };
@@ -231,15 +333,18 @@ export async function writeNBodyPackingJointReferenceWitness({
       bindings:structuredClone(report.bindings),
     };
     phase = 'write-primary-artifacts';
-    const writes = await Promise.allSettled([
-      io.writeFile(resolve(outputRoot, 'fixture.json'), fixtureBytes),
-      io.writeFile(resolve(outputRoot, 'assay-result.json'), assayBytes),
-      io.writeFile(resolve(outputRoot, 'joint-reference.json'), referenceBytes),
-      io.writeFile(resolve(outputRoot, 'index.html'), htmlBytes),
-    ]);
+    const primaryBytes = [
+      fixtureBytes,
+      assayBytes,
+      referenceBytes,
+      ...(sparseProblemBytes ? [sparseProblemBytes, sparseCandidateBytes] : []),
+      htmlBytes,
+    ];
+    const writes = await Promise.allSettled(primaryPaths.map((path, index) =>
+      io.writeFile(resolve(outputRoot, path), primaryBytes[index])));
     const primaryPublication = writes.map((entry, index) => entry.status === 'fulfilled'
-      ? { path:PRIMARY_PATHS[index], status:'written' }
-      : { path:PRIMARY_PATHS[index], status:'failed', error:entry.reason?.message || String(entry.reason) });
+      ? { path:primaryPaths[index], status:'written' }
+      : { path:primaryPaths[index], status:'failed', error:entry.reason?.message || String(entry.reason) });
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'primary-publication-attempted',
@@ -249,10 +354,18 @@ export async function writeNBodyPackingJointReferenceWitness({
     if (rejected) throw rejected.reason;
     phase = 'publish-report';
     await writeJsonAtomically(io, resolve(outputRoot, 'report.json'), report);
-    return { outputRoot, fixture, assayResult, jointReference, report };
+    return {
+      outputRoot,
+      fixture,
+      assayResult,
+      jointReference,
+      sparseProblem,
+      sparseGlobalCandidate,
+      report,
+    };
   } catch (error) {
     const failureReport = {
-      schema:REPORT_SCHEMA,
+      schema:reportSchema,
       status:'failed',
       route:{ requested:route.requested, effective:null, fallbackUsed:false },
       failurePhase:phase,
@@ -274,6 +387,14 @@ export async function writeNBodyPackingJointReferenceWitness({
   }
 }
 
+export async function writeNBodyPackingSparseGlobalCandidateWitness(options = {}) {
+  return writeNBodyPackingJointReferenceWitness({
+    outDir:'artifacts/nbody-packing-sparse-global-v0',
+    ...options,
+    includeSparseGlobalCandidate:true,
+  });
+}
+
 export async function admitNBodyPackingJointReferenceVisualInspection({
   outDir = 'artifacts/nbody-packing-joint-reference-v0',
   inspection,
@@ -291,15 +412,39 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
       'joint-reference visual admission requires observedAt, baseUrl, summary, and images',
     );
   }
+  const reportPath = resolve(outputRoot, 'report.json');
+  const reportBytes = await io.readFile(reportPath);
+  const report = JSON.parse(String(reportBytes));
+  const isJointReference =
+    report.schema === REPORT_SCHEMA &&
+    report.route?.requested === NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE &&
+    report.route?.effective === NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
+  const isSparseGlobal =
+    report.schema === SPARSE_REPORT_SCHEMA &&
+    report.route?.requested === NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE &&
+    report.route?.effective === NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE;
+  if (!isJointReference && !isSparseGlobal) {
+    throw new Error('joint-reference visual admission requires a recognized exact pending witness route');
+  }
+  const visualStates = isSparseGlobal ? SPARSE_VISUAL_STATES : VISUAL_STATES;
+  const visualVerdictKeys = isSparseGlobal
+    ? SPARSE_VISUAL_VERDICT_KEYS
+    : VISUAL_VERDICT_KEYS;
+  const visualInspectionSchema = isSparseGlobal
+    ? SPARSE_VISUAL_INSPECTION_SCHEMA
+    : VISUAL_INSPECTION_SCHEMA;
+  const effectiveRoute = isSparseGlobal
+    ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
+    : NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
   const verdictKeys = Object.keys(inspection.verdict || {}).sort();
   if (
-    JSON.stringify(verdictKeys) !== JSON.stringify([...VISUAL_VERDICT_KEYS].sort()) ||
-    VISUAL_VERDICT_KEYS.some(key => inspection.verdict[key] !== true)
+    JSON.stringify(verdictKeys) !== JSON.stringify([...visualVerdictKeys].sort()) ||
+    visualVerdictKeys.some(key => inspection.verdict[key] !== true)
   ) {
     throw new Error('joint-reference visual admission requires the exact all-positive verdict contract');
   }
   const expectedCombinations = new Set(
-    VISUAL_STATES.flatMap(state => VISUAL_MODES.map(mode => `${state}|${mode}`)),
+    visualStates.flatMap(state => VISUAL_MODES.map(mode => `${state}|${mode}`)),
   );
   const effectiveCombinations = inspection.images.map(image => `${image?.state}|${image?.mode}`);
   if (
@@ -310,25 +455,24 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     throw new Error('joint-reference visual admission requires every state/mode combination exactly once');
   }
 
-  const reportPath = resolve(outputRoot, 'report.json');
   const fixturePath = resolve(outputRoot, 'fixture.json');
   const assayPath = resolve(outputRoot, 'assay-result.json');
   const referencePath = resolve(outputRoot, 'joint-reference.json');
+  const sparseProblemPath = isSparseGlobal ? resolve(outputRoot, 'sparse-problem.json') : null;
+  const sparseCandidatePath = isSparseGlobal ? resolve(outputRoot, 'sparse-candidate.json') : null;
   const indexPath = resolve(outputRoot, 'index.html');
-  const [reportBytes, fixtureBytes, assayBytes, referenceBytes, indexBytes] =
+  const [fixtureBytes, assayBytes, referenceBytes, sparseProblemBytes, sparseCandidateBytes, indexBytes] =
     await Promise.all([
-      io.readFile(reportPath),
       io.readFile(fixturePath),
       io.readFile(assayPath),
       io.readFile(referencePath),
+      ...(isSparseGlobal
+        ? [io.readFile(sparseProblemPath), io.readFile(sparseCandidatePath)]
+        : [Promise.resolve(null), Promise.resolve(null)]),
       io.readFile(indexPath),
     ]);
-  const report = JSON.parse(String(reportBytes));
   if (
-    report.schema !== REPORT_SCHEMA ||
     report.status !== 'complete-pending-visual-inspection' ||
-    report.route?.requested !== NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE ||
-    report.route?.effective !== NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE ||
     report.route?.fallbackUsed !== false ||
     report.visualInspection?.status !== 'pending-agent-inspection'
   ) {
@@ -338,6 +482,10 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     fixtureJsonSha256:sha256(fixtureBytes),
     assayResultJsonSha256:sha256(assayBytes),
     jointReferenceJsonSha256:sha256(referenceBytes),
+    ...(isSparseGlobal ? {
+      sparseProblemJsonSha256:sha256(sparseProblemBytes),
+      sparseCandidateJsonSha256:sha256(sparseCandidateBytes),
+    } : {}),
     indexHtmlSha256:sha256(indexBytes),
   };
   if (JSON.stringify(bindingChecks) !== JSON.stringify(report.bindings)) {
@@ -375,9 +523,22 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     const captureReport = JSON.parse(String(captureReportBytes));
     const captureUrl = new URL(captureReport.invocation?.url || inspection.baseUrl);
     const effectiveImageSha256 = sha256(imageBytes);
+    const effectiveViewport = captureReport.invocation?.viewport;
+    if (
+      !Number.isInteger(effectiveViewport?.width) ||
+      !Number.isInteger(effectiveViewport?.height) ||
+      effectiveViewport.width !== NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.width ||
+      effectiveViewport.height !== NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.height
+    ) {
+      throw new Error(
+        `joint-reference visual admission viewport must be exactly ` +
+        `${NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.width}x` +
+        `${NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT.height}: ${image.state}/${image.mode}`,
+      );
+    }
     const effectivePng = validateReceiptBearingPng(
       imageBytes,
-      captureReport.invocation?.viewport,
+      effectiveViewport,
     );
     if (
       !captureReport.primaryOutput?.png ||
@@ -394,7 +555,7 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
       domReceipt.dataset?.witnessLoaded !== 'true' ||
       domReceipt.dataset?.witnessState !== image.state ||
       domReceipt.dataset?.witnessMode !== image.mode ||
-      domReceipt.dataset?.witnessRoute !== NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE
+      domReceipt.dataset?.witnessRoute !== effectiveRoute
     ) {
       throw new Error(
         `joint-reference visual admission effective DOM mismatch: ${image.state}/${image.mode}`,
@@ -448,10 +609,10 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     });
   }
   if (new Set(images.map(image => image.sha256)).size !== images.length) {
-    throw new Error('joint-reference visual admission requires distinct pixels for all eight captures');
+    throw new Error('joint-reference visual admission requires distinct pixels for every capture');
   }
   const receipt = {
-    schema:VISUAL_INSPECTION_SCHEMA,
+    schema:visualInspectionSchema,
     status:'passed-agent-inspection',
     observedAt:inspection.observedAt,
     route:{ ...structuredClone(report.route), baseUrl:inspection.baseUrl },

@@ -70,17 +70,25 @@ async function clearPrimaryArtifacts(io, outputRoot) {
     : { status:'failed', paths:[...PRIMARY_PATHS], failures };
 }
 
-export function renderNBodyPackingAssayHtml({ fixture, result, report, jointReference = null }) {
+export function renderNBodyPackingAssayHtml({
+  fixture,
+  result,
+  report,
+  jointReference = null,
+  sparseGlobalCandidate = null,
+}) {
   const payload = JSON.stringify({
     fixture,
     result,
     jointReference,
+    sparseGlobalCandidate,
     route:report.route,
   });
   const states = [
     ['known-feasible', 'Known feasible'],
     ['crowded', 'Crowded input'],
     ['sequential-counterfeit', 'Local counterfeit'],
+    ...(sparseGlobalCandidate ? [['sparse-global-candidate', 'Sparse global candidate']] : []),
     ...(jointReference ? [['joint-reference', 'Joint reference']] : []),
   ];
   const stateButtons = states.map(([state, label]) =>
@@ -101,6 +109,17 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
       <span>candidate enumeration</span><span class="value known">${escapeHtml(jointReference.invariance.candidateEnumeration)}</span>
     </div>
     <p class="reference-truth">Synthetic bounded reference: jointly feasible and KKT-stationary in the declared ten-dimensional carrier basis. This does not establish a scalable production solver or anatomical correctness.</p>` : '';
+  const candidatePanel = sparseGlobalCandidate ? `
+    <div class="reference-ledger candidate-ledger">
+      <span class="head">candidate versus bounded oracle</span><span class="head value">measured</span>
+      <span>continuous max residual</span><span class="value known">${formatMetric(sparseGlobalCandidate.selected.maximumPhysicalResidual)}</span>
+      <span>global work</span><span class="value">${sparseGlobalCandidate.work.iterations} synchronous iterations</span>
+      <span>displacement participation</span><span class="value">${sparseGlobalCandidate.selected.displacement.movedMemberCount} moved members</span>
+      <span>contact graph</span><span class="value">${sparseGlobalCandidate.mechanism.graphEdgeCount} edges / degree ${sparseGlobalCandidate.mechanism.maximumDegree}</span>
+      <span>deformation energy</span><span class="value">${formatMetric(sparseGlobalCandidate.selected.deformationEnergy)}</span>
+      <span>traversal invariance</span><span class="value known">${escapeHtml(sparseGlobalCandidate.invariance.candidateEnumeration)}</span>
+    </div>
+    <p class="candidate-truth">Scalable candidate evidence: one assembled snapshot and one simultaneous graph update per iteration. Pairwise closure authority is disabled; visual cleanliness does not substitute for oracle comparison or authenticated anatomy.</p>` : '';
   const colors = ['#ff7b72', '#f2cc60', '#56d4dd', '#a98cff', '#69a7ff'];
   const legend = fixture.contactGraph.members.map((id, index) =>
     `<span><i class="swatch" style="background:${colors[index]}"></i>${escapeHtml(id.replace('rosette-', ''))}</span>`,
@@ -141,6 +160,8 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
     .reference-ledger .head { color:#8998a7; text-transform:uppercase; font-size:8px; letter-spacing:.07em; }
     .reference-ledger .value { text-align:right; }
     .reference-truth { margin:9px 0 0; padding:8px 9px; border-left:3px solid #65d9a6; background:#102d24b8; color:#baf1d8; font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .candidate-ledger { border-top-color:#66b8ff55; }
+    .candidate-truth { margin:9px 0 0; padding:8px 9px; border-left:3px solid #66b8ff; background:#10263ab8; color:#c4e4ff; font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
     .legend { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:11px; color:#aeb9c6; font-size:9px; }
     .swatch { display:inline-block; width:8px; height:8px; margin-right:4px; border-radius:50%; }
     .hint { position:fixed; z-index:3; right:16px; bottom:14px; max-width:420px; padding:9px 12px; border-radius:9px; background:#080c12d4; color:#aeb8c4; font-size:10px; text-align:right; }
@@ -151,10 +172,10 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="N-body packing assay controls and evidence">
-    <h1>${jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
+    <h1>${sparseGlobalCandidate ? 'Five-body scalable candidate assay' : jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
     <p class="authority">Synthetic known-feasible assay · no anatomical admission</p>
-    <p class="status">${escapeHtml(jointReference?.status || result.status)}</p>
-    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
+    <p class="status">${escapeHtml(sparseGlobalCandidate?.status || jointReference?.status || result.status)}</p>
+    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${sparseGlobalCandidate ? 'The sparse global candidate updates every active graph contact from one assembled snapshot; the joint reference remains the bounded oracle, not a target coordinate source.' : jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
     <div class="button-row">${stateButtons}</div>
     <div class="button-row mode">
       <button data-mode="volume">Volumetric context</button>
@@ -174,6 +195,7 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
       <span>center → east distal</span><span class="value">${formatMetric(distal.beforePenetration)}</span><span class="value worsened">${formatMetric(distal.afterPenetration)}</span>
     </div>
     <p class="truth">Rejected: distal pressure debt survives despite locally and globally lower aggregate overlap. Red slice markers are measured belt-plane interpenetrations, not decorative contact hints.</p>
+    ${candidatePanel}
     ${referencePanel}
     <div class="legend">${legend}<span><i class="swatch" style="background:#f5f1e8"></i>attachments</span><span><i class="swatch" style="background:#cbd8e4"></i>bone</span><span><i class="swatch" style="background:#ff334f"></i>penetration</span></div>
   </section>
@@ -188,6 +210,7 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
       'known-feasible':payload.result.states.knownFeasible,
       'crowded':payload.result.states.crowded,
       'sequential-counterfeit':payload.result.states.sequentialCounterfeit,
+      ...(payload.sparseGlobalCandidate?{'sparse-global-candidate':payload.sparseGlobalCandidate.selected}:{}),
       ...(payload.jointReference?{'joint-reference':payload.jointReference.selected}:{}),
     };
     const viewport=document.querySelector('#viewport');
@@ -280,9 +303,16 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report, jointRefe
         if(!(pair.penetration>0))continue;
         const left=beltSample(byId.get(pair.members[0])),right=beltSample(byId.get(pair.members[1]));
         const midpoint=[(left.position[0]+right.position[0])*.5,0,(left.position[2]+right.position[2])*.5];
-        const marker=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.022,pair.penetration*.72),20,14),new THREE.MeshBasicMaterial({color:0xff334f,depthTest:false}));
+        const deltaX=right.position[0]-left.position[0],deltaZ=right.position[2]-left.position[2];
+        const distance=Math.hypot(deltaX,deltaZ);
+        const unitX=distance>1e-12?deltaX/distance:1,unitZ=distance>1e-12?deltaZ/distance:0;
+        const overlapHalf=Math.min(distance*.5,pair.penetration*.5);
+        const marker=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.002,Math.min(.04,pair.penetration*.72)),20,14),new THREE.MeshBasicMaterial({color:0xff334f,depthTest:false}));
         marker.position.set(...midpoint); marker.renderOrder=10; group.add(marker);
-        const connector=line([[left.position[0],0,left.position[2]],[right.position[0],0,right.position[2]]],0xff334f,.95,false);
+        const connector=line([
+          [midpoint[0]-unitX*overlapHalf,0,midpoint[2]-unitZ*overlapHalf],
+          [midpoint[0]+unitX*overlapHalf,0,midpoint[2]+unitZ*overlapHalf],
+        ],0xff334f,.95,false);
         connector.renderOrder=10; group.add(connector);
       }
     }

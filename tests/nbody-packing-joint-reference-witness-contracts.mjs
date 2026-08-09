@@ -8,7 +8,10 @@ import { deflateSync } from 'node:zlib';
 
 import {
   NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
+  NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
+  admitNBodyPackingJointReferenceVisualInspection,
   writeNBodyPackingJointReferenceWitness,
+  writeNBodyPackingSparseGlobalCandidateWitness,
 } from '../nbody-packing-joint-reference-witness.mjs';
 
 const VISUAL_STATES = [
@@ -18,6 +21,13 @@ const VISUAL_STATES = [
   'joint-reference',
 ];
 const VISUAL_MODES = ['volume', 'slice'];
+const SPARSE_VISUAL_STATES = [
+  'known-feasible',
+  'crowded',
+  'sequential-counterfeit',
+  'sparse-global-candidate',
+  'joint-reference',
+];
 const VISUAL_VERDICT = {
   nonblank:true,
   orbitable:true,
@@ -29,6 +39,11 @@ const VISUAL_VERDICT = {
   packingSemanticsNotInverted:true,
   jointReferenceLegible:true,
   textContained:true,
+};
+const SPARSE_VISUAL_VERDICT = {
+  ...VISUAL_VERDICT,
+  sparseCandidateLegible:true,
+  candidateOracleDifferenceLegible:true,
 };
 
 function digest(bytes) {
@@ -58,14 +73,25 @@ function pngChunk(type, data) {
   return Buffer.concat([length, typeBytes, data, checksum]);
 }
 
-function onePixelPng(seed) {
+function syntheticPng(seed, { width = 1400, height = 900 } = {}) {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(1, 0);
-  ihdr.writeUInt32BE(1, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
   ihdr[9] = 2;
-  const pixel = Buffer.from([0, (seed * 53) % 256, (seed * 97) % 256, (seed * 193) % 256]);
-  const idat = deflateSync(pixel);
+  const scanlines = Buffer.alloc(height * (1 + width * 3));
+  const color = [(seed * 53) % 256, (seed * 97) % 256, (seed * 193) % 256];
+  for (let y = 0; y < height; y += 1) {
+    const row = y * (1 + width * 3);
+    scanlines[row] = 0;
+    for (let x = 0; x < width; x += 1) {
+      const pixel = row + 1 + x * 3;
+      scanlines[pixel] = color[0];
+      scanlines[pixel + 1] = color[1];
+      scanlines[pixel + 2] = color[2];
+    }
+  }
+  const idat = deflateSync(scanlines);
   return {
     bytes:Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -74,8 +100,8 @@ function onePixelPng(seed) {
       pngChunk('IEND', Buffer.alloc(0)),
     ]),
     png: {
-      width:1,
-      height:1,
+      width,
+      height,
       bitDepth:8,
       colorType:2,
       compression:0,
@@ -87,13 +113,18 @@ function onePixelPng(seed) {
   };
 }
 
-async function fakeCapture(root, state, mode) {
-  const seed = VISUAL_STATES.indexOf(state) * VISUAL_MODES.length +
+async function fakeCapture(root, state, mode, {
+  states = VISUAL_STATES,
+  route = NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
+  artifactDir = 'nbody-packing-joint-reference-v0',
+  viewport = { width:1400, height:900 },
+} = {}) {
+  const seed = states.indexOf(state) * VISUAL_MODES.length +
     VISUAL_MODES.indexOf(mode) + 1;
-  const { bytes, png } = onePixelPng(seed);
+  const { bytes, png } = syntheticPng(seed, viewport);
   const path = `${state}-${mode}.png`;
   const captureReportPath = `${state}-${mode}-capture-report.json`;
-  const url = `http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=${state}&mode=${mode}`;
+  const url = `http://127.0.0.1:18765/artifacts/${artifactDir}/?state=${state}&mode=${mode}`;
   await writeFile(join(root, path), bytes);
   await writeFile(join(root, captureReportPath), `${JSON.stringify({
     schema:'kaminos.receipt-bearing-browser-capture.v0',
@@ -117,12 +148,12 @@ async function fakeCapture(root, state, mode) {
         witnessLoaded:'true',
         witnessState:state,
         witnessMode:mode,
-        witnessRoute:NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
+        witnessRoute:route,
       },
     },
-    invocation: { url, viewport:{ width:1, height:1 } },
+    invocation: { url, viewport },
     primaryOutput: {
-      path:`repo://artifacts/nbody-packing-joint-reference-v0/${path}`,
+      path:`repo://artifacts/${artifactDir}/${path}`,
       sizeBytes:bytes.length,
       sha256:digest(bytes),
       png,
@@ -248,6 +279,30 @@ test('joint reference witness binds the four-state A/B/C/reference viewer to exa
       /effective DOM mismatch/,
     );
     images[1] = await fakeCapture(root, wrongDomImage.state, wrongDomImage.mode);
+    const partialImage = images[0];
+    images[0] = await fakeCapture(root, partialImage.state, partialImage.mode, {
+      viewport:{ width:1, height:1 },
+    });
+    await assert.rejects(
+      () => witnessModule.admitNBodyPackingJointReferenceVisualInspection({
+        outDir:root,
+        inspection,
+      }),
+      /viewport must be exactly 1400x900/,
+    );
+    images[0] = await fakeCapture(root, partialImage.state, partialImage.mode);
+    const mixedImage = images[1];
+    images[1] = await fakeCapture(root, mixedImage.state, mixedImage.mode, {
+      viewport:{ width:1399, height:900 },
+    });
+    await assert.rejects(
+      () => witnessModule.admitNBodyPackingJointReferenceVisualInspection({
+        outDir:root,
+        inspection,
+      }),
+      /viewport must be exactly 1400x900/,
+    );
+    images[1] = await fakeCapture(root, mixedImage.state, mixedImage.mode);
     const admitted = await witnessModule.admitNBodyPackingJointReferenceVisualInspection({
       outDir:root,
       inspection,
@@ -258,6 +313,74 @@ test('joint reference witness binds the four-state A/B/C/reference viewer to exa
     assert.ok(admitted.receipt.images.every(
       image => image.capture.browser.installedStableChrome === false,
     ));
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('sparse global witness binds candidate and bounded oracle to ten admitted visual receipts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-sparse-witness-'));
+  try {
+    const written = await writeNBodyPackingSparseGlobalCandidateWitness({ outDir:root });
+    const [problemBytes, candidateBytes, htmlBytes, reportBytes] = await Promise.all([
+      readFile(join(root, 'sparse-problem.json')),
+      readFile(join(root, 'sparse-candidate.json')),
+      readFile(join(root, 'index.html')),
+      readFile(join(root, 'report.json')),
+    ]);
+    const problem = JSON.parse(problemBytes);
+    const candidate = JSON.parse(candidateBytes);
+    const report = JSON.parse(reportBytes);
+    const html = String(htmlBytes);
+
+    assert.equal(written.report.status, 'complete-pending-visual-inspection');
+    assert.deepEqual(report.route, {
+      requested:NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
+      effective:NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
+      fallbackUsed:false,
+    });
+    assert.equal(candidate.status, 'converged-sparse-global-candidate');
+    assert.equal(candidate.source.problemSha256, problem.identity.sha256);
+    assert.equal(candidate.route.fallbackUsed, false);
+    assert.equal(candidate.mechanism.oracleTargetCoordinatesConsumed, false);
+    assert.equal(candidate.mechanism.pairwiseClosureAuthority, false);
+    assert.equal(candidate.invariance.candidateEnumeration, 'passed');
+    assert.equal(candidate.invariance.rows.length, 2);
+    assert.ok(Object.values(candidate.invariance.comparison).every(Boolean));
+    assert.ok(candidate.selected.maximumPhysicalResidual <= candidate.config.effective.convergenceTolerance);
+    assert.equal(report.claims.scalableSyntheticCandidate, 'supported-only-on-bounded-five-body-assay');
+    assert.equal(report.claims.scalableProductionSolver, 'not-assayed');
+    assert.deepEqual(report.visualInspection.requiredStates, SPARSE_VISUAL_STATES);
+    assert.match(html, /data-state="sparse-global-candidate"/);
+    assert.match(html, /Scalable candidate evidence/i);
+    assert.match(html, /joint reference evidence/i);
+    assert.match(report.bindings.sparseProblemJsonSha256, /^[0-9a-f]{64}$/);
+    assert.match(report.bindings.sparseCandidateJsonSha256, /^[0-9a-f]{64}$/);
+
+    const images = [];
+    for (const state of SPARSE_VISUAL_STATES) {
+      for (const mode of VISUAL_MODES) {
+        images.push(await fakeCapture(root, state, mode, {
+          states:SPARSE_VISUAL_STATES,
+          route:NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
+          artifactDir:'nbody-packing-sparse-global-v0',
+        }));
+      }
+    }
+    const admitted = await admitNBodyPackingJointReferenceVisualInspection({
+      outDir:root,
+      inspection: {
+        observedAt:'2026-08-09T22:00:00-04:00',
+        baseUrl:'http://127.0.0.1:18765/artifacts/nbody-packing-sparse-global-v0/',
+        images,
+        verdict:SPARSE_VISUAL_VERDICT,
+        summary:'Candidate and oracle are distinct and legible in both volume and slice.',
+      },
+    });
+    assert.equal(admitted.report.status, 'complete-visual-inspected');
+    assert.equal(admitted.receipt.schema, 'kaminos.nbody-packing-sparse-global-comparison-visual-inspection.v0');
+    assert.equal(admitted.receipt.images.length, 10);
+    assert.equal(new Set(admitted.receipt.images.map(image => image.sha256)).size, 10);
   } finally {
     await rm(root, { recursive:true, force:true });
   }

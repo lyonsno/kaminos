@@ -278,7 +278,7 @@ function requireKnownFeasibleState(metrics) {
   }
 }
 
-function validateFixture(fixture) {
+export function validateNBodyPackingAssayFixture(fixture) {
   if (fixture?.schema !== NBODY_PACKING_ASSAY_FIXTURE_SCHEMA) {
     throw new Error(`N-body fixture schema mismatch: ${fixture?.schema || 'missing'}`);
   }
@@ -423,7 +423,7 @@ export function runNBodyRosetteCounterfeitAssay({
   fixture = createNBodyRosetteFixture(),
   requestedConfig = structuredClone(DEFAULT_COUNTERFEIT_CONFIG),
 } = {}) {
-  validateFixture(fixture);
+  validateNBodyPackingAssayFixture(fixture);
   validateCounterfeitConfig(requestedConfig);
   const effectiveConfig = structuredClone(requestedConfig);
   const counterfeitMuscles = structuredClone(fixture.crowded.muscles);
