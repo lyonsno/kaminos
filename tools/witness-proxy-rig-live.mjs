@@ -224,6 +224,7 @@ const report = {
   narrow: null,
   missingPackage: null,
   storageDenied: null,
+  publicGizmoM31: null,
   hierarchyPoses: null,
   status: 'running',
   failurePhase: null,
@@ -370,10 +371,63 @@ try {
     `desktop: reported kernel does not match renderer identity (${JSON.stringify(report.effectiveRuntime)})`,
   );
   const canvas = desktop.page.locator('#viewport > canvas').first();
+  const publicGizmoRestCanvas = await canvas.screenshot({
+    path: resolve(outputDir, 'proxy-rig-m31-public-gizmo-rest-canvas.png'),
+  });
   await desktop.page.screenshot({
     path: resolve(outputDir, 'proxy-rig-public-initial-control-page.png'),
     fullPage: true,
   });
+
+  report.failurePhase = 'public-gizmo-m31-shape';
+  const canvasBox = await canvas.boundingBox();
+  assert(canvasBox, 'public gizmo: canvas bounding box is missing');
+  const pointer = {
+    start: {
+      x: canvasBox.x + canvasBox.width * 0.724,
+      y: canvasBox.y + canvasBox.height * 0.49,
+    },
+    end: {
+      x: canvasBox.x + canvasBox.width * 0.799,
+      y: canvasBox.y + canvasBox.height * 0.557,
+    },
+  };
+  await desktop.page.mouse.move(pointer.start.x, pointer.start.y);
+  await desktop.page.mouse.down();
+  await desktop.page.mouse.move(pointer.end.x, pointer.end.y, { steps: 20 });
+  await desktop.page.mouse.up();
+  await desktop.page.waitForTimeout(500);
+  const publicGizmoState = await desktop.page.evaluate(() => window.kaminosProxyRigDebugState());
+  assert(
+    publicGizmoState.selectedControl === expectedInteraction.initialControl
+      && publicGizmoState.transformTargetName === expectedInteraction.initialControl,
+    `public gizmo: pointer drag escaped the declared skeletal support (${JSON.stringify(publicGizmoState)})`,
+  );
+  assert(
+    publicGizmoState.muscleShapeChanges?.['muscle-31']?.q95AbsLogEdgeStrain > 0.02,
+    'public gizmo: visible skeletal-control drag did not non-rigidly deform M31',
+  );
+  const publicGizmoFlexCanvas = await canvas.screenshot({
+    path: resolve(outputDir, 'proxy-rig-m31-public-gizmo-flex-canvas.png'),
+  });
+  const publicGizmoDelta = await pixelDelta(desktop.page, publicGizmoRestCanvas, publicGizmoFlexCanvas);
+  assert(
+    publicGizmoDelta.changedPixelFraction > 0.0005 && publicGizmoDelta.meanAbsoluteRgbDelta > 0.02,
+    `public gizmo: pointer drag did not materially change rendered pixels (${JSON.stringify(publicGizmoDelta)})`,
+  );
+  await desktop.page.screenshot({
+    path: resolve(outputDir, 'proxy-rig-m31-public-gizmo-flex-page.png'),
+    fullPage: true,
+  });
+  report.publicGizmoM31 = {
+    pointer,
+    state: publicGizmoState,
+    renderedPoseDelta: publicGizmoDelta,
+  };
+  report.lastTrustworthyEvidence = report.publicGizmoM31;
+  await desktop.page.locator('#proxy-rig-reset-all').click();
+  await desktop.page.waitForTimeout(200);
+
   await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(false));
   await desktop.page.waitForTimeout(800);
   const hiddenRestState = await desktop.page.evaluate(() => window.kaminosProxyRigDebugState());

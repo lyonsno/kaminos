@@ -13,6 +13,8 @@ test('witness binds M31 shape evidence to the visible declared skeletal control'
   assert.match(source, /selectedControl\s*===\s*controlName/);
   assert.match(source, /muscleShapeChanges/);
   assert.match(source, /q95AbsLogEdgeStrain/);
+  assert.match(source, /publicGizmoM31/);
+  assert.match(source, /\.mouse\.down\(\)/);
 });
 
 test('witness setup failure overwrites any stale pass with a terminal failure report', async () => {
