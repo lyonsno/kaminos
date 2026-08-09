@@ -1,0 +1,47 @@
+{
+  "schema": "kaminos.matched_generator_assay.v1",
+  "title": "Reapportioned envelope morphology-authority canary",
+  "campaign_question": "Does the operator's more anatomically specific envelope retain its newly authored cranial, cervical, scapular, pelvic, and hind-limb organization under deformable and rigid FLUX elaboration?",
+  "revised_source": {
+    "path": "source/reapportioned-envelope-v1.png",
+    "sha256": "68ee109ca805f678095078e5c5df6edb6ede6d3f339b932149650defa1b41e4c",
+    "width": 496,
+    "height": 590,
+    "custody_note": "Exact operator-provided Image 4 screenshot, preserved without crop, cleanup, or rerender."
+  },
+  "original_source_comparator": {
+    "campaign": "../reapportioned-envelope-surface-semantics-v0/campaign.json",
+    "source_sha256": "8bbbc504473ccb1658a84f633554b070ea4c0554ae095cabd68abfee2e658d56",
+    "fur_job_id": "cd768da9118d",
+    "stone_job_id": "c37f480e7ae6"
+  },
+  "conditions": [
+    {
+      "id": "fur",
+      "prompt_file": "prompts/fur.txt",
+      "prompt": "This shape covered in fur.",
+      "role": "deformable-surface morphology-survival probe"
+    },
+    {
+      "id": "stone",
+      "prompt_file": "prompts/stone.txt",
+      "prompt": "This creature made of fitted stone plates.",
+      "role": "rigid-surface morphology-survival probe"
+    }
+  ],
+  "seed": 80301,
+  "route": {
+    "requested_job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "known_confound": "The revised screenshot does not reproduce the original source camera, framing, resolution, or viewport lighting exactly. Cross-source differences can support directional morphology-authority evidence but cannot attribute every output delta solely to geometry revision.",
+  "claim_ceiling": "The four paired outputs can show whether the revised source visibly carries more of its authored organization through both material prompts. They cannot independently estimate a geometry-only effect size or establish production generality.",
+  "expansion_predicate": "Expand the revised source to armor and shell only if at least one revised cell preserves the newly authored cranial, neck-to-scapula, pelvic, and hind-limb organization without a material silhouette regression relative to its original-source comparator.",
+  "visual_review": "Inspect all four comparator and revised outputs together. Present both conditioning sources, exact prompts, seed, settings, effective routes, outputs, and morphology-survival judgments in one sheet."
+}

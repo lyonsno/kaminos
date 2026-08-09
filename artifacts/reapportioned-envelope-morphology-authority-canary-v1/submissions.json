@@ -1,0 +1,19 @@
+{
+  "schema": "kaminos.gpu_greenroom_submission_ledger.v1",
+  "initial_status": "pending",
+  "jobs": [
+    {
+      "condition": "fur",
+      "seed": 80301,
+      "job_id": "110c435046a9",
+      "output_dir": "runs/fur-seed80301"
+    },
+    {
+      "condition": "stone",
+      "seed": 80301,
+      "job_id": "ccd41ea2035d",
+      "output_dir": "runs/stone-seed80301"
+    }
+  ],
+  "receipt_note": "Both submit commands exited zero. Effective route remains unknown until a Greenroom worker leases the jobs."
+}
