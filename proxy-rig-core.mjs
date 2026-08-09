@@ -144,13 +144,6 @@ export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainT
   const rigidSectionCount = Math.max(2, Math.floor(sourceFixture.sectionCount * 0.2));
   const route = 'authenticated-m31-two-support-live-overlay';
   return {
-    supportRefinement: {
-      parentGroup: 'hindlimb-left',
-      childName: 'hindlimb-left-m31-insertion',
-      sourceBones: ['Cube.003'],
-      pivot: applyChain(sourceFixture.hinge.pivotWorld, [sourceToSkeleton]),
-      pivotDerivation: 'authenticated muscle-31 moving-support object origin through M31 source registration',
-    },
     muscle: {
       schema: 'kaminos.proxy-rig-muscle.v0',
       relationId: 'muscle-31',
@@ -168,7 +161,7 @@ export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainT
       },
       supportMapping: {
         fixed: 'hindlimb-left',
-        moving: 'hindlimb-left-m31-insertion',
+        moving: 'hindlimb-left-distal-support',
         fixedSource: 'Cube.002',
         movingSource: 'Cube.003',
       },
@@ -180,6 +173,28 @@ export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainT
       originCapLastSection: rigidSectionCount - 1,
       insertionCapFirstSection: sourceFixture.sectionCount - rigidSectionCount,
     },
+  };
+}
+
+export function createSkeletalSupportRefinement({
+  parentGroup,
+  childName,
+  supportBone,
+}) {
+  const pivot = supportBone?.worldOrigin;
+  if (typeof parentGroup !== 'string' || !parentGroup
+      || typeof childName !== 'string' || !childName
+      || typeof supportBone?.name !== 'string' || !supportBone.name
+      || !Array.isArray(pivot) || pivot.length !== 3
+      || pivot.some(value => !Number.isFinite(value))) {
+    throw new Error('Skeletal support refinement requires named controls and an authored support origin');
+  }
+  return {
+    parentGroup,
+    childName,
+    sourceBones: [supportBone.name],
+    pivot: [...pivot],
+    pivotDerivation: `authored ${supportBone.name} skeleton-node world origin`,
   };
 }
 

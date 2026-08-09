@@ -116,6 +116,7 @@ export function parseGlbNodeGeometries(bytes) {
       if (triangles.length >= 3) {
         nodes.push({
           name: node.name ?? `node-${nodeIndex}`,
+          worldOrigin: [world[12], world[13], world[14]],
           geometry: {
             positions: Float64Array.from(positions),
             triangles: Uint32Array.from(triangles),

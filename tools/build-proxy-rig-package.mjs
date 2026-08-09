@@ -23,6 +23,7 @@ import {
   bindEnvelopeToSkeleton,
   createM31LiveOverlay,
   createProxyRigPackage,
+  createSkeletalSupportRefinement,
   validateM31SourceRegistration,
 } from '../proxy-rig-core.mjs';
 import {
@@ -108,8 +109,13 @@ const m31Overlay = createM31LiveOverlay({
 const m31MovingSupport = bones.find(bone => (
   bone.name === m31Overlay.muscle.supportMapping.movingSource
 ));
+const leftDistalSupport = createSkeletalSupportRefinement({
+  parentGroup: m31Overlay.muscle.supportMapping.fixed,
+  childName: m31Overlay.muscle.supportMapping.moving,
+  supportBone: m31MovingSupport,
+});
 const m31AuthoredSupportProximity = assertM31AuthoredSupportProximity({
-  pivot: m31Overlay.supportRefinement.pivot,
+  pivot: applyChain(m31SourceFixture.hinge.pivotWorld, [m31SourceRegistration.transform]),
   supportBone: m31MovingSupport,
   chainTransforms: [],
 });
@@ -118,7 +124,7 @@ const skinBinding = bindEnvelopeToSkeleton({
   bones,
   manifest,
   chainTransforms,
-  supportRefinements: [m31Overlay.supportRefinement],
+  supportRefinements: [leftDistalSupport],
 });
 const castBinding = bindCastToEnvelope({ cast, envelopeInCastFrame });
 const packageData = createProxyRigPackage({
@@ -143,8 +149,8 @@ const packageData = createProxyRigPackage({
     m31SourceRegistrationReceipt: 'artifacts/cast-correspondence-v0/receipts/m31-source-blend--skeleton-authored.json',
     m31SourceRegistrationReceiptSha256: m31SourceRegistration.receiptSha256,
     m31AuthoredSupportProximity,
-    effectiveRoute: 'proxy-rig-core.mjs manifest-backed hierarchy + authenticated M31 two-support overlay + bindEnvelopeToSkeleton + bindCastToEnvelope',
-    hierarchyDerivation: 'hindlimb-right proximodistal chain plus M31 Cube.002 -> Cube.003 left-hindlimb support split',
+    effectiveRoute: 'proxy-rig-core.mjs manifest-backed skeletal hierarchy + authenticated M31 two-support overlay + bindEnvelopeToSkeleton + bindCastToEnvelope',
+    hierarchyDerivation: 'hindlimb-right proximodistal chain plus relation-independent Cube.003 left-hindlimb distal support split',
   },
 });
 

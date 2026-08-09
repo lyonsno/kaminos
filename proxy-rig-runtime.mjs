@@ -472,6 +472,11 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
       insertionCapFirstSection: muscle.insertionCapFirstSection,
     };
   });
+  for (const relationId of muscleIds) {
+    if (names.has(relationId)) {
+      fail(`${relationId} cannot also be a skeletal control`);
+    }
+  }
 
   return {
     schema: pkg.schema,
@@ -525,6 +530,11 @@ export function createProxyRigEvaluator(input, {
     })),
     cast: packageData.cast,
     evaluate(pose = {}) {
+      requireObject(pose, 'pose');
+      const knownControls = new Set(packageData.skinBinding.groups.map(group => group.name));
+      for (const name of Object.keys(pose)) {
+        if (!knownControls.has(name)) fail(`unknown pose control ${name}`);
+      }
       const posedEnvelope = poseEnvelope({
         envelopeInCastFrame: packageData.envelope,
         skinBinding: packageData.skinBinding,
@@ -572,7 +582,15 @@ function slerpQuaternion(aInput, bInput, amount) {
   return a.map((value, index) => left * value + right * b[index]);
 }
 
-function validatePoseFrame(frame, index) {
+function validateKnownPoseControls(pose, knownControls, label) {
+  if (knownControls === null || knownControls === undefined) return;
+  const known = knownControls instanceof Set ? knownControls : new Set(knownControls);
+  for (const name of Object.keys(pose)) {
+    if (!known.has(name)) fail(`unknown pose control ${name} in ${label}`);
+  }
+}
+
+function validatePoseFrame(frame, index, knownControls = null) {
   requireObject(frame, `pose frame ${index}`);
   if (!Number.isFinite(frame.tMs) || frame.tMs < 0) fail(`pose frame ${index} tMs must be non-negative`);
   requireObject(frame.pose, `pose frame ${index} pose`);
@@ -581,13 +599,14 @@ function validatePoseFrame(frame, index) {
     requireObject(transform, `pose frame ${index} control ${name}`);
     pose[name] = { quaternion: normalizeQuaternion(transform.quaternion, `pose frame ${index} control ${name} quaternion`) };
   }
+  validateKnownPoseControls(pose, knownControls, `pose frame ${index}`);
   return { tMs: frame.tMs, pose };
 }
 
-export function createProxyPoseRun({ packageId, frames }) {
+export function createProxyPoseRun({ packageId, frames, knownControls = null }) {
   if (typeof packageId !== 'string' || !packageId.trim()) fail('pose run package id is required');
   if (!Array.isArray(frames) || frames.length === 0) fail('pose run frames are required');
-  const normalized = frames.map(validatePoseFrame);
+  const normalized = frames.map((frame, index) => validatePoseFrame(frame, index, knownControls));
   requireMonotonicFrameTimes(normalized);
   return { schema: PROXY_POSE_RUN_SCHEMA, packageId, frames: normalized };
 }
@@ -598,14 +617,17 @@ function requireMonotonicFrameTimes(frames) {
   }
 }
 
-export function sampleProxyPoseRun(input, tMs, { expectedPackageId = null } = {}) {
+export function sampleProxyPoseRun(input, tMs, {
+  expectedPackageId = null,
+  knownControls = null,
+} = {}) {
   const run = requireObject(input, 'pose run');
   if (run.schema !== PROXY_POSE_RUN_SCHEMA) fail(`pose run schema ${String(run.schema)} is unsupported`);
   if (expectedPackageId && run.packageId !== expectedPackageId) {
     fail(`pose run package id ${String(run.packageId)} != requested ${expectedPackageId}`);
   }
   if (!Array.isArray(run.frames) || run.frames.length === 0) fail('pose run frames are required');
-  const frames = run.frames.map(validatePoseFrame);
+  const frames = run.frames.map((frame, index) => validatePoseFrame(frame, index, knownControls));
   requireMonotonicFrameTimes(frames);
   if (tMs <= frames[0].tMs) return frames[0].pose;
   if (tMs >= frames.at(-1).tMs) return frames.at(-1).pose;

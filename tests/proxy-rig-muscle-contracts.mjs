@@ -58,7 +58,11 @@ test('M31 source registration precedes the skeleton-to-cast chain and is mandato
     }],
   });
   assert.deepEqual(Array.from(overlay.muscle.positions.slice(0, 3)), [6, 7, 3]);
-  assert.deepEqual(overlay.supportRefinement.pivot, [12, 4, 6]);
+  assert.equal(
+    overlay.supportRefinement,
+    undefined,
+    'a muscle relation must not manufacture or own a skeletal transform control',
+  );
   assert.equal(overlay.muscle.source.registrationReceiptSha256, sourceRegistration.receiptSha256);
   assert.throws(
     () => core.createM31LiveOverlay({ sourceFixture, chainTransforms: [] }),
@@ -80,7 +84,7 @@ function musclePackage() {
         { name: 'moving', pivot: [1, 0, 0], parent: 'fixed', sourceBones: ['Cube.003'] },
       ],
       neighbors: 1,
-      weightGroups: [0, 0, 0],
+      weightGroups: [0, 1, 1],
       weightValues: [1, 1, 1],
     },
     castBinding: { triangle: [0, 0, 0], local: [0, 0, 0, 1, 0, 0, 0, 1, 0] },
@@ -135,6 +139,11 @@ test('live evaluator transports one authenticated muscle through its exact suppo
     moving: { quaternion: [0, 0, Math.sin(halfAngle), Math.cos(halfAngle)] },
   });
   assert.equal(result.muscles.length, 1);
+  assert.notDeepEqual(
+    Array.from(result.positions),
+    musclePackage().cast.positions,
+    'the moving skeletal support must drive the cast as well as the muscle',
+  );
   const posed = result.muscles[0];
 
   assert.deepEqual(vertex(posed.positions, 0), [0, -0.1, 0], 'origin cap follows fixed support exactly');
@@ -149,6 +158,14 @@ test('live evaluator transports one authenticated muscle through its exact suppo
   assert.notDeepEqual(interior, fixedInterior, 'belly must not rigidly follow the fixed support');
   assert.notDeepEqual(interior, movingInterior, 'belly must not rigidly follow the moving support');
   assert.ok(interior.every(Number.isFinite));
+
+  assert.throws(
+    () => evaluator.evaluate({
+      'muscle-31': { quaternion: [0, 0, Math.sin(halfAngle), Math.cos(halfAngle)] },
+    }),
+    /unknown pose control muscle-31/i,
+    'a relation id must never become an independently poseable transform target',
+  );
 });
 
 test('muscle support identity and route degradation fail before live evaluation', () => {
@@ -163,6 +180,15 @@ test('muscle support identity and route degradation fail before live evaluation'
   const malformedSections = musclePackage();
   malformedSections.muscles[0].sectionIndices.pop();
   assert.throws(() => runtime.createProxyRigEvaluator(malformedSections), /muscle-31.*section indices/i);
+
+  const relationControlCollision = musclePackage();
+  relationControlCollision.skinBinding.groups[1].name = 'muscle-31';
+  relationControlCollision.muscles[0].supportMapping.moving = 'muscle-31';
+  assert.throws(
+    () => runtime.createProxyRigEvaluator(relationControlCollision),
+    /muscle-31.*cannot also be a skeletal control/i,
+    'relation identity must remain disjoint from every selectable skeletal control',
+  );
 });
 
 test('pose-run replay drives cast and muscle under the same package identity', () => {
@@ -175,10 +201,26 @@ test('pose-run replay drives cast and muscle under the same package identity', (
       { tMs: 100, pose: { moving: { quaternion: [0, 0, 1, 0] } } },
     ],
   });
-  const sampled = runtime.sampleProxyPoseRun(run, 50, { expectedPackageId: pkg.packageId });
+  const sampled = runtime.sampleProxyPoseRun(run, 50, {
+    expectedPackageId: pkg.packageId,
+    knownControls: evaluator.groups.map(group => group.name),
+  });
   const first = evaluator.evaluate(sampled);
   const second = evaluator.evaluate(sampled);
   assert.deepEqual(Array.from(first.positions), Array.from(second.positions));
   assert.deepEqual(Array.from(first.muscles[0].positions), Array.from(second.muscles[0].positions));
   assert.equal(first.muscles[0].packageId, pkg.packageId);
+
+  const relationOwnedRun = runtime.createProxyPoseRun({
+    packageId: pkg.packageId,
+    frames: [{ tMs: 0, pose: { 'muscle-31': { quaternion: [0, 0, 0, 1] } } }],
+  });
+  assert.throws(
+    () => runtime.sampleProxyPoseRun(relationOwnedRun, 0, {
+      expectedPackageId: pkg.packageId,
+      knownControls: evaluator.groups.map(group => group.name),
+    }),
+    /unknown pose control muscle-31/i,
+    'persisted pose runs must not silently drop a relation-owned key before evaluation',
+  );
 });

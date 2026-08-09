@@ -190,6 +190,26 @@ test('denied local storage degrades to an in-memory assay without escaping purge
   assert.match(restored.storageError, /storage read denied/i);
 });
 
+test('persisted pose restoration rejects unknown controls before browser replay', () => {
+  const poseRun = runtime.createProxyPoseRun({
+    packageId: 'sha256:toy-proxy-rig',
+    frames: [{ tMs: 0, pose: { 'muscle-31': { quaternion: [0, 0, 0, 1] } } }],
+  });
+  let removed = null;
+  const restored = restoreProxyPoseRunFromStorage({
+    storage: {
+      getItem() { return JSON.stringify(poseRun); },
+      removeItem(key) { removed = key; },
+    },
+    key: 'pose-run',
+    packageId: 'sha256:toy-proxy-rig',
+    knownControls: ['arm'],
+  });
+  assert.equal(restored.poseRun, null);
+  assert.match(restored.storageError, /unknown pose control muscle-31/i);
+  assert.equal(removed, 'pose-run');
+});
+
 test('render identity reports the effective Three revision and renderer backend', () => {
   class WebGPUBackend {}
   assert.deepEqual(
@@ -308,4 +328,59 @@ test('friendly labels are visible and identity-preserving for every nonblank acc
   assert.equal(invisible.value, invisibleName);
   assert.equal(invisible.title, invisibleName);
   assert.match(invisible.label, /[^\p{Z}\p{Cc}\p{Cf}]/u);
+});
+
+test('live transform targeting exposes skeletal controls and never muscle relations', () => {
+  assert.equal(typeof liveHost.resolveProxyRigTransformTarget, 'function');
+  assert.equal(typeof liveHost.chooseProxyRigInitialControlName, 'function');
+  const distalSupport = { userData: { controlKind: 'skeletal-support' } };
+  const rightHock = { userData: { controlKind: 'skeletal-support' } };
+  const controls = new Map([
+    ['hindlimb-left-distal-support', distalSupport],
+    ['hindlimb-right-hock', rightHock],
+  ]);
+
+  assert.equal(
+    liveHost.resolveProxyRigTransformTarget(controls, 'hindlimb-left-distal-support'),
+    distalSupport,
+  );
+  assert.equal(liveHost.resolveProxyRigTransformTarget(controls, 'muscle-31'), null);
+  assert.equal(
+    liveHost.chooseProxyRigInitialControlName([...controls.keys()]),
+    'hindlimb-right-hock',
+    'loading a muscle must not redirect initial selection onto its attachment support',
+  );
+  assert.deepEqual(liveHost.proxyRigControlOptionDescriptor('hindlimb-left-distal-support'), {
+    value: 'hindlimb-left-distal-support',
+    title: 'hindlimb-left-distal-support',
+    label: 'Left hindlimb - Distal support',
+  });
+});
+
+test('skeletal linkage diagnostics count only effectively visible segments in the current root', () => {
+  assert.equal(typeof liveHost.countVisibleProxyRigSupportSegments, 'function');
+  const currentSegment = {
+    visible: true,
+    userData: { controlKind: 'skeletal-support-segment' },
+    children: [],
+  };
+  const hiddenSegment = {
+    visible: true,
+    userData: { controlKind: 'skeletal-support-segment' },
+    children: [],
+  };
+  const hiddenParent = { visible: false, userData: {}, children: [hiddenSegment] };
+  const currentRoot = { visible: true, userData: {}, children: [currentSegment, hiddenParent] };
+  const disposedSegment = {
+    visible: true,
+    userData: { controlKind: 'skeletal-support-segment' },
+    children: [],
+  };
+
+  assert.equal(liveHost.countVisibleProxyRigSupportSegments(currentRoot), 1);
+  assert.equal(
+    liveHost.countVisibleProxyRigSupportSegments({ visible: true, userData: {}, children: [] }),
+    0,
+    `detached segment ${String(disposedSegment.userData.controlKind)} must not survive root replacement`,
+  );
 });

@@ -45,12 +45,17 @@ test('real SF3D route packages the frozen geometry, bindings, and source identit
     sourceRegistration: m31SourceRegistration,
     chainTransforms,
   });
+  const leftDistalSupport = core.createSkeletalSupportRefinement({
+    parentGroup: m31Overlay.muscle.supportMapping.fixed,
+    childName: m31Overlay.muscle.supportMapping.moving,
+    supportBone: bones.find(bone => bone.name === m31Overlay.muscle.supportMapping.movingSource),
+  });
   const skinBinding = core.bindEnvelopeToSkeleton({
     envelope: envelopeInCastFrame,
     bones,
     manifest,
     chainTransforms,
-    supportRefinements: [m31Overlay.supportRefinement],
+    supportRefinements: [leftDistalSupport],
   });
   const castBinding = core.bindCastToEnvelope({ cast, envelopeInCastFrame });
   const input = {
@@ -86,15 +91,19 @@ test('real SF3D route packages the frozen geometry, bindings, and source identit
   assert.equal(packagedGroups.get('hindlimb-right-paw').parent, 'hindlimb-right-hock');
   assert.deepEqual(packagedGroups.get('hindlimb-right-stifle').sourceBones, ['Cube.086', 'Cube.089']);
   assert.match(packagedGroups.get('hindlimb-right-hock').pivotDerivation, /nearest-surface boundary/i);
-  assert.equal(packagedGroups.get('hindlimb-left-m31-insertion').parent, 'hindlimb-left');
-  assert.deepEqual(packagedGroups.get('hindlimb-left-m31-insertion').sourceBones, ['Cube.003']);
+  assert.equal(packagedGroups.get('hindlimb-left-distal-support').parent, 'hindlimb-left');
+  assert.deepEqual(packagedGroups.get('hindlimb-left-distal-support').sourceBones, ['Cube.003']);
+  assert.ok(
+    [...packagedGroups.keys()].every(name => !/m31|muscle-31/i.test(name)),
+    'skeletal control identity must not depend on the first relation that consumes it',
+  );
   assert.ok(packagedGroups.get('hindlimb-left').sourceBones.includes('Cube.002'));
   assert.ok(!packagedGroups.get('hindlimb-left').sourceBones.includes('Cube.003'));
   assert.equal(a.muscles.length, 1);
   assert.equal(a.muscles[0].relationId, 'muscle-31');
   assert.deepEqual(a.muscles[0].supportMapping, {
     fixed: 'hindlimb-left',
-    moving: 'hindlimb-left-m31-insertion',
+    moving: 'hindlimb-left-distal-support',
     fixedSource: 'Cube.002',
     movingSource: 'Cube.003',
   });

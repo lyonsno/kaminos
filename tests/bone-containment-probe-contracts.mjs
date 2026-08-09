@@ -111,6 +111,11 @@ test('parseGlbNodeGeometries returns separable named nodes (real skeleton smoke)
   const nodes = parseGlbNodeGeometries(bytes);
   assert.ok(nodes.length >= 90, `expected ~96 bone nodes, got ${nodes.length}`);
   assert.ok(nodes.some(n => n.name === 'SRC_PELVIS'), 'named pelvis node must survive');
+  assert.deepEqual(
+    nodes.find(n => n.name === 'Cube.003')?.worldOrigin,
+    [25.05453109741211, -9.382328987121582, -5.397850036621094],
+    'skeletal controls must retain their authored node origin independently of relation fixtures',
+  );
   const totalTris = nodes.reduce((acc, n) => acc + n.geometry.triangles.length / 3, 0);
   assert.equal(totalTris, 9111, 'per-node parse must cover the merged triangle count');
 });

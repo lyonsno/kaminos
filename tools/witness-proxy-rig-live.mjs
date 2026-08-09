@@ -22,7 +22,7 @@ const quaternionZ = angleDeg => {
 };
 const hierarchyPoses = {
   m31Flex: {
-    'hindlimb-left-m31-insertion': quaternionZ(24),
+    'hindlimb-left-distal-support': quaternionZ(24),
   },
   planted: {
     'hindlimb-right-hip': quaternionZ(8),
@@ -192,6 +192,19 @@ async function loadWitnessPage(browser, viewport, label) {
     JSON.stringify(state.muscles) === JSON.stringify(expectedMuscles),
     `${label}: live muscle identity differs from the verified package (${JSON.stringify(state.muscles)})`,
   );
+  assert(
+    state.selectedControl === 'hindlimb-right-hock',
+    `${label}: initial selection drifted onto ${String(state.selectedControl)}`,
+  );
+  assert(
+    state.selectedControlKind === 'skeletal-support'
+      && state.transformTargetName === state.selectedControl,
+    `${label}: transform target is not the selected skeletal support (${JSON.stringify(state)})`,
+  );
+  assert(
+    state.skeletalSupportSegmentCount >= 1,
+    `${label}: rendered scene has no visible parent-child skeletal linkage`,
+  );
   assert(state.error === null, `${label}: live state contains an error: ${state.error}`);
   const panelBox = await page.locator('#proxy-rig-live-controls').boundingBox();
   const viewportBox = await page.locator('#viewport').boundingBox();
@@ -263,7 +276,7 @@ try {
   assert(
     JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-left'))) === JSON.stringify([
       { name: 'hindlimb-left', parent: null },
-      { name: 'hindlimb-left-m31-insertion', parent: 'hindlimb-left' },
+      { name: 'hindlimb-left-distal-support', parent: 'hindlimb-left' },
     ]),
     `verified package does not carry the M31 support hierarchy (${JSON.stringify(expectedHierarchy)})`,
   );

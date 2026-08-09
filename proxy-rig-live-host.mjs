@@ -30,6 +30,12 @@ function controlNameFallback(name) {
 function controlLabel(name) {
   const hindlimb = name.match(/^hindlimb-(left|right)-(hip|stifle|hock|paw)$/);
   if (hindlimb) return `${hindlimb[1][0].toUpperCase()}${hindlimb[1].slice(1)} hindlimb - ${hindlimb[2][0].toUpperCase()}${hindlimb[2].slice(1)}`;
+  const skeletalSupport = name.match(/^hindlimb-(left|right)-(proximal|distal)-support$/);
+  if (skeletalSupport) {
+    const side = `${skeletalSupport[1][0].toUpperCase()}${skeletalSupport[1].slice(1)}`;
+    const position = `${skeletalSupport[2][0].toUpperCase()}${skeletalSupport[2].slice(1)}`;
+    return `${side} hindlimb - ${position} support`;
+  }
   const friendly = name.split('-')
     .map(part => part.trim())
     .filter(Boolean)
@@ -45,6 +51,28 @@ export function proxyRigControlOptionDescriptor(name) {
     title: name,
     label: controlLabel(name),
   };
+}
+
+export function resolveProxyRigTransformTarget(controls, selectedControl) {
+  return controls.get(selectedControl) ?? null;
+}
+
+export function chooseProxyRigInitialControlName(controlNames) {
+  if (controlNames.includes('hindlimb-right-hock')) return 'hindlimb-right-hock';
+  return controlNames[0] ?? null;
+}
+
+export function countVisibleProxyRigSupportSegments(root) {
+  let count = 0;
+  const visit = (object, ancestorsVisible) => {
+    const effectivelyVisible = ancestorsVisible && object?.visible !== false;
+    if (effectivelyVisible && object?.userData?.controlKind === 'skeletal-support-segment') {
+      count += 1;
+    }
+    for (const child of object?.children ?? []) visit(child, effectivelyVisible);
+  };
+  if (root) visit(root, true);
+  return count;
 }
 
 export function proxyRigRenderIdentity(THREE, renderer) {
@@ -104,12 +132,21 @@ export function attachProxyRigTransformControl(controls, transformControls, cont
   setProxyRigControlVisibility(controls, transformControls, visible);
 }
 
-export function restoreProxyPoseRunFromStorage({ storageProvider, storage, key, packageId }) {
+export function restoreProxyPoseRunFromStorage({
+  storageProvider,
+  storage,
+  key,
+  packageId,
+  knownControls = null,
+}) {
   try {
     const effectiveStorage = storageProvider ? storageProvider() : storage;
     const serialized = effectiveStorage.getItem(key);
     const poseRun = serialized === null ? null : JSON.parse(serialized);
-    if (poseRun) sampleProxyPoseRun(poseRun, 0, { expectedPackageId: packageId });
+    if (poseRun) sampleProxyPoseRun(poseRun, 0, {
+      expectedPackageId: packageId,
+      knownControls,
+    });
     return { poseRun, storageError: null };
   } catch (error) {
     const storageError = error?.message || String(error);
@@ -190,6 +227,10 @@ export function createProxyRigLiveHost({
       controlsVisible: state.controlsVisible,
       transformHelperVisible: transformControls.getHelper?.().visible ?? transformControls.visible,
       selectedControl: state.selectedControl,
+      selectedControlKind: state.controls.get(state.selectedControl)?.userData.controlKind ?? null,
+      transformTargetName: [...state.controls]
+        .find(([, control]) => control === transformControls.object)?.[0] ?? null,
+      skeletalSupportSegmentCount: countVisibleProxyRigSupportSegments(state.root),
       frameCount: state.frameCount,
       lastEvaluationMs: state.lastEvaluationMs,
       maxDisplacement: state.maxDisplacement,
@@ -267,6 +308,7 @@ export function createProxyRigLiveHost({
       storageProvider: () => localStorage,
       key: poseStorageKey(),
       packageId: state.packageId,
+      knownControls: [...state.controls.keys()],
     });
     state.poseRun = restored.poseRun;
     state.storageError = restored.storageError;
@@ -297,6 +339,9 @@ export function createProxyRigLiveHost({
   }
 
   function applyPose(pose) {
+    for (const name of Object.keys(pose)) {
+      if (!state.controls.has(name)) throw new Error(`unknown pose control ${name}`);
+    }
     for (const [name, control] of state.controls) {
       const quaternion = pose[name]?.quaternion ?? [0, 0, 0, 1];
       control.quaternion.fromArray(quaternion).normalize();
@@ -372,7 +417,11 @@ export function createProxyRigLiveHost({
       pose: castPose(state.controls),
     };
     if (finalFrame.tMs > state.recording.frames.at(-1).tMs) state.recording.frames.push(finalFrame);
-    state.poseRun = createProxyPoseRun({ packageId: state.packageId, frames: state.recording.frames });
+    state.poseRun = createProxyPoseRun({
+      packageId: state.packageId,
+      frames: state.recording.frames,
+      knownControls: [...state.controls.keys()],
+    });
     state.recording = null;
     try {
       localStorage.setItem(poseStorageKey(), JSON.stringify(state.poseRun));
@@ -401,6 +450,7 @@ export function createProxyRigLiveHost({
       const elapsed = now - state.replayStartedAt;
       applyPose(sampleProxyPoseRun(state.poseRun, Math.min(elapsed, duration), {
         expectedPackageId: state.packageId,
+        knownControls: [...state.controls.keys()],
       }));
       if (elapsed < duration) state.replayFrame = requestAnimationFrame(tick);
       else stopReplay();
@@ -487,6 +537,7 @@ export function createProxyRigLiveHost({
       state.evaluator.groups.forEach((group, index) => {
         const control = new THREE.Object3D();
         control.name = `Proxy control ${group.name}`;
+        control.userData.controlKind = 'skeletal-support';
         const handleMaterial = new THREE.MeshStandardMaterial({
           color: colors[index % colors.length],
           emissive: colors[index % colors.length],
@@ -497,6 +548,7 @@ export function createProxyRigLiveHost({
         const handle = new THREE.Mesh(handleGeometry, handleMaterial);
         handle.renderOrder = 12;
         handle.userData.proxyRigControlName = group.name;
+        handle.userData.controlKind = 'skeletal-support';
         control.userData.handle = handle;
         control.userData.proxyRigControlName = group.name;
         control.add(handle);
@@ -509,6 +561,21 @@ export function createProxyRigLiveHost({
           control.position.fromArray(group.pivot).sub(new THREE.Vector3().fromArray(
             state.evaluator.groups.find(candidate => candidate.name === group.parent).pivot,
           ));
+          const segmentGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0),
+            control.position.clone(),
+          ]);
+          const segmentMaterial = new THREE.LineBasicMaterial({
+            color: 0x8fb8bf,
+            transparent: true,
+            opacity: 0.72,
+            depthTest: false,
+          });
+          const segment = new THREE.Line(segmentGeometry, segmentMaterial);
+          segment.name = `Skeletal support ${group.parent} -> ${group.name}`;
+          segment.renderOrder = 11;
+          segment.userData.controlKind = 'skeletal-support-segment';
+          parent.add(segment);
           parent.add(control);
         } else {
           control.position.fromArray(group.pivot);
@@ -534,9 +601,7 @@ export function createProxyRigLiveHost({
       }
       state.status = 'live';
       restorePoseRun();
-      selectControl(state.controls.has('hindlimb-left-m31-insertion')
-        ? 'hindlimb-left-m31-insertion'
-        : (state.controls.has('hindlimb-right-hock') ? 'hindlimb-right-hock' : state.controls.keys().next().value));
+      selectControl(chooseProxyRigInitialControlName([...state.controls.keys()]));
       evaluate(false);
       setInfo(`Live proxy rig: ${shortId(state.packageId)}`);
       updateUi();
@@ -585,7 +650,7 @@ export function createProxyRigLiveHost({
     dispose,
     selectControl,
     pickControl,
-    transformTarget: () => state.controls.get(state.selectedControl) ?? null,
+    transformTarget: () => resolveProxyRigTransformTarget(state.controls, state.selectedControl),
     handleControlChange: () => evaluate(true),
     isActive: () => state.status === 'live',
     debugState,
