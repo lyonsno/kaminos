@@ -1,0 +1,377 @@
+{
+  "schema": "kaminos.nbody-packing-joint-reference-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-09T21:18:09.433Z",
+  "route": {
+    "requested": "nbody-packing-joint-reference-orbitable-v0",
+    "effective": "nbody-packing-joint-reference-orbitable-v0",
+    "fallbackUsed": false,
+    "baseUrl": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/"
+  },
+  "bindings": {
+    "fixtureJsonSha256": "33a1e11d7db95977702d822c60843b803da66de6c234dcc74b3c31ee13f551da",
+    "assayResultJsonSha256": "a58416ef25e4e59f0d544803aa0b3962d67fca50086b1e382ac0f8e130293db0",
+    "jointReferenceJsonSha256": "67dbd19008c90e23785fc3e9b6d34b0b170b8fb08456454f4937ed2adbf7a92c",
+    "indexHtmlSha256": "97ed5b2ab368a1b09e4b5e8389463db335954408b63307d1fe305f7de0b54fe7",
+    "pendingReportSha256": "d023c866b210fab94145e591fdc548010652cfc28d41d30578a9ac26fc36a401"
+  },
+  "images": [
+    {
+      "state": "known-feasible",
+      "mode": "volume",
+      "path": "known-feasible-volume.png",
+      "byteLength": 233051,
+      "sha256": "27f175939a228d323bc9d85e67b2713db478fd01b5f2485bf7b4414483e299c1",
+      "captureReportPath": "known-feasible-volume-capture-report.json",
+      "captureReportSha256": "884412bbc471f1a9e9252497205a69f66ebbaafb521a0504c5b39bdbcec2861d",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=known-feasible&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=known-feasible&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142046,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "known-feasible",
+      "mode": "slice",
+      "path": "known-feasible-slice.png",
+      "byteLength": 187118,
+      "sha256": "9ba88f307a6284ede1ccdd3069502e2d38cf87cf06375cc8df901cdf3ca756cf",
+      "captureReportPath": "known-feasible-slice-capture-report.json",
+      "captureReportSha256": "c2e01faeb5cc4de900924f77a512b7331989bf7850ec07d771784f281633bcc6",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=known-feasible&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=known-feasible&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142045,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "path": "crowded-volume.png",
+      "byteLength": 235508,
+      "sha256": "07c36543523b1636073a4c28ed15eeb6489d6cfd6d5a5cf9e0392e829dbb63f7",
+      "captureReportPath": "crowded-volume-capture-report.json",
+      "captureReportSha256": "e248b5a984f309b1e354411cae1140118232dd7823911016aea985980ea2496d",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=crowded&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=crowded&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142039,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "path": "crowded-slice.png",
+      "byteLength": 187712,
+      "sha256": "d4cb1e08f5a6f73d099b349244cbbf10a6408bf29b38d35d9375fa20ed7193e7",
+      "captureReportPath": "crowded-slice-capture-report.json",
+      "captureReportSha256": "cf9961a4b6d0b9466458d947f0b175ffaf5acd1fd332dc7ac6cd5fd88ec3ef77",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=crowded&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=crowded&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142038,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "volume",
+      "path": "sequential-counterfeit-volume.png",
+      "byteLength": 239081,
+      "sha256": "99e9db8def93c9f114d5a3960f63f3c2f35382490e7812106be15cbfd22aea17",
+      "captureReportPath": "sequential-counterfeit-volume-capture-report.json",
+      "captureReportSha256": "2194004be0553746ea2c9c78c69c0dbf848463bc6c21586fe7b5f92050e64eac",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=sequential-counterfeit&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=sequential-counterfeit&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142054,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "slice",
+      "path": "sequential-counterfeit-slice.png",
+      "byteLength": 188329,
+      "sha256": "e5efe9f75189d788909c8597bd047a8ff835719d33616604ecfcfc161292a904",
+      "captureReportPath": "sequential-counterfeit-slice-capture-report.json",
+      "captureReportSha256": "bcc603cb1a6a75628588d1f02ff9a2c9ad5399f1db4c29debbfa0bd03613911e",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=sequential-counterfeit&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=sequential-counterfeit&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142053,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "volume",
+      "path": "joint-reference-volume.png",
+      "byteLength": 234690,
+      "sha256": "20f02270b30f2a05f92f411b747b7e295d757d88ea516df882e5611094f5f071",
+      "captureReportPath": "joint-reference-volume-capture-report.json",
+      "captureReportSha256": "ab865f6c97b4a02c7596149857c0b7e0a509962fc7469dbbf5e10ddb7b04a81d",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=joint-reference&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=joint-reference&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142047,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "slice",
+      "path": "joint-reference-slice.png",
+      "byteLength": 186311,
+      "sha256": "b1109d3bfe4d1601ddaefb8aad27d61e2918013f961b9609d37475c4d1fbe4a0",
+      "captureReportPath": "joint-reference-slice-capture-report.json",
+      "captureReportSha256": "01159d6ed3e1beea6c6c21cd45fa94bd4669949cde84210048fff9daaa441506",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=joint-reference&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-joint-reference-v0/?state=joint-reference&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-joint-reference-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 142046,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "statesLegible": true,
+    "opaqueOverlapTruthLegible": true,
+    "stableIdentityLegible": true,
+    "attachmentsBoneCompartmentLegible": true,
+    "metricsMatchMarkers": true,
+    "packingSemanticsNotInverted": true,
+    "jointReferenceLegible": true,
+    "textContained": true
+  },
+  "summary": "Personally re-inspected all eight regenerated volume and slice captures after Revision 1. Known feasible is clean; crowded W-C penetration is visibly localized; the sequential counterfeit visibly exports debt to C-E; and the joint reference restores a clean bounded arrangement with stable member colors, attachments, bone, compartment, contained text, exact effective DOM state/mode/route receipts, valid full PNG receipts, and paired full-solve enumeration agreement."
+}

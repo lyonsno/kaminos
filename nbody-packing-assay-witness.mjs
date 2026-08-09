@@ -70,16 +70,18 @@ async function clearPrimaryArtifacts(io, outputRoot) {
     : { status:'failed', paths:[...PRIMARY_PATHS], failures };
 }
 
-export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
+export function renderNBodyPackingAssayHtml({ fixture, result, report, jointReference = null }) {
   const payload = JSON.stringify({
     fixture,
     result,
+    jointReference,
     route:report.route,
   });
   const states = [
     ['known-feasible', 'Known feasible'],
     ['crowded', 'Crowded input'],
     ['sequential-counterfeit', 'Local counterfeit'],
+    ...(jointReference ? [['joint-reference', 'Joint reference']] : []),
   ];
   const stateButtons = states.map(([state, label]) =>
     `<button data-state="${state}">${escapeHtml(label)}</button>`,
@@ -89,6 +91,16 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
   const counterfeit = result.states.sequentialCounterfeit.metrics;
   const selected = result.counterfeit.selectedPair;
   const distal = result.counterfeit.exportedDebt;
+  const referencePanel = jointReference ? `
+    <div class="reference-ledger">
+      <span class="head">joint reference evidence</span><span class="head value">measured</span>
+      <span>continuous max residual</span><span class="value known">${formatMetric(jointReference.selected.maximumPhysicalResidual)}</span>
+      <span>projected KKT ∞ norm</span><span class="value known">${formatMetric(jointReference.stationarity.projectedGradientInfinityNorm)}</span>
+      <span>active contacts</span><span class="value">${jointReference.stationarity.activeConstraintCount}</span>
+      <span>admissible multistarts</span><span class="value">${jointReference.multistart.admissibleCount} / ${jointReference.multistart.rows.length}</span>
+      <span>candidate enumeration</span><span class="value known">${escapeHtml(jointReference.invariance.candidateEnumeration)}</span>
+    </div>
+    <p class="reference-truth">Synthetic bounded reference: jointly feasible and KKT-stationary in the declared ten-dimensional carrier basis. This does not establish a scalable production solver or anatomical correctness.</p>` : '';
   const colors = ['#ff7b72', '#f2cc60', '#56d4dd', '#a98cff', '#69a7ff'];
   const legend = fixture.contactGraph.members.map((id, index) =>
     `<span><i class="swatch" style="background:${colors[index]}"></i>${escapeHtml(id.replace('rosette-', ''))}</span>`,
@@ -125,6 +137,10 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
     .improved { color:#8ce6be; }
     .worsened { color:#ff8f8f; }
     .truth { margin:11px 0 0; padding:8px 9px; border-left:3px solid #ff4f64; background:#34131aa8; color:#ffd0d5; font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .reference-ledger { display:grid; grid-template-columns:1fr auto; gap:4px 10px; margin-top:12px; padding-top:10px; border-top:1px solid #ffffff1b; color:#c1ccd8; font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .reference-ledger .head { color:#8998a7; text-transform:uppercase; font-size:8px; letter-spacing:.07em; }
+    .reference-ledger .value { text-align:right; }
+    .reference-truth { margin:9px 0 0; padding:8px 9px; border-left:3px solid #65d9a6; background:#102d24b8; color:#baf1d8; font:10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; }
     .legend { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:11px; color:#aeb9c6; font-size:9px; }
     .swatch { display:inline-block; width:8px; height:8px; margin-right:4px; border-radius:50%; }
     .hint { position:fixed; z-index:3; right:16px; bottom:14px; max-width:420px; padding:9px 12px; border-radius:9px; background:#080c12d4; color:#aeb8c4; font-size:10px; text-align:right; }
@@ -135,10 +151,10 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="N-body packing assay controls and evidence">
-    <h1>Five-body global-debt falsifier</h1>
+    <h1>${jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
     <p class="authority">Synthetic known-feasible assay · no anatomical admission</p>
-    <p class="status">${escapeHtml(result.status)}</p>
-    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. Aggregate improvement is deliberately insufficient.</p>
+    <p class="status">${escapeHtml(jointReference?.status || result.status)}</p>
+    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
     <div class="button-row">${stateButtons}</div>
     <div class="button-row mode">
       <button data-mode="volume">Volumetric context</button>
@@ -158,6 +174,7 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
       <span>center → east distal</span><span class="value">${formatMetric(distal.beforePenetration)}</span><span class="value worsened">${formatMetric(distal.afterPenetration)}</span>
     </div>
     <p class="truth">Rejected: distal pressure debt survives despite locally and globally lower aggregate overlap. Red slice markers are measured belt-plane interpenetrations, not decorative contact hints.</p>
+    ${referencePanel}
     <div class="legend">${legend}<span><i class="swatch" style="background:#f5f1e8"></i>attachments</span><span><i class="swatch" style="background:#cbd8e4"></i>bone</span><span><i class="swatch" style="background:#ff334f"></i>penetration</span></div>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · switch states under one camera · slice mode makes all belt occupancy opaque</div>
@@ -166,11 +183,12 @@ export function renderNBodyPackingAssayHtml({ fixture, result, report }) {
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     const payload=${payload};
     const colors=[0xff7b72,0xf2cc60,0x56d4dd,0xa98cff,0x69a7ff];
-    const stateKeys=['known-feasible','crowded','sequential-counterfeit'];
+    const stateKeys=${JSON.stringify(states.map(([state]) => state))};
     const stateData={
       'known-feasible':payload.result.states.knownFeasible,
       'crowded':payload.result.states.crowded,
       'sequential-counterfeit':payload.result.states.sequentialCounterfeit,
+      ...(payload.jointReference?{'joint-reference':payload.jointReference.selected}:{}),
     };
     const viewport=document.querySelector('#viewport');
     const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});

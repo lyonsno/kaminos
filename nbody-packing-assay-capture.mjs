@@ -3,7 +3,12 @@ import { pathToFileURL } from 'node:url';
 
 import { captureIndependentBrowserScreenshot } from './lib/receipt-bearing-browser-capture.mjs';
 
-const STATES = Object.freeze(['known-feasible', 'crowded', 'sequential-counterfeit']);
+const STATES = Object.freeze([
+  'known-feasible',
+  'crowded',
+  'sequential-counterfeit',
+  'joint-reference',
+]);
 const MODES = Object.freeze(['volume', 'slice']);
 
 function parseArguments(argv) {
@@ -21,11 +26,11 @@ function parseArguments(argv) {
 }
 
 export async function captureNBodyPackingAssayState({
-  baseUrl = 'http://127.0.0.1:8765/artifacts/nbody-packing-rosette-assay-v0/',
+  baseUrl = null,
   state = 'crowded',
   mode = 'volume',
-  outputPath = `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}.png`,
-  reportPath = `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}-capture-report.json`,
+  outputPath = null,
+  reportPath = null,
   browserExecutable = process.env.KAMINOS_HEADLESS_BROWSER || null,
   viewport = { width:1400, height:900 },
   captureTimeoutMs = 20_000,
@@ -33,23 +38,37 @@ export async function captureNBodyPackingAssayState({
   receiptRoot = process.cwd(),
 } = {}) {
   if (!STATES.includes(state)) {
-    throw new Error(`state must be known-feasible, crowded, or sequential-counterfeit, got ${state}`);
+    throw new Error(
+      `state must be known-feasible, crowded, sequential-counterfeit, or joint-reference, got ${state}`,
+    );
   }
   if (!MODES.includes(mode)) {
     throw new Error(`mode must be volume or slice, got ${mode}`);
   }
-  const url = new URL(baseUrl);
+  if (state === 'joint-reference' && (!baseUrl || !outputPath || !reportPath)) {
+    throw new Error(
+      'joint-reference capture requires an explicit baseUrl, outputPath, and reportPath',
+    );
+  }
+  const effectiveBaseUrl = baseUrl ||
+    'http://127.0.0.1:8765/artifacts/nbody-packing-rosette-assay-v0/';
+  const effectiveOutputPath = outputPath ||
+    `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}.png`;
+  const effectiveReportPath = reportPath ||
+    `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}-capture-report.json`;
+  const url = new URL(effectiveBaseUrl);
   url.searchParams.set('state', state);
   url.searchParams.set('mode', mode);
   return captureIndependentBrowserScreenshot({
     cliExecutable:browserExecutable,
     url:url.href,
-    outputPath,
-    reportPath,
+    outputPath:effectiveOutputPath,
+    reportPath:effectiveReportPath,
     viewport,
     captureTimeoutMs,
     cleanupGraceMs,
     receiptRoot,
+    domDatasetKeys:['witnessLoaded', 'witnessState', 'witnessMode', 'witnessRoute'],
   });
 }
 
@@ -57,10 +76,12 @@ async function main() {
   const args = parseArguments(process.argv.slice(2));
   const state = args.get('state') || 'crowded';
   const mode = args.get('mode') || 'volume';
-  const outputPath = args.get('out') ||
-    `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}.png`;
-  const reportPath = args.get('report') ||
-    `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}-capture-report.json`;
+  const outputPath = args.get('out') || (state === 'joint-reference'
+    ? null
+    : `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}.png`);
+  const reportPath = args.get('report') || (state === 'joint-reference'
+    ? null
+    : `artifacts/nbody-packing-rosette-assay-v0/${state}-${mode}-capture-report.json`);
   const captured = await captureNBodyPackingAssayState({
     baseUrl:args.get('url') || undefined,
     state,

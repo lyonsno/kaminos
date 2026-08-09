@@ -1,0 +1,3884 @@
+{
+  "schema": "kaminos.nbody-packing-joint-reference-result.v0",
+  "status": "converged-joint-reference",
+  "fixture": {
+    "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+    "schema": "kaminos.nbody-packing-assay-fixture.v0",
+    "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b",
+    "input": {
+      "requested": {
+        "kind": "synthetic-nbody-assay-fixture",
+        "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+        "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+      },
+      "effective": {
+        "kind": "synthetic-nbody-assay-fixture",
+        "id": "nbody-known-feasible-five-body-rosette-assay-v0",
+        "sha256": "dbfeb9be3ab680f1eb457d524cf82327268b5fd3ae28c382b3edf75e1e85822b"
+      }
+    }
+  },
+  "config": {
+    "requested": {
+      "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+      "candidateEnumeration": "canonical",
+      "hardTolerance": 1e-7,
+      "penaltySchedule": [
+        1000,
+        100000,
+        10000000,
+        1000000000,
+        100000000000
+      ],
+      "startFamily": [
+        "crowded-zero",
+        "known-feasible-continuation",
+        "balanced-radial-relief"
+      ],
+      "stepSchedule": [
+        0.04,
+        0.02,
+        0.01,
+        0.005,
+        0.0025,
+        0.00125,
+        0.000625,
+        0.0003125,
+        0.00015625,
+        0.000078125,
+        0.0000390625,
+        0.00001953125,
+        0.000009765625,
+        0.0000048828125,
+        0.00000244140625,
+        0.000001220703125,
+        6.103515625e-7,
+        3.0517578125e-7,
+        1.52587890625e-7,
+        7.62939453125e-8
+      ],
+      "translationBounds": [
+        -0.3,
+        0.3
+      ],
+      "translationBasis": "per-member-xz-sine-zero-at-attachments"
+    },
+    "effective": {
+      "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+      "candidateEnumeration": "canonical",
+      "hardTolerance": 1e-7,
+      "penaltySchedule": [
+        1000,
+        100000,
+        10000000,
+        1000000000,
+        100000000000
+      ],
+      "startFamily": [
+        "crowded-zero",
+        "known-feasible-continuation",
+        "balanced-radial-relief"
+      ],
+      "stepSchedule": [
+        0.04,
+        0.02,
+        0.01,
+        0.005,
+        0.0025,
+        0.00125,
+        0.000625,
+        0.0003125,
+        0.00015625,
+        0.000078125,
+        0.0000390625,
+        0.00001953125,
+        0.000009765625,
+        0.0000048828125,
+        0.00000244140625,
+        0.000001220703125,
+        6.103515625e-7,
+        3.0517578125e-7,
+        1.52587890625e-7,
+        7.62939453125e-8
+      ],
+      "translationBounds": [
+        -0.3,
+        0.3
+      ],
+      "translationBasis": "per-member-xz-sine-zero-at-attachments"
+    },
+    "fallbackUsed": false
+  },
+  "reference": {
+    "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+    "translationBasis": "per-member-xz-sine-zero-at-attachments",
+    "sharedIterationState": true,
+    "candidateSelection": "all-axis-neighbors-evaluated-from-one-snapshot-then-global-best",
+    "physicalResidualSeparatedFromAugmentedObjective": true,
+    "innerLoopMeasure": "exact-belt-plus-knot-sampled-obstacle-and-compartment",
+    "finalAdmissionMeasure": "conservative-continuous-piecewise-linear-per-completed-multistart",
+    "claimCeiling": "bounded-synthetic-reference-only"
+  },
+  "selected": {
+    "startName": "balanced-radial-relief",
+    "vector": [
+      -0.058628640400216,
+      2.13382e-10,
+      0.040124794654861,
+      -2.54794e-10,
+      0.019036677536757,
+      4.2148e-11,
+      0,
+      0,
+      0,
+      0
+    ],
+    "muscles": [
+      {
+        "id": "rosette-west",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-west",
+          "constructionId": "nbody-rosette:rosette-west",
+          "lineageId": "nbody-rosette-lineage:rosette-west",
+          "instanceId": "nbody-rosette-instance:rosette-west"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-west:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-west:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              -0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.10993329092335519
+          },
+          {
+            "position": [
+              -0.3839268199141089,
+              -0.75,
+              1.254227927046725e-10
+            ],
+            "radius": 0.1998787107697367
+          },
+          {
+            "position": [
+              -0.36163236853873226,
+              -0.28,
+              2.0293834156009246e-10
+            ],
+            "radius": 0.27483322730838794
+          },
+          {
+            "position": [
+              -0.3616323685387323,
+              0.28,
+              2.029383415600925e-10
+            ],
+            "radius": 0.27483322730838794
+          },
+          {
+            "position": [
+              -0.3839268199141088,
+              0.75,
+              1.2542279270467253e-10
+            ],
+            "radius": 0.1998787107697367
+          },
+          {
+            "position": [
+              -0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.10993329092335519
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-center",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-center",
+          "constructionId": "nbody-rosette:rosette-center",
+          "lineageId": "nbody-rosette-lineage:rosette-center",
+          "instanceId": "nbody-rosette-instance:rosette-center"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-center:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-center:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0
+            ],
+            "radius": 0.07997445673722683
+          },
+          {
+            "position": [
+              0.02358476254939115,
+              -0.75,
+              -1.497641555726084e-10
+            ],
+            "radius": 0.1049664744676102
+          },
+          {
+            "position": [
+              0.038160947421510494,
+              -0.28,
+              -2.4232349401290734e-10
+            ],
+            "radius": 0.12496008865191692
+          },
+          {
+            "position": [
+              0.0381609474215105,
+              0.28,
+              -2.423234940129074e-10
+            ],
+            "radius": 0.12496008865191692
+          },
+          {
+            "position": [
+              0.023584762549391153,
+              0.75,
+              -1.4976415557260842e-10
+            ],
+            "radius": 0.1049664744676102
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0
+            ],
+            "radius": 0.07997445673722683
+          }
+        ],
+        "targetVolume": 0.0882771827695464,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-east",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-east",
+          "constructionId": "nbody-rosette:rosette-east",
+          "lineageId": "nbody-rosette-lineage:rosette-east",
+          "instanceId": "nbody-rosette-instance:rosette-east"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-east:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-east:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.42,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.42,
+              -1.15,
+              0
+            ],
+            "radius": 0.10999356805861404
+          },
+          {
+            "position": [
+              0.43118947830875315,
+              -0.75,
+              2.477397281362316e-11
+            ],
+            "radius": 0.19998830556111646
+          },
+          {
+            "position": [
+              0.4381049562199423,
+              -0.28,
+              4.008513004880813e-11
+            ],
+            "radius": 0.2749839201465351
+          },
+          {
+            "position": [
+              0.4381049562199423,
+              0.28,
+              4.0085130048808135e-11
+            ],
+            "radius": 0.2749839201465351
+          },
+          {
+            "position": [
+              0.43118947830875315,
+              0.75,
+              2.4773972813623162e-11
+            ],
+            "radius": 0.19998830556111646
+          },
+          {
+            "position": [
+              0.42,
+              1.15,
+              0
+            ],
+            "radius": 0.10999356805861404
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-north",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-north",
+          "constructionId": "nbody-rosette:rosette-north",
+          "lineageId": "nbody-rosette-lineage:rosette-north",
+          "instanceId": "nbody-rosette-instance:rosette-north"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-north:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-north:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-south",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-south",
+          "constructionId": "nbody-rosette:rosette-south",
+          "lineageId": "nbody-rosette-lineage:rosette-south",
+          "instanceId": "nbody-rosette-instance:rosette-south"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-south:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ]
+          },
+          "insertion": {
+            "id": "rosette-south:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0,
+              -1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          },
+          {
+            "position": [
+              0,
+              -0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              -0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.28,
+              -0.42
+            ],
+            "radius": 0.275
+          },
+          {
+            "position": [
+              0,
+              0.75,
+              -0.42
+            ],
+            "radius": 0.2
+          },
+          {
+            "position": [
+              0,
+              1.15,
+              -0.42
+            ],
+            "radius": 0.11
+          }
+        ],
+        "targetVolume": 0.3630817169570064,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      }
+    ],
+    "metrics": {
+      "pairwisePenetration": 4.17e-10,
+      "skeletalPenetration": 0,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 0.027373791854,
+      "maximumSourceKnotDisplacement": 0.055759150494,
+      "rootMeanSquareSourceKnotDisplacement": 0.021232270472,
+      "minimumSourceBendEnergyRetention": 0.875896054521,
+      "minimumSourceCurvatureCosine": 0.978398172757,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 0.996423417857,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.00170113078,
+      "minimumPairwiseRelationCosine": 0.995897667325,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "belt": {
+      "sample": "paired-carrier-knots-2-and-3",
+      "pairs": [
+        {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.249920177304,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0.004403157102,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0.00440315741,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.021769988663,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02176998818,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.056922952966,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.056922953021,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      ],
+      "byPair": {
+        "rosette-west|rosette-center": {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-east": {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.249920177304,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-north": {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0.004403157102,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-south": {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0.00440315741,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-east": {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-north": {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0.021769988663,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-south": {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0.02176998818,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-north": {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.056922952966,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-south": {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.056922953021,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-north|rosette-south": {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.29,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      },
+      "totalPenetration": 0,
+      "maximumPenetration": 0
+    },
+    "deformationEnergy": 0.002704855856456,
+    "physicalViolationSquared": 0,
+    "maximumPhysicalResidual": 4.17e-10,
+    "physicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3"
+  },
+  "stationarity": {
+    "kind": "finite-difference-active-constraint-kkt",
+    "objective": "minimum-squared-translation-from-crowded-state",
+    "constraint": "nonnegative-belt-gap-with-continuous-physical-admission",
+    "finiteDifferenceStep": 0.000001,
+    "activeConstraintThreshold": 0.00005,
+    "activeConstraintCount": 2,
+    "activeConstraints": [
+      {
+        "pairKey": "rosette-west|rosette-center",
+        "signedGap": 0,
+        "multiplier": 0.061999283056
+      },
+      {
+        "pairKey": "rosette-center|rosette-east",
+        "signedGap": 0,
+        "multiplier": 0.019980863339
+      }
+    ],
+    "projectedGradientInfinityNorm": 1.76e-10,
+    "rawObjectiveGradientInfinityNorm": 0.0586286404
+  },
+  "distantResponse": {
+    "driverMuscleId": "rosette-west",
+    "rows": [
+      {
+        "muscleId": "rosette-west",
+        "maximumDisplacement": 0.055759150494,
+        "rootMeanSquareDisplacement": 0.037844624647
+      },
+      {
+        "muscleId": "rosette-center",
+        "maximumDisplacement": 0.038160947422,
+        "rootMeanSquareDisplacement": 0.025900443578
+      },
+      {
+        "muscleId": "rosette-east",
+        "maximumDisplacement": 0.01810495622,
+        "rootMeanSquareDisplacement": 0.012288122511
+      },
+      {
+        "muscleId": "rosette-north",
+        "maximumDisplacement": 0,
+        "rootMeanSquareDisplacement": 0
+      },
+      {
+        "muscleId": "rosette-south",
+        "maximumDisplacement": 0,
+        "rootMeanSquareDisplacement": 0
+      }
+    ],
+    "movedMemberCount": 3,
+    "maximumNonDriverDisplacement": 0.038160947422
+  },
+  "multistart": {
+    "declaredStartFamily": [
+      "crowded-zero",
+      "known-feasible-continuation",
+      "balanced-radial-relief"
+    ],
+    "admissibleCount": 3,
+    "rows": [
+      {
+        "startName": "crowded-zero",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 547347,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 4.17e-10,
+        "deformationEnergy": 0.002704855856456,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "c6b4c559a4b9829b9c47c449efaff6d9950a878baa5531337c86f279b9e9e9fb",
+        "stationarityRefinement": {
+          "kind": "iterated-active-gap-tangent-projection",
+          "finiteDifferenceStep": 0.000001,
+          "activeConstraintThreshold": 0.0005,
+          "convergenceTolerance": 1e-9,
+          "cycleDetection": "canonical-vector-key-fail-loud",
+          "iterations": 12,
+          "rows": [
+            {
+              "iteration": 1,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000194674336525,
+              "maximumPenetration": 6.3e-12
+            },
+            {
+              "iteration": 2,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000061395927502,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 3,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.00001955960498,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 4,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000006160877272,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 5,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000001936051576,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 6,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 6.08110243e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 7,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.90989036e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 8,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.99852e-8,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 9,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.8842192e-8,
+              "maximumPenetration": 4.8e-14
+            },
+            {
+              "iteration": 10,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.912715e-9,
+              "maximumPenetration": 6e-14
+            },
+            {
+              "iteration": 11,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.855887e-9,
+              "maximumPenetration": 6.2e-14
+            },
+            {
+              "iteration": 12,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.84237e-10,
+              "maximumPenetration": 6.2e-14
+            }
+          ]
+        },
+        "continuation": [
+          {
+            "penalty": 1000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.0072,
+                "deformationEnergy": 0.0072,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 27,
+                "augmentedObjective": 0.003555049068339,
+                "deformationEnergy": 0.00353515625,
+                "maximumPhysicalResidual": 0.000141041902777
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 14,
+                "augmentedObjective": 0.003279253775447,
+                "deformationEnergy": 0.003264453125,
+                "maximumPhysicalResidual": 0.000121657923895
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.003261023446189,
+                "deformationEnergy": 0.00324658203125,
+                "maximumPhysicalResidual": 0.00012017243835
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.003249877929688,
+                "deformationEnergy": 0.003249877929688,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.003241411668099,
+                "deformationEnergy": 0.00323938293457,
+                "maximumPhysicalResidual": 0.000045041464555
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 188,
+                "augmentedObjective": 0.003110923289167,
+                "deformationEnergy": 0.003109745788574,
+                "maximumPhysicalResidual": 0.000032810888544
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 373,
+                "augmentedObjective": 0.003000006592124,
+                "deformationEnergy": 0.002998488807678,
+                "maximumPhysicalResidual": 0.000038454351795
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1333,
+                "augmentedObjective": 0.002845520468221,
+                "deformationEnergy": 0.002844456911087,
+                "maximumPhysicalResidual": 0.000031912596666
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2661,
+                "augmentedObjective": 0.002747487373049,
+                "deformationEnergy": 0.002746372282505,
+                "maximumPhysicalResidual": 0.000032078423255
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 3460,
+                "augmentedObjective": 0.002713830171036,
+                "deformationEnergy": 0.002712757360935,
+                "maximumPhysicalResidual": 0.000031256143241
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 3983,
+                "augmentedObjective": 0.002705203434565,
+                "deformationEnergy": 0.00270412883535,
+                "maximumPhysicalResidual": 0.000031201135814
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 2070,
+                "augmentedObjective": 0.002704246805368,
+                "deformationEnergy": 0.002703190511093,
+                "maximumPhysicalResidual": 0.000031014395516
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 2652,
+                "augmentedObjective": 0.002703912477715,
+                "deformationEnergy": 0.002702850107011,
+                "maximumPhysicalResidual": 0.000031052785323
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 2045,
+                "augmentedObjective": 0.002703841690277,
+                "deformationEnergy": 0.002702780993062,
+                "maximumPhysicalResidual": 0.000031007385473
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 3860,
+                "augmentedObjective": 0.002703804551308,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              }
+            ],
+            "augmentedObjective": 0.002703804551308,
+            "deformationEnergy": 0.002702743967256,
+            "maximumPhysicalResidual": 0.000031003972486,
+            "vector": [
+              -0.058681411743792,
+              0,
+              0.040039901732774,
+              0,
+              0.01894165039003,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808802372501,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808802372501,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002752743967256,
+                "deformationEnergy": 0.002752743967256,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002713007374317,
+                "deformationEnergy": 0.002712509592256,
+                "maximumPhysicalResidual": 0.000002231103003
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.002709925241769,
+                "deformationEnergy": 0.002709384592256,
+                "maximumPhysicalResidual": 0.000002325187117
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002709715075831,
+                "deformationEnergy": 0.002709689768038,
+                "maximumPhysicalResidual": 5.03068516e-7
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.002709476310028,
+                "deformationEnergy": 0.002709277780733,
+                "maximumPhysicalResidual": 0.000001409004242
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002709452485398,
+                "deformationEnergy": 0.002709361704073,
+                "maximumPhysicalResidual": 9.50602799e-7
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.002709430191003,
+                "deformationEnergy": 0.002709336717806,
+                "maximumPhysicalResidual": 9.4515522e-7
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002709427888624,
+                "deformationEnergy": 0.002709313686571,
+                "maximumPhysicalResidual": 0.000001059427534
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 23,
+                "augmentedObjective": 0.00270942384278,
+                "deformationEnergy": 0.002709309120855,
+                "maximumPhysicalResidual": 0.000001056369285
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002709423769023,
+                "deformationEnergy": 0.002709315036616,
+                "maximumPhysicalResidual": 0.000001027628767
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 4462,
+                "augmentedObjective": 0.002704886749673,
+                "deformationEnergy": 0.002704886749673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.00270485712946,
+                "deformationEnergy": 0.002704839345866,
+                "maximumPhysicalResidual": 4.13804792e-7
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270485712946,
+                "deformationEnergy": 0.002704839345866,
+                "maximumPhysicalResidual": 4.13804792e-7
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704856228675,
+                "deformationEnergy": 0.002704848304886,
+                "maximumPhysicalResidual": 2.6951133e-7
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704856158549,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              }
+            ],
+            "augmentedObjective": 0.002704856158549,
+            "deformationEnergy": 0.002704843825373,
+            "maximumPhysicalResidual": 3.41658061e-7,
+            "vector": [
+              -0.058713836670551,
+              0,
+              0.040039901732774,
+              0,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 10000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705625075373,
+                "deformationEnergy": 0.002705625075373,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705039137873,
+                "deformationEnergy": 0.002705039137873,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705039137873,
+                "deformationEnergy": 0.002705039137873,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704965895686,
+                "deformationEnergy": 0.002704965895686,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270493232635,
+                "deformationEnergy": 0.00270493232635,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270493232635,
+                "deformationEnergy": 0.00270493232635,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.002704918450618,
+                "deformationEnergy": 0.002704913443598,
+                "maximumPhysicalResidual": 2.2376372e-8
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.002704917024109,
+                "deformationEnergy": 0.002704915787737,
+                "maximumPhysicalResidual": 1.1119227e-8
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 19,
+                "augmentedObjective": 0.002704917013353,
+                "deformationEnergy": 0.002704915865642,
+                "maximumPhysicalResidual": 1.0713127e-8
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270491701301,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270491701301,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              }
+            ],
+            "augmentedObjective": 0.00270491701301,
+            "deformationEnergy": 0.002704915824815,
+            "maximumPhysicalResidual": 1.0900438e-8,
+            "vector": [
+              -0.058713836670551,
+              0.000269165039059,
+              0.040039901732774,
+              -0.00026748657227,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 1000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704969826624,
+                "deformationEnergy": 0.002704969826624,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704939773962,
+                "deformationEnergy": 0.002704939773962,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704927036449,
+                "deformationEnergy": 0.002704927036449,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704921239897,
+                "deformationEnergy": 0.002704921239897,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918254628,
+                "deformationEnergy": 0.002704918146975,
+                "maximumPhysicalResidual": 3.28106e-10
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918254628,
+                "deformationEnergy": 0.002704918146975,
+                "maximumPhysicalResidual": 3.28106e-10
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918229164,
+                "deformationEnergy": 0.002704918229164,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918205198,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918205198,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              }
+            ],
+            "augmentedObjective": 0.002704918205198,
+            "deformationEnergy": 0.002704918187057,
+            "maximumPhysicalResidual": 1.3469e-10,
+            "vector": [
+              -0.058713836670551,
+              0.00026947021484,
+              0.040039901732774,
+              -0.000275878906254,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704918876889,
+                "deformationEnergy": 0.002704918179606,
+                "maximumPhysicalResidual": 8.3503e-11
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918844198,
+                "deformationEnergy": 0.002704918844198,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270491851004,
+                "deformationEnergy": 0.00270491851004,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918343333,
+                "deformationEnergy": 0.002704918343333,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918260026,
+                "deformationEnergy": 0.002704918260026,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918218408,
+                "deformationEnergy": 0.002704918218408,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918201564,
+                "deformationEnergy": 0.002704918197595,
+                "maximumPhysicalResidual": 6.3e-12
+              }
+            ],
+            "augmentedObjective": 0.002704918201564,
+            "deformationEnergy": 0.002704918197595,
+            "maximumPhysicalResidual": 6.3e-12,
+            "vector": [
+              -0.058713836670551,
+              0.000272674560543,
+              0.040039901732774,
+              -0.000272750854496,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "startName": "known-feasible-continuation",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 547287,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 4.17e-10,
+        "deformationEnergy": 0.002704855856456,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "c6b4c559a4b9829b9c47c449efaff6d9950a878baa5531337c86f279b9e9e9fb",
+        "stationarityRefinement": {
+          "kind": "iterated-active-gap-tangent-projection",
+          "finiteDifferenceStep": 0.000001,
+          "activeConstraintThreshold": 0.0005,
+          "convergenceTolerance": 1e-9,
+          "cycleDetection": "canonical-vector-key-fail-loud",
+          "iterations": 12,
+          "rows": [
+            {
+              "iteration": 1,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000194674336525,
+              "maximumPenetration": 6.3e-12
+            },
+            {
+              "iteration": 2,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000061395927502,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 3,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.00001955960498,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 4,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000006160877272,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 5,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000001936051576,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 6,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 6.08110243e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 7,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.90989036e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 8,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.99852e-8,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 9,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.8842192e-8,
+              "maximumPenetration": 4.8e-14
+            },
+            {
+              "iteration": 10,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.912715e-9,
+              "maximumPenetration": 6e-14
+            },
+            {
+              "iteration": 11,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.855887e-9,
+              "maximumPenetration": 6.2e-14
+            },
+            {
+              "iteration": 12,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.84237e-10,
+              "maximumPenetration": 6.2e-14
+            }
+          ]
+        },
+        "continuation": [
+          {
+            "penalty": 1000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.0072,
+                "deformationEnergy": 0.0072,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.005,
+                "deformationEnergy": 0.005,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 27,
+                "augmentedObjective": 0.003555049068339,
+                "deformationEnergy": 0.00353515625,
+                "maximumPhysicalResidual": 0.000141041902777
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 14,
+                "augmentedObjective": 0.003279253775447,
+                "deformationEnergy": 0.003264453125,
+                "maximumPhysicalResidual": 0.000121657923895
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.003261023446189,
+                "deformationEnergy": 0.00324658203125,
+                "maximumPhysicalResidual": 0.00012017243835
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.003249877929688,
+                "deformationEnergy": 0.003249877929688,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.003241411668099,
+                "deformationEnergy": 0.00323938293457,
+                "maximumPhysicalResidual": 0.000045041464555
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 188,
+                "augmentedObjective": 0.003110923289167,
+                "deformationEnergy": 0.003109745788574,
+                "maximumPhysicalResidual": 0.000032810888544
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 373,
+                "augmentedObjective": 0.003000006592124,
+                "deformationEnergy": 0.002998488807678,
+                "maximumPhysicalResidual": 0.000038454351795
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1333,
+                "augmentedObjective": 0.002845520468221,
+                "deformationEnergy": 0.002844456911087,
+                "maximumPhysicalResidual": 0.000031912596666
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2661,
+                "augmentedObjective": 0.002747487373049,
+                "deformationEnergy": 0.002746372282505,
+                "maximumPhysicalResidual": 0.000032078423255
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 3460,
+                "augmentedObjective": 0.002713830171036,
+                "deformationEnergy": 0.002712757360935,
+                "maximumPhysicalResidual": 0.000031256143241
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 3983,
+                "augmentedObjective": 0.002705203434565,
+                "deformationEnergy": 0.00270412883535,
+                "maximumPhysicalResidual": 0.000031201135814
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 2070,
+                "augmentedObjective": 0.002704246805368,
+                "deformationEnergy": 0.002703190511093,
+                "maximumPhysicalResidual": 0.000031014395516
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 2652,
+                "augmentedObjective": 0.002703912477715,
+                "deformationEnergy": 0.002702850107011,
+                "maximumPhysicalResidual": 0.000031052785323
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 2045,
+                "augmentedObjective": 0.002703841690277,
+                "deformationEnergy": 0.002702780993062,
+                "maximumPhysicalResidual": 0.000031007385473
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 3860,
+                "augmentedObjective": 0.002703804551308,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              }
+            ],
+            "augmentedObjective": 0.002703804551308,
+            "deformationEnergy": 0.002702743967256,
+            "maximumPhysicalResidual": 0.000031003972486,
+            "vector": [
+              -0.058681411743792,
+              0,
+              0.040039901732774,
+              0,
+              0.01894165039003,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808802372501,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808802372501,
+                "deformationEnergy": 0.002702743967256,
+                "maximumPhysicalResidual": 0.000031003972486
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002752743967256,
+                "deformationEnergy": 0.002752743967256,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715686344164,
+                "deformationEnergy": 0.002715243967256,
+                "maximumPhysicalResidual": 0.000002103275797
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002713007374317,
+                "deformationEnergy": 0.002712509592256,
+                "maximumPhysicalResidual": 0.000002231103003
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.002709925241769,
+                "deformationEnergy": 0.002709384592256,
+                "maximumPhysicalResidual": 0.000002325187117
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002709715075831,
+                "deformationEnergy": 0.002709689768038,
+                "maximumPhysicalResidual": 5.03068516e-7
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.002709476310028,
+                "deformationEnergy": 0.002709277780733,
+                "maximumPhysicalResidual": 0.000001409004242
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002709452485398,
+                "deformationEnergy": 0.002709361704073,
+                "maximumPhysicalResidual": 9.50602799e-7
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.002709430191003,
+                "deformationEnergy": 0.002709336717806,
+                "maximumPhysicalResidual": 9.4515522e-7
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002709427888624,
+                "deformationEnergy": 0.002709313686571,
+                "maximumPhysicalResidual": 0.000001059427534
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 23,
+                "augmentedObjective": 0.00270942384278,
+                "deformationEnergy": 0.002709309120855,
+                "maximumPhysicalResidual": 0.000001056369285
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002709423769023,
+                "deformationEnergy": 0.002709315036616,
+                "maximumPhysicalResidual": 0.000001027628767
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 4462,
+                "augmentedObjective": 0.002704886749673,
+                "deformationEnergy": 0.002704886749673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.00270485712946,
+                "deformationEnergy": 0.002704839345866,
+                "maximumPhysicalResidual": 4.13804792e-7
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270485712946,
+                "deformationEnergy": 0.002704839345866,
+                "maximumPhysicalResidual": 4.13804792e-7
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704856228675,
+                "deformationEnergy": 0.002704848304886,
+                "maximumPhysicalResidual": 2.6951133e-7
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704856158549,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              }
+            ],
+            "augmentedObjective": 0.002704856158549,
+            "deformationEnergy": 0.002704843825373,
+            "maximumPhysicalResidual": 3.41658061e-7,
+            "vector": [
+              -0.058713836670551,
+              0,
+              0.040039901732774,
+              0,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 10000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002706077143022,
+                "deformationEnergy": 0.002704843825373,
+                "maximumPhysicalResidual": 3.41658061e-7
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705625075373,
+                "deformationEnergy": 0.002705625075373,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705039137873,
+                "deformationEnergy": 0.002705039137873,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705039137873,
+                "deformationEnergy": 0.002705039137873,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704965895686,
+                "deformationEnergy": 0.002704965895686,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270493232635,
+                "deformationEnergy": 0.00270493232635,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270493232635,
+                "deformationEnergy": 0.00270493232635,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.002704918450618,
+                "deformationEnergy": 0.002704913443598,
+                "maximumPhysicalResidual": 2.2376372e-8
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704917051189,
+                "deformationEnergy": 0.002704915970835,
+                "maximumPhysicalResidual": 1.0394008e-8
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.002704917024109,
+                "deformationEnergy": 0.002704915787737,
+                "maximumPhysicalResidual": 1.1119227e-8
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 19,
+                "augmentedObjective": 0.002704917013353,
+                "deformationEnergy": 0.002704915865642,
+                "maximumPhysicalResidual": 1.0713127e-8
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270491701301,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.00270491701301,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              }
+            ],
+            "augmentedObjective": 0.00270491701301,
+            "deformationEnergy": 0.002704915824815,
+            "maximumPhysicalResidual": 1.0900438e-8,
+            "vector": [
+              -0.058713836670551,
+              0.000269165039059,
+              0.040039901732774,
+              -0.00026748657227,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 1000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705034644361,
+                "deformationEnergy": 0.002704915824815,
+                "maximumPhysicalResidual": 1.0900438e-8
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704969826624,
+                "deformationEnergy": 0.002704969826624,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704939773962,
+                "deformationEnergy": 0.002704939773962,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704927036449,
+                "deformationEnergy": 0.002704927036449,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704921239897,
+                "deformationEnergy": 0.002704921239897,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918484673,
+                "deformationEnergy": 0.002704918484673,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918254628,
+                "deformationEnergy": 0.002704918146975,
+                "maximumPhysicalResidual": 3.28106e-10
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918254628,
+                "deformationEnergy": 0.002704918146975,
+                "maximumPhysicalResidual": 3.28106e-10
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918229164,
+                "deformationEnergy": 0.002704918229164,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918205198,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704918205198,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              }
+            ],
+            "augmentedObjective": 0.002704918205198,
+            "deformationEnergy": 0.002704918187057,
+            "maximumPhysicalResidual": 1.3469e-10,
+            "vector": [
+              -0.058713836670551,
+              0.00026947021484,
+              0.040039901732774,
+              -0.000275878906254,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704920001192,
+                "deformationEnergy": 0.002704918187057,
+                "maximumPhysicalResidual": 1.3469e-10
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704918876889,
+                "deformationEnergy": 0.002704918179606,
+                "maximumPhysicalResidual": 8.3503e-11
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918844198,
+                "deformationEnergy": 0.002704918844198,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270491851004,
+                "deformationEnergy": 0.00270491851004,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918343333,
+                "deformationEnergy": 0.002704918343333,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918260026,
+                "deformationEnergy": 0.002704918260026,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918218408,
+                "deformationEnergy": 0.002704918218408,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704918201564,
+                "deformationEnergy": 0.002704918197595,
+                "maximumPhysicalResidual": 6.3e-12
+              }
+            ],
+            "augmentedObjective": 0.002704918201564,
+            "deformationEnergy": 0.002704918197595,
+            "maximumPhysicalResidual": 6.3e-12,
+            "vector": [
+              -0.058713836670551,
+              0.000272674560543,
+              0.040039901732774,
+              -0.000272750854496,
+              0.018952026366592,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      {
+        "startName": "balanced-radial-relief",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 427587,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 4.17e-10,
+        "deformationEnergy": 0.002704855856456,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+        "stationarityRefinement": {
+          "kind": "iterated-active-gap-tangent-projection",
+          "finiteDifferenceStep": 0.000001,
+          "activeConstraintThreshold": 0.0005,
+          "convergenceTolerance": 1e-9,
+          "cycleDetection": "canonical-vector-key-fail-loud",
+          "iterations": 12,
+          "rows": [
+            {
+              "iteration": 1,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000185293728068,
+              "maximumPenetration": 5.013e-12
+            },
+            {
+              "iteration": 2,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000059427347331,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 3,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000018749767731,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 4,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.00000589413928,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 5,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 0.000001851478693,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 6,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.81500581e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 7,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.82625624e-7,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 8,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.7357424e-8,
+              "maximumPenetration": 0
+            },
+            {
+              "iteration": 9,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.8013792e-8,
+              "maximumPenetration": 4.8e-14
+            },
+            {
+              "iteration": 10,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.659641e-9,
+              "maximumPenetration": 6.1e-14
+            },
+            {
+              "iteration": 11,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 1.778477e-9,
+              "maximumPenetration": 6.2e-14
+            },
+            {
+              "iteration": 12,
+              "activePairKeys": [
+                "rosette-west|rosette-center",
+                "rosette-center|rosette-east"
+              ],
+              "maximumUpdate": 5.57554e-10,
+              "maximumPenetration": 6.3e-14
+            }
+          ]
+        },
+        "continuation": [
+          {
+            "penalty": 1000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 4,
+                "augmentedObjective": 0.0055125,
+                "deformationEnergy": 0.0055125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.0041125,
+                "deformationEnergy": 0.0041125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.0032625,
+                "deformationEnergy": 0.0032625,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.0028375,
+                "deformationEnergy": 0.0028375,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.0028375,
+                "deformationEnergy": 0.0028375,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002757217808663,
+                "deformationEnergy": 0.0027390625,
+                "maximumPhysicalResidual": 0.000134741636709
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.0027541015625,
+                "deformationEnergy": 0.0027541015625,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002746533203125,
+                "deformationEnergy": 0.002746533203125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002742785644531,
+                "deformationEnergy": 0.002742785644531,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.0027401373713,
+                "deformationEnergy": 0.002738589477539,
+                "maximumPhysicalResidual": 0.000039343281016
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002739735240336,
+                "deformationEnergy": 0.002737656402588,
+                "maximumPhysicalResidual": 0.000039343281016
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002739338038066,
+                "deformationEnergy": 0.002738875007629,
+                "maximumPhysicalResidual": 0.000021040123915
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002739083051931,
+                "deformationEnergy": 0.002737969827652,
+                "maximumPhysicalResidual": 0.00003034952378
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 345,
+                "augmentedObjective": 0.002731388419068,
+                "deformationEnergy": 0.002730338346958,
+                "maximumPhysicalResidual": 0.000030248566576
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 2643,
+                "augmentedObjective": 0.00271067824993,
+                "deformationEnergy": 0.002709594836831,
+                "maximumPhysicalResidual": 0.000030965502852
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 2886,
+                "augmentedObjective": 0.002705206226983,
+                "deformationEnergy": 0.00270416700393,
+                "maximumPhysicalResidual": 0.000030677393612
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 1664,
+                "augmentedObjective": 0.002704394370823,
+                "deformationEnergy": 0.002703338366747,
+                "maximumPhysicalResidual": 0.000030912157968
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 3019,
+                "augmentedObjective": 0.002703954296306,
+                "deformationEnergy": 0.002702899559727,
+                "maximumPhysicalResidual": 0.00003089683718
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 3956,
+                "augmentedObjective": 0.0027038188083,
+                "deformationEnergy": 0.002702760459366,
+                "maximumPhysicalResidual": 0.000030949524571
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1988,
+                "augmentedObjective": 0.002703803785816,
+                "deformationEnergy": 0.00270274518936,
+                "maximumPhysicalResidual": 0.000030963806366
+              }
+            ],
+            "augmentedObjective": 0.002703803785816,
+            "deformationEnergy": 0.00270274518936,
+            "maximumPhysicalResidual": 0.000030963806366,
+            "vector": [
+              -0.058528823852368,
+              0,
+              0.040191345215013,
+              0,
+              0.019092483520658,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808604834918,
+                "deformationEnergy": 0.00270274518936,
+                "maximumPhysicalResidual": 0.000030963806366
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002808604834918,
+                "deformationEnergy": 0.00270274518936,
+                "maximumPhysicalResidual": 0.000030963806366
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00275274518936,
+                "deformationEnergy": 0.00275274518936,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002715670804123,
+                "deformationEnergy": 0.00271524518936,
+                "maximumPhysicalResidual": 0.000002063043293
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715670804123,
+                "deformationEnergy": 0.00271524518936,
+                "maximumPhysicalResidual": 0.000002063043293
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002715670804123,
+                "deformationEnergy": 0.00271524518936,
+                "maximumPhysicalResidual": 0.000002063043293
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002712990804798,
+                "deformationEnergy": 0.00271251081436,
+                "maximumPhysicalResidual": 0.000002190868407
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 6,
+                "augmentedObjective": 0.002710394677706,
+                "deformationEnergy": 0.00270987409561,
+                "maximumPhysicalResidual": 0.000002281626823
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 5,
+                "augmentedObjective": 0.002709712411194,
+                "deformationEnergy": 0.002709690990141,
+                "maximumPhysicalResidual": 4.62828832e-7
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 6,
+                "augmentedObjective": 0.002709507217016,
+                "deformationEnergy": 0.002709318675688,
+                "maximumPhysicalResidual": 0.000001373103522
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002709464503721,
+                "deformationEnergy": 0.002709380473784,
+                "maximumPhysicalResidual": 9.12772897e-7
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 22,
+                "augmentedObjective": 0.002709419769755,
+                "deformationEnergy": 0.002709286250762,
+                "maximumPhysicalResidual": 0.000001131729889
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002709418159639,
+                "deformationEnergy": 0.002709311904601,
+                "maximumPhysicalResidual": 0.000001016916079
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002709417848568,
+                "deformationEnergy": 0.002709311654261,
+                "maximumPhysicalResidual": 0.000001016525593
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.00270941743121,
+                "deformationEnergy": 0.002709304865292,
+                "maximumPhysicalResidual": 0.000001044462386
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 4512,
+                "augmentedObjective": 0.002704884599737,
+                "deformationEnergy": 0.002704884599737,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704852318446,
+                "deformationEnergy": 0.002704837197001,
+                "maximumPhysicalResidual": 3.74070768e-7
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704852318446,
+                "deformationEnergy": 0.002704837197001,
+                "maximumPhysicalResidual": 3.74070768e-7
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704852318446,
+                "deformationEnergy": 0.002704837197001,
+                "maximumPhysicalResidual": 3.74070768e-7
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704851909292,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              }
+            ],
+            "augmentedObjective": 0.002704851909292,
+            "deformationEnergy": 0.002704841664867,
+            "maximumPhysicalResidual": 3.01925057e-7,
+            "vector": [
+              -0.058561248779126,
+              0,
+              0.040191345215013,
+              0,
+              0.019102859497221,
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 10000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705866107372,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705866107372,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705866107372,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705866107372,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705866107372,
+                "deformationEnergy": 0.002704841664867,
+                "maximumPhysicalResidual": 3.01925057e-7
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705622914867,
+                "deformationEnergy": 0.002705622914867,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002705036977367,
+                "deformationEnergy": 0.002705036977367,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705036977367,
+                "deformationEnergy": 0.002705036977367,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 3,
+                "augmentedObjective": 0.002704927569106,
+                "deformationEnergy": 0.002704902700023,
+                "maximumPhysicalResidual": 4.9868911e-8
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704917958812,
+                "deformationEnergy": 0.002704917958812,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704909939746,
+                "deformationEnergy": 0.002704909566478,
+                "maximumPhysicalResidual": 6.109564e-9
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704909939746,
+                "deformationEnergy": 0.002704909566478,
+                "maximumPhysicalResidual": 6.109564e-9
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704908888862,
+                "deformationEnergy": 0.002704908517436,
+                "maximumPhysicalResidual": 6.085602e-9
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704908443218,
+                "deformationEnergy": 0.002704907063083,
+                "maximumPhysicalResidual": 1.1741094e-8
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 21,
+                "augmentedObjective": 0.002704907326266,
+                "deformationEnergy": 0.002704906493859,
+                "maximumPhysicalResidual": 8.830507e-9
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 6,
+                "augmentedObjective": 0.002704907234109,
+                "deformationEnergy": 0.002704906164543,
+                "maximumPhysicalResidual": 1.0234048e-8
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 23,
+                "augmentedObjective": 0.002704907119709,
+                "deformationEnergy": 0.002704906040305,
+                "maximumPhysicalResidual": 1.020228e-8
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 23,
+                "augmentedObjective": 0.002704907088609,
+                "deformationEnergy": 0.002704906002912,
+                "maximumPhysicalResidual": 1.0185164e-8
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 29,
+                "augmentedObjective": 0.002704907077967,
+                "deformationEnergy": 0.002704905989093,
+                "maximumPhysicalResidual": 1.0174048e-8
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 48,
+                "augmentedObjective": 0.002704907074287,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              }
+            ],
+            "augmentedObjective": 0.002704907074287,
+            "deformationEnergy": 0.002704905986672,
+            "maximumPhysicalResidual": 1.0164925e-8,
+            "vector": [
+              -0.058561248779126,
+              0.000235900878899,
+              0.040191345215013,
+              -0.000268249511724,
+              0.019102859497221,
+              0.00003219604492,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 1000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002705014748159,
+                "deformationEnergy": 0.002704905986672,
+                "maximumPhysicalResidual": 1.0164925e-8
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270496010769,
+                "deformationEnergy": 0.00270496010769,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704929995423,
+                "deformationEnergy": 0.002704929995423,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704917228108,
+                "deformationEnergy": 0.002704917228108,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704911416655,
+                "deformationEnergy": 0.002704911416655,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.00270490865398,
+                "deformationEnergy": 0.00270490865398,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908508694,
+                "deformationEnergy": 0.002704908508694,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704908508694,
+                "deformationEnergy": 0.002704908508694,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908218716,
+                "deformationEnergy": 0.002704908170065,
+                "maximumPhysicalResidual": 2.20569e-10
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704908218716,
+                "deformationEnergy": 0.002704908170065,
+                "maximumPhysicalResidual": 2.20569e-10
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908210427,
+                "deformationEnergy": 0.002704908161776,
+                "maximumPhysicalResidual": 2.20569e-10
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704908197004,
+                "deformationEnergy": 0.002704908193674,
+                "maximumPhysicalResidual": 4.123e-11
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908194391,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              }
+            ],
+            "augmentedObjective": 0.002704908194391,
+            "deformationEnergy": 0.002704908175667,
+            "maximumPhysicalResidual": 1.30475e-10,
+            "vector": [
+              -0.058561248779126,
+              0.000235977172845,
+              0.040191345215013,
+              -0.000276794433599,
+              0.019102859497221,
+              0.000026855468748,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.02,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.005,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.00125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.0003125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.000078125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.00001953125,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 0,
+                "augmentedObjective": 0.002704910048041,
+                "deformationEnergy": 0.002704908175667,
+                "maximumPhysicalResidual": 1.30475e-10
+              },
+              {
+                "step": 0.0000048828125,
+                "acceptedMoves": 2,
+                "augmentedObjective": 0.002704909482872,
+                "deformationEnergy": 0.002704909482872,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908810084,
+                "deformationEnergy": 0.002704908810084,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000001220703125,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908475926,
+                "deformationEnergy": 0.002704908475926,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908309405,
+                "deformationEnergy": 0.002704908309405,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 3.0517578125e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908226285,
+                "deformationEnergy": 0.002704908226285,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908184759,
+                "deformationEnergy": 0.002704908184759,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.002704908168899,
+                "deformationEnergy": 0.002704908166386,
+                "maximumPhysicalResidual": 5.013e-12
+              }
+            ],
+            "augmentedObjective": 0.002704908168899,
+            "deformationEnergy": 0.002704908166386,
+            "maximumPhysicalResidual": 5.013e-12,
+            "vector": [
+              -0.058561248779126,
+              0.0002407836914,
+              0.040191345215013,
+              -0.00027206420899,
+              0.019102859497221,
+              0.000031738281248,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "invariance": {
+    "candidateEnumeration": "passed",
+    "mechanism": "paired-full-solve-artifact-comparison",
+    "rows": [
+      {
+        "requestedConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "canonical",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            1000,
+            100000,
+            10000000,
+            1000000000,
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.02,
+            0.01,
+            0.005,
+            0.0025,
+            0.00125,
+            0.000625,
+            0.0003125,
+            0.00015625,
+            0.000078125,
+            0.0000390625,
+            0.00001953125,
+            0.000009765625,
+            0.0000048828125,
+            0.00000244140625,
+            0.000001220703125,
+            6.103515625e-7,
+            3.0517578125e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "effectiveConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "canonical",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            1000,
+            100000,
+            10000000,
+            1000000000,
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.02,
+            0.01,
+            0.005,
+            0.0025,
+            0.00125,
+            0.000625,
+            0.0003125,
+            0.00015625,
+            0.000078125,
+            0.0000390625,
+            0.00001953125,
+            0.000009765625,
+            0.0000048828125,
+            0.00000244140625,
+            0.000001220703125,
+            6.103515625e-7,
+            3.0517578125e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "fallbackUsed": false,
+        "status": "converged-joint-reference",
+        "selectedVector": [
+          -0.058628640400216,
+          2.13382e-10,
+          0.040124794654861,
+          -2.54794e-10,
+          0.019036677536757,
+          4.2148e-11,
+          0,
+          0,
+          0,
+          0
+        ],
+        "selectedPhysicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+        "selectedMetricsSha256": "d23b1cc6cde58f9e8ed827de59f9437468baa108f945d205fa2df7f5e043fafb",
+        "selectedBeltSha256": "ba63b37f1f6044024a23278fa1f4924f8cd99aa9568cf14a40def888e6554b85"
+      },
+      {
+        "requestedConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "reverse",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            1000,
+            100000,
+            10000000,
+            1000000000,
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.02,
+            0.01,
+            0.005,
+            0.0025,
+            0.00125,
+            0.000625,
+            0.0003125,
+            0.00015625,
+            0.000078125,
+            0.0000390625,
+            0.00001953125,
+            0.000009765625,
+            0.0000048828125,
+            0.00000244140625,
+            0.000001220703125,
+            6.103515625e-7,
+            3.0517578125e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "effectiveConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "reverse",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            1000,
+            100000,
+            10000000,
+            1000000000,
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.02,
+            0.01,
+            0.005,
+            0.0025,
+            0.00125,
+            0.000625,
+            0.0003125,
+            0.00015625,
+            0.000078125,
+            0.0000390625,
+            0.00001953125,
+            0.000009765625,
+            0.0000048828125,
+            0.00000244140625,
+            0.000001220703125,
+            6.103515625e-7,
+            3.0517578125e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "fallbackUsed": false,
+        "status": "converged-joint-reference",
+        "selectedVector": [
+          -0.058628640400216,
+          2.13382e-10,
+          0.040124794654861,
+          -2.54794e-10,
+          0.019036677536757,
+          4.2148e-11,
+          0,
+          0,
+          0,
+          0
+        ],
+        "selectedPhysicalStateSha256": "868bb80212e3ed75af4d843dbb7c2fe3add6be64ee30f3ebdc7d8db9ea2a86b3",
+        "selectedMetricsSha256": "d23b1cc6cde58f9e8ed827de59f9437468baa108f945d205fa2df7f5e043fafb",
+        "selectedBeltSha256": "ba63b37f1f6044024a23278fa1f4924f8cd99aa9568cf14a40def888e6554b85"
+      }
+    ],
+    "comparison": {
+      "selectedVectorEqual": true,
+      "selectedPhysicalStateEqual": true,
+      "selectedMetricsEqual": true,
+      "selectedBeltEqual": true
+    },
+    "labelPermutation": "not-yet-assayed"
+  },
+  "identity": {
+    "sha256": "0804e1fcaad77ec5dec531c6f83a322b0f1ce0932d3127f8b238a9c396e4a304"
+  }
+}
