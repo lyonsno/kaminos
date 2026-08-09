@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { createNBodyRosetteFixture } from '../nbody-packing-assay-core.mjs';
+import { hashMusclePackingCanonicalJson } from '../muscle-compartment-packing-core.mjs';
 import {
   NBODY_PACKING_ASSAY_WITNESS_ROUTE,
   admitNBodyPackingAssayVisualInspection,
@@ -148,6 +149,86 @@ test('witness failure clears stale primaries and preserves the failure phase', a
     await assert.rejects(() => readFile(join(root, 'fixture.json')), /ENOENT/);
     await assert.rejects(() => readFile(join(root, 'result.json')), /ENOENT/);
     await assert.rejects(() => readFile(join(root, 'index.html')), /ENOENT/);
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('witness rejects a hash-consistent physically inadmissible known state before completion', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-inadmissible-witness-'));
+  try {
+    const fixture = createNBodyRosetteFixture();
+    const center = fixture.knownFeasible.muscles.find(
+      muscle => muscle.id === 'rosette-center',
+    );
+    center.centerline[2].radius = 1.2;
+    center.centerline[3].radius = 1.2;
+    const { input:sourceInput, ...sourceCore } = fixture.knownFeasible;
+    const sourceSha256 = hashMusclePackingCanonicalJson(sourceCore);
+    fixture.knownFeasible.input = {
+      requested:{ kind:'synthetic-fixture', id:fixture.knownFeasible.id, sha256:sourceSha256 },
+      effective:{ kind:'synthetic-fixture', id:fixture.knownFeasible.id, sha256:sourceSha256 },
+    };
+    const { identity, input, ...fixtureCore } = fixture;
+    const fixtureSha256 = hashMusclePackingCanonicalJson(fixtureCore);
+    fixture.identity = { sha256:fixtureSha256 };
+    fixture.input = {
+      requested:{ kind:'synthetic-nbody-assay-fixture', id:fixture.id, sha256:fixtureSha256 },
+      effective:{ kind:'synthetic-nbody-assay-fixture', id:fixture.id, sha256:fixtureSha256 },
+    };
+    await assert.rejects(
+      () => writeNBodyPackingAssayWitness({ outDir:root, fixture }),
+      /known-feasible state is physically inadmissible/,
+    );
+    const report = JSON.parse(await readFile(join(root, 'report.json')));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'build-assay');
+    assert.equal(report.route.effective, null);
+    await assert.rejects(() => readFile(join(root, 'index.html')), /ENOENT/);
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('primary-write failure preserves the built result and binding evidence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-primary-write-failure-'));
+  try {
+    const failingWriteFile = async (path, bytes) => {
+      if (path === join(root, 'fixture.json')) {
+        throw new Error('injected fixture primary write failure');
+      }
+      return writeFile(path, bytes);
+    };
+    await assert.rejects(
+      () => writeNBodyPackingAssayWitness({
+        outDir:root,
+        io:{ writeFile:failingWriteFile },
+      }),
+      /injected fixture primary write failure/,
+    );
+    const report = JSON.parse(await readFile(join(root, 'report.json')));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'write-primary-artifacts');
+    assert.equal(report.route.effective, null);
+    assert.equal(report.lastTrustworthyEvidence.phase, 'primary-publication-attempted');
+    assert.equal(
+      report.lastTrustworthyEvidence.result.status,
+      'counterfeit-rejected-global-debt',
+    );
+    assert.match(report.lastTrustworthyEvidence.result.sha256, /^[0-9a-f]{64}$/);
+    assert.deepEqual(
+      report.lastTrustworthyEvidence.result.config.requested,
+      report.lastTrustworthyEvidence.result.config.effective,
+    );
+    assert.match(
+      report.lastTrustworthyEvidence.bindings.resultJsonSha256,
+      /^[0-9a-f]{64}$/,
+    );
+    assert.deepEqual(report.lastTrustworthyEvidence.primaryPublication, [
+      { path:'fixture.json', status:'failed', error:'injected fixture primary write failure' },
+      { path:'result.json', status:'written' },
+      { path:'index.html', status:'written' },
+    ]);
   } finally {
     await rm(root, { recursive:true, force:true });
   }

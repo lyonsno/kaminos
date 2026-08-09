@@ -74,8 +74,8 @@
     "status": "passed-agent-inspection",
     "artifact": "index.html",
     "receipt": "visual-inspection.json",
-    "receiptSha256": "f06efb99f5521f94bee2349ec0ffe2d4ad56715ecc6c8a567242b8139e259e60",
-    "summary": "Direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
+    "receiptSha256": "13ddfd0c0df36a539f501c835bd45ac7d87eee738993634310059873673a24f5",
+    "summary": "Post-review regeneration and direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
   },
   "stalePrimaryCleanup": {
     "status": "cleared",

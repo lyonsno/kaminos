@@ -7,11 +7,31 @@ import {
   createNBodyRosetteFixture,
   runNBodyRosetteCounterfeitAssay,
 } from '../nbody-packing-assay-core.mjs';
+import { hashMusclePackingCanonicalJson } from '../muscle-compartment-packing-core.mjs';
 
 const PRESSURE_CHAIN = ['rosette-west', 'rosette-center', 'rosette-east'];
 
 function endpoints(muscle) {
   return [muscle.centerline[0].position, muscle.centerline.at(-1).position];
+}
+
+function rehashSyntheticSource(source) {
+  const { input, ...core } = source;
+  const sha256 = hashMusclePackingCanonicalJson(core);
+  source.input = {
+    requested:{ kind:'synthetic-fixture', id:source.id, sha256 },
+    effective:{ kind:'synthetic-fixture', id:source.id, sha256 },
+  };
+}
+
+function rehashFixture(fixture) {
+  const { identity, input, ...core } = fixture;
+  const sha256 = hashMusclePackingCanonicalJson(core);
+  fixture.identity = { sha256 };
+  fixture.input = {
+    requested:{ kind:'synthetic-nbody-assay-fixture', id:fixture.id, sha256 },
+    effective:{ kind:'synthetic-nbody-assay-fixture', id:fixture.id, sha256 },
+  };
 }
 
 test('manufactured five-body rosette starts from a known admissible packed witness', () => {
@@ -156,5 +176,21 @@ test('counterfeit refuses hidden defaults, stale identities, and non-chain pair 
       envelope:'sine-zero-at-attachments',
     } }),
     /fixture identity mismatch/,
+  );
+});
+
+test('hash-consistent metadata cannot promote a physically inadmissible known witness', () => {
+  const fixture = createNBodyRosetteFixture();
+  const center = fixture.knownFeasible.muscles.find(
+    muscle => muscle.id === 'rosette-center',
+  );
+  center.centerline[2].radius = 1.2;
+  center.centerline[3].radius = 1.2;
+  rehashSyntheticSource(fixture.knownFeasible);
+  rehashFixture(fixture);
+
+  assert.throws(
+    () => runNBodyRosetteCounterfeitAssay({ fixture }),
+    /known-feasible state is physically inadmissible/,
   );
 });

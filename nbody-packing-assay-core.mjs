@@ -248,6 +248,36 @@ function fixtureCoreWithoutIdentity(fixture) {
   return core;
 }
 
+function requireMatchingFixtureReceipt(label, recorded, effective) {
+  if (JSON.stringify(recorded) !== JSON.stringify(effective)) {
+    throw new Error(`N-body fixture ${label} receipt does not match recomputed geometry`);
+  }
+}
+
+function requireKnownFeasibleState(metrics) {
+  const tolerance = 1e-9;
+  const residuals = [
+    'pairwisePenetration',
+    'skeletalPenetration',
+    'compartmentEscape',
+    'endpointDrift',
+    'maximumRelativeVolumeError',
+  ];
+  const inadmissibleResiduals = residuals.filter(
+    key => !Number.isFinite(metrics[key]) || metrics[key] > tolerance,
+  );
+  if (
+    inadmissibleResiduals.length > 0 ||
+    metrics.nonFiniteValueCount !== 0 ||
+    metrics.nonPositiveRadiusCount !== 0
+  ) {
+    throw new Error(
+      'N-body fixture known-feasible state is physically inadmissible: ' +
+      `${inadmissibleResiduals.join(', ') || 'invalid carrier samples'}`,
+    );
+  }
+}
+
 function validateFixture(fixture) {
   if (fixture?.schema !== NBODY_PACKING_ASSAY_FIXTURE_SCHEMA) {
     throw new Error(`N-body fixture schema mismatch: ${fixture?.schema || 'missing'}`);
@@ -268,8 +298,26 @@ function validateFixture(fixture) {
   if (JSON.stringify(fixture.input.requested) !== JSON.stringify(fixture.input.effective)) {
     throw new Error('N-body fixture requested/effective identity mismatch');
   }
-  measureMuscleCompartmentPacking(fixture.knownFeasible);
-  measureMuscleCompartmentPacking(fixture.crowded);
+  const knownFeasibleMetrics = measureMuscleCompartmentPacking(fixture.knownFeasible);
+  const crowdedMetrics = measureMuscleCompartmentPacking(fixture.crowded);
+  const knownFeasibleBelt = measureBelt(
+    fixture.knownFeasible.muscles,
+    fixture.contactGraph,
+  );
+  const crowdedBelt = measureBelt(fixture.crowded.muscles, fixture.contactGraph);
+  requireKnownFeasibleState(knownFeasibleMetrics);
+  requireMatchingFixtureReceipt(
+    'known-feasible metrics',
+    fixture.metrics?.knownFeasible,
+    knownFeasibleMetrics,
+  );
+  requireMatchingFixtureReceipt(
+    'known-feasible belt',
+    fixture.metrics?.knownFeasibleBelt,
+    knownFeasibleBelt,
+  );
+  requireMatchingFixtureReceipt('crowded metrics', fixture.metrics?.crowded, crowdedMetrics);
+  requireMatchingFixtureReceipt('crowded belt', fixture.metrics?.crowdedBelt, crowdedBelt);
 }
 
 export function createNBodyRosetteFixture() {

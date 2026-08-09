@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.nbody-packing-assay-visual-inspection.v0",
   "status": "passed-agent-inspection",
-  "observedAt": "2026-08-09T15:35:53-04:00",
+  "observedAt": "2026-08-09T15:50:09-04:00",
   "route": {
     "requested": "nbody-packing-rosette-orbitable-v0",
     "effective": "nbody-packing-rosette-orbitable-v0",
@@ -22,7 +22,7 @@
       "byteLength": 203331,
       "sha256": "5017b3eef01c6216b43864f25aac6076dac8e1a896ee7bf500e2341b32d3f349",
       "captureReportPath": "known-feasible-volume-capture-report.json",
-      "captureReportSha256": "a284c49ad8e9eee2020dc5a6a396d50ab9f5c1a29062f229361868175d2f9c36",
+      "captureReportSha256": "4adc7f31a0774eb4cbc897b8fe4cadfba75f75722fa0bda94f4f9531687e4741",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -48,7 +48,7 @@
       "byteLength": 160184,
       "sha256": "8f1bbfeb90d9c97e9ea4554b8954541a1e88fc91051e1bdfc55d190a03ff37c7",
       "captureReportPath": "known-feasible-slice-capture-report.json",
-      "captureReportSha256": "122ea720fb95a68b92574998d6df4602d360112752af123cfbd5af2807cc7fcd",
+      "captureReportSha256": "842059e5dd2ae8a548b75650a3c77103563506247a5ce953effc8b44e6c85d6c",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -74,7 +74,7 @@
       "byteLength": 205354,
       "sha256": "8754b6aea2ffa75dfedad72720989bea32bc2c532d7004a5c3e4362316cba05e",
       "captureReportPath": "crowded-volume-capture-report.json",
-      "captureReportSha256": "b9c844ed8d636c146c0500f946f73983423991c65a0544982427e41201a577c7",
+      "captureReportSha256": "de6422f3678d5546a0cc7c6c13d4998a4ce1627a9fa50e656f4041d0c84fdbab",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -100,7 +100,7 @@
       "byteLength": 160906,
       "sha256": "fd6e92024ad4d6a592c60d44f62a2958d4e1dbbefb1d44648113b969aed78289",
       "captureReportPath": "crowded-slice-capture-report.json",
-      "captureReportSha256": "ed98aa6c69a2076f7f110438ebfcc765c4019aec6a2319efa6f1ad4a0401ead2",
+      "captureReportSha256": "41c628c411cb26d3e936511f4c4be386e397c3ec1ba929830d963dcff4af6a42",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -126,7 +126,7 @@
       "byteLength": 208974,
       "sha256": "2b18ee33cde932465739f214e976c80a8e8608e2ba72d527de847afbda113ad4",
       "captureReportPath": "sequential-counterfeit-volume-capture-report.json",
-      "captureReportSha256": "ccc21e4f72beee3959b07fa28299abe8cf3dda21814483659a68cc2992d9ea0b",
+      "captureReportSha256": "55f1fce5b5a4bd67b12cf2591edf35ea36a13c8556ec48bc9dbc069747d22bc8",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -152,7 +152,7 @@
       "byteLength": 161649,
       "sha256": "f3c796814d7e3ba1c9a58e0c7bba658251fa41dd26ee67c48b67509873e27797",
       "captureReportPath": "sequential-counterfeit-slice-capture-report.json",
-      "captureReportSha256": "3e126897c2d93f43912141d6f25a606db09f23f337ecd2994cf0626a6c966a62",
+      "captureReportSha256": "7b81cb25b8a5147a376730cb4987c00c8512a78bd188898e3586333d02524a1a",
       "viewport": {
         "width": 1400,
         "height": 900
@@ -183,5 +183,5 @@
     "packingSemanticsNotInverted": true,
     "textContained": true
   },
-  "summary": "Direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
+  "summary": "Post-review regeneration and direct inspection of all six 1400x900 captures: the known-feasible slice contains five separated member discs and no red penetration markers; crowded volume and slice show west-center plus adjacent ring debt; the local counterfeit visibly narrows the west-center collision while introducing the new center-east red marker predicted by the ledger. Stable colors, fixed attachment handles, bone, compartment bounds, controls, and metrics remain legible. The default camera compresses north/south separation in volume mode, but orbitability plus the opaque slice resolves that ambiguity rather than hiding it."
 }

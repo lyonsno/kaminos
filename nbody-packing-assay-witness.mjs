@@ -326,6 +326,12 @@ export async function writeNBodyPackingAssayWitness({
   const outputRoot = resolve(outDir);
   let phase = 'prepare-output';
   let stalePrimaryCleanup = { status:'not-attempted', paths:[...PRIMARY_PATHS] };
+  let lastTrustworthyEvidence = {
+    phase:'fixture-received',
+    fixtureId:fixture?.id || null,
+    fixtureSchema:fixture?.schema || null,
+    recordedFixtureSha256:fixture?.identity?.sha256 || null,
+  };
   const route = {
     requested:NBODY_PACKING_ASSAY_WITNESS_ROUTE,
     effective:NBODY_PACKING_ASSAY_WITNESS_ROUTE,
@@ -346,6 +352,16 @@ export async function writeNBodyPackingAssayWitness({
     if (result.status !== 'counterfeit-rejected-global-debt') {
       throw new Error(`N-body witness requires rejected counterfeit, got ${result.status}`);
     }
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'assay-built',
+      result: {
+        schema:result.schema,
+        status:result.status,
+        sha256:result.identity.sha256,
+        config:structuredClone(result.config),
+      },
+    };
     const reportCore = {
       schema:REPORT_SCHEMA,
       status:'complete-pending-visual-inspection',
@@ -397,14 +413,35 @@ export async function writeNBodyPackingAssayWitness({
         indexHtmlSha256:sha256(htmlBytes),
       },
     };
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'primary-artifacts-bound',
+      bindings:structuredClone(report.bindings),
+    };
     phase = 'write-primary-artifacts';
     const writes = await Promise.allSettled([
       io.writeFile(resolve(outputRoot, 'fixture.json'), fixtureBytes),
       io.writeFile(resolve(outputRoot, 'result.json'), resultBytes),
       io.writeFile(resolve(outputRoot, 'index.html'), htmlBytes),
     ]);
+    const primaryPublication = writes.map((write, index) => write.status === 'fulfilled'
+      ? { path:PRIMARY_PATHS[index], status:'written' }
+      : {
+          path:PRIMARY_PATHS[index],
+          status:'failed',
+          error:write.reason?.message || String(write.reason),
+        });
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'primary-publication-attempted',
+      primaryPublication,
+    };
     const rejected = writes.find(write => write.status === 'rejected');
     if (rejected) throw rejected.reason;
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'primary-artifacts-written',
+    };
     phase = 'publish-report';
     await writeJsonAtomically(io, resolve(outputRoot, 'report.json'), report);
     return { outputRoot, fixture, result, report };
@@ -412,14 +449,13 @@ export async function writeNBodyPackingAssayWitness({
     const failureReport = {
       schema:REPORT_SCHEMA,
       status:'failed',
-      route,
-      failurePhase:phase,
-      lastTrustworthyEvidence: {
-        phase:'fixture-received',
-        fixtureId:fixture?.id || null,
-        fixtureSchema:fixture?.schema || null,
-        recordedFixtureSha256:fixture?.identity?.sha256 || null,
+      route: {
+        requested:route.requested,
+        effective:null,
+        fallbackUsed:false,
       },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
       stalePrimaryCleanup,
       error: { name:error.name, message:error.message },
     };
