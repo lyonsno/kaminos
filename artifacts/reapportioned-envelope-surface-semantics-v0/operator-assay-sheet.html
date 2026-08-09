@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reapportioned Envelope Surface Semantics</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #111413; color: #ecf0ed; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111413; }
+    header, section { padding: 28px clamp(18px, 3vw, 48px); }
+    header { border-bottom: 1px solid #39413e; }
+    h1 { margin: 0 0 8px; font-size: clamp(24px, 3vw, 38px); letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: 21px; letter-spacing: 0; }
+    p { max-width: 1100px; margin: 6px 0; line-height: 1.5; color: #bdc7c1; }
+    strong { color: #f7faf8; }
+    .verdict { color: #8ee5a5; font-weight: 750; }
+    .route { margin-top: 16px; color: #98a49e; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .matrix { display: grid; grid-template-columns: minmax(210px, .8fr) repeat(3, minmax(220px, 1fr)); gap: 12px; }
+    .canary { display: grid; grid-template-columns: minmax(210px, .8fr) repeat(2, minmax(260px, 1fr)); gap: 12px; }
+    .row-label, figure { margin: 0; border: 1px solid #343c38; background: #191d1b; border-radius: 6px; overflow: hidden; }
+    .row-label { padding: 16px; min-height: 100%; }
+    .row-label h3 { margin: 0 0 10px; font-size: 17px; letter-spacing: 0; }
+    .prompt { color: #eef3ef; font-size: 15px; line-height: 1.45; }
+    .role, figcaption { color: #9aa69f; font-size: 12px; line-height: 1.45; }
+    figure img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #303432; }
+    figcaption { padding: 10px 12px 12px; }
+    .status { display: inline-block; margin-bottom: 5px; color: #8ee5a5; font-weight: 800; }
+    .source figcaption { color: #d5ddd8; }
+    .condition { display: contents; }
+    .condition + .condition > * { margin-top: 16px; }
+    .note { margin-top: 8px; color: #cbd3ce; }
+    footer { padding: 18px clamp(18px, 3vw, 48px) 34px; color: #818b85; font-size: 12px; }
+    @media (max-width: 950px) { .matrix, .canary { grid-template-columns: 1fr 1fr; } .row-label { grid-column: 1 / -1; } }
+    @media (max-width: 600px) { .matrix, .canary { grid-template-columns: 1fr; } .row-label { grid-column: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Reapportioned envelope: surface semantics</h1>
+    <p><span class="verdict">Strong positive result.</span> Short prompts produced four visually separable surface classes while retaining the authored quadruped morphology. The shell row is the cleanest local-control evidence: FLUX adds a discrete dorsal component while leaving much of the source head, limbs, and body exposed and substantially unchanged.</p>
+    <p><strong>What changed:</strong> rigid-component generation is no longer only a speculative downstream segmentation problem. The generator can express armor, an integrated shell, or fitted stone plates over one controlled envelope without first replacing that envelope with a generic animal.</p>
+    <p><strong>Claim ceiling:</strong> these images establish visual morphology retention and separable surface semantics. They do not establish automatic rigid-region recovery, deformation behavior, or production generality.</p>
+    <div class="route">Effective route: mflux-generate-flux2-edit / flux2-klein-9b / Q4 / 512x512 / 8 steps / guidance 1.0<br>Seeds: 80301, 80302, 80413 · Source SHA256: 8bbbc504473ccb1658a84f633554b070ea4c0554ae095cabd68abfee2e658d56</div>
+  </header>
+
+  <section>
+    <h2>Matched surface-class matrix</h2>
+    <div class="matrix">
+      <div class="condition">
+        <div class="row-label"><h3>Rigid plate armor</h3><div class="prompt">“This creature wearing rigid plate armor.”</div><p class="role">Worn rigid-component probe. All three seeds retain the stance and broad mass distribution while constructing articulated armor with clear boundaries.</p></div>
+        <figure><img src="runs/armor-seed80301/output.png" alt="Seed 80301 armor output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job 247ae25dd400</figcaption></figure>
+        <figure><img src="runs/armor-seed80302/output.png" alt="Seed 80302 armor output"><figcaption><span class="status">ADHERED</span><br>seed 80302 · job 439231ff1462</figcaption></figure>
+        <figure><img src="runs/armor-seed80413/output.png" alt="Seed 80413 armor output"><figcaption><span class="status">ADHERED</span><br>seed 80413 · job e849ec7b1f2e</figcaption></figure>
+      </div>
+      <div class="condition">
+        <div class="row-label"><h3>Soft fur</h3><div class="prompt">“This shape covered in fur.”</div><p class="role">Deformable-surface control. The prompt elaborates material aggressively without materially replacing the authored silhouette.</p></div>
+        <figure><img src="runs/fur-seed80301/output.png" alt="Seed 80301 fur output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job cd768da9118d</figcaption></figure>
+        <figure><img src="runs/fur-seed80302/output.png" alt="Seed 80302 fur output"><figcaption><span class="status">ADHERED</span><br>seed 80302 · job 5da39d504a62</figcaption></figure>
+        <figure><img src="runs/fur-seed80413/output.png" alt="Seed 80413 fur output"><figcaption><span class="status">ADHERED</span><br>seed 80413 · job 539b768ac94c</figcaption></figure>
+      </div>
+      <div class="condition">
+        <div class="row-label"><h3>Hard dorsal shell</h3><div class="prompt">“This creature with a hard shell over its back.”</div><p class="role">Integrated rigid-component probe. Strongest evidence that a local prompt can add a bounded rigid carrier without restyling every exposed surface.</p></div>
+        <figure><img src="runs/shell-seed80301/output.png" alt="Seed 80301 shell output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job ef5cb8df6655</figcaption></figure>
+        <figure><img src="runs/shell-seed80302/output.png" alt="Seed 80302 shell output"><figcaption><span class="status">ADHERED</span><br>seed 80302 · job 01796ee6c79c</figcaption></figure>
+        <figure><img src="runs/shell-seed80413/output.png" alt="Seed 80413 shell output"><figcaption><span class="status">ADHERED</span><br>seed 80413 · job bf0e3a9639b2</figcaption></figure>
+      </div>
+      <div class="condition">
+        <div class="row-label"><h3>Fitted stone plates</h3><div class="prompt">“This creature made of fitted stone plates.”</div><p class="role">Whole-body rigid-material probe. FLUX follows the same body organization while introducing explicit plate seams and rigid segmentation across the surface.</p></div>
+        <figure><img src="runs/stone-seed80301/output.png" alt="Seed 80301 stone output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job c37f480e7ae6</figcaption></figure>
+        <figure><img src="runs/stone-seed80302/output.png" alt="Seed 80302 stone output"><figcaption><span class="status">ADHERED</span><br>seed 80302 · job 41791447574c</figcaption></figure>
+        <figure><img src="runs/stone-seed80413/output.png" alt="Seed 80413 stone output"><figcaption><span class="status">ADHERED</span><br>seed 80413 · job 0a3c34b4e811</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Revised-envelope morphology canary</h2>
+    <p class="note">Same prompts and seed, new operator-authored source. The revised cranial, cervical, scapular, pelvic, and hind-limb organization survives both deformable and rigid elaboration. Camera, framing, and viewport lighting differ, so this is directional source-authority evidence rather than a geometry-only effect-size estimate.</p>
+    <div class="canary">
+      <figure class="source"><img src="source/reapportioned-envelope-v0.png" alt="Original conditioning source"><figcaption>Original source · SHA 8bbbc504473c…</figcaption></figure>
+      <figure><img src="runs/fur-seed80301/output.png" alt="Original source fur comparator"><figcaption>“This shape covered in fur.”<br>seed 80301 · job cd768da9118d</figcaption></figure>
+      <figure><img src="runs/stone-seed80301/output.png" alt="Original source stone comparator"><figcaption>“This creature made of fitted stone plates.”<br>seed 80301 · job c37f480e7ae6</figcaption></figure>
+      <figure class="source"><img src="../reapportioned-envelope-morphology-authority-canary-v1/source/reapportioned-envelope-v1.png" alt="Revised conditioning source"><figcaption>Revised source · SHA 68ee109ca805…</figcaption></figure>
+      <figure><img src="../reapportioned-envelope-morphology-authority-canary-v1/runs/fur-seed80301/output.png" alt="Revised source fur output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job 110c435046a9</figcaption></figure>
+      <figure><img src="../reapportioned-envelope-morphology-authority-canary-v1/runs/stone-seed80301/output.png" alt="Revised source stone output"><figcaption><span class="status">ADHERED</span><br>seed 80301 · job ccd41ea2035d</figcaption></figure>
+    </div>
+  </section>
+
+  <footer>Generated outputs completed 2026-08-09 between 04:08 and 04:17 EDT after Greenroom job 50115671f589 released the worker. Requested and effective route details remain in each run’s metadata and canonical Greenroom receipt.</footer>
+</body>
+</html>

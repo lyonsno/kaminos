@@ -1,0 +1,24 @@
+{
+  "name": "reapportioned-envelope-v0",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "247ae25dd400",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/reapportioned-envelope-surface-semantics-v0/source/reapportioned-envelope-v0.png",
+  "input_name": "reapportioned-envelope-v0.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/reapportioned-envelope-surface-semantics-v0/prompts/armor.txt",
+    "seed": "80301",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786263028.703155,
+  "duration_s": 38.1
+}

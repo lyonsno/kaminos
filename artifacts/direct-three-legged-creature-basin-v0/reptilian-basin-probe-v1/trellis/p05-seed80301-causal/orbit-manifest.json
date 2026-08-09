@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.41346603631973267,
+      0.4992126524448395,
+      0.34841424226760864
+    ],
+    "low": [
+      -0.41363608837127686,
+      -0.5001013278961182,
+      -0.35106170177459717
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/output.glb",
+    "sha256": "da1f0470128b5b4b981310e9470e36416d1f5fd4d7f89d05a867ae67a94b7160"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 590651,
+      "cameraLocation": [
+        2.5947279930114746,
+        -0.00044433772563934326,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.099245548248291,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az000-el12.png",
+      "sha256": "0974576ef3e4594dee638324f4cc96d1328948b9a5a5ea6bcc2074897f35e126"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 545444,
+      "cameraLocation": [
+        1.2973215579986572,
+        2.246729850769043,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.3375431299209595,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az060-el12.png",
+      "sha256": "ace4178bf737ecdfa0e023e7c00c16a75e36af3c6ec4efebf2e7d8e104744768"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 543327,
+      "cameraLocation": [
+        -1.2974915504455566,
+        2.246729850769043,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.3375431299209595,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az120-el12.png",
+      "sha256": "dce6fca68928a5f2ca78115013719047e9f552aecb5b3765e8ba524d5edbb90b"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 580794,
+      "cameraLocation": [
+        -2.594898223876953,
+        -0.00044433772563934326,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.099245548248291,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az180-el12.png",
+      "sha256": "403ddb274e0868161bcb86a0eacbe88d80a8fc2ea0caf4d852011f6219f5a6dd"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 535551,
+      "cameraLocation": [
+        -1.2974915504455566,
+        -2.2476186752319336,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.337543249130249,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az240-el12.png",
+      "sha256": "4fcb75671e071aa41894cc0eb473bc9fa4ed8652f07d9a7678793ad4145bc3d9"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 542811,
+      "cameraLocation": [
+        1.2973215579986572,
+        -2.2476186752319336,
+        0.5502208471298218
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.337543249130249,
+      "path": "artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/trellis/p05-seed80301-causal/orbit/az300-el12.png",
+      "sha256": "4e4f6ccb9fd889660cbab0400e26e489641ccf749eb5a3fa09d72a9231d9b439"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 180628
+}

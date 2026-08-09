@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "4d3439e1ee8d",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/direct-three-legged-creature-basin-v0/reptilian-basin-probe-v1/replay-runs/p05-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786262880.2093818,
+  "duration_s": 56.5
+}
