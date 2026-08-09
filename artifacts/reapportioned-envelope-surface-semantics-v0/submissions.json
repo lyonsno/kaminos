@@ -1,0 +1,20 @@
+{
+  "schema": "kaminos.gpu_greenroom_submission_ledger.v1",
+  "submitted_at_unix_approx": 1786243722,
+  "initial_status": "pending",
+  "jobs": [
+    {"condition": "fur", "seed": 80301, "job_id": "cd768da9118d", "output_dir": "runs/fur-seed80301"},
+    {"condition": "fur", "seed": 80302, "job_id": "5da39d504a62", "output_dir": "runs/fur-seed80302"},
+    {"condition": "fur", "seed": 80413, "job_id": "539b768ac94c", "output_dir": "runs/fur-seed80413"},
+    {"condition": "armor", "seed": 80301, "job_id": "247ae25dd400", "output_dir": "runs/armor-seed80301"},
+    {"condition": "armor", "seed": 80302, "job_id": "439231ff1462", "output_dir": "runs/armor-seed80302"},
+    {"condition": "armor", "seed": 80413, "job_id": "e849ec7b1f2e", "output_dir": "runs/armor-seed80413"},
+    {"condition": "shell", "seed": 80301, "job_id": "ef5cb8df6655", "output_dir": "runs/shell-seed80301"},
+    {"condition": "shell", "seed": 80302, "job_id": "01796ee6c79c", "output_dir": "runs/shell-seed80302"},
+    {"condition": "shell", "seed": 80413, "job_id": "bf0e3a9639b2", "output_dir": "runs/shell-seed80413"},
+    {"condition": "stone", "seed": 80301, "job_id": "c37f480e7ae6", "output_dir": "runs/stone-seed80301"},
+    {"condition": "stone", "seed": 80302, "job_id": "41791447574c", "output_dir": "runs/stone-seed80302"},
+    {"condition": "stone", "seed": 80413, "job_id": "0a3c34b4e811", "output_dir": "runs/stone-seed80413"}
+  ],
+  "receipt_note": "All submit commands exited zero. The first status inspection confirmed pending state and exact request parameters; effective route remains unknown until a worker leases the jobs."
+}
