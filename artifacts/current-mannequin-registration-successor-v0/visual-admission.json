@@ -1,0 +1,54 @@
+{
+  "campaign": "current-mannequin-registration-successor-v0",
+  "classification": "All six outputs are happy-safe for operator inspection.",
+  "cells": [
+    {
+      "promptId": "mannequin",
+      "seed": 80301,
+      "adherence": "strong",
+      "surface": "hairless naturalistic creature",
+      "promotedToTrellis": true,
+      "reason": "Strongest naturalistic anatomy and clean authored-silhouette retention."
+    },
+    {
+      "promptId": "mannequin",
+      "seed": 80413,
+      "adherence": "strong",
+      "surface": "green fantasy hide",
+      "promotedToTrellis": true,
+      "reason": "Distinct non-naturalistic surface treatment while retaining the authored stance and large masses."
+    },
+    {
+      "promptId": "armature",
+      "seed": 80301,
+      "adherence": "strong",
+      "surface": "hairless naturalistic creature",
+      "promotedToTrellis": false,
+      "reason": "Near-duplicate of mannequin seed 80301; no additional Trellis information."
+    },
+    {
+      "promptId": "armature",
+      "seed": 80413,
+      "adherence": "strong with localized head departure",
+      "surface": "green fantasy hide with collar",
+      "promotedToTrellis": false,
+      "reason": "Same seed basin as mannequin 80413 with extra head and accessory confounds."
+    },
+    {
+      "promptId": "fur",
+      "seed": 80301,
+      "adherence": "moderate",
+      "surface": "dense long fur",
+      "promotedToTrellis": false,
+      "reason": "Fur obscures the face and changes distal support and tail mass more than the matched alternative."
+    },
+    {
+      "promptId": "fur",
+      "seed": 80413,
+      "adherence": "strong",
+      "surface": "dense long fur",
+      "promotedToTrellis": true,
+      "reason": "Best fur-specific retention and a materially distinct reconstruction challenge."
+    }
+  ]
+}

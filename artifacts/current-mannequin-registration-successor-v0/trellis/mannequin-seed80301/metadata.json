@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "3e14f38dc294",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/current-mannequin-registration-successor-v0/runs/mannequin-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786304156.305521,
+  "duration_s": 53.9
+}

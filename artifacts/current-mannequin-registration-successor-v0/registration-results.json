@@ -1,0 +1,151 @@
+{
+  "schema": "kaminos.registration-witness.v0",
+  "source": {
+    "blend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-025.blend",
+    "sha256": "ba04387f9e20c47a297450b0cc93747ae2f5918d5ab48a39820273c871b5ef48",
+    "object": "Cube.056",
+    "sampleCount": 989,
+    "skeletonObjectCount": 67
+  },
+  "method": {
+    "transformClass": "global_similarity",
+    "allowsLocalDeformation": false,
+    "allowsAnatomicalLandmarkEditing": false,
+    "fitSurface": "authored envelope to reconstructed cast",
+    "claimCeiling": "Diagnostic registration pressure only; automated fit is not operator anatomical admission."
+  },
+  "casts": [
+    {
+      "name": "mannequin-seed80301",
+      "glb": "trellis/mannequin-seed80301/output.glb",
+      "glbSha256": "3302f4595d42da429004243b2b08e5fa58a54ea42098decc39d00a86bd45ffa0",
+      "fit": {
+        "sampleCount": 989,
+        "scale": 0.01609000836671534,
+        "medianDistance": 0.017816409468650818,
+        "p90Distance": 0.05048145353794098,
+        "normalizedMedianDistance": 0.0143034700557025,
+        "normalizedP90Distance": 0.04052780445570637,
+        "matrix": [
+          [
+            -0.016088731450753634,
+            -0.0001984290131962453,
+            -4.1418271599684355e-05,
+            -0.023204313946432076
+          ],
+          [
+            -0.00019872870203227686,
+            0.01608834644629974,
+            0.00011825721032068684,
+            -0.021090327316475085
+          ],
+          [
+            3.9955593962601304e-05,
+            0.00011875938500273484,
+            -0.016089520471411017,
+            -0.3449794989808039
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "views": [
+        "registration/mannequin-seed80301/az000-el10.png",
+        "registration/mannequin-seed80301/az045-el10.png",
+        "registration/mannequin-seed80301/az135-el10.png"
+      ]
+    },
+    {
+      "name": "mannequin-seed80413",
+      "glb": "trellis/mannequin-seed80413/output.glb",
+      "glbSha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3",
+      "fit": {
+        "sampleCount": 989,
+        "scale": 0.016352501787551738,
+        "medianDistance": 0.012095911428332329,
+        "p90Distance": 0.0347481869161129,
+        "normalizedMedianDistance": 0.009303354522443026,
+        "normalizedP90Distance": 0.026725948169189318,
+        "matrix": [
+          [
+            -0.016345081395993014,
+            0.0002826018003821373,
+            0.0004034415604102577,
+            0.005442190759847998
+          ],
+          [
+            0.0002895770352178537,
+            0.016347524705772113,
+            0.0002808840449860936,
+            0.010254140355767098
+          ],
+          [
+            -0.0003984645667056498,
+            0.00028790090043987534,
+            -0.01634511100520544,
+            -0.3336847397298237
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "views": [
+        "registration/mannequin-seed80413/az000-el10.png",
+        "registration/mannequin-seed80413/az045-el10.png",
+        "registration/mannequin-seed80413/az135-el10.png"
+      ]
+    },
+    {
+      "name": "fur-seed80413",
+      "glb": "trellis/fur-seed80413/output.glb",
+      "glbSha256": "b5e62c24fcf8678c7ffb0c131041a5741406f234ea19941bd88d10adcfa4467d",
+      "fit": {
+        "sampleCount": 989,
+        "scale": 0.016428018122233705,
+        "medianDistance": 0.014384395442903042,
+        "p90Distance": 0.04691601470112801,
+        "normalizedMedianDistance": 0.010707651065539383,
+        "normalizedP90Distance": 0.03492397833467855,
+        "matrix": [
+          [
+            -0.016391245554698456,
+            0.00040947669824711706,
+            -0.001019400521683893,
+            -0.015987908590857483
+          ],
+          [
+            0.0004164903923799274,
+            0.016422431776668484,
+            -0.0001002482825930413,
+            0.055974492691605954
+          ],
+          [
+            0.0010165551352838613,
+            -0.00012586817985605383,
+            -0.01639605294827586,
+            -0.3912181774925618
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "views": [
+        "registration/fur-seed80413/az000-el10.png",
+        "registration/fur-seed80413/az045-el10.png",
+        "registration/fur-seed80413/az135-el10.png"
+      ]
+    }
+  ]
+}

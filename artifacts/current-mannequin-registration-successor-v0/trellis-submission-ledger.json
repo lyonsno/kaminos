@@ -1,0 +1,26 @@
+{
+  "campaign": "current-mannequin-registration-successor-v0",
+  "jobs": [
+    {
+      "promptId": "mannequin",
+      "seed": 80301,
+      "jobId": "3e14f38dc294",
+      "inputPath": "runs/mannequin-seed80301/output.png",
+      "outputDir": "trellis/mannequin-seed80301"
+    },
+    {
+      "promptId": "mannequin",
+      "seed": 80413,
+      "jobId": "fdfd590ec773",
+      "inputPath": "runs/mannequin-seed80413/output.png",
+      "outputDir": "trellis/mannequin-seed80413"
+    },
+    {
+      "promptId": "fur",
+      "seed": 80413,
+      "jobId": "8b485f3024a2",
+      "inputPath": "runs/fur-seed80413/output.png",
+      "outputDir": "trellis/fur-seed80413"
+    }
+  ]
+}
