@@ -1,0 +1,39 @@
+{
+  "schema": "kaminos.decimation-ladder.v0",
+  "source": {
+    "blend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-025.blend",
+    "sha256": "ba04387f9e20c47a297450b0cc93747ae2f5918d5ab48a39820273c871b5ef48",
+    "object": "Cube.056",
+    "evaluatedVertexCount": 989,
+    "evaluatedFaceCount": 1037
+  },
+  "render": {
+    "engine": "BLENDER_WORKBENCH",
+    "resolution": [
+      768,
+      768
+    ],
+    "cameraType": "ORTHO",
+    "cameraLocation": [
+      84.4188461303711,
+      -20.88406753540039,
+      -9.919485092163086
+    ],
+    "cameraRotationEuler": [
+      -1.445556402206421,
+      1.6339079422778013e-07,
+      -1.7750505208969116
+    ],
+    "orthographicScale": 71.25691223144531
+  },
+  "cells": [
+    {
+      "label": "lod-00-r1.00",
+      "requestedRatio": 1.0,
+      "vertexCount": 989,
+      "faceCount": 1037,
+      "render": "lod-00-r1.00.png"
+    }
+  ],
+  "claimCeiling": "Geometry-source inspection only. These renders do not establish generator behavior."
+}

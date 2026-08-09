@@ -1,0 +1,74 @@
+{
+  "schema": "kaminos.nonlinear_basin_threshold_assay.v0",
+  "title": "Authored envelope density and structure threshold assay",
+  "campaignQuestion": "Where does FLUX preservation of an authored bauplan change nonlinearly as representation density and anatomical organization are independently degraded?",
+  "firstInformativeResult": "Five camera-identical density cells at one short prompt and one fixed seed.",
+  "densityAxis": {
+    "manifest": "resolution-ladder/manifest.json",
+    "cells": [
+      {
+        "id": "r100",
+        "source": "resolution-ladder/lod-00-r1.00.png",
+        "sha256": "5ee43c8e50f9e5eb29c73d4b5423ebea105e5cf41f0e0c41ad24dcdfa4a4b3b1",
+        "triangleCount": 2070,
+        "role": "positive control"
+      },
+      {
+        "id": "r075",
+        "source": "resolution-ladder/lod-01-r0.75.png",
+        "sha256": "caaafd1aee1b6364faeb8d83c8d5a07a2219b5c84f0cf1954e923eaf6d024f16",
+        "triangleCount": 1539,
+        "role": "coherent resolution reduction"
+      },
+      {
+        "id": "r050",
+        "source": "resolution-ladder/lod-02-r0.50.png",
+        "sha256": "296134b30922ab7191bac50d28505f32e819cc71ee2a3fedcbd5e858d33cd025",
+        "triangleCount": 1025,
+        "role": "coherent resolution reduction"
+      },
+      {
+        "id": "r030",
+        "source": "resolution-ladder/lod-03-r0.30.png",
+        "sha256": "611a2ac8922b5a67864d90ed800b31bb8c5c3e6da19843d2a8dc9936a328b8e8",
+        "triangleCount": 615,
+        "role": "transition where density loss begins to damage structure"
+      },
+      {
+        "id": "r015",
+        "source": "resolution-ladder/lod-04-r0.15.png",
+        "sha256": "a432135da3d09d0c8464098683a118ce62998593ac271006c8b1e11c1a0eca28",
+        "triangleCount": 307,
+        "role": "known structural-breakdown control"
+      }
+    ]
+  },
+  "structureAxis": {
+    "status": "awaiting two operator-authored derivatives",
+    "brief": "operator-structure-variants.md",
+    "historicalRevisionEvidence": "structural-ladder/operator-inspection.html",
+    "historicalRevisionDisposition": "Provenance only. The revisions are not visibly monotonic enough to claim a controlled quality ladder."
+  },
+  "prompt": {
+    "path": "prompts/fur.txt",
+    "text": "This shape covered in fur.",
+    "role": "short deformable-surface elaboration probe with prior successful morphology registration"
+  },
+  "seed": 80301,
+  "route": {
+    "requestedJobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "interpretation": {
+    "primaryRead": "Compare survival of cranial direction, neck-to-scapula transition, trunk proportions, pelvic mass, rear limb chain, feet, and tail root against the matched source cell.",
+    "nonlinearSignal": "A sharp preservation change between adjacent density cells, rather than a smooth loss of incidental detail.",
+    "claimCeiling": "This pass can locate a candidate density threshold for one prompt, seed, route, camera, and authored envelope. It cannot establish a universal polygon threshold or separate density from structure in r030 and r015.",
+    "nextPredicate": "Run the fixed-density structure axis next. Cross one structure variant with r050 only if both independent axes produce distinguishable effects."
+  }
+}

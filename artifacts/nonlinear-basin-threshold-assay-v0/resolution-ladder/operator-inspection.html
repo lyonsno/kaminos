@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authored Envelope Resolution Ladder</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #181c1b; color: #eef2ef; }
+    main { max-width: 1500px; margin: 0 auto; padding: 28px; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    p { margin: 0 0 24px; color: #aeb8b2; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    figure { margin: 0; background: #202524; border: 1px solid #343b38; border-radius: 6px; overflow: hidden; }
+    img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #1d2220; }
+    figcaption { padding: 12px 14px 14px; font-weight: 650; }
+    small { display: block; margin-top: 3px; color: #9ca7a1; font-weight: 450; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Authored envelope resolution ladder</h1>
+    <p>Same evaluated source, transform, material, camera, and lighting. No generator outputs.</p>
+    <section class="grid">
+      <figure><img src="lod-00-r1.00.png"><figcaption>Baseline<small>989 vertices · 2,070 triangles · positive control</small></figcaption></figure>
+      <figure><img src="lod-01-r0.75.png"><figcaption>75% collapse target<small>732 vertices · 1,539 triangles · coherent LOD</small></figcaption></figure>
+      <figure><img src="lod-02-r0.50.png"><figcaption>50% collapse target<small>475 vertices · 1,025 triangles · coherent LOD</small></figcaption></figure>
+      <figure><img src="lod-03-r0.30.png"><figcaption>30% collapse target<small>270 vertices · 615 triangles · transition cell</small></figcaption></figure>
+      <figure><img src="lod-04-r0.15.png"><figcaption>15% collapse target<small>116 vertices · 307 triangles · breakdown control</small></figcaption></figure>
+    </section>
+  </main>
+</body>
+</html>

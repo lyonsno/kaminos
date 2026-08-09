@@ -1,0 +1,24 @@
+{
+  "name": "lod-01-r0.75",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "2fe821d07bbf",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/nonlinear-basin-threshold-assay-v0/resolution-ladder/lod-01-r0.75.png",
+  "input_name": "lod-01-r0.75.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/nonlinear-basin-threshold-assay-v0/prompts/fur.txt",
+    "seed": "80301",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786271405.5020921,
+  "duration_s": 34.1
+}

@@ -1,0 +1,74 @@
+{
+  "schema": "kaminos.decimation-ladder.v1",
+  "source": {
+    "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-025.blend",
+    "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-025.blend",
+    "sha256": "ba04387f9e20c47a297450b0cc93747ae2f5918d5ab48a39820273c871b5ef48",
+    "object": "Cube.056",
+    "evaluatedVertexCount": 989,
+    "evaluatedPolygonCount": 1037,
+    "evaluatedTriangleCount": 2070
+  },
+  "render": {
+    "engine": "BLENDER_WORKBENCH",
+    "resolution": [
+      768,
+      768
+    ],
+    "cameraType": "ORTHO",
+    "cameraLocation": [
+      84.4188461303711,
+      -20.88406753540039,
+      -9.919485092163086
+    ],
+    "cameraRotationEuler": [
+      -1.445556402206421,
+      1.6339079422778013e-07,
+      -1.7750505208969116
+    ],
+    "orthographicScale": 71.25691223144531
+  },
+  "cells": [
+    {
+      "label": "lod-00-r1.00",
+      "requestedRatio": 1.0,
+      "vertexCount": 989,
+      "polygonCount": 1037,
+      "triangleCount": 2070,
+      "render": "lod-00-r1.00.png"
+    },
+    {
+      "label": "lod-01-r0.75",
+      "requestedRatio": 0.75,
+      "vertexCount": 732,
+      "polygonCount": 1539,
+      "triangleCount": 1539,
+      "render": "lod-01-r0.75.png"
+    },
+    {
+      "label": "lod-02-r0.50",
+      "requestedRatio": 0.5,
+      "vertexCount": 475,
+      "polygonCount": 1025,
+      "triangleCount": 1025,
+      "render": "lod-02-r0.50.png"
+    },
+    {
+      "label": "lod-03-r0.30",
+      "requestedRatio": 0.3,
+      "vertexCount": 270,
+      "polygonCount": 615,
+      "triangleCount": 615,
+      "render": "lod-03-r0.30.png"
+    },
+    {
+      "label": "lod-04-r0.15",
+      "requestedRatio": 0.15,
+      "vertexCount": 116,
+      "polygonCount": 307,
+      "triangleCount": 307,
+      "render": "lod-04-r0.15.png"
+    }
+  ],
+  "claimCeiling": "Geometry-source inspection only. These renders do not establish generator behavior."
+}

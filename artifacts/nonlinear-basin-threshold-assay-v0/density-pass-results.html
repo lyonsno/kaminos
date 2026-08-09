@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authored envelope density pass</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #111412; color: #edf0e9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #111412; }
+    main { width: min(1520px, calc(100% - 48px)); margin: 0 auto; padding: 42px 0 64px; }
+    h1 { margin: 0 0 12px; font-size: 34px; letter-spacing: 0; }
+    h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: 0; }
+    p { color: #c4cabf; line-height: 1.55; }
+    .lede { max-width: 1050px; font-size: 18px; }
+    .conclusion { margin: 26px 0; padding: 20px 22px; border-left: 5px solid #55c787; background: #19221c; }
+    .conclusion strong { display: block; color: #76dfa0; font-size: 19px; margin-bottom: 5px; }
+    .settings { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 24px; padding: 20px 0 30px; border-bottom: 1px solid #394039; }
+    .prompt { font-size: 23px; color: #fff1be; }
+    .facts, code { color: #919b91; font-size: 13px; }
+    code { display: block; margin-top: 8px; overflow-wrap: anywhere; }
+    .result-row { display: grid; grid-template-columns: minmax(0, 1fr) 42px minmax(0, 1fr); gap: 22px; align-items: center; padding: 34px 0; border-bottom: 1px solid #303730; }
+    .source-pane, .output-pane { min-width: 0; }
+    .eyebrow { color: #e8bc55; font-weight: 750; font-size: 13px; margin-bottom: 10px; }
+    img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: #202420; border: 1px solid #353b35; }
+    .arrow { color: #55c787; font-size: 34px; text-align: center; }
+    .limit { margin-top: 32px; padding: 20px 22px; background: #211d17; border-left: 5px solid #dda552; }
+    .failures { margin-top: 34px; color: #aab1aa; }
+    @media (max-width: 760px) {
+      main { width: min(100% - 24px, 1520px); padding-top: 24px; }
+      .settings, .result-row { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Authored envelope density pass</h1>
+  <p class="lede">Where does FLUX preservation of an authored bauplan change nonlinearly as representation density and anatomical organization are independently degraded?</p>
+  <div class="conclusion"><strong>Density is not the limiting variable across the useful range.</strong>The same fur-bearing organism basin survives from 2,070 through 615 triangles; first clear local anatomical collapse appears at 307 triangles.</div>
+  <section class="settings">
+    <div><h2>Prompt</h2><div class="prompt">“This shape covered in fur.”</div><p>No exclusion clause.</p></div>
+    <div><h2>Frozen route</h2><p>FLUX.2 Klein 9B · seed 80301 · 512×512 · 8 steps · guidance 1.0 · quantization 4. Every row changes only the authenticated source plate.</p></div>
+  </section>
+
+            <section class="result-row" id="r100">
+              <div class="source-pane">
+                <div class="eyebrow">SOURCE · r100</div>
+                <img src="resolution-ladder/lod-00-r1.00.png" alt="r100 authored envelope source">
+                <div class="facts">2,070 triangles · positive control</div>
+                <code>resolution-ladder/lod-00-r1.00.png</code>
+              </div>
+              <div class="arrow" aria-hidden="true">→</div>
+              <div class="output-pane">
+                <div class="eyebrow">FLUX OUTPUT · HAPPY / SAFE</div>
+                <img src="runs/r100-seed80301/output.png" alt="r100 FLUX output">
+                <p>Positive control. Happy fur-bearing quadruped; authored mass, stance, neck, head, feet, and tail organization survive.</p>
+                <div class="facts">SSIM vs r100: 1.000000 · job 1d00bb515202</div>
+                <code>runs/r100-seed80301/output.png</code>
+              </div>
+            </section>
+
+            <section class="result-row" id="r075">
+              <div class="source-pane">
+                <div class="eyebrow">SOURCE · r075</div>
+                <img src="resolution-ladder/lod-01-r0.75.png" alt="r075 authored envelope source">
+                <div class="facts">1,539 triangles · coherent resolution reduction</div>
+                <code>resolution-ladder/lod-01-r0.75.png</code>
+              </div>
+              <div class="arrow" aria-hidden="true">→</div>
+              <div class="output-pane">
+                <div class="eyebrow">FLUX OUTPUT · HAPPY / SAFE</div>
+                <img src="runs/r075-seed80301/output.png" alt="r075 FLUX output">
+                <p>No meaningful basin change. The generated organism is nearly identical to the positive control.</p>
+                <div class="facts">SSIM vs r100: 0.983205 · job 2fe821d07bbf</div>
+                <code>runs/r075-seed80301/output.png</code>
+              </div>
+            </section>
+
+            <section class="result-row" id="r050">
+              <div class="source-pane">
+                <div class="eyebrow">SOURCE · r050</div>
+                <img src="resolution-ladder/lod-02-r0.50.png" alt="r050 authored envelope source">
+                <div class="facts">1,025 triangles · coherent resolution reduction</div>
+                <code>resolution-ladder/lod-02-r0.50.png</code>
+              </div>
+              <div class="arrow" aria-hidden="true">→</div>
+              <div class="output-pane">
+                <div class="eyebrow">FLUX OUTPUT · HAPPY / SAFE</div>
+                <img src="runs/r050-seed80301/output.png" alt="r050 FLUX output">
+                <p>Same organism basin and macro-organization. Only slight distal rear-support variation is visible.</p>
+                <div class="facts">SSIM vs r100: 0.967359 · job 35a69d6d9df7</div>
+                <code>runs/r050-seed80301/output.png</code>
+              </div>
+            </section>
+
+            <section class="result-row" id="r030">
+              <div class="source-pane">
+                <div class="eyebrow">SOURCE · r030</div>
+                <img src="resolution-ladder/lod-03-r0.30.png" alt="r030 authored envelope source">
+                <div class="facts">615 triangles · transition where density loss begins to damage structure</div>
+                <code>resolution-ladder/lod-03-r0.30.png</code>
+              </div>
+              <div class="arrow" aria-hidden="true">→</div>
+              <div class="output-pane">
+                <div class="eyebrow">FLUX OUTPUT · HAPPY / SAFE</div>
+                <img src="runs/r030-seed80301/output.png" alt="r030 FLUX output">
+                <p>Still the same basin at 615 triangles. Local variation increases, but the authored macro-structure remains legible.</p>
+                <div class="facts">SSIM vs r100: 0.954667 · job 18fabe78b3d0</div>
+                <code>runs/r030-seed80301/output.png</code>
+              </div>
+            </section>
+
+            <section class="result-row" id="r015">
+              <div class="source-pane">
+                <div class="eyebrow">SOURCE · r015</div>
+                <img src="resolution-ladder/lod-04-r0.15.png" alt="r015 authored envelope source">
+                <div class="facts">307 triangles · known structural-breakdown control</div>
+                <code>resolution-ladder/lod-04-r0.15.png</code>
+              </div>
+              <div class="arrow" aria-hidden="true">→</div>
+              <div class="output-pane">
+                <div class="eyebrow">FLUX OUTPUT · HAPPY / SAFE</div>
+                <img src="runs/r015-seed80301/output.png" alt="r015 FLUX output">
+                <p>First clear local breakdown. Cranial and distal support specificity collapse, although the global quadruped body plan survives.</p>
+                <div class="facts">SSIM vs r100: 0.868015 · job 9bcf635d1bb0</div>
+                <code>runs/r015-seed80301/output.png</code>
+              </div>
+            </section>
+
+  <aside class="limit"><strong>Causal limit.</strong> The 615- and 307-triangle cells increasingly conflate polygon reduction with loss of authored structural organization. This pass therefore does not establish a universal polygon threshold. It establishes that ordinary decimation is surprisingly cheap through 615 triangles on this route, and motivates a separate same-density structural-quality assay.</aside>
+  <p class="failures">Audit note: five malformed launch attempts passed the source directory rather than an image and failed before inference. They remain recorded in <code>density-pass-ledger.json</code> with zero visual authority.</p>
+</main>
+</body>
+</html>
