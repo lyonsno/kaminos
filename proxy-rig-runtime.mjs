@@ -94,19 +94,54 @@ function rotationFromQuaternion(value) {
   ];
 }
 
+const IDENTITY3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+
+function multiplyRotation(a, b) {
+  return [0, 1, 2].map(row => [0, 1, 2].map(column => (
+    a[row][0] * b[0][column] + a[row][1] * b[1][column] + a[row][2] * b[2][column]
+  )));
+}
+
+function rotateVector(rotation, value) {
+  return [0, 1, 2].map(row => (
+    rotation[row][0] * value[0] + rotation[row][1] * value[1] + rotation[row][2] * value[2]
+  ));
+}
+
+function hierarchyTransforms(groups, pose) {
+  const indexByName = new Map(groups.map((group, index) => [group.name, index]));
+  const cache = new Array(groups.length);
+  const resolve = index => {
+    if (cache[index]) return cache[index];
+    const group = groups[index];
+    const spec = pose[group.name];
+    const rotation = spec
+      ? (spec.quaternion
+        ? rotationFromQuaternion(spec.quaternion)
+        : rotationFromAxisAngle(spec.axis, spec.angleDeg))
+      : IDENTITY3;
+    const pivot = spec?.pivot ?? group.pivot;
+    const rotatedPivot = rotateVector(rotation, pivot);
+    const localTranslation = pivot.map((value, axis) => value - rotatedPivot[axis]);
+    if (group.parent === null || group.parent === undefined) {
+      cache[index] = { rotation, translation: localTranslation };
+      return cache[index];
+    }
+    const parent = resolve(indexByName.get(group.parent));
+    const carriedTranslation = rotateVector(parent.rotation, localTranslation);
+    cache[index] = {
+      rotation: multiplyRotation(parent.rotation, rotation),
+      translation: carriedTranslation.map((value, axis) => value + parent.translation[axis]),
+    };
+    return cache[index];
+  };
+  return groups.map((_, index) => resolve(index));
+}
+
 // pose: { [groupName]: { quaternion: [x,y,z,w] | axis + angleDeg, pivot?: override } }
 export function poseEnvelope({ envelopeInCastFrame, skinBinding, pose }) {
   const { weightGroups, weightValues, neighbors, groups } = skinBinding;
-  const transforms = groups.map(group => {
-    const spec = pose[group.name];
-    if (!spec) return null;
-    return {
-      rotation: spec.quaternion
-        ? rotationFromQuaternion(spec.quaternion)
-        : rotationFromAxisAngle(spec.axis, spec.angleDeg),
-      pivot: spec.pivot ?? group.pivot,
-    };
-  });
+  const transforms = hierarchyTransforms(groups, pose);
   const vertexCount = envelopeInCastFrame.positions.length / 3;
   const posed = envelopeInCastFrame.positions.slice();
   for (let v = 0; v < vertexCount; v += 1) {
@@ -117,11 +152,9 @@ export function poseEnvelope({ envelopeInCastFrame, skinBinding, pose }) {
       const w = weightValues[v * neighbors + k];
       const t = g >= 0 ? transforms[g] : null;
       if (!t) { ox += w * px; oy += w * py; oz += w * pz; continue; }
-      const [cx, cy, cz] = t.pivot;
-      const x = px - cx; const y = py - cy; const z = pz - cz;
-      ox += w * (t.rotation[0][0] * x + t.rotation[0][1] * y + t.rotation[0][2] * z + cx);
-      oy += w * (t.rotation[1][0] * x + t.rotation[1][1] * y + t.rotation[1][2] * z + cy);
-      oz += w * (t.rotation[2][0] * x + t.rotation[2][1] * y + t.rotation[2][2] * z + cz);
+      ox += w * (t.rotation[0][0] * px + t.rotation[0][1] * py + t.rotation[0][2] * pz + t.translation[0]);
+      oy += w * (t.rotation[1][0] * px + t.rotation[1][1] * py + t.rotation[1][2] * pz + t.translation[1]);
+      oz += w * (t.rotation[2][0] * px + t.rotation[2][1] * py + t.rotation[2][2] * pz + t.translation[2]);
     }
     posed[v * 3] = ox; posed[v * 3 + 1] = oy; posed[v * 3 + 2] = oz;
   }
@@ -264,8 +297,39 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
     if (names.has(group.name)) fail(`skin binding group name ${group.name} is duplicated`);
     names.add(group.name);
     requireArray(group.pivot, `skin binding group ${group.name} pivot`, { length: 3 });
-    return { name: group.name, pivot: Array.from(group.pivot, Number) };
+    if (group.parent !== undefined && group.parent !== null
+      && (typeof group.parent !== 'string' || !group.parent.trim())) {
+      fail(`skin binding group ${group.name} parent must be a control name or null`);
+    }
+    if (group.sourceBones !== undefined
+      && (!Array.isArray(group.sourceBones) || group.sourceBones.some(name => typeof name !== 'string' || !name.trim()))) {
+      fail(`skin binding group ${group.name} source bones must be control-source names`);
+    }
+    return {
+      name: group.name,
+      pivot: Array.from(group.pivot, Number),
+      parent: group.parent ?? null,
+      ...(group.sourceBones ? { sourceBones: [...group.sourceBones] } : {}),
+      ...(group.pivotDerivation ? { pivotDerivation: String(group.pivotDerivation) } : {}),
+    };
   });
+  const byName = new Map(groups.map(group => [group.name, group]));
+  for (const group of groups) {
+    if (group.parent !== null && !byName.has(group.parent)) {
+      fail(`skin binding group ${group.name} parent ${group.parent} is missing`);
+    }
+  }
+  const visited = new Set();
+  const active = new Set();
+  const visit = group => {
+    if (active.has(group.name)) fail(`skin binding control hierarchy contains a cycle at ${group.name}`);
+    if (visited.has(group.name)) return;
+    active.add(group.name);
+    if (group.parent !== null) visit(byName.get(group.parent));
+    active.delete(group.name);
+    visited.add(group.name);
+  };
+  groups.forEach(visit);
   const weightCount = envelopeVertexCount * skinInput.neighbors;
   requireArray(skinInput.weightGroups, 'skin binding weight groups', { length: weightCount });
   requireArray(skinInput.weightValues, 'skin binding weight values', { length: weightCount });

@@ -115,6 +115,25 @@ test('skin weights must be nonnegative and normalized per envelope vertex', () =
   }
 });
 
+test('control hierarchy rejects missing parents and cycles before the rig goes live', () => {
+  const missingParent = toyPackage();
+  missingParent.skinBinding.groups[0].parent = 'missing';
+  assert.throws(
+    () => runtime.createProxyRigEvaluator(missingParent),
+    /parent missing/i,
+  );
+
+  const cyclic = toyPackage();
+  cyclic.skinBinding.groups = [
+    { name: 'a', pivot: [0, 0, 0], parent: 'b' },
+    { name: 'b', pivot: [1, 0, 0], parent: 'a' },
+  ];
+  assert.throws(
+    () => runtime.createProxyRigEvaluator(cyclic),
+    /cycle/i,
+  );
+});
+
 test('package arrays reject coercible JSON values rather than silently changing geometry', () => {
   for (const value of [null, '1', '']) {
     const malformed = toyPackage({
@@ -225,4 +244,27 @@ test('attaching a selected control preserves hidden witness isolation', () => {
   assert.equal(transformControls.visible, false);
   assert.equal(helper.visible, false);
   assert.equal(controls[0].visible, false);
+});
+
+test('friendly labels are visible and identity-preserving for every nonblank accepted control name', () => {
+  const invisibleName = '\u200B';
+  const pkg = toyPackage();
+  pkg.skinBinding.groups = [{ name: invisibleName, pivot: [0, 0, 0] }];
+  assert.doesNotThrow(() => runtime.createProxyRigEvaluator(pkg));
+
+  assert.equal(typeof liveHost.proxyRigControlOptionDescriptor, 'function');
+  assert.deepEqual(liveHost.proxyRigControlOptionDescriptor('arm--tip'), {
+    value: 'arm--tip',
+    title: 'arm--tip',
+    label: 'Arm Tip',
+  });
+  assert.equal(liveHost.proxyRigControlOptionDescriptor('-arm-').label, 'Arm');
+  assert.equal(liveHost.proxyRigControlOptionDescriptor('-').label, '-');
+  assert.equal(liveHost.proxyRigControlOptionDescriptor('--').label, '--');
+  assert.equal(liveHost.proxyRigControlOptionDescriptor(' - ').label, '-');
+
+  const invisible = liveHost.proxyRigControlOptionDescriptor(invisibleName);
+  assert.equal(invisible.value, invisibleName);
+  assert.equal(invisible.title, invisibleName);
+  assert.match(invisible.label, /[^\p{Z}\p{Cc}\p{Cf}]/u);
 });

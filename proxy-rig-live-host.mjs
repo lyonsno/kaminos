@@ -20,6 +20,33 @@ function shortId(value) {
   return value?.startsWith('sha256:') ? `${value.slice(0, 15)}...${value.slice(-6)}` : String(value || 'missing');
 }
 
+function controlNameFallback(name) {
+  const codePoints = Array.from(name, character => (
+    `U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`
+  ));
+  return `Control ${codePoints.join(' ')}`;
+}
+
+function controlLabel(name) {
+  const hindlimb = name.match(/^hindlimb-(left|right)-(hip|stifle|hock|paw)$/);
+  if (hindlimb) return `${hindlimb[1][0].toUpperCase()}${hindlimb[1].slice(1)} hindlimb - ${hindlimb[2][0].toUpperCase()}${hindlimb[2].slice(1)}`;
+  const friendly = name.split('-')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+  const candidate = friendly || name.trim();
+  return /[^\p{Z}\p{Cc}\p{Cf}]/u.test(candidate) ? candidate : controlNameFallback(name);
+}
+
+export function proxyRigControlOptionDescriptor(name) {
+  return {
+    value: name,
+    title: name,
+    label: controlLabel(name),
+  };
+}
+
 export function proxyRigRenderIdentity(THREE, renderer) {
   return {
     renderBackend: renderer.backend?.constructor?.name ?? 'unknown',
@@ -114,6 +141,11 @@ export function createProxyRigLiveHost({
       runtimeSchema: state.runtimeSchema,
       source: state.source ? { ...state.source } : null,
       controls: [...state.controls.keys()],
+      hierarchy: state.evaluator?.groups.map(group => ({ name: group.name, parent: group.parent })) ?? [],
+      controlWorldPositions: Object.fromEntries([...state.controls].map(([name, control]) => [
+        name,
+        control.getWorldPosition(new THREE.Vector3()).toArray(),
+      ])),
       controlsVisible: state.controlsVisible,
       transformHelperVisible: transformControls.getHelper?.().visible ?? transformControls.visible,
       selectedControl: state.selectedControl,
@@ -374,7 +406,6 @@ export function createProxyRigLiveHost({
       state.evaluator.groups.forEach((group, index) => {
         const control = new THREE.Object3D();
         control.name = `Proxy control ${group.name}`;
-        control.position.fromArray(group.pivot);
         const handleMaterial = new THREE.MeshStandardMaterial({
           color: colors[index % colors.length],
           emissive: colors[index % colors.length],
@@ -389,8 +420,20 @@ export function createProxyRigLiveHost({
         control.userData.proxyRigControlName = group.name;
         control.add(handle);
         state.controls.set(group.name, control);
-        state.root.add(control);
       });
+      for (const group of state.evaluator.groups) {
+        const control = state.controls.get(group.name);
+        if (group.parent) {
+          const parent = state.controls.get(group.parent);
+          control.position.fromArray(group.pivot).sub(new THREE.Vector3().fromArray(
+            state.evaluator.groups.find(candidate => candidate.name === group.parent).pivot,
+          ));
+          parent.add(control);
+        } else {
+          control.position.fromArray(group.pivot);
+          state.root.add(control);
+        }
+      }
       state.root.scale.setScalar(displayScale);
       state.root.position.copy(center).multiplyScalar(-displayScale);
       scene.add(state.root);
@@ -400,15 +443,17 @@ export function createProxyRigLiveHost({
 
       if (controlSelect) {
         controlSelect.replaceChildren(...[...state.controls.keys()].map(name => {
+          const descriptor = proxyRigControlOptionDescriptor(name);
           const option = document.createElement('option');
-          option.value = name;
-          option.textContent = name;
+          option.value = descriptor.value;
+          option.textContent = descriptor.label;
+          option.title = descriptor.title;
           return option;
         }));
       }
       state.status = 'live';
       restorePoseRun();
-      selectControl(state.controls.has('forelimb-right') ? 'forelimb-right' : state.controls.keys().next().value);
+      selectControl(state.controls.has('hindlimb-right-hock') ? 'hindlimb-right-hock' : state.controls.keys().next().value);
       evaluate(false);
       setInfo(`Live proxy rig: ${shortId(state.packageId)}`);
       updateUi();

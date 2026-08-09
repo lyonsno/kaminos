@@ -16,9 +16,43 @@ const packagePath = process.env.PROXY_RIG_PACKAGE_PATH
   || 'artifacts/cast-correspondence-v0/rig-packages/cast-sf3d-skin-baseline.proxy-rig.json';
 const packageDiskPath = resolve(repoRoot, packagePath);
 const route = `${baseUrl}/?proxy_rig_package=${encodeURIComponent(packagePath)}`;
+const quaternionZ = angleDeg => {
+  const halfAngle = angleDeg * Math.PI / 360;
+  return [0, 0, Math.sin(halfAngle), Math.cos(halfAngle)];
+};
+const hierarchyPoses = {
+  planted: {
+    'hindlimb-right-hip': quaternionZ(8),
+    'hindlimb-right-stifle': quaternionZ(-18),
+    'hindlimb-right-hock': quaternionZ(20),
+    'hindlimb-right-paw': quaternionZ(-8),
+  },
+  crouched: {
+    'hindlimb-right-hip': quaternionZ(-20),
+    'hindlimb-right-stifle': quaternionZ(24),
+    'hindlimb-right-hock': quaternionZ(-16),
+    'hindlimb-right-paw': quaternionZ(5),
+  },
+  extended: {
+    'hindlimb-right-hip': quaternionZ(16),
+    'hindlimb-right-stifle': quaternionZ(-48),
+    'hindlimb-right-hock': quaternionZ(38),
+    'hindlimb-right-paw': quaternionZ(10),
+  },
+};
+let expectedControlNames = [];
+let expectedHierarchy = [];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function assertLivePackageIdentity(state, expectedPackageId, label) {
+  assert(/^sha256:[a-f0-9]{64}$/.test(state.packageId), `${label}: package id is not a sha256 identity`);
+  assert(
+    state.packageId === expectedPackageId,
+    `${label}: live package id ${state.packageId} differs from fresh source package ${expectedPackageId}`,
+  );
 }
 
 async function pixelStats(page, imageBuffer) {
@@ -141,8 +175,15 @@ async function loadWitnessPage(browser, viewport, label) {
   const state = await page.evaluate(() => window.kaminosProxyRigDebugState());
   assert(state.requestedPackagePath === packagePath, `${label}: requested package identity was not preserved`);
   assert(state.effectivePackagePath.endsWith(packagePath), `${label}: effective package identity was not preserved`);
-  assert(/^sha256:[a-f0-9]{64}$/.test(state.packageId), `${label}: package id is not a sha256 identity`);
-  assert(state.controls.length === 7, `${label}: expected seven controls, got ${state.controls.length}`);
+  assertLivePackageIdentity(state, report.expectedPackageId, label);
+  assert(
+    JSON.stringify(state.controls) === JSON.stringify(expectedControlNames),
+    `${label}: controls differ from the verified package (${JSON.stringify(state.controls)})`,
+  );
+  assert(
+    JSON.stringify(state.hierarchy) === JSON.stringify(expectedHierarchy),
+    `${label}: live hierarchy differs from the verified package (${JSON.stringify(state.hierarchy)})`,
+  );
   assert(state.error === null, `${label}: live state contains an error: ${state.error}`);
   const panelBox = await page.locator('#proxy-rig-live-controls').boundingBox();
   const viewportBox = await page.locator('#viewport').boundingBox();
@@ -161,6 +202,7 @@ const report = {
   narrow: null,
   missingPackage: null,
   storageDenied: null,
+  hierarchyPoses: null,
   status: 'running',
   failurePhase: null,
   lastTrustworthyEvidence: null,
@@ -194,6 +236,21 @@ try {
   ]);
   await verifyProxyRigPackageIdentity(checkedPackage);
   await verifyProxyRigPackageIdentity(freshPackage);
+  expectedControlNames = checkedPackage.skinBinding.groups.map(group => group.name);
+  expectedHierarchy = checkedPackage.skinBinding.groups.map(group => ({
+    name: group.name,
+    parent: group.parent ?? null,
+  }));
+  assert(expectedControlNames.length === 10, `expected ten controls, got ${expectedControlNames.length}`);
+  assert(
+    JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-right'))) === JSON.stringify([
+      { name: 'hindlimb-right-hip', parent: null },
+      { name: 'hindlimb-right-stifle', parent: 'hindlimb-right-hip' },
+      { name: 'hindlimb-right-hock', parent: 'hindlimb-right-stifle' },
+      { name: 'hindlimb-right-paw', parent: 'hindlimb-right-hock' },
+    ]),
+    `verified package does not carry the preregistered hindlimb chain (${JSON.stringify(expectedHierarchy)})`,
+  );
   report.expectedPackageId = freshPackage.packageId;
   assert(
     checkedPackage.packageId === freshPackage.packageId,
@@ -244,6 +301,7 @@ try {
   await storageDeniedPage.goto(route, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await storageDeniedPage.waitForFunction(() => window.kaminosProxyRigDebugState?.().status === 'live', null, { timeout: 60000 });
   const storageDeniedState = await storageDeniedPage.evaluate(() => window.kaminosProxyRigDebugState());
+  assertLivePackageIdentity(storageDeniedState, report.expectedPackageId, 'storage denied');
   assert(storageDeniedState.effectivePackagePath.endsWith(packagePath), 'storage denied: effective package route was lost');
   assert(/simulated storage read denial/i.test(storageDeniedState.storageError), 'storage denied: degraded persistence was not surfaced');
   assert(storageDeniedState.error === null, `storage denied: live rig reported route error (${storageDeniedState.error})`);
@@ -271,6 +329,41 @@ try {
   const restStats = await pixelStats(desktop.page, restCanvas);
   assert(restStats.variance > 20, `desktop: rest canvas is visually blank (${JSON.stringify(restStats)})`);
   await desktop.page.screenshot({ path: resolve(outputDir, 'proxy-rig-rest-page.png'), fullPage: true });
+
+  report.failurePhase = 'hindlimb-hierarchy-poses';
+  report.hierarchyPoses = {};
+  for (const [poseName, controls] of Object.entries(hierarchyPoses)) {
+    await desktop.page.locator('#proxy-rig-reset-all').click();
+    for (const [controlName, quaternion] of Object.entries(controls)) {
+      await desktop.page.evaluate(({ name, value }) => {
+        window.kaminosProxyRigSetControlQuaternion(name, value);
+      }, { name: controlName, value: quaternion });
+    }
+    await desktop.page.waitForTimeout(350);
+    const poseState = await desktop.page.evaluate(() => window.kaminosProxyRigDebugState());
+    assert(poseState.maxDisplacement > 0.005, `${poseName}: hierarchy pose did not move the cast`);
+    const poseCanvas = await canvas.screenshot({
+      path: resolve(outputDir, `proxy-rig-hindlimb-${poseName}-canvas.png`),
+    });
+    const stats = await pixelStats(desktop.page, poseCanvas);
+    const delta = await pixelDelta(desktop.page, restCanvas, poseCanvas);
+    assert(stats.variance > 20, `${poseName}: hierarchy canvas is visually blank (${JSON.stringify(stats)})`);
+    assert(
+      delta.changedPixelFraction > 0.0005 && delta.meanAbsoluteRgbDelta > 0.02,
+      `${poseName}: hierarchy pose did not materially differ from rest (${JSON.stringify(delta)})`,
+    );
+    report.hierarchyPoses[poseName] = { controls, state: poseState, pixelStats: stats, renderedPoseDelta: delta };
+    const restPaw = hiddenRestState.controlWorldPositions['hindlimb-right-paw'];
+    const posedPaw = poseState.controlWorldPositions['hindlimb-right-paw'];
+    assert(
+      Math.hypot(...posedPaw.map((value, axis) => value - restPaw[axis])) > 0.01,
+      `${poseName}: descendant paw handle did not follow the hierarchy`,
+    );
+  }
+  await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(true));
+  await desktop.page.screenshot({ path: resolve(outputDir, 'proxy-rig-hindlimb-extended-page.png'), fullPage: true });
+  await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(false));
+  await desktop.page.locator('#proxy-rig-reset-all').click();
 
   report.failurePhase = 'desktop-pose';
   const angle = 25 * Math.PI / 180;

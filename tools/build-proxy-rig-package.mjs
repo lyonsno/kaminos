@@ -107,7 +107,8 @@ const packageData = createProxyRigPackage({
     frameLinkReceiptSha256,
     registrationReceipt: 'artifacts/cast-correspondence-v0/receipts/envelope-baseline--cast-sf3d-skin-baseline.json',
     registrationReceiptSha256,
-    effectiveRoute: 'proxy-rig-core.mjs bindEnvelopeToSkeleton + bindCastToEnvelope',
+    effectiveRoute: 'proxy-rig-core.mjs manifest-backed hindlimb hierarchy + bindEnvelopeToSkeleton + bindCastToEnvelope',
+    hierarchyDerivation: 'hindlimb-right instance; largest proximodistal source-geometry gaps; nearest-surface boundary pivots',
   },
 });
 

@@ -58,7 +58,13 @@ export function createProxyRigPackage({
     envelope: serialGeometry(envelopeInCastFrame),
     cast: serialGeometry(cast),
     skinBinding: {
-      groups: skinBinding.groups.map(group => ({ name: group.name, pivot: Array.from(group.pivot) })),
+      groups: skinBinding.groups.map(group => ({
+        name: group.name,
+        pivot: Array.from(group.pivot),
+        parent: group.parent ?? null,
+        ...(group.sourceBones ? { sourceBones: [...group.sourceBones] } : {}),
+        ...(group.pivotDerivation ? { pivotDerivation: group.pivotDerivation } : {}),
+      })),
       neighbors: skinBinding.neighbors,
       weightGroups: Array.from(skinBinding.weightGroups),
       weightValues: Array.from(skinBinding.weightValues),
@@ -85,6 +91,140 @@ export function assertProxyRigArtifactHash(bytes, expectedSha256, label) {
 
 // --- envelope <- skeleton binding ----------------------------------------------
 
+function geometryCentroid(geometry) {
+  const centroid = [0, 0, 0];
+  const count = geometry.positions.length / 3;
+  for (let i = 0; i < geometry.positions.length; i += 3) {
+    centroid[0] += geometry.positions[i];
+    centroid[1] += geometry.positions[i + 1];
+    centroid[2] += geometry.positions[i + 2];
+  }
+  return centroid.map(value => value / count);
+}
+
+function averageCentroid(entries) {
+  return [0, 1, 2].map(axis => (
+    entries.reduce((sum, entry) => sum + entry.centroid[axis], 0) / entries.length
+  ));
+}
+
+function splitAtLargestProjectionGaps(entries, count) {
+  if (entries.length < count) {
+    throw new Error(`derive-hindlimb-chain: ${entries.length} source bones cannot form ${count} segments`);
+  }
+  const sorted = entries.slice().sort((a, b) => a.projection - b.projection || a.bone.name.localeCompare(b.bone.name));
+  const splitAfter = new Set(sorted.slice(0, -1).map((entry, index) => ({
+    index,
+    gap: sorted[index + 1].projection - entry.projection,
+  })).sort((a, b) => b.gap - a.gap || a.index - b.index).slice(0, count - 1).map(value => value.index));
+  const clusters = [[]];
+  sorted.forEach((entry, index) => {
+    clusters.at(-1).push(entry);
+    if (splitAfter.has(index)) clusters.push([]);
+  });
+  return clusters;
+}
+
+function nearestSurfaceBoundary(leftEntries, rightEntries) {
+  let bestDistanceSquared = Infinity;
+  let leftPoint = null;
+  let rightPoint = null;
+  for (const left of leftEntries) {
+    const a = left.bone.geometry.positions;
+    for (const right of rightEntries) {
+      const b = right.bone.geometry.positions;
+      for (let i = 0; i < a.length; i += 3) {
+        for (let j = 0; j < b.length; j += 3) {
+          const distanceSquared = (a[i] - b[j]) ** 2
+            + (a[i + 1] - b[j + 1]) ** 2
+            + (a[i + 2] - b[j + 2]) ** 2;
+          if (distanceSquared < bestDistanceSquared) {
+            bestDistanceSquared = distanceSquared;
+            leftPoint = [a[i], a[i + 1], a[i + 2]];
+            rightPoint = [b[j], b[j + 1], b[j + 2]];
+          }
+        }
+      }
+    }
+  }
+  if (!leftPoint || !rightPoint) throw new Error('derive-hindlimb-chain: no finite segment boundary');
+  return leftPoint.map((value, axis) => (value + rightPoint[axis]) / 2);
+}
+
+export function deriveHindlimbHierarchy({ bones, manifest, broadGroup, side = 'right' }) {
+  const regionOf = bone => manifest.bone_to_region[bone.name] ?? 'unmapped';
+  const members = broadGroup.bones.map(bone => ({
+    bone,
+    region: regionOf(bone),
+    centroid: geometryCentroid(bone.geometry),
+  }));
+  const hindlimb = members.filter(entry => entry.region === 'hindlimb');
+  const pedal = members.filter(entry => entry.region === 'pedal');
+  if (hindlimb.length < 3 || pedal.length < 2) {
+    throw new Error(`derive-hindlimb-chain: ${broadGroup.name} lacks hindlimb/pedal source support`);
+  }
+  const pedalCenter = averageCentroid(pedal);
+  const direction = pedalCenter.map((value, axis) => value - broadGroup.pivot[axis]);
+  const length = Math.hypot(...direction);
+  if (length < 1e-9) throw new Error(`derive-hindlimb-chain: ${broadGroup.name} has no proximodistal extent`);
+  direction.forEach((value, axis) => { direction[axis] = value / length; });
+  for (const entry of members) {
+    entry.projection = entry.centroid.reduce(
+      (sum, value, axis) => sum + (value - broadGroup.pivot[axis]) * direction[axis],
+      0,
+    );
+  }
+
+  const [proximal, middle, distal] = splitAtLargestProjectionGaps(hindlimb, 3);
+  const [proximalPedal, distalPedal] = splitAtLargestProjectionGaps(pedal, 2);
+  const pelvis = bones.filter(bone => regionOf(bone) === 'pelvis').map(bone => ({
+    bone,
+    region: 'pelvis',
+    centroid: geometryCentroid(bone.geometry),
+  }));
+  if (pelvis.length === 0) throw new Error('derive-hindlimb-chain: pelvis attachment source is missing');
+
+  const specifications = [
+    {
+      suffix: 'hip',
+      entries: proximal,
+      pivot: nearestSurfaceBoundary(pelvis, proximal),
+      parent: null,
+      pivotDerivation: 'pelvis/proximal nearest-surface attachment midpoint',
+    },
+    {
+      suffix: 'stifle',
+      entries: middle,
+      pivot: nearestSurfaceBoundary(proximal, middle),
+      parent: `${broadGroup.name}-hip`,
+      pivotDerivation: 'proximal/middle nearest-surface boundary midpoint',
+    },
+    {
+      suffix: 'hock',
+      entries: [...distal, ...proximalPedal],
+      pivot: nearestSurfaceBoundary(middle, distal),
+      parent: `${broadGroup.name}-stifle`,
+      pivotDerivation: 'middle/distal nearest-surface boundary midpoint',
+    },
+    {
+      suffix: 'paw',
+      entries: distalPedal,
+      pivot: nearestSurfaceBoundary(proximalPedal, distalPedal),
+      parent: `${broadGroup.name}-hock`,
+      pivotDerivation: 'proximal/distal pedal nearest-surface boundary midpoint',
+    },
+  ];
+  return specifications.map(specification => ({
+    name: `${broadGroup.name}-${specification.suffix}`,
+    parent: specification.parent,
+    pivot: specification.pivot,
+    bones: specification.entries.map(entry => entry.bone),
+    sourceBones: specification.entries.map(entry => entry.bone.name).sort(),
+    pivotDerivation: specification.pivotDerivation,
+    derivation: `manifest ${broadGroup.name} instance; ${side} side; largest proximodistal source-geometry gaps`,
+  }));
+}
+
 export function bindEnvelopeToSkeleton({
   envelope,
   bones,
@@ -93,7 +233,17 @@ export function bindEnvelopeToSkeleton({
   samplesPerBone = 30,
   neighbors = 2,
 }) {
-  const groups = deriveRefinementGroups(bones, manifest);
+  const broadGroups = deriveRefinementGroups(bones, manifest);
+  const groups = broadGroups.flatMap(group => (
+    group.name === 'hindlimb-right'
+      ? deriveHindlimbHierarchy({ bones, manifest, broadGroup: group, side: 'right' })
+      : [{
+        ...group,
+        parent: null,
+        sourceBones: group.boneNames.slice().sort(),
+        pivotDerivation: 'nearest source-member centroid to core center',
+      }]
+  ));
   // Group control points: bone surface samples carried into cast frame.
   const controls = groups.map(group => {
     const points = [];
@@ -107,6 +257,9 @@ export function bindEnvelopeToSkeleton({
     return {
       name: group.name,
       pivot: applyChain(group.pivot, chainTransforms),
+      parent: group.parent,
+      sourceBones: group.sourceBones,
+      pivotDerivation: group.pivotDerivation,
       points,
     };
   }).filter(g => g.points.length > 0);
@@ -139,7 +292,13 @@ export function bindEnvelopeToSkeleton({
     for (let k = 0; k < neighbors; k += 1) weightValues[v * neighbors + k] /= total;
   }
   return {
-    groups: controls.map(c => ({ name: c.name, pivot: c.pivot })),
+    groups: controls.map(c => ({
+      name: c.name,
+      pivot: c.pivot,
+      parent: c.parent,
+      sourceBones: c.sourceBones,
+      pivotDerivation: c.pivotDerivation,
+    })),
     neighbors,
     weightGroups,
     weightValues,

@@ -60,6 +60,12 @@ test('real SF3D route packages the frozen geometry, bindings, and source identit
   assert.equal(a.cast.positions.length, cast.positions.length);
   assert.equal(a.castBinding.triangle.length, cast.positions.length / 3);
   assert.deepEqual(a.source, input.source);
+  const packagedGroups = new Map(a.skinBinding.groups.map(group => [group.name, group]));
+  assert.equal(packagedGroups.get('hindlimb-right-stifle').parent, 'hindlimb-right-hip');
+  assert.equal(packagedGroups.get('hindlimb-right-hock').parent, 'hindlimb-right-stifle');
+  assert.equal(packagedGroups.get('hindlimb-right-paw').parent, 'hindlimb-right-hock');
+  assert.deepEqual(packagedGroups.get('hindlimb-right-stifle').sourceBones, ['Cube.086', 'Cube.089']);
+  assert.match(packagedGroups.get('hindlimb-right-hock').pivotDerivation, /nearest-surface boundary/i);
 });
 
 test('source artifact bytes must agree with the receipt hash before packaging', () => {
