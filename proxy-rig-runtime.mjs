@@ -4,6 +4,7 @@
 export const PROXY_RIG_RUNTIME_SCHEMA = 'kaminos.proxy-rig-runtime.v0';
 export const PROXY_RIG_PACKAGE_SCHEMA = 'kaminos.proxy-rig-package.v0';
 export const PROXY_POSE_RUN_SCHEMA = 'kaminos.proxy-pose-run.v0';
+export const PROXY_RIG_MUSCLE_SCHEMA = 'kaminos.proxy-rig-muscle.v0';
 
 function fail(message) {
   throw new Error(`Proxy rig package: ${message}`);
@@ -108,6 +109,16 @@ function rotateVector(rotation, value) {
   ));
 }
 
+function transformPoint(transform, value) {
+  const rotated = rotateVector(transform.rotation, value);
+  return rotated.map((component, axis) => component + transform.translation[axis]);
+}
+
+function smoothstep(value) {
+  const bounded = Math.max(0, Math.min(1, value));
+  return bounded * bounded * (3 - 2 * bounded);
+}
+
 function hierarchyTransforms(groups, pose) {
   const indexByName = new Map(groups.map((group, index) => [group.name, index]));
   const cache = new Array(groups.length);
@@ -136,6 +147,39 @@ function hierarchyTransforms(groups, pose) {
     return cache[index];
   };
   return groups.map((_, index) => resolve(index));
+}
+
+function poseMuscle(muscle, groups, pose, packageId) {
+  const transforms = hierarchyTransforms(groups, pose);
+  const groupIndex = new Map(groups.map((group, index) => [group.name, index]));
+  const fixedTransform = transforms[groupIndex.get(muscle.supportMapping.fixed)];
+  const movingTransform = transforms[groupIndex.get(muscle.supportMapping.moving)];
+  const posed = new Float64Array(muscle.positions.length);
+  const transitionSpan = muscle.insertionCapFirstSection - muscle.originCapLastSection;
+  for (let vertex = 0; vertex < muscle.positions.length / 3; vertex += 1) {
+    const point = Array.from(muscle.positions.slice(vertex * 3, vertex * 3 + 3));
+    const section = muscle.sectionIndices[vertex];
+    let amount;
+    if (section <= muscle.originCapLastSection) amount = 0;
+    else if (section >= muscle.insertionCapFirstSection) amount = 1;
+    else amount = smoothstep((section - muscle.originCapLastSection) / transitionSpan);
+    const fixed = transformPoint(fixedTransform, point);
+    const moving = transformPoint(movingTransform, point);
+    for (let axis = 0; axis < 3; axis += 1) {
+      posed[vertex * 3 + axis] = fixed[axis] + amount * (moving[axis] - fixed[axis]);
+    }
+  }
+  return {
+    relationId: muscle.relationId,
+    packageId,
+    requestedRoute: muscle.requestedRoute,
+    effectiveRoute: muscle.effectiveRoute,
+    fallbackUsed: muscle.fallbackUsed,
+    source: { ...muscle.source },
+    supportMapping: { ...muscle.supportMapping },
+    positions: posed,
+    triangles: muscle.triangles,
+  };
 }
 
 // pose: { [groupName]: { quaternion: [x,y,z,w] | axis + angleDeg, pivot?: override } }
@@ -358,6 +402,77 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
   requireIndexArray(castBindingInput.triangle, 'cast binding triangle', envelopeTriangleCount, { length: castVertexCount });
   requireArray(castBindingInput.local, 'cast binding local', { length: castVertexCount * 3 });
 
+  const muscleIds = new Set();
+  const muscles = (pkg.muscles ?? []).map((value, index) => {
+    const muscle = requireObject(value, `muscle ${index}`);
+    if (muscle.schema !== PROXY_RIG_MUSCLE_SCHEMA) fail(`muscle ${index} schema is invalid`);
+    if (typeof muscle.relationId !== 'string' || !muscle.relationId.trim()) fail(`muscle ${index} relation id is required`);
+    if (muscleIds.has(muscle.relationId)) fail(`muscle relation ${muscle.relationId} is duplicated`);
+    muscleIds.add(muscle.relationId);
+    if (typeof muscle.requestedRoute !== 'string' || !muscle.requestedRoute.trim()
+        || muscle.effectiveRoute !== muscle.requestedRoute) {
+      fail(`${muscle.relationId} requested and effective routes must match`);
+    }
+    if (muscle.fallbackUsed !== false) fail(`${muscle.relationId} fallback route is not admissible`);
+    const muscleSource = requireObject(muscle.source, `${muscle.relationId} source`);
+    if (typeof muscleSource.historicalRef !== 'string' || !muscleSource.historicalRef.trim()) {
+      fail(`${muscle.relationId} historical source reference is required`);
+    }
+    for (const key of ['sourceArtifactSha256', 'surfaceGeometrySha256']) {
+      if (typeof muscleSource[key] !== 'string' || !/^[a-f0-9]{64}$/.test(muscleSource[key])) {
+        fail(`${muscle.relationId} source ${key} must be a SHA-256 identity`);
+      }
+    }
+    if (typeof muscleSource.registrationReceiptSha256 !== 'string'
+        || !/^sha256:[a-f0-9]{64}$/.test(muscleSource.registrationReceiptSha256)) {
+      fail(`${muscle.relationId} source registrationReceiptSha256 must be a content identity`);
+    }
+    const supportMapping = requireObject(muscle.supportMapping, `${muscle.relationId} support mapping`);
+    for (const role of ['fixed', 'moving']) {
+      if (typeof supportMapping[role] !== 'string' || !byName.has(supportMapping[role])) {
+        fail(`${muscle.relationId} ${role} support ${String(supportMapping[role])} is missing`);
+      }
+    }
+    if (supportMapping.fixed === supportMapping.moving) fail(`${muscle.relationId} support controls must be distinct`);
+    const sourceRoles = [['fixed', 'fixedSource'], ['moving', 'movingSource']];
+    for (const [role, sourceRole] of sourceRoles) {
+      if (typeof supportMapping[sourceRole] !== 'string'
+          || !byName.get(supportMapping[role]).sourceBones?.includes(supportMapping[sourceRole])) {
+        fail(`${muscle.relationId} ${role} support does not own ${String(supportMapping[sourceRole])}`);
+      }
+    }
+    requireArray(muscle.positions, `${muscle.relationId} positions`, { multipleOf: 3 });
+    const muscleVertexCount = muscle.positions.length / 3;
+    requireIndexArray(muscle.triangles, `${muscle.relationId} triangles`, muscleVertexCount, { multipleOf: 3 });
+    if (!Number.isInteger(muscle.sectionCount) || muscle.sectionCount < 3) {
+      fail(`${muscle.relationId} section count must be at least three`);
+    }
+    requireIndexArray(muscle.sectionIndices, `${muscle.relationId} section indices`, muscle.sectionCount, {
+      length: muscleVertexCount,
+    });
+    if (!Number.isInteger(muscle.originCapLastSection) || muscle.originCapLastSection < 0
+        || !Number.isInteger(muscle.insertionCapFirstSection)
+        || muscle.insertionCapFirstSection >= muscle.sectionCount
+        || muscle.originCapLastSection >= muscle.insertionCapFirstSection - 1) {
+      fail(`${muscle.relationId} attachment cap section bounds are invalid`);
+    }
+    return {
+      schema: muscle.schema,
+      relationId: muscle.relationId,
+      requestedRoute: muscle.requestedRoute,
+      effectiveRoute: muscle.effectiveRoute,
+      fallbackUsed: muscle.fallbackUsed,
+      source: { ...muscleSource },
+      supportMapping: { ...supportMapping },
+      positions: Float64Array.from(muscle.positions),
+      triangles: Uint32Array.from(muscle.triangles),
+      sectionIndices: Uint16Array.from(muscle.sectionIndices),
+      sectionCount: muscle.sectionCount,
+      originCapLastSection: muscle.originCapLastSection,
+      insertionCapFirstSection: muscle.insertionCapFirstSection,
+    };
+  });
+
   return {
     schema: pkg.schema,
     runtimeSchema: pkg.runtimeSchema,
@@ -381,6 +496,7 @@ function hydrateProxyRigPackage(input, expectedPackageId = null) {
       triangle: Int32Array.from(castBindingInput.triangle),
       local: Float64Array.from(castBindingInput.local),
     },
+    muscles,
   };
 }
 
@@ -397,6 +513,16 @@ export function createProxyRigEvaluator(input, {
     runtimeSchema: packageData.runtimeSchema,
     source: packageData.source,
     groups: packageData.skinBinding.groups.map(group => ({ ...group, pivot: [...group.pivot] })),
+    muscles: packageData.muscles.map(muscle => ({
+      relationId: muscle.relationId,
+      requestedRoute: muscle.requestedRoute,
+      effectiveRoute: muscle.effectiveRoute,
+      fallbackUsed: muscle.fallbackUsed,
+      source: { ...muscle.source },
+      supportMapping: { ...muscle.supportMapping },
+      positions: muscle.positions,
+      triangles: muscle.triangles,
+    })),
     cast: packageData.cast,
     evaluate(pose = {}) {
       const posedEnvelope = poseEnvelope({
@@ -409,7 +535,10 @@ export function createProxyRigEvaluator(input, {
         posedEnvelope,
         castBinding: packageData.castBinding,
       });
-      if (!smooth) return posedCast;
+      const posedMuscles = packageData.muscles.map(muscle => poseMuscle(
+        muscle, packageData.skinBinding.groups, pose, packageData.packageId,
+      ));
+      if (!smooth) return { ...posedCast, muscles: posedMuscles };
       return {
         positions: smoothDisplacementField({
           cast: packageData.cast,
@@ -419,6 +548,7 @@ export function createProxyRigEvaluator(input, {
           lambda: smoothingLambda,
         }),
         triangles: packageData.cast.triangles,
+        muscles: posedMuscles,
       };
     },
   };

@@ -63,6 +63,40 @@ export function setProxyRigControlVisibility(controls, transformControls, visibl
   if (helper) helper.visible = transformVisible;
 }
 
+export function proxyRigMuscleOverlayDescriptor(muscle) {
+  return {
+    relationId: muscle.relationId,
+    requestedRoute: muscle.requestedRoute,
+    effectiveRoute: muscle.effectiveRoute,
+    fallbackUsed: muscle.fallbackUsed,
+    historicalRef: muscle.source?.historicalRef ?? null,
+    fixtureId: muscle.source?.fixtureId ?? null,
+    fixedSupport: muscle.supportMapping?.fixed ?? null,
+    movingSupport: muscle.supportMapping?.moving ?? null,
+  };
+}
+
+export function setProxyRigMuscleVisibility(meshes, visible) {
+  for (const mesh of meshes) mesh.visible = Boolean(visible);
+}
+
+export function proxyRigMaximumVertexDisplacement(restPositions, posedPositions) {
+  if (!restPositions || !posedPositions
+      || restPositions.length !== posedPositions.length
+      || restPositions.length % 3 !== 0) {
+    throw new Error('Muscle displacement requires matching xyz arrays');
+  }
+  let maximum = 0;
+  for (let index = 0; index < restPositions.length; index += 3) {
+    maximum = Math.max(maximum, Math.hypot(
+      posedPositions[index] - restPositions[index],
+      posedPositions[index + 1] - restPositions[index + 1],
+      posedPositions[index + 2] - restPositions[index + 2],
+    ));
+  }
+  return maximum;
+}
+
 export function attachProxyRigTransformControl(controls, transformControls, control, visible) {
   transformControls.detach();
   transformControls.attach(control);
@@ -110,6 +144,9 @@ export function createProxyRigLiveHost({
     root: null,
     mesh: null,
     ghost: null,
+    muscleMeshes: new Map(),
+    muscleMaxDisplacements: {},
+    musclesVisible: true,
     controls: new Map(),
     controlsVisible: true,
     selectedControl: null,
@@ -130,6 +167,7 @@ export function createProxyRigLiveHost({
   const stopButton = document.getElementById('proxy-rig-stop-button');
   const statusElement = document.getElementById('proxy-rig-live-status');
   const ghostToggle = document.getElementById('proxy-rig-ghost-toggle');
+  const muscleToggle = document.getElementById('proxy-rig-muscle-toggle');
   const renderIdentity = proxyRigRenderIdentity(THREE, renderer);
 
   function debugState() {
@@ -142,6 +180,9 @@ export function createProxyRigLiveHost({
       source: state.source ? { ...state.source } : null,
       controls: [...state.controls.keys()],
       hierarchy: state.evaluator?.groups.map(group => ({ name: group.name, parent: group.parent })) ?? [],
+      muscles: state.evaluator?.muscles.map(proxyRigMuscleOverlayDescriptor) ?? [],
+      musclesVisible: state.musclesVisible,
+      muscleMaxDisplacements: { ...state.muscleMaxDisplacements },
       controlWorldPositions: Object.fromEntries([...state.controls].map(([name, control]) => [
         name,
         control.getWorldPosition(new THREE.Vector3()).toArray(),
@@ -169,11 +210,12 @@ export function createProxyRigLiveHost({
     if (recordButton) recordButton.textContent = state.recording ? 'Finish' : 'Record';
     if (replayButton) replayButton.disabled = !state.poseRun || !!state.recording;
     if (stopButton) stopButton.disabled = state.replayFrame === null;
+    if (muscleToggle) muscleToggle.disabled = state.muscleMeshes.size === 0;
     if (statusElement) {
       statusElement.classList.toggle('error', state.status === 'error');
       statusElement.textContent = state.status === 'error'
         ? state.error
-        : `${state.selectedControl || 'no control'} | ${shortId(state.packageId)} | ${state.lastEvaluationMs?.toFixed(1) ?? '-'} ms`;
+        : `${state.selectedControl || 'no control'} | ${state.muscleMeshes.size ? [...state.muscleMeshes.keys()].join(', ') : 'no muscle'} | ${shortId(state.packageId)} | ${state.lastEvaluationMs?.toFixed(1) ?? '-'} ms`;
     }
   }
 
@@ -197,6 +239,9 @@ export function createProxyRigLiveHost({
       root: null,
       mesh: null,
       ghost: null,
+      muscleMeshes: new Map(),
+      muscleMaxDisplacements: {},
+      musclesVisible: true,
       controls: new Map(),
       controlsVisible: true,
       selectedControl: null,
@@ -268,6 +313,18 @@ export function createProxyRigLiveHost({
     state.mesh.geometry.attributes.position.array.set(result.positions);
     state.mesh.geometry.attributes.position.needsUpdate = true;
     state.mesh.geometry.computeVertexNormals();
+    for (const muscle of result.muscles ?? []) {
+      const mesh = state.muscleMeshes.get(muscle.relationId);
+      if (!mesh) continue;
+      mesh.geometry.attributes.position.array.set(muscle.positions);
+      mesh.geometry.attributes.position.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+      const restMuscle = state.evaluator.muscles.find(candidate => candidate.relationId === muscle.relationId);
+      state.muscleMaxDisplacements[muscle.relationId] = proxyRigMaximumVertexDisplacement(
+        restMuscle.positions,
+        muscle.positions,
+      );
+    }
     let maxDisplacement = 0;
     const rest = state.evaluator.cast.positions;
     for (let i = 0; i < result.positions.length; i += 3) {
@@ -397,6 +454,30 @@ export function createProxyRigLiveHost({
       state.root = new THREE.Group();
       state.root.name = `Proxy rig ${state.packageId}`;
       state.root.add(state.ghost, state.mesh);
+      state.evaluator.muscles.forEach((muscle, index) => {
+        const muscleGeometry = new THREE.BufferGeometry();
+        muscleGeometry.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(muscle.positions), 3));
+        muscleGeometry.setIndex(new THREE.BufferAttribute(Uint32Array.from(muscle.triangles), 1));
+        muscleGeometry.computeVertexNormals();
+        const color = [0xd43f58, 0xe46755, 0xc93f7a][index % 3];
+        const muscleMaterial = new THREE.MeshStandardMaterial({
+          color,
+          emissive: color,
+          emissiveIntensity: 0.24,
+          roughness: 0.46,
+          metalness: 0,
+          transparent: true,
+          opacity: 0.88,
+          depthTest: false,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        });
+        const muscleMesh = new THREE.Mesh(muscleGeometry, muscleMaterial);
+        muscleMesh.name = `Live generated ${muscle.relationId}`;
+        muscleMesh.renderOrder = 10;
+        state.muscleMeshes.set(muscle.relationId, muscleMesh);
+        state.root.add(muscleMesh);
+      });
       const bounds = new THREE.Box3().setFromBufferAttribute(geometry.attributes.position);
       const center = bounds.getCenter(new THREE.Vector3());
       const diagonal = Math.max(1e-9, bounds.getSize(new THREE.Vector3()).length());
@@ -453,7 +534,9 @@ export function createProxyRigLiveHost({
       }
       state.status = 'live';
       restorePoseRun();
-      selectControl(state.controls.has('hindlimb-right-hock') ? 'hindlimb-right-hock' : state.controls.keys().next().value);
+      selectControl(state.controls.has('hindlimb-left-m31-insertion')
+        ? 'hindlimb-left-m31-insertion'
+        : (state.controls.has('hindlimb-right-hock') ? 'hindlimb-right-hock' : state.controls.keys().next().value));
       evaluate(false);
       setInfo(`Live proxy rig: ${shortId(state.packageId)}`);
       updateUi();
@@ -489,6 +572,11 @@ export function createProxyRigLiveHost({
   stopButton?.addEventListener('click', stopReplay);
   ghostToggle?.addEventListener('change', () => {
     if (state.ghost) state.ghost.visible = ghostToggle.checked;
+    markDirty();
+  });
+  muscleToggle?.addEventListener('change', () => {
+    state.musclesVisible = muscleToggle.checked;
+    setProxyRigMuscleVisibility(state.muscleMeshes.values(), state.musclesVisible);
     markDirty();
   });
 

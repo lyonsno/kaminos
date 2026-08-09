@@ -31,6 +31,7 @@ export {
 } from './proxy-rig-runtime.mjs';
 
 export const PROXY_RIG_SCHEMA = 'kaminos.proxy-rig.v0';
+export const M31_SOURCE_REGISTRATION_SCHEMA = 'kaminos.m31-source-registration-receipt.v0';
 
 function serialGeometry(geometry) {
   return {
@@ -45,6 +46,7 @@ export function createProxyRigPackage({
   skinBinding,
   castBinding,
   source,
+  muscles = [],
 }) {
   for (const key of ['cast', 'envelope', 'skeleton']) {
     if (typeof source?.[key] !== 'string' || !source[key].trim()) {
@@ -73,9 +75,112 @@ export function createProxyRigPackage({
       triangle: Array.from(castBinding.triangle),
       local: Array.from(castBinding.local),
     },
+    muscles: muscles.map(muscle => ({
+      ...muscle,
+      source: { ...muscle.source },
+      supportMapping: { ...muscle.supportMapping },
+      positions: Array.from(muscle.positions),
+      triangles: Array.from(muscle.triangles),
+      sectionIndices: Array.from(muscle.sectionIndices),
+    })),
   };
   const digest = createHash('sha256').update(canonicalProxyRigJson(content)).digest('hex');
   return { ...content, packageId: `sha256:${digest}` };
+}
+
+export function validateM31SourceRegistration(receipt, { sourceFixture = null, skeletonSha256 = null } = {}) {
+  if (!receipt || receipt.schema !== M31_SOURCE_REGISTRATION_SCHEMA) {
+    throw new Error('M31 source registration receipt is required');
+  }
+  const { receiptSha256, ...content } = receipt;
+  const digest = createHash('sha256').update(canonicalProxyRigJson(content)).digest('hex');
+  if (receiptSha256 !== `sha256:${digest}`) {
+    throw new Error(`M31 source registration receipt identity mismatch: ${String(receiptSha256)} != sha256:${digest}`);
+  }
+  const transform = receipt.transform;
+  if (!(transform?.scale > 0)
+      || !Array.isArray(transform.rotation) || transform.rotation.length !== 3
+      || transform.rotation.some(row => !Array.isArray(row) || row.length !== 3 || row.some(value => !Number.isFinite(value)))
+      || !Array.isArray(transform.translation) || transform.translation.length !== 3
+      || transform.translation.some(value => !Number.isFinite(value))) {
+    throw new Error('M31 source registration transform is malformed');
+  }
+  if (canonicalProxyRigJson(receipt.inputs?.supports) !== canonicalProxyRigJson(['Cube.002', 'Cube.003'])) {
+    throw new Error('M31 source registration support identity mismatched');
+  }
+  if (sourceFixture && receipt.inputs?.sourceBlendSha256 !== sourceFixture.source?.assetSha256) {
+    throw new Error('M31 source registration blend identity mismatched');
+  }
+  if (skeletonSha256 && receipt.inputs?.authoredSkeletonSha256 !== skeletonSha256) {
+    throw new Error('M31 source registration skeleton identity mismatched');
+  }
+  if (!(receipt.residual?.rms <= 0.5) || !(receipt.residual?.max <= 1)) {
+    throw new Error('M31 source registration residual exceeds its admission gate');
+  }
+  return receipt;
+}
+
+export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainTransforms }) {
+  const { fixtureId: claimedFixtureId, ...fixtureContent } = sourceFixture ?? {};
+  const fixtureDigest = createHash('sha256')
+    .update(canonicalProxyRigJson(fixtureContent)).digest('hex');
+  if (claimedFixtureId !== `sha256:${fixtureDigest}`) {
+    throw new Error(`M31 live fixture identity mismatch: ${String(claimedFixtureId)} != sha256:${fixtureDigest}`);
+  }
+  if (sourceFixture.schema !== 'kaminos.proxy-rig-muscle-source.v0'
+      || sourceFixture.relationId !== 'muscle-31'
+      || canonicalProxyRigJson(sourceFixture.selection?.supportFamily)
+        !== canonicalProxyRigJson(['Cube.002', 'Cube.003'])) {
+    throw new Error('M31 live fixture relation or support family mismatched');
+  }
+  validateM31SourceRegistration(sourceRegistration, { sourceFixture });
+  const sourceToSkeleton = sourceRegistration.transform;
+  const sourceToCast = [sourceToSkeleton, ...chainTransforms];
+  const positions = new Float64Array(sourceFixture.positions.length);
+  for (let index = 0; index < sourceFixture.positions.length; index += 3) {
+    positions.set(applyChain(sourceFixture.positions.slice(index, index + 3), sourceToCast), index);
+  }
+  const hingePivot = applyChain(sourceFixture.hinge.pivotWorld, sourceToCast);
+  const rigidSectionCount = Math.max(2, Math.floor(sourceFixture.sectionCount * 0.2));
+  const route = 'authenticated-m31-two-support-live-overlay';
+  return {
+    supportRefinement: {
+      parentGroup: 'hindlimb-left',
+      childName: 'hindlimb-left-m31-insertion',
+      sourceBones: ['Cube.003'],
+      pivot: applyChain(sourceFixture.hinge.pivotWorld, [sourceToSkeleton]),
+      pivotDerivation: 'authenticated muscle-31 moving-support object origin through M31 source registration',
+    },
+    muscle: {
+      schema: 'kaminos.proxy-rig-muscle.v0',
+      relationId: 'muscle-31',
+      requestedRoute: route,
+      effectiveRoute: route,
+      fallbackUsed: false,
+      source: {
+        historicalRef: sourceFixture.historicalRef,
+        fixtureId: sourceFixture.fixtureId,
+        sourceArtifactSha256: sourceFixture.sourceArtifactSha256,
+        surfaceGeometrySha256: sourceFixture.source.surfaceGeometrySha256,
+        sourceAssetSha256: sourceFixture.source.assetSha256,
+        routingFixtureSha256: sourceFixture.source.routingFixtureSha256,
+        registrationReceiptSha256: sourceRegistration.receiptSha256,
+      },
+      supportMapping: {
+        fixed: 'hindlimb-left',
+        moving: 'hindlimb-left-m31-insertion',
+        fixedSource: 'Cube.002',
+        movingSource: 'Cube.003',
+      },
+      hingePivot,
+      positions,
+      triangles: Uint32Array.from(sourceFixture.triangles),
+      sectionIndices: Uint16Array.from(sourceFixture.sectionIndices),
+      sectionCount: sourceFixture.sectionCount,
+      originCapLastSection: rigidSectionCount - 1,
+      insertionCapFirstSection: sourceFixture.sectionCount - rigidSectionCount,
+    },
+  };
 }
 
 export function assertProxyRigArtifactHash(bytes, expectedSha256, label) {
@@ -87,6 +192,48 @@ export function assertProxyRigArtifactHash(bytes, expectedSha256, label) {
     throw new Error(`Proxy rig ${label} bytes do not match receipt hash: ${actual} != ${expectedSha256}`);
   }
   return actual;
+}
+
+export function assertM31AuthoredSupportProximity({
+  pivot,
+  supportBone,
+  chainTransforms,
+  maxRelativeDistance = 0.25,
+}) {
+  if (!Array.isArray(pivot) || pivot.length !== 3 || pivot.some(value => !Number.isFinite(value))) {
+    throw new Error('M31 authored support proximity requires a finite pivot');
+  }
+  const positions = supportBone?.geometry?.positions;
+  if (!positions?.length || positions.length % 3 !== 0) {
+    throw new Error('M31 authored support proximity requires support geometry');
+  }
+
+  const lower = [Infinity, Infinity, Infinity];
+  const upper = [-Infinity, -Infinity, -Infinity];
+  let nearestDistance = Infinity;
+  for (let i = 0; i < positions.length; i += 3) {
+    const point = applyChain(
+      [positions[i], positions[i + 1], positions[i + 2]],
+      chainTransforms,
+    );
+    for (let axis = 0; axis < 3; axis += 1) {
+      lower[axis] = Math.min(lower[axis], point[axis]);
+      upper[axis] = Math.max(upper[axis], point[axis]);
+    }
+    nearestDistance = Math.min(
+      nearestDistance,
+      Math.hypot(...point.map((value, axis) => value - pivot[axis])),
+    );
+  }
+  const supportDiagonal = Math.hypot(...upper.map((value, axis) => value - lower[axis]));
+  const maximumDistance = supportDiagonal * maxRelativeDistance;
+  if (!(supportDiagonal > 0) || nearestDistance > maximumDistance) {
+    throw new Error(
+      `M31 authored support proximity failed for ${supportBone.name ?? 'unknown support'}: `
+      + `${nearestDistance} > ${maximumDistance} (${maxRelativeDistance} x support diagonal)`,
+    );
+  }
+  return { nearestDistance, supportDiagonal, maximumDistance };
 }
 
 // --- envelope <- skeleton binding ----------------------------------------------
@@ -230,11 +377,12 @@ export function bindEnvelopeToSkeleton({
   bones,
   manifest,
   chainTransforms,
+  supportRefinements = [],
   samplesPerBone = 30,
   neighbors = 2,
 }) {
   const broadGroups = deriveRefinementGroups(bones, manifest);
-  const groups = broadGroups.flatMap(group => (
+  let groups = broadGroups.flatMap(group => (
     group.name === 'hindlimb-right'
       ? deriveHindlimbHierarchy({ bones, manifest, broadGroup: group, side: 'right' })
       : [{
@@ -244,6 +392,32 @@ export function bindEnvelopeToSkeleton({
         pivotDerivation: 'nearest source-member centroid to core center',
       }]
   ));
+  for (const refinement of supportRefinements) {
+    const parentIndex = groups.findIndex(group => group.name === refinement.parentGroup);
+    if (parentIndex < 0) throw new Error(`support refinement parent ${refinement.parentGroup} is missing`);
+    const parent = groups[parentIndex];
+    const childNames = new Set(refinement.sourceBones);
+    const childBones = parent.bones.filter(bone => childNames.has(bone.name));
+    if (childBones.length !== childNames.size) {
+      throw new Error(`support refinement ${refinement.childName} source bones are not all owned by ${parent.name}`);
+    }
+    const remainingBones = parent.bones.filter(bone => !childNames.has(bone.name));
+    if (remainingBones.length === 0) throw new Error(`support refinement ${refinement.childName} empties ${parent.name}`);
+    const refinedParent = {
+      ...parent,
+      bones: remainingBones,
+      sourceBones: remainingBones.map(bone => bone.name).sort(),
+    };
+    const child = {
+      name: refinement.childName,
+      parent: parent.name,
+      pivot: refinement.pivot,
+      bones: childBones,
+      sourceBones: childBones.map(bone => bone.name).sort(),
+      pivotDerivation: refinement.pivotDerivation,
+    };
+    groups = [...groups.slice(0, parentIndex), refinedParent, child, ...groups.slice(parentIndex + 1)];
+  }
   // Group control points: bone surface samples carried into cast frame.
   const controls = groups.map(group => {
     const points = [];

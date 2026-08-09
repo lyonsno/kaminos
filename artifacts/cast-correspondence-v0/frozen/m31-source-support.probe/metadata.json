@@ -1,0 +1,15 @@
+{
+  "name": "cat_armature_001",
+  "job_type": "kaminos_blender_scene_inventory",
+  "job_id": "2946512885cf",
+  "input_path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat_armature_001.blend",
+  "input_name": "cat_armature_001.blend",
+  "params": {
+    "script": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/tools/blender-m31-support-registration-probe.py"
+  },
+  "output_files": [
+    "inventory.json"
+  ],
+  "created_at": 1786264698.245261,
+  "duration_s": 0.6
+}

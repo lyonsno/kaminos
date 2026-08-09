@@ -201,6 +201,47 @@ test('render identity reports the effective Three revision and renderer backend'
   );
 });
 
+test('muscle overlay descriptor and visibility preserve effective source identity', () => {
+  assert.equal(typeof liveHost.proxyRigMuscleOverlayDescriptor, 'function');
+  assert.equal(typeof liveHost.setProxyRigMuscleVisibility, 'function');
+  const descriptor = liveHost.proxyRigMuscleOverlayDescriptor({
+    relationId: 'muscle-31',
+    requestedRoute: 'authenticated-m31-two-support-live-overlay',
+    effectiveRoute: 'authenticated-m31-two-support-live-overlay',
+    fallbackUsed: false,
+    source: { historicalRef: 'commit:path', fixtureId: 'sha256:fixture' },
+    supportMapping: { fixed: 'left', moving: 'left-insertion' },
+  });
+  assert.deepEqual(descriptor, {
+    relationId: 'muscle-31',
+    requestedRoute: 'authenticated-m31-two-support-live-overlay',
+    effectiveRoute: 'authenticated-m31-two-support-live-overlay',
+    fallbackUsed: false,
+    historicalRef: 'commit:path',
+    fixtureId: 'sha256:fixture',
+    fixedSupport: 'left',
+    movingSupport: 'left-insertion',
+  });
+  const meshes = [{ visible: true }, { visible: true }];
+  liveHost.setProxyRigMuscleVisibility(meshes, false);
+  assert.deepEqual(meshes.map(mesh => mesh.visible), [false, false]);
+});
+
+test('muscle displacement diagnostics measure the posed overlay against its own rest geometry', () => {
+  assert.equal(typeof liveHost.proxyRigMaximumVertexDisplacement, 'function');
+  assert.equal(
+    liveHost.proxyRigMaximumVertexDisplacement(
+      [0, 0, 0, 1, 1, 1],
+      [0, 3, 4, 1, 1, 1],
+    ),
+    5,
+  );
+  assert.throws(
+    () => liveHost.proxyRigMaximumVertexDisplacement([0, 0, 0], [0, 0]),
+    /matching xyz arrays/i,
+  );
+});
+
 test('control visibility reaches the TransformControls scene helper', () => {
   assert.equal(typeof liveHost.setProxyRigControlVisibility, 'function');
   const controls = [{ visible: true }, { visible: true }];

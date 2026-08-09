@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -17,10 +18,17 @@ import {
 } from '../frame-link-core.mjs';
 import {
   assertProxyRigArtifactHash,
+  assertM31AuthoredSupportProximity,
   bindCastToEnvelope,
   bindEnvelopeToSkeleton,
+  createM31LiveOverlay,
   createProxyRigPackage,
+  validateM31SourceRegistration,
 } from '../proxy-rig-core.mjs';
+import {
+  assertM31CompactFixtureMatchesHistorical,
+  M31_HISTORICAL_SOURCE_REF,
+} from '../m31-live-source-fixture-core.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultOutput = 'artifacts/cast-correspondence-v0/rig-packages/cast-sf3d-skin-baseline.proxy-rig.json';
@@ -35,15 +43,21 @@ const artifactRoot = resolve(repoRoot, option('--artifact-root', 'artifacts/cast
 const loadBytes = relative => readFile(resolve(artifactRoot, relative));
 const loadJson = async relative => JSON.parse(await readFile(resolve(artifactRoot, relative), 'utf8'));
 
-const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, castBytes] = await Promise.all([
+const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, castBytes, m31SourceFixture, m31SourceRegistration] = await Promise.all([
   loadBytes('frozen/skeleton-authored.glb'),
   loadBytes('frozen/region-manifest-golden-provisional.json'),
   loadJson('receipts/frame-link--skeleton--envelope-baseline.json'),
   loadJson('receipts/envelope-baseline--cast-sf3d-skin-baseline.json'),
   loadBytes('frozen/envelope-baseline.glb'),
   loadBytes('frozen/cast-sf3d-skin-baseline.glb'),
+  loadJson('frozen/m31-authenticated-source.compact.json'),
+  loadJson('receipts/m31-source-blend--skeleton-authored.json'),
 ]);
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
+const m31HistoricalSourceBytes = execFileSync(
+  'git', ['show', M31_HISTORICAL_SOURCE_REF], { cwd: repoRoot },
+);
+assertM31CompactFixtureMatchesHistorical(m31SourceFixture, m31HistoricalSourceBytes);
 
 validateFrameLinkReceipt(frameLink);
 const frameLinkReceiptSha256 = frameLinkReceiptIdentity(frameLink);
@@ -57,6 +71,10 @@ if (registrationReceiptSha256 !== registration.receiptSha256) {
 }
 
 const skeletonSha256 = assertProxyRigArtifactHash(skeletonBytes, frameLink.inputs.sourceSha256, 'skeleton');
+validateM31SourceRegistration(m31SourceRegistration, {
+  sourceFixture: m31SourceFixture,
+  skeletonSha256,
+});
 if (manifest.source_glb_sha256 !== skeletonSha256) {
   throw new Error(`Proxy rig manifest skeleton identity mismatch: ${manifest.source_glb_sha256} != ${skeletonSha256}`);
 }
@@ -82,11 +100,25 @@ for (let i = 0; i < envelope.positions.length; i += 3) {
 }
 
 const chainTransforms = [{ scale: 1, ...frameLink.link.transform }, stageATransform];
+const m31Overlay = createM31LiveOverlay({
+  sourceFixture: m31SourceFixture,
+  sourceRegistration: m31SourceRegistration,
+  chainTransforms,
+});
+const m31MovingSupport = bones.find(bone => (
+  bone.name === m31Overlay.muscle.supportMapping.movingSource
+));
+const m31AuthoredSupportProximity = assertM31AuthoredSupportProximity({
+  pivot: m31Overlay.supportRefinement.pivot,
+  supportBone: m31MovingSupport,
+  chainTransforms: [],
+});
 const skinBinding = bindEnvelopeToSkeleton({
   envelope: envelopeInCastFrame,
   bones,
   manifest,
   chainTransforms,
+  supportRefinements: [m31Overlay.supportRefinement],
 });
 const castBinding = bindCastToEnvelope({ cast, envelopeInCastFrame });
 const packageData = createProxyRigPackage({
@@ -94,6 +126,7 @@ const packageData = createProxyRigPackage({
   cast,
   skinBinding,
   castBinding,
+  muscles: [m31Overlay.muscle],
   source: {
     cast: 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb',
     castSha256,
@@ -107,8 +140,11 @@ const packageData = createProxyRigPackage({
     frameLinkReceiptSha256,
     registrationReceipt: 'artifacts/cast-correspondence-v0/receipts/envelope-baseline--cast-sf3d-skin-baseline.json',
     registrationReceiptSha256,
-    effectiveRoute: 'proxy-rig-core.mjs manifest-backed hindlimb hierarchy + bindEnvelopeToSkeleton + bindCastToEnvelope',
-    hierarchyDerivation: 'hindlimb-right instance; largest proximodistal source-geometry gaps; nearest-surface boundary pivots',
+    m31SourceRegistrationReceipt: 'artifacts/cast-correspondence-v0/receipts/m31-source-blend--skeleton-authored.json',
+    m31SourceRegistrationReceiptSha256: m31SourceRegistration.receiptSha256,
+    m31AuthoredSupportProximity,
+    effectiveRoute: 'proxy-rig-core.mjs manifest-backed hierarchy + authenticated M31 two-support overlay + bindEnvelopeToSkeleton + bindCastToEnvelope',
+    hierarchyDerivation: 'hindlimb-right proximodistal chain plus M31 Cube.002 -> Cube.003 left-hindlimb support split',
   },
 });
 
@@ -123,4 +159,5 @@ process.stdout.write(`${JSON.stringify({
   controls: packageData.skinBinding.groups.map(group => group.name),
   envelopeVertices: packageData.envelope.positions.length / 3,
   castVertices: packageData.cast.positions.length / 3,
+  muscles: packageData.muscles.map(muscle => muscle.relationId),
 })}\n`);

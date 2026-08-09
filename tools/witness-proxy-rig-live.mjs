@@ -21,6 +21,9 @@ const quaternionZ = angleDeg => {
   return [0, 0, Math.sin(halfAngle), Math.cos(halfAngle)];
 };
 const hierarchyPoses = {
+  m31Flex: {
+    'hindlimb-left-m31-insertion': quaternionZ(24),
+  },
   planted: {
     'hindlimb-right-hip': quaternionZ(8),
     'hindlimb-right-stifle': quaternionZ(-18),
@@ -42,6 +45,7 @@ const hierarchyPoses = {
 };
 let expectedControlNames = [];
 let expectedHierarchy = [];
+let expectedMuscles = [];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -184,6 +188,10 @@ async function loadWitnessPage(browser, viewport, label) {
     JSON.stringify(state.hierarchy) === JSON.stringify(expectedHierarchy),
     `${label}: live hierarchy differs from the verified package (${JSON.stringify(state.hierarchy)})`,
   );
+  assert(
+    JSON.stringify(state.muscles) === JSON.stringify(expectedMuscles),
+    `${label}: live muscle identity differs from the verified package (${JSON.stringify(state.muscles)})`,
+  );
   assert(state.error === null, `${label}: live state contains an error: ${state.error}`);
   const panelBox = await page.locator('#proxy-rig-live-controls').boundingBox();
   const viewportBox = await page.locator('#viewport').boundingBox();
@@ -241,7 +249,30 @@ try {
     name: group.name,
     parent: group.parent ?? null,
   }));
-  assert(expectedControlNames.length === 10, `expected ten controls, got ${expectedControlNames.length}`);
+  expectedMuscles = checkedPackage.muscles.map(muscle => ({
+    relationId: muscle.relationId,
+    requestedRoute: muscle.requestedRoute,
+    effectiveRoute: muscle.effectiveRoute,
+    fallbackUsed: muscle.fallbackUsed,
+    historicalRef: muscle.source.historicalRef,
+    fixtureId: muscle.source.fixtureId,
+    fixedSupport: muscle.supportMapping.fixed,
+    movingSupport: muscle.supportMapping.moving,
+  }));
+  assert(expectedControlNames.length === 11, `expected eleven controls, got ${expectedControlNames.length}`);
+  assert(
+    JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-left'))) === JSON.stringify([
+      { name: 'hindlimb-left', parent: null },
+      { name: 'hindlimb-left-m31-insertion', parent: 'hindlimb-left' },
+    ]),
+    `verified package does not carry the M31 support hierarchy (${JSON.stringify(expectedHierarchy)})`,
+  );
+  assert(
+    expectedMuscles.length === 1
+      && expectedMuscles[0].relationId === 'muscle-31'
+      && expectedMuscles[0].fallbackUsed === false,
+    `verified package does not carry one exact non-fallback M31 overlay (${JSON.stringify(expectedMuscles)})`,
+  );
   assert(
     JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-right'))) === JSON.stringify([
       { name: 'hindlimb-right-hip', parent: null },
@@ -353,12 +384,19 @@ try {
       `${poseName}: hierarchy pose did not materially differ from rest (${JSON.stringify(delta)})`,
     );
     report.hierarchyPoses[poseName] = { controls, state: poseState, pixelStats: stats, renderedPoseDelta: delta };
-    const restPaw = hiddenRestState.controlWorldPositions['hindlimb-right-paw'];
-    const posedPaw = poseState.controlWorldPositions['hindlimb-right-paw'];
-    assert(
-      Math.hypot(...posedPaw.map((value, axis) => value - restPaw[axis])) > 0.01,
-      `${poseName}: descendant paw handle did not follow the hierarchy`,
-    );
+    if (poseName === 'm31Flex') {
+      assert(
+        poseState.muscleMaxDisplacements?.['muscle-31'] > 0.005,
+        `${poseName}: authenticated M31 overlay did not move with its insertion support`,
+      );
+    } else {
+      const restPaw = hiddenRestState.controlWorldPositions['hindlimb-right-paw'];
+      const posedPaw = poseState.controlWorldPositions['hindlimb-right-paw'];
+      assert(
+        Math.hypot(...posedPaw.map((value, axis) => value - restPaw[axis])) > 0.01,
+        `${poseName}: descendant paw handle did not follow the hierarchy`,
+      );
+    }
   }
   await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(true));
   await desktop.page.screenshot({ path: resolve(outputDir, 'proxy-rig-hindlimb-extended-page.png'), fullPage: true });
