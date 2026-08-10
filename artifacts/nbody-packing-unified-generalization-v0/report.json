@@ -1,0 +1,98 @@
+{
+  "schema": "kaminos.nbody-packing-unified-generalization-witness-report.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-unified-generalization-orbitable-v0",
+    "effective": "nbody-packing-unified-generalization-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "rows": [
+    {
+      "memberCount": 4,
+      "fixtureSha256": "8567f26da0c716568f9dc5c1908d69b4e5bbcb956dcbf8b0a1d2b2e4db3db396",
+      "problemSha256": "8376ba62c9fc4bafa37d44bb88c98f6704a8267b4fc0353417f47f55f132f65e",
+      "candidateSha256": "7a21a1cb6be652481bf3053b258ef9b23701905e902528f2094e9f2d998abf35",
+      "selectedPhysicalStateSha256": "9f87480a7bb3499c5fae40a81eacc1a4c530b0ff09f69cfd9717218440cd6103",
+      "maximumPhysicalResidual": 0,
+      "movedMemberCount": 4,
+      "iterations": 1,
+      "traversalEquivalence": "passed"
+    },
+    {
+      "memberCount": 6,
+      "fixtureSha256": "6d8fa5019406b0fdad290e559129a2d50264edd45032cb23b042ccb50fdb54fd",
+      "problemSha256": "6ffbb8a16891556f52094c51c45700904389537893f20ee6072f3e787ef7303a",
+      "candidateSha256": "7d0d0f2742cd6c3537fffd62796b939636ef6a8d2a7c6099230943739d4e6bd7",
+      "selectedPhysicalStateSha256": "2eff1df1178508103af130bd3f7c7959112ec2b55d7cfcede6000128b37b1a64",
+      "maximumPhysicalResidual": 0,
+      "movedMemberCount": 6,
+      "iterations": 1,
+      "traversalEquivalence": "passed"
+    },
+    {
+      "memberCount": 8,
+      "fixtureSha256": "3c0a94dde1dab06d8851d1f61f3b108d03d34f1f73e13e5d8b24efcaab28493e",
+      "problemSha256": "a6768e4dc854e512787b47ef63e6e5c1a2f239f27d2518b527b07d78cc3a03dc",
+      "candidateSha256": "640fecc273961d3e96d89285bb7f2445b1f1808f3014c9147c3976a6b37e378d",
+      "selectedPhysicalStateSha256": "51d98ed595f2320e1fed948b50f20192c094989ca331d329cfe5d4580115067e",
+      "maximumPhysicalResidual": 0,
+      "movedMemberCount": 8,
+      "iterations": 1,
+      "traversalEquivalence": "passed"
+    }
+  ],
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "9f54853552b6e8721d6aaa42c2c71b12aa8c77c8bda3844fe71022ce3d418aea",
+    "captureCount": 18,
+    "requiredMemberCounts": [
+      4,
+      6,
+      8
+    ],
+    "requiredStates": [
+      "crowded",
+      "packed",
+      "reference"
+    ],
+    "requiredModes": [
+      "volume",
+      "slice"
+    ]
+  },
+  "claimCeiling": {
+    "authority": "bounded-synthetic-generalization-agent-visual-inspected",
+    "admittedClaim": "one unified formulation closes declared hard residuals on deterministic manufactured-feasible 4/6/8 density fixtures",
+    "rankingAuthority": "none",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "arbitrary-n-closure",
+      "authenticated-anatomy",
+      "fascia-or-skin-mechanics",
+      "production-performance",
+      "global-optimality"
+    ]
+  },
+  "stalePrimaryCleanup": [
+    {
+      "path": "suite.json",
+      "status": "absent"
+    },
+    {
+      "path": "results.json",
+      "status": "absent"
+    },
+    {
+      "path": "index.html",
+      "status": "absent"
+    }
+  ],
+  "bindings": {
+    "suiteJsonSha256": "17186c336c2f358cd0f08254a8c06ad8c03a7d32b13ccb0689cc318538256f7a",
+    "resultsJsonSha256": "fdf388d365d9bb1b5b9f6ff1f3fdae69377eb792576cbe5df08813c19cd77ff4",
+    "indexHtmlSha256": "be964e34af31e3951f79add4043830b2ae87e8f61f512d3034c6d4daf54376ad",
+    "visualInspectionJsonSha256": "9f54853552b6e8721d6aaa42c2c71b12aa8c77c8bda3844fe71022ce3d418aea",
+    "captureReceiptSetSha256": "cad085905dcc272f326c297cc0c6ddf203eed174bcf5f61d8866c6ce0fc78cd8"
+  }
+}

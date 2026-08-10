@@ -1,0 +1,347 @@
+{
+  "schema": "kaminos.nbody-packing-unified-generalization-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-10T19:56:10Z",
+  "summary": "Personally inspected all eighteen 4/6/8 crowded, unified-packed, and manufactured-reference volume/slice captures. Crowded states visibly contain muscle-muscle and muscle-bone collision; packed states clear both while retaining fixed attachment handles, smooth single-bend centerlines, stable member identity, legible individual volume, and bounded placement. Packed states remain distinct from the manufactured references rather than copying their target coordinates.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "countSelectionLegible": true,
+    "crowdedCollisionLegible": true,
+    "packedClearanceLegible": true,
+    "stableIdentityLegible": true,
+    "fixedAttachmentsLegible": true,
+    "smoothCenterlinesLegible": true,
+    "individualVolumeLegible": true,
+    "packingSemanticsNotInverted": true
+  },
+  "route": {
+    "requested": "nbody-packing-unified-generalization-orbitable-v0",
+    "effective": "nbody-packing-unified-generalization-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "memberCount": 4,
+      "state": "crowded",
+      "mode": "volume",
+      "png": "4-crowded-volume.png",
+      "pngSha256": "e9364eaaa35ae1bfd305ed6b2b4f3478ee6574126a2be92f317542cce117d594",
+      "captureReport": "4-crowded-volume-capture-report.json",
+      "captureReportSha256": "8d14b6c043b94fac07597c142564e8984d529eaefd9d9b161e757d92522eea75",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 4,
+      "state": "crowded",
+      "mode": "slice",
+      "png": "4-crowded-slice.png",
+      "pngSha256": "d89d1efa01284a869c822a51154c923d1761109de3980dedea8a5183d494e222",
+      "captureReport": "4-crowded-slice-capture-report.json",
+      "captureReportSha256": "32b40ca634bacf7f7dcb7b32a4faef3335901b463e0b7719615fc9deecec1a30",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 4,
+      "state": "packed",
+      "mode": "volume",
+      "png": "4-packed-volume.png",
+      "pngSha256": "268da5648536b4500f810814ef36e8449922054dd5a36cd34df22c271f938127",
+      "captureReport": "4-packed-volume-capture-report.json",
+      "captureReportSha256": "c7fc7d15dcb78990ee47833d6efe5a82f04460a971fbc3fc111213af80ba4b36",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 4,
+      "state": "packed",
+      "mode": "slice",
+      "png": "4-packed-slice.png",
+      "pngSha256": "4ac6f3a995398ddc8b5617cd3999f02eecb9dc5d499f0be38302403c083e2d78",
+      "captureReport": "4-packed-slice-capture-report.json",
+      "captureReportSha256": "ca10e3c9ce65678c2299b6b48c51d66fb2a9a402053348544e21c2489567b2b7",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 4,
+      "state": "reference",
+      "mode": "volume",
+      "png": "4-reference-volume.png",
+      "pngSha256": "972f328532bf6cbcd208ee3917a91550e7cbfdb74983f3b80afd9abfa50d3d57",
+      "captureReport": "4-reference-volume-capture-report.json",
+      "captureReportSha256": "5ce9d33aec469acf22db6cb042f164af5405933e11ae6e40ef7014fb17407ae5",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 4,
+      "state": "reference",
+      "mode": "slice",
+      "png": "4-reference-slice.png",
+      "pngSha256": "9809ca5abdd57d162f175815e1307350bce7209a1dba996e150915e87953565a",
+      "captureReport": "4-reference-slice-capture-report.json",
+      "captureReportSha256": "243ad5b84e6e79f1223cd5365828ba68fb15c4d79dceb34d1b264e8bb80f76e9",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "4"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "crowded",
+      "mode": "volume",
+      "png": "6-crowded-volume.png",
+      "pngSha256": "ff4e62456133f1627cb7e7960c6e6661ccaea5626c499c4e59c052a7bfb4402a",
+      "captureReport": "6-crowded-volume-capture-report.json",
+      "captureReportSha256": "0a2b965d222a9f071838f2ef6bb33cc88089bac044b7d73e2e1760b1421e9ff2",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "crowded",
+      "mode": "slice",
+      "png": "6-crowded-slice.png",
+      "pngSha256": "ace9740737b5572482ace620750c788310d8d01e21946b8c74830600b66a72d9",
+      "captureReport": "6-crowded-slice-capture-report.json",
+      "captureReportSha256": "75fd4c693b54d962b15d4642569b17a3fa3cb798880ba249aae7092ac900070e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "packed",
+      "mode": "volume",
+      "png": "6-packed-volume.png",
+      "pngSha256": "5766f2f5f3e86248288da5f649588b041cc9b0806ebcb9b6cfc9be29aeb600cd",
+      "captureReport": "6-packed-volume-capture-report.json",
+      "captureReportSha256": "be6bfda5fa57c62324925558e1450558aab3341bdba888d1ae47c0202a59e513",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "packed",
+      "mode": "slice",
+      "png": "6-packed-slice.png",
+      "pngSha256": "bfbf0b0b5912b4dcbed6793d0f4c8204538e3a2cab48871978612a38987a1281",
+      "captureReport": "6-packed-slice-capture-report.json",
+      "captureReportSha256": "300693f709507fb8dde591d3acb7719278cd6ac365b8fea613362625288104df",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "reference",
+      "mode": "volume",
+      "png": "6-reference-volume.png",
+      "pngSha256": "6d309fe4560ec541c83d8c68642668d815b0c8e6e4219f930145221a5178bcfe",
+      "captureReport": "6-reference-volume-capture-report.json",
+      "captureReportSha256": "9fd62b55d6b0e9632cc6672f0b68a5e1fe4af638cc2082c51337dd8922944d93",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 6,
+      "state": "reference",
+      "mode": "slice",
+      "png": "6-reference-slice.png",
+      "pngSha256": "6419cc9c9584f6a68a30bbe5c33511940d4cf0d81936e41ba3b6e200de21ddb4",
+      "captureReport": "6-reference-slice-capture-report.json",
+      "captureReportSha256": "77088d6d15a0dc568f4e55768e51df45d3f6a4c2f34cc57a53f6b8ffca217486",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "6"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "crowded",
+      "mode": "volume",
+      "png": "8-crowded-volume.png",
+      "pngSha256": "96555d8ec98358d7516c8666be4d2a0e2ecfb4ff062812c48596350dca06ee01",
+      "captureReport": "8-crowded-volume-capture-report.json",
+      "captureReportSha256": "690c47da52d5b148f884e034f471b13377df378b2f0fa768c4cc164c5f89f264",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "crowded",
+      "mode": "slice",
+      "png": "8-crowded-slice.png",
+      "pngSha256": "2c5f70fdcf7710958705d131b47be97637ee184c5c486f1a2041f49d38670642",
+      "captureReport": "8-crowded-slice-capture-report.json",
+      "captureReportSha256": "152feefdb53f774abf3fb3cc29a48885d48219a5338bc941ca8cd9c80ce80198",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "packed",
+      "mode": "volume",
+      "png": "8-packed-volume.png",
+      "pngSha256": "85e0af6feb2448058ced7e0ac2acf51a683e52e2221c67210f48fbe010529d0f",
+      "captureReport": "8-packed-volume-capture-report.json",
+      "captureReportSha256": "34a0e1ab838557656e99de0f72b3a096daa4b1ddd2d876b37c11cb22d6c64091",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "packed",
+      "mode": "slice",
+      "png": "8-packed-slice.png",
+      "pngSha256": "e72b199b814ab97c1a32cf36a5d8771ca6b92c97ad1efcab1ba44c464bad7052",
+      "captureReport": "8-packed-slice-capture-report.json",
+      "captureReportSha256": "56c2e72506163e4e30e4bf5e2ce17d6202208f683b102c32f29f9cb30d79adf4",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "packed",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "reference",
+      "mode": "volume",
+      "png": "8-reference-volume.png",
+      "pngSha256": "df531020ce6ac704b2d07dbc1f1cbdd5914d0b50fe223b18177a980b685165e4",
+      "captureReport": "8-reference-volume-capture-report.json",
+      "captureReportSha256": "40fce5f92303f15aa23bc6de92ea3d0e7e1b55327705e96a22557f43c0a7c327",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "memberCount": 8,
+      "state": "reference",
+      "mode": "slice",
+      "png": "8-reference-slice.png",
+      "pngSha256": "70e6700ac62236cab895a7c57aea156a0dc6a960a44ca818926f88efbb399d87",
+      "captureReport": "8-reference-slice-capture-report.json",
+      "captureReportSha256": "3bd0061cbaed9d92b8894368a360b2cd40a6e9405f1f47c5bf8634b064580244",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-unified-generalization-orbitable-v0",
+        "memberCount": "8"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    }
+  ],
+  "claimCeiling": {
+    "authority": "bounded-synthetic-generalization-pending-visual-inspection",
+    "admittedClaim": "one unified formulation closes declared hard residuals on deterministic manufactured-feasible 4/6/8 density fixtures",
+    "rankingAuthority": "none",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "arbitrary-n-closure",
+      "authenticated-anatomy",
+      "fascia-or-skin-mechanics",
+      "production-performance",
+      "global-optimality"
+    ]
+  },
+  "identity": {
+    "sha256": "ad322638272369d665171f14321516678163f1f7a502b69af8be52fea0b0c195"
+  }
+}

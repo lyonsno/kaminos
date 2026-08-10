@@ -300,11 +300,12 @@ function deriveFrustratedCrowdedSource(knownFeasible) {
 
 function beltPairRows(muscles) {
   const byId = new Map(muscles.map(muscle => [muscle.id, muscle]));
+  const memberOrder = muscles.map(muscle => muscle.id);
   const pairs = [];
-  for (let leftIndex = 0; leftIndex < MEMBER_ORDER.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < MEMBER_ORDER.length; rightIndex += 1) {
-      const leftId = MEMBER_ORDER[leftIndex];
-      const rightId = MEMBER_ORDER[rightIndex];
+  for (let leftIndex = 0; leftIndex < memberOrder.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < memberOrder.length; rightIndex += 1) {
+      const leftId = memberOrder[leftIndex];
+      const rightId = memberOrder[rightIndex];
       const left = byId.get(leftId);
       const right = byId.get(rightId);
       if (!left || !right) throw new Error(`rosette state missing member ${leftId} or ${rightId}`);
@@ -515,6 +516,168 @@ export function createNBodyRosetteFixture({ stressTier = 'mild-bringup-v0' } = {
       effective:{ ...identity },
     },
   };
+}
+
+const GENERALIZATION_PROFILES = Object.freeze({
+  4:Object.freeze({ ringRadius:0.52, bellyRadius:0.2, crowding:0.28, phase:0.11 }),
+  6:Object.freeze({ ringRadius:0.56, bellyRadius:0.18, crowding:0.25, phase:0.27 }),
+  8:Object.freeze({ ringRadius:0.6, bellyRadius:0.17, crowding:0.24, phase:-0.08 }),
+});
+
+function createGeneralizationRingMuscle(memberCount, index, profile) {
+  const id = `density-${String(memberCount).padStart(2, '0')}-${String(index).padStart(2, '0')}`;
+  const angle = profile.phase + 2 * Math.PI * index / memberCount;
+  const crossSection = [
+    Math.cos(angle) * profile.ringRadius,
+    Math.sin(angle) * profile.ringRadius,
+  ];
+  const endpointRadius = profile.bellyRadius * 0.55;
+  const radii = [
+    endpointRadius,
+    profile.bellyRadius * 0.78,
+    profile.bellyRadius,
+    profile.bellyRadius,
+    profile.bellyRadius * 0.78,
+    endpointRadius,
+  ];
+  const muscle = createRosetteMuscle(id, crossSection, radii);
+  muscle.identity = {
+    sourceId:`synthetic-manufactured-feasible:${id}`,
+    constructionId:`nbody-density-ring:${memberCount}:${index}`,
+    lineageId:`nbody-density-ring-lineage:${memberCount}:${index}`,
+    instanceId:`nbody-density-ring-instance:${memberCount}:${index}`,
+  };
+  muscle.attachments.origin.sourceAuthority = 'synthetic-manufactured-feasible';
+  muscle.attachments.insertion.sourceAuthority = 'synthetic-manufactured-feasible';
+  muscle.volumeAuthority = 'synthetic-manufactured-feasible-target';
+  return muscle;
+}
+
+function createGeneralizationKnownFeasibleSource(memberCount, profile) {
+  return sourceWithIdentity({
+    schema:MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
+    id:`synthetic-manufactured-feasible-density-${memberCount}-v0`,
+    authority: {
+      kind:'synthetic-proxy',
+      anatomicalAdmission:'none',
+    },
+    dimension:3,
+    formation: {
+      centerlineSmoothingReference:'source-displacement',
+    },
+    compartment: {
+      id:`density-${memberCount}-asymmetric-compartment`,
+      kind:'box',
+      minimum:[-0.86, -1.3, -0.86],
+      maximum:[0.9, 1.3, 0.88],
+      clearance:0.02,
+    },
+    obstacles:[{
+      id:`density-${memberCount}-offset-bone`,
+      kind:'capsule',
+      start:[-0.07, -1.1, 0.045],
+      end:[-0.07, 1.1, 0.045],
+      radius:0.14,
+      clearance:0.02,
+      authority:'synthetic-manufactured-feasible',
+    }],
+    muscles:Array.from(
+      { length:memberCount },
+      (_, index) => createGeneralizationRingMuscle(memberCount, index, profile),
+    ),
+  });
+}
+
+function deriveGeneralizationCrowdedSource(knownFeasible, memberCount, profile) {
+  const core = structuredClone(knownFeasible);
+  delete core.input;
+  core.id = `synthetic-crowded-density-${memberCount}-v0`;
+  const transforms = core.muscles.map((muscle, index) => {
+    const angle = profile.phase + 2 * Math.PI * index / memberCount;
+    const tangential = index % 2 === 0 ? 0.012 : -0.012;
+    const translation = [
+      -Math.cos(angle) * profile.crowding - Math.sin(angle) * tangential,
+      0,
+      -Math.sin(angle) * profile.crowding + Math.cos(angle) * tangential,
+    ];
+    return {
+      muscleId:muscle.id,
+      requestedTranslation:translation.map(value => rounded(value)),
+      effectiveTranslation:translation.map(value => rounded(value)),
+      envelope:'sine-zero-at-attachments',
+      radiusScale:rounded(translateMuscleBelly(muscle, translation)),
+      fallbackUsed:false,
+    };
+  });
+  core.derivation = {
+    schema:'kaminos.nbody-density-generalization-crowding.v0',
+    parent:structuredClone(knownFeasible.input.effective),
+    transforms,
+    envelope:'sine-zero-at-attachments',
+    fallbackUsed:false,
+  };
+  return sourceWithIdentity(core);
+}
+
+export function createNBodyPackingGeneralizationSuite() {
+  return [4, 6, 8].map(memberCount => {
+    const profile = GENERALIZATION_PROFILES[memberCount];
+    const knownFeasible = createGeneralizationKnownFeasibleSource(memberCount, profile);
+    const crowded = deriveGeneralizationCrowdedSource(knownFeasible, memberCount, profile);
+    const memberIds = knownFeasible.muscles.map(muscle => muscle.id);
+    const edges = memberIds.map((memberId, index) => {
+      const next = memberIds[(index + 1) % memberIds.length];
+      const members = index === memberIds.length - 1 ? [next, memberId] : [memberId, next];
+      return { key:members.join('|'), members };
+    });
+    const contactGraph = {
+      schema:'kaminos.nbody-contact-graph.v0',
+      members:memberIds,
+      edges,
+      requiredCycle:memberIds,
+      proximityThreshold:0.06,
+    };
+    const core = {
+      schema:NBODY_PACKING_ASSAY_FIXTURE_SCHEMA,
+      id:`nbody-manufactured-feasible-density-${memberCount}-assay-v0`,
+      authority: {
+        kind:'synthetic-known-feasible',
+        anatomicalAdmission:'none',
+        claimCeiling:'bounded-generalization-assay-only',
+      },
+      dimension:3,
+      assayProfile: {
+        stressTier:`density-${memberCount}-generalization-v0`,
+        comparisonAuthority:'visual-and-hard-gates-only',
+        rankingAuthority:'none-before-visual-discrimination',
+        falsifier:'unified-formulation-does-not-close-a-manufactured-feasible-density-rung',
+      },
+      pressureChain:memberIds.slice(0, 3),
+      contactGraph,
+      knownFeasible,
+      crowded,
+      metrics: {
+        knownFeasible:measureMuscleCompartmentPacking(knownFeasible),
+        knownFeasibleBelt:measureBelt(knownFeasible.muscles, contactGraph),
+        crowded:measureMuscleCompartmentPacking(crowded),
+        crowdedBelt:measureBelt(crowded.muscles, contactGraph),
+      },
+      derivation: {
+        kind:'known-feasible-witness-then-deterministic-crowding',
+        fallbackUsed:false,
+      },
+    };
+    const sha256 = hashMusclePackingCanonicalJson(core);
+    const identity = { kind:'synthetic-nbody-assay-fixture', id:core.id, sha256 };
+    return {
+      ...core,
+      identity:{ sha256 },
+      input: {
+        requested:{ ...identity },
+        effective:{ ...identity },
+      },
+    };
+  });
 }
 
 function validateCounterfeitConfig(config) {
