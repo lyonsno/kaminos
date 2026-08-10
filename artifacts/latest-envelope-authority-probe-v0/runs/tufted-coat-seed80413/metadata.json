@@ -1,0 +1,25 @@
+{
+  "name": "latest-envelope-029",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "9470a96e04f7",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/source/latest-envelope-029.png",
+  "input_name": "latest-envelope-029.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/prompts/tufted-coat.txt",
+    "seed": "80413",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786339737.968108,
+  "duration_s": 31.4
+}

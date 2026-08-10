@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.latest-envelope-authority-probe-result.v0",
+  "cells": [
+    {
+      "id": "mannequin-seed80413",
+      "jobId": "17986b61e774",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "status": "done",
+      "exitCode": 0,
+      "durationSeconds": 32.58706307411194,
+      "source": "source/latest-envelope-029.png",
+      "prompt": "Elaborate this mannequin into a finished creature.",
+      "output": "runs/mannequin-seed80413/output.png",
+      "outputSha256": "a20285f2969d3098d09fa50b6970d66ba6dfadd445ddb25241a24bd661eb00d5",
+      "rawReceipt": "receipts/17986b61e774.json",
+      "rawReceiptSha256": "bfd3080dac67cacb98fb91895f116589d0fccfa0795ef20e155db9ef727484ff",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/prompts/mannequin.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/runs/mannequin-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "visualDisposition": "safe-positive",
+      "interpretation": "The fixed basin remains a green carnivoran, but revision-029 visibly transfers its rounder hindquarter, tighter trunk, cleaner forequarter, and more feline head-neck relation. This is candidate-specific source response, not a categorical cat conversion."
+    },
+    {
+      "id": "tufted-coat-seed80413",
+      "jobId": "9470a96e04f7",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "status": "done",
+      "exitCode": 0,
+      "durationSeconds": 31.40798306465149,
+      "source": "source/latest-envelope-029.png",
+      "prompt": "This shape covered in broad layered fur tufts.",
+      "output": "runs/tufted-coat-seed80413/output.png",
+      "outputSha256": "3ae339d24dc1eccb4afa5f2fff9278be50cddc7f8c67be7a203034c38b9e7537",
+      "rawReceipt": "receipts/9470a96e04f7.json",
+      "rawReceiptSha256": "ad70676dc90fcc21ea75703e2b509c2b49eb27cb8630cfcff356e229cc1aecc4",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/prompts/tufted-coat.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-authority-probe-v0/runs/tufted-coat-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "visualDisposition": "safe-negative",
+      "interpretation": "The prompt overpowers local anatomy and produces a dense shaggy fiber shell. It does not produce broad separated meso-scale clumps and should not advance to TRELLIS."
+    }
+  ],
+  "campaignResult": "Revision-029 buys additional local morphological authority inside the fixed seed-80413 basin, but not a categorical basin change. Explicit broad-tuft language is too destructive at this setting and fails the intended fur representation test.",
+  "claimCeiling": "Candidate-specific FLUX source authority and prompt failure only. No arbitrary-morphology, production, or TRELLIS claim."
+}

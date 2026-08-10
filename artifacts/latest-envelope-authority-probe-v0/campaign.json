@@ -1,0 +1,56 @@
+{
+  "schema": "kaminos.latest-envelope-authority-probe.v0",
+  "campaignQuestion": "Does the more anatomically organized revision-029 envelope move the fixed seed-80413 basin toward the authored feline morphology, and can the same source induce broad separated fur structure rather than an undifferentiated hair shell?",
+  "source": {
+    "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "blendSha256": "0df08915c9319ec37bf0de02bd6bd59b028bcb77d7870ca91a2663afe40e8360",
+    "object": "Cube.056",
+    "evaluatedVertexCount": 1195,
+    "evaluatedPolygonCount": 1198,
+    "evaluatedTriangleCount": 2465,
+    "plate": "source/latest-envelope-029.png",
+    "plateSha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4",
+    "renderManifest": "source/manifest.json"
+  },
+  "matchedPredecessor": {
+    "blend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-025.blend",
+    "source": "../nonlinear-basin-threshold-assay-v0/resolution-ladder/lod-00-r1.00.png",
+    "result": "../current-mannequin-registration-successor-v0/runs/mannequin-seed80413/output.png",
+    "seed": 80413,
+    "prompt": "Elaborate this mannequin into a finished creature."
+  },
+  "cells": [
+    {
+      "id": "mannequin-seed80413",
+      "question": "Does authored revision-029 morphology shift the known seed-80413 fox/wolf basin toward cat while retaining elaboration?",
+      "source": "source/latest-envelope-029.png",
+      "prompt": "Elaborate this mannequin into a finished creature.",
+      "promptFile": "prompts/mannequin.txt",
+      "seed": 80413,
+      "model": "flux2-klein-9b",
+      "quantize": 4,
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "guidance": 1.0,
+      "mlxCacheLimitGb": 48
+    },
+    {
+      "id": "tufted-coat-seed80413",
+      "question": "Can a concise representation-level prompt induce broad separated fur clumps without destroying the authored morphology?",
+      "source": "source/latest-envelope-029.png",
+      "prompt": "This shape covered in broad layered fur tufts.",
+      "promptFile": "prompts/tufted-coat.txt",
+      "seed": 80413,
+      "model": "flux2-klein-9b",
+      "quantize": 4,
+      "width": 512,
+      "height": 512,
+      "steps": 8,
+      "guidance": 1.0,
+      "mlxCacheLimitGb": 48
+    }
+  ],
+  "claimCeiling": "This matched pair may establish candidate-specific source authority and a candidate fur-representation route. It cannot establish arbitrary-morphology control, production reliability, or TRELLIS compatibility."
+}
