@@ -1,0 +1,27 @@
+{
+  "question": "Does the current cheap TRELLIS route preserve explicit official-demo fur clumps cleanly enough to rule out settings as the primary cat-fur failure?",
+  "source": {
+    "role": "official TRELLIS.2 furry creature example",
+    "canonicalPath": "/Users/noahlyons/dev/trellis-mac/TRELLIS.2/assets/example_image/5c80e5e03a3b60b6f03eaf555ba1dafc0e4230c472d7e8c8e2c5ca0a0dfcef10.webp",
+    "copiedPath": "source/official-shaggy-bear.webp",
+    "sha256": "fbd98cf5da79c56f8efc6cf86804391e71bdad2e935d21a7262472653a0674dc",
+    "dimensions": [792, 792]
+  },
+  "cells": {
+    "exactCheapRoute": {
+      "jobType": "trellis2mlx_fast",
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true,
+      "seed": 80301
+    }
+  },
+  "decisionRule": {
+    "ifExactIsClean": "stop; source ambiguity explains the cat-fur failure",
+    "ifExactIsDegraded": "run one higher-quality rung on this same source"
+  },
+  "claimCeiling": "One official example can distinguish a gross cheap-route fur failure from source-specific ambiguity; it cannot establish production reliability across fur types."
+}

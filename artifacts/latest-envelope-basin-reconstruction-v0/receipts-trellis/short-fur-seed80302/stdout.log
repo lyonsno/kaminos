@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80302/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 20.4s
+  1992 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 10.3s (1992 tokens)
+  No-cascade: using LR SLat directly (1,992 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 9379 voxels
+  Level 1 → 2: 46161 voxels
+  Level 2 → 3: 242232 voxels
+  Level 3 → 4: 1330873 voxels
+  Decoded: 22.1s (1,330,873 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  1,330,873 voxels, coord range [34, 511], grid_size=512
+  Extracted: 1.3s
+  1,330,873 vertices, 3,006,396 faces
+  Pre-simplify: 55,760V 271,321F (28.5s)
+  Removed 87890 duplicate faces
+  Removed 104335 non-manifold faces
+  Filled 882 holes (787 too large, max_perimeter=0.03)
+  Cleanup: 55,760V 271,321F → 54,165V 82,036F
+  Cleanup: 2.7s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 4.6s (1,992 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 9379 voxels
+  Level 1 → 2: 46161 voxels
+  Level 2 → 3: 242232 voxels
+  Level 3 → 4: 1330873 voxels
+  Decoded: 8.4s (1,330,873 voxels, 6 channels)
+  PBR attrs: RGB [-0.00, 0.66] metallic [-0.00, 0.21] roughness [0.41, 0.98]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 157,060V 82,036F (1.6s)
+    Rasterizing UV space (82,036 tris, 1024x1024, MLX)...
+    402,412 pixels covered (0.8s)
+    Interpolated 402,412 positions (0.0s)
+    Sampled voxel attrs (1.0s)
+    Inpainted seams (0.6s)
+
+  Saved: /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80302/output.glb (8.2MB)
+
+Total: 110.3s

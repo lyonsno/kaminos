@@ -1,0 +1,64 @@
+{
+  "schema": "kaminos.latest-envelope-basin-reconstruction.v0",
+  "campaignQuestion": "Which useful completion basins preserve the authored revision-029 envelope, and which admitted outputs does TRELLIS reconstruct faithfully?",
+  "source": {
+    "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "blendSha256": "0df08915c9319ec37bf0de02bd6bd59b028bcb77d7870ca91a2663afe40e8360",
+    "object": "Cube.056",
+    "plate": "source/latest-envelope-029.png",
+    "plateSha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4",
+    "renderManifest": "source/manifest.json"
+  },
+  "seeds": [80301, 80302, 80413],
+  "promptFamilies": [
+    {"id": "neutral", "prompt": "Elaborate this mannequin into a finished creature.", "promptFile": "prompts/neutral.txt", "surfaceClass": "unconstrained"},
+    {"id": "skin", "prompt": "This shape covered in skin.", "promptFile": "prompts/skin.txt", "surfaceClass": "skin"},
+    {"id": "short-fur", "prompt": "This shape covered in short dense fur.", "promptFile": "prompts/short-fur.txt", "surfaceClass": "fur"},
+    {"id": "armor", "prompt": "This creature covered in broad armor plates.", "promptFile": "prompts/armor.txt", "surfaceClass": "rigid-plates"},
+    {"id": "shell", "prompt": "This creature with a smooth protective shell.", "promptFile": "prompts/shell.txt", "surfaceClass": "shell"},
+    {"id": "mossy-stone", "prompt": "This shape as a mossy stone creature.", "promptFile": "prompts/mossy-stone.txt", "surfaceClass": "rigid-stone"}
+  ],
+  "fluxRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "cells": [
+    {"id": "neutral-seed80301", "family": "neutral", "source": "source/latest-envelope-029.png", "promptFile": "prompts/neutral.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "neutral-seed80302", "family": "neutral", "source": "source/latest-envelope-029.png", "promptFile": "prompts/neutral.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "neutral-seed80413", "family": "neutral", "source": "source/latest-envelope-029.png", "promptFile": "prompts/neutral.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "skin-seed80301", "family": "skin", "source": "source/latest-envelope-029.png", "promptFile": "prompts/skin.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "skin-seed80302", "family": "skin", "source": "source/latest-envelope-029.png", "promptFile": "prompts/skin.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "skin-seed80413", "family": "skin", "source": "source/latest-envelope-029.png", "promptFile": "prompts/skin.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "short-fur-seed80301", "family": "short-fur", "source": "source/latest-envelope-029.png", "promptFile": "prompts/short-fur.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "short-fur-seed80302", "family": "short-fur", "source": "source/latest-envelope-029.png", "promptFile": "prompts/short-fur.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "short-fur-seed80413", "family": "short-fur", "source": "source/latest-envelope-029.png", "promptFile": "prompts/short-fur.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "armor-seed80301", "family": "armor", "source": "source/latest-envelope-029.png", "promptFile": "prompts/armor.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "armor-seed80302", "family": "armor", "source": "source/latest-envelope-029.png", "promptFile": "prompts/armor.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "armor-seed80413", "family": "armor", "source": "source/latest-envelope-029.png", "promptFile": "prompts/armor.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "shell-seed80301", "family": "shell", "source": "source/latest-envelope-029.png", "promptFile": "prompts/shell.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "shell-seed80302", "family": "shell", "source": "source/latest-envelope-029.png", "promptFile": "prompts/shell.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "shell-seed80413", "family": "shell", "source": "source/latest-envelope-029.png", "promptFile": "prompts/shell.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "mossy-stone-seed80301", "family": "mossy-stone", "source": "source/latest-envelope-029.png", "promptFile": "prompts/mossy-stone.txt", "seed": 80301, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "mossy-stone-seed80302", "family": "mossy-stone", "source": "source/latest-envelope-029.png", "promptFile": "prompts/mossy-stone.txt", "seed": 80302, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48},
+    {"id": "mossy-stone-seed80413", "family": "mossy-stone", "source": "source/latest-envelope-029.png", "promptFile": "prompts/mossy-stone.txt", "seed": 80413, "jobType": "mflux_flux2_edit_promptfile", "model": "flux2-klein-9b", "quantize": 4, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlxCacheLimitGb": 48}
+  ],
+  "trellisPolicy": {
+    "jobType": "trellis2mlx_fast",
+    "seedBinding": "reuse-flux-seed",
+    "advanceAllHappyStructurallyLegibleNonFur": true,
+    "advanceStructurallyLegibleFur": true,
+    "steps": 6,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "orbitAzimuths": [0, 60, 120, 180, 240, 300],
+    "orbitElevation": 12
+  },
+  "claimCeiling": "This campaign may establish source-specific FLUX basin breadth and candidate-specific TRELLIS preferences for the frozen routes, prompts, and seeds. It cannot establish universal prompt semantics, production reconstruction reliability, riggability, or arbitrary-creature correspondence."
+}

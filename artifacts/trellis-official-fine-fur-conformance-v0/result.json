@@ -1,0 +1,58 @@
+{
+  "status": "completed",
+  "job": {
+    "id": "b576b46e1e8e",
+    "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/b576b46e1e8e/receipt.json",
+    "durationSeconds": 514.4
+  },
+  "effectiveRoute": {
+    "jobType": "trellis2mlx_fast",
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "simplifyFirst": true,
+    "seed": 80301
+  },
+  "geometry": {
+    "extractedVertices": 4492740,
+    "extractedFaces": 16695668,
+    "preCleanupVertices": 91941,
+    "preCleanupFaces": 953689,
+    "simplifiedVertices": 88569,
+    "simplifiedFaces": 149311
+  },
+  "output": {
+    "path": "output/output.glb",
+    "sha256": "ddfdb643adba5ae37ce53904c9e52cd77890be495836c904ad02610e13c3b924"
+  },
+  "visualDisposition": "organized-fine-clumps-degrade-on-cheap-route",
+  "interpretation": "The cloak volume survives, but its ordered leaf-like tufts collapse into dense irregular triangular flakes across all six views. This matches the generated cat-fur failure class closely enough to trigger the preregistered 1M-face comparison.",
+  "orbit": [
+    {
+      "path": "output/orbit/az000-el12.png",
+      "sha256": "2ad08dfdf5df09e2e3225334fc701fe1a6cd159ee23b855b7b2c60a501c1a6ba"
+    },
+    {
+      "path": "output/orbit/az060-el12.png",
+      "sha256": "b071bbb5c821cdc5a5e6c96e93e38631db5b8c235223aaaf246f399a891371bf"
+    },
+    {
+      "path": "output/orbit/az120-el12.png",
+      "sha256": "7c227033afa924a6f18b517b5152e74866e6be6c46d2167634e444d70839b1ec"
+    },
+    {
+      "path": "output/orbit/az180-el12.png",
+      "sha256": "753208477d11f3d17f02b56bde1526e3dc09198371674418bffd5d6a331a55a3"
+    },
+    {
+      "path": "output/orbit/az240-el12.png",
+      "sha256": "5a29e47c0e063e008c666c8cab080453d55f2cf7307ccf36056d101e181e05cc"
+    },
+    {
+      "path": "output/orbit/az300-el12.png",
+      "sha256": "1ec8d0af83410c29c0d8150c267b5e43d912459a2e88f0b19d55d1ef74159a64"
+    }
+  ]
+}

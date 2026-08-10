@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.latest-envelope-basin-reconstruction.visual-admission.v0",
+  "campaign": "campaign.json",
+  "inspection": {
+    "inspector": "principal-research-lead",
+    "surface": "all 18 native 512x512 FLUX outputs",
+    "basis": "direct visual inspection at original resolution"
+  },
+  "operatorSafety": {
+    "campaignSafe": true,
+    "summary": "Happy or neutral isolated creature/object studies; no infestation, corruption, cavity clusters, or multiplicity hazards observed."
+  },
+  "policy": {
+    "nonFur": "Promote every non-fur output, including shell-collapse controls, because TRELLIS is cheap and the failures help map reconstruction preferences.",
+    "fur": "Promote all three short-fur outputs because every seed produced a coherent, isolated, structurally legible creature."
+  },
+  "cells": {
+    "neutral-seed80301": {"family": "neutral", "seed": 80301, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Plausible hairless mammal; authored support placement and body axis remain legible."},
+    "neutral-seed80302": {"family": "neutral", "seed": 80302, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Canid-like completion with strong authored silhouette retention."},
+    "neutral-seed80413": {"family": "neutral", "seed": 80413, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Unfamiliar green mammal; useful prior-shift test with preserved macrostructure."},
+    "skin-seed80301": {"family": "skin", "seed": 80301, "safety": "safe", "affect": "safe-neutral", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Literal skin treatment; highly constrained silhouette and support layout."},
+    "skin-seed80302": {"family": "skin", "seed": 80302, "safety": "safe", "affect": "safe-neutral", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Literal skin treatment with modest seed-specific proportion shift."},
+    "skin-seed80413": {"family": "skin", "seed": 80413, "safety": "safe", "affect": "safe-neutral", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "candidate", "promotedToTrellis": true, "note": "Literal skin treatment; surface blemishes present but no operator no-go pattern."},
+    "short-fur-seed80301": {"family": "short-fur", "seed": 80301, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "moderate-strong", "trellisRole": "fur-candidate", "promotedToTrellis": true, "note": "Dense coherent fur; bear-like prior but clean silhouette."},
+    "short-fur-seed80302": {"family": "short-fur", "seed": 80302, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "fur-candidate", "promotedToTrellis": true, "note": "Strongest fur candidate; feline/canid structure remains readable through surface detail."},
+    "short-fur-seed80413": {"family": "short-fur", "seed": 80413, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "moderate-strong", "trellisRole": "fur-candidate", "promotedToTrellis": true, "note": "Dense coherent fur; useful cross-seed reconstruction test."},
+    "armor-seed80301": {"family": "armor", "seed": 80301, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "rigid-candidate", "promotedToTrellis": true, "note": "Broad local plates preserve organism and articulate around authored supports."},
+    "armor-seed80302": {"family": "armor", "seed": 80302, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "rigid-candidate", "promotedToTrellis": true, "note": "Most literal plate-localization result; strong rigid/deformable segmentation candidate."},
+    "armor-seed80413": {"family": "armor", "seed": 80413, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "rigid-candidate", "promotedToTrellis": true, "note": "Heavier armor basin while preserving support and body organization."},
+    "shell-seed80301": {"family": "shell", "seed": 80301, "safety": "safe", "affect": "safe-neutral", "structureLegible": false, "sourceAdherence": "collapsed", "trellisRole": "negative-control", "promotedToTrellis": true, "note": "Prompt overwrote the organism with an almost literal shell object."},
+    "shell-seed80302": {"family": "shell", "seed": 80302, "safety": "safe", "affect": "safe-neutral", "structureLegible": true, "sourceAdherence": "weak", "trellisRole": "boundary-control", "promotedToTrellis": true, "note": "Organism survives, but shell becomes the dominant body volume."},
+    "shell-seed80413": {"family": "shell", "seed": 80413, "safety": "safe", "affect": "safe-neutral", "structureLegible": false, "sourceAdherence": "collapsed", "trellisRole": "negative-control", "promotedToTrellis": true, "note": "Prompt produced a freestanding shell/helmet form with no visible organism."},
+    "mossy-stone-seed80301": {"family": "mossy-stone", "seed": 80301, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "strong", "trellisRole": "rigid-surface-candidate", "promotedToTrellis": true, "note": "Stone and moss applied over a coherent creature with authored support layout intact."},
+    "mossy-stone-seed80302": {"family": "mossy-stone", "seed": 80302, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "rigid-surface-candidate", "promotedToTrellis": true, "note": "Detailed mixed rigid/soft surface while retaining the source silhouette."},
+    "mossy-stone-seed80413": {"family": "mossy-stone", "seed": 80413, "safety": "safe", "affect": "happy-positive", "structureLegible": true, "sourceAdherence": "very-strong", "trellisRole": "rigid-surface-candidate", "promotedToTrellis": true, "note": "Cleanest source-preserving stone candidate; strong test of textured rigid reconstruction."}
+  }
+}

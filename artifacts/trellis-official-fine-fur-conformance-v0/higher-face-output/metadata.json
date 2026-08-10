@@ -1,0 +1,16 @@
+{
+  "name": "official-dwarf-fur-cloak",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "edc7a6d78e5e",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/source/official-dwarf-fur-cloak.webp",
+  "input_name": "official-dwarf-fur-cloak.webp",
+  "params": {
+    "seed": "80301",
+    "target_faces": "1000000"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786355397.713774,
+  "duration_s": 456.9
+}

@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.15838415920734406,
+      0.499937504529953,
+      0.41100940108299255
+    ],
+    "low": [
+      -0.15831856429576874,
+      -0.500266432762146,
+      -0.41335541009902954
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb",
+    "sha256": "062deed4fd9c9d9c4730309798af2ee8cb0184e4c7ae537d1da340e69712a232"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 562050,
+      "cameraLocation": [
+        2.3492424488067627,
+        -0.00016446411609649658,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.100224256515503,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az000-el12.png",
+      "sha256": "e933566c507454eab62cf2467c9790fa2a810b473c5e305eb3bd139c89129237"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 536583,
+      "cameraLocation": [
+        1.1746375560760498,
+        2.0343105792999268,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.1213037967681885,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az060-el12.png",
+      "sha256": "0c90424806ded5b4846aee4022ad1609a15af7572793ada3b75c56f1aacd476b"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 524347,
+      "cameraLocation": [
+        -1.1745719909667969,
+        2.0343105792999268,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.1213037967681885,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az120-el12.png",
+      "sha256": "a9ff735c084b986956b62a320241d5eb7f0c1622d76f96b55c444de0194830ee"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 542044,
+      "cameraLocation": [
+        -2.3491766452789307,
+        -0.00016446411609649658,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.100224256515503,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az180-el12.png",
+      "sha256": "3fbfc39f6f77716a6145e38695779c4b5b1d7c76b4b8a5cce1ba9e990de567f2"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 535924,
+      "cameraLocation": [
+        -1.1745719909667969,
+        -2.034639596939087,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.1213037967681885,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az240-el12.png",
+      "sha256": "7f073ef301197e461abf44324c69992206e20a146e38724a3beff268a0b88076"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 544380,
+      "cameraLocation": [
+        1.1746375560760498,
+        -2.034639596939087,
+        0.49816691875457764
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.1213037967681885,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/orbit/az300-el12.png",
+      "sha256": "46e31a676a95626e3431c416140ca21da6b3960c6465d165095363564dc8e3fb"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 148802
+}

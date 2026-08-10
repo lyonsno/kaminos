@@ -1,0 +1,198 @@
+{
+  "schema": "kaminos.latest-envelope-basin-reconstruction.trellis-visual-review.v0",
+  "campaign": "campaign.json",
+  "inspection": {
+    "inspector": "principal-research-lead",
+    "surface": "six-view textured orbit renders of each completed TRELLIS cast",
+    "basis": "direct visual inspection after canonical Greenroom completion"
+  },
+  "claimAxes": {
+    "macrostructure": "Whether TRELLIS produced one coherent animal volume with the expected head, trunk, supports, and tail.",
+    "supportSeparation": "Whether the four supports remain visually distinct enough to seed correspondence or fitting.",
+    "backsideCompletion": "Whether unseen geometry closes coherently rather than collapsing, duplicating, or fusing major structures.",
+    "surfaceGeometry": "Whether local geometry is smooth and stable enough to carry deformation, independent of semantic recognizability.",
+    "reuseDisposition": "candidate means plausible deformation substrate; conditional means useful after repair or surface replacement; appearance-only means retain visual semantics but reject the generated surface as the deformation carrier; control means intentionally diagnostic rather than reusable."
+  },
+  "cells": {
+    "neutral-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "mostly-distinct",
+      "backsideCompletion": "coherent-with-local-artifacts",
+      "surfaceGeometry": "coarse-sharded",
+      "textureQuality": "legible-but-rough",
+      "reuseDisposition": "conditional",
+      "note": "Recognizable complete animal and preserved body organization; rough shard-like surface and belly/support artifacts require surface replacement or substantial repair."
+    },
+    "neutral-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "fur-transitions-sharded",
+      "textureQuality": "legible",
+      "reuseDisposition": "conditional",
+      "note": "Canid-like cast remains structurally readable, but visible fur transitions become unstable geometric facets."
+    },
+    "neutral-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "mostly-smooth-with-local-fringe",
+      "textureQuality": "good",
+      "reuseDisposition": "conditional",
+      "note": "Cleanest neutral reconstruction; macrostructure is strong with localized facial fringe and minor surface repair still required."
+    },
+    "skin-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "mostly-distinct",
+      "backsideCompletion": "coherent-with-rear-support-ambiguity",
+      "surfaceGeometry": "smooth",
+      "textureQuality": "good",
+      "reuseDisposition": "candidate",
+      "note": "Clean closed animal volume with plausible smooth surface; a localized doubled or ambiguous rear support remains the main correspondence risk."
+    },
+    "skin-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "smooth",
+      "textureQuality": "good",
+      "reuseDisposition": "candidate",
+      "note": "Coherent smooth cast from all inspected views; paws and face are prior-driven, but all four supports and the global body organization survive."
+    },
+    "skin-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "smooth-with-small-local-blemishes",
+      "textureQuality": "good",
+      "reuseDisposition": "candidate",
+      "note": "Strong smooth reconstruction with clean tail and separated supports; local facial and foot details are generator-specific but do not compromise the carrier volume."
+    },
+    "short-fur-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct-but-blobbed-at-feet",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "dense-sharded-fur",
+      "textureQuality": "recognizable-fur",
+      "reuseDisposition": "appearance-only",
+      "note": "Head, ears, trunk, supports, and rear volume survive, but millions of fur-derived geometric shards destroy stable local correspondence."
+    },
+    "short-fur-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "dense-high-relief-fur",
+      "textureQuality": "recognizable-fur",
+      "reuseDisposition": "appearance-only",
+      "note": "Better paws, muzzle, tail, and whole-body completion than the first fur seed, but high-relief coat geometry still makes the cast unsuitable as the primary deformation surface."
+    },
+    "short-fur-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct-but-blobbed-at-feet",
+      "backsideCompletion": "coherent-with-tail-loss",
+      "surfaceGeometry": "dense-sharded-fur",
+      "textureQuality": "recognizable-fur",
+      "reuseDisposition": "appearance-only",
+      "note": "Third independent recurrence of fur-derived shard geometry; the body, head, and supports survive, but the tail is weak and the generated coat is unsuitable for local correspondence."
+    },
+    "armor-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "coherent-plates-with-ragged-borders",
+      "textureQuality": "good",
+      "reuseDisposition": "component-candidate",
+      "note": "Broad plates survive as spatially distinct riding components across the back, shoulders, hips, and limbs while a continuous organism remains visible underneath."
+    },
+    "armor-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "clean-layered-plates-with-local-seam-noise",
+      "textureQuality": "good",
+      "reuseDisposition": "component-candidate",
+      "note": "Strongest rigid-component reconstruction: overlapping back, hip, chest, and limb plates remain visibly layered around a continuous body with unusually clean separation."
+    },
+    "armor-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "coherent-heavy-plates-with-ragged-borders",
+      "textureQuality": "good",
+      "reuseDisposition": "component-candidate",
+      "note": "Heavier armor basin still reconstructs coherent riding plates over the torso and supports; borders need cleanup, but the rigid/underbody distinction remains strong."
+    },
+    "shell-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "collapsed-to-object",
+      "supportSeparation": "absent",
+      "backsideCompletion": "coherent-object",
+      "surfaceGeometry": "smooth-closed-shell",
+      "textureQuality": "plain",
+      "reuseDisposition": "control",
+      "note": "TRELLIS faithfully reconstructs the FLUX collapse as a smooth closed shell object; this is a clean negative control showing that reconstruction cannot recover organism structure erased upstream."
+    },
+    "shell-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "weak-organism-under-dominant-shell",
+      "supportSeparation": "distinct-but-thin-and-damaged",
+      "backsideCompletion": "coherent-shell-with-attached-creature-fragments",
+      "surfaceGeometry": "smooth-shell-over-rough-supports",
+      "textureQuality": "plain",
+      "reuseDisposition": "control",
+      "note": "TRELLIS preserves the weak organism that survived FLUX, but the shell remains an enormous dominant body volume and the supports are subordinate damaged appendages."
+    },
+    "shell-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "collapsed-to-object",
+      "supportSeparation": "absent",
+      "backsideCompletion": "coherent-object",
+      "surfaceGeometry": "smooth-closed-helmet-shell",
+      "textureQuality": "plain",
+      "reuseDisposition": "control",
+      "note": "Second complete upstream collapse reconstructed faithfully as a smooth helmet-like shell with a rim and rear loop; no organism structure is recoverable."
+    },
+    "mossy-stone-seed80301": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "pervasive-moss-derived-faceting",
+      "textureQuality": "good-color-poor-surface",
+      "reuseDisposition": "appearance-only",
+      "note": "The animal and all four supports survive, but pervasive moss detail becomes dense geometric faceting; retain the appearance semantics while replacing the deformation surface."
+    },
+    "mossy-stone-seed80302": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent",
+      "surfaceGeometry": "stone-regions-under-pervasive-moss-relief",
+      "textureQuality": "strong",
+      "reuseDisposition": "appearance-only",
+      "note": "Coherent stone regions and animal supports survive, but leaf-like moss relief covers most of the body; useful for material-region inference, not as the primary deformation mesh."
+    },
+    "mossy-stone-seed80413": {
+      "status": "reviewed",
+      "macrostructure": "strong",
+      "supportSeparation": "distinct",
+      "backsideCompletion": "coherent-with-weak-tail",
+      "surfaceGeometry": "mostly-stone-with-patchy-moss-relief",
+      "textureQuality": "strong",
+      "reuseDisposition": "appearance-only",
+      "note": "Cleanest mossy-stone cast: the stone body is comparatively smooth and all four supports survive, but moss still creates patchy relief and the tail is weak; retain as an appearance and material-region reference."
+    }
+  }
+}

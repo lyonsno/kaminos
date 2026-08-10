@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.2217523753643036,
+      0.49900609254837036,
+      0.39361488819122314
+    ],
+    "low": [
+      -0.22220508754253387,
+      -0.5004227161407471,
+      -0.39703628420829773
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/output.glb",
+    "sha256": "eeb7ca36dd8eb7ebce7498bc83ac3832e81a3b61b3ac5849cec8a039ef0362a9"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 682890,
+      "cameraLocation": [
+        2.3757498264312744,
+        -0.0007083117961883545,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.0993716716766357,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az000-el12.png",
+      "sha256": "8677ecd197411262b48a45ead74fd89cb96bb1c45cba61e64856ed1617d9be9c"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 644271,
+      "cameraLocation": [
+        1.187761664390564,
+        2.0569472312927246,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.0994272232055664,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az060-el12.png",
+      "sha256": "dd04cd49ac26d7040b1601e9efca440ee037044772b55c9ffedc49f72396fbc6"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 635974,
+      "cameraLocation": [
+        -1.1882144212722778,
+        2.0569472312927246,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.0994272232055664,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az120-el12.png",
+      "sha256": "5a37db0127d84a253da5b4033cd71076cdb7d897ca80b933aff67c05d1083c01"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 662039,
+      "cameraLocation": [
+        -2.376202344894409,
+        -0.0007083117961883545,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.0993716716766357,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az180-el12.png",
+      "sha256": "2f95faa7b593c80d5352e77b991d36c3fae748af72c9d663b4d32e411d5fc7cb"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 621516,
+      "cameraLocation": [
+        -1.1882144212722778,
+        -2.058363914489746,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.0994272232055664,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az240-el12.png",
+      "sha256": "acb69e833beeac61da7f28e024f9a51b7a96a4a8ace3b9afb8118a98461763c5"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 631581,
+      "cameraLocation": [
+        1.187761664390564,
+        -2.058363914489746,
+        0.5033186078071594
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.0994272232055664,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/orbit/az300-el12.png",
+      "sha256": "a91a2ea931ee657ee6de2aedcbef57e532d9e2c65df0f4f393358ffe4d5d5091"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 83573
+}

@@ -1,0 +1,10 @@
+{
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80413/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80413",
+  "params": {
+    "seed": "80413"
+  },
+  "job_id": "937ef0362a2c",
+  "submitted_at": 1786346512.348491
+}

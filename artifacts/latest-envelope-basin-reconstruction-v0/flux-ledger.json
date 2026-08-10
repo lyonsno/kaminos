@@ -1,0 +1,366 @@
+{
+  "schema": "kaminos.latest-envelope-basin-reconstruction.flux-ledger.v0",
+  "campaign": "campaign.json",
+  "cells": {
+    "neutral-seed80301": {
+      "jobId": "11d4e47a650e",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/neutral-seed80301/output.png",
+      "receipt": "receipts/neutral-seed80301/receipt.json",
+      "statusEvidence": "receipts/neutral-seed80301/status.json"
+    },
+    "neutral-seed80302": {
+      "jobId": "d501e004a58f",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/neutral-seed80302/output.png",
+      "receipt": "receipts/neutral-seed80302/receipt.json",
+      "statusEvidence": "receipts/neutral-seed80302/status.json"
+    },
+    "neutral-seed80413": {
+      "jobId": "5f680ac18732",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/neutral.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/neutral-seed80413/output.png",
+      "receipt": "receipts/neutral-seed80413/receipt.json",
+      "statusEvidence": "receipts/neutral-seed80413/status.json"
+    },
+    "skin-seed80301": {
+      "jobId": "48fc46a22480",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/skin-seed80301/output.png",
+      "receipt": "receipts/skin-seed80301/receipt.json",
+      "statusEvidence": "receipts/skin-seed80301/status.json"
+    },
+    "skin-seed80302": {
+      "jobId": "c88e38424683",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/skin-seed80302/output.png",
+      "receipt": "receipts/skin-seed80302/receipt.json",
+      "statusEvidence": "receipts/skin-seed80302/status.json"
+    },
+    "skin-seed80413": {
+      "jobId": "8d9d662524d0",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/skin.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/skin-seed80413/output.png",
+      "receipt": "receipts/skin-seed80413/receipt.json",
+      "statusEvidence": "receipts/skin-seed80413/status.json"
+    },
+    "short-fur-seed80301": {
+      "jobId": "5f609377d5be",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/short-fur-seed80301/output.png",
+      "receipt": "receipts/short-fur-seed80301/receipt.json",
+      "statusEvidence": "receipts/short-fur-seed80301/status.json"
+    },
+    "short-fur-seed80302": {
+      "jobId": "2ccc1e118d33",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/short-fur-seed80302/output.png",
+      "receipt": "receipts/short-fur-seed80302/receipt.json",
+      "statusEvidence": "receipts/short-fur-seed80302/status.json"
+    },
+    "short-fur-seed80413": {
+      "jobId": "e4bc8415c50b",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/short-fur.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/short-fur-seed80413/output.png",
+      "receipt": "receipts/short-fur-seed80413/receipt.json",
+      "statusEvidence": "receipts/short-fur-seed80413/status.json"
+    },
+    "armor-seed80301": {
+      "jobId": "c35a136dd500",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/armor-seed80301/output.png",
+      "receipt": "receipts/armor-seed80301/receipt.json",
+      "statusEvidence": "receipts/armor-seed80301/status.json"
+    },
+    "armor-seed80302": {
+      "jobId": "8899e8fb683d",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/armor-seed80302/output.png",
+      "receipt": "receipts/armor-seed80302/receipt.json",
+      "statusEvidence": "receipts/armor-seed80302/status.json"
+    },
+    "armor-seed80413": {
+      "jobId": "8e234eeb65a3",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/armor.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/armor-seed80413/output.png",
+      "receipt": "receipts/armor-seed80413/receipt.json",
+      "statusEvidence": "receipts/armor-seed80413/status.json"
+    },
+    "shell-seed80301": {
+      "jobId": "d6e451fe2273",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/shell-seed80301/output.png",
+      "receipt": "receipts/shell-seed80301/receipt.json",
+      "statusEvidence": "receipts/shell-seed80301/status.json"
+    },
+    "shell-seed80302": {
+      "jobId": "7c9e84f586cb",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/shell-seed80302/output.png",
+      "receipt": "receipts/shell-seed80302/receipt.json",
+      "statusEvidence": "receipts/shell-seed80302/status.json"
+    },
+    "shell-seed80413": {
+      "jobId": "adf60ab0a98e",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/shell.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/shell-seed80413/output.png",
+      "receipt": "receipts/shell-seed80413/receipt.json",
+      "statusEvidence": "receipts/shell-seed80413/status.json"
+    },
+    "mossy-stone-seed80301": {
+      "jobId": "7d12203c227d",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt",
+        "seed": "80301",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "flux/mossy-stone-seed80301/output.png",
+      "receipt": "receipts/mossy-stone-seed80301/receipt.json",
+      "statusEvidence": "receipts/mossy-stone-seed80301/status.json"
+    },
+    "mossy-stone-seed80302": {
+      "jobId": "cf5c3213c6f9",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt",
+        "seed": "80302",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+      "output": "flux/mossy-stone-seed80302/output.png",
+      "receipt": "receipts/mossy-stone-seed80302/receipt.json",
+      "statusEvidence": "receipts/mossy-stone-seed80302/status.json"
+    },
+    "mossy-stone-seed80413": {
+      "jobId": "5fd3ae959845",
+      "status": "done",
+      "jobType": "mflux_flux2_edit_promptfile",
+      "params": {
+        "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt",
+        "seed": "80413",
+        "model": "flux2-klein-9b",
+        "quantize": "4",
+        "width": "512",
+        "height": "512",
+        "steps": "8",
+        "guidance": "1.0",
+        "mlx_cache_limit_gb": "48"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80413/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80413 --mlx-cache-limit-gb 48",
+      "output": "flux/mossy-stone-seed80413/output.png",
+      "receipt": "receipts/mossy-stone-seed80413/receipt.json",
+      "statusEvidence": "receipts/mossy-stone-seed80413/status.json"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "status": "completed",
+  "job": {
+    "id": "edc7a6d78e5e",
+    "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/edc7a6d78e5e/receipt.json",
+    "durationSeconds": 456.9
+  },
+  "effectiveRoute": {
+    "jobType": "trellis2mlx_fast",
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "targetFaces": 1000000,
+    "textureSize": 1024,
+    "simplifyFirst": true,
+    "seed": 80301
+  },
+  "geometry": {
+    "extractedVertices": 4492740,
+    "extractedFaces": 16695668,
+    "preCleanupVertices": 94007,
+    "preCleanupFaces": 999983,
+    "simplifiedVertices": 90570,
+    "simplifiedFaces": 153251
+  },
+  "output": {
+    "path": "higher-face-output/output.glb",
+    "sha256": "90823f85ae5628c43cb41c9c568d65d3f13553f08ffad3bc638d20626ccdab35"
+  },
+  "visualDisposition": "organized-fine-clumps-do-not-improve-at-one-million-faces",
+  "interpretation": "The one-million-face request reproduces the exact same upstream sparse and decoded structure as the cheap route, but cleanup reduces 999,983 pre-cleanup faces to 153,251 final faces. Across six matched views, the source's ordered overlapping cloak clumps remain nearly identical irregular triangular flakes. Raising targetFaces alone is therefore insufficient on this route.",
+  "orbit": [
+    {
+      "path": "higher-face-output/orbit/az000-el12.png",
+      "sha256": "b68a19703afa695d72ea1e889270e3de7ecd9121e663e1aef31f0b241ed1ffdf"
+    },
+    {
+      "path": "higher-face-output/orbit/az060-el12.png",
+      "sha256": "016113ecdb7e6f090412e647cbd60728bf1499ec9cebfac33b76266aae6ca1cc"
+    },
+    {
+      "path": "higher-face-output/orbit/az120-el12.png",
+      "sha256": "b33fef2f174e384d7bb3273aa9e9aa3d0dacf30c2ff963c7582f0bba0bfdce35"
+    },
+    {
+      "path": "higher-face-output/orbit/az180-el12.png",
+      "sha256": "b8b630bdfda0acb08e0d905066cb3f73e085bad3ccfd87717167f43fbc80f713"
+    },
+    {
+      "path": "higher-face-output/orbit/az240-el12.png",
+      "sha256": "a02a5bece94e0cb76f96df155a20beba7f5b83f63ce7044b26b8172f98ed5ec9"
+    },
+    {
+      "path": "higher-face-output/orbit/az300-el12.png",
+      "sha256": "b5306856a1a577b9df1f226345611a5cd53c541f1063255a67bb806cd6e5a11c"
+    }
+  ]
+}

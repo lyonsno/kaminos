@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "153c409396e0",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786349045.854141,
+  "duration_s": 246.9
+}

@@ -1,0 +1,258 @@
+{
+  "schema": "kaminos.latest-envelope-basin-reconstruction.trellis-ledger.v0",
+  "submissions": "trellis-submissions.json",
+  "cells": {
+    "neutral-seed80301": {
+      "jobId": "8d4c7458ea32",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/neutral-seed80301/output.png",
+      "output": "trellis/neutral-seed80301/output.glb",
+      "receipt": "receipts-trellis/neutral-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/neutral-seed80301/status.json",
+      "trellisRole": "candidate"
+    },
+    "neutral-seed80302": {
+      "jobId": "4a363fae21ad",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/neutral-seed80302/output.png",
+      "output": "trellis/neutral-seed80302/output.glb",
+      "receipt": "receipts-trellis/neutral-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/neutral-seed80302/status.json",
+      "trellisRole": "candidate"
+    },
+    "neutral-seed80413": {
+      "jobId": "97fe08351ec7",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/neutral-seed80413/output.png",
+      "output": "trellis/neutral-seed80413/output.glb",
+      "receipt": "receipts-trellis/neutral-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/neutral-seed80413/status.json",
+      "trellisRole": "candidate"
+    },
+    "skin-seed80301": {
+      "jobId": "60f749eb62ca",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/skin-seed80301/output.png",
+      "output": "trellis/skin-seed80301/output.glb",
+      "receipt": "receipts-trellis/skin-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/skin-seed80301/status.json",
+      "trellisRole": "candidate"
+    },
+    "skin-seed80302": {
+      "jobId": "c3b5b6d9f433",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/skin-seed80302/output.png",
+      "output": "trellis/skin-seed80302/output.glb",
+      "receipt": "receipts-trellis/skin-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/skin-seed80302/status.json",
+      "trellisRole": "candidate"
+    },
+    "skin-seed80413": {
+      "jobId": "fa4a4b0bd00f",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/skin-seed80413/output.png",
+      "output": "trellis/skin-seed80413/output.glb",
+      "receipt": "receipts-trellis/skin-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/skin-seed80413/status.json",
+      "trellisRole": "candidate"
+    },
+    "short-fur-seed80301": {
+      "jobId": "2e471005bd27",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/short-fur-seed80301/output.png",
+      "output": "trellis/short-fur-seed80301/output.glb",
+      "receipt": "receipts-trellis/short-fur-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/short-fur-seed80301/status.json",
+      "trellisRole": "fur-candidate"
+    },
+    "short-fur-seed80302": {
+      "jobId": "d8799801bf91",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/short-fur-seed80302/output.png",
+      "output": "trellis/short-fur-seed80302/output.glb",
+      "receipt": "receipts-trellis/short-fur-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/short-fur-seed80302/status.json",
+      "trellisRole": "fur-candidate"
+    },
+    "short-fur-seed80413": {
+      "jobId": "fb4cde323363",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/short-fur-seed80413/output.png",
+      "output": "trellis/short-fur-seed80413/output.glb",
+      "receipt": "receipts-trellis/short-fur-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/short-fur-seed80413/status.json",
+      "trellisRole": "fur-candidate"
+    },
+    "armor-seed80301": {
+      "jobId": "cc8bad9ae5a2",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/armor-seed80301/output.png",
+      "output": "trellis/armor-seed80301/output.glb",
+      "receipt": "receipts-trellis/armor-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/armor-seed80301/status.json",
+      "trellisRole": "rigid-candidate"
+    },
+    "armor-seed80302": {
+      "jobId": "4c5425453885",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/armor-seed80302/output.png",
+      "output": "trellis/armor-seed80302/output.glb",
+      "receipt": "receipts-trellis/armor-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/armor-seed80302/status.json",
+      "trellisRole": "rigid-candidate"
+    },
+    "armor-seed80413": {
+      "jobId": "c079d165971b",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/armor-seed80413/output.png",
+      "output": "trellis/armor-seed80413/output.glb",
+      "receipt": "receipts-trellis/armor-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/armor-seed80413/status.json",
+      "trellisRole": "rigid-candidate"
+    },
+    "shell-seed80301": {
+      "jobId": "5e74f9874554",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/shell-seed80301/output.png",
+      "output": "trellis/shell-seed80301/output.glb",
+      "receipt": "receipts-trellis/shell-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/shell-seed80301/status.json",
+      "trellisRole": "negative-control"
+    },
+    "shell-seed80302": {
+      "jobId": "cc0b50d17866",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/shell-seed80302/output.png",
+      "output": "trellis/shell-seed80302/output.glb",
+      "receipt": "receipts-trellis/shell-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/shell-seed80302/status.json",
+      "trellisRole": "boundary-control"
+    },
+    "shell-seed80413": {
+      "jobId": "937ef0362a2c",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/shell-seed80413/output.png",
+      "output": "trellis/shell-seed80413/output.glb",
+      "receipt": "receipts-trellis/shell-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/shell-seed80413/status.json",
+      "trellisRole": "negative-control"
+    },
+    "mossy-stone-seed80301": {
+      "jobId": "153c409396e0",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80301"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/output.glb --seed 80301 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/mossy-stone-seed80301/output.png",
+      "output": "trellis/mossy-stone-seed80301/output.glb",
+      "receipt": "receipts-trellis/mossy-stone-seed80301/receipt.json",
+      "statusEvidence": "receipts-trellis/mossy-stone-seed80301/status.json",
+      "trellisRole": "rigid-surface-candidate"
+    },
+    "mossy-stone-seed80302": {
+      "jobId": "9f4a0eb4b689",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80302"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/mossy-stone-seed80302/output.png",
+      "output": "trellis/mossy-stone-seed80302/output.glb",
+      "receipt": "receipts-trellis/mossy-stone-seed80302/receipt.json",
+      "statusEvidence": "receipts-trellis/mossy-stone-seed80302/status.json",
+      "trellisRole": "rigid-surface-candidate"
+    },
+    "mossy-stone-seed80413": {
+      "jobId": "d99acdcb6929",
+      "status": "done",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": "80413"
+      },
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80413/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80413/output.glb --seed 80413 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "input": "flux/mossy-stone-seed80413/output.png",
+      "output": "trellis/mossy-stone-seed80413/output.glb",
+      "receipt": "receipts-trellis/mossy-stone-seed80413/receipt.json",
+      "statusEvidence": "receipts-trellis/mossy-stone-seed80413/status.json",
+      "trellisRole": "rigid-surface-candidate"
+    }
+  }
+}

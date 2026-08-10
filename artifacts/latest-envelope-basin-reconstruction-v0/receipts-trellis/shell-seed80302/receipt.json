@@ -1,0 +1,64 @@
+{
+  "job_id": "cc0b50d17866",
+  "job_type": "trellis2mlx_fast",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80302",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80302/output.glb",
+    "--seed",
+    "80302",
+    "--resolution",
+    "512",
+    "--steps",
+    "6",
+    "--no-cascade",
+    "--target-faces",
+    "200000",
+    "--texture-size",
+    "1024",
+    "--simplify-first"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1786348617.636051,
+  "finished_at": 1786348710.615592,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/cc0b50d17866/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/cc0b50d17866/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/cc0b50d17866/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 12729,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

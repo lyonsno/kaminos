@@ -1,0 +1,40 @@
+{
+  "question": "Does the current cheap TRELLIS route preserve the official example's small, directionally organized cloak clumps that are closer to the generated cat-fur failure class?",
+  "source": {
+    "role": "official TRELLIS.2 dense fine-clump fur cloak example",
+    "canonicalPath": "/Users/noahlyons/dev/trellis-mac/TRELLIS.2/assets/example_image/50b70c5f88a5961d2c786158655d2fce5c3b214b2717956500a66a4e5b5fbe37.webp",
+    "copiedPath": "source/official-dwarf-fur-cloak.webp",
+    "sha256": "933c10aeebb2920b08cb34a08ab1878817b64eb9e30efdcc3d76731069fc0849",
+    "dimensions": [932, 932]
+  },
+  "cells": {
+    "exactCheapRoute": {
+      "jobType": "trellis2mlx_fast",
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true,
+      "seed": 80301
+    },
+    "conditionalHigherFaceRoute": {
+      "jobType": "trellis2mlx_fast",
+      "resolution": 512,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 1000000,
+      "textureSize": 1024,
+      "simplifyFirst": true,
+      "seed": 80301,
+      "runOnlyIf": "exactCheapRoute visibly collapses or merges the source cloak clumps"
+    }
+  },
+  "decisionRule": {
+    "ifExactIsClean": "stop; higher settings are disfavored and source fur organization becomes the leading cat-fur failure explanation",
+    "ifExactIsDegraded": "run the conditional higher-face route on this exact source before changing any other setting",
+    "ifHigherFacesImprove": "face budget or simplification is causally implicated",
+    "ifHigherFacesDoNotImprove": "face budget is not sufficient; only then test official-like stage quality"
+  },
+  "claimCeiling": "One official fine-clump example can distinguish cheap-route preservation from visible fine-clump degradation. It cannot establish production reliability across fur types or prove that face budget is irrelevant to every source."
+}

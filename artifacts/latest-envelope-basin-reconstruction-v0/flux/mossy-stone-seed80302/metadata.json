@@ -1,0 +1,24 @@
+{
+  "name": "latest-envelope-029",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "cf5c3213c6f9",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png",
+  "input_name": "latest-envelope-029.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/prompts/mossy-stone.txt",
+    "seed": "80302",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786346195.7736902,
+  "duration_s": 38.8
+}

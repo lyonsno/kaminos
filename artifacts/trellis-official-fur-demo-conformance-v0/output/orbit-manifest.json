@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.4232288599014282,
+      0.3759514391422272,
+      0.4987412989139557
+    ],
+    "low": [
+      -0.4228077828884125,
+      -0.3737608790397644,
+      -0.500166118144989
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/output.glb",
+    "sha256": "b972965c910f9bef0eac96aac42c8e7416a1b784b81bcf119a538e64e2d2d676"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 644094,
+      "cameraLocation": [
+        2.6562275886535645,
+        0.0010952800512313843,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.268277645111084,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az000-el12.png",
+      "sha256": "74a9806fa369f5894e732cc6cf0ac08cd34644542232cd5788f3a2ccae1dd6b3"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 626556,
+      "cameraLocation": [
+        1.3282190561294556,
+        2.3012735843658447,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.3200217485427856,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az060-el12.png",
+      "sha256": "b9d45ba8b20080f93a97c3789b159007e9b40f77ff304e211aa82224e28f3c8e"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 622734,
+      "cameraLocation": [
+        -1.3277980089187622,
+        2.3012735843658447,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.3200217485427856,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az120-el12.png",
+      "sha256": "a895a42f6cb0a27b86eb7c082048ab4d317baa193f421a8d901e7957b6cb0b82"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 624567,
+      "cameraLocation": [
+        -2.655806541442871,
+        0.0010952800512313843,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.268277645111084,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az180-el12.png",
+      "sha256": "e3d49765ea2142936ef65ac05accf209cc612830dff2af96863658fd6f1d0e19"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 628419,
+      "cameraLocation": [
+        -1.3277980089187622,
+        -2.2990829944610596,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.3200217485427856,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az240-el12.png",
+      "sha256": "4e101e2ab4264845fcba932b19b16b7ee81434a13d4ba4b2e8ffce005e5791ed"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 648510,
+      "cameraLocation": [
+        1.3282190561294556,
+        -2.2990829944610596,
+        0.5638414621353149
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.3200217485427856,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/output/orbit/az300-el12.png",
+      "sha256": "42076a10d7a684ff276905b50874eb4be053ba116e1647c00f5f96ae5284a20a"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 199128
+}

@@ -1,0 +1,274 @@
+{
+  "cells": {
+    "neutral-seed80301": {
+      "jobId": "8d4c7458ea32",
+      "input": "flux/neutral-seed80301/output.png",
+      "outputDir": "trellis/neutral-seed80301",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "neutral-seed80302": {
+      "jobId": "4a363fae21ad",
+      "input": "flux/neutral-seed80302/output.png",
+      "outputDir": "trellis/neutral-seed80302",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "neutral-seed80413": {
+      "jobId": "97fe08351ec7",
+      "input": "flux/neutral-seed80413/output.png",
+      "outputDir": "trellis/neutral-seed80413",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/neutral-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/neutral-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    },
+    "skin-seed80301": {
+      "jobId": "60f749eb62ca",
+      "input": "flux/skin-seed80301/output.png",
+      "outputDir": "trellis/skin-seed80301",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "skin-seed80302": {
+      "jobId": "c3b5b6d9f433",
+      "input": "flux/skin-seed80302/output.png",
+      "outputDir": "trellis/skin-seed80302",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "skin-seed80413": {
+      "jobId": "fa4a4b0bd00f",
+      "input": "flux/skin-seed80413/output.png",
+      "outputDir": "trellis/skin-seed80413",
+      "trellisRole": "candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    },
+    "short-fur-seed80301": {
+      "jobId": "2e471005bd27",
+      "input": "flux/short-fur-seed80301/output.png",
+      "outputDir": "trellis/short-fur-seed80301",
+      "trellisRole": "fur-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "short-fur-seed80302": {
+      "jobId": "d8799801bf91",
+      "input": "flux/short-fur-seed80302/output.png",
+      "outputDir": "trellis/short-fur-seed80302",
+      "trellisRole": "fur-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "short-fur-seed80413": {
+      "jobId": "fb4cde323363",
+      "input": "flux/short-fur-seed80413/output.png",
+      "outputDir": "trellis/short-fur-seed80413",
+      "trellisRole": "fur-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/short-fur-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    },
+    "armor-seed80301": {
+      "jobId": "cc8bad9ae5a2",
+      "input": "flux/armor-seed80301/output.png",
+      "outputDir": "trellis/armor-seed80301",
+      "trellisRole": "rigid-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "armor-seed80302": {
+      "jobId": "4c5425453885",
+      "input": "flux/armor-seed80302/output.png",
+      "outputDir": "trellis/armor-seed80302",
+      "trellisRole": "rigid-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "armor-seed80413": {
+      "jobId": "c079d165971b",
+      "input": "flux/armor-seed80413/output.png",
+      "outputDir": "trellis/armor-seed80413",
+      "trellisRole": "rigid-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    },
+    "shell-seed80301": {
+      "jobId": "5e74f9874554",
+      "input": "flux/shell-seed80301/output.png",
+      "outputDir": "trellis/shell-seed80301",
+      "trellisRole": "negative-control",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "shell-seed80302": {
+      "jobId": "cc0b50d17866",
+      "input": "flux/shell-seed80302/output.png",
+      "outputDir": "trellis/shell-seed80302",
+      "trellisRole": "boundary-control",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "shell-seed80413": {
+      "jobId": "937ef0362a2c",
+      "input": "flux/shell-seed80413/output.png",
+      "outputDir": "trellis/shell-seed80413",
+      "trellisRole": "negative-control",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/shell-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/shell-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    },
+    "mossy-stone-seed80301": {
+      "jobId": "153c409396e0",
+      "input": "flux/mossy-stone-seed80301/output.png",
+      "outputDir": "trellis/mossy-stone-seed80301",
+      "trellisRole": "rigid-surface-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301",
+        "-p",
+        "seed=80301"
+      ]
+    },
+    "mossy-stone-seed80302": {
+      "jobId": "9f4a0eb4b689",
+      "input": "flux/mossy-stone-seed80302/output.png",
+      "outputDir": "trellis/mossy-stone-seed80302",
+      "trellisRole": "rigid-surface-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80302",
+        "-p",
+        "seed=80302"
+      ]
+    },
+    "mossy-stone-seed80413": {
+      "jobId": "d99acdcb6929",
+      "input": "flux/mossy-stone-seed80413/output.png",
+      "outputDir": "trellis/mossy-stone-seed80413",
+      "trellisRole": "rigid-surface-candidate",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80413/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80413",
+        "-p",
+        "seed=80413"
+      ]
+    }
+  }
+}

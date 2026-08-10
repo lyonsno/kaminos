@@ -1,0 +1,55 @@
+{
+  "status": "completed",
+  "job": {
+    "id": "30294066681a",
+    "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/30294066681a/receipt.json",
+    "durationSeconds": 105.0
+  },
+  "effectiveRoute": {
+    "jobType": "trellis2mlx_fast",
+    "resolution": 512,
+    "steps": 6,
+    "cascade": false,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "simplifyFirst": true,
+    "seed": 80301
+  },
+  "geometry": {
+    "extractedVertices": 1643583,
+    "extractedFaces": 3266734,
+    "simplifiedFaces": 199999
+  },
+  "output": {
+    "path": "output/output.glb",
+    "sha256": "b972965c910f9bef0eac96aac42c8e7416a1b784b81bcf119a538e64e2d2d676"
+  },
+  "visualDisposition": "coherent-broad-tufts-survive-cheap-route",
+  "interpretation": "The matched cheap route preserves the official example's broad layered tufts. This rules out a gross inability to reconstruct explicit coarse fur geometry, but does not test the smaller organized cloak clumps that are closer to the generated cat-fur failure.",
+  "orbit": [
+    {
+      "path": "output/orbit/az000-el12.png",
+      "sha256": "74a9806fa369f5894e732cc6cf0ac08cd34644542232cd5788f3a2ccae1dd6b3"
+    },
+    {
+      "path": "output/orbit/az060-el12.png",
+      "sha256": "b9d45ba8b20080f93a97c3789b159007e9b40f77ff304e211aa82224e28f3c8e"
+    },
+    {
+      "path": "output/orbit/az120-el12.png",
+      "sha256": "a895a42f6cb0a27b86eb7c082048ab4d317baa193f421a8d901e7957b6cb0b82"
+    },
+    {
+      "path": "output/orbit/az180-el12.png",
+      "sha256": "e3d49765ea2142936ef65ac05accf209cc612830dff2af96863658fd6f1d0e19"
+    },
+    {
+      "path": "output/orbit/az240-el12.png",
+      "sha256": "4e101e2ab4264845fcba932b19b16b7ee81434a13d4ba4b2e8ffce005e5791ed"
+    },
+    {
+      "path": "output/orbit/az300-el12.png",
+      "sha256": "42076a10d7a684ff276905b50874eb4be053ba116e1647c00f5f96ae5284a20a"
+    }
+  ]
+}

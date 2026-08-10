@@ -1,0 +1,15 @@
+{
+  "name": "official-shaggy-bear",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "30294066681a",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fur-demo-conformance-v0/source/official-shaggy-bear.webp",
+  "input_name": "official-shaggy-bear.webp",
+  "params": {
+    "seed": "80301"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786351297.2050502,
+  "duration_s": 105.0
+}

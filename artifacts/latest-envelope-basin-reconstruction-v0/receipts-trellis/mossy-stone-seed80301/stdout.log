@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/mossy-stone-seed80301/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 15.5s
+  2428 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 8.8s (2428 tokens)
+  No-cascade: using LR SLat directly (2,428 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 11545 voxels
+  Level 1 → 2: 57654 voxels
+  Level 2 → 3: 325557 voxels
+  Level 3 → 4: 2016369 voxels
+  Decoded: 24.9s (2,016,369 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  2,016,369 voxels, coord range [0, 511], grid_size=512
+  Extracted: 2.1s
+  2,016,369 vertices, 8,742,972 faces
+  Pre-simplify: 29,439V 518,616F (173.8s)
+  Removed 354303 duplicate faces
+  Removed 125453 non-manifold faces
+  Filled 183 holes (607 too large, max_perimeter=0.03)
+  Cleanup: 29,439V 518,616F → 26,545V 39,435F
+  Cleanup: 1.6s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 4.7s (2,428 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 11545 voxels
+  Level 1 → 2: 57654 voxels
+  Level 2 → 3: 325557 voxels
+  Level 3 → 4: 2016369 voxels
+  Decoded: 9.9s (2,016,369 voxels, 6 channels)
+  PBR attrs: RGB [-0.01, 0.91] metallic [-0.00, 0.01] roughness [0.91, 0.93]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 83,573V 39,435F (1.0s)
+    Rasterizing UV space (39,435 tris, 1024x1024, MLX)...
+    439,065 pixels covered (0.2s)
+    Interpolated 439,065 positions (0.0s)
+    Sampled voxel attrs (1.1s)
+    Inpainted seams (0.5s)
+
+  Saved: /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/mossy-stone-seed80301/output.glb (5.4MB)
+
+Total: 246.7s

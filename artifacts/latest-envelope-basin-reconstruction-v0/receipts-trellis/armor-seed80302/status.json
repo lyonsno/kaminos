@@ -1,0 +1,21 @@
+{
+  "job_id": "4c5425453885",
+  "status": "done",
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80302/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80302",
+  "params": {
+    "seed": "80302"
+  },
+  "submitted_at": 1786346512.210059,
+  "started_at": 1786348379.287283,
+  "finished_at": 1786348460.979614,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/flux/armor-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/latest-envelope-basin-reconstruction-v0/trellis/armor-seed80302/output.glb --seed 80302 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "pid": 12729,
+  "warnings": [
+    "volatile_output"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "kaminos.latest-envelope-source-plate.v0",
+  "plate": {
+    "path": "latest-envelope-029.png",
+    "sha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4",
+    "width": 768,
+    "height": 768
+  },
+  "provenance": {
+    "exactReplay": false,
+    "limitation": "The frozen campaign plate is exact and hash-bound, but its originating Blender render invocation was not preserved. The nearby decimation-ladder manifest described a different plate and cannot establish replay provenance for this image."
+  },
+  "authoredSourceIdentity": {
+    "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+    "sha256": "0df08915c9319ec37bf0de02bd6bd59b028bcb77d7870ca91a2663afe40e8360",
+    "object": "Cube.056"
+  },
+  "claimCeiling": "Exact campaign input identity only. This manifest does not establish that the named Blender object produced the plate through a replayable render route."
+}
