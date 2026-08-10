@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -35,6 +36,21 @@ function descriptor() {
   return structuredClone(descriptorFixture);
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function rowPlanHash(rowPlan) {
+  return createHash('sha256').update(canonicalJson(rowPlan)).digest('hex');
+}
+
 function faithfulEvidence() {
   const neutralDescriptor = descriptor();
   return {
@@ -49,10 +65,15 @@ function faithfulEvidence() {
       sourceHash: 'b'.repeat(64),
     },
     representation: {
-      requestedInteriorCarrierId: 'anisotropic-components-v0',
-      effectiveInteriorCarrierId: 'anisotropic-components-v0',
+      requestedInteriorCarrierId: 'labeled-anisotropic-components-v0',
+      effectiveInteriorCarrierId: 'labeled-anisotropic-components-v0',
       requestedSurfaceFormationId: 'fitted-response-shell-v0',
       effectiveSurfaceFormationId: 'fitted-response-shell-v0',
+    },
+    assay: {
+      rowPlan: structuredClone(rowPlanFixture),
+      rowPlanHash: rowPlanHash(rowPlanFixture),
+      rowId: 'factored-hybrid-leading-hypothesis',
     },
     trial: { controlId: 'muscle-tension', delta: 0.1 },
     surface: {
@@ -111,6 +132,87 @@ test('faithful factored evidence passes with source-warranted coupling intact', 
   const verdict = adjudicate(faithfulEvidence());
   assert.equal(verdict.passed, true, JSON.stringify(verdict.failures));
   assert.equal(verdict.numeric.couplingHeld, true);
+});
+
+test('negative-control response remains observable but cannot become positive admission', () => {
+  for (const rowId of ['scalar-union-negative-control', 'explicit-shell-causal-null']) {
+    const evidence = faithfulEvidence();
+    const row = evidence.assay.rowPlan.rows.find((candidate) => candidate.id === rowId);
+    evidence.assay.rowId = row.id;
+    evidence.representation = {
+      requestedInteriorCarrierId: row.interiorCarrierId,
+      effectiveInteriorCarrierId: row.interiorCarrierId,
+      requestedSurfaceFormationId: row.surfaceFormationId,
+      effectiveSurfaceFormationId: row.surfaceFormationId,
+    };
+
+    const verdict = adjudicate(evidence);
+    assert.equal(verdict.numeric.passed, true, `${rowId} numeric observation should be retained`);
+    assert.equal(verdict.passed, false, `${rowId} must not become positive representation admission`);
+    assert.ok(
+      verdict.failures.some((failure) => failure.code === 'assay-row-control-only'),
+      JSON.stringify(verdict.failures),
+    );
+  }
+});
+
+test('declared assay row cannot carry a different representation pair', () => {
+  const evidence = faithfulEvidence();
+  evidence.representation.requestedInteriorCarrierId = 'undifferentiated-metaball-sdf-v0';
+  evidence.representation.effectiveInteriorCarrierId = 'undifferentiated-metaball-sdf-v0';
+  evidence.representation.requestedSurfaceFormationId = 'direct-zero-isosurface-v0';
+  evidence.representation.effectiveSurfaceFormationId = 'direct-zero-isosurface-v0';
+
+  const verdict = adjudicate(evidence);
+  assert.equal(verdict.passed, false);
+  assert.ok(
+    verdict.failures.some((failure) => failure.code === 'assay-row-representation-mismatch'),
+    JSON.stringify(verdict.failures),
+  );
+});
+
+test('row-plan tampering cannot inherit a stale evidence hash', () => {
+  const evidence = faithfulEvidence();
+  evidence.assay.rowPlan.rows.find(
+    (row) => row.id === evidence.assay.rowId,
+  ).evidenceDisposition = 'control-observation';
+
+  const verdict = adjudicate(evidence);
+  assert.equal(verdict.passed, false);
+  assert.ok(
+    verdict.failures.some((failure) => failure.code === 'assay-row-plan-hash-mismatch'),
+    JSON.stringify(verdict.failures),
+  );
+});
+
+test('unknown perturbed relation returns a structured evidence verdict', () => {
+  const verdict = adjudicateTissueResponseLedger({
+    baselineComparison,
+    perturbedComparison,
+    perturbedRelation: 'tailSweep',
+    expectedDirection: 1,
+    evidence: faithfulEvidence(),
+  });
+  assert.equal(verdict.passed, false);
+  assert.equal(verdict.numeric, null);
+  assert.ok(
+    verdict.failures.some((failure) => failure.code === 'perturbed-relation-invalid'),
+    JSON.stringify(verdict.failures),
+  );
+});
+
+test('exact-component evidence does not require synthetic mixture weights', () => {
+  const evidence = faithfulEvidence();
+  evidence.descriptor.surfaceContract.identityMode = 'exact-component';
+  evidence.descriptorHash = analyticalTissueDescriptorHash(evidence.descriptor);
+  evidence.surface.identityMode = 'exact-component';
+  evidence.surface.contributors = evidence.surface.contributors.map(({ componentId, tissueClass }) => ({
+    componentId,
+    tissueClass,
+  }));
+
+  const verdict = adjudicate(evidence);
+  assert.equal(verdict.passed, true, JSON.stringify(verdict.failures));
 });
 
 test('identity swap cannot pass behind a numerically faithful response vector', () => {

@@ -2,6 +2,7 @@
   "schema": "kaminos.analytical-tissue-factored-row-plan.v0",
   "id": "synthetic-hindquarter-factored-comparison-v0",
   "descriptorRef": "fixtures/analytical-tissue/synthetic-hindquarter-neutral.v0.json",
+  "descriptorId": "synthetic-hindquarter-v0",
   "claimCeiling": "Independent semantic control on one bounded, partly synthetic fixture only.",
   "freeze": {
     "controls": [
@@ -32,6 +33,7 @@
       "interiorCarrierId": "undifferentiated-metaball-sdf-v0",
       "surfaceFormationId": "direct-zero-isosurface-v0",
       "role": "current-baseline-negative-control",
+      "evidenceDisposition": "control-observation",
       "prediction": "May produce a coherent envelope but erases component attribution at the consumed surface."
     },
     {
@@ -39,6 +41,7 @@
       "interiorCarrierId": "labeled-anisotropic-components-v0",
       "surfaceFormationId": "identity-weighted-isosurface-v0",
       "role": "interior-carrier-challenger",
+      "evidenceDisposition": "candidate-evidence",
       "prediction": "Preserves local component response but may inherit field-union surface artifacts."
     },
     {
@@ -46,6 +49,7 @@
       "interiorCarrierId": "no-identity-bearing-interior-v0",
       "surfaceFormationId": "fitted-skin-shell-v0",
       "role": "surface-formation-control",
+      "evidenceDisposition": "control-observation",
       "prediction": "Fits the baseline envelope but cannot attribute tissue-specific perturbations without a causal interior."
     },
     {
@@ -53,6 +57,7 @@
       "interiorCarrierId": "labeled-anisotropic-components-v0",
       "surfaceFormationId": "fitted-response-shell-v0",
       "role": "leading-composed-challenger",
+      "evidenceDisposition": "candidate-evidence",
       "prediction": "Separates causal tissue identity from surface regularity while carrying mixture weights to the final shell."
     }
   ],

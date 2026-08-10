@@ -7,12 +7,15 @@ export const ANALYTICAL_TISSUE_DESCRIPTOR_VALIDATION_SCHEMA =
   'kaminos.analytical-tissue-descriptor-validation.v0';
 export const ANALYTICAL_TISSUE_RESPONSE_VERDICT_SCHEMA =
   'kaminos.analytical-tissue-response-verdict.v0';
+export const ANALYTICAL_TISSUE_ROW_PLAN_SCHEMA =
+  'kaminos.analytical-tissue-factored-row-plan.v0';
 
 export const TISSUE_CLASSES = Object.freeze(['rigid', 'muscle', 'fat', 'tether', 'skin']);
 export const CONTROLLABLE_TISSUE_CLASSES = Object.freeze(['muscle', 'fat', 'tether', 'skin']);
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/i;
 const SURFACE_IDENTITY_MODES = new Set(['exact-component', 'mixture-weights']);
+const ROW_EVIDENCE_DISPOSITIONS = new Set(['control-observation', 'candidate-evidence']);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -46,6 +49,10 @@ function addFailure(failures, code, message, details = {}) {
 
 export function analyticalTissueDescriptorHash(descriptor) {
   return createHash('sha256').update(canonicalJson(descriptor)).digest('hex');
+}
+
+export function analyticalTissueRowPlanHash(rowPlan) {
+  return createHash('sha256').update(canonicalJson(rowPlan)).digest('hex');
 }
 
 export function validateAnalyticalTissueDescriptor(descriptor) {
@@ -259,6 +266,70 @@ function validateEvidence(evidence, descriptor, descriptorValidation) {
     }
   }
 
+  const assay = evidence.assay;
+  const rowPlan = assay?.rowPlan;
+  const rows = Array.isArray(rowPlan?.rows) ? rowPlan.rows : [];
+  const rowIds = rows.map((row) => row?.id);
+  if (rowPlan?.schema !== ANALYTICAL_TISSUE_ROW_PLAN_SCHEMA
+    || !nonEmptyString(rowPlan?.id)
+    || rowPlan?.descriptorId !== descriptor.id
+    || rowPlan?.promotion !== 'none'
+    || !uniqueNonEmptyStrings(rowIds)
+    || rows.some((row) => (
+      !nonEmptyString(row?.interiorCarrierId)
+      || !nonEmptyString(row?.surfaceFormationId)
+      || !ROW_EVIDENCE_DISPOSITIONS.has(row?.evidenceDisposition)
+    ))) {
+    addFailure(
+      failures,
+      'assay-row-plan-invalid',
+      'Response evidence requires the bounded factored row plan for this descriptor.',
+    );
+  } else if (!HASH_PATTERN.test(assay?.rowPlanHash ?? '')
+    || assay.rowPlanHash !== analyticalTissueRowPlanHash(rowPlan)) {
+    addFailure(
+      failures,
+      'assay-row-plan-hash-mismatch',
+      'Response evidence does not bind the exact factored row plan.',
+    );
+  } else {
+    const row = rows.find((candidate) => candidate.id === assay?.rowId);
+    if (!row) {
+      addFailure(
+        failures,
+        'assay-row-identity-invalid',
+        'Response evidence must name one row from the frozen factored plan.',
+      );
+    } else {
+      const representationMatchesRow = (
+        representation?.requestedInteriorCarrierId === row.interiorCarrierId
+        && representation?.effectiveInteriorCarrierId === row.interiorCarrierId
+        && representation?.requestedSurfaceFormationId === row.surfaceFormationId
+        && representation?.effectiveSurfaceFormationId === row.surfaceFormationId
+      );
+      if (!representationMatchesRow) {
+        addFailure(
+          failures,
+          'assay-row-representation-mismatch',
+          'Requested and effective representation identities must match the declared assay row.',
+          {
+            rowId: row.id,
+            expectedInteriorCarrierId: row.interiorCarrierId,
+            expectedSurfaceFormationId: row.surfaceFormationId,
+          },
+        );
+      }
+      if (row.evidenceDisposition === 'control-observation') {
+        addFailure(
+          failures,
+          'assay-row-control-only',
+          'A control-row response remains observable but cannot become positive representation admission.',
+          { rowId: row.id },
+        );
+      }
+    }
+  }
+
   const control = descriptor.controls?.find((candidate) => candidate.id === evidence.trial?.controlId);
   if (!control || !finite(evidence.trial?.delta) || evidence.trial.delta === 0) {
     addFailure(
@@ -317,19 +388,34 @@ function validateEvidence(evidence, descriptor, descriptorValidation) {
     );
   }
 
-  const weightSum = contributors.reduce(
-    (sum, contributor) => sum + (finite(contributor?.weight) ? contributor.weight : Number.NaN),
-    0,
-  );
-  if (contributors.some((contributor) => !(finite(contributor?.weight) && contributor.weight > 0))
-    || !finite(weightSum)
-    || Math.abs(weightSum - 1) > 1e-9) {
-    addFailure(
-      failures,
-      'surface-mixture-weight-invalid',
-      'Contributor weights must be positive, finite, and sum to one.',
-      { weightSum },
+  if (surface?.identityMode === 'mixture-weights') {
+    const weightSum = contributors.reduce(
+      (sum, contributor) => sum + (finite(contributor?.weight) ? contributor.weight : Number.NaN),
+      0,
     );
+    if (contributors.some((contributor) => !(finite(contributor?.weight) && contributor.weight > 0))
+      || !finite(weightSum)
+      || Math.abs(weightSum - 1) > 1e-9) {
+      addFailure(
+        failures,
+        'surface-mixture-weight-invalid',
+        'Mixture-weight contributors must have positive finite weights summing to one.',
+        { weightSum },
+      );
+    }
+  } else if (surface?.identityMode === 'exact-component') {
+    const expectedIds = [...(descriptor.surfaceContract?.requiredComponentIds ?? [])].sort();
+    const observedIds = [...contributorIds].sort();
+    const exactSet = expectedIds.length === observedIds.length
+      && expectedIds.every((componentId, index) => componentId === observedIds[index]);
+    if (!exactSet) {
+      addFailure(
+        failures,
+        'surface-exact-component-set-mismatch',
+        'Exact-component evidence must expose exactly the descriptor-required component identities.',
+        { expected: expectedIds, observed: observedIds },
+      );
+    }
   }
 
   return failures;
@@ -348,6 +434,15 @@ export function adjudicateTissueResponseLedger({ evidence, ...perturbation }) {
     const sameKeys = (left, right) => (
       left.length === right.length && left.every((key, index) => key === right[index])
     );
+    const relationIsDeclared = expected.includes(perturbation.perturbedRelation);
+    if (!relationIsDeclared) {
+      addFailure(
+        failures,
+        'perturbed-relation-invalid',
+        'The perturbed relation must be one of the frozen descriptor observables.',
+        { expected, observed: perturbation.perturbedRelation ?? null },
+      );
+    }
     if (!sameKeys(expected, baseline) || !sameKeys(expected, perturbed)) {
       addFailure(
         failures,
@@ -355,7 +450,7 @@ export function adjudicateTissueResponseLedger({ evidence, ...perturbation }) {
         'Baseline and perturbed response keys must exactly match the frozen descriptor observables.',
         { expected, baseline, perturbed },
       );
-    } else {
+    } else if (relationIsDeclared) {
       numeric = adjudicatePerturbation(perturbation);
     }
   }
