@@ -77,6 +77,7 @@ export function renderNBodyPackingAssayHtml({
   jointReference = null,
   sparseGlobalCandidate = null,
   mixedFieldCandidates = [],
+  unifiedKktCandidate = null,
 }) {
   const payload = JSON.stringify({
     fixture,
@@ -84,6 +85,7 @@ export function renderNBodyPackingAssayHtml({
     jointReference,
     sparseGlobalCandidate,
     mixedFieldCandidates,
+    unifiedKktCandidate,
     route:report.route,
   });
   const states = [
@@ -92,6 +94,7 @@ export function renderNBodyPackingAssayHtml({
     ['sequential-counterfeit', 'Local counterfeit'],
     ...(sparseGlobalCandidate ? [['sparse-global-candidate', 'Sparse global candidate']] : []),
     ...mixedFieldCandidates.map(candidate => [candidate.stateKey, candidate.label]),
+    ...(unifiedKktCandidate ? [['unified-kkt-candidate', 'Unified global candidate']] : []),
     ...(jointReference ? [['joint-reference', 'Joint reference']] : []),
   ];
   const stateButtons = states.map(([state, label]) =>
@@ -138,6 +141,18 @@ export function renderNBodyPackingAssayHtml({
       <span>grid disposition</span><span class="value counterfeit">stable failed class</span>
     </div>
     <p class="candidate-truth candidate-rejected">Rejected bounded field formulation: all three order-two quadrature grids move the formation and preserve bone/compartment feasibility, but each stalls with unresolved contact. These are last trustworthy failed states, not packed results.</p>` : '';
+  const unifiedKktPanel = unifiedKktCandidate ? `
+    <div class="reference-ledger candidate-ledger">
+      <span class="head">unified global candidate</span><span class="head value">measured</span>
+      <span>continuous max residual</span><span class="value known">${formatMetric(unifiedKktCandidate.selected.maximumPhysicalResidual)}</span>
+      <span>pair / bone / compartment</span><span class="value known">${formatMetric(unifiedKktCandidate.selected.metrics.pairwisePenetration)} / ${formatMetric(unifiedKktCandidate.selected.metrics.skeletalPenetration)} / ${formatMetric(unifiedKktCandidate.selected.metrics.compartmentEscape)}</span>
+      <span>endpoint / max volume error</span><span class="value known">${formatMetric(unifiedKktCandidate.selected.metrics.endpointDrift)} / ${formatMetric(unifiedKktCandidate.selected.metrics.maximumRelativeVolumeError)}</span>
+      <span>global work</span><span class="value">${unifiedKktCandidate.work.iterations} coupled iterations</span>
+      <span>displacement participation</span><span class="value">${unifiedKktCandidate.selected.displacement.movedMemberCount} moved members</span>
+      <span>contact representation</span><span class="value">explicit segment-pair inequalities</span>
+      <span>traversal equivalence</span><span class="value known">${escapeHtml(unifiedKktCandidate.invariance.candidateEnumeration)}</span>
+    </div>
+    <p class="candidate-truth">Provisional bounded success: one coupled solve closes all declared physical residuals on this exact synthetic five-body fixture without target coordinates or an authored contact graph. Visual inspection can reject implausible form, but this state carries no anatomical or arbitrary-N admission.</p>` : '';
   const colors = ['#ff7b72', '#f2cc60', '#56d4dd', '#a98cff', '#69a7ff'];
   const legend = fixture.contactGraph.members.map((id, index) =>
     `<span><i class="swatch" style="background:${colors[index]}"></i>${escapeHtml(id.replace('rosette-', ''))}</span>`,
@@ -192,10 +207,10 @@ export function renderNBodyPackingAssayHtml({
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="N-body packing assay controls and evidence">
-    <h1>${mixedFieldCandidates.length ? 'Five-body mixed-field failure assay' : sparseCandidateRejected ? 'Five-body contact-only failure assay' : sparseGlobalCandidate ? 'Five-body scalable candidate assay' : jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
+    <h1>${unifiedKktCandidate ? 'Five-body unified global packing assay' : mixedFieldCandidates.length ? 'Five-body mixed-field failure assay' : sparseCandidateRejected ? 'Five-body contact-only failure assay' : sparseGlobalCandidate ? 'Five-body scalable candidate assay' : jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
     <p class="authority">Synthetic known-feasible assay · no anatomical admission</p>
-    <p class="status">${escapeHtml(mixedFieldCandidates[0]?.result.status || sparseGlobalCandidate?.status || jointReference?.status || result.status)}</p>
-    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${mixedFieldCandidates.length ? 'The mixed-field buttons expose baseline, half-cell-shifted, and refined order-two quadrature results. All are failed candidates; compare them directly with the contact-only failure and jointly feasible reference.' : sparseCandidateRejected ? 'The contact-only candidate is shown at its last trustworthy stalled state; the joint reference demonstrates that the same crowded input is jointly satisfiable when bone clearance participates in the solve.' : sparseGlobalCandidate ? 'The sparse global candidate updates every active graph contact from one assembled snapshot; the joint reference remains the bounded oracle, not a target coordinate source.' : jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
+    <p class="status">${escapeHtml(unifiedKktCandidate?.status || mixedFieldCandidates[0]?.result.status || sparseGlobalCandidate?.status || jointReference?.status || result.status)}</p>
+    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${unifiedKktCandidate ? 'The unified candidate adds explicit segment-pair, skeletal, and compartment inequalities to one simultaneous solve. Compare it directly with crowded input, both failed mechanism classes, and the bounded joint reference under one camera.' : mixedFieldCandidates.length ? 'The mixed-field buttons expose baseline, half-cell-shifted, and refined order-two quadrature results. All are failed candidates; compare them directly with the contact-only failure and jointly feasible reference.' : sparseCandidateRejected ? 'The contact-only candidate is shown at its last trustworthy stalled state; the joint reference demonstrates that the same crowded input is jointly satisfiable when bone clearance participates in the solve.' : sparseGlobalCandidate ? 'The sparse global candidate updates every active graph contact from one assembled snapshot; the joint reference remains the bounded oracle, not a target coordinate source.' : jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
     <div class="button-row">${stateButtons}</div>
     <div class="button-row mode">
       <button data-mode="volume">Volumetric context</button>
@@ -217,6 +232,7 @@ export function renderNBodyPackingAssayHtml({
     <p class="truth">Rejected: distal pressure debt survives despite locally and globally lower aggregate overlap. Red slice markers are measured belt-plane interpenetrations, not decorative contact hints.</p>
     ${candidatePanel}
     ${mixedFieldPanel}
+    ${unifiedKktPanel}
     ${referencePanel}
     <div class="legend">${legend}<span><i class="swatch" style="background:#f5f1e8"></i>attachments</span><span><i class="swatch" style="background:#cbd8e4"></i>bone</span><span><i class="swatch" style="background:#ff334f"></i>muscle overlap</span><span><i class="swatch" style="background:#ff3bd4"></i>bone penetration</span></div>
   </section>
@@ -233,6 +249,7 @@ export function renderNBodyPackingAssayHtml({
       'sequential-counterfeit':payload.result.states.sequentialCounterfeit,
       ...(payload.sparseGlobalCandidate?{'sparse-global-candidate':payload.sparseGlobalCandidate.selected}:{}),
       ...Object.fromEntries(payload.mixedFieldCandidates.map(candidate=>[candidate.stateKey,candidate.result.selected])),
+      ...(payload.unifiedKktCandidate?{'unified-kkt-candidate':payload.unifiedKktCandidate.selected}:{}),
       ...(payload.jointReference?{'joint-reference':payload.jointReference.selected}:{}),
     };
     const viewport=document.querySelector('#viewport');
@@ -420,7 +437,7 @@ export function renderNBodyPackingAssayHtml({
     document.documentElement.dataset.witnessRoute=payload.route.effective;
   </script>
 </body>
-</html>`;
+</html>`.replace(/^[ \t]+$/gm, '');
 }
 
 export async function writeNBodyPackingAssayWitness({

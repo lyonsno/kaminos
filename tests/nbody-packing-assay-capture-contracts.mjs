@@ -9,7 +9,7 @@ import { captureNBodyPackingAssayState } from '../nbody-packing-assay-capture.mj
 test('N-body capture rejects state and evidence-mode substitution before browser resolution', async () => {
   await assert.rejects(
     () => captureNBodyPackingAssayState({ state:'reference' }),
-    /state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, mixed-field-baseline, mixed-field-shifted, mixed-field-refined, or joint-reference/,
+    /state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, mixed-field-baseline, mixed-field-shifted, mixed-field-refined, unified-kkt-candidate, or joint-reference/,
   );
   await assert.rejects(
     () => captureNBodyPackingAssayState({ mode:'transparent-beauty' }),
@@ -91,4 +91,11 @@ test('mixed-field states require an explicit comparison witness route', async ()
       new RegExp(`${state} capture requires an explicit baseUrl`),
     );
   }
+});
+
+test('unified KKT state requires an explicit source-bound comparison route', async () => {
+  await assert.rejects(
+    () => captureNBodyPackingAssayState({ state:'unified-kkt-candidate' }),
+    /unified-kkt-candidate capture requires an explicit baseUrl/,
+  );
 });
