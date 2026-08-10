@@ -126,7 +126,12 @@ export function validateM31SourceRegistration(receipt, { sourceFixture = null, s
   return receipt;
 }
 
-export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainTransforms }) {
+export function createM31LiveOverlay({
+  sourceFixture,
+  sourceRegistration,
+  chainTransforms,
+  supportMapping = null,
+}) {
   const { fixtureId: claimedFixtureId, ...fixtureContent } = sourceFixture ?? {};
   const fixtureDigest = createHash('sha256')
     .update(canonicalProxyRigJson(fixtureContent)).digest('hex');
@@ -149,6 +154,19 @@ export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainT
   const hingePivot = applyChain(sourceFixture.hinge.pivotWorld, sourceToCast);
   const rigidSectionCount = Math.max(2, Math.floor(sourceFixture.sectionCount * 0.2));
   const route = 'authenticated-m31-two-support-live-overlay';
+  const effectiveSupportMapping = supportMapping ?? {
+    fixed: 'hindlimb-left',
+    moving: 'hindlimb-left-distal-support',
+    fixedSource: 'Cube.002',
+    movingSource: 'Cube.003',
+  };
+  if (typeof effectiveSupportMapping.fixed !== 'string' || !effectiveSupportMapping.fixed
+      || typeof effectiveSupportMapping.moving !== 'string' || !effectiveSupportMapping.moving
+      || effectiveSupportMapping.fixed === effectiveSupportMapping.moving
+      || effectiveSupportMapping.fixedSource !== 'Cube.002'
+      || effectiveSupportMapping.movingSource !== 'Cube.003') {
+    throw new Error('M31 live overlay requires distinct controls owning authenticated Cube.002 -> Cube.003 supports');
+  }
   return {
     muscle: {
       schema: 'kaminos.proxy-rig-muscle.v0',
@@ -165,12 +183,7 @@ export function createM31LiveOverlay({ sourceFixture, sourceRegistration, chainT
         routingFixtureSha256: sourceFixture.source.routingFixtureSha256,
         registrationReceiptSha256: sourceRegistration.receiptSha256,
       },
-      supportMapping: {
-        fixed: 'hindlimb-left',
-        moving: 'hindlimb-left-distal-support',
-        fixedSource: 'Cube.002',
-        movingSource: 'Cube.003',
-      },
+      supportMapping: { ...effectiveSupportMapping },
       hingePivot,
       positions,
       triangles: Uint32Array.from(sourceFixture.triangles),
@@ -398,13 +411,17 @@ export function bindEnvelopeToSkeleton({
   bones,
   manifest,
   chainTransforms,
+  authoredHierarchy = null,
   supportRefinements = [],
   samplesPerBone = 30,
   neighbors = 2,
 }) {
   const broadGroups = deriveRefinementGroups(bones, manifest);
+  const replacedGroups = new Set(authoredHierarchy?.replaces ?? []);
   let groups = broadGroups.flatMap(group => (
-    group.name === 'hindlimb-right'
+    replacedGroups.has(group.name)
+      ? []
+      : group.name === 'hindlimb-right'
       ? deriveHindlimbHierarchy({ bones, manifest, broadGroup: group, side: 'right' })
       : [{
         ...group,
@@ -413,6 +430,65 @@ export function bindEnvelopeToSkeleton({
         pivotDerivation: 'nearest source-member centroid to core center',
       }]
   ));
+  if (authoredHierarchy) {
+    if (!Array.isArray(authoredHierarchy.controls) || authoredHierarchy.controls.length === 0) {
+      throw new Error('authored hierarchy controls are required');
+    }
+    const broadByName = new Map(broadGroups.map(group => [group.name, group]));
+    for (const name of replacedGroups) {
+      if (!broadByName.has(name)) throw new Error(`authored hierarchy replacement ${name} is missing`);
+    }
+    const boneByName = new Map(bones.map(bone => [bone.name, bone]));
+    const claimed = new Set();
+    const authoredGroups = authoredHierarchy.controls.map(control => {
+      if (typeof control.name !== 'string' || !control.name
+          || (control.parent !== null && control.parent !== undefined
+            && (typeof control.parent !== 'string' || !control.parent))
+          || !Array.isArray(control.pivot) || control.pivot.length !== 3
+          || control.pivot.some(value => !Number.isFinite(value))
+          || !Array.isArray(control.sourceBones) || control.sourceBones.length === 0) {
+        throw new Error('authored hierarchy controls require names, finite pivots, and source bones');
+      }
+      const ownedBones = control.sourceBones.map(name => {
+        if (claimed.has(name)) throw new Error(`authored hierarchy source bone ${name} is claimed more than once`);
+        const bone = boneByName.get(name);
+        if (!bone) throw new Error(`authored hierarchy source bone ${name} is missing`);
+        claimed.add(name);
+        return bone;
+      });
+      return {
+        name: control.name,
+        parent: control.parent ?? null,
+        pivot: [...control.pivot],
+        bones: ownedBones,
+        sourceBones: [...control.sourceBones].sort(),
+        pivotDerivation: control.pivotDerivation ?? 'operator-authored hierarchy control',
+      };
+    });
+    for (const replacedName of replacedGroups) {
+      const missing = broadByName.get(replacedName).boneNames.filter(name => !claimed.has(name));
+      if (missing.length) {
+        throw new Error(`authored hierarchy replacement ${replacedName} leaves source bones unowned: ${missing.join(', ')}`);
+      }
+    }
+    groups = groups.flatMap(group => {
+      const remainingBones = group.bones.filter(bone => !claimed.has(bone.name));
+      if (remainingBones.length === 0) return [];
+      if (remainingBones.length === group.bones.length) return [group];
+      return [{
+        ...group,
+        bones: remainingBones,
+        sourceBones: remainingBones.map(bone => bone.name).sort(),
+      }];
+    });
+    const allControlNames = new Set([...groups, ...authoredGroups].map(group => group.name));
+    for (const group of authoredGroups) {
+      if (group.parent !== null && !allControlNames.has(group.parent)) {
+        throw new Error(`authored hierarchy parent ${group.parent} for ${group.name} is missing`);
+      }
+    }
+    groups.push(...authoredGroups);
+  }
   for (const refinement of supportRefinements) {
     const parentIndex = groups.findIndex(group => group.name === refinement.parentGroup);
     if (parentIndex < 0) throw new Error(`support refinement parent ${refinement.parentGroup} is missing`);

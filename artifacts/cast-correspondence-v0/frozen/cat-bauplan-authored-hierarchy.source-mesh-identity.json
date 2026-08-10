@@ -1,0 +1,91 @@
+{
+  "schema": "kaminos.authored-rig-source-mesh-identity.v0",
+  "source": {
+    "hierarchy": "operator-scratch/meshes/cat-bauplan-030-skeleton-empties-hierarchy.glb",
+    "hierarchySha256": "707c32a2234c1867fce037e7d4aa6f97252855c3775f261362d80eb062df5076"
+  },
+  "effectiveRoot": {
+    "name": "pelvis",
+    "nodeIndex": 201,
+    "nodeCount": 22,
+    "meshNodeCount": 15
+  },
+  "meshNodes": [
+    {
+      "nodeIndex": 180,
+      "nodeName": "Cube.202",
+      "meshIndex": 121
+    },
+    {
+      "nodeIndex": 181,
+      "nodeName": "Cube.021",
+      "meshIndex": 122
+    },
+    {
+      "nodeIndex": 182,
+      "nodeName": "Cube.201",
+      "meshIndex": 123
+    },
+    {
+      "nodeIndex": 183,
+      "nodeName": "Cube.204",
+      "meshIndex": 124
+    },
+    {
+      "nodeIndex": 184,
+      "nodeName": "Cube.185",
+      "meshIndex": 125
+    },
+    {
+      "nodeIndex": 185,
+      "nodeName": "Cube.190",
+      "meshIndex": 126
+    },
+    {
+      "nodeIndex": 186,
+      "nodeName": "Cube.203",
+      "meshIndex": 127
+    },
+    {
+      "nodeIndex": 190,
+      "nodeName": "Cube.057",
+      "meshIndex": 122
+    },
+    {
+      "nodeIndex": 191,
+      "nodeName": "Cube.197",
+      "meshIndex": 123
+    },
+    {
+      "nodeIndex": 192,
+      "nodeName": "Cube.200",
+      "meshIndex": 124
+    },
+    {
+      "nodeIndex": 193,
+      "nodeName": "Cube.167",
+      "meshIndex": 125
+    },
+    {
+      "nodeIndex": 194,
+      "nodeName": "Cube.172",
+      "meshIndex": 126
+    },
+    {
+      "nodeIndex": 195,
+      "nodeName": "Cube.199",
+      "meshIndex": 127
+    },
+    {
+      "nodeIndex": 198,
+      "nodeName": "right-femur-mesh",
+      "meshIndex": 121
+    },
+    {
+      "nodeIndex": 200,
+      "nodeName": "SRC_PELVIS.002",
+      "meshIndex": 128
+    }
+  ],
+  "identitySha256": "sha256:e0876c3ef7ab13055e2478e5cff5779a0275a08bb4ae07655e0987904671ffa5"
+}

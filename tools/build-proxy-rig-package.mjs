@@ -23,9 +23,9 @@ import {
   bindEnvelopeToSkeleton,
   createM31LiveOverlay,
   createProxyRigPackage,
-  createSkeletalSupportRefinement,
   validateM31SourceRegistration,
 } from '../proxy-rig-core.mjs';
+import { validateAuthoredRigHierarchy } from '../authored-rig-hierarchy-core.mjs';
 import {
   assertM31CompactFixtureMatchesHistorical,
   M31_HISTORICAL_SOURCE_REF,
@@ -44,7 +44,7 @@ const artifactRoot = resolve(repoRoot, option('--artifact-root', 'artifacts/cast
 const loadBytes = relative => readFile(resolve(artifactRoot, relative));
 const loadJson = async relative => JSON.parse(await readFile(resolve(artifactRoot, relative), 'utf8'));
 
-const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, castBytes, m31SourceFixture, m31SourceRegistration] = await Promise.all([
+const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, castBytes, m31SourceFixture, m31SourceRegistration, authoredHierarchy, authoredHierarchySourceMeshIdentity] = await Promise.all([
   loadBytes('frozen/skeleton-authored.glb'),
   loadBytes('frozen/region-manifest-golden-provisional.json'),
   loadJson('receipts/frame-link--skeleton--envelope-baseline.json'),
@@ -53,6 +53,8 @@ const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, cas
   loadBytes('frozen/cast-sf3d-skin-baseline.glb'),
   loadJson('frozen/m31-authenticated-source.compact.json'),
   loadJson('receipts/m31-source-blend--skeleton-authored.json'),
+  loadJson('frozen/cat-bauplan-authored-hierarchy.receipt.json'),
+  loadJson('frozen/cat-bauplan-authored-hierarchy.source-mesh-identity.json'),
 ]);
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
 const m31HistoricalSourceBytes = execFileSync(
@@ -72,6 +74,10 @@ if (registrationReceiptSha256 !== registration.receiptSha256) {
 }
 
 const skeletonSha256 = assertProxyRigArtifactHash(skeletonBytes, frameLink.inputs.sourceSha256, 'skeleton');
+validateAuthoredRigHierarchy(authoredHierarchy, {
+  skeletonSha256,
+  sourceMeshIdentity: authoredHierarchySourceMeshIdentity,
+});
 validateM31SourceRegistration(m31SourceRegistration, {
   sourceFixture: m31SourceFixture,
   skeletonSha256,
@@ -105,15 +111,16 @@ const m31Overlay = createM31LiveOverlay({
   sourceFixture: m31SourceFixture,
   sourceRegistration: m31SourceRegistration,
   chainTransforms,
+  supportMapping: {
+    fixed: 'hindlimb-left-hip',
+    moving: 'hindlimb-left-hock',
+    fixedSource: 'Cube.002',
+    movingSource: 'Cube.003',
+  },
 });
 const m31MovingSupport = bones.find(bone => (
   bone.name === m31Overlay.muscle.supportMapping.movingSource
 ));
-const leftDistalSupport = createSkeletalSupportRefinement({
-  parentGroup: m31Overlay.muscle.supportMapping.fixed,
-  childName: m31Overlay.muscle.supportMapping.moving,
-  supportBone: m31MovingSupport,
-});
 const m31AuthoredSupportProximity = assertM31AuthoredSupportProximity({
   pivot: applyChain(m31SourceFixture.hinge.pivotWorld, [m31SourceRegistration.transform]),
   supportBone: m31MovingSupport,
@@ -124,7 +131,7 @@ const skinBinding = bindEnvelopeToSkeleton({
   bones,
   manifest,
   chainTransforms,
-  supportRefinements: [leftDistalSupport],
+  authoredHierarchy,
 });
 const castBinding = bindCastToEnvelope({ cast, envelopeInCastFrame });
 const packageData = createProxyRigPackage({
@@ -134,7 +141,7 @@ const packageData = createProxyRigPackage({
   castBinding,
   muscles: [m31Overlay.muscle],
   interaction: {
-    initialControl: 'hindlimb-left-distal-support',
+    initialControl: 'hindlimb-left-hock',
   },
   source: {
     cast: 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb',
@@ -152,8 +159,19 @@ const packageData = createProxyRigPackage({
     m31SourceRegistrationReceipt: 'artifacts/cast-correspondence-v0/receipts/m31-source-blend--skeleton-authored.json',
     m31SourceRegistrationReceiptSha256: m31SourceRegistration.receiptSha256,
     m31AuthoredSupportProximity,
-    effectiveRoute: 'proxy-rig-core.mjs manifest-backed skeletal hierarchy + authenticated M31 two-support overlay + bindEnvelopeToSkeleton + bindCastToEnvelope',
-    hierarchyDerivation: 'hindlimb-right proximodistal chain plus relation-independent Cube.003 left-hindlimb distal support split',
+    authoredHierarchyReceipt: 'artifacts/cast-correspondence-v0/frozen/cat-bauplan-authored-hierarchy.receipt.json',
+    authoredHierarchyReceiptSha256: authoredHierarchy.receiptSha256,
+    authoredHierarchySourceMeshIdentity: 'artifacts/cast-correspondence-v0/frozen/cat-bauplan-authored-hierarchy.source-mesh-identity.json',
+    authoredHierarchySourceMeshIdentitySha256: authoredHierarchySourceMeshIdentity.identitySha256,
+    authoredHierarchySource: authoredHierarchy.source.hierarchy,
+    authoredHierarchySourceSha256: authoredHierarchy.source.hierarchySha256,
+    authoredHierarchyRoot: authoredHierarchy.effectiveRoot.name,
+    authoredHierarchyNodeCount: authoredHierarchy.effectiveRoot.nodeCount,
+    authoredHierarchySideResolution: authoredHierarchy.sideResolution,
+    authoredHierarchyUnmatchedMeshNodes: authoredHierarchy.unmatchedMeshNodes,
+    authoredHierarchyUnmatchedMeshPolicy: authoredHierarchy.unmatchedMeshPolicy,
+    effectiveRoute: 'operator-authored pelvis hierarchy receipt + authenticated M31 two-support overlay + bindEnvelopeToSkeleton + bindCastToEnvelope',
+    hierarchyDerivation: 'pelvis control subtree with explicit Cube.021 accessory exception; canonical sides resolved by Cube.002/Cube.087 frozen-skeleton anchors over advisory raw node labels; M31 Cube.002 -> Cube.003 bound to left hip -> hock',
   },
 });
 

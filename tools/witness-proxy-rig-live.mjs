@@ -22,25 +22,22 @@ const quaternionZ = angleDeg => {
 };
 const hierarchyPoses = {
   m31Flex: {
-    'hindlimb-left-distal-support': quaternionZ(24),
+    'hindlimb-left-hock': quaternionZ(24),
   },
   planted: {
     'hindlimb-right-hip': quaternionZ(8),
     'hindlimb-right-stifle': quaternionZ(-18),
     'hindlimb-right-hock': quaternionZ(20),
-    'hindlimb-right-paw': quaternionZ(-8),
   },
   crouched: {
     'hindlimb-right-hip': quaternionZ(-20),
     'hindlimb-right-stifle': quaternionZ(24),
     'hindlimb-right-hock': quaternionZ(-16),
-    'hindlimb-right-paw': quaternionZ(5),
   },
   extended: {
     'hindlimb-right-hip': quaternionZ(16),
     'hindlimb-right-stifle': quaternionZ(-48),
     'hindlimb-right-hock': quaternionZ(38),
-    'hindlimb-right-paw': quaternionZ(10),
   },
 };
 let expectedControlNames = [];
@@ -276,14 +273,19 @@ try {
   }));
   expectedInteraction = checkedPackage.interaction;
   assert(
-    expectedInteraction?.initialControl === 'hindlimb-left-distal-support',
+    expectedInteraction?.initialControl === 'hindlimb-left-hock',
     `fresh package does not declare the M31-driving skeletal assay control (${JSON.stringify(expectedInteraction)})`,
   );
-  assert(expectedControlNames.length === 11, `expected eleven controls, got ${expectedControlNames.length}`);
+  assert(expectedControlNames.length === 12, `expected twelve controls, got ${expectedControlNames.length}`);
+  assert(
+    !expectedControlNames.some(name => /distal-support|muscle|m31|insertion/i.test(name)),
+    `relation-owned or synthetic control survived into the public rig (${expectedControlNames.join(', ')})`,
+  );
   assert(
     JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-left'))) === JSON.stringify([
-      { name: 'hindlimb-left', parent: null },
-      { name: 'hindlimb-left-distal-support', parent: 'hindlimb-left' },
+      { name: 'hindlimb-left-hip', parent: 'pelvis' },
+      { name: 'hindlimb-left-stifle', parent: 'hindlimb-left-hip' },
+      { name: 'hindlimb-left-hock', parent: 'hindlimb-left-stifle' },
     ]),
     `verified package does not carry the M31 support hierarchy (${JSON.stringify(expectedHierarchy)})`,
   );
@@ -295,10 +297,9 @@ try {
   );
   assert(
     JSON.stringify(expectedHierarchy.filter(group => group.name.startsWith('hindlimb-right'))) === JSON.stringify([
-      { name: 'hindlimb-right-hip', parent: null },
+      { name: 'hindlimb-right-hip', parent: 'pelvis' },
       { name: 'hindlimb-right-stifle', parent: 'hindlimb-right-hip' },
       { name: 'hindlimb-right-hock', parent: 'hindlimb-right-stifle' },
-      { name: 'hindlimb-right-paw', parent: 'hindlimb-right-hock' },
     ]),
     `verified package does not carry the preregistered hindlimb chain (${JSON.stringify(expectedHierarchy)})`,
   );
@@ -384,12 +385,12 @@ try {
   assert(canvasBox, 'public gizmo: canvas bounding box is missing');
   const pointer = {
     start: {
-      x: canvasBox.x + canvasBox.width * 0.724,
-      y: canvasBox.y + canvasBox.height * 0.49,
+      x: canvasBox.x + canvasBox.width * 0.70,
+      y: canvasBox.y + canvasBox.height * 0.59,
     },
     end: {
-      x: canvasBox.x + canvasBox.width * 0.799,
-      y: canvasBox.y + canvasBox.height * 0.557,
+      x: canvasBox.x + canvasBox.width * 0.755,
+      y: canvasBox.y + canvasBox.height * 0.65,
     },
   };
   await desktop.page.mouse.move(pointer.start.x, pointer.start.y);
@@ -485,11 +486,11 @@ try {
       });
       await desktop.page.evaluate(() => window.kaminosProxyRigSetControlVisibility(false));
     } else {
-      const restPaw = hiddenRestState.controlWorldPositions['hindlimb-right-paw'];
-      const posedPaw = poseState.controlWorldPositions['hindlimb-right-paw'];
+      const restHock = hiddenRestState.controlWorldPositions['hindlimb-right-hock'];
+      const posedHock = poseState.controlWorldPositions['hindlimb-right-hock'];
       assert(
-        Math.hypot(...posedPaw.map((value, axis) => value - restPaw[axis])) > 0.01,
-        `${poseName}: descendant paw handle did not follow the hierarchy`,
+        Math.hypot(...posedHock.map((value, axis) => value - restHock[axis])) > 0.01,
+        `${poseName}: descendant hock handle did not follow the hierarchy`,
       );
     }
   }

@@ -1,0 +1,304 @@
+{
+  "schema": "kaminos.authored-rig-hierarchy.v0",
+  "source": {
+    "hierarchy": "operator-scratch/meshes/cat-bauplan-030-skeleton-empties-hierarchy.glb",
+    "hierarchySha256": "707c32a2234c1867fce037e7d4aa6f97252855c3775f261362d80eb062df5076",
+    "skeleton": "artifacts/cast-correspondence-v0/frozen/skeleton-authored.glb",
+    "skeletonSha256": "533e4a6a63e658d86e841e0294bbecb4cd3f9be52b253c063282aa15b3596eb7"
+  },
+  "effectiveRoot": {
+    "name": "pelvis",
+    "nodeIndex": 201,
+    "nodeCount": 22,
+    "meshNodeCount": 15
+  },
+  "registration": {
+    "type": "translation",
+    "translation": [
+      20.362567901611328,
+      0,
+      12.2189040184021
+    ],
+    "anchor": {
+      "hierarchyNode": "SRC_PELVIS.002",
+      "skeletonBone": "SRC_PELVIS",
+      "residual": 0
+    }
+  },
+  "sideResolution": {
+    "authority": "frozen-skeleton-source-bone-anchor",
+    "anchors": {
+      "left": "Cube.002",
+      "right": "Cube.087"
+    },
+    "rawNodeLabels": "advisory",
+    "branches": [
+      {
+        "canonicalSide": "left",
+        "sourceAnchor": "Cube.002",
+        "rawHipNode": "hindlimb-right-hip",
+        "rawHipSide": "right",
+        "agrees": false
+      },
+      {
+        "canonicalSide": "right",
+        "sourceAnchor": "Cube.087",
+        "rawHipNode": "hindlimb-left-hip.001",
+        "rawHipSide": "left",
+        "agrees": false
+      }
+    ]
+  },
+  "replaces": [
+    "hindlimb-left",
+    "hindlimb-right"
+  ],
+  "controls": [
+    {
+      "name": "pelvis",
+      "parent": null,
+      "pivot": [
+        19.916682958602905,
+        -33.397274017333984,
+        -0.7898430824279785
+      ],
+      "sourceBones": [
+        "SRC_PELVIS"
+      ],
+      "rawSourceNode": "pelvis",
+      "pivotDerivation": "operator-authored pelvis empty registered by SRC_PELVIS translation anchor"
+    },
+    {
+      "name": "hindlimb-left-hip",
+      "parent": "pelvis",
+      "pivot": [
+        22.807203769683838,
+        -29.093503952026367,
+        -4.5942769050598145
+      ],
+      "sourceBones": [
+        "Icosphere",
+        "Cube.002"
+      ],
+      "rawSourceNode": "hindlimb-right-hip",
+      "pivotDerivation": "operator-authored hindlimb-right-hip empty registered into skeleton frame"
+    },
+    {
+      "name": "hindlimb-left-stifle",
+      "parent": "hindlimb-left-hip",
+      "pivot": [
+        25.409618854522705,
+        -16.619281768798828,
+        4.22930383682251
+      ],
+      "sourceBones": [
+        "Cube.001",
+        "Cube.005"
+      ],
+      "rawSourceNode": "hindlimb-right-stifle.001",
+      "pivotDerivation": "operator-authored hindlimb-right-stifle.001 empty registered into skeleton frame"
+    },
+    {
+      "name": "hindlimb-left-hock",
+      "parent": "hindlimb-left-stifle",
+      "pivot": [
+        24.03258991241455,
+        -5.998407363891602,
+        -2.3572473526000977
+      ],
+      "sourceBones": [
+        "Cube.003",
+        "Cube.004",
+        "Cube.012",
+        "Cube.045",
+        "Cube.066",
+        "Cube.067",
+        "Cube.072",
+        "Cube.073",
+        "Cube.074",
+        "Cube.075"
+      ],
+      "rawSourceNode": "hindlimb-right-hock",
+      "pivotDerivation": "operator-authored hindlimb-right-hock empty registered into skeleton frame"
+    },
+    {
+      "name": "hindlimb-right-hip",
+      "parent": "pelvis",
+      "pivot": [
+        17.114379405975342,
+        -29.093503952026367,
+        -4.5942769050598145
+      ],
+      "sourceBones": [
+        "Cube.083",
+        "Cube.087"
+      ],
+      "rawSourceNode": "hindlimb-left-hip.001",
+      "pivotDerivation": "operator-authored hindlimb-left-hip.001 empty registered into skeleton frame"
+    },
+    {
+      "name": "hindlimb-right-stifle",
+      "parent": "hindlimb-right-hip",
+      "pivot": [
+        14.511964321136475,
+        -16.619281768798828,
+        4.22930383682251
+      ],
+      "sourceBones": [
+        "Cube.086",
+        "Cube.089"
+      ],
+      "rawSourceNode": "hindlimb-left-stifle.002",
+      "pivotDerivation": "operator-authored hindlimb-left-stifle.002 empty registered into skeleton frame"
+    },
+    {
+      "name": "hindlimb-right-hock",
+      "parent": "hindlimb-right-stifle",
+      "pivot": [
+        15.888993263244629,
+        -5.998408317565918,
+        -2.3572492599487305
+      ],
+      "sourceBones": [
+        "Cube.068",
+        "Cube.069",
+        "Cube.070",
+        "Cube.071",
+        "Cube.081",
+        "Cube.082",
+        "Cube.084",
+        "Cube.085",
+        "Cube.088"
+      ],
+      "rawSourceNode": "hindlimb-right-hock.001",
+      "pivotDerivation": "operator-authored hindlimb-right-hock.001 empty registered into skeleton frame"
+    }
+  ],
+  "meshMatches": [
+    {
+      "nodeIndex": 180,
+      "nodeName": "Cube.202",
+      "meshIndex": 121,
+      "skeletonBone": "Cube.087",
+      "residual": 0.000001430511474609375
+    },
+    {
+      "nodeIndex": 181,
+      "nodeName": "Cube.021",
+      "meshIndex": 122,
+      "skeletonBone": null,
+      "residual": 2.8726291409830425
+    },
+    {
+      "nodeIndex": 182,
+      "nodeName": "Cube.201",
+      "meshIndex": 123,
+      "skeletonBone": "Cube.086",
+      "residual": 0.0000011920928955078125
+    },
+    {
+      "nodeIndex": 183,
+      "nodeName": "Cube.204",
+      "meshIndex": 124,
+      "skeletonBone": "Cube.089",
+      "residual": 0.000001018524616398517
+    },
+    {
+      "nodeIndex": 184,
+      "nodeName": "Cube.185",
+      "meshIndex": 125,
+      "skeletonBone": "Cube.070",
+      "residual": 9.5367431640625e-7
+    },
+    {
+      "nodeIndex": 185,
+      "nodeName": "Cube.190",
+      "meshIndex": 126,
+      "skeletonBone": "Cube.085",
+      "residual": 0.000001066240299940009
+    },
+    {
+      "nodeIndex": 186,
+      "nodeName": "Cube.203",
+      "meshIndex": 127,
+      "skeletonBone": "Cube.088",
+      "residual": 0.0000016858739404357613
+    },
+    {
+      "nodeIndex": 190,
+      "nodeName": "Cube.057",
+      "meshIndex": 122,
+      "skeletonBone": "Cube",
+      "residual": 9.830249847454215e-7
+    },
+    {
+      "nodeIndex": 191,
+      "nodeName": "Cube.197",
+      "meshIndex": 123,
+      "skeletonBone": "Cube.001",
+      "residual": 9.830249847454215e-7
+    },
+    {
+      "nodeIndex": 192,
+      "nodeName": "Cube.200",
+      "meshIndex": 124,
+      "skeletonBone": "Cube.005",
+      "residual": 9.610960183499514e-7
+    },
+    {
+      "nodeIndex": 193,
+      "nodeName": "Cube.167",
+      "meshIndex": 125,
+      "skeletonBone": "Cube.066",
+      "residual": 0.0000017357134555054948
+    },
+    {
+      "nodeIndex": 194,
+      "nodeName": "Cube.172",
+      "meshIndex": 126,
+      "skeletonBone": "Cube.075",
+      "residual": 0.0000017357134555054948
+    },
+    {
+      "nodeIndex": 195,
+      "nodeName": "Cube.199",
+      "meshIndex": 127,
+      "skeletonBone": "Cube.003",
+      "residual": 0.000003015782985847835
+    },
+    {
+      "nodeIndex": 198,
+      "nodeName": "right-femur-mesh",
+      "meshIndex": 121,
+      "skeletonBone": "Cube.002",
+      "residual": 0.000001430511474609375
+    },
+    {
+      "nodeIndex": 200,
+      "nodeName": "SRC_PELVIS.002",
+      "meshIndex": 128,
+      "skeletonBone": "SRC_PELVIS",
+      "residual": 0
+    }
+  ],
+  "unmatchedMeshNodes": [
+    {
+      "nodeIndex": 181,
+      "nodeName": "Cube.021",
+      "meshIndex": 122,
+      "skeletonBone": null,
+      "residual": 2.8726291409830425
+    }
+  ],
+  "unmatchedMeshPolicy": {
+    "mode": "explicit-allowlist",
+    "admitted": [
+      {
+        "nodeName": "Cube.021",
+        "rationale": "operator-authored accessory retained in the hierarchy source but outside frozen skeleton ownership"
+      }
+    ]
+  },
+  "claimCeiling": "operator-authored assay control hierarchy registered into the frozen skeleton frame; not an authored skin or production armature",
+  "receiptSha256": "sha256:8032d8dbbc33f850b9e55b749daf7cad788d598e2dcee90d5803374036622711"
+}
