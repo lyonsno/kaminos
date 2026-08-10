@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.analytical-tissue-geometry-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "synthetic-hindquarter-analytic-profile-mesh-v0",
+  "effectiveRouteId": "synthetic-hindquarter-analytic-profile-mesh-v0",
+  "parameters": {
+    "delta": 0.1,
+    "stationCount": 65,
+    "radialSegments": 32
+  },
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 4229905,
+      "sha256": "63f007ecf8697a4bed9c64330a7c9585f1418f3436ada86f286b1165fda4183b"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 19199,
+      "sha256": "238f8ae843a6931891c7b2d88bf46308c6c755a7680ea454bf0dce99265aeb24"
+    },
+    {
+      "relativePath": "1-scalar-union-negative-control-baseline.obj",
+      "byteLength": 163009,
+      "sha256": "faa2e5b7436ab298f6ac83b158c35e5bd042ad3241146d2359872947c8d7ecb9"
+    },
+    {
+      "relativePath": "1-scalar-union-negative-control-perturbed.obj",
+      "byteLength": 162902,
+      "sha256": "9fddec310385895096e0b397f7a8a2578570342bdd26cfe40f9857fb13bac978"
+    },
+    {
+      "relativePath": "2-anisotropic-field-row-baseline.obj",
+      "byteLength": 162940,
+      "sha256": "dbc503268348165526cec0889f005ff902f231b4e3b62f17113a3009ee1446be"
+    },
+    {
+      "relativePath": "2-anisotropic-field-row-perturbed.obj",
+      "byteLength": 162865,
+      "sha256": "34e64a6eb8aa91d39768f5489a7160720af2068cc2e71733742f76c896e567fd"
+    },
+    {
+      "relativePath": "3-explicit-shell-causal-null-baseline.obj",
+      "byteLength": 162968,
+      "sha256": "806fd055819c620e808aa114ff9d7566dce209c40583bfb8b3c0f2bab380efc8"
+    },
+    {
+      "relativePath": "3-explicit-shell-causal-null-perturbed.obj",
+      "byteLength": 162969,
+      "sha256": "b24cee39e661f1fa44ef2ae06ee151934cf194933cc2b9c8a78052bf4bac659b"
+    },
+    {
+      "relativePath": "4-factored-hybrid-leading-hypothesis-baseline.obj",
+      "byteLength": 162976,
+      "sha256": "9cc56bf74904ba03e5f2c9821bb3206c67b1cfa5602b4c5ff53670564fb0a165"
+    },
+    {
+      "relativePath": "4-factored-hybrid-leading-hypothesis-perturbed.obj",
+      "byteLength": 162874,
+      "sha256": "0aeb24c1181135427e964c681a12316420032ef4c64bed77dc1af176a1521423"
+    }
+  ],
+  "descriptorHash": "2f452d8139a4033719064737f12d85387f629c9e6942db09388a6fa658d37156",
+  "rowPlanHash": "d67bcd76aa417e3b637519b5911dcaa38a10a42cb6caf428b7b8ae469d6eb143",
+  "assayHash": "75a2acd4d76aedd0cfcd5cd6ed45110d0936e717d0d8831a1febbcd2e6f7bbcd",
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all primary artifacts reread and hashed from disk"
+}
