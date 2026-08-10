@@ -1,0 +1,467 @@
+{
+  "schema": "kaminos.nbody-packing-sparse-global-comparison-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-10T06:10:47.494Z",
+  "route": {
+    "requested": "nbody-packing-frustrated-comparison-orbitable-v0",
+    "effective": "nbody-packing-frustrated-comparison-orbitable-v0",
+    "fallbackUsed": false,
+    "baseUrl": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/"
+  },
+  "bindings": {
+    "fixtureJsonSha256": "fe6bf93ce6c4c9df732eceea5384d48896b29a380cd018b6819226bb6c0c6db3",
+    "assayResultJsonSha256": "4d26d237e863f9c58501c812c61cae38f532f1e583ce57f9833c3eec8e94aec7",
+    "jointReferenceJsonSha256": "2d4c0de3ab224e797dd2d2063d2aa3294435b7b6fd65855b933091f911aee774",
+    "sparseProblemJsonSha256": "58de739ad109bea085e42c12918a5774008ab9171a485dda4eb25a6a176f9c79",
+    "sparseCandidateJsonSha256": "e3041859539f7906d25ebb98f1ffe7ab8ee31d6060508cd774e3b2971419fecf",
+    "indexHtmlSha256": "07618a9f757a070f0fb1d3c50399cb8335813801c7d767a0955390997d9732e5",
+    "pendingReportSha256": "694cb58e453a720081e3c4914c5e216597bdd38462054305ff2029f7ea15e03a"
+  },
+  "images": [
+    {
+      "state": "known-feasible",
+      "mode": "volume",
+      "path": "known-feasible-volume.png",
+      "byteLength": 271702,
+      "sha256": "88de0c38f16d39495d8308ad9cbe818ccc96782f8840050c513e973c5555f0d2",
+      "captureReportPath": "known-feasible-volume-capture-report.json",
+      "captureReportSha256": "81347073edef75fbbbe031b0c9ec689f0d747bc690ef6e1e4e80ca79c84bf9f8",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=known-feasible&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=known-feasible&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216159,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "known-feasible",
+      "mode": "slice",
+      "path": "known-feasible-slice.png",
+      "byteLength": 223647,
+      "sha256": "cea4136ee84234eafaa394d50aac7886e2494ef68eab0ad8b387585d75b8e7d4",
+      "captureReportPath": "known-feasible-slice-capture-report.json",
+      "captureReportSha256": "e3b511fa2e14d942738d9ae0b7df509a648fbafd53f46ff202097e576925abe4",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=known-feasible&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=known-feasible&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216158,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "path": "crowded-volume.png",
+      "byteLength": 287822,
+      "sha256": "be40daa2125b5e43a2b1623cf677f075c6bf17b76a0c8e6ccb30a566ffe8893c",
+      "captureReportPath": "crowded-volume-capture-report.json",
+      "captureReportSha256": "6c30408c1975aa537e0a0ac91d1345f062a913d39a266b1f7570aed0ec223c4a",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=crowded&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=crowded&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216152,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "path": "crowded-slice.png",
+      "byteLength": 221198,
+      "sha256": "f0c2ced4dba66cd4812cc866e4190fb5edaf15d22ac242218175e84d73a99919",
+      "captureReportPath": "crowded-slice-capture-report.json",
+      "captureReportSha256": "bed77130fd1fdeaf2012f69271b19b83b1680583bbdeb630f64b284b4cb0c75e",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=crowded&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=crowded&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216151,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "volume",
+      "path": "sequential-counterfeit-volume.png",
+      "byteLength": 288510,
+      "sha256": "9ecb128bc73433dccf6747af760e1e8f3ea5f4ce663257269354e5709df8c05e",
+      "captureReportPath": "sequential-counterfeit-volume-capture-report.json",
+      "captureReportSha256": "57cd6006121a195335b39e89f931c88563ca753cfc7869f083f5210ab5c000f1",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sequential-counterfeit&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sequential-counterfeit&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216167,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "slice",
+      "path": "sequential-counterfeit-slice.png",
+      "byteLength": 221583,
+      "sha256": "09a88c66841d7b91c093302fb1abc7292db5a45794622637355a6757fb1e1a2a",
+      "captureReportPath": "sequential-counterfeit-slice-capture-report.json",
+      "captureReportSha256": "ec738d88c234eb03af785de1e8fd3253e4c404d2ae6b28dddb7addfeacb135bf",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sequential-counterfeit&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sequential-counterfeit&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216166,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sparse-global-candidate",
+      "mode": "volume",
+      "path": "sparse-global-candidate-volume.png",
+      "byteLength": 280318,
+      "sha256": "095c50e427a82d59f2c87e4762a43936a45181cc9e385245c5ffc4733d442f3a",
+      "captureReportPath": "sparse-global-candidate-volume-capture-report.json",
+      "captureReportSha256": "821f5f32252fd309b3803b3e7377dec10cf44a74b5b16038bf826f457765e82a",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sparse-global-candidate&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sparse-global-candidate&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sparse-global-candidate",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216168,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sparse-global-candidate",
+      "mode": "slice",
+      "path": "sparse-global-candidate-slice.png",
+      "byteLength": 222902,
+      "sha256": "ee23aefc70036d358dc093ced0b9a68267caf63b5a71828cdb587fb3eb0fe68e",
+      "captureReportPath": "sparse-global-candidate-slice-capture-report.json",
+      "captureReportSha256": "a48826aa2747ca75c779ef4e7dff4f5bd435b77c2aba2385b523db561f24b093",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sparse-global-candidate&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=sparse-global-candidate&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sparse-global-candidate",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216167,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "volume",
+      "path": "joint-reference-volume.png",
+      "byteLength": 282503,
+      "sha256": "72f2e3bc385cbf336b4bb600ce3de11f7ce7a787f5b5e06730ddaffd2230055d",
+      "captureReportPath": "joint-reference-volume-capture-report.json",
+      "captureReportSha256": "0bd35bc0b0ee443ef1682c130b2c94fae948ec7467f39900ec28259e4acad5e2",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=joint-reference&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=joint-reference&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216160,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "slice",
+      "path": "joint-reference-slice.png",
+      "byteLength": 222434,
+      "sha256": "d5b71b045cc1c77c7214ea64416672e7dce93dd7b99546b951342bd584fbbe9e",
+      "captureReportPath": "joint-reference-slice-capture-report.json",
+      "captureReportSha256": "2dc06d89869903e2c9bf4b3363d76a149868355bdcf0e7119b06346594fce9e4",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=joint-reference&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-frustrated-comparison-v0/?state=joint-reference&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-frustrated-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 216159,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "statesLegible": true,
+    "opaqueOverlapTruthLegible": true,
+    "stableIdentityLegible": true,
+    "attachmentsBoneCompartmentLegible": true,
+    "metricsMatchMarkers": true,
+    "packingSemanticsNotInverted": true,
+    "jointReferenceLegible": true,
+    "textContained": true,
+    "sparseCandidateLegible": true,
+    "candidateOracleDifferenceLegible": true
+  },
+  "summary": "Under one camera, the frustrated crowded state is visibly interpenetrated; the contact-only candidate moves all five carriers but retains legible muscle-overlap and skeletal-penetration markers, while the bounded reference clears both. Volume and opaque slice modes agree, labels remain contained, and state identity is stable."
+}

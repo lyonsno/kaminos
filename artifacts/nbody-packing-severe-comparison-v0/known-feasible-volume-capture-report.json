@@ -1,0 +1,193 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-severe-comparison-v0/known-feasible-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-severe-comparison-v0/known-feasible-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 79593,
+    "processGroupId": 79593,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 79593,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 79603,
+      "processGroupId": 79603,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 79603,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3839,
+    "retainedBytes": 3839,
+    "truncated": false,
+    "tail": "[0810/014420.832075:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0810/014420.886829:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014421.206352:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n[0810/014421.206455:INFO:CONSOLE:0] \"[.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n[0810/014421.207340:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014421.240693:INFO:CONSOLE:0] \"[.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n[0810/014421.242134:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014421.268970:INFO:CONSOLE:0] \"[.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n[0810/014421.269558:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0810/014421.311794:INFO:CONSOLE:0] \"[.WebGL-0x12c00509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n268472 bytes written to file repo://artifacts/nbody-packing-severe-comparison-v0/known-feasible-volume.png\n[0810/014421.472784:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0810/014421.495298:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n[0810/014421.521808:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014421.846820:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014421.848597:INFO:CONSOLE:0] \"[.WebGL-0x12400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-severe-comparison-v0/known-feasible-volume.png",
+    "sizeBytes": 268472,
+    "sha256": "45c08faed560a41fc6ddf4b508a79bae4f2f5b1cc5b4763a7d7a26794273df9c",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 69,
+      "idatBytes": 267623
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "known-feasible",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-sparse-global-comparison-orbitable-v0"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 128686,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-severe-comparison-v0/known-feasible-volume.png",
+      "sizeBytes": 268472,
+      "sha256": "45c08faed560a41fc6ddf4b508a79bae4f2f5b1cc5b4763a7d7a26794273df9c",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 69,
+        "idatBytes": 267623
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=known-feasible&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "known-feasible",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-sparse-global-comparison-orbitable-v0"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 128686,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  }
+}

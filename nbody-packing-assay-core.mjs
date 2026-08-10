@@ -157,6 +157,46 @@ function createKnownFeasibleSource() {
   });
 }
 
+function createFrustratedKnownFeasibleSource() {
+  const centralRadii = [0.08, 0.105, 0.125, 0.125, 0.105, 0.08];
+  const outerRadii = [0.1, 0.18, 0.24, 0.24, 0.18, 0.1];
+  return sourceWithIdentity({
+    schema:MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
+    id:'synthetic-known-feasible-five-body-frustrated-rosette-v0',
+    authority: {
+      kind:'synthetic-proxy',
+      anatomicalAdmission:'none',
+    },
+    dimension:3,
+    formation: {
+      centerlineSmoothingReference:'source-displacement',
+    },
+    compartment: {
+      id:'asymmetric-frustrated-rosette-compartment',
+      kind:'box',
+      minimum:[-0.68, -1.3, -0.85],
+      maximum:[0.75, 1.3, 0.85],
+      clearance:0.02,
+    },
+    obstacles:[{
+      id:'frustrated-west-bypass-bone',
+      kind:'capsule',
+      start:[-0.66, -1.1, 0],
+      end:[-0.66, 1.1, 0],
+      radius:0.16,
+      clearance:0.02,
+      authority:'synthetic-known-feasible',
+    }],
+    muscles:[
+      createRosetteMuscle('rosette-west', [-0.34, 0.28], outerRadii),
+      createRosetteMuscle('rosette-center', [0.05, 0], centralRadii),
+      createRosetteMuscle('rosette-east', [0.45, 0.1], outerRadii),
+      createRosetteMuscle('rosette-north', [0.1, 0.55], outerRadii),
+      createRosetteMuscle('rosette-south', [0.1, -0.55], outerRadii),
+    ],
+  });
+}
+
 function translateMuscleBelly(muscle, translation) {
   const lastIndex = muscle.centerline.length - 1;
   for (let index = 1; index < lastIndex; index += 1) {
@@ -185,6 +225,76 @@ function deriveCrowdedSource(knownFeasible) {
   core.derivation.radiusScale = rounded(
     translateMuscleBelly(driver, core.derivation.effectiveTranslation),
   );
+  return sourceWithIdentity(core);
+}
+
+function deriveSevereCrowdedSource(knownFeasible) {
+  const core = structuredClone(knownFeasible);
+  delete core.input;
+  core.id = 'synthetic-severe-crowded-five-body-rosette-v0';
+  const requestedTransforms = [
+    { muscleId:'rosette-west', translation:[0.18, 0, 0] },
+    { muscleId:'rosette-east', translation:[-0.18, 0, 0] },
+    { muscleId:'rosette-north', translation:[0, 0, -0.18] },
+    { muscleId:'rosette-south', translation:[0, 0, 0.18] },
+  ];
+  core.derivation = {
+    schema:'kaminos.nbody-rosette-severe-crowding-continuation.v0',
+    parent:structuredClone(knownFeasible.input.effective),
+    driverMuscleId:'rosette-west',
+    requestedTranslation:[...requestedTransforms[0].translation],
+    effectiveTranslation:[...requestedTransforms[0].translation],
+    envelope:'sine-zero-at-attachments',
+    fallbackUsed:false,
+    transforms:requestedTransforms.map(requested => {
+      const muscle = core.muscles.find(row => row.id === requested.muscleId);
+      if (!muscle) throw new Error(`severe crowding member missing: ${requested.muscleId}`);
+      return {
+        muscleId:requested.muscleId,
+        requestedTranslation:[...requested.translation],
+        effectiveTranslation:[...requested.translation],
+        envelope:'sine-zero-at-attachments',
+        radiusScale:rounded(translateMuscleBelly(muscle, requested.translation)),
+        fallbackUsed:false,
+      };
+    }),
+  };
+  core.derivation.radiusScale = core.derivation.transforms[0].radiusScale;
+  return sourceWithIdentity(core);
+}
+
+function deriveFrustratedCrowdedSource(knownFeasible) {
+  const core = structuredClone(knownFeasible);
+  delete core.input;
+  core.id = 'synthetic-frustrated-crowded-five-body-rosette-v0';
+  const requestedTransforms = [
+    { muscleId:'rosette-west', translation:[0.18, 0, -0.28] },
+    { muscleId:'rosette-east', translation:[-0.24, 0, -0.1] },
+    { muscleId:'rosette-north', translation:[-0.05, 0, -0.3] },
+    { muscleId:'rosette-south', translation:[-0.05, 0, 0.3] },
+  ];
+  core.derivation = {
+    schema:'kaminos.nbody-rosette-frustrated-crowding-continuation.v0',
+    parent:structuredClone(knownFeasible.input.effective),
+    driverMuscleId:'rosette-west',
+    requestedTranslation:[...requestedTransforms[0].translation],
+    effectiveTranslation:[...requestedTransforms[0].translation],
+    envelope:'sine-zero-at-attachments',
+    fallbackUsed:false,
+    transforms:requestedTransforms.map(requested => {
+      const muscle = core.muscles.find(row => row.id === requested.muscleId);
+      if (!muscle) throw new Error(`frustrated crowding member missing: ${requested.muscleId}`);
+      return {
+        muscleId:requested.muscleId,
+        requestedTranslation:[...requested.translation],
+        effectiveTranslation:[...requested.translation],
+        envelope:'sine-zero-at-attachments',
+        radiusScale:rounded(translateMuscleBelly(muscle, requested.translation)),
+        fallbackUsed:false,
+      };
+    }),
+  };
+  core.derivation.radiusScale = core.derivation.transforms[0].radiusScale;
   return sourceWithIdentity(core);
 }
 
@@ -320,9 +430,22 @@ export function validateNBodyPackingAssayFixture(fixture) {
   requireMatchingFixtureReceipt('crowded belt', fixture.metrics?.crowdedBelt, crowdedBelt);
 }
 
-export function createNBodyRosetteFixture() {
-  const knownFeasible = createKnownFeasibleSource();
-  const crowded = deriveCrowdedSource(knownFeasible);
+export function createNBodyRosetteFixture({ stressTier = 'mild-bringup-v0' } = {}) {
+  if (![
+    'mild-bringup-v0',
+    'severe-comparative-v0',
+    'frustrated-comparative-v0',
+  ].includes(stressTier)) {
+    throw new Error(`unsupported N-body rosette stress tier: ${stressTier}`);
+  }
+  const knownFeasible = stressTier === 'frustrated-comparative-v0'
+    ? createFrustratedKnownFeasibleSource()
+    : createKnownFeasibleSource();
+  const crowded = stressTier === 'frustrated-comparative-v0'
+    ? deriveFrustratedCrowdedSource(knownFeasible)
+    : stressTier === 'severe-comparative-v0'
+      ? deriveSevereCrowdedSource(knownFeasible)
+      : deriveCrowdedSource(knownFeasible);
   const contactGraph = {
     schema:'kaminos.nbody-contact-graph.v0',
     members:[...MEMBER_ORDER],
@@ -346,13 +469,27 @@ export function createNBodyRosetteFixture() {
   };
   const core = {
     schema:NBODY_PACKING_ASSAY_FIXTURE_SCHEMA,
-    id:'nbody-known-feasible-five-body-rosette-assay-v0',
+    id:stressTier === 'frustrated-comparative-v0'
+      ? 'nbody-known-feasible-five-body-frustrated-rosette-assay-v0'
+      : stressTier === 'severe-comparative-v0'
+        ? 'nbody-known-feasible-five-body-severe-rosette-assay-v0'
+        : 'nbody-known-feasible-five-body-rosette-assay-v0',
     authority: {
       kind:'synthetic-known-feasible',
       anatomicalAdmission:'none',
       claimCeiling:'assay-discrimination-only',
     },
     dimension:3,
+    ...(stressTier !== 'mild-bringup-v0' ? {
+      assayProfile: {
+        stressTier,
+        comparisonAuthority:'visual-and-hard-gates-only',
+        rankingAuthority:'none-before-visual-discrimination',
+        ...(stressTier === 'frustrated-comparative-v0' ? {
+          falsifier:'contact-only-radial-relief-exports-skeletal-debt',
+        } : {}),
+      },
+    } : {}),
     pressureChain:[...PRESSURE_CHAIN],
     contactGraph,
     knownFeasible,

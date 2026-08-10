@@ -1,0 +1,193 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "cli",
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": null,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-severe-comparison-v0/sequential-counterfeit-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-severe-comparison-v0/sequential-counterfeit-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 78501,
+    "processGroupId": 78501,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 78501,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 78529,
+      "processGroupId": 78529,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 78529,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3903,
+    "retainedBytes": 3903,
+    "truncated": false,
+    "tail": "[0810/014336.520650:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0810/014336.602018:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014337.041926:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n[0810/014337.041994:INFO:CONSOLE:0] \"[.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n[0810/014337.043049:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014337.087766:INFO:CONSOLE:0] \"[.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n[0810/014337.089144:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014337.110378:INFO:CONSOLE:0] \"[.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n[0810/014337.111140:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0810/014337.153941:INFO:CONSOLE:0] \"[.WebGL-0x13400569000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n270145 bytes written to file repo://artifacts/nbody-packing-severe-comparison-v0/sequential-counterfeit-volume.png\n[0810/014337.373247:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0810/014337.395391:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n[0810/014337.424449:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014337.878586:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0810/014337.880252:INFO:CONSOLE:0] \"[.WebGL-0x12400509000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-severe-comparison-v0/sequential-counterfeit-volume.png",
+    "sizeBytes": 270145,
+    "sha256": "427e974bc394e935a1ecfd6cf532c90fce08f6a8d294f979ad2a4c50ad190502",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 69,
+      "idatBytes": 269296
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "sequential-counterfeit",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-sparse-global-comparison-orbitable-v0"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 128694,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "cli",
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell"
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": null,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-severe-comparison-v0/sequential-counterfeit-volume.png",
+      "sizeBytes": 270145,
+      "sha256": "427e974bc394e935a1ecfd6cf532c90fce08f6a8d294f979ad2a4c50ad190502",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 69,
+        "idatBytes": 269296
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-severe-comparison-v0/?state=sequential-counterfeit&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "sequential-counterfeit",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-sparse-global-comparison-orbitable-v0"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 128694,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  }
+}

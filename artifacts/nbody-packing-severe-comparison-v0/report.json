@@ -1,0 +1,321 @@
+{
+  "schema": "kaminos.nbody-packing-sparse-global-comparison-witness-report.v0",
+  "status": "complete-pending-visual-inspection",
+  "route": {
+    "requested": "nbody-packing-sparse-global-comparison-orbitable-v0",
+    "effective": "nbody-packing-sparse-global-comparison-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "fixture": {
+    "id": "nbody-known-feasible-five-body-severe-rosette-assay-v0",
+    "schema": "kaminos.nbody-packing-assay-fixture.v0",
+    "sha256": "9150fa981cba30b3388d3e11829881d9ef0c73e28584c5530aa4b6e5549e0d7b",
+    "memberCount": 5
+  },
+  "assay": {
+    "schema": "kaminos.nbody-packing-counterfeit-assay-result.v0",
+    "status": "counterfeit-rejected-global-debt",
+    "sha256": "d775374b6343c45525ed651af5289df224ea3e11eb3420ea6f99f8f5a27ccb68"
+  },
+  "jointReference": {
+    "schema": "kaminos.nbody-packing-joint-reference-result.v0",
+    "status": "converged-joint-reference",
+    "sha256": "79b0b6d8e8497e879fc2b8bbb650c2ad0f32fdee5d9c6702d177941967537fb8",
+    "selectedPhysicalStateSha256": "de556bffc818da07ed780d03d14a2308f85b89917263c67903952c5cd0621067",
+    "maximumPhysicalResidual": 8.34e-10,
+    "projectedGradientInfinityNorm": 5.25e-10,
+    "activeConstraintCount": 4,
+    "admissibleMultistarts": 3,
+    "declaredMultistarts": 3,
+    "candidateEnumeration": "passed",
+    "candidateEnumerationReceipt": {
+      "candidateEnumeration": "passed",
+      "mechanism": "paired-full-solve-artifact-comparison",
+      "rows": [
+        {
+          "requestedConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "canonical",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.01,
+              0.0025,
+              0.000625,
+              0.00015625,
+              0.0000390625,
+              0.000009765625,
+              0.00000244140625,
+              6.103515625e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "effectiveConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "canonical",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.01,
+              0.0025,
+              0.000625,
+              0.00015625,
+              0.0000390625,
+              0.000009765625,
+              0.00000244140625,
+              6.103515625e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "fallbackUsed": false,
+          "status": "converged-joint-reference",
+          "selectedVector": [
+            -0.158950082989877,
+            0,
+            9.91693e-10,
+            0,
+            0.158950084977165,
+            0,
+            -1.482685e-9,
+            0.158950083983521,
+            -1.482685e-9,
+            -0.158950083983521
+          ],
+          "selectedPhysicalStateSha256": "de556bffc818da07ed780d03d14a2308f85b89917263c67903952c5cd0621067",
+          "selectedMetricsSha256": "ae29136d1ab563e560835bcc8655e13e7ec9a762f1e5e006142d16bc3fae3d63",
+          "selectedBeltSha256": "9adad8903357965ae2ca7db2277b40a8409aa1778eaa75b25f716b163992f4cc"
+        },
+        {
+          "requestedConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "reverse",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.01,
+              0.0025,
+              0.000625,
+              0.00015625,
+              0.0000390625,
+              0.000009765625,
+              0.00000244140625,
+              6.103515625e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "effectiveConfig": {
+            "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+            "candidateEnumeration": "reverse",
+            "hardTolerance": 1e-7,
+            "penaltySchedule": [
+              100000000000
+            ],
+            "startFamily": [
+              "crowded-zero",
+              "known-feasible-continuation",
+              "balanced-radial-relief"
+            ],
+            "stepSchedule": [
+              0.04,
+              0.01,
+              0.0025,
+              0.000625,
+              0.00015625,
+              0.0000390625,
+              0.000009765625,
+              0.00000244140625,
+              6.103515625e-7,
+              1.52587890625e-7,
+              7.62939453125e-8
+            ],
+            "translationBounds": [
+              -0.3,
+              0.3
+            ],
+            "translationBasis": "per-member-xz-sine-zero-at-attachments"
+          },
+          "fallbackUsed": false,
+          "status": "converged-joint-reference",
+          "selectedVector": [
+            -0.158950082989877,
+            0,
+            9.91693e-10,
+            0,
+            0.158950084977165,
+            0,
+            -1.482685e-9,
+            0.158950083983521,
+            -1.482685e-9,
+            -0.158950083983521
+          ],
+          "selectedPhysicalStateSha256": "de556bffc818da07ed780d03d14a2308f85b89917263c67903952c5cd0621067",
+          "selectedMetricsSha256": "ae29136d1ab563e560835bcc8655e13e7ec9a762f1e5e006142d16bc3fae3d63",
+          "selectedBeltSha256": "9adad8903357965ae2ca7db2277b40a8409aa1778eaa75b25f716b163992f4cc"
+        }
+      ],
+      "comparison": {
+        "selectedVectorEqual": true,
+        "selectedPhysicalStateEqual": true,
+        "selectedMetricsEqual": true,
+        "selectedBeltEqual": true
+      },
+      "labelPermutation": "not-yet-assayed"
+    }
+  },
+  "sparseGlobalCandidate": {
+    "schema": "kaminos.nbody-packing-sparse-graph-result.v0",
+    "status": "converged-sparse-global-candidate",
+    "sha256": "9b87cfe0d4d19e20f76139fe1185f2b8847b10e7414475f231a55a1632259bd8",
+    "problemSha256": "c08849041bfe5edd73b8892c34897571e820513936464c7c0555290a769055bc",
+    "selectedPhysicalStateSha256": "b8e0a4eab00dedaa4420ab87f02d7fdd01fdd49cd1d1a70b693a7d993ecfcf70",
+    "maximumPhysicalResidual": 7.868e-8,
+    "deformationEnergy": 0.050530245360796,
+    "movedMemberCount": 4,
+    "iterations": 29,
+    "graphEdgeCount": 8,
+    "maximumDegree": 4,
+    "candidateEnumerationReceipt": {
+      "candidateEnumeration": "passed",
+      "mechanism": "paired-full-solve-traversal-comparison",
+      "rows": [
+        {
+          "requestedEnumeration": "canonical",
+          "effectiveEnumeration": "canonical",
+          "status": "converged-sparse-global-candidate",
+          "fallbackUsed": false,
+          "selectedVector": [
+            -0.158950063480321,
+            0,
+            0,
+            0,
+            0.158950063480321,
+            0,
+            0,
+            0.158950063480321,
+            0,
+            -0.158950063480321
+          ],
+          "selectedPhysicalStateSha256": "b8e0a4eab00dedaa4420ab87f02d7fdd01fdd49cd1d1a70b693a7d993ecfcf70",
+          "selectedMetricsSha256": "f8df3422e1a4f49f84876b824fadaf920020ece4bb6664771103b25920813ad1",
+          "selectedBeltSha256": "4f77eab2b75137b2414fe9eb04cbdbb0460e61b3cdb43c7f6c4d86a970ce2a29",
+          "workSha256": "86be43fd914d586b00f10782328484e64372673ab971e1dd56d95c1ab02a02bb"
+        },
+        {
+          "requestedEnumeration": "reverse",
+          "effectiveEnumeration": "reverse",
+          "status": "converged-sparse-global-candidate",
+          "fallbackUsed": false,
+          "selectedVector": [
+            -0.158950063480321,
+            0,
+            0,
+            0,
+            0.158950063480321,
+            0,
+            0,
+            0.158950063480321,
+            0,
+            -0.158950063480321
+          ],
+          "selectedPhysicalStateSha256": "b8e0a4eab00dedaa4420ab87f02d7fdd01fdd49cd1d1a70b693a7d993ecfcf70",
+          "selectedMetricsSha256": "f8df3422e1a4f49f84876b824fadaf920020ece4bb6664771103b25920813ad1",
+          "selectedBeltSha256": "4f77eab2b75137b2414fe9eb04cbdbb0460e61b3cdb43c7f6c4d86a970ce2a29",
+          "workSha256": "86be43fd914d586b00f10782328484e64372673ab971e1dd56d95c1ab02a02bb"
+        }
+      ],
+      "comparison": {
+        "statusEqual": true,
+        "selectedVectorEqual": true,
+        "selectedPhysicalStateEqual": true,
+        "selectedMetricsEqual": true,
+        "selectedBeltEqual": true,
+        "workEqual": true
+      }
+    }
+  },
+  "claims": {
+    "knownFeasibility": "supported-by-manufactured-witness",
+    "localCounterfeitDiscrimination": "supported-by-global-debt-ledger",
+    "boundedJointReference": "supported-by-kkt-and-continuous-admission",
+    "scalableSyntheticCandidate": "supported-only-on-bounded-five-body-assay",
+    "scalableProductionSolver": "not-assayed",
+    "anatomicalCorrectness": "not-assayed",
+    "fasciaMechanics": "not-assayed"
+  },
+  "visualInspection": {
+    "status": "pending-agent-inspection",
+    "artifact": "index.html",
+    "requiredStates": [
+      "known-feasible",
+      "crowded",
+      "sequential-counterfeit",
+      "sparse-global-candidate",
+      "joint-reference"
+    ],
+    "requiredModes": [
+      "volume",
+      "slice"
+    ]
+  },
+  "stalePrimaryCleanup": {
+    "status": "cleared",
+    "paths": [
+      "fixture.json",
+      "assay-result.json",
+      "joint-reference.json",
+      "sparse-problem.json",
+      "sparse-candidate.json",
+      "index.html"
+    ]
+  },
+  "bindings": {
+    "fixtureJsonSha256": "46b792259969cd744e6c2374ea58677ef87df95c0da6bbf292f4b7bf8196d04b",
+    "assayResultJsonSha256": "63e138219e9887cef91330787c8ab1b39c097be92f5622ac0011e8c69ab30129",
+    "jointReferenceJsonSha256": "a47e9bfbfff6b15b1435cd081051a7b3044fadffe1260c9d32c8a4375a363bb7",
+    "sparseProblemJsonSha256": "3d66fe64f33f4fbe5d81891c3f2ba04f5c50045dc3323115ba7724d28b90fd64",
+    "sparseCandidateJsonSha256": "cb9f959f8aae5f131ddc5e1907f5285ec0e9f51e10f685a8a3e65ce4fbdbfec6",
+    "indexHtmlSha256": "405453036ac28b399dbece9311421ff869800dbffe16e396629a2274750ce2ce"
+  }
+}

@@ -1,10 +1,12 @@
 import {
   hashMusclePackingCanonicalJson,
   measureMuscleCompartmentPacking,
+  taperedSegmentSurfaceMinimum,
 } from './muscle-compartment-packing-core.mjs';
 import {
   NBODY_PACKING_ASSAY_FIXTURE_SCHEMA,
   createNBodyRosetteFixture,
+  validateNBodyPackingAssayFixture,
 } from './nbody-packing-assay-core.mjs';
 
 export const NBODY_PACKING_JOINT_REFERENCE_RESULT_SCHEMA =
@@ -304,6 +306,7 @@ function validateFixture(fixture) {
   if (fixture?.schema !== NBODY_PACKING_ASSAY_FIXTURE_SCHEMA) {
     throw new Error(`joint reference fixture schema mismatch: ${fixture?.schema || 'missing'}`);
   }
+  validateNBodyPackingAssayFixture(fixture);
   if (
     !fixture.identity?.sha256 ||
     fixture.input?.requested?.sha256 !== fixture.identity.sha256 ||
@@ -446,6 +449,22 @@ function boundedCandidate(vector, index, delta, bounds) {
   return candidate;
 }
 
+function materializeCandidate(fixture, vector, penalty) {
+  const evaluator = createEvaluator(fixture);
+  const searchFinal = evaluator.evaluate(vector, penalty);
+  const muscles = instantiateState(fixture, vector);
+  const metrics = measureMuscleCompartmentPacking(fixture.crowded, muscles);
+  const belt = measureBelt(muscles);
+  return {
+    ...searchFinal,
+    muscles,
+    metrics,
+    belt,
+    physicalViolationSquared:physicalViolationSquared(metrics, belt),
+    maximumPhysicalResidual:maximumPhysicalResidual(metrics, belt),
+  };
+}
+
 function optimizeStart(fixture, config, startName) {
   const evaluator = createEvaluator(fixture);
   let vector = startVector(fixture, startName);
@@ -494,25 +513,15 @@ function optimizeStart(fixture, config, startName) {
       vector:[...vector],
     });
   }
-  const patternFinal = evaluator.evaluate(vector, config.penaltySchedule.at(-1));
-  const refinement = refineStationaryCandidate(fixture, patternFinal.vector, config);
-  const searchFinal = evaluator.evaluate(refinement.vector, config.penaltySchedule.at(-1));
-  const muscles = instantiateState(fixture, refinement.vector);
-  const metrics = measureMuscleCompartmentPacking(fixture.crowded, muscles);
-  const belt = measureBelt(muscles);
-  const final = {
-    ...searchFinal,
-    muscles,
-    metrics,
-    belt,
-    physicalViolationSquared:physicalViolationSquared(metrics, belt),
-    maximumPhysicalResidual:maximumPhysicalResidual(metrics, belt),
-  };
+  const final = materializeCandidate(
+    fixture,
+    vector,
+    config.penaltySchedule.at(-1),
+  );
   return {
     startName,
     final,
     stages,
-    stationarityRefinement:refinement.receipt,
     evaluationCount:evaluator.evaluationCount,
   };
 }
@@ -543,31 +552,122 @@ function solveLinearSystem(matrix, rhs) {
   return augmented.map(row => row[size]);
 }
 
-function rawBeltByPair(fixture, vector) {
+function rawPhysicalConstraintRows(fixture, vector) {
+  const muscles = instantiateState(fixture, vector);
+  const segmentPairs = [
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [3, 3],
+    [4, 4],
+    [1, 2],
+    [2, 1],
+    [2, 3],
+    [3, 2],
+  ];
+  const continuousPairs = [];
+  for (let leftIndex = 0; leftIndex < muscles.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < muscles.length; rightIndex += 1) {
+      const left = muscles[leftIndex];
+      const right = muscles[rightIndex];
+      let signedGap = Infinity;
+      let controllingSegments = null;
+      for (const [leftSegment, rightSegment] of segmentPairs) {
+        const candidateGap = taperedSegmentSurfaceMinimum(
+          left.centerline[leftSegment],
+          left.centerline[leftSegment + 1],
+          right.centerline[rightSegment],
+          right.centerline[rightSegment + 1],
+        ).gap;
+        if (candidateGap < signedGap) {
+          signedGap = candidateGap;
+          controllingSegments = [leftSegment, rightSegment];
+        }
+      }
+      continuousPairs.push({
+        key:`${left.id}|${right.id}`,
+        members:[left.id, right.id],
+        signedGap,
+        controllingSegments,
+      });
+    }
+  }
+  const rows = continuousPairs.map(row => ({
+    key:`pair:${row.key}`,
+    kind:'pairwise-clearance',
+    pairKey:row.key,
+    members:[...row.members],
+    signedGap:row.signedGap,
+    controllingSegments:[...row.controllingSegments],
+  }));
+  for (const muscle of muscles) {
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      for (const obstacle of fixture.crowded.obstacles) {
+        const nearest = closestPointOnObstacle(knot.position, obstacle);
+        rows.push({
+          key:`skeletal:${muscle.id}:${knotIndex}:${obstacle.id}`,
+          kind:'skeletal-clearance',
+          muscleId:muscle.id,
+          knotIndex,
+          obstacleId:obstacle.id,
+          signedGap:distance(knot.position, nearest) - knot.radius - obstacle.radius -
+            (obstacle.clearance || 0),
+        });
+      }
+      for (let axis = 0; axis < 3; axis += 1) {
+        const minimum = fixture.crowded.compartment.minimum[axis] +
+          fixture.crowded.compartment.clearance + knot.radius;
+        const maximum = fixture.crowded.compartment.maximum[axis] -
+          fixture.crowded.compartment.clearance - knot.radius;
+        rows.push({
+          key:`compartment-lower:${muscle.id}:${knotIndex}:${axis}`,
+          kind:'compartment-clearance',
+          side:'lower',
+          muscleId:muscle.id,
+          knotIndex,
+          axis,
+          signedGap:knot.position[axis] - minimum,
+        });
+        rows.push({
+          key:`compartment-upper:${muscle.id}:${knotIndex}:${axis}`,
+          kind:'compartment-clearance',
+          side:'upper',
+          muscleId:muscle.id,
+          knotIndex,
+          axis,
+          signedGap:maximum - knot.position[axis],
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+function rawPhysicalConstraintByKey(fixture, vector) {
   return Object.fromEntries(
-    rawBeltRows(instantiateState(fixture, vector)).map(row => [row.key, row]),
+    rawPhysicalConstraintRows(fixture, vector).map(row => [row.key, row]),
   );
 }
 
-function activeGapLinearization(fixture, vector, pairKeys, finiteDifferenceStep) {
-  const currentByPair = rawBeltByPair(fixture, vector);
-  const gradients = pairKeys.map(() => Array(vector.length).fill(0));
+function activeGapLinearization(fixture, vector, constraintKeys, finiteDifferenceStep) {
+  const currentByKey = rawPhysicalConstraintByKey(fixture, vector);
+  const gradients = constraintKeys.map(() => Array(vector.length).fill(0));
   for (let axis = 0; axis < vector.length; axis += 1) {
     const positive = [...vector];
     const negative = [...vector];
     positive[axis] += finiteDifferenceStep;
     negative[axis] -= finiteDifferenceStep;
-    const positiveByPair = rawBeltByPair(fixture, positive);
-    const negativeByPair = rawBeltByPair(fixture, negative);
-    for (let row = 0; row < pairKeys.length; row += 1) {
+    const positiveByKey = rawPhysicalConstraintByKey(fixture, positive);
+    const negativeByKey = rawPhysicalConstraintByKey(fixture, negative);
+    for (let row = 0; row < constraintKeys.length; row += 1) {
       gradients[row][axis] = (
-        positiveByPair[pairKeys[row]].signedGap -
-        negativeByPair[pairKeys[row]].signedGap
+        positiveByKey[constraintKeys[row]].signedGap -
+        negativeByKey[constraintKeys[row]].signedGap
       ) / (2 * finiteDifferenceStep);
     }
   }
   return {
-    gaps:pairKeys.map(pairKey => currentByPair[pairKey].signedGap),
+    gaps:constraintKeys.map(key => currentByKey[key].signedGap),
     gradients,
   };
 }
@@ -575,59 +675,142 @@ function activeGapLinearization(fixture, vector, pairKeys, finiteDifferenceStep)
 function refineStationaryCandidate(fixture, initialVector, config) {
   const activeThreshold = Math.max(5e-4, config.hardTolerance * 100);
   const finiteDifferenceStep = 1e-6;
-  const convergenceTolerance = Math.min(1e-9, config.hardTolerance / 10);
+  const convergenceTolerance = Math.min(5e-8, config.hardTolerance / 2);
   let vector = [...initialVector];
   const seen = new Set();
   const rows = [];
   while (true) {
     const vectorKey = canonicalVectorKey(vector);
     if (seen.has(vectorKey)) {
-      throw new Error('joint reference stationarity refinement cycled before convergence');
+      throw new Error(
+        'joint reference stationarity refinement cycled before convergence: ' +
+        JSON.stringify(rows.slice(-2)),
+      );
     }
     seen.add(vectorKey);
-    const belt = rawBeltRows(instantiateState(fixture, vector));
-    const active = belt.filter(row => row.signedGap <= activeThreshold);
+    const constraints = rawPhysicalConstraintRows(fixture, vector);
+    const active = constraints.filter(row => row.signedGap <= activeThreshold);
     if (active.length === 0) {
       throw new Error('joint reference stationarity refinement found no active contact constraints');
     }
-    const pairKeys = active.map(row => row.key);
+    const constraintKeys = active.map(row => row.key);
     const { gaps, gradients } = activeGapLinearization(
       fixture,
       vector,
-      pairKeys,
+      constraintKeys,
       finiteDifferenceStep,
     );
-    const gram = gradients.map((left, leftIndex) => gradients.map((right, rightIndex) =>
-      left.reduce((sum, value, axis) => sum + value * right[axis], 0) +
-      (leftIndex === rightIndex ? 1e-12 : 0)));
-    const rhs = gradients.map((gradient, row) =>
-      gradient.reduce((sum, value, axis) => sum + value * vector[axis], 0) - gaps[row]);
-    const multipliers = solveLinearSystem(gram, rhs);
-    if (!multipliers) {
-      throw new Error('joint reference stationarity refinement active system is singular');
+    let activeIndices = gradients.map((_, index) => index);
+    let multipliers = null;
+    while (activeIndices.length > 0) {
+      const activeGradients = activeIndices.map(index => gradients[index]);
+      const activeGaps = activeIndices.map(index => gaps[index]);
+      const gram = activeGradients.map((left, leftIndex) => activeGradients.map(
+        (right, rightIndex) => left.reduce(
+          (sum, value, axis) => sum + value * right[axis],
+          0,
+        ) + (leftIndex === rightIndex ? 1e-12 : 0),
+      ));
+      const rhs = activeGradients.map((gradient, row) =>
+        gradient.reduce((sum, value, axis) => sum + value * vector[axis], 0) -
+          activeGaps[row]);
+      const solution = solveLinearSystem(gram, rhs);
+      if (!solution) {
+        throw new Error('joint reference stationarity refinement active system is singular');
+      }
+      const mostNegative = solution.reduce(
+        (result, value, index) => value < result.value ? { value, index } : result,
+        { value:-1e-10, index:-1 },
+      );
+      if (mostNegative.index < 0) {
+        multipliers = solution;
+        break;
+      }
+      activeIndices.splice(mostNegative.index, 1);
     }
+    if (!multipliers || activeIndices.length === 0) {
+      throw new Error('joint reference stationarity refinement has no nonnegative active set');
+    }
+    const activeGradients = activeIndices.map(index => gradients[index]);
     const projected = Array(vector.length).fill(0);
-    for (let row = 0; row < gradients.length; row += 1) {
+    for (let row = 0; row < activeGradients.length; row += 1) {
       for (let axis = 0; axis < vector.length; axis += 1) {
-        projected[axis] += gradients[row][axis] * multipliers[row];
+        projected[axis] += activeGradients[row][axis] * multipliers[row];
       }
     }
     if (projected.some((value, axis) =>
       value < config.translationBounds[0] || value > config.translationBounds[1])) {
       throw new Error('joint reference stationarity refinement escaped translation bounds');
     }
-    const maximumUpdate = Math.max(
+    const projectedMaximumUpdate = Math.max(
       ...projected.map((value, axis) => Math.abs(value - vector[axis])),
     );
-    const maximumPenetration = Math.max(0, ...belt.map(row => row.penetration));
+    const currentMaximumPenetration = Math.max(
+      0,
+      ...constraints.map(row => Math.max(0, -row.signedGap)),
+    );
+    if (
+      projectedMaximumUpdate <= convergenceTolerance &&
+      currentMaximumPenetration <= config.hardTolerance
+    ) {
+      rows.push({
+        iteration:rows.length + 1,
+        activeConstraintKeys:activeIndices.map(index => constraintKeys[index]),
+        acceptedLineScale:0,
+        maximumUpdate:rounded(projectedMaximumUpdate, 15),
+        maximumPenetration:rounded(currentMaximumPenetration, 15),
+      });
+      break;
+    }
+    const currentEnergy = deformationEnergy(vector);
+    let accepted = null;
+    let lineScale = 1;
+    while (projectedMaximumUpdate * lineScale > convergenceTolerance / 4) {
+      const candidate = projected.map(
+        (value, axis) => rounded(vector[axis] + lineScale * (value - vector[axis]), 15),
+      );
+      const candidateConstraints = rawPhysicalConstraintRows(fixture, candidate);
+      const candidateMaximumPenetration = Math.max(
+        0,
+        ...candidateConstraints.map(row => Math.max(0, -row.signedGap)),
+      );
+      const candidateEnergy = deformationEnergy(candidate);
+      const restoresFeasibility = currentMaximumPenetration > config.hardTolerance &&
+        candidateMaximumPenetration < currentMaximumPenetration - 1e-12;
+      const improvesFeasibleObjective = currentMaximumPenetration <= config.hardTolerance &&
+        candidateMaximumPenetration <= config.hardTolerance &&
+        candidateEnergy < currentEnergy - 1e-18;
+      if (restoresFeasibility || improvesFeasibleObjective) {
+        accepted = {
+          vector:candidate,
+          lineScale,
+          maximumPenetration:candidateMaximumPenetration,
+        };
+        break;
+      }
+      lineScale *= 0.5;
+    }
+    if (!accepted) {
+      throw new Error(
+        'joint reference stationarity refinement line search stalled: ' +
+        JSON.stringify({ currentMaximumPenetration, projectedMaximumUpdate }),
+      );
+    }
+    const maximumUpdate = Math.max(
+      ...accepted.vector.map((value, axis) => Math.abs(value - vector[axis])),
+    );
     rows.push({
       iteration:rows.length + 1,
-      activePairKeys:pairKeys,
+      activeConstraintKeys:activeIndices.map(index => constraintKeys[index]),
+      acceptedLineScale:accepted.lineScale,
       maximumUpdate:rounded(maximumUpdate, 15),
-      maximumPenetration:rounded(maximumPenetration, 15),
+      maximumPenetration:rounded(accepted.maximumPenetration, 15),
     });
-    vector = projected.map(value => rounded(value, 15));
-    if (maximumUpdate <= convergenceTolerance && maximumPenetration <= config.hardTolerance) break;
+    vector = accepted.vector;
+    if (
+      maximumUpdate <= convergenceTolerance &&
+      accepted.maximumPenetration <= config.hardTolerance
+    ) break;
   }
   return {
     vector,
@@ -646,25 +829,17 @@ function refineStationaryCandidate(fixture, initialVector, config) {
 function stationarityReceipt(fixture, selected, hardTolerance) {
   const vector = selected.vector;
   const finiteDifferenceStep = 1e-6;
-  const activePairs = selected.belt.pairs.filter(
-    pair => pair.signedGap <= Math.max(5e-5, hardTolerance * 20),
+  const constraints = rawPhysicalConstraintRows(fixture, vector);
+  const activeConstraints = constraints.filter(
+    row => row.signedGap <= Math.max(5e-5, hardTolerance * 20),
   );
-  const pairKeys = activePairs.map(pair => pair.key);
-  const gradients = pairKeys.map(() => Array(vector.length).fill(0));
-  for (let axis = 0; axis < vector.length; axis += 1) {
-    const positive = [...vector];
-    const negative = [...vector];
-    positive[axis] += finiteDifferenceStep;
-    negative[axis] -= finiteDifferenceStep;
-    const positiveByPair = rawBeltByPair(fixture, positive);
-    const negativeByPair = rawBeltByPair(fixture, negative);
-    for (let row = 0; row < pairKeys.length; row += 1) {
-      gradients[row][axis] = (
-        positiveByPair[pairKeys[row]].signedGap -
-        negativeByPair[pairKeys[row]].signedGap
-      ) / (2 * finiteDifferenceStep);
-    }
-  }
+  const constraintKeys = activeConstraints.map(row => row.key);
+  const { gradients } = activeGapLinearization(
+    fixture,
+    vector,
+    constraintKeys,
+    finiteDifferenceStep,
+  );
   const objectiveGradient = vector.map(value => value);
   let activeIndices = gradients.map((_, index) => index);
   let multipliers = [];
@@ -698,13 +873,15 @@ function stationarityReceipt(fixture, selected, hardTolerance) {
   return {
     kind:'finite-difference-active-constraint-kkt',
     objective:'minimum-squared-translation-from-crowded-state',
-    constraint:'nonnegative-belt-gap-with-continuous-physical-admission',
+    constraint:'nonnegative-pair-skeletal-and-compartment-clearance',
     finiteDifferenceStep,
     activeConstraintThreshold:Math.max(5e-5, hardTolerance * 20),
     activeConstraintCount:activeIndices.length,
     activeConstraints:activeIndices.map((index, row) => ({
-      pairKey:pairKeys[index],
-      signedGap:selected.belt.byPair[pairKeys[index]].signedGap,
+      constraintKey:constraintKeys[index],
+      kind:activeConstraints[index].kind,
+      pairKey:activeConstraints[index].pairKey || null,
+      signedGap:rounded(activeConstraints[index].signedGap, 15),
       multiplier:rounded(multipliers[row] || 0),
     })),
     projectedGradientInfinityNorm:rounded(Math.max(...residual.map(Math.abs))),
@@ -749,13 +926,13 @@ function solveSingleEnumeration({
   validateFixture(fixture);
   const config = structuredClone(requestedConfig);
   const runs = config.startFamily.map(startName => optimizeStart(fixture, config, startName));
-  const admissible = runs.filter(run =>
+  const patternAdmissible = runs.filter(run =>
     run.final.maximumPhysicalResidual <= config.hardTolerance &&
     run.final.metrics.nonFiniteValueCount === 0 &&
     run.final.metrics.nonPositiveRadiusCount === 0);
-  const selectionPool = admissible.length > 0 ? admissible : runs;
+  const selectionPool = patternAdmissible.length > 0 ? patternAdmissible : runs;
   selectionPool.sort((left, right) => {
-    if (admissible.length > 0) {
+    if (patternAdmissible.length > 0) {
       const energyDifference = left.final.deformationEnergy - right.final.deformationEnergy;
       if (Math.abs(energyDifference) > 1e-15) return energyDifference;
     } else {
@@ -765,16 +942,26 @@ function solveSingleEnumeration({
     }
     return left.final.vectorKey.localeCompare(right.final.vectorKey);
   });
-  const selectedRun = selectionPool[0];
+  const selectedPatternRun = selectionPool[0];
+  const refinement = refineStationaryCandidate(
+    fixture,
+    selectedPatternRun.final.vector,
+    config,
+  );
+  const selectedFinal = materializeCandidate(
+    fixture,
+    refinement.vector,
+    config.penaltySchedule.at(-1),
+  );
   const selected = {
-    startName:selectedRun.startName,
-    vector:[...selectedRun.final.vector],
-    muscles:structuredClone(selectedRun.final.muscles),
-    metrics:structuredClone(selectedRun.final.metrics),
-    belt:structuredClone(selectedRun.final.belt),
-    deformationEnergy:selectedRun.final.deformationEnergy,
-    physicalViolationSquared:rounded(selectedRun.final.physicalViolationSquared, 15),
-    maximumPhysicalResidual:rounded(selectedRun.final.maximumPhysicalResidual, 15),
+    startName:selectedPatternRun.startName,
+    vector:[...selectedFinal.vector],
+    muscles:structuredClone(selectedFinal.muscles),
+    metrics:structuredClone(selectedFinal.metrics),
+    belt:structuredClone(selectedFinal.belt),
+    deformationEnergy:selectedFinal.deformationEnergy,
+    physicalViolationSquared:rounded(selectedFinal.physicalViolationSquared, 15),
+    maximumPhysicalResidual:rounded(selectedFinal.maximumPhysicalResidual, 15),
   };
   selected.physicalStateSha256 = hashMusclePackingCanonicalJson({
     muscles:selected.muscles,
@@ -783,10 +970,13 @@ function solveSingleEnumeration({
   });
   const stationarity = stationarityReceipt(fixture, selected, config.hardTolerance);
   const distantResponse = displacementReceipt(fixture, selected.muscles);
-  const status = admissible.length > 0 &&
+  const selectedAdmissible = selected.maximumPhysicalResidual <= config.hardTolerance &&
+    selected.metrics.nonFiniteValueCount === 0 &&
+    selected.metrics.nonPositiveRadiusCount === 0;
+  const status = selectedAdmissible &&
     stationarity.projectedGradientInfinityNorm <= 5e-5
     ? 'converged-joint-reference'
-    : admissible.length > 0
+    : selectedAdmissible
       ? 'feasible-stationarity-residual'
       : 'reference-physical-residual';
   const core = {
@@ -808,17 +998,19 @@ function solveSingleEnumeration({
       translationBasis:config.translationBasis,
       sharedIterationState:true,
       candidateSelection:'all-axis-neighbors-evaluated-from-one-snapshot-then-global-best',
+      stationaritySelection:'refine-once-after-physically-admissible-multistart-selection',
       physicalResidualSeparatedFromAugmentedObjective:true,
       innerLoopMeasure:'exact-belt-plus-knot-sampled-obstacle-and-compartment',
-      finalAdmissionMeasure:'conservative-continuous-piecewise-linear-per-completed-multistart',
+      finalAdmissionMeasure:'conservative-continuous-piecewise-linear-on-selected-candidate',
       claimCeiling:'bounded-synthetic-reference-only',
     },
     selected,
     stationarity,
+    stationarityRefinement:refinement.receipt,
     distantResponse,
     multistart: {
       declaredStartFamily:[...config.startFamily],
-      admissibleCount:admissible.length,
+      admissibleCount:patternAdmissible.length,
       rows:runs.map(run => ({
         startName:run.startName,
         completed:true,
@@ -835,7 +1027,11 @@ function solveSingleEnumeration({
           metrics:run.final.metrics,
           belt:run.final.belt,
         }),
-        stationarityRefinement:run.stationarityRefinement,
+        stationarityRefinement:{
+          status:run === selectedPatternRun
+            ? 'selected-for-post-multistart-refinement'
+            : 'not-run-after-global-selection',
+        },
         continuation:run.stages,
       })),
     },

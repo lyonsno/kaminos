@@ -244,7 +244,7 @@ function goldenSectionMinimum(fn, iterations = 48) {
   return { ...minimum, intervalWidth:upper - lower };
 }
 
-function taperedSegmentSurfaceMinimum(
+export function taperedSegmentSurfaceMinimum(
   leftStart,
   leftEnd,
   rightStart,
@@ -270,7 +270,7 @@ function taperedSegmentSurfaceMinimum(
   return { leftT, rightT, gap:gapAt(leftT, rightT) };
 }
 
-function taperedSegmentSurfaceGapLowerBound(leftStart, leftEnd, rightStart, rightEnd) {
+export function taperedSegmentSurfaceGapLowerBound(leftStart, leftEnd, rightStart, rightEnd) {
   const gapAt = (leftT, rightT) => distance(
     interpolatePoint(leftStart.position, leftEnd.position, leftT),
     interpolatePoint(rightStart.position, rightEnd.position, rightT),

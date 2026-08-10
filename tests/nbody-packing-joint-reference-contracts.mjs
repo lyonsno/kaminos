@@ -51,6 +51,22 @@ test('joint reference requires an exact explicit optimization contract', () => {
   ]);
 });
 
+test('joint reference independently rejects a mutually consistent forged fixture identity', () => {
+  const fixture = createNBodyRosetteFixture();
+  const forgedIdentity = '0'.repeat(64);
+  fixture.identity.sha256 = forgedIdentity;
+  fixture.input.requested.sha256 = forgedIdentity;
+  fixture.input.effective.sha256 = forgedIdentity;
+
+  assert.throws(
+    () => solveNBodyRosetteJointReference({
+      fixture,
+      requestedConfig:createNBodyRosetteJointReferenceConfig(),
+    }),
+    /fixture identity mismatch/,
+  );
+});
+
 test('bounded joint reference clears global debt while preserving hard carrier invariants', () => {
   const fixture = createNBodyRosetteFixture();
   const requestedConfig = createNBodyRosetteJointReferenceConfig();
@@ -140,4 +156,39 @@ test('synchronous candidate enumeration cannot change the selected physical stat
     selectedMetricsEqual:true,
     selectedBeltEqual:true,
   });
+});
+
+test('bounded joint reference carries asymmetric skeletal clearance through stationarity refinement', () => {
+  const fixture = createNBodyRosetteFixture({ stressTier:'frustrated-comparative-v0' });
+  const base = createNBodyRosetteJointReferenceConfig();
+  const config = {
+    ...base,
+    penaltySchedule:[1e11],
+    stepSchedule:[
+      0.04,
+      0.01,
+      0.0025,
+      0.000625,
+      0.00015625,
+      0.0000390625,
+      0.000009765625,
+      0.00000244140625,
+      0.0000006103515625,
+      0.000000152587890625,
+      0.0000000762939453125,
+    ],
+  };
+  const result = solveNBodyRosetteJointReference({ fixture, requestedConfig:config });
+
+  assert.equal(result.status, 'converged-joint-reference');
+  assert.ok(result.selected.maximumPhysicalResidual <= config.hardTolerance);
+  assert.ok(result.selected.metrics.pairwisePenetration <= config.hardTolerance);
+  assert.ok(result.selected.metrics.skeletalPenetration <= config.hardTolerance);
+  assert.ok(result.selected.metrics.compartmentEscape <= config.hardTolerance);
+  assert.ok(result.stationarity.projectedGradientInfinityNorm <= 5e-5);
+  assert.ok(
+    result.stationarity.activeConstraints.some(row => row.kind === 'skeletal-clearance'),
+    'the constrained optimum must retain the asymmetric bone as an active KKT row',
+  );
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
 });

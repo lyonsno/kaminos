@@ -109,3 +109,30 @@ test('iteration exhaustion is loud and preserves the last measured assembled sta
   assert.equal(result.failure.phase, 'global-sparse-contact-projection');
   assert.equal(result.failure.lastTrustworthyEvidence, 'selected');
 });
+
+test('contact-only sparse projection cannot launder frustrated pair relief through bone', () => {
+  const fixture = createNBodyRosetteFixture({ stressTier:'frustrated-comparative-v0' });
+  const problem = compileNBodySparseGraphProblem(fixture);
+  const requestedConfig = {
+    ...createNBodySparseGraphConfig(),
+    lineSearch:[1],
+  };
+  const result = solveNBodySparseGraphCandidate({ problem, requestedConfig });
+
+  assert.equal(result.status, 'stalled-sparse-global-candidate');
+  assert.equal(result.route.fallbackUsed, false);
+  assert.equal(result.source.fixtureSha256, fixture.identity.sha256);
+  assert.equal(result.source.problemSha256, problem.identity.sha256);
+  assert.equal(result.failure.phase, 'global-sparse-contact-projection');
+  assert.equal(result.failure.lastTrustworthyEvidence, 'selected');
+  assert.ok(
+    result.selected.metrics.pairwisePenetration > requestedConfig.convergenceTolerance,
+    'the last trustworthy state must retain unresolved pair debt',
+  );
+  assert.ok(
+    result.selected.metrics.skeletalPenetration > requestedConfig.convergenceTolerance,
+    'contact relief that enters the asymmetric bone must remain a loud physical failure',
+  );
+  assert.ok(result.selected.displacement.movedMemberCount >= 4);
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
+});

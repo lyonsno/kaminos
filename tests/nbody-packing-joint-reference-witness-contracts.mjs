@@ -7,9 +7,11 @@ import test from 'node:test';
 import { deflateSync } from 'node:zlib';
 
 import {
+  NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE,
   NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
   NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
   admitNBodyPackingJointReferenceVisualInspection,
+  writeNBodyPackingFrustratedComparisonWitness,
   writeNBodyPackingJointReferenceWitness,
   writeNBodyPackingSparseGlobalCandidateWitness,
 } from '../nbody-packing-joint-reference-witness.mjs';
@@ -381,6 +383,37 @@ test('sparse global witness binds candidate and bounded oracle to ten admitted v
     assert.equal(admitted.receipt.schema, 'kaminos.nbody-packing-sparse-global-comparison-visual-inspection.v0');
     assert.equal(admitted.receipt.images.length, 10);
     assert.equal(new Set(admitted.receipt.images.map(image => image.sha256)).size, 10);
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('frustrated comparison publishes the sparse failure without granting it admission', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-frustrated-witness-'));
+  try {
+    const written = await writeNBodyPackingFrustratedComparisonWitness({ outDir:root });
+    const candidate = JSON.parse(await readFile(join(root, 'sparse-candidate.json')));
+    const reference = JSON.parse(await readFile(join(root, 'joint-reference.json')));
+    const report = JSON.parse(await readFile(join(root, 'report.json')));
+    const html = String(await readFile(join(root, 'index.html')));
+
+    assert.deepEqual(report.route, {
+      requested:NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE,
+      effective:NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE,
+      fallbackUsed:false,
+    });
+    assert.equal(candidate.status, 'stalled-sparse-global-candidate');
+    assert.equal(candidate.failure.phase, 'global-sparse-contact-projection');
+    assert.ok(candidate.selected.metrics.pairwisePenetration > 1e-7);
+    assert.ok(candidate.selected.metrics.skeletalPenetration > 1e-7);
+    assert.equal(reference.status, 'converged-joint-reference');
+    assert.ok(reference.selected.metrics.pairwisePenetration <= 1e-7);
+    assert.ok(reference.selected.metrics.skeletalPenetration <= 1e-7);
+    assert.equal(report.claims.scalableSyntheticCandidate, 'rejected-on-frustrated-bone-clearance-assay');
+    assert.equal(report.sparseGlobalCandidate.admission, 'rejected-physical-residual');
+    assert.equal(written.fixture.id, 'nbody-known-feasible-five-body-frustrated-rosette-assay-v0');
+    assert.match(html, /contact-only candidate rejected/i);
+    assert.match(html, /skeletal penetration/i);
   } finally {
     await rm(root, { recursive:true, force:true });
   }

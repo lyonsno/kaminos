@@ -24,10 +24,14 @@ export const NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE =
   'nbody-packing-joint-reference-orbitable-v0';
 export const NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE =
   'nbody-packing-sparse-global-comparison-orbitable-v0';
+export const NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE =
+  'nbody-packing-frustrated-comparison-orbitable-v0';
 
 const REPORT_SCHEMA = 'kaminos.nbody-packing-joint-reference-witness-report.v0';
 const SPARSE_REPORT_SCHEMA =
   'kaminos.nbody-packing-sparse-global-comparison-witness-report.v0';
+const FRUSTRATED_REPORT_SCHEMA =
+  'kaminos.nbody-packing-frustrated-comparison-witness-report.v0';
 const VISUAL_INSPECTION_SCHEMA =
   'kaminos.nbody-packing-joint-reference-visual-inspection.v0';
 const SPARSE_VISUAL_INSPECTION_SCHEMA =
@@ -139,6 +143,7 @@ export async function writeNBodyPackingJointReferenceWitness({
   requestedAssayConfig,
   requestedReferenceConfig = createNBodyRosetteJointReferenceConfig(),
   includeSparseGlobalCandidate = false,
+  sparseAdmission = 'require-converged',
   requestedSparseConfig = createNBodySparseGraphConfig(),
   io:ioOverrides = {},
 } = {}) {
@@ -146,10 +151,23 @@ export async function writeNBodyPackingJointReferenceWitness({
   const outputRoot = resolve(outDir);
   const primaryPaths = includeSparseGlobalCandidate ? SPARSE_PRIMARY_PATHS : PRIMARY_PATHS;
   const visualStates = includeSparseGlobalCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
-  const reportSchema = includeSparseGlobalCandidate ? SPARSE_REPORT_SCHEMA : REPORT_SCHEMA;
-  const effectiveRoute = includeSparseGlobalCandidate
-    ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
-    : NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
+  const isFrustratedComparison = sparseAdmission === 'require-frustrated-physical-failure';
+  if (!['require-converged', 'require-frustrated-physical-failure'].includes(sparseAdmission)) {
+    throw new Error(`unsupported sparse witness admission: ${sparseAdmission}`);
+  }
+  if (isFrustratedComparison && !includeSparseGlobalCandidate) {
+    throw new Error('frustrated sparse failure witness requires a sparse global candidate');
+  }
+  const reportSchema = isFrustratedComparison
+    ? FRUSTRATED_REPORT_SCHEMA
+    : includeSparseGlobalCandidate
+      ? SPARSE_REPORT_SCHEMA
+      : REPORT_SCHEMA;
+  const effectiveRoute = isFrustratedComparison
+    ? NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE
+    : includeSparseGlobalCandidate
+      ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
+      : NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
   const route = {
     requested:effectiveRoute,
     effective:effectiveRoute,
@@ -208,8 +226,7 @@ export async function writeNBodyPackingJointReferenceWitness({
         problem:sparseProblem,
         requestedConfig:requestedSparseConfig,
       });
-      if (
-        sparseGlobalCandidate.status !== 'converged-sparse-global-candidate' ||
+      const sharedSparseEvidenceValid =
         sparseGlobalCandidate.source.fixtureSha256 !== fixture.identity.sha256 ||
         sparseGlobalCandidate.source.problemSha256 !== sparseProblem.identity.sha256 ||
         sparseGlobalCandidate.route.fallbackUsed !== false ||
@@ -217,20 +234,37 @@ export async function writeNBodyPackingJointReferenceWitness({
         sparseGlobalCandidate.mechanism.pairwiseClosureAuthority !== false ||
         sparseGlobalCandidate.invariance?.candidateEnumeration !== 'passed' ||
         sparseGlobalCandidate.invariance?.rows?.length !== 2 ||
-        !Object.values(sparseGlobalCandidate.invariance?.comparison || {}).every(Boolean) ||
+        !Object.values(sparseGlobalCandidate.invariance?.comparison || {}).every(Boolean);
+      const convergedEvidenceInvalid =
+        sparseGlobalCandidate.status !== 'converged-sparse-global-candidate' ||
         sparseGlobalCandidate.selected.maximumPhysicalResidual >
-          sparseGlobalCandidate.config.effective.convergenceTolerance
+          sparseGlobalCandidate.config.effective.convergenceTolerance;
+      const frustratedFailureInvalid =
+        sparseGlobalCandidate.status !== 'stalled-sparse-global-candidate' ||
+        sparseGlobalCandidate.failure?.phase !== 'global-sparse-contact-projection' ||
+        sparseGlobalCandidate.failure?.lastTrustworthyEvidence !== 'selected' ||
+        sparseGlobalCandidate.selected.metrics?.pairwisePenetration <=
+          sparseGlobalCandidate.config.effective.convergenceTolerance ||
+        sparseGlobalCandidate.selected.metrics?.skeletalPenetration <=
+          sparseGlobalCandidate.config.effective.convergenceTolerance;
+      if (
+        sharedSparseEvidenceValid ||
+        (isFrustratedComparison ? frustratedFailureInvalid : convergedEvidenceInvalid)
       ) {
         throw new Error('sparse global witness rejects substituted or inadmissible candidate evidence');
       }
       lastTrustworthyEvidence = {
         ...lastTrustworthyEvidence,
-        phase:'sparse-global-candidate-admitted',
+        phase:isFrustratedComparison
+          ? 'sparse-global-candidate-physical-failure-bound'
+          : 'sparse-global-candidate-admitted',
         sparseGlobalCandidate: {
           status:sparseGlobalCandidate.status,
           sha256:sparseGlobalCandidate.identity.sha256,
           physicalStateSha256:sparseGlobalCandidate.selected.physicalStateSha256,
           maximumPhysicalResidual:sparseGlobalCandidate.selected.maximumPhysicalResidual,
+          pairwisePenetration:sparseGlobalCandidate.selected.metrics.pairwisePenetration,
+          skeletalPenetration:sparseGlobalCandidate.selected.metrics.skeletalPenetration,
           iterations:sparseGlobalCandidate.work.iterations,
         },
       };
@@ -277,15 +311,20 @@ export async function writeNBodyPackingJointReferenceWitness({
           graphEdgeCount:sparseGlobalCandidate.mechanism.graphEdgeCount,
           maximumDegree:sparseGlobalCandidate.mechanism.maximumDegree,
           candidateEnumerationReceipt:structuredClone(sparseGlobalCandidate.invariance),
+          admission:isFrustratedComparison
+            ? 'rejected-physical-residual'
+            : 'admitted-bounded-synthetic-candidate',
         },
       } : {}),
       claims: {
         knownFeasibility:'supported-by-manufactured-witness',
         localCounterfeitDiscrimination:'supported-by-global-debt-ledger',
         boundedJointReference:'supported-by-kkt-and-continuous-admission',
-        scalableSyntheticCandidate:includeSparseGlobalCandidate
-          ? 'supported-only-on-bounded-five-body-assay'
-          : 'not-assayed',
+        scalableSyntheticCandidate:isFrustratedComparison
+          ? 'rejected-on-frustrated-bone-clearance-assay'
+          : includeSparseGlobalCandidate
+            ? 'supported-only-on-bounded-five-body-assay'
+            : 'not-assayed',
         scalableProductionSolver:'not-assayed',
         anatomicalCorrectness:'not-assayed',
         fasciaMechanics:'not-assayed',
@@ -395,6 +434,38 @@ export async function writeNBodyPackingSparseGlobalCandidateWitness(options = {}
   });
 }
 
+export async function writeNBodyPackingFrustratedComparisonWitness(options = {}) {
+  const referenceBase = createNBodyRosetteJointReferenceConfig();
+  return writeNBodyPackingJointReferenceWitness({
+    outDir:'artifacts/nbody-packing-frustrated-comparison-v0',
+    fixture:createNBodyRosetteFixture({ stressTier:'frustrated-comparative-v0' }),
+    requestedReferenceConfig:{
+      ...referenceBase,
+      penaltySchedule:[1e11],
+      stepSchedule:[
+        0.04,
+        0.01,
+        0.0025,
+        0.000625,
+        0.00015625,
+        0.0000390625,
+        0.000009765625,
+        0.00000244140625,
+        0.0000006103515625,
+        0.000000152587890625,
+        0.0000000762939453125,
+      ],
+    },
+    requestedSparseConfig:{
+      ...createNBodySparseGraphConfig(),
+      lineSearch:[1],
+    },
+    ...options,
+    includeSparseGlobalCandidate:true,
+    sparseAdmission:'require-frustrated-physical-failure',
+  });
+}
+
 export async function admitNBodyPackingJointReferenceVisualInspection({
   outDir = 'artifacts/nbody-packing-joint-reference-v0',
   inspection,
@@ -423,19 +494,22 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     report.schema === SPARSE_REPORT_SCHEMA &&
     report.route?.requested === NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE &&
     report.route?.effective === NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE;
-  if (!isJointReference && !isSparseGlobal) {
+  const isFrustratedComparison =
+    report.schema === FRUSTRATED_REPORT_SCHEMA &&
+    report.route?.requested === NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE &&
+    report.route?.effective === NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE;
+  if (!isJointReference && !isSparseGlobal && !isFrustratedComparison) {
     throw new Error('joint-reference visual admission requires a recognized exact pending witness route');
   }
-  const visualStates = isSparseGlobal ? SPARSE_VISUAL_STATES : VISUAL_STATES;
-  const visualVerdictKeys = isSparseGlobal
+  const includesSparseCandidate = isSparseGlobal || isFrustratedComparison;
+  const visualStates = includesSparseCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
+  const visualVerdictKeys = includesSparseCandidate
     ? SPARSE_VISUAL_VERDICT_KEYS
     : VISUAL_VERDICT_KEYS;
-  const visualInspectionSchema = isSparseGlobal
+  const visualInspectionSchema = includesSparseCandidate
     ? SPARSE_VISUAL_INSPECTION_SCHEMA
     : VISUAL_INSPECTION_SCHEMA;
-  const effectiveRoute = isSparseGlobal
-    ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
-    : NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE;
+  const effectiveRoute = report.route.effective;
   const verdictKeys = Object.keys(inspection.verdict || {}).sort();
   if (
     JSON.stringify(verdictKeys) !== JSON.stringify([...visualVerdictKeys].sort()) ||
@@ -458,15 +532,15 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
   const fixturePath = resolve(outputRoot, 'fixture.json');
   const assayPath = resolve(outputRoot, 'assay-result.json');
   const referencePath = resolve(outputRoot, 'joint-reference.json');
-  const sparseProblemPath = isSparseGlobal ? resolve(outputRoot, 'sparse-problem.json') : null;
-  const sparseCandidatePath = isSparseGlobal ? resolve(outputRoot, 'sparse-candidate.json') : null;
+  const sparseProblemPath = includesSparseCandidate ? resolve(outputRoot, 'sparse-problem.json') : null;
+  const sparseCandidatePath = includesSparseCandidate ? resolve(outputRoot, 'sparse-candidate.json') : null;
   const indexPath = resolve(outputRoot, 'index.html');
   const [fixtureBytes, assayBytes, referenceBytes, sparseProblemBytes, sparseCandidateBytes, indexBytes] =
     await Promise.all([
       io.readFile(fixturePath),
       io.readFile(assayPath),
       io.readFile(referencePath),
-      ...(isSparseGlobal
+      ...(includesSparseCandidate
         ? [io.readFile(sparseProblemPath), io.readFile(sparseCandidatePath)]
         : [Promise.resolve(null), Promise.resolve(null)]),
       io.readFile(indexPath),
@@ -482,7 +556,7 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     fixtureJsonSha256:sha256(fixtureBytes),
     assayResultJsonSha256:sha256(assayBytes),
     jointReferenceJsonSha256:sha256(referenceBytes),
-    ...(isSparseGlobal ? {
+    ...(includesSparseCandidate ? {
       sparseProblemJsonSha256:sha256(sparseProblemBytes),
       sparseCandidateJsonSha256:sha256(sparseCandidateBytes),
     } : {}),
