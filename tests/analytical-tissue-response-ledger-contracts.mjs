@@ -24,6 +24,10 @@ const rowPlanFixture = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/factored-row-plan.v0.json', import.meta.url),
   'utf8',
 ));
+const precursorRowPlanFixture = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/analytic-profile-precursor-row-plan.v0.json', import.meta.url),
+  'utf8',
+));
 
 const perturbedComparison = Object.freeze({
   muscleBulge: Object.freeze({ source: 1, envelope: 1 }),
@@ -132,6 +136,29 @@ test('faithful factored evidence passes with source-warranted coupling intact', 
   const verdict = adjudicate(faithfulEvidence());
   assert.equal(verdict.passed, true, JSON.stringify(verdict.failures));
   assert.equal(verdict.numeric.couplingHeld, true);
+});
+
+test('lower-authority precursor plan is explicit and cannot generalize schema admission', () => {
+  const evidence = faithfulEvidence();
+  const row = precursorRowPlanFixture.rows.find(
+    (candidate) => candidate.id === 'smoothed-identity-profile-variant',
+  );
+  evidence.assay.rowPlan = structuredClone(precursorRowPlanFixture);
+  evidence.assay.rowPlanHash = rowPlanHash(evidence.assay.rowPlan);
+  evidence.assay.rowId = row.id;
+  evidence.representation = {
+    requestedInteriorCarrierId: row.interiorCarrierId,
+    effectiveInteriorCarrierId: row.interiorCarrierId,
+    requestedSurfaceFormationId: row.surfaceFormationId,
+    effectiveSurfaceFormationId: row.surfaceFormationId,
+  };
+  assert.equal(adjudicate(evidence).passed, true);
+
+  evidence.assay.rowPlan.schema = 'kaminos.analytical-tissue-arbitrary-row-plan.v0';
+  evidence.assay.rowPlanHash = rowPlanHash(evidence.assay.rowPlan);
+  const rejected = adjudicate(evidence);
+  assert.equal(rejected.passed, false);
+  assert.ok(rejected.failures.some((failure) => failure.code === 'assay-row-plan-invalid'));
 });
 
 test('negative-control response remains observable but cannot become positive admission', () => {

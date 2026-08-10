@@ -1,0 +1,71 @@
+{
+  "schema": "kaminos.analytical-tissue-geometry-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "synthetic-hindquarter-analytic-profile-mesh-v0",
+  "effectiveRouteId": "synthetic-hindquarter-analytic-profile-mesh-v0",
+  "parameters": {
+    "delta": 0.1,
+    "stationCount": 65,
+    "radialSegments": 32
+  },
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 4187016,
+      "sha256": "cbcba81ba511863326b44017144acd7fd35053d78cb7ec9a9cb510c782123753"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 19868,
+      "sha256": "aa8743554ed4ce9aed001a6b190fc777319231f8dc049980a67007b153ba1eb1"
+    },
+    {
+      "relativePath": "1-isotropized-profile-negative-control-baseline.obj",
+      "byteLength": 163016,
+      "sha256": "1f4f61471928c934f1bfb4da8cf79bdba5d0c84cbd9fd11f7f724d24a56072cc"
+    },
+    {
+      "relativePath": "1-isotropized-profile-negative-control-perturbed.obj",
+      "byteLength": 162909,
+      "sha256": "9abc9bfbdc42d2b214fa32548eaafa68fabb016123962b92a886351414ccc620"
+    },
+    {
+      "relativePath": "2-raw-identity-profile-variant-baseline.obj",
+      "byteLength": 162947,
+      "sha256": "05bb7f6e5650bf72d3deee0390f8c229aea31a3c22f53d50e6922964564e8a29"
+    },
+    {
+      "relativePath": "2-raw-identity-profile-variant-perturbed.obj",
+      "byteLength": 162872,
+      "sha256": "e09182f4776b2d8d95e519f910b2abcc6ad2071ec832b4368887d64b8555ce92"
+    },
+    {
+      "relativePath": "3-frozen-profile-causal-null-baseline.obj",
+      "byteLength": 162968,
+      "sha256": "5f3287f4dd959b4443d18fc821ac12323544f4d8b0e9a3fc9cfbc1cce6088175"
+    },
+    {
+      "relativePath": "3-frozen-profile-causal-null-perturbed.obj",
+      "byteLength": 162969,
+      "sha256": "f5e4a029f941f0c6c753be6045502dcff92652fb4b3dbf8f10234bd3d64f454f"
+    },
+    {
+      "relativePath": "4-smoothed-identity-profile-variant-baseline.obj",
+      "byteLength": 162975,
+      "sha256": "fe7d25c2dadbed45330862de5226b4ad4530824fe4d424281138d88fc97f922c"
+    },
+    {
+      "relativePath": "4-smoothed-identity-profile-variant-perturbed.obj",
+      "byteLength": 162873,
+      "sha256": "c99ac0d9f02cfe7f94e7ae2ba9e0cbd46b7fc702ff5c3b4ac7422545c40ee0fc"
+    }
+  ],
+  "descriptorHash": "2f452d8139a4033719064737f12d85387f629c9e6942db09388a6fa658d37156",
+  "rowPlanHash": "e63c6eb5c9b9924d35de60bba8c7149eb0a8781cc856e413683543c06ebf35ee",
+  "requestedSourceResponseRef": "fixtures/analytical-tissue/synthetic-hindquarter-muscle-tension-response.v0.json",
+  "effectiveSourceFixtureId": "synthetic-hindquarter-muscle-tension-response-v0",
+  "sourceFixtureHash": "34d7b76aeebbd71a4f265dc00fc1ea8ebd8c53e98bb36c15f60376237d803df3",
+  "assayHash": "fce11fa34714349382968be0ceb0180aea58204b0be0d172785f434713fc0244",
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all primary artifacts reread and hashed from disk"
+}

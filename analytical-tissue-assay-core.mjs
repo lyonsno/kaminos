@@ -9,13 +9,23 @@ export const ANALYTICAL_TISSUE_RESPONSE_VERDICT_SCHEMA =
   'kaminos.analytical-tissue-response-verdict.v0';
 export const ANALYTICAL_TISSUE_ROW_PLAN_SCHEMA =
   'kaminos.analytical-tissue-factored-row-plan.v0';
+export const ANALYTICAL_TISSUE_PRECURSOR_ROW_PLAN_SCHEMA =
+  'kaminos.analytical-tissue-analytic-profile-row-plan.v0';
 
 export const TISSUE_CLASSES = Object.freeze(['rigid', 'muscle', 'fat', 'tether', 'skin']);
 export const CONTROLLABLE_TISSUE_CLASSES = Object.freeze(['muscle', 'fat', 'tether', 'skin']);
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/i;
 const SURFACE_IDENTITY_MODES = new Set(['exact-component', 'mixture-weights']);
-const ROW_EVIDENCE_DISPOSITIONS = new Set(['control-observation', 'candidate-evidence']);
+const ROW_PLAN_SCHEMAS = new Set([
+  ANALYTICAL_TISSUE_ROW_PLAN_SCHEMA,
+  ANALYTICAL_TISSUE_PRECURSOR_ROW_PLAN_SCHEMA,
+]);
+const ROW_EVIDENCE_DISPOSITIONS = new Set([
+  'control-observation',
+  'candidate-evidence',
+  'variant-evidence',
+]);
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -270,27 +280,30 @@ function validateEvidence(evidence, descriptor, descriptorValidation) {
   const rowPlan = assay?.rowPlan;
   const rows = Array.isArray(rowPlan?.rows) ? rowPlan.rows : [];
   const rowIds = rows.map((row) => row?.id);
-  if (rowPlan?.schema !== ANALYTICAL_TISSUE_ROW_PLAN_SCHEMA
+  const precursorPlan = rowPlan?.schema === ANALYTICAL_TISSUE_PRECURSOR_ROW_PLAN_SCHEMA;
+  if (!ROW_PLAN_SCHEMAS.has(rowPlan?.schema)
     || !nonEmptyString(rowPlan?.id)
     || rowPlan?.descriptorId !== descriptor.id
     || rowPlan?.promotion !== 'none'
+    || (precursorPlan && !nonEmptyString(rowPlan?.sourceResponseRef))
     || !uniqueNonEmptyStrings(rowIds)
     || rows.some((row) => (
       !nonEmptyString(row?.interiorCarrierId)
       || !nonEmptyString(row?.surfaceFormationId)
+      || (precursorPlan && !nonEmptyString(row?.implementationMode))
       || !ROW_EVIDENCE_DISPOSITIONS.has(row?.evidenceDisposition)
     ))) {
     addFailure(
       failures,
       'assay-row-plan-invalid',
-      'Response evidence requires the bounded factored row plan for this descriptor.',
+      'Response evidence requires a recognized bounded row plan for this descriptor.',
     );
   } else if (!HASH_PATTERN.test(assay?.rowPlanHash ?? '')
     || assay.rowPlanHash !== analyticalTissueRowPlanHash(rowPlan)) {
     addFailure(
       failures,
       'assay-row-plan-hash-mismatch',
-      'Response evidence does not bind the exact factored row plan.',
+      'Response evidence does not bind the exact bounded row plan.',
     );
   } else {
     const row = rows.find((candidate) => candidate.id === assay?.rowId);
@@ -298,7 +311,7 @@ function validateEvidence(evidence, descriptor, descriptorValidation) {
       addFailure(
         failures,
         'assay-row-identity-invalid',
-        'Response evidence must name one row from the frozen factored plan.',
+        'Response evidence must name one row from the frozen bounded plan.',
       );
     } else {
       const representationMatchesRow = (

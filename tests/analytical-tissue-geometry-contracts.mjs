@@ -19,7 +19,11 @@ const descriptor = JSON.parse(await readFile(
   'utf8',
 ));
 const rowPlan = JSON.parse(await readFile(
-  new URL('../fixtures/analytical-tissue/factored-row-plan.v0.json', import.meta.url),
+  new URL('../fixtures/analytical-tissue/analytic-profile-precursor-row-plan.v0.json', import.meta.url),
+  'utf8',
+));
+const sourceFixture = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/synthetic-hindquarter-muscle-tension-response.v0.json', import.meta.url),
   'utf8',
 ));
 const execFileAsync = promisify(execFile);
@@ -28,6 +32,7 @@ function build() {
   return buildAnalyticalTissueMuscleTensionAssay({
     descriptor: structuredClone(descriptor),
     rowPlan: structuredClone(rowPlan),
+    sourceFixture: structuredClone(sourceFixture),
     delta: 0.1,
     stationCount: 65,
     radialSegments: 32,
@@ -73,19 +78,21 @@ test('every baseline and perturbed row emits a closed nontrivial envelope mesh',
 
 test('control rows retain observations without becoming positive admission', () => {
   const assay = build();
-  for (const rowId of ['scalar-union-negative-control', 'explicit-shell-causal-null']) {
+  for (const rowId of ['isotropized-profile-negative-control', 'frozen-profile-causal-null']) {
     const row = assay.rows.find((candidate) => candidate.id === rowId);
     assert.equal(row.verdict.passed, false, rowId);
     assert.ok(row.verdict.failures.some((failure) => failure.code === 'assay-row-control-only'));
   }
-  const nullRow = assay.rows.find((row) => row.id === 'explicit-shell-causal-null');
+  const nullRow = assay.rows.find((row) => row.id === 'frozen-profile-causal-null');
   assert.equal(nullRow.response.observables.muscleBulge, 0);
   assert.equal(nullRow.verdict.numeric.passed, false);
 });
 
-test('factored hybrid produces the source-warranted signed coupled response', () => {
+test('smoothed profile variant matches the fixed external synthetic response', () => {
   const assay = build();
-  const hybrid = assay.rows.find((row) => row.id === 'factored-hybrid-leading-hypothesis');
+  const hybrid = assay.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
+  assert.equal(assay.source.fixtureId, sourceFixture.id);
+  assert.deepEqual(assay.source.response.observables, sourceFixture.responseObservables);
   assert.deepEqual(
     Object.fromEntries(Object.entries(assay.source.response.observables).map(([key, value]) => [
       key,
@@ -97,8 +104,8 @@ test('factored hybrid produces the source-warranted signed coupled response', ()
   assert.equal(hybrid.verdict.numeric.couplingHeld, true);
 });
 
-test('hybrid muscle response is localized, smooth, and attributable', () => {
-  const hybrid = build().rows.find((row) => row.id === 'factored-hybrid-leading-hypothesis');
+test('smoothed profile response is localized, smooth, and attributable', () => {
+  const hybrid = build().rows.find((row) => row.id === 'smoothed-identity-profile-variant');
   assert.ok(hybrid.response.localization.ratio >= 4, hybrid.response.localization.ratio);
   assert.ok(hybrid.response.smoothness.maxSecondDifference < 0.08);
   assert.equal(hybrid.response.attribution.dominantComponentId, 'gluteal-carrier');
@@ -109,25 +116,44 @@ test('geometry and visual serialization are deterministic and identity-bearing',
   const first = build();
   const second = build();
   assert.equal(first.assayHash, second.assayHash);
-  const hybrid = first.rows.find((row) => row.id === 'factored-hybrid-leading-hypothesis');
+  const hybrid = first.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
   const obj = analyticalTissueMeshToObj(hybrid.perturbed.mesh, { objectId: hybrid.id });
-  assert.match(obj, /^o factored-hybrid-leading-hypothesis/m);
+  assert.match(obj, /^o smoothed-identity-profile-variant/m);
   assert.match(obj, /^v /m);
   assert.match(obj, /^f /m);
   const svg = renderAnalyticalTissueAssaySvg(first);
   assert.match(svg, /<svg/);
-  assert.match(svg, /scalar-union-negative-control/);
-  assert.match(svg, /factored-hybrid-leading-hypothesis/);
+  assert.match(svg, /isotropized-profile-negative-control/);
+  assert.match(svg, /smoothed-identity-profile-variant/);
   assert.match(svg, /baseline/);
   assert.match(svg, /perturbed/);
+  assert.match(svg, /synthetic-hindquarter-analytic-profile-mesh-v0/);
+  assert.match(svg, /synthetic-hindquarter-orthographic-v0/);
+  assert.match(svg, new RegExp(first.descriptorHash));
+  assert.match(svg, new RegExp(first.rowPlanHash));
+  assert.match(svg, /visual companion to report\.json/);
+});
+
+test('fixed source rejects an implementation-mode substitution', () => {
+  const substitutedPlan = structuredClone(rowPlan);
+  const smoothed = substitutedPlan.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
+  smoothed.implementationMode = 'isotropized-profile';
+  const assay = buildAnalyticalTissueMuscleTensionAssay({
+    descriptor: structuredClone(descriptor),
+    rowPlan: substitutedPlan,
+    sourceFixture: structuredClone(sourceFixture),
+  });
+  const substituted = assay.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
+  assert.equal(substituted.verdict.passed, false);
+  assert.notDeepEqual(substituted.response.observables, sourceFixture.responseObservables);
 });
 
 test('artifact writer preserves a durable failure report before primary output', async (t) => {
   const outDir = await mkdtemp(join(tmpdir(), 'kaminos-analytical-tissue-failure-'));
   t.after(() => rm(outDir, { recursive: true, force: true }));
   await assert.rejects(
-    writeAnalyticalTissueMuscleTensionArtifacts({ outDir, descriptor: null, rowPlan }),
-    /descriptor and rowPlan are required/,
+    writeAnalyticalTissueMuscleTensionArtifacts({ outDir, descriptor: null, rowPlan, sourceFixture }),
+    /descriptor, rowPlan, and sourceFixture are required/,
   );
   const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
   assert.equal(report.status, 'failed');
@@ -142,9 +168,12 @@ test('artifact writer records effective route and nonblank hashed products', asy
     outDir,
     descriptor: structuredClone(descriptor),
     rowPlan: structuredClone(rowPlan),
+    sourceFixture: structuredClone(sourceFixture),
   });
   assert.equal(result.report.status, 'completed');
   assert.equal(result.report.requestedRouteId, result.report.effectiveRouteId);
+  assert.equal(result.report.requestedSourceResponseRef, rowPlan.sourceResponseRef);
+  assert.equal(result.report.effectiveSourceFixtureId, sourceFixture.id);
   assert.equal(result.report.outputs.length, 10);
   assert.ok(result.report.outputs.every((output) => output.byteLength > 100));
   assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));

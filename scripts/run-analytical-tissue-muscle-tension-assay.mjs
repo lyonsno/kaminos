@@ -15,7 +15,7 @@ function optionValue(argv, name, fallback) {
 }
 
 async function main(argv) {
-  const defaultOutDir = 'artifacts/analytical-tissue-muscle-tension-v0';
+  const defaultOutDir = 'artifacts/analytical-profile-precursor-muscle-tension-v0';
   const outIndex = argv.indexOf('--out');
   const recoverableOutValue = outIndex >= 0 && argv[outIndex + 1]
     && !argv[outIndex + 1].startsWith('--')
@@ -27,9 +27,16 @@ async function main(argv) {
   let phase = 'cli-parse';
   let descriptorPath;
   let rowPlanPath;
+  let sourceResponsePath;
   let requestedRouteId;
   try {
-    const knownOptions = new Set(['--out', '--descriptor', '--row-plan', '--route']);
+    const knownOptions = new Set([
+      '--out',
+      '--descriptor',
+      '--row-plan',
+      '--source-response',
+      '--route',
+    ]);
     for (let index = 0; index < argv.length; index += 1) {
       const token = argv[index];
       if (!knownOptions.has(token)) throw new Error(`unknown option: ${token}`);
@@ -46,7 +53,12 @@ async function main(argv) {
     rowPlanPath = resolve(optionValue(
       argv,
       '--row-plan',
-      'fixtures/analytical-tissue/factored-row-plan.v0.json',
+      'fixtures/analytical-tissue/analytic-profile-precursor-row-plan.v0.json',
+    ));
+    sourceResponsePath = resolve(optionValue(
+      argv,
+      '--source-response',
+      'fixtures/analytical-tissue/synthetic-hindquarter-muscle-tension-response.v0.json',
     ));
     requestedRouteId = optionValue(
       argv,
@@ -55,14 +67,16 @@ async function main(argv) {
     );
 
     phase = 'input-read';
-    const [descriptor, rowPlan] = await Promise.all([
+    const [descriptor, rowPlan, sourceFixture] = await Promise.all([
       readFile(descriptorPath, 'utf8').then(JSON.parse),
       readFile(rowPlanPath, 'utf8').then(JSON.parse),
+      readFile(sourceResponsePath, 'utf8').then(JSON.parse),
     ]);
     const result = await writeAnalyticalTissueMuscleTensionArtifacts({
       outDir,
       descriptor,
       rowPlan,
+      sourceFixture,
       requestedRouteId,
     });
 
@@ -84,6 +98,7 @@ async function main(argv) {
         effectiveRouteId: null,
         descriptorPath: descriptorPath ?? null,
         rowPlanPath: rowPlanPath ?? null,
+        sourceResponsePath: sourceResponsePath ?? null,
         outputs: [],
         lastTrustworthyEvidence: 'output directory created; no assay artifact emitted',
       };

@@ -154,19 +154,19 @@ function smoothProfile(profile, passes = 3) {
 }
 
 function profileForRow(row, state, baselineState, stationCount) {
-  if (row.id === 'scalar-union-negative-control') {
+  if (row.implementationMode === 'isotropized-profile') {
     return smoothProfile(rawProfile(state, stationCount, { isotropic: true }), 1);
   }
-  if (row.id === 'anisotropic-field-row') {
+  if (row.implementationMode === 'raw-identity-profile') {
     return rawProfile(state, stationCount);
   }
-  if (row.id === 'explicit-shell-causal-null') {
+  if (row.implementationMode === 'frozen-profile') {
     return smoothProfile(rawProfile(baselineState, stationCount), 5);
   }
-  if (row.id === 'factored-hybrid-leading-hypothesis') {
+  if (row.implementationMode === 'smoothed-identity-profile') {
     return smoothProfile(rawProfile(state, stationCount), 5);
   }
-  throw new Error(`unsupported analytical tissue row: ${row.id}`);
+  throw new Error(`unsupported analytical tissue implementation mode: ${row.implementationMode}`);
 }
 
 function profileToMesh(profile, radialSegments) {
@@ -302,14 +302,14 @@ function mixtureContributors(state) {
 }
 
 function surfaceEvidence(row, state) {
-  if (row.id === 'scalar-union-negative-control') {
+  if (row.implementationMode === 'isotropized-profile') {
     return {
       outputSurfaceId: `${row.id}:muscle-tension:${state.muscleTension}`,
       identityMode: 'none',
       contributors: [{ componentId: 'smooth-blob', tissueClass: 'undifferentiated', weight: 1 }],
     };
   }
-  if (row.id === 'explicit-shell-causal-null') {
+  if (row.implementationMode === 'frozen-profile') {
     return {
       outputSurfaceId: `${row.id}:muscle-tension:${state.muscleTension}`,
       identityMode: 'mixture-weights',
@@ -344,35 +344,63 @@ function comparison(sourceMetrics, candidateMetrics) {
 export function buildAnalyticalTissueMuscleTensionAssay({
   descriptor,
   rowPlan,
+  sourceFixture,
   delta = 0.1,
   stationCount = 65,
   radialSegments = 32,
 } = {}) {
-  if (!descriptor || !rowPlan) throw new Error('descriptor and rowPlan are required');
+  if (!descriptor || !rowPlan || !sourceFixture) {
+    throw new Error('descriptor, rowPlan, and sourceFixture are required');
+  }
   if (!(Number.isFinite(delta) && delta > 0)) throw new Error('delta must be positive and finite');
   finitePositiveInteger(stationCount, 'stationCount', 9);
   finitePositiveInteger(radialSegments, 'radialSegments', 8);
+  if (sourceFixture.schema !== 'kaminos.analytical-tissue-source-response.v0') {
+    throw new Error('unsupported source response fixture schema');
+  }
+  if (sourceFixture.descriptorId !== descriptor.id) {
+    throw new Error('source response descriptorId does not match descriptor');
+  }
+  if (sourceFixture.controlId !== 'muscle-tension' || sourceFixture.delta !== delta) {
+    throw new Error('source response control or delta does not match trial');
+  }
+  if (sourceFixture.cameraId !== CAMERA.id) {
+    throw new Error('source response camera does not match effective camera');
+  }
+  const observableIds = descriptor.observables.map((entry) => entry.id);
+  for (const field of ['baselineMetrics', 'perturbedMetrics', 'responseObservables']) {
+    if (canonicalJson(Object.keys(sourceFixture[field] ?? {}).sort()) !== canonicalJson([...observableIds].sort())) {
+      throw new Error(`source response ${field} does not match descriptor observables`);
+    }
+  }
+  const computedSourceResponse = subtractMetrics(
+    sourceFixture.perturbedMetrics,
+    sourceFixture.baselineMetrics,
+  );
+  for (const observableId of observableIds) {
+    if (Math.abs(computedSourceResponse[observableId] - sourceFixture.responseObservables[observableId]) > 1e-12) {
+      throw new Error(`source response is internally inconsistent for ${observableId}`);
+    }
+  }
   const baselineState = createState(0);
   const perturbedState = createState(delta);
-  const sourceRow = rowPlan.rows.find((row) => row.id === 'factored-hybrid-leading-hypothesis');
-  if (!sourceRow) throw new Error('rowPlan is missing the factored hybrid source-truth row');
-  const sourceBaselineProfile = profileForRow(sourceRow, baselineState, baselineState, stationCount);
-  const sourcePerturbedProfile = profileForRow(sourceRow, perturbedState, baselineState, stationCount);
-  const sourceBaselineMetrics = profileMetrics(sourceBaselineProfile);
-  const sourcePerturbedMetrics = profileMetrics(sourcePerturbedProfile);
+  const sourceBaselineMetrics = structuredClone(sourceFixture.baselineMetrics);
+  const sourcePerturbedMetrics = structuredClone(sourceFixture.perturbedMetrics);
+  const sourceFixtureHash = hashValue(sourceFixture);
   const source = {
-    authority: 'synthetic-truth',
-    baseline: { profile: sourceBaselineProfile, metrics: sourceBaselineMetrics },
-    perturbed: { profile: sourcePerturbedProfile, metrics: sourcePerturbedMetrics },
-    response: { observables: subtractMetrics(sourcePerturbedMetrics, sourceBaselineMetrics) },
+    fixtureId: sourceFixture.id,
+    fixtureHash: sourceFixtureHash,
+    authority: structuredClone(sourceFixture.authority),
+    baseline: { metrics: sourceBaselineMetrics },
+    perturbed: { metrics: sourcePerturbedMetrics },
+    response: { observables: structuredClone(sourceFixture.responseObservables) },
   };
   const camera = { ...CAMERA, hash: hashValue(CAMERA) };
-  const sourceHash = hashValue({ descriptor, baselineState, perturbedState, source });
   const rows = rowPlan.rows.map((row) => {
     const baseline = compileState(row, baselineState, baselineState, stationCount, radialSegments);
     const perturbed = compileState(row, perturbedState, baselineState, stationCount, radialSegments);
     const identityBearing = !row.evidenceDisposition.includes('control')
-      && row.id !== 'scalar-union-negative-control';
+      && row.implementationMode !== 'isotropized-profile';
     const response = {
       observables: subtractMetrics(perturbed.metrics, baseline.metrics),
       ...responseShape(
@@ -392,13 +420,15 @@ export function buildAnalyticalTissueMuscleTensionAssay({
         baselineObservationId: `${row.id}:baseline:v0`,
         perturbedObservationId: `${row.id}:muscle-tension:${delta}:v0`,
         cameraHash: camera.hash,
-        sourceHash,
+        sourceHash: sourceFixtureHash,
       },
       representation: {
         requestedInteriorCarrierId: row.interiorCarrierId,
         effectiveInteriorCarrierId: row.interiorCarrierId,
         requestedSurfaceFormationId: row.surfaceFormationId,
         effectiveSurfaceFormationId: row.surfaceFormationId,
+        requestedImplementationMode: row.implementationMode,
+        effectiveImplementationMode: row.implementationMode,
       },
       assay: {
         rowPlan,
@@ -436,6 +466,7 @@ export function buildAnalyticalTissueMuscleTensionAssay({
     rowPlanHash: analyticalTissueRowPlanHash(rowPlan),
     parameters: { controlId: 'muscle-tension', delta, stationCount, radialSegments },
     source,
+    sourceFixtureHash,
     rows,
   };
   return { ...assay, assayHash: hashValue(assay) };
@@ -480,7 +511,7 @@ export function renderAnalyticalTissueAssaySvg(assay) {
     throw new Error('completed four-row analytical tissue assay is required');
   }
   const width = 1280;
-  const height = 940;
+  const height = 1030;
   const panels = assay.rows.map((_, index) => ({
     x: 60 + (index % 2) * 620,
     y: 150 + Math.floor(index / 2) * 390,
@@ -510,10 +541,15 @@ export function renderAnalyticalTissueAssaySvg(assay) {
     .meta { font-size: 12px; fill: #94aab3; }
     .metric { font-size: 11px; fill: #b9cbd2; }
   </style>
-  <text x="60" y="44" class="heading">Bounded hindquarter muscle-tension assay</text>
-  <text x="60" y="70" class="sub">baseline = grey · perturbed = cyan · one frozen camera · synthetic truth only</text>
+  <text x="60" y="44" class="heading">Bounded analytic-profile muscle-tension precursor</text>
+  <text x="60" y="70" class="sub">baseline = grey · perturbed = cyan · fixed synthetic comparator · no distinct representation result</text>
   ${body}
-  <text x="60" y="920" class="sub">Assay ${escapeXml(assay.assayHash)} · no anatomical, feline, generator, reconstruction, registration, motion, or production claim</text>
+  <text x="60" y="890" class="sub">visual companion to report.json · route ${escapeXml(assay.effectiveRoute.id)} · camera ${escapeXml(assay.camera.id)}</text>
+  <text x="60" y="915" class="sub">descriptor ${escapeXml(assay.descriptorHash)}</text>
+  <text x="60" y="940" class="sub">row plan ${escapeXml(assay.rowPlanHash)}</text>
+  <text x="60" y="965" class="sub">source fixture ${escapeXml(assay.sourceFixtureHash)}</text>
+  <text x="60" y="990" class="sub">assay ${escapeXml(assay.assayHash)}</text>
+  <text x="60" y="1015" class="sub">no anatomical, authored-envelope, feline, generator, reconstruction, registration, motion, or production claim</text>
 </svg>
 `;
 }
@@ -522,6 +558,7 @@ export async function writeAnalyticalTissueMuscleTensionArtifacts({
   outDir,
   descriptor,
   rowPlan,
+  sourceFixture,
   requestedRouteId = EFFECTIVE_ROUTE.id,
   delta = 0.1,
   stationCount = 65,
@@ -544,7 +581,9 @@ export async function writeAnalyticalTissueMuscleTensionArtifacts({
   let phase = 'input-validation';
 
   try {
-    if (!descriptor || !rowPlan) throw new Error('descriptor and rowPlan are required');
+    if (!descriptor || !rowPlan || !sourceFixture) {
+      throw new Error('descriptor, rowPlan, and sourceFixture are required');
+    }
     if (requestedRouteId !== EFFECTIVE_ROUTE.id) {
       throw new Error(
         `requested route ${requestedRouteId} is unavailable; effective route would be ${EFFECTIVE_ROUTE.id}`,
@@ -552,11 +591,15 @@ export async function writeAnalyticalTissueMuscleTensionArtifacts({
     }
     report.descriptorHash = analyticalTissueDescriptorHash(descriptor);
     report.rowPlanHash = analyticalTissueRowPlanHash(rowPlan);
+    report.requestedSourceResponseRef = rowPlan.sourceResponseRef;
+    report.effectiveSourceFixtureId = sourceFixture.id;
+    report.sourceFixtureHash = hashValue(sourceFixture);
 
     phase = 'assay-build';
     const assay = buildAnalyticalTissueMuscleTensionAssay({
       descriptor,
       rowPlan,
+      sourceFixture,
       delta,
       stationCount,
       radialSegments,

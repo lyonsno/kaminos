@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.analytical-tissue-analytic-profile-row-plan.v0",
+  "id": "synthetic-hindquarter-analytic-profile-precursor-v0",
+  "descriptorRef": "fixtures/analytical-tissue/synthetic-hindquarter-neutral.v0.json",
+  "descriptorId": "synthetic-hindquarter-v0",
+  "sourceResponseRef": "fixtures/analytical-tissue/synthetic-hindquarter-muscle-tension-response.v0.json",
+  "claimCeiling": "Internal consistency against one fixed external synthetic response comparator; no distinct representation result.",
+  "freeze": {
+    "controls": [
+      "muscle-tension"
+    ],
+    "perturbationMode": "one-sided-fixed-delta",
+    "cameraId": "synthetic-hindquarter-orthographic-v0",
+    "observableIds": [
+      "muscleBulge",
+      "fatSpan",
+      "tetherAnchor",
+      "skinSlack"
+    ],
+    "requiredEvidence": [
+      "raw-geometry",
+      "same-camera-render",
+      "external-synthetic-response-vector",
+      "candidate-response-vector",
+      "surface-contributor-mixture"
+    ]
+  },
+  "rows": [
+    {
+      "id": "isotropized-profile-negative-control",
+      "implementationMode": "isotropized-profile",
+      "interiorCarrierId": "isotropized-analytic-sections-v0",
+      "surfaceFormationId": "direct-profile-revolution-v0",
+      "role": "analytic-profile-negative-control",
+      "evidenceDisposition": "control-observation",
+      "prediction": "Responds through isotropized sections while intentionally erasing contributor identity at the consumed surface."
+    },
+    {
+      "id": "raw-identity-profile-variant",
+      "implementationMode": "raw-identity-profile",
+      "interiorCarrierId": "identity-bearing-analytic-sections-v0",
+      "surfaceFormationId": "direct-profile-revolution-v0",
+      "role": "unsmoothed-analytic-profile-variant",
+      "evidenceDisposition": "variant-evidence",
+      "prediction": "Preserves contributor identity and the fixed synthetic response but retains station-scale profile roughness."
+    },
+    {
+      "id": "frozen-profile-causal-null",
+      "implementationMode": "frozen-profile",
+      "interiorCarrierId": "no-perturbation-carrier-v0",
+      "surfaceFormationId": "frozen-smoothed-profile-revolution-v0",
+      "role": "analytic-profile-causal-null",
+      "evidenceDisposition": "control-observation",
+      "prediction": "Reuses the baseline profile under perturbation and therefore carries no causal response."
+    },
+    {
+      "id": "smoothed-identity-profile-variant",
+      "implementationMode": "smoothed-identity-profile",
+      "interiorCarrierId": "identity-bearing-analytic-sections-v0",
+      "surfaceFormationId": "smoothed-profile-revolution-v0",
+      "role": "smoothed-analytic-profile-variant",
+      "evidenceDisposition": "variant-evidence",
+      "prediction": "Preserves contributor identity and the fixed synthetic response while smoothing station-scale profile roughness."
+    }
+  ],
+  "counterfeits": [
+    "self-generated-source-response",
+    "implementation-mode-substitution",
+    "identity-swap",
+    "smooth-undifferentiated-blob",
+    "dropped-required-component",
+    "stale-or-fallback-route",
+    "invented-motion",
+    "flattened-source-coupling"
+  ],
+  "promotion": "none"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "kaminos.analytical-tissue-source-response.v0",
+  "id": "synthetic-hindquarter-muscle-tension-response-v0",
+  "descriptorId": "synthetic-hindquarter-v0",
+  "controlId": "muscle-tension",
+  "delta": 0.1,
+  "cameraId": "synthetic-hindquarter-orthographic-v0",
+  "metricExtractorId": "analytic-profile-observables-v0",
+  "authority": {
+    "sourceKind": "fixed-synthetic-comparator",
+    "derivation": "Manually frozen from the reviewed b3972868 precursor before external-source adjudication was implemented.",
+    "claimCeiling": "Candidate independence from a fixed numeric comparator only; not anatomical, authored-envelope, or source-grounded truth."
+  },
+  "baselineMetrics": {
+    "muscleBulge": 0.4942186282641,
+    "fatSpan": 0.9282630787559423,
+    "tetherAnchor": -0.42147086791741595,
+    "skinSlack": 0.8163937812362629
+  },
+  "perturbedMetrics": {
+    "muscleBulge": 0.5819485809854562,
+    "fatSpan": 0.9995444880424985,
+    "tetherAnchor": -0.4612485736806945,
+    "skinSlack": 0.8844462035665555
+  },
+  "responseObservables": {
+    "muscleBulge": 0.0877299527213562,
+    "fatSpan": 0.07128140928655624,
+    "tetherAnchor": -0.03977770576327855,
+    "skinSlack": 0.06805242233029252
+  }
+}
