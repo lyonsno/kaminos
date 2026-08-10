@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Latest-envelope authority probe</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #101312; color: #f2f4f1; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101312; }
+    main { width: min(1500px, 100%); margin: 0 auto; padding: 28px; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    .lead { margin: 0 0 24px; color: #b9c0bb; max-width: 1000px; line-height: 1.5; }
+    .row { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(260px, .9fr) minmax(240px, 1fr); gap: 16px; padding: 18px 0; border-top: 1px solid #343a36; align-items: stretch; }
+    .row:first-of-type { border-top: 0; }
+    figure, .context { margin: 0; background: #191d1b; border: 1px solid #343a36; border-radius: 6px; overflow: hidden; }
+    img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: #151918; }
+    figcaption, .context { padding: 14px; }
+    .context { display: flex; flex-direction: column; justify-content: space-between; }
+    h2 { margin: 0 0 10px; font-size: 18px; letter-spacing: 0; }
+    .prompt { margin: 0 0 18px; font-size: 18px; line-height: 1.45; }
+    .settings { color: #aab2ad; font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .finding { margin: 16px 0 0; color: #ced4d0; line-height: 1.5; }
+    .positive { color: #8fe09f; }
+    .negative { color: #edc27b; }
+    @media (max-width: 900px) { main { padding: 16px; } .row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Latest-envelope authority probe</h1>
+  <p class="lead">Revision 029 versus the matched revision-025 predecessor at seed 80413, followed by a separate fur-representation probe. Source, wording, settings, and output remain adjacent.</p>
+
+  <section class="row" id="mannequin-seed80413">
+    <figure>
+      <img src="source/latest-envelope-029.png" alt="Revision-029 authored envelope source">
+      <figcaption><strong>Revision 029 source</strong><br>Object Cube.056; 2,465 evaluated triangles.</figcaption>
+    </figure>
+    <div class="context">
+      <div>
+        <h2>mannequin-seed80413</h2>
+        <p class="prompt">Elaborate this mannequin into a finished creature.</p>
+        <div class="settings">FLUX.2 Klein 9B q4<br>seed 80413 · 8 steps · guidance 1.0<br>512 × 512</div>
+      </div>
+      <p class="finding positive">Safe positive: same seed basin, with a rounder hindquarter, tighter trunk, cleaner forequarter, and more feline head-neck relation.</p>
+    </div>
+    <figure>
+      <img src="runs/mannequin-seed80413/output.png" alt="Revision-029 mannequin elaboration output">
+      <figcaption><strong>Revision 029 output</strong><br>Candidate-specific local authority gain; no categorical cat claim.</figcaption>
+    </figure>
+  </section>
+
+  <section class="row" id="matched-predecessor">
+    <figure>
+      <img src="../nonlinear-basin-threshold-assay-v0/resolution-ladder/lod-00-r1.00.png" alt="Revision-025 predecessor source">
+      <figcaption><strong>Revision 025 predecessor</strong><br>Same source-plate recipe.</figcaption>
+    </figure>
+    <div class="context">
+      <div>
+        <h2>Matched predecessor</h2>
+        <p class="prompt">Elaborate this mannequin into a finished creature.</p>
+        <div class="settings">FLUX.2 Klein 9B q4<br>seed 80413 · 8 steps · guidance 1.0<br>512 × 512</div>
+      </div>
+      <p class="finding">The comparison isolates authored source revision while holding prompt, seed, route, and framing recipe fixed.</p>
+    </div>
+    <figure>
+      <img src="../current-mannequin-registration-successor-v0/runs/mannequin-seed80413/output.png" alt="Revision-025 predecessor output">
+      <figcaption><strong>Revision 025 output</strong><br>The known seed-80413 green fox/wolf basin.</figcaption>
+    </figure>
+  </section>
+
+  <section class="row" id="tufted-coat-seed80413">
+    <figure>
+      <img src="source/latest-envelope-029.png" alt="Revision-029 authored envelope source repeated for fur probe">
+      <figcaption><strong>Revision 029 source</strong><br>Same source and seed; prompt is the only changed control.</figcaption>
+    </figure>
+    <div class="context">
+      <div>
+        <h2>tufted-coat-seed80413</h2>
+        <p class="prompt">This shape covered in broad layered fur tufts.</p>
+        <div class="settings">FLUX.2 Klein 9B q4<br>seed 80413 · 8 steps · guidance 1.0<br>512 × 512</div>
+      </div>
+      <p class="finding negative">Safe negative: dense shaggy shell, lost face and distal anatomy, no broad separated meso-scale clumps. Do not send to TRELLIS.</p>
+    </div>
+    <figure>
+      <img src="runs/tufted-coat-seed80413/output.png" alt="Dense shaggy fur output">
+      <figcaption><strong>Tuft probe output</strong><br>Representation-targeted wording overpowered source morphology.</figcaption>
+    </figure>
+  </section>
+</main>
+</body>
+</html>
