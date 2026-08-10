@@ -29,6 +29,7 @@ def main():
     flux = load_json("flux-results.json")
     trellis = load_json("trellis-results.json")
     registration = load_json("registration-results.json")
+    historical = load_json("historical-registration-results.json")
     require_file(SOURCE, "authenticated source plate")
 
     cells = sorted(
@@ -36,6 +37,7 @@ def main():
         key=lambda item: ({"mannequin": 0, "armature": 1, "fur": 2}[item["promptId"]], item["seed"]),
     )
     casts = {item["name"]: item for item in registration["casts"]}
+    historical_fit = historical["fit"]
 
     flux_cards = []
     for cell in cells:
@@ -125,6 +127,7 @@ def main():
   .meta, .hash {{ color: #8f988f; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }}
   code {{ color: #d5b56e; }}
   .promotion {{ margin-bottom: 14px; padding: 16px; }}
+  .historical {{ border: 1px solid #303832; background: #191d1a; border-radius: 6px; padding: 16px; }}
   .promotion header p {{ color: #9ea69e; margin: 0; font-size: 13px; }}
   .evidence-grid {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; margin-top: 14px; }}
   .fit {{ margin-top: 14px; padding-top: 12px; border-top: 1px solid #303832; color: #aab2aa; font-size: 13px; }}
@@ -138,12 +141,19 @@ def main():
   <section class="verdict">
     <div><strong>Campaign state</strong><span>The anatomically stronger envelope remains highly legible under concise neutral elaboration and reconstructs into spatially compatible casts.</span></div>
     <div><strong>Best current cast</strong><span><code>mannequin-seed80413</code>: 0.93% median and 2.67% p90 envelope-to-cast distance after one global fit.</span></div>
-    <div><strong>Claim ceiling</strong><span>Candidate-specific registration evidence. Cannot establish general production reliability or historically improved registration without a matched prior metric.</span></div>
+    <div><strong>Claim ceiling</strong><span>Candidate-specific registration evidence. The replayed historical metric does not show a general registration improvement, and the changed source plus changed prompt prevent causal attribution.</span></div>
   </section>
   <h2>FLUX elaboration matrix</h2>
   <section class="flux-grid">{''.join(flux_cards)}</section>
   <h2>Promoted Trellis casts and registration</h2>
   <section>{''.join(promoted_rows)}</section>
+  <h2>Historical comparison</h2>
+  <section class="historical">
+    <p class="lede">The prior authored-envelope cast was replayed through the same global similarity fit: {historical_fit['normalizedMedianDistance'] * 100:.2f}% median and {historical_fit['normalizedP90Distance'] * 100:.2f}% p90 of cast diagonal. This is essentially tied with the best current median and between the current candidates at p90. Because the historical source geometry and prompt wording both differ, this comparison cannot isolate source revision causally.</p>
+    <div class="evidence-grid">
+      {''.join(f'<figure>{image(view, "historical registration overlay")}<figcaption>Historical global-fit overlay</figcaption></figure>' for view in historical['views'])}
+    </div>
+  </section>
 </main></body></html>"""
     (ROOT / "campaign-screen.html").write_text(document)
 

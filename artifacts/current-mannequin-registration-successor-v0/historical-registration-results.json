@@ -1,0 +1,56 @@
+{
+  "schema": "kaminos.historical-registration-witness.v0",
+  "source": {
+    "path": "artifacts/authored-envelope-v0/recon-trellis-maquette/AUTHORED-ENVELOPE-for-comparison.glb",
+    "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "cast": {
+    "path": "artifacts/authored-envelope-v0/recon-trellis-maquette/output.glb",
+    "sha256": "372887134a3994e2d980f14419ef7bc8bdcbc36c275feaeeaf53c311fffcf24d"
+  },
+  "method": {
+    "transformClass": "global_similarity",
+    "allowsLocalDeformation": false,
+    "allowsAnatomicalLandmarkEditing": false,
+    "comparisonLimit": "Historical and current prompts differ, so this cannot isolate source revision causally."
+  },
+  "fit": {
+    "sampleCount": 3764,
+    "scale": 0.015488425384803458,
+    "medianDistance": 0.011503318324685097,
+    "p90Distance": 0.04003627598285675,
+    "normalizedMedianDistance": 0.009275959047104756,
+    "normalizedP90Distance": 0.032284150184614606,
+    "matrix": [
+      [
+        -0.015480553736344728,
+        -0.0002556865125124372,
+        0.00042237580906964435,
+        -0.6128846990769605
+      ],
+      [
+        -0.00022563963108309347,
+        0.015448930309116985,
+        0.0010821090340421495,
+        0.23558949363914886
+      ],
+      [
+        -0.0004391624684017243,
+        0.0010754057894535292,
+        -0.015444803644429463,
+        0.06471142440321138
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "views": [
+    "historical-registration/az000-el10.png",
+    "historical-registration/az045-el10.png",
+    "historical-registration/az135-el10.png"
+  ]
+}

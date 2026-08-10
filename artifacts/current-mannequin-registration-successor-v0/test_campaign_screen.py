@@ -36,8 +36,17 @@ class CampaignScreenTest(unittest.TestCase):
         html = (ROOT / "campaign-screen.html").read_text()
         self.assertIn("mflux_flux2_edit_promptfile", html)
         self.assertIn("trellis2mlx_fast", html)
-        self.assertIn("Cannot establish general production reliability", html)
-        self.assertIn("without a matched prior metric", html)
+        self.assertIn("does not show a general registration improvement", html)
+
+    def test_screen_exposes_historical_registration_comparison(self):
+        html = (ROOT / "campaign-screen.html").read_text()
+        historical = json.loads((ROOT / "historical-registration-results.json").read_text())
+        self.assertIn("Historical comparison", html)
+        self.assertIn("0.93% median", html)
+        self.assertIn("3.23% p90", html)
+        self.assertIn("cannot isolate source revision causally", html.lower())
+        for view in historical["views"]:
+            self.assertIn(view, html)
 
 
 if __name__ == "__main__":
