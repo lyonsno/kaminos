@@ -1,0 +1,87 @@
+{
+  "schema": "kaminos.analytical-tissue-legacy-source-candidates.v0",
+  "sourceClassification": {
+    "branch": "cc/molten-cat-analytical-carrier-0805",
+    "path": "artifacts/cat-bauplan-analytical-carrier-v0/source-preview-r2-complete/classification.json",
+    "sha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d"
+  },
+  "authority": "legacy-geometry-identity-only",
+  "candidates": [
+    {
+      "name": "SRC_PELVIS",
+      "role": "authored_mesh",
+      "admissionBasis": "authoring_collection",
+      "worldBounds": {
+        "min": [
+          14.48103714,
+          -11.982673645,
+          -14.19306469
+        ],
+        "max": [
+          25.372341156,
+          6.560198784,
+          1.288298607
+        ]
+      }
+    },
+    {
+      "name": "Muscle 41 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "worldBounds": {
+        "min": [
+          24.235177994,
+          -0.387836456,
+          -5.932677746
+        ],
+        "max": [
+          25.88942337,
+          5.701060772,
+          -4.873492241
+        ]
+      }
+    },
+    {
+      "name": "Muscle 42 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "worldBounds": {
+        "min": [
+          23.851657867,
+          -1.351949215,
+          -6.267002583
+        ],
+        "max": [
+          26.045818329,
+          5.481902599,
+          -4.16942215
+        ]
+      }
+    },
+    {
+      "name": "Muscle 53 | Surface",
+      "role": "muscle_surface",
+      "admissionBasis": "provisional_muscle_surface",
+      "worldBounds": {
+        "min": [
+          23.180477142,
+          -1.982856274,
+          -4.401945114
+        ],
+        "max": [
+          26.024284363,
+          5.479346752,
+          -1.780315757
+        ]
+      }
+    }
+  ],
+  "doesNotEstablish": [
+    "anatomical-naming",
+    "feline-specificity",
+    "fat-identity",
+    "tether-identity",
+    "skin-identity",
+    "control-perturbation"
+  ]
+}

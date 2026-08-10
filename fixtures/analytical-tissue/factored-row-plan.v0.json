@@ -1,0 +1,68 @@
+{
+  "schema": "kaminos.analytical-tissue-factored-row-plan.v0",
+  "id": "synthetic-hindquarter-factored-comparison-v0",
+  "descriptorRef": "fixtures/analytical-tissue/synthetic-hindquarter-neutral.v0.json",
+  "claimCeiling": "Independent semantic control on one bounded, partly synthetic fixture only.",
+  "freeze": {
+    "controls": [
+      "muscle-tension",
+      "fat-volume",
+      "tether-length",
+      "skin-slack"
+    ],
+    "perturbationMode": "one-control-at-a-time-symmetric-finite-difference",
+    "cameraId": "synthetic-hindquarter-orthographic-v0",
+    "observableIds": [
+      "muscleBulge",
+      "fatSpan",
+      "tetherAnchor",
+      "skinSlack"
+    ],
+    "requiredEvidence": [
+      "raw-geometry",
+      "same-camera-render",
+      "source-response-vector",
+      "candidate-response-vector",
+      "surface-contributor-mixture"
+    ]
+  },
+  "rows": [
+    {
+      "id": "scalar-union-negative-control",
+      "interiorCarrierId": "undifferentiated-metaball-sdf-v0",
+      "surfaceFormationId": "direct-zero-isosurface-v0",
+      "role": "current-baseline-negative-control",
+      "prediction": "May produce a coherent envelope but erases component attribution at the consumed surface."
+    },
+    {
+      "id": "anisotropic-field-row",
+      "interiorCarrierId": "labeled-anisotropic-components-v0",
+      "surfaceFormationId": "identity-weighted-isosurface-v0",
+      "role": "interior-carrier-challenger",
+      "prediction": "Preserves local component response but may inherit field-union surface artifacts."
+    },
+    {
+      "id": "explicit-shell-causal-null",
+      "interiorCarrierId": "no-identity-bearing-interior-v0",
+      "surfaceFormationId": "fitted-skin-shell-v0",
+      "role": "surface-formation-control",
+      "prediction": "Fits the baseline envelope but cannot attribute tissue-specific perturbations without a causal interior."
+    },
+    {
+      "id": "factored-hybrid-leading-hypothesis",
+      "interiorCarrierId": "labeled-anisotropic-components-v0",
+      "surfaceFormationId": "fitted-response-shell-v0",
+      "role": "leading-composed-challenger",
+      "prediction": "Separates causal tissue identity from surface regularity while carrying mixture weights to the final shell."
+    }
+  ],
+  "counterfeits": [
+    "identity-swap",
+    "smooth-undifferentiated-blob",
+    "dropped-required-component",
+    "stale-or-fallback-route",
+    "invented-motion",
+    "flattened-source-coupling"
+  ],
+  "promotion": "none"
+}

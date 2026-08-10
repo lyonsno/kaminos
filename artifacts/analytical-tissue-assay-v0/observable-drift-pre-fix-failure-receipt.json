@@ -1,0 +1,32 @@
+{
+  "schema": "kaminos.analytical-tissue-pre-fix-failure-receipt.v0",
+  "observedAt": "2026-08-10T20:50:01Z",
+  "source": {
+    "repo": "kaminos",
+    "branch": "cc/analytical-tissue-assay-0810",
+    "baseHead": "b3d1ca1c59d619a15b035914e7f9140395206d38"
+  },
+  "execution": {
+    "runtime": "node v25.9.0",
+    "command": "node --test tests/analytical-tissue-response-ledger-contracts.mjs",
+    "effectiveTestPath": "tests/analytical-tissue-response-ledger-contracts.mjs"
+  },
+  "result": {
+    "passed": 9,
+    "failed": 2,
+    "failurePhase": "response-observable-contract",
+    "counterfeitFailures": [
+      {
+        "id": "missing-descriptor-observable",
+        "signal": "TypeError reading source from an absent perturbed comparison entry",
+        "meaning": "A partial response ledger crashed instead of producing a durable structured failure."
+      },
+      {
+        "id": "unknown-observable-expansion",
+        "signal": "actual true; expected false",
+        "meaning": "An undeclared tailSweep observable silently expanded the frozen comparison class."
+      }
+    ]
+  },
+  "claim": "The tissue response wrapper must bind both comparison vectors to the descriptor's exact observable set before numeric adjudication."
+}

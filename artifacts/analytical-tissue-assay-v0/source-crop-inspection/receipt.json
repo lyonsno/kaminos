@@ -1,0 +1,71 @@
+{
+  "schema": "kaminos.analytical-tissue-source-crop-receipt.v0",
+  "observedAt": "2026-08-10T20:44:49Z",
+  "observerRole": "analytical-tissue-assay-owner",
+  "repo": "kaminos",
+  "researchWorktree": "/private/tmp/kaminos-analytical-tissue-assay-0810",
+  "source": {
+    "branch": "cc/molten-cat-analytical-carrier-0805",
+    "head": "49b6fd5c6aab3036d3acf867853e8c7d5a8f4523",
+    "requestedAssetPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "effectiveAssetPath": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan.blend",
+    "assetSha256": "9453608cdf721ee98ad2924ac16a459b7b810d96159566133e7a573327b9744c",
+    "classificationSchema": "kaminos.cat-bauplan-source-classification.v0",
+    "classificationSha256": "5bde5d4f9d8dee83b9787cba34af92398c45a9cb419ec74ca626ad3947d2833d",
+    "admittedObjectCount": 112
+  },
+  "render": {
+    "requestedRendererId": "blender-cat-source-preview-v0",
+    "effectiveRendererId": "blender-cat-source-preview-v0",
+    "blenderVersion": "5.1.2",
+    "engine": "BLENDER_WORKBENCH",
+    "palette": "ecorche",
+    "view": "right-sagittal",
+    "cameraDirection": [
+      1,
+      0,
+      0
+    ],
+    "imageUpAxis": [
+      0,
+      0,
+      -1
+    ],
+    "orthoScale": 68.95558166503906,
+    "resolution": [
+      900,
+      900
+    ]
+  },
+  "images": {
+    "source": {
+      "path": "20260810T204449_source-right-sagittal.png",
+      "sha256": "43e7f5038c6a3f56f7da4e9741336636dc75ce54c276a58622eab17384b8896f",
+      "resolution": [
+        900,
+        900
+      ]
+    },
+    "crop": {
+      "path": "20260810T204449_hindquarter-crop.png",
+      "sha256": "e6b15bd4349878a2244bcf8a6601d6e0a90ceae3cbb56e9a46ad2c39b26e53df",
+      "resolution": [
+        380,
+        680
+      ],
+      "cropOffset": [
+        80,
+        0
+      ],
+      "command": "sips --cropToHeightWidth 680 380 --cropOffset 80 0 20260810T204449_source-right-sagittal.png --out 20260810T204449_hindquarter-crop.png"
+    }
+  },
+  "inspection": {
+    "visibleRigidRelation": true,
+    "visibleLayeredMassTransition": true,
+    "visibleArticulatedSilhouette": true,
+    "bilateralCompleteness": false,
+    "anatomicalAuthority": false,
+    "admission": "legacy-unilateral-geometry-stress-row"
+  }
+}

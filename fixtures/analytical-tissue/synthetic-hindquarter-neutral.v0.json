@@ -1,0 +1,98 @@
+{
+  "schema": "kaminos.analytical-tissue-descriptor.v0",
+  "id": "synthetic-hindquarter-v0",
+  "authority": {
+    "sourceKind": "synthetic-truth",
+    "claimCeiling": "bounded attributable control only"
+  },
+  "frame": {
+    "id": "synthetic-hindquarter-frame-v0",
+    "units": "fixture-unit",
+    "axes": [
+      "right",
+      "anterior",
+      "dorsal"
+    ]
+  },
+  "components": [
+    {
+      "id": "pelvis",
+      "tissueClass": "rigid",
+      "supportRegionId": "posterior-core"
+    },
+    {
+      "id": "gluteal-carrier",
+      "tissueClass": "muscle",
+      "supportRegionId": "posterior-dorsal"
+    },
+    {
+      "id": "haunch-bulk",
+      "tissueClass": "fat",
+      "supportRegionId": "posterior-lateral"
+    },
+    {
+      "id": "ischial-tether",
+      "tissueClass": "tether",
+      "supportRegionId": "posterior-ventral"
+    },
+    {
+      "id": "hindquarter-skin",
+      "tissueClass": "skin",
+      "supportRegionId": "posterior-envelope"
+    }
+  ],
+  "controls": [
+    {
+      "id": "muscle-tension",
+      "tissueClass": "muscle",
+      "targetComponentIds": [
+        "gluteal-carrier"
+      ]
+    },
+    {
+      "id": "fat-volume",
+      "tissueClass": "fat",
+      "targetComponentIds": [
+        "haunch-bulk"
+      ]
+    },
+    {
+      "id": "tether-length",
+      "tissueClass": "tether",
+      "targetComponentIds": [
+        "ischial-tether"
+      ]
+    },
+    {
+      "id": "skin-slack",
+      "tissueClass": "skin",
+      "targetComponentIds": [
+        "hindquarter-skin"
+      ]
+    }
+  ],
+  "observables": [
+    {
+      "id": "muscleBulge"
+    },
+    {
+      "id": "fatSpan"
+    },
+    {
+      "id": "tetherAnchor"
+    },
+    {
+      "id": "skinSlack"
+    }
+  ],
+  "surfaceContract": {
+    "identityMode": "mixture-weights",
+    "requiredComponentIds": [
+      "pelvis",
+      "gluteal-carrier",
+      "haunch-bulk",
+      "ischial-tether",
+      "hindquarter-skin"
+    ]
+  }
+}

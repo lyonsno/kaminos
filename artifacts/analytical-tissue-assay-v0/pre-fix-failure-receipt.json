@@ -1,0 +1,49 @@
+{
+  "schema": "kaminos.analytical-tissue-pre-fix-failure-receipt.v0",
+  "observedAt": "2026-08-10T20:44:49Z",
+  "source": {
+    "repo": "kaminos",
+    "branch": "cc/analytical-tissue-assay-0810",
+    "preFixHead": "b3d1ca1c59d619a15b035914e7f9140395206d38",
+    "importedHarnessSourceCommit": "d9bc68e3dbef9b2ced32699e45704db44c7bd311"
+  },
+  "execution": {
+    "runtime": "node v25.9.0",
+    "command": "node --test tests/analytical-tissue-response-ledger-contracts.mjs",
+    "effectiveTestPath": "tests/analytical-tissue-response-ledger-contracts.mjs",
+    "priorHarnessCommand": "node --test tests/envelope-relation-measure-contracts.mjs",
+    "priorHarnessResult": {
+      "passed": 14,
+      "failed": 0
+    }
+  },
+  "result": {
+    "passed": 0,
+    "failed": 4,
+    "failurePhase": "contract-assertion",
+    "lastTrustworthyEvidence": "The imported numeric response adjudicator passed all 14 existing tests before the counterfeit tests ran.",
+    "counterfeitFailures": [
+      {
+        "id": "identity-swap",
+        "signal": "actual true; expected false",
+        "meaning": "Numerically faithful response was accepted after muscle and fat contributor classes were swapped."
+      },
+      {
+        "id": "smooth-undifferentiated-blob",
+        "signal": "actual true; expected false",
+        "meaning": "Gross response was accepted after contributor identity collapsed to one undifferentiated blob."
+      },
+      {
+        "id": "dropped-required-component",
+        "signal": "actual true; expected false",
+        "meaning": "Gross response was accepted after the tether contributor disappeared."
+      },
+      {
+        "id": "stale-or-fallback-route",
+        "signal": "actual true; expected false",
+        "meaning": "Requested synthetic route was accepted when the effective route was a cached default."
+      }
+    ]
+  },
+  "claim": "The numeric-only perturbation harness cannot establish identity-bearing analytical tissue control."
+}

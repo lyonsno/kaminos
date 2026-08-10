@@ -1,0 +1,35 @@
+{
+  "schema": "kaminos.analytical-tissue-verification-receipt.v0",
+  "observedAt": "2026-08-10T20:50:01Z",
+  "source": {
+    "repo": "kaminos",
+    "branch": "cc/analytical-tissue-assay-0810",
+    "importedHarnessSourceCommit": "d9bc68e3dbef9b2ced32699e45704db44c7bd311"
+  },
+  "execution": {
+    "runtime": "node v25.9.0",
+    "command": "node --test tests/analytical-tissue-response-ledger-contracts.mjs tests/envelope-relation-measure-contracts.mjs",
+    "effectiveTestPaths": [
+      "tests/analytical-tissue-response-ledger-contracts.mjs",
+      "tests/envelope-relation-measure-contracts.mjs"
+    ]
+  },
+  "result": {
+    "passed": 25,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "coveredFalseClosurePaths": [
+    "identity-swap",
+    "smooth-undifferentiated-blob",
+    "dropped-required-component",
+    "stale-or-fallback-route",
+    "invented-motion",
+    "flattened-source-coupling",
+    "missing-descriptor-observable",
+    "unknown-observable-expansion",
+    "blank-or-degenerate-geometry"
+  ],
+  "claimCeiling": "The contract distinguishes a faithful synthetic evidence row from named counterfeits; no geometry representation row has yet been constructed or promoted."
+}
