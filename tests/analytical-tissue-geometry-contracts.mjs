@@ -134,18 +134,32 @@ test('geometry and visual serialization are deterministic and identity-bearing',
   assert.match(svg, /visual companion to report\.json/);
 });
 
-test('fixed source rejects an implementation-mode substitution', () => {
-  const substitutedPlan = structuredClone(rowPlan);
-  const smoothed = substitutedPlan.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
-  smoothed.implementationMode = 'isotropized-profile';
-  const assay = buildAnalyticalTissueMuscleTensionAssay({
-    descriptor: structuredClone(descriptor),
-    rowPlan: substitutedPlan,
-    sourceFixture: structuredClone(sourceFixture),
-  });
-  const substituted = assay.rows.find((row) => row.id === 'smoothed-identity-profile-variant');
-  assert.equal(substituted.verdict.passed, false);
-  assert.notDeepEqual(substituted.response.observables, sourceFixture.responseObservables);
+test('fixed source rejects control-like and same-family implementation-mode substitutions', () => {
+  for (const substitution of [
+    { rowId: 'smoothed-identity-profile-variant', mode: 'raw-identity-profile' },
+    { rowId: 'raw-identity-profile-variant', mode: 'smoothed-identity-profile' },
+    { rowId: 'smoothed-identity-profile-variant', mode: 'isotropized-profile' },
+  ]) {
+    const substitutedPlan = structuredClone(rowPlan);
+    substitutedPlan.rows.find(
+      (row) => row.id === substitution.rowId,
+    ).implementationMode = substitution.mode;
+    const assay = buildAnalyticalTissueMuscleTensionAssay({
+      descriptor: structuredClone(descriptor),
+      rowPlan: substitutedPlan,
+      sourceFixture: structuredClone(sourceFixture),
+    });
+    const substituted = assay.rows.find((row) => row.id === substitution.rowId);
+    assert.equal(
+      substituted.verdict.passed,
+      false,
+      `${substitution.rowId} must reject ${substitution.mode}`,
+    );
+    assert.ok(
+      substituted.verdict.failures.some((failure) => failure.code === 'assay-row-plan-invalid'),
+      JSON.stringify(substituted.verdict.failures),
+    );
+  }
 });
 
 test('artifact writer preserves a durable failure report before primary output', async (t) => {

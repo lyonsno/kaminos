@@ -26,6 +26,36 @@ const ROW_EVIDENCE_DISPOSITIONS = new Set([
   'candidate-evidence',
   'variant-evidence',
 ]);
+const PRECURSOR_ROW_BINDINGS = Object.freeze({
+  'isotropized-profile-negative-control': Object.freeze({
+    role: 'analytic-profile-negative-control',
+    evidenceDisposition: 'control-observation',
+    implementationMode: 'isotropized-profile',
+    interiorCarrierId: 'isotropized-analytic-sections-v0',
+    surfaceFormationId: 'direct-profile-revolution-v0',
+  }),
+  'raw-identity-profile-variant': Object.freeze({
+    role: 'unsmoothed-analytic-profile-variant',
+    evidenceDisposition: 'variant-evidence',
+    implementationMode: 'raw-identity-profile',
+    interiorCarrierId: 'identity-bearing-analytic-sections-v0',
+    surfaceFormationId: 'direct-profile-revolution-v0',
+  }),
+  'frozen-profile-causal-null': Object.freeze({
+    role: 'analytic-profile-causal-null',
+    evidenceDisposition: 'control-observation',
+    implementationMode: 'frozen-profile',
+    interiorCarrierId: 'no-perturbation-carrier-v0',
+    surfaceFormationId: 'frozen-smoothed-profile-revolution-v0',
+  }),
+  'smoothed-identity-profile-variant': Object.freeze({
+    role: 'smoothed-analytic-profile-variant',
+    evidenceDisposition: 'variant-evidence',
+    implementationMode: 'smoothed-identity-profile',
+    interiorCarrierId: 'identity-bearing-analytic-sections-v0',
+    surfaceFormationId: 'smoothed-profile-revolution-v0',
+  }),
+});
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -55,6 +85,16 @@ function uniqueNonEmptyStrings(values) {
 
 function addFailure(failures, code, message, details = {}) {
   failures.push({ code, message, ...details });
+}
+
+function precursorRowsMatchBindings(rows) {
+  const expectedIds = Object.keys(PRECURSOR_ROW_BINDINGS);
+  if (rows.length !== expectedIds.length) return false;
+  return expectedIds.every((rowId) => {
+    const row = rows.find((candidate) => candidate?.id === rowId);
+    const expected = PRECURSOR_ROW_BINDINGS[rowId];
+    return row && Object.entries(expected).every(([field, value]) => row[field] === value);
+  });
 }
 
 export function analyticalTissueDescriptorHash(descriptor) {
@@ -286,6 +326,7 @@ function validateEvidence(evidence, descriptor, descriptorValidation) {
     || rowPlan?.descriptorId !== descriptor.id
     || rowPlan?.promotion !== 'none'
     || (precursorPlan && !nonEmptyString(rowPlan?.sourceResponseRef))
+    || (precursorPlan && !precursorRowsMatchBindings(rows))
     || !uniqueNonEmptyStrings(rowIds)
     || rows.some((row) => (
       !nonEmptyString(row?.interiorCarrierId)
