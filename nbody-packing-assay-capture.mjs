@@ -8,10 +8,19 @@ const STATES = Object.freeze([
   'crowded',
   'sequential-counterfeit',
   'sparse-global-candidate',
+  'mixed-field-baseline',
+  'mixed-field-shifted',
+  'mixed-field-refined',
   'joint-reference',
 ]);
 const MODES = Object.freeze(['volume', 'slice']);
-const EXPLICIT_WITNESS_STATES = new Set(['sparse-global-candidate', 'joint-reference']);
+const EXPLICIT_WITNESS_STATES = new Set([
+  'sparse-global-candidate',
+  'mixed-field-baseline',
+  'mixed-field-shifted',
+  'mixed-field-refined',
+  'joint-reference',
+]);
 export const NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT = Object.freeze({
   width:1400,
   height:900,
@@ -60,7 +69,8 @@ export async function captureNBodyPackingAssayState({
 } = {}) {
   if (!STATES.includes(state)) {
     throw new Error(
-      `state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, or joint-reference, got ${state}`,
+      `state must be known-feasible, crowded, sequential-counterfeit, sparse-global-candidate, ` +
+      `mixed-field-baseline, mixed-field-shifted, mixed-field-refined, or joint-reference, got ${state}`,
     );
   }
   if (!MODES.includes(mode)) {

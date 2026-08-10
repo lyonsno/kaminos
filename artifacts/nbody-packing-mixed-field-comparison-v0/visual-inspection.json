@@ -1,0 +1,731 @@
+{
+  "schema": "kaminos.nbody-packing-mixed-field-comparison-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-10T07:51:19.794Z",
+  "route": {
+    "requested": "nbody-packing-mixed-field-comparison-orbitable-v0",
+    "effective": "nbody-packing-mixed-field-comparison-orbitable-v0",
+    "fallbackUsed": false,
+    "baseUrl": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/"
+  },
+  "bindings": {
+    "fixtureJsonSha256": "fe6bf93ce6c4c9df732eceea5384d48896b29a380cd018b6819226bb6c0c6db3",
+    "assayResultJsonSha256": "4d26d237e863f9c58501c812c61cae38f532f1e583ce57f9833c3eec8e94aec7",
+    "jointReferenceJsonSha256": "2d4c0de3ab224e797dd2d2063d2aa3294435b7b6fd65855b933091f911aee774",
+    "sparseProblemJsonSha256": "58de739ad109bea085e42c12918a5774008ab9171a485dda4eb25a6a176f9c79",
+    "sparseCandidateJsonSha256": "e3041859539f7906d25ebb98f1ffe7ab8ee31d6060508cd774e3b2971419fecf",
+    "mixedFieldProblemJsonSha256": "5a255f35c9dbfc5229138a8739adc53c6c56f9f628c4bf81aed4387111f75f5f",
+    "mixedFieldBaselineJsonSha256": "60335fe74ab4a5e665615049d45e57e274cdd7c3c457b27a6d69eac343f8588f",
+    "mixedFieldShiftedJsonSha256": "2ec21baa157d2a4939a3914f4b2882e3f7adbb999854e77456a1a4fab3794beb",
+    "mixedFieldRefinedJsonSha256": "6d86623ee7360a5eca43b1ea98382daefc0ebfa15afc7f803dd3c98090ac4847",
+    "indexHtmlSha256": "3928a3322a62237c91293bb536ec5de04750c74342ddbbf99e936ca5d689dbef",
+    "pendingReportSha256": "b48ac32921ea348bccce7f07891257eefe4db85cbc7ed97a81da6731c4beb06d"
+  },
+  "images": [
+    {
+      "state": "known-feasible",
+      "mode": "volume",
+      "path": "known-feasible-volume.png",
+      "byteLength": 267430,
+      "sha256": "7cfc7f39e1a762a814dcac6ae95d5c0598e3c0aed1d47daccaed46f9b03e7429",
+      "captureReportPath": "known-feasible-volume-capture-report.json",
+      "captureReportSha256": "924a94b6e79b3b2db3d701580c8ad1da300330dbb6ae0e2afb3a40f1ab525f98",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=known-feasible&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=known-feasible&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266165,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "known-feasible",
+      "mode": "slice",
+      "path": "known-feasible-slice.png",
+      "byteLength": 220047,
+      "sha256": "d46fbdddb4bd8eb4cdf4023638d53901c16ae122a8718daa704e64ec892927ac",
+      "captureReportPath": "known-feasible-slice-capture-report.json",
+      "captureReportSha256": "8fc2ab7bd698bdddd77872a8c2ec405b3283f48c28882d216ed33eeffa1b4f35",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=known-feasible&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=known-feasible&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "known-feasible",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266164,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "path": "crowded-volume.png",
+      "byteLength": 283330,
+      "sha256": "c2a0824ec87cc58e0bdd72a331f478080d1857b223ea21dd1366979769934d97",
+      "captureReportPath": "crowded-volume-capture-report.json",
+      "captureReportSha256": "b320b3185c0c9fe03e424ded4458ecc17f02d089d06e0050521e7d5994de76ac",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=crowded&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=crowded&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266158,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "path": "crowded-slice.png",
+      "byteLength": 217357,
+      "sha256": "4d3b85f9fc3a95e9eec040e4db9e1e89eba59546e8ce01de83db98e508ef9225",
+      "captureReportPath": "crowded-slice-capture-report.json",
+      "captureReportSha256": "0e376cf83fc681646f577a709ea9dcee1a74c53f049af7c3f1c9ce042d02706a",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=crowded&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=crowded&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "crowded",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266157,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "volume",
+      "path": "sequential-counterfeit-volume.png",
+      "byteLength": 284750,
+      "sha256": "026686fa4040332730714bea5d84b554db5fce088025df19eb53c8f60d148e31",
+      "captureReportPath": "sequential-counterfeit-volume-capture-report.json",
+      "captureReportSha256": "7f4cddbf186134e219c48f487a576d1c2a9bbcb5080e035e987b2cc6cb0571a8",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sequential-counterfeit&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sequential-counterfeit&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266173,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sequential-counterfeit",
+      "mode": "slice",
+      "path": "sequential-counterfeit-slice.png",
+      "byteLength": 217869,
+      "sha256": "ef8ca97b41bf74192914780112dc9834872c3227b13269c0693709d1f76cb0d8",
+      "captureReportPath": "sequential-counterfeit-slice-capture-report.json",
+      "captureReportSha256": "334b62b66d2982e2b2fb852bdb4f1677cbbc0eb941dc2b322f98f187a9dfe1db",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sequential-counterfeit&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sequential-counterfeit&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sequential-counterfeit",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266172,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sparse-global-candidate",
+      "mode": "volume",
+      "path": "sparse-global-candidate-volume.png",
+      "byteLength": 276555,
+      "sha256": "ea841bf3f2346a4d3634826391762e34ba41531dbf8a721cb8e44e37fdd9d64f",
+      "captureReportPath": "sparse-global-candidate-volume-capture-report.json",
+      "captureReportSha256": "5d008e9907ce2724ac3e243fb2f6a6c35ae9e5ad6a7ab0786600c2afff8aaa56",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sparse-global-candidate&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sparse-global-candidate&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sparse-global-candidate",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266174,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "sparse-global-candidate",
+      "mode": "slice",
+      "path": "sparse-global-candidate-slice.png",
+      "byteLength": 219678,
+      "sha256": "0b7fc4a2d5cada44117fb075d48e73b07ee1746087ef6ec53108b5fad90d2eae",
+      "captureReportPath": "sparse-global-candidate-slice-capture-report.json",
+      "captureReportSha256": "dc92f43c398e6f339b4afb52ff37b1c5a4f7b19da7b96be655abb7e08786d67d",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sparse-global-candidate&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=sparse-global-candidate&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "sparse-global-candidate",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266173,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-baseline",
+      "mode": "volume",
+      "path": "mixed-field-baseline-volume.png",
+      "byteLength": 278540,
+      "sha256": "4c5182ae987b9e45716cb85908238b026adfb3fd40970e76ad5dde5dfae753db",
+      "captureReportPath": "mixed-field-baseline-volume-capture-report.json",
+      "captureReportSha256": "f865e261853ed47a841116449d481649b2f0fe893129c819ada462268a31cf10",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-baseline&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-baseline&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-baseline",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266171,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-baseline",
+      "mode": "slice",
+      "path": "mixed-field-baseline-slice.png",
+      "byteLength": 218713,
+      "sha256": "00200df328265baa9d78963c08f805594bc0ccd4852ce351a775df4583859031",
+      "captureReportPath": "mixed-field-baseline-slice-capture-report.json",
+      "captureReportSha256": "cb77a24c3fd7ebd05ce1e2431c981f1eee4e0dc92ade36d1ae17016210076dc3",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-baseline&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-baseline&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-baseline",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266170,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-shifted",
+      "mode": "volume",
+      "path": "mixed-field-shifted-volume.png",
+      "byteLength": 278680,
+      "sha256": "7208cbb0a12e2cc95ff278e0efa1fd5adacf3f4629005ef43aefda67da95a871",
+      "captureReportPath": "mixed-field-shifted-volume-capture-report.json",
+      "captureReportSha256": "4dce53cf38f4915de51a70cea8d210d664c524851071d20c04aa103ac3a2073a",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-shifted&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-shifted&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-shifted",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266170,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-shifted",
+      "mode": "slice",
+      "path": "mixed-field-shifted-slice.png",
+      "byteLength": 218847,
+      "sha256": "4d0ea4c6756ea20762deae804840caa303c7b587b4bd3a85840e72672cc230c9",
+      "captureReportPath": "mixed-field-shifted-slice-capture-report.json",
+      "captureReportSha256": "135aa05c92bbdf1cf348bee4fe5bb758b28a2c3b535e864acf75f2dfa7826fdd",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-shifted&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-shifted&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-shifted",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266169,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-refined",
+      "mode": "volume",
+      "path": "mixed-field-refined-volume.png",
+      "byteLength": 278543,
+      "sha256": "d5890bbd4615f2b0f7d74df142358365df201d128f12f05bdb762522b7b1fb90",
+      "captureReportPath": "mixed-field-refined-volume-capture-report.json",
+      "captureReportSha256": "75efb9ce86360e5ec265b51fcb27c97e28e2bff34b03341665d7d31ba5b372a6",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-refined&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-refined&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-refined",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266170,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "mixed-field-refined",
+      "mode": "slice",
+      "path": "mixed-field-refined-slice.png",
+      "byteLength": 218527,
+      "sha256": "156229577fabdfdeed64d83c8f98c9101efa954d4c532478eb3a247380361724",
+      "captureReportPath": "mixed-field-refined-slice-capture-report.json",
+      "captureReportSha256": "55eb7d216997932cb2f83f080fa66ab3246c8cfa908ffcb1979e3bd1f41242a2",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-refined&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=mixed-field-refined&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "mixed-field-refined",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266169,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "volume",
+      "path": "joint-reference-volume.png",
+      "byteLength": 278374,
+      "sha256": "4b0fdf01974093913742a55e9f749c46d26f938da6d50f70188f1edb84325896",
+      "captureReportPath": "joint-reference-volume-capture-report.json",
+      "captureReportSha256": "b0a0d5cfe7f0390efe0eac0c2f204a182c8db8e3e7de5bfc6fccc960e8635d69",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=joint-reference&mode=volume",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=joint-reference&mode=volume",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "volume",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266166,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    },
+    {
+      "state": "joint-reference",
+      "mode": "slice",
+      "path": "joint-reference-slice.png",
+      "byteLength": 218444,
+      "sha256": "cd9cf370ad2ad5eed588767b536f90e22525d66a584c2b09f27a5c9054e1de5b",
+      "captureReportPath": "joint-reference-slice-capture-report.json",
+      "captureReportSha256": "a160dc78df443579c80acdfc920f24b0189715988d4444e86dbf0bf9c8d785d3",
+      "viewport": {
+        "width": 1400,
+        "height": 900
+      },
+      "capture": {
+        "route": {
+          "requested": "independent-headless-screenshot-v0",
+          "effective": "independent-headless-screenshot-v0",
+          "fallbackUsed": false
+        },
+        "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=joint-reference&mode=slice",
+        "browser": {
+          "kind": "playwright-chromium-headless-shell",
+          "installedStableChrome": false,
+          "fallbackPolicy": "explicit-independent-override-or-fail-no-stable-chrome"
+        },
+        "effectiveDom": {
+          "status": "complete",
+          "url": "http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/?state=joint-reference&mode=slice",
+          "dataset": {
+            "witnessLoaded": "true",
+            "witnessState": "joint-reference",
+            "witnessMode": "slice",
+            "witnessRoute": "nbody-packing-mixed-field-comparison-orbitable-v0"
+          },
+          "stdout": {
+            "limitBytes": 65536,
+            "totalBytes": 266165,
+            "retainedBytes": 65536,
+            "truncated": true,
+            "retention": "prefix-only-no-dom-body-in-report"
+          }
+        }
+      }
+    }
+  ],
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "statesLegible": true,
+    "opaqueOverlapTruthLegible": true,
+    "stableIdentityLegible": true,
+    "attachmentsBoneCompartmentLegible": true,
+    "metricsMatchMarkers": true,
+    "packingSemanticsNotInverted": true,
+    "jointReferenceLegible": true,
+    "textContained": true,
+    "sparseCandidateLegible": true,
+    "candidateOracleDifferenceLegible": true,
+    "mixedFieldFailuresLegible": true,
+    "gridVariantsLegible": true
+  },
+  "summary": "Revision 1: all eight states loaded under one camera in volume and slice. The exact canonical order-two baseline, half-cell, and refined field variants perform the same material reorganization and retain continuous-overlap glyphs; direct toggling shows only a subvisual grid delta, while the joint reference removes the overlap glyphs. The bound report limits rejection to this exact formulation and fixture."
+}

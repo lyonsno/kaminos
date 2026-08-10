@@ -1,0 +1,4953 @@
+{
+  "schema": "kaminos.nbody-packing-joint-reference-result.v0",
+  "status": "converged-joint-reference",
+  "fixture": {
+    "id": "nbody-known-feasible-five-body-frustrated-rosette-assay-v0",
+    "schema": "kaminos.nbody-packing-assay-fixture.v0",
+    "sha256": "bfbb7bd13b96903951f0e11fd80859e14d6c7d33a63634211b49a910e76b1676",
+    "input": {
+      "requested": {
+        "kind": "synthetic-nbody-assay-fixture",
+        "id": "nbody-known-feasible-five-body-frustrated-rosette-assay-v0",
+        "sha256": "bfbb7bd13b96903951f0e11fd80859e14d6c7d33a63634211b49a910e76b1676"
+      },
+      "effective": {
+        "kind": "synthetic-nbody-assay-fixture",
+        "id": "nbody-known-feasible-five-body-frustrated-rosette-assay-v0",
+        "sha256": "bfbb7bd13b96903951f0e11fd80859e14d6c7d33a63634211b49a910e76b1676"
+      }
+    }
+  },
+  "config": {
+    "requested": {
+      "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+      "candidateEnumeration": "canonical",
+      "hardTolerance": 1e-7,
+      "penaltySchedule": [
+        100000000000
+      ],
+      "startFamily": [
+        "crowded-zero",
+        "known-feasible-continuation",
+        "balanced-radial-relief"
+      ],
+      "stepSchedule": [
+        0.04,
+        0.01,
+        0.0025,
+        0.000625,
+        0.00015625,
+        0.0000390625,
+        0.000009765625,
+        0.00000244140625,
+        6.103515625e-7,
+        1.52587890625e-7,
+        7.62939453125e-8
+      ],
+      "translationBounds": [
+        -0.3,
+        0.3
+      ],
+      "translationBasis": "per-member-xz-sine-zero-at-attachments"
+    },
+    "effective": {
+      "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+      "candidateEnumeration": "canonical",
+      "hardTolerance": 1e-7,
+      "penaltySchedule": [
+        100000000000
+      ],
+      "startFamily": [
+        "crowded-zero",
+        "known-feasible-continuation",
+        "balanced-radial-relief"
+      ],
+      "stepSchedule": [
+        0.04,
+        0.01,
+        0.0025,
+        0.000625,
+        0.00015625,
+        0.0000390625,
+        0.000009765625,
+        0.00000244140625,
+        6.103515625e-7,
+        1.52587890625e-7,
+        7.62939453125e-8
+      ],
+      "translationBounds": [
+        -0.3,
+        0.3
+      ],
+      "translationBasis": "per-member-xz-sine-zero-at-attachments"
+    },
+    "fallbackUsed": false
+  },
+  "reference": {
+    "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+    "translationBasis": "per-member-xz-sine-zero-at-attachments",
+    "sharedIterationState": true,
+    "candidateSelection": "all-axis-neighbors-evaluated-from-one-snapshot-then-global-best",
+    "stationaritySelection": "refine-once-after-physically-admissible-multistart-selection",
+    "physicalResidualSeparatedFromAugmentedObjective": true,
+    "innerLoopMeasure": "exact-belt-plus-knot-sampled-obstacle-and-compartment",
+    "finalAdmissionMeasure": "conservative-continuous-piecewise-linear-on-selected-candidate",
+    "claimCeiling": "bounded-synthetic-reference-only"
+  },
+  "selected": {
+    "startName": "crowded-zero",
+    "vector": [
+      -0.07884804760981,
+      -0.020210006136429,
+      0.07052481707098,
+      -0.020241924704272,
+      0.264459398853719,
+      0.057317291375321,
+      0.028264934654142,
+      0.081063313575191,
+      -0.000338106867909,
+      -0.117971678703053
+    ],
+    "muscles": [
+      {
+        "id": "rosette-west",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-west",
+          "constructionId": "nbody-rosette:rosette-west",
+          "lineageId": "nbody-rosette-lineage:rosette-west",
+          "instanceId": "nbody-rosette-instance:rosette-west"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-west:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.34,
+              -1.15,
+              0.28
+            ]
+          },
+          "insertion": {
+            "id": "rosette-west:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              -0.34,
+              1.15,
+              0.28
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              -0.34,
+              -1.15,
+              0.28
+            ],
+            "radius": 0.09843240968194776
+          },
+          {
+            "position": [
+              -0.280544374144456,
+              -0.75,
+              0.10354098580237417
+            ],
+            "radius": 0.17717833742750597
+          },
+          {
+            "position": [
+              -0.2437987765433327,
+              -0.28,
+              -0.005516682593058816
+            ],
+            "radius": 0.23623778323667463
+          },
+          {
+            "position": [
+              -0.24379877654333268,
+              0.28,
+              -0.005516682593058871
+            ],
+            "radius": 0.23623778323667463
+          },
+          {
+            "position": [
+              -0.28054437414445593,
+              0.75,
+              0.10354098580237414
+            ],
+            "radius": 0.17717833742750597
+          },
+          {
+            "position": [
+              -0.34,
+              1.15,
+              0.28
+            ],
+            "radius": 0.09843240968194776
+          }
+        ],
+        "targetVolume": 0.2830533092982356,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-center",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-center",
+          "constructionId": "nbody-rosette:rosette-center",
+          "lineageId": "nbody-rosette-lineage:rosette-center",
+          "instanceId": "nbody-rosette-instance:rosette-center"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-center:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.05,
+              -1.15,
+              0
+            ]
+          },
+          "insertion": {
+            "id": "rosette-center:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.05,
+              1.15,
+              0
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.05,
+              -1.15,
+              0
+            ],
+            "radius": 0.07991481548297957
+          },
+          {
+            "position": [
+              0.0914534473949465,
+              -0.75,
+              -0.011897904819185762
+            ],
+            "radius": 0.1048881953214107
+          },
+          {
+            "position": [
+              0.11707308683587922,
+              -0.28,
+              -0.019251214392353735
+            ],
+            "radius": 0.12486689919215559
+          },
+          {
+            "position": [
+              0.11707308683587922,
+              0.28,
+              -0.019251214392353735
+            ],
+            "radius": 0.12486689919215559
+          },
+          {
+            "position": [
+              0.09145344739494651,
+              0.75,
+              -0.011897904819185765
+            ],
+            "radius": 0.1048881953214107
+          },
+          {
+            "position": [
+              0.05,
+              1.15,
+              0
+            ],
+            "radius": 0.07991481548297957
+          }
+        ],
+        "targetVolume": 0.0882771827695464,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-east",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-east",
+          "constructionId": "nbody-rosette:rosette-east",
+          "lineageId": "nbody-rosette-lineage:rosette-east",
+          "instanceId": "nbody-rosette-instance:rosette-east"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-east:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.45,
+              -1.15,
+              0.1
+            ]
+          },
+          "insertion": {
+            "id": "rosette-east:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.45,
+              1.15,
+              0.1
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.45,
+              -1.15,
+              0.1
+            ],
+            "radius": 0.0999599630800552
+          },
+          {
+            "position": [
+              0.46437687392615545,
+              -0.75,
+              0.07491173334251694
+            ],
+            "radius": 0.1799279335440993
+          },
+          {
+            "position": [
+              0.47326227066449167,
+              -0.28,
+              0.05940633182937169
+            ],
+            "radius": 0.23990391139213244
+          },
+          {
+            "position": [
+              0.47326227066449167,
+              0.28,
+              0.05940633182937168
+            ],
+            "radius": 0.23990391139213244
+          },
+          {
+            "position": [
+              0.46437687392615545,
+              0.75,
+              0.07491173334251694
+            ],
+            "radius": 0.1799279335440993
+          },
+          {
+            "position": [
+              0.45,
+              1.15,
+              0.1
+            ],
+            "radius": 0.0999599630800552
+          }
+        ],
+        "targetVolume": 0.2830533092982356,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-north",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-north",
+          "constructionId": "nbody-rosette:rosette-north",
+          "lineageId": "nbody-rosette-lineage:rosette-north",
+          "instanceId": "nbody-rosette-instance:rosette-north"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-north:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.1,
+              -1.15,
+              0.55
+            ]
+          },
+          "insertion": {
+            "id": "rosette-north:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.1,
+              1.15,
+              0.55
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.1,
+              -1.15,
+              0.55
+            ],
+            "radius": 0.09922116999517797
+          },
+          {
+            "position": [
+              0.08722444913209147,
+              -0.75,
+              0.42131224453371563
+            ],
+            "radius": 0.17859810599132034
+          },
+          {
+            "position": [
+              0.07932872447072079,
+              -0.28,
+              0.3417788377196168
+            ],
+            "radius": 0.23813080798842712
+          },
+          {
+            "position": [
+              0.07932872447072077,
+              0.28,
+              0.34177883771961676
+            ],
+            "radius": 0.23813080798842712
+          },
+          {
+            "position": [
+              0.08722444913209147,
+              0.75,
+              0.42131224453371563
+            ],
+            "radius": 0.17859810599132034
+          },
+          {
+            "position": [
+              0.1,
+              1.15,
+              0.55
+            ],
+            "radius": 0.09922116999517797
+          }
+        ],
+        "targetVolume": 0.2830533092982356,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      },
+      {
+        "id": "rosette-south",
+        "identity": {
+          "sourceId": "synthetic-known-feasible:rosette-south",
+          "constructionId": "nbody-rosette:rosette-south",
+          "lineageId": "nbody-rosette-lineage:rosette-south",
+          "instanceId": "nbody-rosette-instance:rosette-south"
+        },
+        "authority": {
+          "kind": "synthetic-proxy",
+          "anatomicalAdmission": "none"
+        },
+        "attachments": {
+          "origin": {
+            "id": "rosette-south:origin",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.1,
+              -1.15,
+              -0.55
+            ]
+          },
+          "insertion": {
+            "id": "rosette-south:insertion",
+            "sourceAuthority": "synthetic-known-feasible",
+            "position": [
+              0.1,
+              1.15,
+              -0.55
+            ]
+          }
+        },
+        "centerline": [
+          {
+            "position": [
+              0.1,
+              -1.15,
+              -0.55
+            ],
+            "radius": 0.09942176369082582
+          },
+          {
+            "position": [
+              0.07041200315472064,
+              -0.75,
+              -0.4430064372420987
+            ],
+            "radius": 0.17895917464348648
+          },
+          {
+            "position": [
+              0.05212561544531333,
+              -0.28,
+              -0.3768807788802708
+            ],
+            "radius": 0.23861223285798197
+          },
+          {
+            "position": [
+              0.05212561544531332,
+              0.28,
+              -0.3768807788802707
+            ],
+            "radius": 0.23861223285798197
+          },
+          {
+            "position": [
+              0.07041200315472064,
+              0.75,
+              -0.4430064372420987
+            ],
+            "radius": 0.17895917464348648
+          },
+          {
+            "position": [
+              0.1,
+              1.15,
+              -0.55
+            ],
+            "radius": 0.09942176369082582
+          }
+        ],
+        "targetVolume": 0.2830533092982356,
+        "volumeAuthority": "synthetic-known-feasible-target"
+      }
+    ],
+    "metrics": {
+      "pairwisePenetration": 1.752e-9,
+      "skeletalPenetration": 5.14e-10,
+      "compartmentEscape": 0,
+      "endpointDrift": 0,
+      "maximumRelativeVolumeError": 0,
+      "maximumBendEnergy": 0.062605001556,
+      "maximumSourceKnotDisplacement": 0.257355340692,
+      "rootMeanSquareSourceKnotDisplacement": 0.094216323985,
+      "minimumSourceBendEnergyRetention": 0.530683499427,
+      "minimumSourceCurvatureCosine": 0.658974318257,
+      "sourceCurvatureReversalCount": 0,
+      "minimumSourceTangentCosine": 0.928488721206,
+      "sourceTangentReversalCount": 0,
+      "maximumSourceRadiusRatio": 1.010468177865,
+      "minimumPairwiseRelationCosine": 0.931846805553,
+      "pairwiseRelationReversalCount": 0,
+      "nonFiniteValueCount": 0,
+      "nonPositiveRadiusCount": 0
+    },
+    "belt": {
+      "sample": "paired-carrier-knots-2-and-3",
+      "pairs": [
+        {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0.00002844973,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.243852432586,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.006648549259,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.127868655477,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.242431245173,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      ],
+      "byPair": {
+        "rosette-west|rosette-center": {
+          "key": "rosette-west|rosette-center",
+          "members": [
+            "rosette-west",
+            "rosette-center"
+          ],
+          "signedGap": 0.00002844973,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        "rosette-west|rosette-east": {
+          "key": "rosette-west|rosette-east",
+          "members": [
+            "rosette-west",
+            "rosette-east"
+          ],
+          "signedGap": 0.243852432586,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-north": {
+          "key": "rosette-west|rosette-north",
+          "members": [
+            "rosette-west",
+            "rosette-north"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-west|rosette-south": {
+          "key": "rosette-west|rosette-south",
+          "members": [
+            "rosette-west",
+            "rosette-south"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        "rosette-center|rosette-east": {
+          "key": "rosette-center|rosette-east",
+          "members": [
+            "rosette-center",
+            "rosette-east"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-center|rosette-north": {
+          "key": "rosette-center|rosette-north",
+          "members": [
+            "rosette-center",
+            "rosette-north"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        "rosette-center|rosette-south": {
+          "key": "rosette-center|rosette-south",
+          "members": [
+            "rosette-center",
+            "rosette-south"
+          ],
+          "signedGap": 0,
+          "penetration": 0,
+          "controllingKnotIndex": 3
+        },
+        "rosette-east|rosette-north": {
+          "key": "rosette-east|rosette-north",
+          "members": [
+            "rosette-east",
+            "rosette-north"
+          ],
+          "signedGap": 0.006648549259,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-east|rosette-south": {
+          "key": "rosette-east|rosette-south",
+          "members": [
+            "rosette-east",
+            "rosette-south"
+          ],
+          "signedGap": 0.127868655477,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        },
+        "rosette-north|rosette-south": {
+          "key": "rosette-north|rosette-south",
+          "members": [
+            "rosette-north",
+            "rosette-south"
+          ],
+          "signedGap": 0.242431245173,
+          "penetration": 0,
+          "controllingKnotIndex": 2
+        }
+      },
+      "totalPenetration": 0,
+      "maximumPenetration": 0
+    },
+    "deformationEnergy": 0.05326029423114,
+    "physicalViolationSquared": 0,
+    "maximumPhysicalResidual": 1.752e-9,
+    "physicalStateSha256": "7170d916d90e0730ea89d78d375094a603a722f733814c8cde16929cca639674"
+  },
+  "stationarity": {
+    "kind": "finite-difference-active-constraint-kkt",
+    "objective": "minimum-squared-translation-from-crowded-state",
+    "constraint": "nonnegative-pair-skeletal-and-compartment-clearance",
+    "finiteDifferenceStep": 0.000001,
+    "activeConstraintThreshold": 0.00005,
+    "activeConstraintCount": 8,
+    "activeConstraints": [
+      {
+        "constraintKey": "pair:rosette-west|rosette-center",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-west|rosette-center",
+        "signedGap": -3.26e-13,
+        "multiplier": 0.32655299043
+      },
+      {
+        "constraintKey": "pair:rosette-west|rosette-north",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-west|rosette-north",
+        "signedGap": -5.1e-14,
+        "multiplier": 0.051452385228
+      },
+      {
+        "constraintKey": "pair:rosette-west|rosette-south",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-west|rosette-south",
+        "signedGap": -3e-14,
+        "multiplier": 0.030145221072
+      },
+      {
+        "constraintKey": "pair:rosette-center|rosette-east",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-center|rosette-east",
+        "signedGap": -2.78e-13,
+        "multiplier": 0.28417509176
+      },
+      {
+        "constraintKey": "pair:rosette-center|rosette-north",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-center|rosette-north",
+        "signedGap": -4.9e-14,
+        "multiplier": 0.049579440492
+      },
+      {
+        "constraintKey": "pair:rosette-center|rosette-south",
+        "kind": "pairwise-clearance",
+        "pairKey": "rosette-center|rosette-south",
+        "signedGap": -1.04e-13,
+        "multiplier": 0.104099310982
+      },
+      {
+        "constraintKey": "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+        "kind": "skeletal-clearance",
+        "pairKey": null,
+        "signedGap": -1.46e-13,
+        "multiplier": 0.14597918366
+      },
+      {
+        "constraintKey": "skeletal:rosette-west:3:frustrated-west-bypass-bone",
+        "kind": "skeletal-clearance",
+        "pairKey": null,
+        "signedGap": -1.46e-13,
+        "multiplier": 0.145995531315
+      }
+    ],
+    "projectedGradientInfinityNorm": 4.8901e-8,
+    "rawObjectiveGradientInfinityNorm": 0.264459398854
+  },
+  "stationarityRefinement": {
+    "kind": "iterated-active-gap-tangent-projection",
+    "finiteDifferenceStep": 0.000001,
+    "activeConstraintThreshold": 0.0005,
+    "convergenceTolerance": 5e-8,
+    "cycleDetection": "canonical-vector-key-fail-loud",
+    "iterations": 224,
+    "rows": [
+      {
+        "iteration": 1,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.03125,
+        "maximumUpdate": 0.00625077245442,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 2,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.015625,
+        "maximumUpdate": 0.003085677549075,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 3,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.0078125,
+        "maximumUpdate": 0.001532021611667,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 4,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.001953125,
+        "maximumUpdate": 0.000381601349143,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 5,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.0625,
+        "maximumUpdate": 0.004867887311177,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 6,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.038663405501811,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 7,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north"
+        ],
+        "acceptedLineScale": 0.00390625,
+        "maximumUpdate": 0.000719656898299,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 8,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north"
+        ],
+        "acceptedLineScale": 0.001953125,
+        "maximumUpdate": 0.000322061044031,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 9,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north"
+        ],
+        "acceptedLineScale": 0.00390625,
+        "maximumUpdate": 0.000385495959927,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 10,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.5,
+        "maximumUpdate": 0.006873686987372,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 11,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.125,
+        "maximumUpdate": 0.001415407329003,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 12,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.0625,
+        "maximumUpdate": 0.000695498024915,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 13,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.03125,
+        "maximumUpdate": 0.000346767025598,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 14,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.007539504969974,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 15,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.006245872222294,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 16,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.005940355142067,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 17,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.005881544127696,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 18,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.005977560309604,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 19,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.006216642778157,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 20,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.006601737771048,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 21,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.007141487726811,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 22,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.007844969874395,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 23,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.008712818175033,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 24,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "pair:rosette-east|rosette-north",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.009675867096378,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 25,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.011166570194592,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 26,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.012858138405827,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 27,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.014279724227812,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 28,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.125,
+        "maximumUpdate": 0.001851657289865,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 29,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0.0625,
+        "maximumUpdate": 0.000924440212955,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 30,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.008973860950697,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 31,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.006384494850314,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 32,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.004642664033183,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 33,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.003386605401257,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 34,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.002470387549902,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 35,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.001801818501993,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 36,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00131472694778,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 37,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000974025224462,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 38,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000855267599664,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 39,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000762762491014,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 40,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000689669218686,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 41,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000630920286231,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 42,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000582790556173,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 43,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000542554478628,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 44,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000508224173598,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 45,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000478352790766,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 46,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000451888373574,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 47,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000428066062501,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 48,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000406329236766,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 49,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000386271968201,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 50,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000367597068145,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 51,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000350085937919,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 52,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000333576394476,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 53,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000317947069123,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 54,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000303105791982,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 55,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000288981520291,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 56,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000275518346113,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 57,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000262671258929,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 58,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000250403175564,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 59,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000238682714593,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 60,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000227482646235,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 61,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000216778792354,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 62,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000206549273652,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 63,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000196773922209,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 64,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000187433889424,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 65,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000178511393295,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 66,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000169989502364,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 67,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000161852012625,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 68,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000154083327098,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 69,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000146668469145,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 70,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000139592939125,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 71,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000132842751067,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 72,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000126404364326,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 73,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000120264705295,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 74,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000114411142465,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 75,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000108831458032,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 76,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000103513921188,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 77,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00009844706089,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 78,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000093620009553,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 79,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000089022158466,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 80,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000084643363064,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 81,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000080473811918,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 82,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000076504095768,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 83,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000072725185379,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 84,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000069128408847,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 85,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000065705397174,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 86,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000062448139072,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 87,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000059349018932,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 88,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000056400636771,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 89,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00005359600474,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 90,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000050928340859,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 91,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000048391186622,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 92,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000045978450863,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 93,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000043684152095,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 94,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000041502683947,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 95,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000039428656662,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 96,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000037456944183,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 97,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000035582597297,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 98,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000033800947111,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 99,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000032107509318,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 100,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000030498024928,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 101,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000028968421379,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 102,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000027514752652,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 103,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000026133417863,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 104,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000024820826306,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 105,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000023573611574,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 106,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000022388627241,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 107,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000021262724355,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 108,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000020193052326,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 109,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000019176861223,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 110,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000018211471811,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 111,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000017294403914,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 112,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000016423232995,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 113,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00001559573772,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 114,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000014809707176,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 115,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000014063103184,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 116,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000013353966463,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 117,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000012680424958,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 118,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000012040736703,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 119,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000011433158936,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 120,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000010856161679,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 121,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000010308152005,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 122,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000009787717484,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 123,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000009293503925,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 124,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000008824146516,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 125,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00000837841361,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 126,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000007955139707,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 127,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.0000075531917,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 128,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000007171526998,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 129,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000006809088418,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 130,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000006464931151,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 131,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000006138119761,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 132,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000005827794816,
+        "maximumPenetration": 0
+      },
+      {
+        "iteration": 133,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000005533141071,
+        "maximumPenetration": 1.4e-14
+      },
+      {
+        "iteration": 134,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000005253362129,
+        "maximumPenetration": 2.7e-14
+      },
+      {
+        "iteration": 135,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000004987689121,
+        "maximumPenetration": 3.9e-14
+      },
+      {
+        "iteration": 136,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000004735449578,
+        "maximumPenetration": 5e-14
+      },
+      {
+        "iteration": 137,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000004495940208,
+        "maximumPenetration": 5.9e-14
+      },
+      {
+        "iteration": 138,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000004268506713,
+        "maximumPenetration": 6.8e-14
+      },
+      {
+        "iteration": 139,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000004052599203,
+        "maximumPenetration": 7.6e-14
+      },
+      {
+        "iteration": 140,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000003847569763,
+        "maximumPenetration": 8.2e-14
+      },
+      {
+        "iteration": 141,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000003652899024,
+        "maximumPenetration": 8.9e-14
+      },
+      {
+        "iteration": 142,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000003468076703,
+        "maximumPenetration": 9.4e-14
+      },
+      {
+        "iteration": 143,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00000329259541,
+        "maximumPenetration": 9.9e-14
+      },
+      {
+        "iteration": 144,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000003125982344,
+        "maximumPenetration": 1.04e-13
+      },
+      {
+        "iteration": 145,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002967792226,
+        "maximumPenetration": 1.08e-13
+      },
+      {
+        "iteration": 146,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002817602853,
+        "maximumPenetration": 1.12e-13
+      },
+      {
+        "iteration": 147,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002675003052,
+        "maximumPenetration": 1.15e-13
+      },
+      {
+        "iteration": 148,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002539605958,
+        "maximumPenetration": 1.18e-13
+      },
+      {
+        "iteration": 149,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002411055161,
+        "maximumPenetration": 1.21e-13
+      },
+      {
+        "iteration": 150,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002289022887,
+        "maximumPenetration": 1.23e-13
+      },
+      {
+        "iteration": 151,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000002173156908,
+        "maximumPenetration": 1.26e-13
+      },
+      {
+        "iteration": 152,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00000206314229,
+        "maximumPenetration": 1.27e-13
+      },
+      {
+        "iteration": 153,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001958724391,
+        "maximumPenetration": 1.29e-13
+      },
+      {
+        "iteration": 154,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001859556133,
+        "maximumPenetration": 1.31e-13
+      },
+      {
+        "iteration": 155,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001765401734,
+        "maximumPenetration": 1.33e-13
+      },
+      {
+        "iteration": 156,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001676040051,
+        "maximumPenetration": 1.34e-13
+      },
+      {
+        "iteration": 157,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001591179699,
+        "maximumPenetration": 1.35e-13
+      },
+      {
+        "iteration": 158,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001510606152,
+        "maximumPenetration": 1.36e-13
+      },
+      {
+        "iteration": 159,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001434115475,
+        "maximumPenetration": 1.37e-13
+      },
+      {
+        "iteration": 160,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001361527715,
+        "maximumPenetration": 1.44e-13
+      },
+      {
+        "iteration": 161,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.00000129257414,
+        "maximumPenetration": 1.62e-13
+      },
+      {
+        "iteration": 162,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001227136585,
+        "maximumPenetration": 1.78e-13
+      },
+      {
+        "iteration": 163,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001164992748,
+        "maximumPenetration": 1.93e-13
+      },
+      {
+        "iteration": 164,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001105993259,
+        "maximumPenetration": 2.05e-13
+      },
+      {
+        "iteration": 165,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 0.000001049996011,
+        "maximumPenetration": 2.17e-13
+      },
+      {
+        "iteration": 166,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 9.96820828e-7,
+        "maximumPenetration": 2.28e-13
+      },
+      {
+        "iteration": 167,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 9.46351415e-7,
+        "maximumPenetration": 2.39e-13
+      },
+      {
+        "iteration": 168,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 8.98399828e-7,
+        "maximumPenetration": 2.47e-13
+      },
+      {
+        "iteration": 169,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 8.52928695e-7,
+        "maximumPenetration": 2.55e-13
+      },
+      {
+        "iteration": 170,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 8.09715486e-7,
+        "maximumPenetration": 2.62e-13
+      },
+      {
+        "iteration": 171,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 7.68708712e-7,
+        "maximumPenetration": 2.68e-13
+      },
+      {
+        "iteration": 172,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 7.2981006e-7,
+        "maximumPenetration": 2.74e-13
+      },
+      {
+        "iteration": 173,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.92821709e-7,
+        "maximumPenetration": 2.79e-13
+      },
+      {
+        "iteration": 174,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.57725263e-7,
+        "maximumPenetration": 2.83e-13
+      },
+      {
+        "iteration": 175,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.2443558e-7,
+        "maximumPenetration": 2.89e-13
+      },
+      {
+        "iteration": 176,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.92796478e-7,
+        "maximumPenetration": 2.92e-13
+      },
+      {
+        "iteration": 177,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.62779901e-7,
+        "maximumPenetration": 2.95e-13
+      },
+      {
+        "iteration": 178,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.34271997e-7,
+        "maximumPenetration": 2.99e-13
+      },
+      {
+        "iteration": 179,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.07215895e-7,
+        "maximumPenetration": 3.01e-13
+      },
+      {
+        "iteration": 180,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 4.81525529e-7,
+        "maximumPenetration": 3.03e-13
+      },
+      {
+        "iteration": 181,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 4.57140089e-7,
+        "maximumPenetration": 3.05e-13
+      },
+      {
+        "iteration": 182,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 4.33986443e-7,
+        "maximumPenetration": 3.08e-13
+      },
+      {
+        "iteration": 183,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 4.12008032e-7,
+        "maximumPenetration": 3.1e-13
+      },
+      {
+        "iteration": 184,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.91142118e-7,
+        "maximumPenetration": 3.12e-13
+      },
+      {
+        "iteration": 185,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.71330591e-7,
+        "maximumPenetration": 3.13e-13
+      },
+      {
+        "iteration": 186,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.52508188e-7,
+        "maximumPenetration": 3.14e-13
+      },
+      {
+        "iteration": 187,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.34655345e-7,
+        "maximumPenetration": 3.15e-13
+      },
+      {
+        "iteration": 188,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.17713798e-7,
+        "maximumPenetration": 3.17e-13
+      },
+      {
+        "iteration": 189,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 3.0159935e-7,
+        "maximumPenetration": 3.17e-13
+      },
+      {
+        "iteration": 190,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.86332475e-7,
+        "maximumPenetration": 3.18e-13
+      },
+      {
+        "iteration": 191,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.71834231e-7,
+        "maximumPenetration": 3.19e-13
+      },
+      {
+        "iteration": 192,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.58061012e-7,
+        "maximumPenetration": 3.2e-13
+      },
+      {
+        "iteration": 193,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.44996569e-7,
+        "maximumPenetration": 3.2e-13
+      },
+      {
+        "iteration": 194,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.3257466e-7,
+        "maximumPenetration": 3.2e-13
+      },
+      {
+        "iteration": 195,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.20812123e-7,
+        "maximumPenetration": 3.22e-13
+      },
+      {
+        "iteration": 196,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 2.09613103e-7,
+        "maximumPenetration": 3.22e-13
+      },
+      {
+        "iteration": 197,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.9901232e-7,
+        "maximumPenetration": 3.22e-13
+      },
+      {
+        "iteration": 198,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.88913968e-7,
+        "maximumPenetration": 3.23e-13
+      },
+      {
+        "iteration": 199,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.7934904e-7,
+        "maximumPenetration": 3.23e-13
+      },
+      {
+        "iteration": 200,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.70257577e-7,
+        "maximumPenetration": 3.24e-13
+      },
+      {
+        "iteration": 201,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.61653679e-7,
+        "maximumPenetration": 3.24e-13
+      },
+      {
+        "iteration": 202,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.53466198e-7,
+        "maximumPenetration": 3.24e-13
+      },
+      {
+        "iteration": 203,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.45670931e-7,
+        "maximumPenetration": 3.25e-13
+      },
+      {
+        "iteration": 204,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.38315525e-7,
+        "maximumPenetration": 3.24e-13
+      },
+      {
+        "iteration": 205,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.3129366e-7,
+        "maximumPenetration": 3.25e-13
+      },
+      {
+        "iteration": 206,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.24652346e-7,
+        "maximumPenetration": 3.25e-13
+      },
+      {
+        "iteration": 207,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.1832526e-7,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 208,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.12347836e-7,
+        "maximumPenetration": 3.25e-13
+      },
+      {
+        "iteration": 209,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.06625427e-7,
+        "maximumPenetration": 3.25e-13
+      },
+      {
+        "iteration": 210,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 1.01245493e-7,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 211,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 9.6125433e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 212,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 9.1262534e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 213,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 8.6618384e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 214,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 8.2237489e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 215,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 7.8077712e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 216,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 7.4107063e-8,
+        "maximumPenetration": 3.27e-13
+      },
+      {
+        "iteration": 217,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 7.0376812e-8,
+        "maximumPenetration": 3.27e-13
+      },
+      {
+        "iteration": 218,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.6800192e-8,
+        "maximumPenetration": 3.27e-13
+      },
+      {
+        "iteration": 219,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.3417127e-8,
+        "maximumPenetration": 3.27e-13
+      },
+      {
+        "iteration": 220,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 6.0200281e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 221,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.7155366e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 222,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.4259578e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 223,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 1,
+        "maximumUpdate": 5.1504123e-8,
+        "maximumPenetration": 3.26e-13
+      },
+      {
+        "iteration": 224,
+        "activeConstraintKeys": [
+          "pair:rosette-west|rosette-center",
+          "pair:rosette-west|rosette-north",
+          "pair:rosette-west|rosette-south",
+          "pair:rosette-center|rosette-east",
+          "pair:rosette-center|rosette-north",
+          "pair:rosette-center|rosette-south",
+          "skeletal:rosette-west:2:frustrated-west-bypass-bone",
+          "skeletal:rosette-west:3:frustrated-west-bypass-bone"
+        ],
+        "acceptedLineScale": 0,
+        "maximumUpdate": 4.8901053e-8,
+        "maximumPenetration": 3.26e-13
+      }
+    ]
+  },
+  "distantResponse": {
+    "driverMuscleId": "rosette-west",
+    "rows": [
+      {
+        "muscleId": "rosette-west",
+        "maximumDisplacement": 0.07741307336,
+        "rootMeanSquareDisplacement": 0.052541487417
+      },
+      {
+        "muscleId": "rosette-center",
+        "maximumDisplacement": 0.069781145256,
+        "rootMeanSquareDisplacement": 0.047361576104
+      },
+      {
+        "muscleId": "rosette-east",
+        "maximumDisplacement": 0.257355340692,
+        "rootMeanSquareDisplacement": 0.174671173844
+      },
+      {
+        "muscleId": "rosette-north",
+        "maximumDisplacement": 0.081647896382,
+        "rootMeanSquareDisplacement": 0.055415729336
+      },
+      {
+        "muscleId": "rosette-south",
+        "maximumDisplacement": 0.112198194562,
+        "rootMeanSquareDisplacement": 0.076150703904
+      }
+    ],
+    "movedMemberCount": 5,
+    "maximumNonDriverDisplacement": 0.257355340692
+  },
+  "multistart": {
+    "declaredStartFamily": [
+      "crowded-zero",
+      "known-feasible-continuation",
+      "balanced-radial-relief"
+    ],
+    "admissibleCount": 3,
+    "rows": [
+      {
+        "startName": "crowded-zero",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 2341,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 9.83e-10,
+        "deformationEnergy": 0.065052715934233,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "25da91ffd917b851b0d8d60df5ff3fc4ca8fddcea7a4406ffe425aaf0f4c350e",
+        "stationarityRefinement": {
+          "status": "selected-for-post-multistart-refinement"
+        },
+        "continuation": [
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 22,
+                "augmentedObjective": 5412264.19976151,
+                "deformationEnergy": 0.072,
+                "maximumPhysicalResidual": 0.007356809177736
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 7,
+                "augmentedObjective": 0.06835,
+                "deformationEnergy": 0.06835,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 5,
+                "augmentedObjective": 0.066378125,
+                "deformationEnergy": 0.066378125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.0654271484375,
+                "deformationEnergy": 0.0654271484375,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 12,
+                "augmentedObjective": 0.065134252929687,
+                "deformationEnergy": 0.065134252929687,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.065070320129395,
+                "deformationEnergy": 0.065070320129395,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.06505877494812,
+                "deformationEnergy": 0.06505877494812,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 13,
+                "augmentedObjective": 0.065053951236606,
+                "deformationEnergy": 0.065053951236606,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.065052919011004,
+                "deformationEnergy": 0.065052919011004,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.065052745889969,
+                "deformationEnergy": 0.065052723853475,
+                "maximumPhysicalResidual": 4.6943e-10
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.065052737970727,
+                "deformationEnergy": 0.065052715934233,
+                "maximumPhysicalResidual": 4.6943e-10
+              }
+            ],
+            "augmentedObjective": 0.065052737970727,
+            "deformationEnergy": 0.065052715934233,
+            "maximumPhysicalResidual": 4.6943e-10,
+            "vector": [
+              -0.12,
+              0.178799743652342,
+              0,
+              0,
+              0.202691345214842,
+              0,
+              0.09,
+              0.154201354980466,
+              0,
+              -0.103799057006837
+            ]
+          }
+        ]
+      },
+      {
+        "startName": "known-feasible-continuation",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 2148,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 0,
+        "deformationEnergy": 0.102381594037191,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "022829ad7bd1047b8046d3718b0ae73ac41060c1a91f35c9325548df9b084036",
+        "stationarityRefinement": {
+          "status": "not-run-after-global-selection"
+        },
+        "continuation": [
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.1125,
+                "deformationEnergy": 0.1125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 5,
+                "augmentedObjective": 0.10815,
+                "deformationEnergy": 0.10815,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.103153125,
+                "deformationEnergy": 0.103153125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 6,
+                "augmentedObjective": 0.10270390625,
+                "deformationEnergy": 0.10270390625,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.102468530273438,
+                "deformationEnergy": 0.102468530273438,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.102403244018555,
+                "deformationEnergy": 0.102403244018555,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.102386512041092,
+                "deformationEnergy": 0.102386512041092,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.102383094412088,
+                "deformationEnergy": 0.102383094412088,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 13,
+                "augmentedObjective": 0.102381858166865,
+                "deformationEnergy": 0.102381858166865,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 7,
+                "augmentedObjective": 0.10238165775804,
+                "deformationEnergy": 0.10238165775804,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 5,
+                "augmentedObjective": 0.102381594037191,
+                "deformationEnergy": 0.102381594037191,
+                "maximumPhysicalResidual": 0
+              }
+            ],
+            "augmentedObjective": 0.102381594037191,
+            "deformationEnergy": 0.102381594037191,
+            "maximumPhysicalResidual": 0,
+            "vector": [
+              -0.18,
+              0.271614761352538,
+              0,
+              0,
+              0.2,
+              0.042695846557616,
+              0.05,
+              0.208545989990231,
+              0,
+              -0.103799057006837
+            ]
+          }
+        ]
+      },
+      {
+        "startName": "balanced-radial-relief",
+        "completed": true,
+        "fallbackUsed": false,
+        "evaluationCount": 2321,
+        "status": "physically-admissible",
+        "maximumPhysicalResidual": 9.83e-10,
+        "deformationEnergy": 0.065052715934233,
+        "physicalViolationSquared": 0,
+        "physicalStateSha256": "25da91ffd917b851b0d8d60df5ff3fc4ca8fddcea7a4406ffe425aaf0f4c350e",
+        "stationarityRefinement": {
+          "status": "not-run-after-global-selection"
+        },
+        "continuation": [
+          {
+            "penalty": 100000000000,
+            "steps": [
+              {
+                "step": 0.04,
+                "acceptedMoves": 18,
+                "augmentedObjective": 5412264.19987401,
+                "deformationEnergy": 0.0721125,
+                "maximumPhysicalResidual": 0.007356809177736
+              },
+              {
+                "step": 0.01,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.0683625,
+                "deformationEnergy": 0.0683625,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0025,
+                "acceptedMoves": 7,
+                "augmentedObjective": 0.066378125,
+                "deformationEnergy": 0.066378125,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000625,
+                "acceptedMoves": 9,
+                "augmentedObjective": 0.0654271484375,
+                "deformationEnergy": 0.0654271484375,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00015625,
+                "acceptedMoves": 12,
+                "augmentedObjective": 0.065134252929687,
+                "deformationEnergy": 0.065134252929687,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.0000390625,
+                "acceptedMoves": 10,
+                "augmentedObjective": 0.065070320129395,
+                "deformationEnergy": 0.065070320129395,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.000009765625,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.06505877494812,
+                "deformationEnergy": 0.06505877494812,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 0.00000244140625,
+                "acceptedMoves": 13,
+                "augmentedObjective": 0.065053951236606,
+                "deformationEnergy": 0.065053951236606,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 6.103515625e-7,
+                "acceptedMoves": 11,
+                "augmentedObjective": 0.065052919011004,
+                "deformationEnergy": 0.065052919011004,
+                "maximumPhysicalResidual": 0
+              },
+              {
+                "step": 1.52587890625e-7,
+                "acceptedMoves": 8,
+                "augmentedObjective": 0.065052745889969,
+                "deformationEnergy": 0.065052723853475,
+                "maximumPhysicalResidual": 4.6943e-10
+              },
+              {
+                "step": 7.62939453125e-8,
+                "acceptedMoves": 1,
+                "augmentedObjective": 0.065052737970727,
+                "deformationEnergy": 0.065052715934233,
+                "maximumPhysicalResidual": 4.6943e-10
+              }
+            ],
+            "augmentedObjective": 0.065052737970727,
+            "deformationEnergy": 0.065052715934233,
+            "maximumPhysicalResidual": 4.6943e-10,
+            "vector": [
+              -0.12,
+              0.178799743652342,
+              0,
+              0,
+              0.202691345214842,
+              0,
+              0.09,
+              0.154201354980466,
+              0,
+              -0.103799057006837
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "invariance": {
+    "candidateEnumeration": "passed",
+    "mechanism": "paired-full-solve-artifact-comparison",
+    "rows": [
+      {
+        "requestedConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "canonical",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.01,
+            0.0025,
+            0.000625,
+            0.00015625,
+            0.0000390625,
+            0.000009765625,
+            0.00000244140625,
+            6.103515625e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "effectiveConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "canonical",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.01,
+            0.0025,
+            0.000625,
+            0.00015625,
+            0.0000390625,
+            0.000009765625,
+            0.00000244140625,
+            6.103515625e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "fallbackUsed": false,
+        "status": "converged-joint-reference",
+        "selectedVector": [
+          -0.07884804760981,
+          -0.020210006136429,
+          0.07052481707098,
+          -0.020241924704272,
+          0.264459398853719,
+          0.057317291375321,
+          0.028264934654142,
+          0.081063313575191,
+          -0.000338106867909,
+          -0.117971678703053
+        ],
+        "selectedPhysicalStateSha256": "7170d916d90e0730ea89d78d375094a603a722f733814c8cde16929cca639674",
+        "selectedMetricsSha256": "4ff4469aac7c2f30732e505a19b66c6d6ce9f5a4fc6becb4395a07c3b04183f5",
+        "selectedBeltSha256": "35f56cd234c7a28e81cad161148359035d7a29668107a3800bac3f67f265f1c4"
+      },
+      {
+        "requestedConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "reverse",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.01,
+            0.0025,
+            0.000625,
+            0.00015625,
+            0.0000390625,
+            0.000009765625,
+            0.00000244140625,
+            6.103515625e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "effectiveConfig": {
+          "algorithm": "synchronous-global-pattern-search-augmented-continuation-v0",
+          "candidateEnumeration": "reverse",
+          "hardTolerance": 1e-7,
+          "penaltySchedule": [
+            100000000000
+          ],
+          "startFamily": [
+            "crowded-zero",
+            "known-feasible-continuation",
+            "balanced-radial-relief"
+          ],
+          "stepSchedule": [
+            0.04,
+            0.01,
+            0.0025,
+            0.000625,
+            0.00015625,
+            0.0000390625,
+            0.000009765625,
+            0.00000244140625,
+            6.103515625e-7,
+            1.52587890625e-7,
+            7.62939453125e-8
+          ],
+          "translationBounds": [
+            -0.3,
+            0.3
+          ],
+          "translationBasis": "per-member-xz-sine-zero-at-attachments"
+        },
+        "fallbackUsed": false,
+        "status": "converged-joint-reference",
+        "selectedVector": [
+          -0.07884804760981,
+          -0.020210006136429,
+          0.07052481707098,
+          -0.020241924704272,
+          0.264459398853719,
+          0.057317291375321,
+          0.028264934654142,
+          0.081063313575191,
+          -0.000338106867909,
+          -0.117971678703053
+        ],
+        "selectedPhysicalStateSha256": "7170d916d90e0730ea89d78d375094a603a722f733814c8cde16929cca639674",
+        "selectedMetricsSha256": "4ff4469aac7c2f30732e505a19b66c6d6ce9f5a4fc6becb4395a07c3b04183f5",
+        "selectedBeltSha256": "35f56cd234c7a28e81cad161148359035d7a29668107a3800bac3f67f265f1c4"
+      }
+    ],
+    "comparison": {
+      "selectedVectorEqual": true,
+      "selectedPhysicalStateEqual": true,
+      "selectedMetricsEqual": true,
+      "selectedBeltEqual": true
+    },
+    "labelPermutation": "not-yet-assayed"
+  },
+  "identity": {
+    "sha256": "2368f263135cd86a175366ce0682f53c321edbd496efe1d0948738792114fd24"
+  }
+}

@@ -76,12 +76,14 @@ export function renderNBodyPackingAssayHtml({
   report,
   jointReference = null,
   sparseGlobalCandidate = null,
+  mixedFieldCandidates = [],
 }) {
   const payload = JSON.stringify({
     fixture,
     result,
     jointReference,
     sparseGlobalCandidate,
+    mixedFieldCandidates,
     route:report.route,
   });
   const states = [
@@ -89,6 +91,7 @@ export function renderNBodyPackingAssayHtml({
     ['crowded', 'Crowded input'],
     ['sequential-counterfeit', 'Local counterfeit'],
     ...(sparseGlobalCandidate ? [['sparse-global-candidate', 'Sparse global candidate']] : []),
+    ...mixedFieldCandidates.map(candidate => [candidate.stateKey, candidate.label]),
     ...(jointReference ? [['joint-reference', 'Joint reference']] : []),
   ];
   const stateButtons = states.map(([state, label]) =>
@@ -125,6 +128,16 @@ export function renderNBodyPackingAssayHtml({
       <span>traversal invariance</span><span class="value known">${escapeHtml(sparseGlobalCandidate.invariance.candidateEnumeration)}</span>
     </div>
     <p class="candidate-truth${sparseCandidateRejected ? ' candidate-rejected' : ''}">${sparseCandidateRejected ? 'Rejected: the contact-only global update relieves some muscle overlap by entering the skeletal obstacle, then stalls with both debts live. The displayed state is last trustworthy failure evidence, not a packed result.' : 'Scalable candidate evidence: one assembled snapshot and one simultaneous graph update per iteration. Pairwise closure authority is disabled; visual cleanliness does not substitute for oracle comparison or authenticated anatomy.'}</p>` : '';
+  const mixedFieldPanel = mixedFieldCandidates.length > 0 ? `
+    <div class="reference-ledger candidate-ledger candidate-rejected">
+      <span class="head">mixed-field grid falsifier</span><span class="head value">pair / bone</span>
+      ${mixedFieldCandidates.map(candidate => `
+        <span>${escapeHtml(candidate.label)}</span><span class="value counterfeit">${formatMetric(candidate.result.selected.metrics.pairwisePenetration)} / ${formatMetric(candidate.result.selected.metrics.skeletalPenetration)}</span>
+      `).join('')}
+      <span>field law</span><span class="value">identity occupancy + aggregate pressure + sharp traction</span>
+      <span>grid disposition</span><span class="value counterfeit">stable failed class</span>
+    </div>
+    <p class="candidate-truth candidate-rejected">Rejected bounded field formulation: all three order-two quadrature grids move the formation and preserve bone/compartment feasibility, but each stalls with unresolved contact. These are last trustworthy failed states, not packed results.</p>` : '';
   const colors = ['#ff7b72', '#f2cc60', '#56d4dd', '#a98cff', '#69a7ff'];
   const legend = fixture.contactGraph.members.map((id, index) =>
     `<span><i class="swatch" style="background:${colors[index]}"></i>${escapeHtml(id.replace('rosette-', ''))}</span>`,
@@ -146,8 +159,8 @@ export function renderNBodyPackingAssayHtml({
     .authority { margin:0 0 7px; color:#e5b77d; font:700 10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.07em; text-transform:uppercase; }
     .status { margin:0 0 8px; color:#ff8f8f; font:700 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
     .explanation { margin:0 0 11px; color:#afbbc8; font-size:10px; line-height:1.4; }
-    .button-row { display:flex; gap:7px; margin:8px 0; }
-    button { flex:1; min-width:0; padding:8px 7px; border:1px solid #ffffff24; border-radius:8px; color:#dce6f0; background:#111923; cursor:pointer; font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .button-row { display:flex; flex-wrap:wrap; gap:7px; margin:8px 0; }
+    button { flex:1 1 104px; min-width:0; padding:8px 7px; border:1px solid #ffffff24; border-radius:8px; color:#dce6f0; background:#111923; cursor:pointer; font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
     button[aria-pressed="true"] { color:#071016; background:#e7d1a8; border-color:#fff1d0; }
     .mode button[aria-pressed="true"] { background:#9fd7f1; border-color:#d6f3ff; }
     .metrics { display:grid; grid-template-columns:1.35fr repeat(3,.72fr); gap:4px 8px; margin-top:11px; font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -179,10 +192,10 @@ export function renderNBodyPackingAssayHtml({
 <body>
   <div id="viewport"></div>
   <section class="panel" aria-label="N-body packing assay controls and evidence">
-    <h1>${sparseCandidateRejected ? 'Five-body contact-only failure assay' : sparseGlobalCandidate ? 'Five-body scalable candidate assay' : jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
+    <h1>${mixedFieldCandidates.length ? 'Five-body mixed-field failure assay' : sparseCandidateRejected ? 'Five-body contact-only failure assay' : sparseGlobalCandidate ? 'Five-body scalable candidate assay' : jointReference ? 'Five-body joint reference' : 'Five-body global-debt falsifier'}</h1>
     <p class="authority">Synthetic known-feasible assay · no anatomical admission</p>
-    <p class="status">${escapeHtml(sparseGlobalCandidate?.status || jointReference?.status || result.status)}</p>
-    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${sparseCandidateRejected ? 'The contact-only candidate is shown at its last trustworthy stalled state; the joint reference demonstrates that the same crowded input is jointly satisfiable when bone clearance participates in the solve.' : sparseGlobalCandidate ? 'The sparse global candidate updates every active graph contact from one assembled snapshot; the joint reference remains the bounded oracle, not a target coordinate source.' : jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
+    <p class="status">${escapeHtml(mixedFieldCandidates[0]?.result.status || sparseGlobalCandidate?.status || jointReference?.status || result.status)}</p>
+    <p class="explanation">The packed witness is manufactured first; the crowded input is derived from it. The local counterfeit relieves west→center while exporting pressure into center→east. ${mixedFieldCandidates.length ? 'The mixed-field buttons expose baseline, half-cell-shifted, and refined order-two quadrature results. All are failed candidates; compare them directly with the contact-only failure and jointly feasible reference.' : sparseCandidateRejected ? 'The contact-only candidate is shown at its last trustworthy stalled state; the joint reference demonstrates that the same crowded input is jointly satisfiable when bone clearance participates in the solve.' : sparseGlobalCandidate ? 'The sparse global candidate updates every active graph contact from one assembled snapshot; the joint reference remains the bounded oracle, not a target coordinate source.' : jointReference ? 'The joint reference then resolves the shared contact state under one global objective and independent final admission.' : 'Aggregate improvement is deliberately insufficient.'}</p>
     <div class="button-row">${stateButtons}</div>
     <div class="button-row mode">
       <button data-mode="volume">Volumetric context</button>
@@ -203,6 +216,7 @@ export function renderNBodyPackingAssayHtml({
     </div>
     <p class="truth">Rejected: distal pressure debt survives despite locally and globally lower aggregate overlap. Red slice markers are measured belt-plane interpenetrations, not decorative contact hints.</p>
     ${candidatePanel}
+    ${mixedFieldPanel}
     ${referencePanel}
     <div class="legend">${legend}<span><i class="swatch" style="background:#f5f1e8"></i>attachments</span><span><i class="swatch" style="background:#cbd8e4"></i>bone</span><span><i class="swatch" style="background:#ff334f"></i>muscle overlap</span><span><i class="swatch" style="background:#ff3bd4"></i>bone penetration</span></div>
   </section>
@@ -218,6 +232,7 @@ export function renderNBodyPackingAssayHtml({
       'crowded':payload.result.states.crowded,
       'sequential-counterfeit':payload.result.states.sequentialCounterfeit,
       ...(payload.sparseGlobalCandidate?{'sparse-global-candidate':payload.sparseGlobalCandidate.selected}:{}),
+      ...Object.fromEntries(payload.mixedFieldCandidates.map(candidate=>[candidate.stateKey,candidate.result.selected])),
       ...(payload.jointReference?{'joint-reference':payload.jointReference.selected}:{}),
     };
     const viewport=document.querySelector('#viewport');
@@ -306,10 +321,17 @@ export function renderNBodyPackingAssayHtml({
     }
     function addPenetrations(group,state){
       const byId=new Map(state.muscles.map(muscle=>[muscle.id,muscle]));
-      for(const pair of state.belt.pairs){
+      const continuousPairs=state.pairwisePenetrationReceipt?.pairs;
+      const pairs=continuousPairs||state.belt?.pairs||state.muscles.flatMap((left,leftIndex)=>state.muscles.slice(leftIndex+1).map(right=>{
+        const leftBelt=beltSample(left),rightBelt=beltSample(right);
+        const gap=Math.hypot(leftBelt.position[0]-rightBelt.position[0],leftBelt.position[2]-rightBelt.position[2])-leftBelt.radius-rightBelt.radius;
+        return {members:[left.id,right.id],penetration:Math.max(0,-gap)};
+      }));
+      for(const pair of pairs){
         if(!(pair.penetration>0))continue;
-        const left=beltSample(byId.get(pair.members[0])),right=beltSample(byId.get(pair.members[1]));
-        const midpoint=[(left.position[0]+right.position[0])*.5,0,(left.position[2]+right.position[2])*.5];
+        const left=pair.leftPoint?{position:pair.leftPoint}:beltSample(byId.get(pair.members[0]));
+        const right=pair.rightPoint?{position:pair.rightPoint}:beltSample(byId.get(pair.members[1]));
+        const midpoint=left.position.map((value,axis)=>(value+right.position[axis])*.5);
         const deltaX=right.position[0]-left.position[0],deltaZ=right.position[2]-left.position[2];
         const distance=Math.hypot(deltaX,deltaZ);
         const unitX=distance>1e-12?deltaX/distance:1,unitZ=distance>1e-12?deltaZ/distance:0;
@@ -317,8 +339,8 @@ export function renderNBodyPackingAssayHtml({
         const marker=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.002,Math.min(.04,pair.penetration*.72)),20,14),new THREE.MeshBasicMaterial({color:0xff334f,depthTest:false}));
         marker.position.set(...midpoint); marker.renderOrder=10; group.add(marker);
         const connector=line([
-          [midpoint[0]-unitX*overlapHalf,0,midpoint[2]-unitZ*overlapHalf],
-          [midpoint[0]+unitX*overlapHalf,0,midpoint[2]+unitZ*overlapHalf],
+          [midpoint[0]-unitX*overlapHalf,midpoint[1],midpoint[2]-unitZ*overlapHalf],
+          [midpoint[0]+unitX*overlapHalf,midpoint[1],midpoint[2]+unitZ*overlapHalf],
         ],0xff334f,.95,false);
         connector.renderOrder=10; group.add(connector);
       }

@@ -6,13 +6,17 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { deflateSync } from 'node:zlib';
 
+import { createNBodyMixedFieldConfig } from '../nbody-packing-mixed-field.mjs';
+
 import {
   NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE,
   NBODY_PACKING_JOINT_REFERENCE_WITNESS_ROUTE,
+  NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE,
   NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE,
   admitNBodyPackingJointReferenceVisualInspection,
   writeNBodyPackingFrustratedComparisonWitness,
   writeNBodyPackingJointReferenceWitness,
+  writeNBodyPackingMixedFieldComparisonWitness,
   writeNBodyPackingSparseGlobalCandidateWitness,
 } from '../nbody-packing-joint-reference-witness.mjs';
 
@@ -28,6 +32,16 @@ const SPARSE_VISUAL_STATES = [
   'crowded',
   'sequential-counterfeit',
   'sparse-global-candidate',
+  'joint-reference',
+];
+const MIXED_FIELD_VISUAL_STATES = [
+  'known-feasible',
+  'crowded',
+  'sequential-counterfeit',
+  'sparse-global-candidate',
+  'mixed-field-baseline',
+  'mixed-field-shifted',
+  'mixed-field-refined',
   'joint-reference',
 ];
 const VISUAL_VERDICT = {
@@ -46,6 +60,11 @@ const SPARSE_VISUAL_VERDICT = {
   ...VISUAL_VERDICT,
   sparseCandidateLegible:true,
   candidateOracleDifferenceLegible:true,
+};
+const MIXED_FIELD_VISUAL_VERDICT = {
+  ...SPARSE_VISUAL_VERDICT,
+  mixedFieldFailuresLegible:true,
+  gridVariantsLegible:true,
 };
 
 function digest(bytes) {
@@ -416,5 +435,151 @@ test('frustrated comparison publishes the sparse failure without granting it adm
     assert.match(html, /skeletal penetration/i);
   } finally {
     await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('mixed-field comparison binds three grid-stable failed states to sixteen visual receipts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kaminos-nbody-mixed-field-witness-'));
+  try {
+    const written = await writeNBodyPackingMixedFieldComparisonWitness({ outDir:root });
+    const report = JSON.parse(await readFile(join(root, 'report.json')));
+    const html = String(await readFile(join(root, 'index.html')));
+    const results = await Promise.all([
+      'baseline',
+      'shifted',
+      'refined',
+    ].map(name => readFile(join(root, `mixed-field-${name}.json`)).then(JSON.parse)));
+
+    assert.equal(written.report.status, 'complete-pending-visual-inspection');
+    assert.deepEqual(report.route, {
+      requested:NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE,
+      effective:NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE,
+      fallbackUsed:false,
+    });
+    assert.equal(report.mixedField.admission, 'rejected-stable-grid-failure-class');
+    assert.deepEqual(report.claimCeiling, {
+      authority:'bounded-synthetic-negative-mechanism-result',
+      formulation: {
+        algorithm:'identity-bearing-shared-occupancy-pressure-traction-v0',
+        carrier:'3d-tapered-centerline-carrier-with-per-member-xz-sine-basis-zero-at-attachments',
+        occupancySupport:'shared-xz-lattice-at-centerline-knots-2-and-3',
+        fixtureGeometry:'short-extruded-five-body-frustrated-rosette',
+        fixtureId:report.fixture.id,
+        fixtureSha256:report.fixture.sha256,
+        gridComparison:'exact-baseline-half-cell-and-refined-order-two-quadrature',
+      },
+      admittedClaim:'this-exact-formulation-stalls-with-live-pair-debt-on-this-exact-fixture',
+      rankingAuthority:'none',
+      anatomicalAdmission:'none',
+      nonGoals:[
+        'general-continuum-or-field-method-rejection',
+        'arbitrary-n-closure',
+        'anatomical-correctness',
+        'fascia-mechanics',
+        'production-solver-admission',
+      ],
+    });
+    assert.ok(report.mixedField.maximumStateGap <= report.mixedField.stateGapCeiling);
+    assert.deepEqual(report.visualInspection.requiredStates, MIXED_FIELD_VISUAL_STATES);
+    assert.ok(results.every(result => result.status === 'stalled-mixed-field-candidate'));
+    assert.ok(results.every(result => result.selected.metrics.pairwisePenetration > 1e-7));
+    assert.ok(results.every(result => result.selected.metrics.skeletalPenetration <= 1e-7));
+    assert.ok(results.every(result => result.selected.metrics.compartmentEscape <= 1e-7));
+    assert.ok(results.every(result => result.route.fallbackUsed === false));
+    assert.ok(results.every(result => result.selected.pairwisePenetrationReceipt.pairs.length > 0));
+    assert.match(html, /failed candidates/i);
+    for (const state of MIXED_FIELD_VISUAL_STATES) {
+      assert.match(html, new RegExp(`data-state="${state}"`));
+    }
+    for (const key of [
+      'mixedFieldProblemJsonSha256',
+      'mixedFieldBaselineJsonSha256',
+      'mixedFieldShiftedJsonSha256',
+      'mixedFieldRefinedJsonSha256',
+    ]) assert.match(report.bindings[key], /^[0-9a-f]{64}$/);
+
+    const images = [];
+    for (const state of MIXED_FIELD_VISUAL_STATES) {
+      for (const mode of VISUAL_MODES) {
+        images.push(await fakeCapture(root, state, mode, {
+          states:MIXED_FIELD_VISUAL_STATES,
+          route:NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE,
+          artifactDir:'nbody-packing-mixed-field-comparison-v0',
+        }));
+      }
+    }
+    const inspection = {
+      observedAt:'2026-08-10T12:00:00-04:00',
+      baseUrl:'http://127.0.0.1:18765/artifacts/nbody-packing-mixed-field-comparison-v0/',
+      images,
+      verdict:MIXED_FIELD_VISUAL_VERDICT,
+      summary:'All three mixed-field failures are distinct from the crowded input and jointly feasible reference, with their remaining contact visible in both modes.',
+    };
+    await assert.rejects(
+      () => admitNBodyPackingJointReferenceVisualInspection({
+        outDir:root,
+        inspection:{ ...inspection, images:images.filter(image => image.state !== 'mixed-field-shifted') },
+      }),
+      /every state\/mode combination exactly once/,
+    );
+    const admitted = await admitNBodyPackingJointReferenceVisualInspection({
+      outDir:root,
+      inspection,
+    });
+    assert.equal(admitted.report.status, 'complete-visual-inspected');
+    assert.equal(
+      admitted.receipt.schema,
+      'kaminos.nbody-packing-mixed-field-comparison-visual-inspection.v0',
+    );
+    assert.equal(admitted.receipt.images.length, 16);
+    assert.equal(new Set(admitted.receipt.images.map(image => image.sha256)).size, 16);
+  } finally {
+    await rm(root, { recursive:true, force:true });
+  }
+});
+
+test('mixed-field comparison rejects every canonical grid-descriptor substitution', async () => {
+  const base = createNBodyMixedFieldConfig();
+  const canonicalRows = [
+    { stateKey:'mixed-field-baseline', label:'Field baseline', requestedConfig:base },
+    {
+      stateKey:'mixed-field-shifted',
+      label:'Field half-cell',
+      requestedConfig:{ ...base, latticeTranslation:[0.5, 0.5] },
+    },
+    {
+      stateKey:'mixed-field-refined',
+      label:'Field refined',
+      requestedConfig:{ ...base, latticeResolution:[37, 43] },
+    },
+  ];
+  const substitutions = [
+    canonicalRows.map((row, index) => index === 0
+      ? { ...row, requestedConfig:{ ...row.requestedConfig, latticeQuadratureOrder:1 } }
+      : row),
+    canonicalRows.map((row, index) => index === 1
+      ? { ...row, requestedConfig:{ ...base, latticeTranslation:[0, 0] } }
+      : row),
+    canonicalRows.map((row, index) => index === 2
+      ? { ...row, requestedConfig:{ ...base, latticeResolution:[25, 29] } }
+      : row),
+    canonicalRows.map((row, index) => index === 0 ? { ...row, label:'Swapped label' } : row),
+    canonicalRows.map((row, index) => index === 0
+      ? { ...row, stateKey:'mixed-field-counterfeit' }
+      : row),
+  ];
+  for (const [index, requestedMixedFieldConfigs] of substitutions.entries()) {
+    const root = await mkdtemp(join(tmpdir(), `kaminos-nbody-mixed-substitution-${index}-`));
+    try {
+      await assert.rejects(
+        () => writeNBodyPackingMixedFieldComparisonWitness({
+          outDir:root,
+          requestedMixedFieldConfigs,
+        }),
+        /exact canonical baseline, shifted, and refined descriptor table/,
+      );
+    } finally {
+      await rm(root, { recursive:true, force:true });
+    }
   }
 });

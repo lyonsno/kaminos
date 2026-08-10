@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   createNBodyRosetteFixture,
@@ -17,6 +18,11 @@ import {
   createNBodySparseGraphConfig,
   solveNBodySparseGraphCandidate,
 } from './nbody-packing-sparse-graph.mjs';
+import {
+  compileNBodyMixedFieldProblem,
+  createNBodyMixedFieldConfig,
+  solveNBodyMixedFieldCandidate,
+} from './nbody-packing-mixed-field.mjs';
 import { NBODY_PACKING_ASSAY_CAPTURE_VIEWPORT } from './nbody-packing-assay-capture.mjs';
 import { validateReceiptBearingPng } from './lib/receipt-bearing-browser-capture.mjs';
 
@@ -26,16 +32,22 @@ export const NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE =
   'nbody-packing-sparse-global-comparison-orbitable-v0';
 export const NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE =
   'nbody-packing-frustrated-comparison-orbitable-v0';
+export const NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE =
+  'nbody-packing-mixed-field-comparison-orbitable-v0';
 
 const REPORT_SCHEMA = 'kaminos.nbody-packing-joint-reference-witness-report.v0';
 const SPARSE_REPORT_SCHEMA =
   'kaminos.nbody-packing-sparse-global-comparison-witness-report.v0';
 const FRUSTRATED_REPORT_SCHEMA =
   'kaminos.nbody-packing-frustrated-comparison-witness-report.v0';
+const MIXED_FIELD_REPORT_SCHEMA =
+  'kaminos.nbody-packing-mixed-field-comparison-witness-report.v0';
 const VISUAL_INSPECTION_SCHEMA =
   'kaminos.nbody-packing-joint-reference-visual-inspection.v0';
 const SPARSE_VISUAL_INSPECTION_SCHEMA =
   'kaminos.nbody-packing-sparse-global-comparison-visual-inspection.v0';
+const MIXED_FIELD_VISUAL_INSPECTION_SCHEMA =
+  'kaminos.nbody-packing-mixed-field-comparison-visual-inspection.v0';
 const PRIMARY_PATHS = Object.freeze([
   'fixture.json',
   'assay-result.json',
@@ -50,6 +62,14 @@ const SPARSE_PRIMARY_PATHS = Object.freeze([
   'sparse-candidate.json',
   'index.html',
 ]);
+const MIXED_FIELD_PRIMARY_PATHS = Object.freeze([
+  ...SPARSE_PRIMARY_PATHS.slice(0, -1),
+  'mixed-field-problem.json',
+  'mixed-field-baseline.json',
+  'mixed-field-shifted.json',
+  'mixed-field-refined.json',
+  'index.html',
+]);
 const VISUAL_STATES = Object.freeze([
   'known-feasible',
   'crowded',
@@ -61,6 +81,16 @@ const SPARSE_VISUAL_STATES = Object.freeze([
   'crowded',
   'sequential-counterfeit',
   'sparse-global-candidate',
+  'joint-reference',
+]);
+const MIXED_FIELD_VISUAL_STATES = Object.freeze([
+  'known-feasible',
+  'crowded',
+  'sequential-counterfeit',
+  'sparse-global-candidate',
+  'mixed-field-baseline',
+  'mixed-field-shifted',
+  'mixed-field-refined',
   'joint-reference',
 ]);
 const VISUAL_MODES = Object.freeze(['volume', 'slice']);
@@ -81,7 +111,33 @@ const SPARSE_VISUAL_VERDICT_KEYS = Object.freeze([
   'sparseCandidateLegible',
   'candidateOracleDifferenceLegible',
 ]);
+const MIXED_FIELD_VISUAL_VERDICT_KEYS = Object.freeze([
+  ...SPARSE_VISUAL_VERDICT_KEYS,
+  'mixedFieldFailuresLegible',
+  'gridVariantsLegible',
+]);
 const DEFAULT_IO = { mkdir, readFile, rename, unlink, writeFile };
+
+function canonicalMixedFieldDescriptorRows() {
+  const baseConfig = createNBodyMixedFieldConfig();
+  return [
+    {
+      stateKey:'mixed-field-baseline',
+      label:'Field baseline',
+      requestedConfig:baseConfig,
+    },
+    {
+      stateKey:'mixed-field-shifted',
+      label:'Field half-cell',
+      requestedConfig:{ ...baseConfig, latticeTranslation:[0.5, 0.5] },
+    },
+    {
+      stateKey:'mixed-field-refined',
+      label:'Field refined',
+      requestedConfig:{ ...baseConfig, latticeResolution:[37, 43] },
+    },
+  ];
+}
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -145,12 +201,18 @@ export async function writeNBodyPackingJointReferenceWitness({
   includeSparseGlobalCandidate = false,
   sparseAdmission = 'require-converged',
   requestedSparseConfig = createNBodySparseGraphConfig(),
+  includeMixedFieldCandidates = false,
+  requestedMixedFieldConfigs = null,
   io:ioOverrides = {},
 } = {}) {
   const io = { ...DEFAULT_IO, ...ioOverrides };
   const outputRoot = resolve(outDir);
-  const primaryPaths = includeSparseGlobalCandidate ? SPARSE_PRIMARY_PATHS : PRIMARY_PATHS;
-  const visualStates = includeSparseGlobalCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
+  const primaryPaths = includeMixedFieldCandidates
+    ? MIXED_FIELD_PRIMARY_PATHS
+    : includeSparseGlobalCandidate ? SPARSE_PRIMARY_PATHS : PRIMARY_PATHS;
+  const visualStates = includeMixedFieldCandidates
+    ? MIXED_FIELD_VISUAL_STATES
+    : includeSparseGlobalCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
   const isFrustratedComparison = sparseAdmission === 'require-frustrated-physical-failure';
   if (!['require-converged', 'require-frustrated-physical-failure'].includes(sparseAdmission)) {
     throw new Error(`unsupported sparse witness admission: ${sparseAdmission}`);
@@ -158,12 +220,19 @@ export async function writeNBodyPackingJointReferenceWitness({
   if (isFrustratedComparison && !includeSparseGlobalCandidate) {
     throw new Error('frustrated sparse failure witness requires a sparse global candidate');
   }
-  const reportSchema = isFrustratedComparison
+  if (includeMixedFieldCandidates && !isFrustratedComparison) {
+    throw new Error('mixed field comparison requires the frustrated sparse failure comparison');
+  }
+  const reportSchema = includeMixedFieldCandidates
+    ? MIXED_FIELD_REPORT_SCHEMA
+    : isFrustratedComparison
     ? FRUSTRATED_REPORT_SCHEMA
     : includeSparseGlobalCandidate
       ? SPARSE_REPORT_SCHEMA
       : REPORT_SCHEMA;
-  const effectiveRoute = isFrustratedComparison
+  const effectiveRoute = includeMixedFieldCandidates
+    ? NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE
+    : isFrustratedComparison
     ? NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE
     : includeSparseGlobalCandidate
       ? NBODY_PACKING_SPARSE_GLOBAL_WITNESS_ROUTE
@@ -182,6 +251,18 @@ export async function writeNBodyPackingJointReferenceWitness({
   };
   try {
     await io.mkdir(outputRoot, { recursive:true });
+    const mixedFieldDescriptorRows = includeMixedFieldCandidates
+      ? structuredClone(requestedMixedFieldConfigs || canonicalMixedFieldDescriptorRows())
+      : null;
+    if (
+      includeMixedFieldCandidates &&
+      !isDeepStrictEqual(mixedFieldDescriptorRows, canonicalMixedFieldDescriptorRows())
+    ) {
+      phase = 'validate-mixed-field-descriptors';
+      throw new Error(
+        'mixed field witness requires the exact canonical baseline, shifted, and refined descriptor table',
+      );
+    }
     phase = 'clear-stale-primary';
     stalePrimaryCleanup = await clearPrimaryArtifacts(io, outputRoot, primaryPaths);
     if (stalePrimaryCleanup.status !== 'cleared') {
@@ -269,6 +350,75 @@ export async function writeNBodyPackingJointReferenceWitness({
         },
       };
     }
+    let mixedFieldProblem = null;
+    let mixedFieldCandidates = [];
+    let mixedFieldMaximumStateGap = null;
+    if (includeMixedFieldCandidates) {
+      phase = 'compile-mixed-field-problem';
+      mixedFieldProblem = compileNBodyMixedFieldProblem(fixture);
+      const requestedRows = mixedFieldDescriptorRows;
+      for (const requestedRow of requestedRows) {
+        phase = `solve-${requestedRow.stateKey}`;
+        const result = solveNBodyMixedFieldCandidate({
+          problem:mixedFieldProblem,
+          requestedConfig:requestedRow.requestedConfig,
+        });
+        if (
+          result.status !== 'stalled-mixed-field-candidate' ||
+          result.source.fixtureSha256 !== fixture.identity.sha256 ||
+          result.source.problemSha256 !== mixedFieldProblem.identity.sha256 ||
+          result.route.fallbackUsed !== false ||
+          !isDeepStrictEqual(result.config.effective, requestedRow.requestedConfig) ||
+          result.mechanism.oracleTargetCoordinatesConsumed !== false ||
+          result.mechanism.contactGraphRowsConsumed !== false ||
+          result.invariance?.candidateEnumeration !== 'passed' ||
+          !Object.values(result.invariance?.comparison || {}).every(Boolean) ||
+          result.selected.metrics.pairwisePenetration <=
+            result.config.effective.convergenceTolerance ||
+          result.selected.metrics.skeletalPenetration >
+            result.config.effective.convergenceTolerance ||
+          result.selected.metrics.compartmentEscape >
+            result.config.effective.convergenceTolerance ||
+          result.selected.displacement.movedMemberCount < 4 ||
+          result.failure?.lastTrustworthyEvidence !== 'selected'
+        ) {
+          throw new Error(`mixed field witness rejects substituted or falsely admitted ${requestedRow.stateKey}`);
+        }
+        mixedFieldCandidates.push({
+          stateKey:requestedRow.stateKey,
+          label:requestedRow.label,
+          result,
+        });
+      }
+      mixedFieldMaximumStateGap = 0;
+      for (let left = 0; left < mixedFieldCandidates.length; left += 1) {
+        for (let right = left + 1; right < mixedFieldCandidates.length; right += 1) {
+          mixedFieldMaximumStateGap = Math.max(
+            mixedFieldMaximumStateGap,
+            ...mixedFieldCandidates[left].result.selected.vector.map((value, axis) =>
+              Math.abs(value - mixedFieldCandidates[right].result.selected.vector[axis])),
+          );
+        }
+      }
+      if (mixedFieldMaximumStateGap > 0.2) {
+        throw new Error(`mixed field witness cross-lattice state gap exceeds 0.2: ${mixedFieldMaximumStateGap}`);
+      }
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        phase:'mixed-field-grid-failure-class-bound',
+        mixedField: {
+          problemSha256:mixedFieldProblem.identity.sha256,
+          maximumStateGap:mixedFieldMaximumStateGap,
+          rows:mixedFieldCandidates.map(candidate => ({
+            stateKey:candidate.stateKey,
+            status:candidate.result.status,
+            sha256:candidate.result.identity.sha256,
+            pairwisePenetration:candidate.result.selected.metrics.pairwisePenetration,
+            skeletalPenetration:candidate.result.selected.metrics.skeletalPenetration,
+          })),
+        },
+      };
+    }
     const reportCore = {
       schema:reportSchema,
       status:'complete-pending-visual-inspection',
@@ -316,6 +466,52 @@ export async function writeNBodyPackingJointReferenceWitness({
             : 'admitted-bounded-synthetic-candidate',
         },
       } : {}),
+      ...(mixedFieldCandidates.length > 0 ? {
+        claimCeiling: {
+          authority:'bounded-synthetic-negative-mechanism-result',
+          formulation: {
+            algorithm:'identity-bearing-shared-occupancy-pressure-traction-v0',
+            carrier:'3d-tapered-centerline-carrier-with-per-member-xz-sine-basis-zero-at-attachments',
+            occupancySupport:'shared-xz-lattice-at-centerline-knots-2-and-3',
+            fixtureGeometry:'short-extruded-five-body-frustrated-rosette',
+            fixtureId:fixture.id,
+            fixtureSha256:fixture.identity.sha256,
+            gridComparison:'exact-baseline-half-cell-and-refined-order-two-quadrature',
+          },
+          admittedClaim:'this-exact-formulation-stalls-with-live-pair-debt-on-this-exact-fixture',
+          rankingAuthority:'none',
+          anatomicalAdmission:'none',
+          nonGoals:[
+            'general-continuum-or-field-method-rejection',
+            'arbitrary-n-closure',
+            'anatomical-correctness',
+            'fascia-mechanics',
+            'production-solver-admission',
+          ],
+        },
+        mixedField: {
+          problemSha256:mixedFieldProblem.identity.sha256,
+          maximumStateGap:mixedFieldMaximumStateGap,
+          stateGapCeiling:0.2,
+          admission:'rejected-stable-grid-failure-class',
+          rows:mixedFieldCandidates.map(candidate => ({
+            stateKey:candidate.stateKey,
+            label:candidate.label,
+            schema:candidate.result.schema,
+            status:candidate.result.status,
+            sha256:candidate.result.identity.sha256,
+            selectedPhysicalStateSha256:candidate.result.selected.physicalStateSha256,
+            maximumPhysicalResidual:candidate.result.selected.maximumPhysicalResidual,
+            pairwisePenetration:candidate.result.selected.metrics.pairwisePenetration,
+            skeletalPenetration:candidate.result.selected.metrics.skeletalPenetration,
+            compartmentEscape:candidate.result.selected.metrics.compartmentEscape,
+            movedMemberCount:candidate.result.selected.displacement.movedMemberCount,
+            latticeResolution:candidate.result.config.effective.latticeResolution,
+            latticeTranslation:candidate.result.config.effective.latticeTranslation,
+            latticeQuadratureOrder:candidate.result.config.effective.latticeQuadratureOrder,
+          })),
+        },
+      } : {}),
       claims: {
         knownFeasibility:'supported-by-manufactured-witness',
         localCounterfeitDiscrimination:'supported-by-global-debt-ledger',
@@ -326,6 +522,9 @@ export async function writeNBodyPackingJointReferenceWitness({
             ? 'supported-only-on-bounded-five-body-assay'
             : 'not-assayed',
         scalableProductionSolver:'not-assayed',
+        mixedFieldCandidate:mixedFieldCandidates.length
+          ? 'rejected-stable-grid-failure-class'
+          : 'not-assayed',
         anatomicalCorrectness:'not-assayed',
         fasciaMechanics:'not-assayed',
       },
@@ -346,11 +545,17 @@ export async function writeNBodyPackingJointReferenceWitness({
     const sparseCandidateBytes = sparseGlobalCandidate
       ? Buffer.from(`${JSON.stringify(sparseGlobalCandidate, null, 2)}\n`)
       : null;
+    const mixedFieldProblemBytes = mixedFieldProblem
+      ? Buffer.from(`${JSON.stringify(mixedFieldProblem, null, 2)}\n`)
+      : null;
+    const mixedFieldCandidateBytes = mixedFieldCandidates.map(candidate =>
+      Buffer.from(`${JSON.stringify(candidate.result, null, 2)}\n`));
     const htmlBytes = Buffer.from(renderNBodyPackingAssayHtml({
       fixture,
       result:assayResult,
       jointReference,
       sparseGlobalCandidate,
+      mixedFieldCandidates,
       report:reportCore,
     }));
     const report = {
@@ -362,6 +567,12 @@ export async function writeNBodyPackingJointReferenceWitness({
         ...(sparseProblemBytes ? {
           sparseProblemJsonSha256:sha256(sparseProblemBytes),
           sparseCandidateJsonSha256:sha256(sparseCandidateBytes),
+        } : {}),
+        ...(mixedFieldProblemBytes ? {
+          mixedFieldProblemJsonSha256:sha256(mixedFieldProblemBytes),
+          mixedFieldBaselineJsonSha256:sha256(mixedFieldCandidateBytes[0]),
+          mixedFieldShiftedJsonSha256:sha256(mixedFieldCandidateBytes[1]),
+          mixedFieldRefinedJsonSha256:sha256(mixedFieldCandidateBytes[2]),
         } : {}),
         indexHtmlSha256:sha256(htmlBytes),
       },
@@ -377,6 +588,7 @@ export async function writeNBodyPackingJointReferenceWitness({
       assayBytes,
       referenceBytes,
       ...(sparseProblemBytes ? [sparseProblemBytes, sparseCandidateBytes] : []),
+      ...(mixedFieldProblemBytes ? [mixedFieldProblemBytes, ...mixedFieldCandidateBytes] : []),
       htmlBytes,
     ];
     const writes = await Promise.allSettled(primaryPaths.map((path, index) =>
@@ -400,6 +612,8 @@ export async function writeNBodyPackingJointReferenceWitness({
       jointReference,
       sparseProblem,
       sparseGlobalCandidate,
+      mixedFieldProblem,
+      mixedFieldCandidates,
       report,
     };
   } catch (error) {
@@ -466,6 +680,14 @@ export async function writeNBodyPackingFrustratedComparisonWitness(options = {})
   });
 }
 
+export async function writeNBodyPackingMixedFieldComparisonWitness(options = {}) {
+  return writeNBodyPackingFrustratedComparisonWitness({
+    outDir:'artifacts/nbody-packing-mixed-field-comparison-v0',
+    ...options,
+    includeMixedFieldCandidates:true,
+  });
+}
+
 export async function admitNBodyPackingJointReferenceVisualInspection({
   outDir = 'artifacts/nbody-packing-joint-reference-v0',
   inspection,
@@ -498,15 +720,25 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     report.schema === FRUSTRATED_REPORT_SCHEMA &&
     report.route?.requested === NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE &&
     report.route?.effective === NBODY_PACKING_FRUSTRATED_COMPARISON_WITNESS_ROUTE;
-  if (!isJointReference && !isSparseGlobal && !isFrustratedComparison) {
+  const isMixedFieldComparison =
+    report.schema === MIXED_FIELD_REPORT_SCHEMA &&
+    report.route?.requested === NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE &&
+    report.route?.effective === NBODY_PACKING_MIXED_FIELD_COMPARISON_WITNESS_ROUTE;
+  if (!isJointReference && !isSparseGlobal && !isFrustratedComparison && !isMixedFieldComparison) {
     throw new Error('joint-reference visual admission requires a recognized exact pending witness route');
   }
-  const includesSparseCandidate = isSparseGlobal || isFrustratedComparison;
-  const visualStates = includesSparseCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
-  const visualVerdictKeys = includesSparseCandidate
+  const includesSparseCandidate = isSparseGlobal || isFrustratedComparison || isMixedFieldComparison;
+  const visualStates = isMixedFieldComparison
+    ? MIXED_FIELD_VISUAL_STATES
+    : includesSparseCandidate ? SPARSE_VISUAL_STATES : VISUAL_STATES;
+  const visualVerdictKeys = isMixedFieldComparison
+    ? MIXED_FIELD_VISUAL_VERDICT_KEYS
+    : includesSparseCandidate
     ? SPARSE_VISUAL_VERDICT_KEYS
     : VISUAL_VERDICT_KEYS;
-  const visualInspectionSchema = includesSparseCandidate
+  const visualInspectionSchema = isMixedFieldComparison
+    ? MIXED_FIELD_VISUAL_INSPECTION_SCHEMA
+    : includesSparseCandidate
     ? SPARSE_VISUAL_INSPECTION_SCHEMA
     : VISUAL_INSPECTION_SCHEMA;
   const effectiveRoute = report.route.effective;
@@ -534,8 +766,23 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
   const referencePath = resolve(outputRoot, 'joint-reference.json');
   const sparseProblemPath = includesSparseCandidate ? resolve(outputRoot, 'sparse-problem.json') : null;
   const sparseCandidatePath = includesSparseCandidate ? resolve(outputRoot, 'sparse-candidate.json') : null;
+  const mixedFieldProblemPath = isMixedFieldComparison ? resolve(outputRoot, 'mixed-field-problem.json') : null;
+  const mixedFieldBaselinePath = isMixedFieldComparison ? resolve(outputRoot, 'mixed-field-baseline.json') : null;
+  const mixedFieldShiftedPath = isMixedFieldComparison ? resolve(outputRoot, 'mixed-field-shifted.json') : null;
+  const mixedFieldRefinedPath = isMixedFieldComparison ? resolve(outputRoot, 'mixed-field-refined.json') : null;
   const indexPath = resolve(outputRoot, 'index.html');
-  const [fixtureBytes, assayBytes, referenceBytes, sparseProblemBytes, sparseCandidateBytes, indexBytes] =
+  const [
+    fixtureBytes,
+    assayBytes,
+    referenceBytes,
+    sparseProblemBytes,
+    sparseCandidateBytes,
+    mixedFieldProblemBytes,
+    mixedFieldBaselineBytes,
+    mixedFieldShiftedBytes,
+    mixedFieldRefinedBytes,
+    indexBytes,
+  ] =
     await Promise.all([
       io.readFile(fixturePath),
       io.readFile(assayPath),
@@ -543,6 +790,14 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
       ...(includesSparseCandidate
         ? [io.readFile(sparseProblemPath), io.readFile(sparseCandidatePath)]
         : [Promise.resolve(null), Promise.resolve(null)]),
+      ...(isMixedFieldComparison
+        ? [
+          io.readFile(mixedFieldProblemPath),
+          io.readFile(mixedFieldBaselinePath),
+          io.readFile(mixedFieldShiftedPath),
+          io.readFile(mixedFieldRefinedPath),
+        ]
+        : Array.from({ length:4 }, () => Promise.resolve(null))),
       io.readFile(indexPath),
     ]);
   if (
@@ -559,6 +814,12 @@ export async function admitNBodyPackingJointReferenceVisualInspection({
     ...(includesSparseCandidate ? {
       sparseProblemJsonSha256:sha256(sparseProblemBytes),
       sparseCandidateJsonSha256:sha256(sparseCandidateBytes),
+    } : {}),
+    ...(isMixedFieldComparison ? {
+      mixedFieldProblemJsonSha256:sha256(mixedFieldProblemBytes),
+      mixedFieldBaselineJsonSha256:sha256(mixedFieldBaselineBytes),
+      mixedFieldShiftedJsonSha256:sha256(mixedFieldShiftedBytes),
+      mixedFieldRefinedJsonSha256:sha256(mixedFieldRefinedBytes),
     } : {}),
     indexHtmlSha256:sha256(indexBytes),
   };
