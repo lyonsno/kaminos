@@ -9,6 +9,7 @@ import {
   renderRowDistinctAssaySvg,
   writeRowDistinctAssayArtifacts,
 } from '../row-distinct-field-assay-artifacts.mjs';
+import { buildRowDistinctScalarAnisotropicAssay } from '../row-distinct-field-assay-core.mjs';
 
 const assayCard = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-scalar-anisotropic-assay.v0.json', import.meta.url),
@@ -35,6 +36,7 @@ test('artifact writer emits hashed result, fixed-camera contact sheet, and four 
     assert.equal(result.report.requestedRouteId, ROW_DISTINCT_ARTIFACT_ROUTE);
     assert.equal(result.report.effectiveRouteId, ROW_DISTINCT_ARTIFACT_ROUTE);
     assert.equal(result.report.cameraId, assayCard.camera.id);
+    assert.equal(result.report.admissionPassed, true);
     assert.equal(result.report.outputs.length, 6);
     assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
     assert.ok(result.report.outputs.every((output) => output.byteLength > 100));
@@ -51,6 +53,16 @@ test('artifact renderer rejects partial or stale-looking assay products', () => 
     () => renderRowDistinctAssaySvg({ status: 'partial', rows: [] }),
     /completed row-distinct assay is required/,
   );
+});
+
+test('contact sheet cannot present a candidate as admitted when baseline parity fails', () => {
+  const breached = structuredClone(assayCard);
+  breached.baselineFit.maximumBetweenRowNormalizedRmseGap = 0;
+  const assay = buildRowDistinctScalarAnisotropicAssay({ assayCard: breached, target });
+  const svg = renderRowDistinctAssaySvg(assay, target);
+  assert.doesNotMatch(svg, /candidate admitted/);
+  assert.match(svg, /candidate not admitted/);
+  assert.match(svg, /between-row-baseline-parity-failed/);
 });
 
 test('route substitution fails loud and still leaves a phase-named report', async () => {

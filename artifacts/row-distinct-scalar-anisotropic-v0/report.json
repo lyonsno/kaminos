@@ -7,13 +7,13 @@
   "outputs": [
     {
       "relativePath": "assay.json",
-      "byteLength": 6232529,
-      "sha256": "60283de596c6eb97a067c20093aeb32d04807e48e74223784521cc262cb7c913"
+      "byteLength": 6232588,
+      "sha256": "543ac30703e9c0808b46847b1904ca4e11ff2d30d4290cd6a691403984215198"
     },
     {
       "relativePath": "contact-sheet.svg",
       "byteLength": 4898,
-      "sha256": "512923dcf00c69b16c340586e7a0f2f1aa4ea5ae5f9faf6fda9bbeb4542cc39f"
+      "sha256": "2bf17826fb3b7816d84eb3fd6ce3922351e165c6fa5dd735adb179aad1c44325"
     },
     {
       "relativePath": "1-scalar-metaball-control-baseline.obj",
@@ -36,7 +36,8 @@
       "sha256": "706ad71afa4566ba9d27cd238a65bc59cc2ffa2184af672f928130e8a1897eec"
     }
   ],
-  "assayHash": "830f0bf19225e0707942285dbc77921faacbc6649c382634f7341cf7bd6a4404",
+  "assayHash": "59066374f6e492a83a415d0a0722bf2d5588843b3c57db11091a48ee3552d7a4",
+  "admissionPassed": true,
   "targetHash": "a1175f96382bd3d7aa51f1c15596916cc4a4e82ff49db83957b08ebb0721ea08",
   "assayCardHash": "b22e731b98c8b44b4102f9889c86e336de5ff64c374fb83193d5565322b26d20",
   "failurePhase": null,

@@ -539,6 +539,19 @@ export function buildRowDistinctScalarAnisotropicAssay({ assayCard, target } = {
     baselineParityPassed:
       baselineRmseGap <= assayCard.baselineFit.maximumBetweenRowNormalizedRmseGap,
   };
+  const verdictFailures = [];
+  if (!comparison.baselineParityPassed) {
+    verdictFailures.push({
+      code: 'between-row-baseline-parity-failed',
+      observedGap: comparison.baselineRmseGap,
+      maximumGap: comparison.maximumBaselineRmseGap,
+    });
+  }
+  if (!rows.some(
+    (row) => row.evidenceDisposition === 'candidate-evidence' && row.verdict.passed,
+  )) {
+    verdictFailures.push({ code: 'no-candidate-row-admitted' });
+  }
   const assay = {
     schema: ROW_DISTINCT_FIELD_ASSAY_SCHEMA,
     status: 'completed',
@@ -551,6 +564,7 @@ export function buildRowDistinctScalarAnisotropicAssay({ assayCard, target } = {
     camera: structuredClone(assayCard.camera),
     control: structuredClone(assayCard.control),
     comparison,
+    verdict: { passed: verdictFailures.length === 0, failures: verdictFailures },
     rows,
   };
   return { ...assay, assayHash: hashValue(assay) };

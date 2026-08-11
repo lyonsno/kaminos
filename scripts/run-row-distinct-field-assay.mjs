@@ -53,6 +53,7 @@ async function main(argv) {
     process.stdout.write(`${JSON.stringify({
       status: result.report.status,
       assayHash: result.assay.assayHash,
+      admissionPassed: result.assay.verdict.passed,
       reportPath: result.reportPath,
       effectiveRouteId: result.report.effectiveRouteId,
       outputCount: result.report.outputs.length,

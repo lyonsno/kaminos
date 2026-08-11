@@ -59,6 +59,10 @@
     "maximumBaselineRmseGap": 0.02,
     "baselineParityPassed": true
   },
+  "verdict": {
+    "passed": true,
+    "failures": []
+  },
   "rows": [
     {
       "id": "scalar-metaball-control",
@@ -308178,5 +308182,5 @@
       }
     }
   ],
-  "assayHash": "830f0bf19225e0707942285dbc77921faacbc6649c382634f7341cf7bd6a4404"
+  "assayHash": "59066374f6e492a83a415d0a0722bf2d5588843b3c57db11091a48ee3552d7a4"
 }

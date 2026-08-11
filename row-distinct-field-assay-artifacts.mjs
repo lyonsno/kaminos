@@ -69,8 +69,18 @@ export function renderRowDistinctAssaySvg(assay, target) {
     const targetPerturbed = profilePath(targetProfile(target, 'perturbed'), panel, assay.camera);
     const baseline = profilePath(row.baseline.observations, panel, assay.camera);
     const perturbed = profilePath(row.perturbed.observations, panel, assay.camera);
-    const verdict = row.verdict.passed ? 'candidate admitted' : 'control / not admitted';
-    const failures = row.verdict.failures.map((failure) => failure.code).join(', ');
+    const rowAdmitted = row.evidenceDisposition === 'candidate-evidence'
+      && row.verdict.passed
+      && assay.verdict.passed;
+    const verdict = row.evidenceDisposition === 'control-observation'
+      ? 'control / not admitted'
+      : rowAdmitted ? 'candidate admitted' : 'candidate not admitted';
+    const admissionFailures = row.evidenceDisposition === 'candidate-evidence'
+      ? assay.verdict.failures
+      : [];
+    const failures = [...row.verdict.failures, ...admissionFailures]
+      .map((failure) => failure.code)
+      .join(', ');
     return `<g id="${escapeXml(row.id)}">
       <text x="${panel.x}" y="${panel.y - 47}" class="title">${escapeXml(row.id)}</text>
       <text x="${panel.x}" y="${panel.y - 24}" class="meta">${escapeXml(row.effectiveCompilerId)} · ${escapeXml(verdict)}</text>
@@ -139,6 +149,7 @@ export async function writeRowDistinctAssayArtifacts({
     phase = 'assay-build';
     const assay = buildRowDistinctScalarAnisotropicAssay({ assayCard, target });
     report.assayHash = assay.assayHash;
+    report.admissionPassed = assay.verdict.passed;
     report.targetHash = assay.targetHash;
     report.assayCardHash = assay.assayCardHash;
 

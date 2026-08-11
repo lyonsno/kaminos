@@ -68,6 +68,22 @@ test('both rows clear the same frozen baseline-fit gate before response evidence
     `between-row baseline RMSE gap ${assay.comparison.baselineRmseGap}`,
   );
   assert.equal(assay.comparison.baselineParityPassed, true);
+  assert.equal(assay.verdict.passed, true);
+  assert.deepEqual(assay.verdict.failures, []);
+});
+
+test('between-row baseline parity breach invalidates assay admission', () => {
+  const breached = structuredClone(assayCard);
+  breached.baselineFit.maximumBetweenRowNormalizedRmseGap = 0;
+  const assay = build(breached);
+  assert.equal(assay.status, 'completed');
+  assert.equal(assay.comparison.baselineParityPassed, false);
+  assert.equal(assay.verdict.passed, false);
+  assert.deepEqual(assay.verdict.failures, [{
+    code: 'between-row-baseline-parity-failed',
+    observedGap: assay.comparison.baselineRmseGap,
+    maximumGap: 0,
+  }]);
 });
 
 test('field extraction emits closed nonblank baseline and perturbed surfaces', () => {
