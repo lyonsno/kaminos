@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/pass-crowded-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/pass-crowded-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 52147,
+    "processGroupId": 52147,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 52147,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 52153,
+      "processGroupId": 52153,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 52153,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3871,
+    "retainedBytes": 3871,
+    "truncated": false,
+    "tail": "[0811/070339.502351:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/070339.572642:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070339.974091:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n[0811/070339.974190:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n[0811/070339.975668:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070339.991694:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n[0811/070339.993390:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070340.008498:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n[0811/070340.009563:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0811/070340.059580:INFO:CONSOLE:0] \"[.WebGL-0x12c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n235032 bytes written to file repo://artifacts/nbody-packing-localized-hard-boundary-v0/pass-crowded-volume.png\n[0811/070340.222693:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/070340.241157:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n[0811/070340.275415:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070340.672021:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070340.673193:INFO:CONSOLE:0] \"[.WebGL-0x11c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/pass-crowded-volume.png",
+    "sizeBytes": 235032,
+    "sha256": "6b4678eeaf54d435195a6ee12c9f9c66bbb5a970b8fce19be3f2dc212a42e675",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 61,
+      "idatBytes": 234279
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "pass-crowded",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-localized-hard-boundary-v0",
+      "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+      "resultsSha256": "40b7c1289d288429916933d6c4971cafb33442064577df45516d24c924ec97da"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 128690,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/pass-crowded-volume.png",
+      "sizeBytes": 235032,
+      "sha256": "6b4678eeaf54d435195a6ee12c9f9c66bbb5a970b8fce19be3f2dc212a42e675",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 61,
+        "idatBytes": 234279
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-hard-boundary-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "40b7c1289d288429916933d6c4971cafb33442064577df45516d24c924ec97da"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 128690,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=pass-crowded&mode=volume",
+    "httpStatus": 200,
+    "sizeBytes": 127802,
+    "sha256": "4e5e7593156f8fec7c993d727da1adc29bdbe9c4a63b3df999e6ecb43ea4efac"
+  }
+}

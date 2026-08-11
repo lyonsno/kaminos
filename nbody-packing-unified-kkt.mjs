@@ -262,6 +262,11 @@ function snapshot(problem, vector) {
   };
 }
 
+export function evaluateNBodyUnifiedKktState({ problem, vector } = {}) {
+  validateProblem(problem);
+  return snapshot(problem, vector);
+}
+
 function solveLinearSystem(matrix, rhs) {
   const size = rhs.length;
   const augmented = matrix.map((row, index) => [...row, rhs[index]]);
@@ -305,7 +310,9 @@ function activeLinearization(problem, current, activeRows, config) {
 }
 
 function projectedTarget(current, activeRows, gradients, config) {
-  let activeIndices = gradients.map((_, index) => index);
+  let activeIndices = gradients
+    .map((_, index) => index)
+    .sort((left, right) => activeRows[left].key.localeCompare(activeRows[right].key));
   while (activeIndices.length > 0) {
     const selectedGradients = activeIndices.map(index => gradients[index]);
     const gram = selectedGradients.map((left, leftIndex) => selectedGradients.map(
@@ -321,10 +328,11 @@ function projectedTarget(current, activeRows, gradients, config) {
     });
     const multipliers = solveLinearSystem(gram, rhs);
     if (!multipliers) return null;
-    const mostNegative = multipliers.reduce(
-      (worst, value, index) => value < worst.value ? { value, index } : worst,
-      { value:-1e-10, index:-1 },
-    );
+    const mostNegative = multipliers.reduce((worst, value, index) => {
+      const activeRow = activeRows[activeIndices[index]];
+      if (activeRow.signedGap < 0) return worst;
+      return value < worst.value ? { value, index } : worst;
+    }, { value:-1e-10, index:-1 });
     if (mostNegative.index >= 0) {
       activeIndices.splice(mostNegative.index, 1);
       continue;
@@ -348,6 +356,39 @@ function projectedTarget(current, activeRows, gradients, config) {
 
 function clampVector(vector, bounds) {
   return vector.map(value => rounded(Math.max(bounds[0], Math.min(bounds[1], value)), 15));
+}
+
+function resolveInitialVector(problem, config, initialVector) {
+  if (initialVector === undefined) {
+    return {
+      vector:Array(problem.variables.length).fill(0),
+      receipt:null,
+    };
+  }
+  if (
+    !Array.isArray(initialVector) ||
+    initialVector.length !== problem.variables.length ||
+    initialVector.some(value => !Number.isFinite(value))
+  ) {
+    throw new Error(
+      `unified KKT initialVector must contain ${problem.variables.length} finite values`,
+    );
+  }
+  if (initialVector.some(
+    value => value < config.translationBounds[0] || value > config.translationBounds[1],
+  )) {
+    throw new Error('unified KKT initialVector exceeds translationBounds');
+  }
+  const vector = initialVector.map(value => rounded(value, 15));
+  return {
+    vector,
+    receipt: {
+      kind:'explicit-same-basis-vector',
+      vectorSha256:hashMusclePackingCanonicalJson(vector),
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+    },
+  };
 }
 
 function compareSnapshots(left, right) {
@@ -379,11 +420,11 @@ function displacementReceipt(problem, muscles) {
   };
 }
 
-function solveEnumeration(problem, requestedConfig) {
+function solveEnumeration(problem, requestedConfig, initialState) {
   validateProblem(problem);
   validateConfig(requestedConfig, problem.carrier.translationBasis);
   const config = structuredClone(requestedConfig);
-  let current = snapshot(problem, Array(problem.variables.length).fill(0));
+  let current = snapshot(problem, initialState.vector);
   const workRows = [];
   let linearizationCount = 0;
   let candidateEvaluations = 0;
@@ -489,10 +530,14 @@ function solveEnumeration(problem, requestedConfig) {
     mechanism: {
       updateMode:'one-snapshot-one-coupled-primal-dual-projection',
       objective:'minimum-squared-translation-from-crowded-state',
+      projectionOrdering:'constraint-key-canonical',
       constraintKinds:['pairwise-clearance', 'skeletal-clearance', 'compartment-clearance'],
       contactGraphRowsConsumed:false,
       oracleTargetCoordinatesConsumed:false,
       traversal:config.candidateEnumeration,
+      ...(initialState.receipt
+        ? { initialization:structuredClone(initialState.receipt) }
+        : {}),
     },
     work:{ iterations:workRows.length, linearizationCount, candidateEvaluations, rows:workRows },
     selected,
@@ -526,6 +571,27 @@ function workDecisionStructure(work) {
     activeKinds:row.activeKinds,
     acceptedLineScale:row.acceptedLineScale,
   }));
+}
+
+export function classifyNBodyUnifiedKktTraversalEquivalence({
+  statusEqual,
+  workDecisionStructureEqual,
+  convergenceTolerance,
+  maximumVectorDifference,
+  maximumMetricsDifference,
+} = {}) {
+  const equivalenceTolerance = Math.max(convergenceTolerance, 1e-10);
+  const comparison = {
+    statusEqual,
+    selectedCarrierEquivalent:maximumVectorDifference <= equivalenceTolerance,
+    physicalMetricsEquivalent:maximumMetricsDifference <= equivalenceTolerance,
+    workDecisionStructureEqual,
+  };
+  return {
+    passed:Object.values(comparison).every(Boolean),
+    equivalenceTolerance,
+    comparison,
+  };
 }
 
 export function createNBodyUnifiedKktConfig() {
@@ -605,19 +671,77 @@ export function compileNBodyAdaptiveKktProblem(fixture) {
   return compileNBodyKktProblem(fixture, ADAPTIVE_TRANSLATION_BASIS);
 }
 
-export function solveNBodyUnifiedKktCandidate({ problem, requestedConfig } = {}) {
+export function scaleNBodyUnifiedKktProblemClearance({
+  problem,
+  clearanceScale,
+} = {}) {
+  validateProblem(problem);
+  if (!Number.isFinite(clearanceScale) || clearanceScale <= 0 || clearanceScale > 1) {
+    throw new Error('unified KKT clearanceScale must be in (0, 1]');
+  }
+  if (clearanceScale === 1) return structuredClone(problem);
+  const core = structuredClone(problem);
+  delete core.identity;
+  const parentInput = structuredClone(core.crowdedSource.input.effective);
+  const parentDerivation = structuredClone(core.crowdedSource.derivation);
+  const scaleMuscle = muscle => {
+    for (const knot of muscle.centerline) knot.radius *= clearanceScale;
+    muscle.targetVolume *= clearanceScale ** 2;
+  };
+  for (const muscle of core.members) scaleMuscle(muscle);
+  for (const muscle of core.crowdedSource.muscles) scaleMuscle(muscle);
+  for (const obstacle of core.crowdedSource.obstacles) {
+    obstacle.radius *= clearanceScale;
+    obstacle.clearance = (obstacle.clearance || 0) * clearanceScale;
+  }
+  core.crowdedSource.compartment.clearance *= clearanceScale;
+  core.crowdedSource.id =
+    `${core.crowdedSource.id}-clearance-${clearanceScale}-homotopy`;
+  core.crowdedSource.derivation = {
+    schema:'kaminos.nbody-compiled-clearance-homotopy-stage.v0',
+    parentInput,
+    clearanceScale,
+    sourceDerivation:parentDerivation,
+  };
+  const sourceCore = structuredClone(core.crowdedSource);
+  delete sourceCore.input;
+  const effectiveSourceSha256 = hashMusclePackingCanonicalJson(sourceCore);
+  const effectiveInput = {
+    kind:'synthetic-fixture',
+    id:core.crowdedSource.id,
+    sha256:effectiveSourceSha256,
+  };
+  core.crowdedSource.input = {
+    requested:structuredClone(effectiveInput),
+    effective:structuredClone(effectiveInput),
+  };
+  core.source = {
+    ...core.source,
+    parentProblemSha256:problem.identity.sha256,
+    clearanceScale,
+    effectiveProblemKind:'scaled-clearance-homotopy-stage',
+    crowdedStateSha256:hashMusclePackingCanonicalJson(core.crowdedSource),
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function solveNBodyUnifiedKktCandidate({
+  problem,
+  requestedConfig,
+  initialVector,
+} = {}) {
   validateProblem(problem);
   validateConfig(requestedConfig, problem.carrier.translationBasis);
-  const primary = solveEnumeration(problem, requestedConfig);
+  const initialState = resolveInitialVector(problem, requestedConfig, initialVector);
+  const primary = solveEnumeration(problem, requestedConfig, initialState);
   const alternate = solveEnumeration(problem, {
     ...structuredClone(requestedConfig),
     candidateEnumeration:requestedConfig.candidateEnumeration === 'canonical'
       ? 'reverse'
       : 'canonical',
-  });
+  }, initialState);
   const primaryRow = invarianceRow(primary);
   const alternateRow = invarianceRow(alternate);
-  const equivalenceTolerance = Math.max(requestedConfig.convergenceTolerance * 0.01, 1e-10);
   const maximumVectorDifference = Math.max(...primaryRow.selectedVector.map(
     (value, index) => Math.abs(value - alternateRow.selectedVector[index]),
   ));
@@ -625,17 +749,19 @@ export function solveNBodyUnifiedKktCandidate({ problem, requestedConfig } = {})
     primary.selected.metrics,
     alternate.selected.metrics,
   );
-  const comparison = {
-    statusEqual:primaryRow.status === alternateRow.status,
-    selectedCarrierEquivalent:maximumVectorDifference <= equivalenceTolerance,
-    physicalMetricsEquivalent:maximumMetricsDifference <= equivalenceTolerance,
-    workDecisionStructureEqual:JSON.stringify(workDecisionStructure(primary.work)) ===
-      JSON.stringify(workDecisionStructure(alternate.work)),
-  };
-  const passed = Object.values(comparison).every(Boolean);
-  return {
-    ...primary,
-    invariance:{
+  const { passed, equivalenceTolerance, comparison } =
+    classifyNBodyUnifiedKktTraversalEquivalence({
+      statusEqual:primaryRow.status === alternateRow.status,
+      workDecisionStructureEqual:JSON.stringify(workDecisionStructure(primary.work)) ===
+        JSON.stringify(workDecisionStructure(alternate.work)),
+      convergenceTolerance:requestedConfig.convergenceTolerance,
+      maximumVectorDifference,
+      maximumMetricsDifference,
+    });
+  const { identity:_enumerationIdentity, ...primaryCore } = primary;
+  const core = {
+    ...primaryCore,
+    invariance: {
       candidateEnumeration:passed ? 'passed' : 'failed',
       mechanism:'paired-complete-coupled-kkt-solve-comparison',
       equivalenceTolerance,
@@ -644,17 +770,6 @@ export function solveNBodyUnifiedKktCandidate({ problem, requestedConfig } = {})
       rows:[primaryRow, alternateRow],
       comparison,
     },
-    identity:{ sha256:hashMusclePackingCanonicalJson({
-      ...primary,
-      invariance:{
-        candidateEnumeration:passed ? 'passed' : 'failed',
-        mechanism:'paired-complete-coupled-kkt-solve-comparison',
-        equivalenceTolerance,
-        maximumVectorDifference,
-        maximumMetricsDifference,
-        rows:[primaryRow, alternateRow],
-        comparison,
-      },
-    }) },
   };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }

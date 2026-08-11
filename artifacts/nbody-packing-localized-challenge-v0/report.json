@@ -1,0 +1,182 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "superseded-by-localized-hard-boundary-v0",
+  "route": {
+    "requested": "nbody-packing-localized-boundary-v0",
+    "effective": "nbody-packing-localized-boundary-v0",
+    "fallbackUsed": false
+  },
+  "bracket": {
+    "lastPass": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.20-assay-v0",
+      "fixtureSha256": "7d73f3943a7c07cc9c0b9b577cc62d90ba5f890b7cb1dae3c460a3149b87d4c2",
+      "severity": 0.2,
+      "resultSha256": "74cd97a5ab4fa20b127c57aff5d672c29def35f5096f4847928377e72d12454a"
+    },
+    "firstFail": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.24-assay-v0",
+      "fixtureSha256": "efdcac216cdce26b0b6db09f5e36963542a720181e77ceb05a2851ca4a09a8ca",
+      "severity": 0.24,
+      "resultSha256": "b4f5de28e3960a6770129c542ba4cc7cb6c14faa5b120e32ba8095ab9ce14666",
+      "failure": {
+        "phase": "unified-kkt-globalization-line-search",
+        "lastTrustworthyEvidence": "selected",
+        "residual": 0.000647311228,
+        "violatedConstraints": [
+          {
+            "key": "pair:density-06-00:2|density-06-05:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.000647311227811
+          }
+        ],
+        "linearizedConstraintKeys": [
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:2|density-six-offset-short-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-02:1|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-lower:density-06-03:4:0",
+          "compartment-upper:density-06-00:1:0",
+          "compartment-upper:density-06-00:3:0",
+          "compartment-upper:density-06-01:2:2",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-00:1|density-06-05:1",
+          "pair:density-06-00:1|density-06-05:2",
+          "pair:density-06-00:2|density-06-05:1",
+          "pair:density-06-00:2|density-06-05:2",
+          "pair:density-06-01:2|density-06-02:2",
+          "pair:density-06-01:2|density-06-02:3",
+          "pair:density-06-01:3|density-06-02:2",
+          "pair:density-06-01:3|density-06-02:3"
+        ],
+        "projectedConstraintKeys": [
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-upper:density-06-00:1:0",
+          "compartment-upper:density-06-00:3:0",
+          "compartment-upper:density-06-01:2:2",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-01:2|density-06-02:2"
+        ],
+        "candidateResiduals": [
+          {
+            "lineScale": 1,
+            "maximumPhysicalResidual": 0.000719335856,
+            "pairwisePenetration": 0.000719335856,
+            "skeletalPenetration": 6.5131e-8,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.5,
+            "maximumPhysicalResidual": 0.000683166168,
+            "pairwisePenetration": 0.000683166168,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.25,
+            "maximumPhysicalResidual": 0.000665199358,
+            "pairwisePenetration": 0.000665199358,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.125,
+            "maximumPhysicalResidual": 0.000656245459,
+            "pairwisePenetration": 0.000656245459,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.0625,
+            "maximumPhysicalResidual": 0.000651775885,
+            "pairwisePenetration": 0.000651775885,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.03125,
+            "maximumPhysicalResidual": 0.000649542942,
+            "pairwisePenetration": 0.000649542942,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.015625,
+            "maximumPhysicalResidual": 0.000648426931,
+            "pairwisePenetration": 0.000648426931,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          },
+          {
+            "lineScale": 0.0078125,
+            "maximumPhysicalResidual": 0.000647869041,
+            "pairwisePenetration": 0.000647869041,
+            "skeletalPenetration": 0,
+            "compartmentEscape": 0
+          }
+        ]
+      }
+    }
+  },
+  "classification": {
+    "status": "same-basis-feasible-globalization-failure",
+    "oracleSha256": "0a5bcaff52d4f911ca644572b8c81f1788445681b076ff3637a5a9efa9c040d2",
+    "coordinateIndex": 20,
+    "delta": -0.01
+  },
+  "bindings": {
+    "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+    "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895",
+    "indexHtmlSha256": "4b013cc5ddc44acd818a82c57bddd49b0523033698fa92052857e3aa0d0ed073",
+    "challengeResultSha256": "e1f7acac317ba79daf3408458cde3e7a9c8c6fc05b03ab23d814e77e6ef4eb43",
+    "visualInspectionSha256": "03294e9824366251be48a4067d7a3e20da223d242c8ec58aaf1b1de14a865079",
+    "captureReceiptSetSha256": "0247b514092e90842fe878839c4b278ebacd7ee2004c4ac0351945d25fd7268c"
+  },
+  "requiredStates": [
+    "pass-crowded",
+    "last-pass",
+    "fail-crowded",
+    "first-fail",
+    "same-basis-feasible",
+    "reference"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "the first observed 0.24 stall is a globalization failure because a feasible state exists in the identical 24-variable carrier",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "representation-limit-localization",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "visualInspection": {
+    "status": "superseded-historical-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "03294e9824366251be48a4067d7a3e20da223d242c8ec58aaf1b1de14a865079",
+    "captureCount": 12
+  },
+  "supersession": {
+    "reason": "solver-globalization-repair-moved-the-boundary-and-traversal-semantics-changed",
+    "replacementRoute": "nbody-packing-localized-hard-boundary-v0",
+    "historicalEvidenceOnly": true
+  },
+  "identity": {
+    "sha256": "8e325a4b4a93fc7736cf6f1babd380e7b59c240f191419df34dca3249acf70b6"
+  }
+}

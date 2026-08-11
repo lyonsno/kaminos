@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/first-fail-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/first-fail-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 52230,
+    "processGroupId": 52230,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 52230,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 52236,
+      "processGroupId": 52236,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 52236,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3855,
+    "retainedBytes": 3855,
+    "truncated": false,
+    "tail": "[0811/070348.960973:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/070349.023175:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070349.413387:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n[0811/070349.413501:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n[0811/070349.414969:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070349.435842:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n[0811/070349.437347:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070349.451972:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n[0811/070349.453027:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0811/070349.468254:INFO:CONSOLE:0] \"[.WebGL-0x12400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n252030 bytes written to file repo://artifacts/nbody-packing-localized-hard-boundary-v0/first-fail-volume.png\n[0811/070349.679482:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/070349.698823:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n[0811/070349.732419:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070350.129667:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/070350.130884:INFO:CONSOLE:0] \"[.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/first-fail-volume.png",
+    "sizeBytes": 252030,
+    "sha256": "b3f8ea4b2f330bb8b1e96ffac0a0a2f38737f623db46df270520586fd4aadc3f",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 65,
+      "idatBytes": 251229
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "first-fail",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-localized-hard-boundary-v0",
+      "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+      "resultsSha256": "40b7c1289d288429916933d6c4971cafb33442064577df45516d24c924ec97da"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 128767,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-localized-hard-boundary-v0/first-fail-volume.png",
+      "sizeBytes": 252030,
+      "sha256": "b3f8ea4b2f330bb8b1e96ffac0a0a2f38737f623db46df270520586fd4aadc3f",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 65,
+        "idatBytes": 251229
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-hard-boundary-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "40b7c1289d288429916933d6c4971cafb33442064577df45516d24c924ec97da"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 128767,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-hard-boundary-v0/?state=first-fail&mode=volume",
+    "httpStatus": 200,
+    "sizeBytes": 127802,
+    "sha256": "4e5e7593156f8fec7c993d727da1adc29bdbe9c4a63b3df999e6ecb43ea4efac"
+  }
+}

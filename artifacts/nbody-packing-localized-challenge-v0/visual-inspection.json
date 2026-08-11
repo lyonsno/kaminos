@@ -1,0 +1,236 @@
+{
+  "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
+  "status": "superseded-historical-inspection",
+  "observedAt": "2026-08-11T07:18:38.634Z",
+  "summary": "All twelve exact state/mode frames were personally inspected. Both crowded states visibly wrap the offset skeletal obstacles and carry magenta debt; the last pass clears visible debt while retaining six identities, endpoints, volume, and continuous centerlines; the first fail is explicitly marked by one red pair-contact witness in both volume and slice views; the same-basis feasible correction removes that marker without changing the carrier family; the manufactured reference remains visually distinct. Labels and before/packed semantics are not inverted.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "crowdedDebtLegible": true,
+    "lastPassClearanceLegible": true,
+    "firstFailDebtLegible": true,
+    "sameBasisCorrectionLegible": true,
+    "stableIdentityLegible": true,
+    "fixedAttachmentsLegible": true,
+    "individualVolumeLegible": true,
+    "packingSemanticsNotInverted": true
+  },
+  "route": {
+    "requested": "nbody-packing-localized-boundary-v0",
+    "effective": "nbody-packing-localized-boundary-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "pass-crowded",
+      "mode": "volume",
+      "png": "pass-crowded-volume.png",
+      "pngSha256": "31cbf036124c397a76b08a0b638509fea9b5838d7c3bfe49862511642541f57e",
+      "captureReport": "pass-crowded-volume-capture-report.json",
+      "captureReportSha256": "7048d08de449e5f5f9245d3b198662d624d8283f2770d6a87c0bab79a27d07f4",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "pass-crowded",
+      "mode": "slice",
+      "png": "pass-crowded-slice.png",
+      "pngSha256": "11f48ad3cbce317628ebfbdc3aa781dcc6f023a5415ea3202ac5b86b33ced8a0",
+      "captureReport": "pass-crowded-slice-capture-report.json",
+      "captureReportSha256": "bc52ff152a8ccdbb3904382b0970449cfb4cc0fe622d45440626e8abc5d51d06",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "volume",
+      "png": "last-pass-volume.png",
+      "pngSha256": "2fb16eb29db440cf559d2b8dbc4caad41eb5df4c1bcf3708044af82c99cd5d2b",
+      "captureReport": "last-pass-volume-capture-report.json",
+      "captureReportSha256": "eb5529fbc9cf0f0e15807172077242d6596878f1ac64b66394f72a4acd64fc6b",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "slice",
+      "png": "last-pass-slice.png",
+      "pngSha256": "ec5951a9a7a739723bcf91d353227a2d991d9a84dbaaccf71ee220a144737e48",
+      "captureReport": "last-pass-slice-capture-report.json",
+      "captureReportSha256": "bd17b0d76e213948d37ef98212547ec769d0c46fe2070e46062b36ddd2d3d53f",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "volume",
+      "png": "fail-crowded-volume.png",
+      "pngSha256": "9314cc9cf4a7e6d5b2ad5faaa8e477875f8656d5fcb18dc124fd4506b96da2f8",
+      "captureReport": "fail-crowded-volume-capture-report.json",
+      "captureReportSha256": "a5bca2b5d7442249076826fbeaf80790e6fe2cfae4ba4b9c90e8bd86086cf53f",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "slice",
+      "png": "fail-crowded-slice.png",
+      "pngSha256": "32c5bd422995d2413f815e6cfea957f8d556b1183307ab63c737b8e569d6173f",
+      "captureReport": "fail-crowded-slice-capture-report.json",
+      "captureReportSha256": "a2f8b8d4b61ebe04ca3cf366a97ec37db8a2b30033b358927bcac3b1b51dcc78",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "volume",
+      "png": "first-fail-volume.png",
+      "pngSha256": "bf43c50be975efd262258c52e5f84465e013fa23b3cf4eb31a1fcb83798570a6",
+      "captureReport": "first-fail-volume-capture-report.json",
+      "captureReportSha256": "b49fee5d94423185b3bf59f3ae836a7b1a3dc60de292f406d98cc46f023af484",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "slice",
+      "png": "first-fail-slice.png",
+      "pngSha256": "e293471615a757a2f54023b1f3189943db3cfb717c4636956f2f872000dc6dbb",
+      "captureReport": "first-fail-slice-capture-report.json",
+      "captureReportSha256": "f542bf15dd804418360bedb434bfadc680b9019638495445e960989202ffb6ac",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "volume",
+      "png": "same-basis-feasible-volume.png",
+      "pngSha256": "500d387d5f47f64497a848937a03c4506916fd78ac8dd9e07b23e5a8b6c07e56",
+      "captureReport": "same-basis-feasible-volume-capture-report.json",
+      "captureReportSha256": "725c341d6b4b8563111e71e43e7c80838ca743764395c0ad1cc0c1f0d4382769",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "slice",
+      "png": "same-basis-feasible-slice.png",
+      "pngSha256": "d27c3b8b1242e86d608a677a84a419b7ee7fdfb607abba617e32966d4abc80d0",
+      "captureReport": "same-basis-feasible-slice-capture-report.json",
+      "captureReportSha256": "2d7fb0dcae5d9131d54ba3727cb509dd09ab2e038881d081e1653a857d926774",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "volume",
+      "png": "reference-volume.png",
+      "pngSha256": "fac97829c4c8dc0a1a09ddb02a55ce26ae5bfb03419b05694fdc27f6b07903a1",
+      "captureReport": "reference-volume-capture-report.json",
+      "captureReportSha256": "033cff83d109922471f07e16b00d227bcccb51a804981c46927ee731598841f9",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "slice",
+      "png": "reference-slice.png",
+      "pngSha256": "7de6cbd3c46b21035208e6fb9553b9f0fca8aa163d8643c701311b83dc002f51",
+      "captureReport": "reference-slice-capture-report.json",
+      "captureReportSha256": "954904d416257c2c4d53f26688f5737eee1a70e933002c636a6840bae81c9956",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      }
+    }
+  ],
+  "claimCeiling": {
+    "admittedClaim": "the first observed 0.24 stall is a globalization failure because a feasible state exists in the identical 24-variable carrier",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "representation-limit-localization",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "supersession": {
+    "replacementRoute": "nbody-packing-localized-hard-boundary-v0",
+    "historicalEvidenceOnly": true
+  },
+  "identity": {
+    "sha256": "5b2f0cec40c89847f10784aa476441b6f131b07cae59a557e04da19782f00187"
+  }
+}

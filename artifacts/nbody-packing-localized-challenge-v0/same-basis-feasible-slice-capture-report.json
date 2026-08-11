@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice",
+    "outputPath": "repo://artifacts/nbody-packing-localized-challenge-v0/same-basis-feasible-slice.png",
+    "reportPath": "repo://artifacts/nbody-packing-localized-challenge-v0/same-basis-feasible-slice-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 8054,
+    "processGroupId": 8054,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 8054,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 8060,
+      "processGroupId": 8060,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 8060,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3887,
+    "retainedBytes": 3887,
+    "truncated": false,
+    "tail": "[0811/031713.738972:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/031713.807462:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/031714.202398:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n[0811/031714.202509:INFO:CONSOLE:0] \"[.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n[0811/031714.204335:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/031714.213755:INFO:CONSOLE:0] \"[.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n[0811/031714.215215:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/031714.224215:INFO:CONSOLE:0] \"[.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n[0811/031714.224905:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0811/031714.234451:INFO:CONSOLE:0] \"[.WebGL-0x13400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n146620 bytes written to file repo://artifacts/nbody-packing-localized-challenge-v0/same-basis-feasible-slice.png\n[0811/031714.420721:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/031714.440180:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n[0811/031714.479459:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/031714.871588:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/031714.873264:INFO:CONSOLE:0] \"[.WebGL-0x12c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-localized-challenge-v0/same-basis-feasible-slice.png",
+    "sizeBytes": 146620,
+    "sha256": "d27c3b8b1242e86d608a677a84a419b7ee7fdfb607abba617e32966d4abc80d0",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 39,
+      "idatBytes": 146131
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "same-basis-feasible",
+      "witnessMode": "slice",
+      "witnessRoute": "nbody-packing-localized-boundary-v0",
+      "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+      "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 127017,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-localized-challenge-v0/same-basis-feasible-slice.png",
+      "sizeBytes": 146620,
+      "sha256": "d27c3b8b1242e86d608a677a84a419b7ee7fdfb607abba617e32966d4abc80d0",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 39,
+        "idatBytes": 146131
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-localized-boundary-v0",
+        "fixturesSha256": "108eea6cb9c3df878f517fdb9da9c3dbf7235fb439ae358483ec3678a20b36bc",
+        "resultsSha256": "6deba835da15185227f775f9543cd522d70df6f7e7530f84c11fb29e942fc895"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 127017,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-localized-challenge-v0/?state=same-basis-feasible&mode=slice",
+    "httpStatus": 200,
+    "sizeBytes": 126039,
+    "sha256": "a5a169c9121543499a4c7a8b940d07505a0c6d0937f16923a7dc18fe6f2c6742"
+  }
+}

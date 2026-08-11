@@ -1,0 +1,1123 @@
+{
+  "schema": "kaminos.nbody-localized-constraint-homotopy-result.v0",
+  "route": {
+    "requested": "compiled-problem-clearance-homotopy",
+    "effective": "compiled-problem-clearance-homotopy",
+    "fallbackUsed": false
+  },
+  "source": {
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd"
+  },
+  "config": {
+    "requested": {
+      "stageScales": [
+        0.9,
+        0.925,
+        0.95,
+        0.975,
+        1
+      ],
+      "solver": {
+        "activationMargin": 0.02,
+        "algorithm": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+        "candidateEnumeration": "canonical",
+        "convergenceTolerance": 1e-7,
+        "finiteDifferenceStep": 0.000001,
+        "iterationBudget": 128,
+        "lineSearch": [
+          1,
+          0.5,
+          0.25,
+          0.125,
+          0.0625,
+          0.03125,
+          0.015625,
+          0.0078125
+        ],
+        "ridge": 1e-10,
+        "translationBasis": "per-member-xz-first-second-sine-zero-at-attachments",
+        "translationBounds": [
+          -0.3,
+          0.3
+        ]
+      }
+    },
+    "effective": {
+      "stageScales": [
+        0.9,
+        0.925,
+        0.95,
+        0.975,
+        1
+      ],
+      "solver": {
+        "activationMargin": 0.02,
+        "algorithm": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+        "candidateEnumeration": "canonical",
+        "convergenceTolerance": 1e-7,
+        "finiteDifferenceStep": 0.000001,
+        "iterationBudget": 128,
+        "lineSearch": [
+          1,
+          0.5,
+          0.25,
+          0.125,
+          0.0625,
+          0.03125,
+          0.015625,
+          0.0078125
+        ],
+        "ridge": 1e-10,
+        "translationBasis": "per-member-xz-first-second-sine-zero-at-attachments",
+        "translationBounds": [
+          -0.3,
+          0.3
+        ]
+      }
+    }
+  },
+  "initialization": {
+    "kind": "explicit-same-basis-vector",
+    "vectorSha256": "84ebe282f1f15d022481fc390b500331a75a177c33eec04f4c1784c2f6983c00"
+  },
+  "mechanism": {
+    "continuationVariable": "uniform-muscle-radius-obstacle-radius-and-clearance-scale",
+    "carrier": "unchanged-compiled-first-second-sine",
+    "previousStageSelectedVectorConsumed": true,
+    "oracleTargetCoordinatesConsumed": false,
+    "contactGraphRowsConsumed": false
+  },
+  "stages": [
+    {
+      "clearanceScale": 0.9,
+      "problemSha256": "898b8a9c769ecfd817b8b419d036e29a47cc0187e59947618a7f4902e146cf4c",
+      "parentProblemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+      "seedVectorSha256": "84ebe282f1f15d022481fc390b500331a75a177c33eec04f4c1784c2f6983c00",
+      "elapsedMilliseconds": 133099.93,
+      "solverResult": {
+        "schema": "kaminos.nbody-packing-unified-kkt-result.v0",
+        "status": "stalled-unified-kkt-candidate",
+        "route": {
+          "requested": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+          "effective": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+          "fallbackUsed": false
+        },
+        "source": {
+          "problemSha256": "898b8a9c769ecfd817b8b419d036e29a47cc0187e59947618a7f4902e146cf4c",
+          "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd"
+        },
+        "config": {
+          "requested": {
+            "activationMargin": 0.02,
+            "algorithm": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+            "candidateEnumeration": "canonical",
+            "convergenceTolerance": 1e-7,
+            "finiteDifferenceStep": 0.000001,
+            "iterationBudget": 128,
+            "lineSearch": [
+              1,
+              0.5,
+              0.25,
+              0.125,
+              0.0625,
+              0.03125,
+              0.015625,
+              0.0078125
+            ],
+            "ridge": 1e-10,
+            "translationBasis": "per-member-xz-first-second-sine-zero-at-attachments",
+            "translationBounds": [
+              -0.3,
+              0.3
+            ]
+          },
+          "effective": {
+            "activationMargin": 0.02,
+            "algorithm": "unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0",
+            "candidateEnumeration": "canonical",
+            "convergenceTolerance": 1e-7,
+            "finiteDifferenceStep": 0.000001,
+            "iterationBudget": 128,
+            "lineSearch": [
+              1,
+              0.5,
+              0.25,
+              0.125,
+              0.0625,
+              0.03125,
+              0.015625,
+              0.0078125
+            ],
+            "ridge": 1e-10,
+            "translationBasis": "per-member-xz-first-second-sine-zero-at-attachments",
+            "translationBounds": [
+              -0.3,
+              0.3
+            ]
+          }
+        },
+        "mechanism": {
+          "updateMode": "one-snapshot-one-coupled-primal-dual-projection",
+          "objective": "minimum-squared-translation-from-crowded-state",
+          "constraintKinds": [
+            "pairwise-clearance",
+            "skeletal-clearance",
+            "compartment-clearance"
+          ],
+          "contactGraphRowsConsumed": false,
+          "oracleTargetCoordinatesConsumed": false,
+          "traversal": "canonical",
+          "initialization": {
+            "kind": "explicit-same-basis-vector",
+            "vectorSha256": "84ebe282f1f15d022481fc390b500331a75a177c33eec04f4c1784c2f6983c00",
+            "oracleTargetCoordinatesConsumed": false,
+            "contactGraphRowsConsumed": false
+          }
+        },
+        "work": {
+          "iterations": 4,
+          "linearizationCount": 80,
+          "candidateEvaluations": 40,
+          "rows": [
+            {
+              "iteration": 1,
+              "activeConstraintKeys": [
+                "bone:density-06-00:2|density-six-offset-short-bone",
+                "bone:density-06-01:2|density-6-offset-bone",
+                "bone:density-06-01:2|density-six-offset-short-bone",
+                "bone:density-06-01:3|density-6-offset-bone",
+                "bone:density-06-02:1|density-6-offset-bone",
+                "bone:density-06-02:2|density-6-offset-bone",
+                "bone:density-06-03:2|density-6-offset-bone",
+                "bone:density-06-03:3|density-6-offset-bone",
+                "compartment-lower:density-06-03:2:0",
+                "compartment-lower:density-06-03:4:0",
+                "compartment-upper:density-06-01:2:2",
+                "compartment-upper:density-06-01:4:2"
+              ],
+              "activeKinds": [
+                "compartment-clearance",
+                "skeletal-clearance"
+              ],
+              "acceptedLineScale": 0.25,
+              "maximumPhysicalResidualBefore": 0.008337203954,
+              "maximumPhysicalResidualAfter": 0.006252715845,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.006252715845,
+              "compartmentEscape": 0,
+              "deformationEnergy": 0.071853646812744
+            },
+            {
+              "iteration": 2,
+              "activeConstraintKeys": [
+                "bone:density-06-00:2|density-six-offset-short-bone",
+                "bone:density-06-01:2|density-6-offset-bone",
+                "bone:density-06-01:2|density-six-offset-short-bone",
+                "bone:density-06-01:3|density-6-offset-bone",
+                "bone:density-06-02:1|density-6-offset-bone",
+                "bone:density-06-02:2|density-6-offset-bone",
+                "bone:density-06-03:2|density-6-offset-bone",
+                "bone:density-06-03:3|density-6-offset-bone",
+                "compartment-lower:density-06-03:2:0",
+                "compartment-lower:density-06-03:4:0",
+                "compartment-upper:density-06-01:2:2",
+                "compartment-upper:density-06-01:4:2"
+              ],
+              "activeKinds": [
+                "compartment-clearance",
+                "skeletal-clearance"
+              ],
+              "acceptedLineScale": 0.125,
+              "maximumPhysicalResidualBefore": 0.006252715845,
+              "maximumPhysicalResidualAfter": 0.005506580698,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005506580698,
+              "compartmentEscape": 0,
+              "deformationEnergy": 0.074684441047934
+            },
+            {
+              "iteration": 3,
+              "activeConstraintKeys": [
+                "bone:density-06-00:2|density-six-offset-short-bone",
+                "bone:density-06-01:2|density-6-offset-bone",
+                "bone:density-06-01:2|density-six-offset-short-bone",
+                "bone:density-06-01:3|density-6-offset-bone",
+                "bone:density-06-02:1|density-6-offset-bone",
+                "bone:density-06-02:2|density-6-offset-bone",
+                "bone:density-06-03:2|density-6-offset-bone",
+                "bone:density-06-03:3|density-6-offset-bone",
+                "compartment-lower:density-06-03:2:0",
+                "compartment-lower:density-06-03:4:0",
+                "compartment-upper:density-06-01:2:2",
+                "compartment-upper:density-06-01:4:2"
+              ],
+              "activeKinds": [
+                "compartment-clearance",
+                "skeletal-clearance"
+              ],
+              "acceptedLineScale": 1,
+              "maximumPhysicalResidualBefore": 0.005506580698,
+              "maximumPhysicalResidualAfter": 0.005430496367,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005430496367,
+              "compartmentEscape": 0,
+              "deformationEnergy": 0.076828105794115
+            },
+            {
+              "iteration": 4,
+              "activeConstraintKeys": [
+                "bone:density-06-00:2|density-six-offset-short-bone",
+                "bone:density-06-01:2|density-6-offset-bone",
+                "bone:density-06-01:2|density-six-offset-short-bone",
+                "bone:density-06-01:3|density-6-offset-bone",
+                "bone:density-06-02:1|density-6-offset-bone",
+                "bone:density-06-02:2|density-6-offset-bone",
+                "bone:density-06-03:2|density-6-offset-bone",
+                "bone:density-06-03:3|density-6-offset-bone",
+                "compartment-lower:density-06-03:2:0",
+                "compartment-lower:density-06-03:4:0",
+                "compartment-upper:density-06-01:2:2",
+                "compartment-upper:density-06-01:4:2"
+              ],
+              "activeKinds": [
+                "compartment-clearance",
+                "skeletal-clearance"
+              ],
+              "acceptedLineScale": 1,
+              "maximumPhysicalResidualBefore": 0.005430496367,
+              "maximumPhysicalResidualAfter": 0.00531081146,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.00531081146,
+              "compartmentEscape": 0,
+              "deformationEnergy": 0.076757744043318
+            }
+          ]
+        },
+        "selected": {
+          "vector": [
+            0.087533717549287,
+            -0.125504234304512,
+            0.02648629205683,
+            -0.04214776785952,
+            -0.034992267523315,
+            0.092332276523277,
+            0.3,
+            -0.042588080495163,
+            -0.090430422149966,
+            0.05150543980291,
+            -0.055861672478694,
+            0.030986883116737,
+            -0.080714351476917,
+            -0.04613969075186,
+            0.041387311844885,
+            0.028157427749671,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "muscles": [
+            {
+              "id": "density-06-00",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-00",
+                "constructionId": "nbody-density-ring:6:0",
+                "lineageId": "nbody-density-ring-lineage:6:0",
+                "instanceId": "nbody-density-ring-instance:6:0"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-00:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.5397117019648987,
+                    -1.15,
+                    0.14936960454574547
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-00:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.5397117019648987,
+                    1.15,
+                    0.14936960454574547
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    0.5397117019648987,
+                    -1.15,
+                    0.14936960454574547
+                  ],
+                  "radius": 0.08535227299595097
+                },
+                {
+                  "position": [
+                    0.6001641699923311,
+                    -0.75,
+                    0.034023114445714764
+                  ],
+                  "radius": 0.12104504170334864
+                },
+                {
+                  "position": [
+                    0.3147590487042418,
+                    -0.28,
+                    -0.02460670778681763
+                  ],
+                  "radius": 0.15518595090172904
+                },
+                {
+                  "position": [
+                    0.5912044416972535,
+                    0.28,
+                    0.05328977824719058
+                  ],
+                  "radius": 0.15518595090172904
+                },
+                {
+                  "position": [
+                    0.5659727695655598,
+                    0.75,
+                    0.11568497579138615
+                  ],
+                  "radius": 0.12104504170334864
+                },
+                {
+                  "position": [
+                    0.5397117019648987,
+                    1.15,
+                    0.14936960454574547
+                  ],
+                  "radius": 0.08535227299595097
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            },
+            {
+              "id": "density-06-01",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-01",
+                "constructionId": "nbody-density-ring:6:1",
+                "lineageId": "nbody-density-ring-lineage:6:1",
+                "instanceId": "nbody-density-ring-instance:6:1"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-01:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.1404979788925983,
+                    -1.15,
+                    0.5420888468942108
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-01:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.1404979788925983,
+                    1.15,
+                    0.5420888468942108
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    0.1404979788925983,
+                    -1.15,
+                    0.5420888468942108
+                  ],
+                  "radius": 0.08140323448745349
+                },
+                {
+                  "position": [
+                    0.4052469949866669,
+                    -0.75,
+                    0.5558567258737562
+                  ],
+                  "radius": 0.11544458709129765
+                },
+                {
+                  "position": [
+                    0.2823275880623014,
+                    -0.28,
+                    0.588658600704827
+                  ],
+                  "radius": 0.14800588088627906
+                },
+                {
+                  "position": [
+                    -0.09364407024407298,
+                    0.28,
+                    0.33071842973032467
+                  ],
+                  "radius": 0.14800588088627906
+                },
+                {
+                  "position": [
+                    -0.16661325726047208,
+                    0.75,
+                    0.6206532550139
+                  ],
+                  "radius": 0.11544458709129765
+                },
+                {
+                  "position": [
+                    0.1404979788925983,
+                    1.15,
+                    0.5420888468942108
+                  ],
+                  "radius": 0.08140323448745349
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            },
+            {
+              "id": "density-06-02",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-02",
+                "constructionId": "nbody-density-ring:6:2",
+                "lineageId": "nbody-density-ring-lineage:6:2",
+                "instanceId": "nbody-density-ring-instance:6:2"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-02:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.3992137230723004,
+                    -1.15,
+                    0.3927192423484654
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-02:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.3992137230723004,
+                    1.15,
+                    0.3927192423484654
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    -0.3992137230723004,
+                    -1.15,
+                    0.3927192423484654
+                  ],
+                  "radius": 0.08589401635679844
+                },
+                {
+                  "position": [
+                    -0.4961085917797956,
+                    -0.75,
+                    0.43919000845668893
+                  ],
+                  "radius": 0.12181333228782323
+                },
+                {
+                  "position": [
+                    -0.3303246843238149,
+                    -0.28,
+                    0.19444448083592542
+                  ],
+                  "radius": 0.1561709388305426
+                },
+                {
+                  "position": [
+                    -0.4429970906651335,
+                    0.28,
+                    0.41021654465852836
+                  ],
+                  "radius": 0.1561709388305426
+                },
+                {
+                  "position": [
+                    -0.39923978394862547,
+                    0.75,
+                    0.39352310316960465
+                  ],
+                  "radius": 0.12181333228782323
+                },
+                {
+                  "position": [
+                    -0.3992137230723004,
+                    1.15,
+                    0.3927192423484654
+                  ],
+                  "radius": 0.08589401635679844
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            },
+            {
+              "id": "density-06-03",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-03",
+                "constructionId": "nbody-density-ring:6:3",
+                "lineageId": "nbody-density-ring-lineage:6:3",
+                "instanceId": "nbody-density-ring-instance:6:3"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-03:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.5397117019648987,
+                    -1.15,
+                    -0.14936960454574538
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-03:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.5397117019648987,
+                    1.15,
+                    -0.14936960454574538
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    -0.5397117019648987,
+                    -1.15,
+                    -0.14936960454574538
+                  ],
+                  "radius": 0.0859182595654049
+                },
+                {
+                  "position": [
+                    -0.5477927347893642,
+                    -0.75,
+                    -0.1497105291715895
+                  ],
+                  "radius": 0.1218477135654833
+                },
+                {
+                  "position": [
+                    -0.5774966125569145,
+                    -0.28,
+                    -0.16965717415284257
+                  ],
+                  "radius": 0.15621501739164526
+                },
+                {
+                  "position": [
+                    -0.34775950734620265,
+                    0.28,
+                    -0.0689343154977913
+                  ],
+                  "radius": 0.15621501739164526
+                },
+                {
+                  "position": [
+                    -0.6118639322292088,
+                    0.75,
+                    -0.19622577628990365
+                  ],
+                  "radius": 0.1218477135654833
+                },
+                {
+                  "position": [
+                    -0.5397117019648987,
+                    1.15,
+                    -0.14936960454574538
+                  ],
+                  "radius": 0.0859182595654049
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            },
+            {
+              "id": "density-06-04",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-04",
+                "constructionId": "nbody-density-ring:6:4",
+                "lineageId": "nbody-density-ring-lineage:6:4",
+                "instanceId": "nbody-density-ring-instance:6:4"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-04:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.14049797889259824,
+                    -1.15,
+                    -0.5420888468942108
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-04:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    -0.14049797889259824,
+                    1.15,
+                    -0.5420888468942108
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    -0.14049797889259824,
+                    -1.15,
+                    -0.5420888468942108
+                  ],
+                  "radius": 0.08525843964447778
+                },
+                {
+                  "position": [
+                    -0.1336958654259252,
+                    -0.75,
+                    -0.5273231551601095
+                  ],
+                  "radius": 0.12091196895035031
+                },
+                {
+                  "position": [
+                    -0.004455709559137572,
+                    -0.28,
+                    -0.24677501221218617
+                  ],
+                  "radius": 0.1550153448081414
+                },
+                {
+                  "position": [
+                    -0.1336958654259252,
+                    0.28,
+                    -0.5273231551601095
+                  ],
+                  "radius": 0.1550153448081414
+                },
+                {
+                  "position": [
+                    -0.14049797889259824,
+                    0.75,
+                    -0.5420888468942108
+                  ],
+                  "radius": 0.12091196895035031
+                },
+                {
+                  "position": [
+                    -0.14049797889259824,
+                    1.15,
+                    -0.5420888468942108
+                  ],
+                  "radius": 0.08525843964447778
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            },
+            {
+              "id": "density-06-05",
+              "identity": {
+                "sourceId": "synthetic-manufactured-feasible:density-06-05",
+                "constructionId": "nbody-density-ring:6:5",
+                "lineageId": "nbody-density-ring-lineage:6:5",
+                "instanceId": "nbody-density-ring-instance:6:5"
+              },
+              "authority": {
+                "kind": "synthetic-proxy",
+                "anatomicalAdmission": "none"
+              },
+              "attachments": {
+                "origin": {
+                  "id": "density-06-05:origin",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.39921372307230074,
+                    -1.15,
+                    -0.39271924234846506
+                  ]
+                },
+                "insertion": {
+                  "id": "density-06-05:insertion",
+                  "sourceAuthority": "synthetic-manufactured-feasible",
+                  "position": [
+                    0.39921372307230074,
+                    1.15,
+                    -0.39271924234846506
+                  ]
+                }
+              },
+              "centerline": [
+                {
+                  "position": [
+                    0.39921372307230074,
+                    -1.15,
+                    -0.39271924234846506
+                  ],
+                  "radius": 0.08525843964447777
+                },
+                {
+                  "position": [
+                    0.39921372307230074,
+                    -0.75,
+                    -0.39271924234846506
+                  ],
+                  "radius": 0.12091196895035028
+                },
+                {
+                  "position": [
+                    0.3857879177381572,
+                    -0.28,
+                    -0.3835517917143093
+                  ],
+                  "radius": 0.1550153448081414
+                },
+                {
+                  "position": [
+                    0.13069761638942967,
+                    0.28,
+                    -0.20937022966535024
+                  ],
+                  "radius": 0.1550153448081414
+                },
+                {
+                  "position": [
+                    0.3857879177381572,
+                    0.75,
+                    -0.3835517917143093
+                  ],
+                  "radius": 0.12091196895035028
+                },
+                {
+                  "position": [
+                    0.39921372307230074,
+                    1.15,
+                    -0.39271924234846506
+                  ],
+                  "radius": 0.08525843964447777
+                }
+              ],
+              "targetVolume": 0.1373312544328573,
+              "volumeAuthority": "synthetic-manufactured-feasible-target"
+            }
+          ],
+          "metrics": {
+            "pairwisePenetration": 0,
+            "skeletalPenetration": 0.00531081146,
+            "compartmentEscape": 0,
+            "endpointDrift": 0,
+            "maximumRelativeVolumeError": 0,
+            "maximumBendEnergy": 0.99744580056,
+            "maximumSourceKnotDisplacement": 0.320231027344,
+            "rootMeanSquareSourceKnotDisplacement": 0.103251139383,
+            "minimumSourceBendEnergyRetention": 0.946164908394,
+            "minimumSourceCurvatureCosine": 0.178771984162,
+            "sourceCurvatureReversalCount": 0,
+            "minimumSourceTangentCosine": 0.778690372182,
+            "sourceTangentReversalCount": 0,
+            "maximumSourceRadiusRatio": 1.047359360857,
+            "minimumPairwiseRelationCosine": 0.862289453703,
+            "pairwiseRelationReversalCount": 0,
+            "nonFiniteValueCount": 0,
+            "nonPositiveRadiusCount": 0
+          },
+          "metricsSha256": "9fe59f63b855b483d0b4c7ab1dfa44fe05314d57dfd582af2696ab38a384909b",
+          "physicalStateSha256": "56631231cf9dcaa742d042c9fd82ee2820fd70beed829172c6e7538ffbc0a449",
+          "maximumPhysicalResidual": 0.00531081146,
+          "deformationEnergy": 0.076757744043318,
+          "displacement": {
+            "rows": [
+              {
+                "memberId": "density-06-00",
+                "maximumDisplacement": 0.174756917711,
+                "rootMeanSquareDisplacement": 0.103865743749
+              },
+              {
+                "memberId": "density-06-01",
+                "maximumDisplacement": 0.320231027344,
+                "rootMeanSquareDisplacement": 0.205713648748
+              },
+              {
+                "memberId": "density-06-02",
+                "maximumDisplacement": 0.136522285085,
+                "rootMeanSquareDisplacement": 0.078822545836
+              },
+              {
+                "memberId": "density-06-03",
+                "maximumDisplacement": 0.117776761605,
+                "rootMeanSquareDisplacement": 0.068158601549
+              },
+              {
+                "memberId": "density-06-04",
+                "maximumDisplacement": 0,
+                "rootMeanSquareDisplacement": 0
+              },
+              {
+                "memberId": "density-06-05",
+                "maximumDisplacement": 0,
+                "rootMeanSquareDisplacement": 0
+              }
+            ],
+            "movedMemberCount": 4,
+            "maximumDisplacement": 0.320231027344
+          }
+        },
+        "failure": {
+          "phase": "unified-kkt-globalization-line-search",
+          "lastTrustworthyEvidence": "selected",
+          "residual": 0.00531081146,
+          "violatedConstraints": [
+            {
+              "key": "bone:density-06-01:2|density-6-offset-bone",
+              "kind": "skeletal-clearance",
+              "signedGap": -0.005310811459646
+            },
+            {
+              "key": "bone:density-06-01:3|density-6-offset-bone",
+              "kind": "skeletal-clearance",
+              "signedGap": -0.005310811434986
+            },
+            {
+              "key": "bone:density-06-01:2|density-six-offset-short-bone",
+              "kind": "skeletal-clearance",
+              "signedGap": -0.005272121131893
+            },
+            {
+              "key": "compartment-upper:density-06-01:2:2",
+              "kind": "compartment-clearance",
+              "signedGap": -0.002575634697106
+            },
+            {
+              "key": "compartment-upper:density-06-01:4:2",
+              "kind": "compartment-clearance",
+              "signedGap": -0.002008995211198
+            }
+          ],
+          "linearizedConstraintKeys": [
+            "bone:density-06-00:2|density-six-offset-short-bone",
+            "bone:density-06-01:2|density-6-offset-bone",
+            "bone:density-06-01:2|density-six-offset-short-bone",
+            "bone:density-06-01:3|density-6-offset-bone",
+            "bone:density-06-02:1|density-6-offset-bone",
+            "bone:density-06-02:2|density-6-offset-bone",
+            "bone:density-06-03:2|density-6-offset-bone",
+            "bone:density-06-03:3|density-6-offset-bone",
+            "bone:density-06-04:1|density-6-offset-bone",
+            "bone:density-06-04:2|density-6-offset-bone",
+            "compartment-lower:density-06-03:2:0",
+            "compartment-lower:density-06-03:4:0",
+            "compartment-upper:density-06-00:3:0",
+            "compartment-upper:density-06-01:2:2",
+            "compartment-upper:density-06-01:4:2",
+            "pair:density-06-04:2|density-06-05:2"
+          ],
+          "projectedConstraintKeys": [
+            "bone:density-06-00:2|density-six-offset-short-bone",
+            "bone:density-06-01:2|density-6-offset-bone",
+            "bone:density-06-01:2|density-six-offset-short-bone",
+            "bone:density-06-01:3|density-6-offset-bone",
+            "bone:density-06-02:1|density-6-offset-bone",
+            "bone:density-06-02:2|density-6-offset-bone",
+            "bone:density-06-03:2|density-6-offset-bone",
+            "bone:density-06-03:3|density-6-offset-bone",
+            "compartment-lower:density-06-03:2:0",
+            "compartment-lower:density-06-03:4:0",
+            "compartment-upper:density-06-01:2:2",
+            "compartment-upper:density-06-01:4:2"
+          ],
+          "candidateResiduals": [
+            {
+              "lineScale": 1,
+              "maximumPhysicalResidual": 0.005318009747,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005318009747,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.5,
+              "maximumPhysicalResidual": 0.005314417838,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005314417838,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.25,
+              "maximumPhysicalResidual": 0.005312616457,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005312616457,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.125,
+              "maximumPhysicalResidual": 0.005311714411,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005311714411,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.0625,
+              "maximumPhysicalResidual": 0.005311263048,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005311263048,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.03125,
+              "maximumPhysicalResidual": 0.005311037282,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005311037282,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.015625,
+              "maximumPhysicalResidual": 0.005310924378,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005310924378,
+              "compartmentEscape": 0
+            },
+            {
+              "lineScale": 0.0078125,
+              "maximumPhysicalResidual": 0.005310867921,
+              "pairwisePenetration": 0,
+              "skeletalPenetration": 0.005310867921,
+              "compartmentEscape": 0
+            }
+          ]
+        },
+        "identity": {
+          "sha256": "0be3efc5920cf35ed734311eb56ace9c3c9cd25b87a9505dc71af63380ab90f4"
+        },
+        "invariance": {
+          "candidateEnumeration": "passed",
+          "mechanism": "paired-complete-coupled-kkt-solve-comparison",
+          "equivalenceTolerance": 1e-7,
+          "maximumVectorDifference": 3.900352263386253e-14,
+          "maximumMetricsDifference": 0,
+          "rows": [
+            {
+              "enumeration": "canonical",
+              "status": "stalled-unified-kkt-candidate",
+              "selectedVector": [
+                0.087533717549287,
+                -0.125504234304512,
+                0.02648629205683,
+                -0.04214776785952,
+                -0.034992267523315,
+                0.092332276523277,
+                0.3,
+                -0.042588080495163,
+                -0.090430422149966,
+                0.05150543980291,
+                -0.055861672478694,
+                0.030986883116737,
+                -0.080714351476917,
+                -0.04613969075186,
+                0.041387311844885,
+                0.028157427749671,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "physicalStateSha256": "56631231cf9dcaa742d042c9fd82ee2820fd70beed829172c6e7538ffbc0a449",
+              "metricsSha256": "9fe59f63b855b483d0b4c7ab1dfa44fe05314d57dfd582af2696ab38a384909b",
+              "workSha256": "581877d07f9c31cf626aa46da2f62ccf319ed0298bdfa5dbef1f199a734f8308"
+            },
+            {
+              "enumeration": "reverse",
+              "status": "stalled-unified-kkt-candidate",
+              "selectedVector": [
+                0.087533717549287,
+                -0.125504234304512,
+                0.02648629205683,
+                -0.04214776785952,
+                -0.034992267523276,
+                0.092332276523286,
+                0.3,
+                -0.042588080495139,
+                -0.090430422149966,
+                0.05150543980291,
+                -0.055861672478694,
+                0.030986883116737,
+                -0.080714351476917,
+                -0.04613969075186,
+                0.041387311844885,
+                0.028157427749671,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "physicalStateSha256": "350aae50a3f10aff88198f08e24ed3dbdfa4e0378e688f2aa40e35ad6f8c4245",
+              "metricsSha256": "9fe59f63b855b483d0b4c7ab1dfa44fe05314d57dfd582af2696ab38a384909b",
+              "workSha256": "aff21f8c7fed3ec4b991e3ac6ac6a81c29fd52d19a51edb84f0e768bb7ca242a"
+            }
+          ],
+          "comparison": {
+            "statusEqual": true,
+            "selectedCarrierEquivalent": true,
+            "physicalMetricsEquivalent": true,
+            "workDecisionStructureEqual": true
+          }
+        }
+      }
+    }
+  ],
+  "final": {
+    "clearanceScale": 0.9,
+    "problemSha256": "898b8a9c769ecfd817b8b419d036e29a47cc0187e59947618a7f4902e146cf4c",
+    "resultSha256": "0be3efc5920cf35ed734311eb56ace9c3c9cd25b87a9505dc71af63380ab90f4",
+    "status": "stalled-unified-kkt-candidate",
+    "maximumPhysicalResidual": 0.00531081146
+  },
+  "status": "complete-stalled-before-full-clearance",
+  "terminal": {
+    "startedAt": "2026-08-11T08:46:43.242Z",
+    "completedAt": "2026-08-11T08:48:56.346Z",
+    "failurePhase": null
+  },
+  "claimCeiling": "full-clearance-convergence-on-the-unchanged-carrier-only",
+  "identity": {
+    "sha256": "c4adf803047a62a38597ec86cf5228cd1b9690155be9e37fc1f44d9e9d16e9f0"
+  }
+}

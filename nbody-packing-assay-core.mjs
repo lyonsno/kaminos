@@ -780,6 +780,175 @@ export function createNBodyLongitudinalFalsifierFixture() {
   };
 }
 
+const LOCALIZED_CHALLENGE_SEVERITIES = Object.freeze([
+  0.04,
+  0.08,
+  0.12,
+  0.16,
+  0.2,
+  0.24,
+  0.28,
+  0.32,
+]);
+const LOCALIZED_UPPER_WEIGHTS = Object.freeze([0, 0.05, 1, 0.05, 0, 0]);
+const LOCALIZED_LOWER_WEIGHTS = Object.freeze([0, 0, 0.05, 1, 0.05, 0]);
+
+function relativeProjectionResidual(weights) {
+  const interior = weights.slice(1, -1);
+  const first = interior.map((_, index) => Math.sin(Math.PI * (index + 1) / 5));
+  const second = interior.map((_, index) => Math.sin(2 * Math.PI * (index + 1) / 5));
+  const dot = (left, right) => left.reduce(
+    (sum, value, index) => sum + value * right[index],
+    0,
+  );
+  const gram00 = dot(first, first);
+  const gram01 = dot(first, second);
+  const gram11 = dot(second, second);
+  const rhs0 = dot(interior, first);
+  const rhs1 = dot(interior, second);
+  const determinant = gram00 * gram11 - gram01 ** 2;
+  const coefficient0 = (rhs0 * gram11 - rhs1 * gram01) / determinant;
+  const coefficient1 = (gram00 * rhs1 - gram01 * rhs0) / determinant;
+  const residual = interior.map((value, index) =>
+    value - coefficient0 * first[index] - coefficient1 * second[index]);
+  return rounded(Math.hypot(...residual) / Math.hypot(...interior));
+}
+
+function createLocalizedChallengeKnownFeasibleSource() {
+  const parent = createNBodyPackingGeneralizationSuite().find(
+    fixture => fixture.knownFeasible.muscles.length === 6,
+  );
+  const core = structuredClone(parent.knownFeasible);
+  delete core.input;
+  core.id = 'synthetic-manufactured-feasible-localized-two-obstacle-six-v0';
+  core.obstacles.push({
+    id:'density-six-offset-short-bone',
+    kind:'capsule',
+    start:[0.22, -0.1, 0.22],
+    end:[0.22, 0.75, 0.22],
+    radius:0.12,
+    clearance:0.02,
+    authority:'synthetic-manufactured-feasible',
+  });
+  for (const axis of [0, 2]) {
+    const minimumSurface = Math.min(...core.muscles.flatMap(muscle =>
+      muscle.centerline.map(knot => knot.position[axis] - knot.radius)));
+    const maximumSurface = Math.max(...core.muscles.flatMap(muscle =>
+      muscle.centerline.map(knot => knot.position[axis] + knot.radius)));
+    core.compartment.minimum[axis] = rounded(
+      minimumSurface - core.compartment.clearance - (axis === 0 ? 0.012 : 0.018),
+    );
+    core.compartment.maximum[axis] = rounded(
+      maximumSurface + core.compartment.clearance + (axis === 0 ? 0.026 : 0.01),
+    );
+  }
+  core.compartment.id = 'density-six-tight-asymmetric-two-obstacle-compartment';
+  return { source:sourceWithIdentity(core), contactGraph:structuredClone(parent.contactGraph) };
+}
+
+function deriveLocalizedChallengeCrowdedSource(knownFeasible, severity) {
+  const core = structuredClone(knownFeasible);
+  delete core.input;
+  core.id = `synthetic-localized-two-obstacle-crowding-six-${severity.toFixed(2)}-v0`;
+  const transforms = core.muscles.map((muscle, index) => {
+    const angle = GENERALIZATION_PROFILES[6].phase + 2 * Math.PI * index / 6;
+    const weights = index % 2 === 0
+      ? LOCALIZED_UPPER_WEIGHTS
+      : LOCALIZED_LOWER_WEIGHTS;
+    const inward = [-Math.cos(angle) * severity, 0, -Math.sin(angle) * severity];
+    const chirality = index % 2 === 0 ? 1 : -1;
+    const tangential = [
+      -Math.sin(angle) * severity * 0.18 * chirality,
+      0,
+      Math.cos(angle) * severity * 0.18 * chirality,
+    ];
+    const displacement = inward.map((value, axis) => value + tangential[axis]);
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      knot.position = knot.position.map(
+        (value, axis) => value + displacement[axis] * weights[knotIndex],
+      );
+    }
+    const radiusScale = restoreTargetVolume(muscle);
+    return {
+      muscleId:muscle.id,
+      localizedBand:index % 2 === 0 ? 'upper-knot-2' : 'lower-knot-3',
+      displacement:displacement.map(value => rounded(value)),
+      knotWeights:[...weights],
+      relativeFirstSecondSineProjectionResidual:relativeProjectionResidual(weights),
+      radiusScale:rounded(radiusScale),
+      fallbackUsed:false,
+    };
+  });
+  core.derivation = {
+    schema:'kaminos.nbody-localized-two-obstacle-crowding.v0',
+    parent:structuredClone(knownFeasible.input.effective),
+    severity,
+    transforms,
+    attachmentDisplacement:'exact-zero',
+    fallbackUsed:false,
+  };
+  return sourceWithIdentity(core);
+}
+
+export function createNBodyLocalizedChallengeSuite() {
+  const { source:knownFeasible, contactGraph } =
+    createLocalizedChallengeKnownFeasibleSource();
+  const minimumRelativeProjectionResidual = Math.min(
+    relativeProjectionResidual(LOCALIZED_UPPER_WEIGHTS),
+    relativeProjectionResidual(LOCALIZED_LOWER_WEIGHTS),
+  );
+  return LOCALIZED_CHALLENGE_SEVERITIES.map(severity => {
+    const crowded = deriveLocalizedChallengeCrowdedSource(knownFeasible, severity);
+    const core = {
+      schema:NBODY_PACKING_ASSAY_FIXTURE_SCHEMA,
+      id:`nbody-localized-two-obstacle-six-severity-${severity.toFixed(2)}-assay-v0`,
+      authority: {
+        kind:'synthetic-known-feasible',
+        anatomicalAdmission:'none',
+        claimCeiling:'localized-multi-obstacle-falsifier-only',
+      },
+      dimension:3,
+      assayProfile: {
+        stressTier:'localized-two-obstacle-six-v0',
+        severity,
+        carrierPolicy:'frozen-first-second-sine',
+        comparisonAuthority:'hard-gates-and-direct-visual-only',
+        rankingAuthority:'last-pass-first-fail-only',
+        falsifier:'frozen-two-mode-carrier-does-not-close-localized-multi-obstacle-crowding',
+        withheldBasis: {
+          kind:'compact-interior-knot-bumps',
+          comparedAgainst:['first-sine', 'second-sine'],
+          minimumRelativeProjectionResidual,
+        },
+      },
+      pressureChain:structuredClone(contactGraph.members.slice(0, 3)),
+      contactGraph:structuredClone(contactGraph),
+      knownFeasible:structuredClone(knownFeasible),
+      crowded,
+      metrics: {
+        knownFeasible:measureMuscleCompartmentPacking(knownFeasible),
+        knownFeasibleBelt:measureBelt(knownFeasible.muscles, contactGraph),
+        crowded:measureMuscleCompartmentPacking(crowded),
+        crowdedBelt:measureBelt(crowded.muscles, contactGraph),
+      },
+      derivation: {
+        kind:'known-feasible-witness-then-localized-crowding',
+        fallbackUsed:false,
+      },
+    };
+    const sha256 = hashMusclePackingCanonicalJson(core);
+    const identity = { kind:'synthetic-nbody-assay-fixture', id:core.id, sha256 };
+    return {
+      ...core,
+      identity:{ sha256 },
+      input: {
+        requested:{ ...identity },
+        effective:{ ...identity },
+      },
+    };
+  });
+}
+
 function validateCounterfeitConfig(config) {
   const keys = Object.keys(config || {}).sort();
   if (JSON.stringify(keys) !== JSON.stringify([...REQUIRED_COUNTERFEIT_CONFIG_KEYS])) {

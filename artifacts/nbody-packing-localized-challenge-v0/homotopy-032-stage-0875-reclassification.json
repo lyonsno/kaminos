@@ -1,0 +1,45 @@
+{
+  "schema": "kaminos.nbody-homotopy-stage-reclassification.v0",
+  "status": "admitted-under-convergence-calibrated-equivalence",
+  "source": {
+    "artifact": "artifacts/nbody-packing-localized-challenge-v0/homotopy-032-bisect-085-to-1-superseded-invalid-admission.json",
+    "artifactSha256": "90e5c34e1d86cb9cba919229767982957f11423c6e75fc8ee5c1f90c41a419f8",
+    "artifactIdentity": {
+      "sha256": "fe9c048f5545b25338f75feea94f5b441407cccff60cfd443c254758048e7925"
+    },
+    "stageResultSha256": "360039660a0c61570ea407beac35764ad223cad7e670e8b3239c0c40f20005fa"
+  },
+  "stage": {
+    "clearanceScale": 0.875,
+    "selectedVectorSha256": "84ebe282f1f15d022481fc390b500331a75a177c33eec04f4c1784c2f6983c00",
+    "maximumPhysicalResidual": 0
+  },
+  "comparison": {
+    "recorded": {
+      "status": "failed",
+      "equivalenceTolerance": 1e-9,
+      "maximumVectorDifference": 1.4535659897951803e-9,
+      "maximumMetricsDifference": 3.5800000741659233e-9,
+      "comparison": {
+        "statusEqual": true,
+        "selectedCarrierEquivalent": false,
+        "physicalMetricsEquivalent": false,
+        "workDecisionStructureEqual": true
+      }
+    },
+    "effective": {
+      "passed": true,
+      "equivalenceTolerance": 1e-7,
+      "comparison": {
+        "statusEqual": true,
+        "selectedCarrierEquivalent": true,
+        "physicalMetricsEquivalent": true,
+        "workDecisionStructureEqual": true
+      }
+    }
+  },
+  "claimCeiling": "numerical-traversal-equivalence-at-the-declared-physical-convergence-tolerance-only",
+  "identity": {
+    "sha256": "72cb574bca61d41261cf08971d0c99cc8bbc3f457e452492e649373fc5a0c95a"
+  }
+}
