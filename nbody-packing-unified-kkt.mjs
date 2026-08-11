@@ -14,7 +14,11 @@ export const NBODY_PACKING_UNIFIED_KKT_RESULT_SCHEMA =
   'kaminos.nbody-packing-unified-kkt-result.v0';
 
 const ALGORITHM = 'unified-active-set-pair-bone-compartment-kkt-v0';
+const ADAPTIVE_ALGORITHM =
+  'unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0';
 const TRANSLATION_BASIS = 'per-member-xz-sine-zero-at-attachments';
+const ADAPTIVE_TRANSLATION_BASIS =
+  'per-member-xz-first-second-sine-zero-at-attachments';
 const CONFIG_KEYS = Object.freeze([
   'activationMargin',
   'algorithm',
@@ -59,13 +63,22 @@ function restoreTargetVolume(muscle) {
   for (const knot of muscle.centerline) knot.radius *= radiusScale;
 }
 
-function validateConfig(config) {
+function validateConfig(config, expectedBasis = null) {
   if (JSON.stringify(Object.keys(config || {}).sort()) !== JSON.stringify(CONFIG_KEYS)) {
     throw new Error(`unified KKT requestedConfig requires exact keys: ${CONFIG_KEYS.join(', ')}`);
   }
-  if (config.algorithm !== ALGORITHM) throw new Error(`unified KKT algorithm must be ${ALGORITHM}`);
-  if (config.translationBasis !== TRANSLATION_BASIS) {
-    throw new Error(`unified KKT translationBasis must be ${TRANSLATION_BASIS}`);
+  const algorithmByBasis = {
+    [TRANSLATION_BASIS]:ALGORITHM,
+    [ADAPTIVE_TRANSLATION_BASIS]:ADAPTIVE_ALGORITHM,
+  };
+  if (!(config.translationBasis in algorithmByBasis)) {
+    throw new Error('unified KKT translationBasis is unsupported');
+  }
+  if (config.algorithm !== algorithmByBasis[config.translationBasis]) {
+    throw new Error(`unified KKT algorithm does not match ${config.translationBasis}`);
+  }
+  if (expectedBasis && config.translationBasis !== expectedBasis) {
+    throw new Error('unified KKT config translationBasis does not match compiled problem');
   }
   if (!['canonical', 'reverse'].includes(config.candidateEnumeration)) {
     throw new Error('unified KKT candidateEnumeration must be canonical or reverse');
@@ -106,6 +119,18 @@ function validateProblem(problem) {
   if (JSON.stringify(problem.members) !== JSON.stringify(problem.crowdedSource.muscles)) {
     throw new Error('unified KKT member carrier does not match crowded source');
   }
+  const expectedDof = problem.carrier?.translationBasis === TRANSLATION_BASIS
+    ? 2
+    : problem.carrier?.translationBasis === ADAPTIVE_TRANSLATION_BASIS
+      ? 4
+      : null;
+  if (
+    expectedDof === null ||
+    problem.carrier?.degreesOfFreedomPerMember !== expectedDof ||
+    problem.variables.length !== problem.members.length * expectedDof
+  ) {
+    throw new Error('unified KKT problem carrier basis or variable layout is invalid');
+  }
 }
 
 function instantiate(problem, vector) {
@@ -116,9 +141,18 @@ function instantiate(problem, vector) {
   for (const [memberIndex, muscle] of muscles.entries()) {
     const finalIndex = muscle.centerline.length - 1;
     for (let knotIndex = 1; knotIndex < finalIndex; knotIndex += 1) {
-      const envelope = Math.sin(Math.PI * knotIndex / finalIndex);
-      muscle.centerline[knotIndex].position[0] += vector[memberIndex * 2] * envelope;
-      muscle.centerline[knotIndex].position[2] += vector[memberIndex * 2 + 1] * envelope;
+      const progress = knotIndex / finalIndex;
+      const firstMode = Math.sin(Math.PI * progress);
+      const offset = memberIndex * problem.carrier.degreesOfFreedomPerMember;
+      let displacementX = vector[offset] * firstMode;
+      let displacementZ = vector[offset + 1] * firstMode;
+      if (problem.carrier.translationBasis === ADAPTIVE_TRANSLATION_BASIS) {
+        const secondMode = Math.sin(2 * Math.PI * progress);
+        displacementX += vector[offset + 2] * secondMode;
+        displacementZ += vector[offset + 3] * secondMode;
+      }
+      muscle.centerline[knotIndex].position[0] += displacementX;
+      muscle.centerline[knotIndex].position[2] += displacementZ;
     }
     restoreTargetVolume(muscle);
   }
@@ -347,7 +381,7 @@ function displacementReceipt(problem, muscles) {
 
 function solveEnumeration(problem, requestedConfig) {
   validateProblem(problem);
-  validateConfig(requestedConfig);
+  validateConfig(requestedConfig, problem.carrier.translationBasis);
   const config = structuredClone(requestedConfig);
   let current = snapshot(problem, Array(problem.variables.length).fill(0));
   const workRows = [];
@@ -449,7 +483,7 @@ function solveEnumeration(problem, requestedConfig) {
   const core = {
     schema:NBODY_PACKING_UNIFIED_KKT_RESULT_SCHEMA,
     status,
-    route:{ requested:ALGORITHM, effective:ALGORITHM, fallbackUsed:false },
+    route:{ requested:config.algorithm, effective:config.algorithm, fallbackUsed:false },
     source:{ problemSha256:problem.identity.sha256, fixtureSha256:problem.source.fixtureSha256 },
     config:{ requested:structuredClone(requestedConfig), effective:config },
     mechanism: {
@@ -509,7 +543,15 @@ export function createNBodyUnifiedKktConfig() {
   };
 }
 
-export function compileNBodyUnifiedKktProblem(fixture) {
+export function createNBodyAdaptiveKktConfig() {
+  return {
+    ...createNBodyUnifiedKktConfig(),
+    algorithm:ADAPTIVE_ALGORITHM,
+    translationBasis:ADAPTIVE_TRANSLATION_BASIS,
+  };
+}
+
+function compileNBodyKktProblem(fixture, translationBasis) {
   if (fixture?.schema !== NBODY_PACKING_ASSAY_FIXTURE_SCHEMA) {
     throw new Error(`unified KKT fixture schema mismatch: ${fixture?.schema || 'missing'}`);
   }
@@ -522,10 +564,18 @@ export function compileNBodyUnifiedKktProblem(fixture) {
     throw new Error('unified KKT fixture identity mismatch');
   }
   const members = structuredClone(fixture.crowded.muscles);
-  const variables = members.flatMap((member, memberIndex) => [
-    { index:memberIndex * 2, memberId:member.id, axis:'x' },
-    { index:memberIndex * 2 + 1, memberId:member.id, axis:'z' },
-  ]);
+  const modes = translationBasis === ADAPTIVE_TRANSLATION_BASIS
+    ? ['first-sine', 'second-sine']
+    : ['first-sine'];
+  const degreesOfFreedomPerMember = modes.length * 2;
+  const variables = members.flatMap((member, memberIndex) => modes.flatMap(
+    (mode, modeIndex) => ['x', 'z'].map((axis, axisIndex) => ({
+      index:memberIndex * degreesOfFreedomPerMember + modeIndex * 2 + axisIndex,
+      memberId:member.id,
+      mode,
+      axis,
+    })),
+  ));
   const core = {
     schema:NBODY_PACKING_UNIFIED_KKT_PROBLEM_SCHEMA,
     source:{
@@ -537,8 +587,9 @@ export function compileNBodyUnifiedKktProblem(fixture) {
     members,
     variables,
     carrier:{
-      translationBasis:TRANSLATION_BASIS,
-      degreesOfFreedomPerMember:2,
+      translationBasis,
+      degreesOfFreedomPerMember,
+      longitudinalModes:modes,
       attachmentDisplacement:'exact-zero',
       volumePolicy:'restore-exact-target-after-every-state-instantiation',
     },
@@ -546,9 +597,17 @@ export function compileNBodyUnifiedKktProblem(fixture) {
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }
 
+export function compileNBodyUnifiedKktProblem(fixture) {
+  return compileNBodyKktProblem(fixture, TRANSLATION_BASIS);
+}
+
+export function compileNBodyAdaptiveKktProblem(fixture) {
+  return compileNBodyKktProblem(fixture, ADAPTIVE_TRANSLATION_BASIS);
+}
+
 export function solveNBodyUnifiedKktCandidate({ problem, requestedConfig } = {}) {
   validateProblem(problem);
-  validateConfig(requestedConfig);
+  validateConfig(requestedConfig, problem.carrier.translationBasis);
   const primary = solveEnumeration(problem, requestedConfig);
   const alternate = solveEnumeration(problem, {
     ...structuredClone(requestedConfig),

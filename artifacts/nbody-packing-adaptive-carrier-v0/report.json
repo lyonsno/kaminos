@@ -1,0 +1,84 @@
+{
+  "schema": "kaminos.nbody-packing-adaptive-carrier-witness-report.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-adaptive-carrier-comparison-v0",
+    "effective": "nbody-packing-adaptive-carrier-comparison-v0",
+    "fallbackUsed": false
+  },
+  "fixtureSha256": "fa27d95fc3d724c4006bafff427ac012f918ea6d5ca585535656e7063c9225b2",
+  "primaryIdentity": {
+    "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+    "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+  },
+  "comparison": {
+    "twoDof": {
+      "problemSha256": "ed91355e0d0d0b5ba6cfdff65431e7410c0bedc951ddd2a0821ff649346b3fb5",
+      "candidateSha256": "74ca88b00db56ab60de6102ebd5e84dc09222eb31b2a306918f31723453d1e14",
+      "status": "stalled-unified-kkt-candidate",
+      "failurePhase": "unified-kkt-globalization-line-search",
+      "maximumPhysicalResidual": 0.119521937928
+    },
+    "adaptive": {
+      "problemSha256": "6e03ace2b37d93210227d8d7241aaf6cac135f3710d90050ea21f123dd07e57a",
+      "candidateSha256": "f43833bfacf7e1018eda5a5b375093d209229dbb1035be3cd04861360b59120d",
+      "status": "converged-unified-kkt-candidate",
+      "maximumPhysicalResidual": 0,
+      "traversalEquivalence": "passed"
+    }
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "bf42fd10937756df9cb65eb907ffcd4331d24d8b59c289e9160f2a68e3236f65",
+    "captureCount": 8,
+    "requiredStates": [
+      "crowded",
+      "two-dof-stalled",
+      "adaptive-packed",
+      "reference"
+    ],
+    "requiredModes": [
+      "volume",
+      "slice"
+    ]
+  },
+  "claimCeiling": {
+    "authority": "bounded-synthetic-carrier-boundary-agent-visual-inspected",
+    "admittedClaim": "generic first/second-sine carrier closes one opposed-longitudinal six-body fixture that the first-sine-only carrier cannot close",
+    "rankingAuthority": "hard admission and direct visual comparison only",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "arbitrary-deformation-closure",
+      "authenticated-anatomy",
+      "fascia-or-skin-mechanics",
+      "production-performance",
+      "global-optimality"
+    ]
+  },
+  "stalePrimaryCleanup": [
+    {
+      "path": "fixture.json",
+      "status": "removed"
+    },
+    {
+      "path": "results.json",
+      "status": "removed"
+    },
+    {
+      "path": "index.html",
+      "status": "removed"
+    },
+    {
+      "path": "visual-inspection.json",
+      "status": "removed"
+    }
+  ],
+  "bindings": {
+    "fixtureJsonSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+    "resultsJsonSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3",
+    "indexHtmlSha256": "a605926f47647917e6182db08670801a76715cbacc914eb056f76428eca25378",
+    "visualInspectionJsonSha256": "bf42fd10937756df9cb65eb907ffcd4331d24d8b59c289e9160f2a68e3236f65",
+    "captureReceiptSetSha256": "3f0d5e1e8edbcbfabd063c08257f229b2b49721a1655fcfe7194472bf94409f2"
+  }
+}

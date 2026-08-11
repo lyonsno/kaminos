@@ -3,9 +3,12 @@ import test from 'node:test';
 
 import {
   createNBodyPackingGeneralizationSuite,
+  createNBodyLongitudinalFalsifierFixture,
 } from '../nbody-packing-assay-core.mjs';
 import {
+  compileNBodyAdaptiveKktProblem,
   compileNBodyUnifiedKktProblem,
+  createNBodyAdaptiveKktConfig,
   createNBodyUnifiedKktConfig,
   solveNBodyUnifiedKktCandidate,
 } from '../nbody-packing-unified-kkt.mjs';
@@ -56,4 +59,46 @@ test('unified formulation closes every generalization rung without oracle or gra
     );
     assert.equal(result.invariance.candidateEnumeration, 'passed');
   }
+});
+
+test('opposed longitudinal crowding is feasible but exceeds the one-direction belly carrier', () => {
+  const fixture = createNBodyLongitudinalFalsifierFixture();
+  assert.equal(fixture.knownFeasible.muscles.length, 6);
+  assert.ok(fixture.metrics.knownFeasible.pairwisePenetration <= 1e-9);
+  assert.ok(fixture.metrics.knownFeasible.skeletalPenetration <= 1e-9);
+  assert.ok(fixture.metrics.knownFeasible.compartmentEscape <= 1e-9);
+  assert.ok(fixture.metrics.crowded.pairwisePenetration >= 0.05);
+  assert.equal(fixture.metrics.crowded.endpointDrift, 0);
+  assert.ok(fixture.metrics.crowded.maximumRelativeVolumeError <= 1e-9);
+
+  const problem = compileNBodyUnifiedKktProblem(fixture);
+  assert.equal(problem.carrier.degreesOfFreedomPerMember, 2);
+  const requestedConfig = createNBodyUnifiedKktConfig();
+  const result = solveNBodyUnifiedKktCandidate({ problem, requestedConfig });
+  assert.equal(result.status, 'stalled-unified-kkt-candidate');
+  assert.equal(result.route.effective, 'unified-active-set-pair-bone-compartment-kkt-v0');
+  assert.equal(result.failure?.phase, 'unified-kkt-globalization-line-search');
+  assert.ok(result.selected.maximumPhysicalResidual >= 0.1);
+});
+
+test('generic two-mode longitudinal carrier closes the opposed fixture without target input', () => {
+  const fixture = createNBodyLongitudinalFalsifierFixture();
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  assert.equal(problem.carrier.degreesOfFreedomPerMember, 4);
+  assert.equal(problem.carrier.longitudinalModes.length, 2);
+  assert.equal('knownFeasible' in problem, false);
+  assert.equal('contactGraph' in problem, false);
+
+  const requestedConfig = createNBodyAdaptiveKktConfig();
+  const result = solveNBodyUnifiedKktCandidate({ problem, requestedConfig });
+  assert.equal(result.status, 'converged-unified-kkt-candidate');
+  assert.equal(
+    result.route.effective,
+    'unified-active-set-pair-bone-compartment-kkt-adaptive-carrier-v0',
+  );
+  assert.equal(result.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(result.mechanism.contactGraphRowsConsumed, false);
+  assert.ok(result.selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance);
+  assert.equal(result.selected.displacement.movedMemberCount, 6);
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
 });

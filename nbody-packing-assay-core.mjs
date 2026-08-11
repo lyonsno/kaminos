@@ -680,6 +680,106 @@ export function createNBodyPackingGeneralizationSuite() {
   });
 }
 
+export function createNBodyLongitudinalFalsifierFixture() {
+  const parent = createNBodyPackingGeneralizationSuite().find(
+    fixture => fixture.knownFeasible.muscles.length === 6,
+  );
+  const knownFeasibleCore = structuredClone(parent.knownFeasible);
+  delete knownFeasibleCore.input;
+  knownFeasibleCore.id = 'synthetic-manufactured-feasible-tight-density-six-v0';
+  for (const axis of [0, 2]) {
+    knownFeasibleCore.compartment.minimum[axis] = rounded(Math.min(
+      ...knownFeasibleCore.muscles.flatMap(muscle => muscle.centerline.map(
+        knot => knot.position[axis] - knot.radius,
+      )),
+    ) - knownFeasibleCore.compartment.clearance - 0.01);
+    knownFeasibleCore.compartment.maximum[axis] = rounded(Math.max(
+      ...knownFeasibleCore.muscles.flatMap(muscle => muscle.centerline.map(
+        knot => knot.position[axis] + knot.radius,
+      )),
+    ) + knownFeasibleCore.compartment.clearance + 0.01);
+  }
+  const knownFeasible = sourceWithIdentity(knownFeasibleCore);
+  const crowdedCore = structuredClone(knownFeasible);
+  delete crowdedCore.input;
+  crowdedCore.id = 'synthetic-opposed-longitudinal-crowding-six-v0';
+  const knotWeights = [0, 0.65, 1, -1, -0.65, 0];
+  const transforms = crowdedCore.muscles.map((muscle, index) => {
+    const angle = GENERALIZATION_PROFILES[6].phase + 2 * Math.PI * index / 6;
+    const alternatingSign = index % 2 === 0 ? 1 : -1;
+    const tangential = [
+      -Math.sin(angle) * 0.2 * alternatingSign,
+      0,
+      Math.cos(angle) * 0.2 * alternatingSign,
+    ];
+    for (const [knotIndex, knot] of muscle.centerline.entries()) {
+      knot.position = knot.position.map(
+        (value, axis) => value + tangential[axis] * knotWeights[knotIndex],
+      );
+    }
+    const realizedVolume = carrierVolume(muscle.centerline);
+    const radiusScale = Math.sqrt(muscle.targetVolume / realizedVolume);
+    for (const knot of muscle.centerline) knot.radius *= radiusScale;
+    return {
+      muscleId:muscle.id,
+      alternatingSign,
+      tangential:tangential.map(value => rounded(value)),
+      knotWeights:[...knotWeights],
+      radiusScale:rounded(radiusScale),
+      fallbackUsed:false,
+    };
+  });
+  crowdedCore.derivation = {
+    schema:'kaminos.nbody-opposed-longitudinal-crowding.v0',
+    parent:structuredClone(knownFeasible.input.effective),
+    transforms,
+    attachmentDisplacement:'exact-zero',
+    fallbackUsed:false,
+  };
+  const crowded = sourceWithIdentity(crowdedCore);
+  const contactGraph = structuredClone(parent.contactGraph);
+  const core = {
+    schema:NBODY_PACKING_ASSAY_FIXTURE_SCHEMA,
+    id:'nbody-manufactured-feasible-opposed-longitudinal-six-assay-v0',
+    authority: {
+      kind:'synthetic-known-feasible',
+      anatomicalAdmission:'none',
+      claimCeiling:'carrier-expressivity-falsifier-only',
+    },
+    dimension:3,
+    assayProfile: {
+      stressTier:'opposed-longitudinal-six-v0',
+      comparisonAuthority:'hard-gates-and-direct-visual-only',
+      rankingAuthority:'none',
+      falsifier:'one-direction-belly-carrier-cannot-close-opposed-longitudinal-contact',
+    },
+    pressureChain:structuredClone(parent.pressureChain),
+    contactGraph,
+    knownFeasible,
+    crowded,
+    metrics: {
+      knownFeasible:measureMuscleCompartmentPacking(knownFeasible),
+      knownFeasibleBelt:measureBelt(knownFeasible.muscles, contactGraph),
+      crowded:measureMuscleCompartmentPacking(crowded),
+      crowdedBelt:measureBelt(crowded.muscles, contactGraph),
+    },
+    derivation: {
+      kind:'known-feasible-witness-then-opposed-longitudinal-crowding',
+      fallbackUsed:false,
+    },
+  };
+  const sha256 = hashMusclePackingCanonicalJson(core);
+  const identity = { kind:'synthetic-nbody-assay-fixture', id:core.id, sha256 };
+  return {
+    ...core,
+    identity:{ sha256 },
+    input: {
+      requested:{ ...identity },
+      effective:{ ...identity },
+    },
+  };
+}
+
 function validateCounterfeitConfig(config) {
   const keys = Object.keys(config || {}).sort();
   if (JSON.stringify(keys) !== JSON.stringify([...REQUIRED_COUNTERFEIT_CONFIG_KEYS])) {

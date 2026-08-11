@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice",
+    "outputPath": "repo://artifacts/nbody-packing-adaptive-carrier-v0/adaptive-packed-slice.png",
+    "reportPath": "repo://artifacts/nbody-packing-adaptive-carrier-v0/adaptive-packed-slice-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixtureSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 50782,
+    "processGroupId": 50782,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 50782,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 50836,
+      "processGroupId": 50836,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 50836,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3587,
+    "retainedBytes": 3587,
+    "truncated": false,
+    "tail": "[0811/021803.401848:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/021803.499206:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.062611:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n[0811/021804.062704:INFO:CONSOLE:0] \"[.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n[0811/021804.063946:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.097878:INFO:CONSOLE:0] \"[.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n[0811/021804.100221:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.118466:INFO:CONSOLE:0] \"[.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n[0811/021804.119144:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n152599 bytes written to file repo://artifacts/nbody-packing-adaptive-carrier-v0/adaptive-packed-slice.png\n[0811/021804.422238:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/021804.453021:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n[0811/021804.506903:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00476c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021805.081586:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00476c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021805.082611:INFO:CONSOLE:0] \"[.WebGL-0x10c00476c00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-adaptive-carrier-v0/adaptive-packed-slice.png",
+    "sizeBytes": 152599,
+    "sha256": "fb5fb24e26c6c4cd90d646a55cdc665d17bcc9528ce9d78f39f59ecf666b4fe8",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 41,
+      "idatBytes": 152086
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "adaptive-packed",
+      "witnessMode": "slice",
+      "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+      "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+      "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 88892,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-adaptive-carrier-v0/adaptive-packed-slice.png",
+      "sizeBytes": 152599,
+      "sha256": "fb5fb24e26c6c4cd90d646a55cdc665d17bcc9528ce9d78f39f59ecf666b4fe8",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 41,
+        "idatBytes": 152086
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "adaptive-packed",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 88892,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=adaptive-packed&mode=slice",
+    "httpStatus": 200,
+    "sizeBytes": 88046,
+    "sha256": "a605926f47647917e6182db08670801a76715cbacc914eb056f76428eca25378"
+  }
+}

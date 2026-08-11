@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-adaptive-carrier-v0/crowded-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-adaptive-carrier-v0/crowded-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixtureSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 50784,
+    "processGroupId": 50784,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 50784,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 50835,
+      "processGroupId": 50835,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 50835,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3538,
+    "retainedBytes": 3538,
+    "truncated": false,
+    "tail": "[0811/021803.430902:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/021803.513691:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021803.981673:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n[0811/021803.981776:INFO:CONSOLE:0] \"[.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n[0811/021803.983394:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.033403:INFO:CONSOLE:0] \"[.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n[0811/021804.034914:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.103991:INFO:CONSOLE:0] \"[.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n[0811/021804.105232:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n250910 bytes written to file repo://artifacts/nbody-packing-adaptive-carrier-v0/crowded-volume.png\n[0811/021804.421937:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0811/021804.452911:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n[0811/021804.492826:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004a7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.994487:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x134004a7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0811/021804.995054:INFO:CONSOLE:0] \"[.WebGL-0x134004a7800]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-adaptive-carrier-v0/crowded-volume.png",
+    "sizeBytes": 250910,
+    "sha256": "46f2c10a1f77c7ad7e995ae315d0809aa4d10598bc5b36c2984cf2b8cc61428a",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 65,
+      "idatBytes": 250109
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "crowded",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+      "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+      "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 88847,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-adaptive-carrier-v0/crowded-volume.png",
+      "sizeBytes": 250910,
+      "sha256": "46f2c10a1f77c7ad7e995ae315d0809aa4d10598bc5b36c2984cf2b8cc61428a",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 65,
+        "idatBytes": 250109
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 88847,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-adaptive-carrier-v0/index.html?state=crowded&mode=volume",
+    "httpStatus": 200,
+    "sizeBytes": 88046,
+    "sha256": "a605926f47647917e6182db08670801a76715cbacc914eb056f76428eca25378"
+  }
+}

@@ -1,0 +1,178 @@
+{
+  "schema": "kaminos.nbody-packing-adaptive-carrier-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-11T06:18:21.182Z",
+  "summary": "Revision 1 eight-frame set is pixel-identical to the personally inspected pre-repair set while every capture now binds exact fixture/results DOM identities and the served index document hash; crowded and stalled debt remain legible, adaptive clearance remains coherent and distinct from the reference, and all six identities, endpoints, smooth centerlines, and volumes remain visible.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "crowdedCollisionLegible": true,
+    "stalledDebtLegible": true,
+    "adaptiveClearanceLegible": true,
+    "stableIdentityLegible": true,
+    "fixedAttachmentsLegible": true,
+    "smoothCenterlinesLegible": true,
+    "individualVolumeLegible": true,
+    "packingSemanticsNotInverted": true
+  },
+  "route": {
+    "requested": "nbody-packing-adaptive-carrier-comparison-v0",
+    "effective": "nbody-packing-adaptive-carrier-comparison-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "crowded",
+      "mode": "volume",
+      "png": "crowded-volume.png",
+      "pngSha256": "46f2c10a1f77c7ad7e995ae315d0809aa4d10598bc5b36c2984cf2b8cc61428a",
+      "captureReport": "crowded-volume-capture-report.json",
+      "captureReportSha256": "d352606d4aaec392fc800567e73cc3cd1feb2a7876d8bd43d7e9d2cb2372dca6",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "crowded",
+      "mode": "slice",
+      "png": "crowded-slice.png",
+      "pngSha256": "bb2276c5a0c139405076e6d497cfce27c20f2982b21a45af9fc859ed34689c51",
+      "captureReport": "crowded-slice-capture-report.json",
+      "captureReportSha256": "b249a836414e3ba939cd6de2b5ce785be6da14fea14615dd6108cf2f5d07818d",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "two-dof-stalled",
+      "mode": "volume",
+      "png": "two-dof-stalled-volume.png",
+      "pngSha256": "e29f900ed7cf848c0d7c9c04e5c8f51f95b252f60310db8e695097d2db893899",
+      "captureReport": "two-dof-stalled-volume-capture-report.json",
+      "captureReportSha256": "fc1d6cbcf8f65c9b8847e1dfc3ce95c68318a5968b52882b39c1747eaa19c242",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "two-dof-stalled",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "two-dof-stalled",
+      "mode": "slice",
+      "png": "two-dof-stalled-slice.png",
+      "pngSha256": "1ba84e731c20a5679ba496bab7bbc467c59e58d1824c6225f1d9545867eb74d3",
+      "captureReport": "two-dof-stalled-slice-capture-report.json",
+      "captureReportSha256": "015ca3f3b4ad11ecd43964b88fe0a73d414e539c13f74a706915ea38446621a7",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "two-dof-stalled",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "adaptive-packed",
+      "mode": "volume",
+      "png": "adaptive-packed-volume.png",
+      "pngSha256": "c202c7fa4cf080518263f99b2cb8f42365a02a974575d7b79969444bff4171e7",
+      "captureReport": "adaptive-packed-volume-capture-report.json",
+      "captureReportSha256": "c43c37b66ec94ec6661b110af7d1e14c4da702db7c4400b1e5270505b63f8dbb",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "adaptive-packed",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "adaptive-packed",
+      "mode": "slice",
+      "png": "adaptive-packed-slice.png",
+      "pngSha256": "fb5fb24e26c6c4cd90d646a55cdc665d17bcc9528ce9d78f39f59ecf666b4fe8",
+      "captureReport": "adaptive-packed-slice-capture-report.json",
+      "captureReportSha256": "35c577693d34c306936740213a210c16f842afa1872cbb07fa1c901886b95320",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "adaptive-packed",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "reference",
+      "mode": "volume",
+      "png": "reference-volume.png",
+      "pngSha256": "6fa3ef94ae5fd007375eb05b18ff6cc97e62b42a4c33bbce9dd8d4a330a7e22d",
+      "captureReport": "reference-volume-capture-report.json",
+      "captureReportSha256": "71c3320a145acc61d161281b0029a12bc7cceb94cc954cb54d7ad8a604718774",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    },
+    {
+      "state": "reference",
+      "mode": "slice",
+      "png": "reference-slice.png",
+      "pngSha256": "79cd2f8e06b39b6a23eea5c546113a04858087eb8bc0cb84212528768b3aadab",
+      "captureReport": "reference-slice-capture-report.json",
+      "captureReportSha256": "f2935e208f4c7c78c200509806476b25821be107c3fa88c839a5301fb6360270",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-adaptive-carrier-comparison-v0",
+        "fixtureSha256": "5373bbfb1a0fa7e3a83e71f60a7107ac5aaed458bfd262ee92b2bd1fd9a39ec0",
+        "resultsSha256": "6df5c6d0bfd2f0cd59d0f9d101dd40c1f728aa7aeb9922c64e50fd71dfff01b3"
+      },
+      "browserKind": "playwright-chromium-headless-shell"
+    }
+  ],
+  "claimCeiling": {
+    "authority": "bounded-synthetic-carrier-boundary-pending-visual-inspection",
+    "admittedClaim": "generic first/second-sine carrier closes one opposed-longitudinal six-body fixture that the first-sine-only carrier cannot close",
+    "rankingAuthority": "hard admission and direct visual comparison only",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "arbitrary-deformation-closure",
+      "authenticated-anatomy",
+      "fascia-or-skin-mechanics",
+      "production-performance",
+      "global-optimality"
+    ]
+  },
+  "identity": {
+    "sha256": "3c804aaed6b1187483f4bb4ef1e59b48d8136854576040c602cea58d3a73862d"
+  }
+}
