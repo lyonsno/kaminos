@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.mlx-malformed-coat-carrier-recovery-result.v0",
+  "runId": "2a56f981e26a4d08ade0c3b16b738769",
+  "effectiveRoute": {
+    "reconstruction": "Blender 5.1.2 CPU solidify plus voxel remesh",
+    "groom": "deferred until explicit visual selection",
+    "gpuInference": false
+  },
+  "sourceCastSha256": "68ba45a262e049b6a771a56a21e8fcd92f8da6b86a99731d0fffae4b8763bd4b",
+  "atlasResultSha256": "0720b1392f8ea0f5d8d932894e91ed0c019d79637c1f029f38debd206b30f870",
+  "visualAdmissionSha256": "f5261a4ca3f8c512aa6877b82fae505c2e76a071005c0a6e0092837542e435ec",
+  "selection": {
+    "metric": "relative_area",
+    "operator": ">",
+    "threshold": 0.3025011084360847,
+    "selectedFaceCount": 38305,
+    "totalFaceCount": 41141
+  },
+  "sourceBounds": [
+    0.37095220386981964,
+    0.9964853823184967,
+    0.7858851850032806
+  ],
+  "sourceDiagonal": 1.3221967246737367,
+  "candidates": [
+    {
+      "name": "voxel-0.008d",
+      "admissible": true,
+      "rejectionReasons": [],
+      "componentCount": 1,
+      "largestComponentFaceFraction": 1.0,
+      "silhouetteIouByView": {
+        "x": 0.9849233687783935,
+        "y": 0.9872514432328415,
+        "z": 0.985830112904448
+      },
+      "minimumSilhouetteIou": 0.9849233687783935,
+      "meanSilhouetteIou": 0.986001641638561,
+      "boundsRetentionByAxis": [
+        0.9975088154135298,
+        1.001989951041827,
+        1.0026727790831156
+      ],
+      "meanBoundsRetention": 0.9991696051378433,
+      "volume": 0.0880557318085095,
+      "voxelSizeFractionOfDiagonal": 0.008,
+      "voxelSize": 0.010577573797389894,
+      "vertexCount": 19954,
+      "faceCount": 19956,
+      "meshPath": "meshes/voxel-0.008d.glb",
+      "viewPath": "views/voxel-0.008d.png"
+    },
+    {
+      "name": "voxel-0.012d",
+      "admissible": true,
+      "rejectionReasons": [],
+      "componentCount": 1,
+      "largestComponentFaceFraction": 1.0,
+      "silhouetteIouByView": {
+        "x": 0.983667965238238,
+        "y": 0.9829718875502008,
+        "z": 0.9859390438549821
+      },
+      "minimumSilhouetteIou": 0.9829718875502008,
+      "meanSilhouetteIou": 0.9841929655478069,
+      "boundsRetentionByAxis": [
+        0.9900001932178447,
+        0.9988823890394513,
+        0.995296043815966
+      ],
+      "meanBoundsRetention": 0.9947262086910874,
+      "volume": 0.08846415571708287,
+      "voxelSizeFractionOfDiagonal": 0.012,
+      "voxelSize": 0.015866360696084842,
+      "vertexCount": 8780,
+      "faceCount": 8778,
+      "meshPath": "meshes/voxel-0.012d.glb",
+      "viewPath": "views/voxel-0.012d.png"
+    },
+    {
+      "name": "voxel-0.018d",
+      "admissible": true,
+      "rejectionReasons": [],
+      "componentCount": 1,
+      "largestComponentFaceFraction": 1.0,
+      "silhouetteIouByView": {
+        "x": 0.9839000902798676,
+        "y": 0.9785093367675467,
+        "z": 0.9821985545834918
+      },
+      "minimumSilhouetteIou": 0.9785093367675467,
+      "meanSilhouetteIou": 0.9815359938769688,
+      "boundsRetentionByAxis": [
+        0.9852460299858831,
+        0.9995920924859931,
+        0.993813711533792
+      ],
+      "meanBoundsRetention": 0.9928839446685561,
+      "volume": 0.08701974728728495,
+      "voxelSizeFractionOfDiagonal": 0.018,
+      "voxelSize": 0.023799541044127258,
+      "vertexCount": 3934,
+      "faceCount": 3932,
+      "meshPath": "meshes/voxel-0.018d.glb",
+      "viewPath": "views/voxel-0.018d.png"
+    },
+    {
+      "name": "voxel-0.026d",
+      "admissible": true,
+      "rejectionReasons": [],
+      "componentCount": 1,
+      "largestComponentFaceFraction": 1.0,
+      "silhouetteIouByView": {
+        "x": 0.9776987070261601,
+        "y": 0.9691013508048208,
+        "z": 0.9755167416673023
+      },
+      "minimumSilhouetteIou": 0.9691013508048208,
+      "meanSilhouetteIou": 0.974105599832761,
+      "boundsRetentionByAxis": [
+        0.9830798611129243,
+        0.9791552351724842,
+        0.9842357190847408
+      ],
+      "meanBoundsRetention": 0.9821569384567165,
+      "volume": 0.0849049025764549,
+      "voxelSizeFractionOfDiagonal": 0.026,
+      "voxelSize": 0.034377114841517155,
+      "vertexCount": 1904,
+      "faceCount": 1902,
+      "meshPath": "meshes/voxel-0.026d.glb",
+      "viewPath": "views/voxel-0.026d.png"
+    }
+  ],
+  "metricNominee": "voxel-0.008d",
+  "visualAdmission": "pending-agent-inspection",
+  "claimCeiling": "Exact-route, exact-seed evidence that the admitted malformed MLX coat selection can or cannot support one coherent inferred carrier and one static replacement groom."
+}

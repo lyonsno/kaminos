@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLX malformed-coat carrier recovery</title>
+<style>
+  :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background:#101314; color:#eef2ef; }
+  body { margin:0; background:#101314; }
+  main { max-width:1500px; margin:auto; padding:28px; }
+  h1 { font-size:28px; margin:0 0 8px; letter-spacing:0; }
+  h2 { font-size:18px; margin:30px 0 12px; letter-spacing:0; }
+  p { color:#b8c1bc; line-height:1.5; max-width:1050px; }
+  .status { display:inline-block; padding:5px 8px; border-radius:4px; background:#163a27; color:#86e5a6; font-weight:700; }
+  .warning { padding:12px 14px; border-left:4px solid #e6a44b; background:#211c14; color:#ead6b9; max-width:1050px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; }
+  figure { margin:0; padding:10px; background:#181c1d; border:1px solid #2c3331; border-radius:6px; }
+  img { width:100%; display:block; aspect-ratio:1; object-fit:contain; background:#050708; }
+  figcaption { padding:9px 2px 2px; color:#d7ded9; font-size:14px; }
+  small { display:block; color:#8f9b95; margin-top:4px; line-height:1.35; }
+  table { width:100%; border-collapse:collapse; background:#181c1d; font-size:14px; }
+  th, td { border-bottom:1px solid #303735; padding:9px 10px; text-align:left; }
+  th { color:#9eaaa4; }
+  code { color:#cdd8d2; }
+</style>
+</head>
+<body><main>
+  <h1>Malformed MLX coat to clean carrier</h1>
+  <p><span class="status">Exact seed 80301: carrier recovery admitted</span></p>
+  <p>The assay replays the previously admitted <code>relative_area &gt; 0.3025011084360847</code> selection exactly: 38,305 of 41,141 cast triangles. No new classifier and no GPU inference are introduced. Four CPU voxel-fusion scales test whether that noisy outer coat measurement contains a recoverable organism-shaped carrier.</p>
+
+  <h2>Authenticated source</h2>
+  <div class="grid">
+    <figure><img src="../latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png"><figcaption>Generator source plate<small>Authenticated authored envelope conditioning image.</small></figcaption></figure>
+    <figure><img src="views/admitted-selection.png"><figcaption>Admitted malformed-coat selection<small>The selected MLX exterior is creature-shaped but visibly unusable as a production surface.</small></figcaption></figure>
+  </div>
+
+  <h2>Carrier sweep</h2>
+  <table>
+    <thead><tr><th>Voxel scale</th><th>Faces</th><th>Components</th><th>Fixed-view silhouette IoU</th><th>Disposition</th></tr></thead>
+    <tbody>
+      <tr><td>0.008 diagonal</td><td>19,956</td><td>1</td><td>0.9849 / 0.9873 / 0.9858</td><td>Metric nominee; visually retains failure relief</td></tr>
+      <tr><td>0.012 diagonal</td><td>8,778</td><td>1</td><td>0.9837 / 0.9830 / 0.9859</td><td>Admissible</td></tr>
+      <tr><td>0.018 diagonal</td><td>3,932</td><td>1</td><td>0.9839 / 0.9785 / 0.9822</td><td>Admissible</td></tr>
+      <tr><td>0.026 diagonal</td><td>1,902</td><td>1</td><td>0.9777 / 0.9691 / 0.9755</td><td>Visually selected clean carrier</td></tr>
+    </tbody>
+  </table>
+  <div class="grid" style="margin-top:12px">
+    <figure><img src="views/voxel-0.008d.png"><figcaption>0.008d<small>Most literal; preserves malformed block-scale relief.</small></figcaption></figure>
+    <figure><img src="views/voxel-0.012d.png"><figcaption>0.012d</figcaption></figure>
+    <figure><img src="views/voxel-0.018d.png"><figcaption>0.018d</figcaption></figure>
+    <figure><img src="views/voxel-0.026d.png"><figcaption>0.026d<small>Cleanest coherent carrier inside the preregistered fidelity bounds.</small></figcaption></figure>
+  </div>
+
+  <h2>Visual selection</h2>
+  <p>The highest-IoU candidate was rejected for carrier use after inspection because it preserved the exact failure texture the reconstruction was meant to remove. The selected <code>0.026d</code> shell keeps one connected component, 97.9–98.4% of axis bounds, and at least 96.9% silhouette IoU while visibly suppressing the malformed coat relief.</p>
+  <div class="grid">
+    <figure><img src="views/selected-carrier-flat.png"><figcaption>Selected carrier, flat</figcaption></figure>
+    <figure><img src="views/selected-carrier-smooth.png"><figcaption>Selected carrier, smooth shading</figcaption></figure>
+  </div>
+
+  <h2>Static groom witness</h2>
+  <div class="grid">
+    <figure><img src="views/selected-carrier-with-static-groom.png"><figcaption>3,500 deterministic crossed-ribbon strands<small>Full-surface placement from carrier normals; no dynamics and no production groom claim.</small></figcaption></figure>
+  </div>
+  <p class="warning"><strong>Claim boundary:</strong> this is not a volume-matched fur replacement. The recovered carrier follows the outer malformed coat volume, not an authenticated underlying skin. The next assay must inset the carrier and calibrate strand length and density against the original three fixed-view silhouettes.</p>
+</main></body>
+</html>

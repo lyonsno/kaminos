@@ -1,0 +1,39 @@
+{
+  "schema": "kaminos.mlx-malformed-coat-carrier-recovery-campaign.v0",
+  "claimCeiling": "Exact-route, exact-seed evidence that the admitted malformed MLX coat selection can or cannot support one coherent inferred carrier and one static replacement groom.",
+  "sourcePlate": {
+    "path": "artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png",
+    "sha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4"
+  },
+  "sourceCast": {
+    "family": "short-fur",
+    "seed": "80301",
+    "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80301/output.glb",
+    "sha256": "68ba45a262e049b6a771a56a21e8fcd92f8da6b86a99731d0fffae4b8763bd4b"
+  },
+  "admittedSelection": {
+    "metric": "relative_area",
+    "operator": ">",
+    "threshold": 0.3025011084360847,
+    "arraysPath": "artifacts/fur-signal-metric-atlas-v0/metrics/fur-seed80301.npz",
+    "arraysSha256": "831d1d3793ab1d9b6c2c32ed41cf1c4804aea7c273ac98d77197b68b968fe33a",
+    "atlasResultPath": "artifacts/fur-signal-metric-atlas-v0/result.json",
+    "atlasResultSha256": "0720b1392f8ea0f5d8d932894e91ed0c019d79637c1f029f38debd206b30f870",
+    "visualAdmissionPath": "artifacts/fur-signal-metric-atlas-v0/visual-admission.json",
+    "visualAdmissionSha256": "f5261a4ca3f8c512aa6877b82fae505c2e76a071005c0a6e0092837542e435ec"
+  },
+  "candidateSweep": {
+    "solidifyThicknessFractionOfDiagonal": 0.004,
+    "voxelSizeFractionsOfDiagonal": [0.008, 0.012, 0.018, 0.026],
+    "minimumLargestComponentFaceFraction": 0.95,
+    "minimumProjectedSilhouetteRetention": 0.78,
+    "minimumBoundsRetention": 0.8,
+    "maximumBoundsExpansion": 1.12
+  },
+  "staticGroom": {
+    "strandCount": 3500,
+    "strandLengthFractionOfDiagonal": 0.012,
+    "strandWidthFractionOfDiagonal": 0.0008,
+    "seed": 80301
+  }
+}

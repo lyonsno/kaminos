@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos.mlx-malformed-coat-carrier-recovery-visual-admission.v0",
+  "inspectedAt": "2026-08-11",
+  "inspector": "agent-visual-review",
+  "finalResultSha256": "497e53e3a944aade287df69ac7829ed48a2c9cb487dee08630be87e3d0f345a6",
+  "verdicts": {
+    "cleanCarrierRecovery": "admitted-exact-route-seed",
+    "staticGroomPlacement": "admitted-mechanism-only",
+    "originalFurVolumeReplacement": "not-supported",
+    "generalMlxFurRecovery": "not-supported"
+  },
+  "visibleBasis": "The admitted malformed coat is visibly fused into one cleaner creature-shaped carrier at voxel scale 0.026 of the selected geometry diagonal. The carrier suppresses the block-scale failure texture while preserving the head, torso, limb, and tail silhouette. Deterministic strands grow across the full selected carrier without detached clumps. Because the selected geometry measures the outer malformed coat rather than an authenticated underlying skin, the strands expand outward and do not yet reconstruct the original coat volume.",
+  "nextExperiment": "Inset the selected carrier by a measured strand-length fraction, sweep strand length and density, and compare the carrier-plus-groom silhouette against the authenticated malformed-coat selection under the same three fixed cameras.",
+  "inspectedImages": [
+    {"path": "views/admitted-selection.png", "sha256": "a32ac859437579dfdfc800d3e3f3597900c814715a063109d7a6f71bb9617e37"},
+    {"path": "views/voxel-0.008d.png", "sha256": "1eaab8d0a1eacbf2e0763425d93746d53015066af159ca101564fe1ed17d2a19"},
+    {"path": "views/voxel-0.012d.png", "sha256": "92534bc9395b85162a3cf0ea175ee3a3a423ae286f267350a76428859af2a0fe"},
+    {"path": "views/voxel-0.018d.png", "sha256": "fc5812e781d61a60aeaafe35e7176b03c87026f4aba43d0fb892209473867486"},
+    {"path": "views/voxel-0.026d.png", "sha256": "09ae72240fdb18c5a8a05f862824a21d099c7497d1e97500081967a5967f768b"},
+    {"path": "views/selected-carrier-flat.png", "sha256": "eddcd5fc96719555a250ad0434aad2d9f1e9298b87587cf98e319757c9ba98f3"},
+    {"path": "views/selected-carrier-smooth.png", "sha256": "9e8616788eac064aae05a44fa5597e23df7c4b668850dd35807e0515902f6a79"},
+    {"path": "views/selected-carrier-with-static-groom.png", "sha256": "0e41b7ad244a573d7d4bb58892cb635d8a2a4ccd328d9c9737874efd01be1578"}
+  ]
+}

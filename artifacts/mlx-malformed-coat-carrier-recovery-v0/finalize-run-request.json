@@ -1,0 +1,6 @@
+{
+  "schema": "kaminos.mlx-malformed-coat-carrier-recovery-run-request.v0",
+  "runId": "5d6ef2ec58f740a0996ecacf89e4c517",
+  "resultName": "final-result.json",
+  "failureName": "finalize-failure.json"
+}

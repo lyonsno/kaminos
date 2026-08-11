@@ -1,0 +1,60 @@
+{
+  "schema": "kaminos.mlx-malformed-coat-carrier-recovery-final-result.v0",
+  "runId": "5d6ef2ec58f740a0996ecacf89e4c517",
+  "sweepResultSha256": "f2a1b278e6382e5c75a9cda9cf81bb53f7382e9a627458c661dc2f7beac7ce86",
+  "carrierSelectionSha256": "ec2456f51044651b68d27db386e14324560a887c383dbb03515e3429b7febfef",
+  "chosenCandidate": {
+    "name": "voxel-0.026d",
+    "admissible": true,
+    "rejectionReasons": [],
+    "componentCount": 1,
+    "largestComponentFaceFraction": 1.0,
+    "silhouetteIouByView": {
+      "x": 0.9776987070261601,
+      "y": 0.9691013508048208,
+      "z": 0.9755167416673023
+    },
+    "minimumSilhouetteIou": 0.9691013508048208,
+    "meanSilhouetteIou": 0.974105599832761,
+    "boundsRetentionByAxis": [
+      0.9830798611129243,
+      0.9791552351724842,
+      0.9842357190847408
+    ],
+    "meanBoundsRetention": 0.9821569384567165,
+    "volume": 0.0849049025764549,
+    "voxelSizeFractionOfDiagonal": 0.026,
+    "voxelSize": 0.034377114841517155,
+    "vertexCount": 1904,
+    "faceCount": 1902,
+    "meshPath": "meshes/voxel-0.026d.glb",
+    "viewPath": "views/voxel-0.026d.png"
+  },
+  "staticGroom": {
+    "strandCount": 3500,
+    "strandLengthFractionOfDiagonal": 0.012,
+    "strandWidthFractionOfDiagonal": 0.0008,
+    "seed": 80301,
+    "implementation": "deterministic crossed-ribbon strands from selected carrier surface normals"
+  },
+  "outputs": {
+    "carrierFlatView": {
+      "path": "views/selected-carrier-flat.png",
+      "sha256": "eddcd5fc96719555a250ad0434aad2d9f1e9298b87587cf98e319757c9ba98f3"
+    },
+    "carrierSmoothView": {
+      "path": "views/selected-carrier-smooth.png",
+      "sha256": "9e8616788eac064aae05a44fa5597e23df7c4b668850dd35807e0515902f6a79"
+    },
+    "carrierWithGroomView": {
+      "path": "views/selected-carrier-with-static-groom.png",
+      "sha256": "0e41b7ad244a573d7d4bb58892cb635d8a2a4ccd328d9c9737874efd01be1578"
+    },
+    "carrierWithGroomMesh": {
+      "path": "meshes/selected-carrier-with-static-groom.glb",
+      "sha256": "44b2e8c5ac465d0df676673f887d5b9f942a511e4cfb3f6520ca802af70d51d2"
+    }
+  },
+  "visualAdmission": "pending-agent-inspection",
+  "claimCeiling": "Exact-route, exact-seed evidence that the admitted malformed MLX coat selection can or cannot support one coherent inferred carrier and one static replacement groom."
+}
