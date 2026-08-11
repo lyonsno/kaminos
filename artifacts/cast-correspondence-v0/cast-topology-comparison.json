@@ -1,0 +1,63 @@
+{
+  "schema": "kaminos.proxy-rig-comparison.v0",
+  "claimCeiling": "visual deformation-carrier comparison only",
+  "defaultCandidate": "sf3d-skin-baseline",
+  "candidates": [
+    {
+      "id": "sf3d-skin-baseline",
+      "label": "SF3D skin baseline",
+      "role": "engineering-baseline",
+      "seriousVisibleChoice": true,
+      "cast": "artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb",
+      "castSha256": "bcc51bb15fd7e4fae8e6c67990416a7f7f09d3b9b9b39a4ae793ca3c5b5770f2",
+      "registrationReceipt": "artifacts/cast-correspondence-v0/receipts/envelope-baseline--cast-sf3d-skin-baseline.json",
+      "package": "artifacts/cast-correspondence-v0/rig-packages/sf3d-skin-baseline.proxy-rig.json",
+      "provenance": {
+        "sourceRef": "artifacts/authored-envelope-v0/recon-sf3d-skin/output.glb",
+        "sourceCommit": "9decaa154603f09edd78fd86105363614f88b70d"
+      }
+    },
+    {
+      "id": "trellis-skin-80413",
+      "label": "TRELLIS skin 80413",
+      "role": "preferred-generated-shape-comparator",
+      "seriousVisibleChoice": true,
+      "cast": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+      "castSha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a",
+      "registrationReceipt": "artifacts/cast-correspondence-v0/receipts/envelope-baseline--trellis-skin-80413.json",
+      "package": "artifacts/cast-correspondence-v0/rig-packages/trellis-skin-80413.proxy-rig.json",
+      "provenance": {
+        "sourceRef": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+        "sourceCommit": "bb6c23ee9fdb4852c6d33cd00b195282d23a92fc"
+      }
+    },
+    {
+      "id": "trellis-skin-80302",
+      "label": "TRELLIS skin 80302",
+      "role": "closest-generated-visual-alternative",
+      "seriousVisibleChoice": true,
+      "cast": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb",
+      "castSha256": "062deed4fd9c9d9c4730309798af2ee8cb0184e4c7ae537d1da340e69712a232",
+      "registrationReceipt": "artifacts/cast-correspondence-v0/receipts/envelope-baseline--trellis-skin-80302.json",
+      "package": "artifacts/cast-correspondence-v0/rig-packages/trellis-skin-80302.proxy-rig.json",
+      "provenance": {
+        "sourceRef": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb",
+        "sourceCommit": "bb6c23ee9fdb4852c6d33cd00b195282d23a92fc"
+      }
+    },
+    {
+      "id": "trellis-mannequin-80413",
+      "label": "Mannequin 80413 (control)",
+      "role": "registration-control",
+      "seriousVisibleChoice": false,
+      "cast": "artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+      "castSha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3",
+      "registrationReceipt": "artifacts/cast-correspondence-v0/receipts/envelope-baseline--trellis-mannequin-80413.json",
+      "package": "artifacts/cast-correspondence-v0/rig-packages/trellis-mannequin-80413.proxy-rig.json",
+      "provenance": {
+        "sourceRef": "artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+        "sourceCommit": "ef70a83471ed62d54378ec733f6b205a36665b46"
+      }
+    }
+  ]
+}

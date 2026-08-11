@@ -30,6 +30,10 @@ import {
   assertM31CompactFixtureMatchesHistorical,
   M31_HISTORICAL_SOURCE_REF,
 } from '../m31-live-source-fixture-core.mjs';
+import {
+  resolveProxyRigComparisonCandidate,
+  validateProxyRigComparisonManifest,
+} from '../proxy-rig-comparison.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const defaultOutput = 'artifacts/cast-correspondence-v0/rig-packages/cast-sf3d-skin-baseline.proxy-rig.json';
@@ -39,18 +43,60 @@ function option(name, fallback) {
   return index >= 0 ? process.argv[index + 1] : fallback;
 }
 
-const outputPath = resolve(repoRoot, option('--output', defaultOutput));
+function castInEnvelopeFrame(cast, transform) {
+  const positions = new Float64Array(cast.positions.length);
+  const scale = transform.scale;
+  const rotation = transform.rotation;
+  const translation = transform.translation;
+  for (let index = 0; index < cast.positions.length; index += 3) {
+    const centered = [
+      cast.positions[index] - translation[0],
+      cast.positions[index + 1] - translation[1],
+      cast.positions[index + 2] - translation[2],
+    ];
+    for (let column = 0; column < 3; column += 1) {
+      positions[index + column] = (
+        rotation[0][column] * centered[0]
+        + rotation[1][column] * centered[1]
+        + rotation[2][column] * centered[2]
+      ) / scale;
+    }
+  }
+  return { positions, triangles: cast.triangles };
+}
+
 const artifactRoot = resolve(repoRoot, option('--artifact-root', 'artifacts/cast-correspondence-v0'));
 const loadBytes = relative => readFile(resolve(artifactRoot, relative));
 const loadJson = async relative => JSON.parse(await readFile(resolve(artifactRoot, relative), 'utf8'));
+
+const candidateManifestPath = option('--candidate-manifest', null);
+const candidateId = option('--candidate-id', null);
+let candidate = null;
+if (candidateManifestPath || candidateId) {
+  if (!candidateManifestPath || !candidateId) {
+    throw new Error('--candidate-manifest and --candidate-id must be provided together');
+  }
+  const manifest = validateProxyRigComparisonManifest(JSON.parse(
+    await readFile(resolve(repoRoot, candidateManifestPath), 'utf8'),
+  ));
+  candidate = resolveProxyRigComparisonCandidate(manifest, candidateId);
+}
+const outputPath = resolve(repoRoot, option('--output', candidate?.package ?? defaultOutput));
+const castPath = candidate?.cast ?? 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb';
+const registrationPath = candidate?.registrationReceipt
+  ?? 'artifacts/cast-correspondence-v0/receipts/envelope-baseline--cast-sf3d-skin-baseline.json';
 
 const [skeletonBytes, manifestBytes, frameLink, registration, envelopeBytes, castBytes, m31SourceFixture, m31SourceRegistration, authoredHierarchy, authoredHierarchySourceMeshIdentity] = await Promise.all([
   loadBytes('frozen/skeleton-authored.glb'),
   loadBytes('frozen/region-manifest-golden-provisional.json'),
   loadJson('receipts/frame-link--skeleton--envelope-baseline.json'),
-  loadJson('receipts/envelope-baseline--cast-sf3d-skin-baseline.json'),
+  candidate
+    ? JSON.parse(await readFile(resolve(repoRoot, registrationPath), 'utf8'))
+    : loadJson('receipts/envelope-baseline--cast-sf3d-skin-baseline.json'),
   loadBytes('frozen/envelope-baseline.glb'),
-  loadBytes('frozen/cast-sf3d-skin-baseline.glb'),
+  candidate
+    ? readFile(resolve(repoRoot, castPath))
+    : loadBytes('frozen/cast-sf3d-skin-baseline.glb'),
   loadJson('frozen/m31-authenticated-source.compact.json'),
   loadJson('receipts/m31-source-blend--skeleton-authored.json'),
   loadJson('frozen/cat-bauplan-authored-hierarchy.receipt.json'),
@@ -94,19 +140,29 @@ const bones = parseGlbNodeGeometries(skeletonBytes);
 const envelope = parseGlbGeometry(envelopeBytes);
 const cast = parseGlbGeometry(castBytes);
 const stageATransform = registration.registration.transform;
-const envelopeInCastFrame = {
-  positions: new Float64Array(envelope.positions.length),
-  triangles: envelope.triangles,
-};
-for (let i = 0; i < envelope.positions.length; i += 3) {
-  const point = applyChain(
-    [envelope.positions[i], envelope.positions[i + 1], envelope.positions[i + 2]],
-    [stageATransform],
-  );
-  envelopeInCastFrame.positions.set(point, i);
+let envelopeInRuntimeFrame;
+let castInRuntimeFrame;
+let chainTransforms;
+if (candidate) {
+  envelopeInRuntimeFrame = envelope;
+  castInRuntimeFrame = castInEnvelopeFrame(cast, stageATransform);
+  chainTransforms = [{ scale: 1, ...frameLink.link.transform }];
+} else {
+  envelopeInRuntimeFrame = {
+    positions: new Float64Array(envelope.positions.length),
+    triangles: envelope.triangles,
+  };
+  for (let i = 0; i < envelope.positions.length; i += 3) {
+    const point = applyChain(
+      [envelope.positions[i], envelope.positions[i + 1], envelope.positions[i + 2]],
+      [stageATransform],
+    );
+    envelopeInRuntimeFrame.positions.set(point, i);
+  }
+  castInRuntimeFrame = cast;
+  chainTransforms = [{ scale: 1, ...frameLink.link.transform }, stageATransform];
 }
 
-const chainTransforms = [{ scale: 1, ...frameLink.link.transform }, stageATransform];
 const m31Overlay = createM31LiveOverlay({
   sourceFixture: m31SourceFixture,
   sourceRegistration: m31SourceRegistration,
@@ -127,16 +183,19 @@ const m31AuthoredSupportProximity = assertM31AuthoredSupportProximity({
   chainTransforms: [],
 });
 const skinBinding = bindEnvelopeToSkeleton({
-  envelope: envelopeInCastFrame,
+  envelope: envelopeInRuntimeFrame,
   bones,
   manifest,
   chainTransforms,
   authoredHierarchy,
 });
-const castBinding = bindCastToEnvelope({ cast, envelopeInCastFrame });
+const castBinding = bindCastToEnvelope({
+  cast: castInRuntimeFrame,
+  envelopeInCastFrame: envelopeInRuntimeFrame,
+});
 const packageData = createProxyRigPackage({
-  envelopeInCastFrame,
-  cast,
+  envelopeInCastFrame: envelopeInRuntimeFrame,
+  cast: castInRuntimeFrame,
   skinBinding,
   castBinding,
   muscles: [m31Overlay.muscle],
@@ -144,7 +203,7 @@ const packageData = createProxyRigPackage({
     initialControl: 'hindlimb-left-hock',
   },
   source: {
-    cast: 'artifacts/cast-correspondence-v0/frozen/cast-sf3d-skin-baseline.glb',
+    cast: castPath,
     castSha256,
     envelope: 'artifacts/cast-correspondence-v0/frozen/envelope-baseline.glb',
     envelopeSha256,
@@ -154,8 +213,22 @@ const packageData = createProxyRigPackage({
     manifestSha256,
     frameLinkReceipt: 'artifacts/cast-correspondence-v0/receipts/frame-link--skeleton--envelope-baseline.json',
     frameLinkReceiptSha256,
-    registrationReceipt: 'artifacts/cast-correspondence-v0/receipts/envelope-baseline--cast-sf3d-skin-baseline.json',
+    registrationReceipt: registrationPath,
     registrationReceiptSha256,
+    ...(candidate ? {
+      comparisonCandidate: {
+        id: candidate.id,
+        label: candidate.label,
+        role: candidate.role,
+        seriousVisibleChoice: candidate.seriousVisibleChoice,
+        provenance: candidate.provenance,
+      },
+      comparisonFrame: {
+        frame: 'frozen-envelope-baseline',
+        operation: 'inverse-cast-registration',
+        registrationReceipt: registrationPath,
+      },
+    } : {}),
     m31SourceRegistrationReceipt: 'artifacts/cast-correspondence-v0/receipts/m31-source-blend--skeleton-authored.json',
     m31SourceRegistrationReceiptSha256: m31SourceRegistration.receiptSha256,
     m31AuthoredSupportProximity,
@@ -183,6 +256,7 @@ process.stdout.write(`${JSON.stringify({
   schema: packageData.schema,
   runtimeSchema: packageData.runtimeSchema,
   packageId: packageData.packageId,
+  comparisonCandidate: packageData.source.comparisonCandidate,
   controls: packageData.skinBinding.groups.map(group => group.name),
   envelopeVertices: packageData.envelope.positions.length / 3,
   castVertices: packageData.cast.positions.length / 3,

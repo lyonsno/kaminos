@@ -5,6 +5,10 @@ import {
   sampleProxyPoseRun,
   verifyProxyRigPackageIdentity,
 } from './proxy-rig-runtime.mjs';
+import {
+  createProxyRigComparisonCarryState,
+  transferProxyRigComparisonPose,
+} from './proxy-rig-comparison.mjs';
 
 const POSE_STORAGE_PREFIX = 'kaminos.proxy-rig.pose-run.v0:';
 
@@ -280,12 +284,21 @@ export function createProxyRigLiveHost({
         name,
         control.getWorldPosition(new THREE.Vector3()).toArray(),
       ])),
+      controlQuaternions: Object.fromEntries([...state.controls].map(([name, control]) => [
+        name,
+        control.quaternion.toArray(),
+      ])),
       controlsVisible: state.controlsVisible,
       transformHelperVisible: transformControls.getHelper?.().visible ?? transformControls.visible,
       selectedControl: state.selectedControl,
       selectedControlKind: state.controls.get(state.selectedControl)?.userData.controlKind ?? null,
       transformTargetName: [...state.controls]
         .find(([, control]) => control === transformControls.object)?.[0] ?? null,
+      cameraPosition: camera.position.toArray(),
+      orbitTarget: orbitControls.target.toArray(),
+      comparisonCandidate: state.source?.comparisonCandidate
+        ? { ...state.source.comparisonCandidate }
+        : null,
       skeletalSupportSegmentCount: countVisibleProxyRigSupportSegments(state.root),
       frameCount: state.frameCount,
       lastEvaluationMs: state.lastEvaluationMs,
@@ -522,7 +535,7 @@ export function createProxyRigLiveHost({
     return true;
   }
 
-  async function load(requestedPath) {
+  async function load(requestedPath, { carryState = null } = {}) {
     dispose();
     state.status = 'loading';
     state.requestedPackagePath = requestedPath;
@@ -565,6 +578,15 @@ export function createProxyRigLiveHost({
 
       state.root = new THREE.Group();
       state.root.name = `Proxy rig ${state.packageId}`;
+      if (state.source?.comparisonFrame?.frame === 'frozen-envelope-baseline') {
+        const displayRotation = new THREE.Matrix4().set(
+          0, 0, -1, 0,
+          0, -1, 0, 0,
+          -1, 0, 0, 0,
+          0, 0, 0, 1,
+        );
+        state.root.quaternion.setFromRotationMatrix(displayRotation);
+      }
       state.root.add(state.ghost, state.mesh);
       state.evaluator.muscles.forEach((muscle, index) => {
         const muscleGeometry = new THREE.BufferGeometry();
@@ -645,10 +667,17 @@ export function createProxyRigLiveHost({
         }
       }
       state.root.scale.setScalar(displayScale);
-      state.root.position.copy(center).multiplyScalar(-displayScale);
+      state.root.position.copy(center)
+        .applyQuaternion(state.root.quaternion)
+        .multiplyScalar(-displayScale);
       scene.add(state.root);
-      camera.position.set(0.25, 0.7, 3.15);
-      orbitControls.target.set(0, 0, 0);
+      if (carryState) {
+        camera.position.fromArray(carryState.cameraPosition);
+        orbitControls.target.fromArray(carryState.orbitTarget);
+      } else {
+        camera.position.set(0.25, 0.7, 3.15);
+        orbitControls.target.set(0, 0, 0);
+      }
       orbitControls.update();
 
       if (controlSelect) {
@@ -663,9 +692,11 @@ export function createProxyRigLiveHost({
       }
       state.status = 'live';
       restorePoseRun();
-      const initialControl = chooseProxyRigInitialControlName(
-        [...state.controls.keys()],
-        state.evaluator.interaction?.initialControl,
+      const transferredPose = carryState
+        ? transferProxyRigComparisonPose(carryState.pose, [...state.controls.keys()])
+        : null;
+      const initialControl = carryState?.selectedControl ?? chooseProxyRigInitialControlName(
+        [...state.controls.keys()], state.evaluator.interaction?.initialControl,
       );
       if (!initialControl) {
         throw new Error(`Proxy rig interaction initial control ${String(
@@ -673,7 +704,8 @@ export function createProxyRigLiveHost({
         )} is unavailable`);
       }
       selectControl(initialControl);
-      evaluate(false);
+      if (transferredPose) applyPose(transferredPose);
+      else evaluate(false);
       setInfo(`Live proxy rig: ${shortId(state.packageId)}`);
       updateUi();
       return debugState();
@@ -685,6 +717,19 @@ export function createProxyRigLiveHost({
       updateUi();
       throw error;
     }
+  }
+
+  function switchPackage(requestedPath) {
+    if (state.status !== 'live') throw new Error('Proxy rig package switching requires a live source package');
+    if (state.recording) throw new Error('Finish the active pose recording before switching cast candidates');
+    stopReplay();
+    const carryState = createProxyRigComparisonCarryState({
+      pose: castPose(state.controls),
+      selectedControl: state.selectedControl,
+      cameraPosition: camera.position.toArray(),
+      orbitTarget: orbitControls.target.toArray(),
+    });
+    return load(requestedPath, { carryState });
   }
 
   function pickControl(event) {
@@ -718,6 +763,7 @@ export function createProxyRigLiveHost({
 
   return {
     load,
+    switchPackage,
     dispose,
     selectControl,
     pickControl,

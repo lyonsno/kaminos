@@ -98,6 +98,8 @@ canvas { display: block; }
 .proxy-rig-live-badge { color: #65c9d4; font: 9px 'SF Mono', monospace; text-transform: uppercase; }
 .proxy-rig-live-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
 .proxy-rig-live-row .select-input { min-width: 0; }
+#proxy-rig-candidate-row[hidden] { display: none; }
+#proxy-rig-candidate-select { flex: 1 1 auto; width: 0; }
 #proxy-rig-control-select { flex: 1 1 auto; width: 0; }
 #proxy-rig-reset-selected { flex: 0 0 64px; }
 .proxy-rig-live-row .tb-btn { flex: 1; min-width: 0; }
@@ -2700,6 +2702,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="proxy-rig-live-title">Live Proxy Rig</span>
       <span class="proxy-rig-live-badge">Assay</span>
     </div>
+    <div class="proxy-rig-live-row" id="proxy-rig-candidate-row" hidden>
+      <select class="select-input" id="proxy-rig-candidate-select" aria-label="Cast topology candidate"></select>
+    </div>
     <div class="proxy-rig-live-row">
       <select class="select-input" id="proxy-rig-control-select" aria-label="Proxy rig control"></select>
       <button type="button" class="tb-btn" id="proxy-rig-reset-selected">Reset</button>
@@ -2863,6 +2868,10 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { createProxyRigLiveHost, setProxyRigControlVisibility } from './proxy-rig-live-host.mjs';
+import {
+  resolveProxyRigComparisonCandidate,
+  validateProxyRigComparisonManifest,
+} from './proxy-rig-comparison.mjs';
 
 // --- Helpers ---
 function escapeHtml(s) {
@@ -2878,6 +2887,15 @@ let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let proxyRigLiveHost = null;
+let proxyRigComparisonState = {
+  status: 'idle',
+  requestedManifestPath: null,
+  effectiveManifestPath: null,
+  candidateId: null,
+  candidatePackagePath: null,
+  claimCeiling: null,
+  error: null,
+};
 let groundPlane = null;
 let lermsPreviewActorsGroup = null;
 let loadedFiles = {};
@@ -4682,6 +4700,88 @@ function initKaminosProxyRigRoute(packagePath) {
     window.kaminosProxyRigSetControlVisibility = visible => proxyRigLiveHost.setControlVisibility(visible);
   }
   return proxyRigLiveHost.load(packagePath);
+}
+
+function proxyRigComparisonDebugState() {
+  return {
+    ...proxyRigComparisonState,
+    liveRig: proxyRigLiveHost?.debugState() ?? null,
+  };
+}
+
+async function switchKaminosProxyRigComparisonCandidate(candidateId, { initial = false } = {}) {
+  const candidate = resolveProxyRigComparisonCandidate(proxyRigComparisonState.manifest, candidateId);
+  const candidateSelect = document.getElementById('proxy-rig-candidate-select');
+  proxyRigComparisonState.status = initial ? 'loading' : 'switching';
+  proxyRigComparisonState.error = null;
+  if (candidateSelect) candidateSelect.disabled = true;
+  try {
+    const liveState = initial
+      ? await initKaminosProxyRigRoute(candidate.package)
+      : await proxyRigLiveHost.switchPackage(candidate.package);
+    proxyRigComparisonState.status = 'live';
+    proxyRigComparisonState.candidateId = candidate.id;
+    proxyRigComparisonState.candidatePackagePath = candidate.package;
+    proxyRigComparisonState.packageId = liveState.packageId;
+    if (candidateSelect) candidateSelect.value = candidate.id;
+    const params = new URLSearchParams(window.location.search);
+    params.set('proxy_rig_candidate', candidate.id);
+    history.replaceState(null, '', `${window.location.pathname}?${params}${window.location.hash}`);
+    return proxyRigComparisonDebugState();
+  } catch (error) {
+    proxyRigComparisonState.status = 'error';
+    proxyRigComparisonState.error = error?.message || String(error);
+    throw error;
+  } finally {
+    if (candidateSelect) candidateSelect.disabled = false;
+  }
+}
+
+async function initKaminosProxyRigComparisonRoute(manifestPath, requestedCandidateId = null) {
+  const candidateRow = document.getElementById('proxy-rig-candidate-row');
+  const candidateSelect = document.getElementById('proxy-rig-candidate-select');
+  candidateRow.hidden = false;
+  proxyRigComparisonState = {
+    status: 'loading-manifest',
+    requestedManifestPath: manifestPath,
+    effectiveManifestPath: null,
+    candidateId: null,
+    candidatePackagePath: null,
+    packageId: null,
+    claimCeiling: null,
+    manifest: null,
+    error: null,
+  };
+  window.kaminosProxyRigComparisonDebugState = proxyRigComparisonDebugState;
+  try {
+    const response = await fetch(manifestPath, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Proxy rig comparison load failed (${response.status}) for ${manifestPath}`);
+    const manifest = validateProxyRigComparisonManifest(await response.json());
+    const candidateId = requestedCandidateId || manifest.defaultCandidate;
+    resolveProxyRigComparisonCandidate(manifest, candidateId);
+    proxyRigComparisonState.effectiveManifestPath = response.url;
+    proxyRigComparisonState.claimCeiling = manifest.claimCeiling;
+    proxyRigComparisonState.manifest = manifest;
+    candidateSelect.replaceChildren(...manifest.candidates.map(candidate => {
+      const option = document.createElement('option');
+      option.value = candidate.id;
+      option.textContent = candidate.label;
+      option.title = `${candidate.role} | ${candidate.castSha256}`;
+      return option;
+    }));
+    candidateSelect.onchange = () => {
+      switchKaminosProxyRigComparisonCandidate(candidateSelect.value).catch(error => {
+        console.error('Proxy rig comparison switch failed:', error);
+        setInfo(error?.message || String(error));
+      });
+    };
+    return await switchKaminosProxyRigComparisonCandidate(candidateId, { initial: true });
+  } catch (error) {
+    proxyRigComparisonState.status = 'error';
+    proxyRigComparisonState.error = error?.message || String(error);
+    setInfo(proxyRigComparisonState.error);
+    throw error;
+  }
 }
 
 function setSplatCorrectionDraftDirty(dirty = true) {
@@ -22202,7 +22302,18 @@ initScene().then(() => {
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
     const proxyRigPackage = params.get('proxy_rig_package');
-    if (proxyRigPackage) {
+    const proxyRigComparison = params.get('proxy_rig_comparison');
+    const proxyRigCandidate = params.get('proxy_rig_candidate');
+    if (proxyRigPackage && proxyRigComparison) {
+      console.error('Proxy rig route cannot request both a package and a comparison manifest');
+      setInfo('Proxy rig route cannot request both a package and a comparison manifest');
+    } else if (proxyRigComparison) {
+      try {
+        await initKaminosProxyRigComparisonRoute(proxyRigComparison, proxyRigCandidate);
+      } catch (err) {
+        console.error('Proxy rig comparison deep-link failed:', err);
+      }
+    } else if (proxyRigPackage) {
       try {
         await initKaminosProxyRigRoute(proxyRigPackage);
       } catch (err) {
