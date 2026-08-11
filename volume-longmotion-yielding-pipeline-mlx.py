@@ -226,6 +226,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 self_resubmit(args)
                 return report
             report["failurePhase"] = f"chain-hop{index}-{short}"
+            hop_ckpt = checkpoints / f"hop-{index:02d}-fit.npz"
             fit = ORACLE.fit_modes(
                 data["medium"], data["lattice"], fit_cameras,
                 mode_count=args.mode_count,
@@ -238,7 +239,17 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 initial_state=current_state,
                 anchor_weight=args.anchor_weight,
                 high_frequency_weight=args.high_frequency_weight,
+                checkpoint_path=hop_ckpt,
+                yield_pending_dir=yield_dir,
+                yield_check_steps=args.yield_check_steps,
             )
+            if not fit["finished"]:
+                save_progress(progress_path, progress)
+                report["status"] = "yielded"
+                report["yieldedAt"] = f"chain-hop{index}-fit@{fit['completedSteps']}"
+                self_resubmit(args)
+                return report
+            hop_ckpt.unlink(missing_ok=True)
             current_state = fit["state"]
         report["failurePhase"] = f"chain-witness{index}-{short}"
         fitted_lattice = ORACLE.mixture_density_lattice(current_state, data["medium"], fine_grid=args.fine_grid)
@@ -278,6 +289,11 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
         save_progress(progress_path, progress)
         report["hops"] = hops
         FITTER.write_json(output_dir / "report.json", {**report, "status": "running"})
+        if yield_dir is not None and yield_dir.is_dir() and any(yield_dir.iterdir()) and index < len(chain_states) - 1:
+            report["status"] = "yielded"
+            report["yieldedAt"] = f"chain-postwitness{index}"
+            self_resubmit(args)
+            return report
 
     report["failurePhase"] = "witness-viewer"
     shorts = [s.split("-")[-1] for s in chain_states]
