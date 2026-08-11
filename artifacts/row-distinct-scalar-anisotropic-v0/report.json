@@ -1,0 +1,44 @@
+{
+  "schema": "kaminos.row-distinct-field-assay-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "bounded-hindquarter-row-distinct-field-mesh-v0",
+  "effectiveRouteId": "bounded-hindquarter-row-distinct-field-mesh-v0",
+  "cameraId": "right-sagittal-boundary-observation-v0",
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 6232529,
+      "sha256": "60283de596c6eb97a067c20093aeb32d04807e48e74223784521cc262cb7c913"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 4898,
+      "sha256": "512923dcf00c69b16c340586e7a0f2f1aa4ea5ae5f9faf6fda9bbeb4542cc39f"
+    },
+    {
+      "relativePath": "1-scalar-metaball-control-baseline.obj",
+      "byteLength": 436626,
+      "sha256": "f07c8b55589af3e8b5c05c2de5196ed9a251fc0983c1832bd160d43902aa8862"
+    },
+    {
+      "relativePath": "1-scalar-metaball-control-perturbed.obj",
+      "byteLength": 466757,
+      "sha256": "9e93893c1943862bbe2945244a8b26368dad398d55c29e07bdf616257fb495eb"
+    },
+    {
+      "relativePath": "2-anisotropic-identity-challenger-baseline.obj",
+      "byteLength": 446029,
+      "sha256": "233c902e731075e57c87e00367d603ac400f8cb4a8a2f2576133563af53b1d85"
+    },
+    {
+      "relativePath": "2-anisotropic-identity-challenger-perturbed.obj",
+      "byteLength": 498146,
+      "sha256": "706ad71afa4566ba9d27cd238a65bc59cc2ffa2184af672f928130e8a1897eec"
+    }
+  ],
+  "assayHash": "830f0bf19225e0707942285dbc77921faacbc6649c382634f7341cf7bd6a4404",
+  "targetHash": "a1175f96382bd3d7aa51f1c15596916cc4a4e82ff49db83957b08ebb0721ea08",
+  "assayCardHash": "b22e731b98c8b44b4102f9889c86e336de5ff64c374fb83193d5565322b26d20",
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all primary artifacts reread and hashed from disk"
+}

@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.row-distinct-boundary-response-target.v0",
+  "id": "bounded-hindquarter-boundary-response-v0",
+  "authority": {
+    "sourceKind": "independently-authored-synthetic-observation",
+    "construction": "Frozen boundary stations and displacement targets authored as observations; no candidate field or extraction compiler generated them.",
+    "claimCeiling": "Synthetic boundary fit and response only; not anatomical, feline, or authored-envelope truth."
+  },
+  "frame": {
+    "units": "fixture-unit",
+    "axes": ["right", "dorsal", "anterior"],
+    "cameraId": "right-sagittal-boundary-observation-v0"
+  },
+  "normalizationSpan": 1.5,
+  "stations": [
+    {"anterior": -0.65, "baseline": {"top": 0.18, "bottom": -0.16, "halfWidth": 0.20}, "perturbed": {"top": 0.18, "bottom": -0.16, "halfWidth": 0.20}, "targetComponentId": "haunch-bulk"},
+    {"anterior": -0.525, "baseline": {"top": 0.36, "bottom": -0.29, "halfWidth": 0.36}, "perturbed": {"top": 0.37, "bottom": -0.29, "halfWidth": 0.37}, "targetComponentId": "gluteal-carrier"},
+    {"anterior": -0.4, "baseline": {"top": 0.50, "bottom": -0.39, "halfWidth": 0.48}, "perturbed": {"top": 0.55, "bottom": -0.40, "halfWidth": 0.52}, "targetComponentId": "gluteal-carrier"},
+    {"anterior": -0.275, "baseline": {"top": 0.58, "bottom": -0.45, "halfWidth": 0.55}, "perturbed": {"top": 0.67, "bottom": -0.47, "halfWidth": 0.61}, "targetComponentId": "gluteal-carrier"},
+    {"anterior": -0.15, "baseline": {"top": 0.60, "bottom": -0.47, "halfWidth": 0.57}, "perturbed": {"top": 0.68, "bottom": -0.49, "halfWidth": 0.62}, "targetComponentId": "gluteal-carrier"},
+    {"anterior": -0.025, "baseline": {"top": 0.57, "bottom": -0.44, "halfWidth": 0.54}, "perturbed": {"top": 0.61, "bottom": -0.45, "halfWidth": 0.58}, "targetComponentId": "gluteal-carrier"},
+    {"anterior": 0.1, "baseline": {"top": 0.49, "bottom": -0.37, "halfWidth": 0.46}, "perturbed": {"top": 0.50, "bottom": -0.37, "halfWidth": 0.47}, "targetComponentId": "pelvis"},
+    {"anterior": 0.225, "baseline": {"top": 0.35, "bottom": -0.26, "halfWidth": 0.32}, "perturbed": {"top": 0.35, "bottom": -0.26, "halfWidth": 0.32}, "targetComponentId": "ischial-tether"},
+    {"anterior": 0.35, "baseline": {"top": 0.16, "bottom": -0.14, "halfWidth": 0.18}, "perturbed": {"top": 0.16, "bottom": -0.14, "halfWidth": 0.18}, "targetComponentId": "pelvis"}
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "schema": "kaminos.row-distinct-scalar-anisotropic-assay.v0",
+  "id": "bounded-hindquarter-scalar-anisotropic-v0",
+  "targetRef": "fixtures/analytical-tissue/row-distinct-hindquarter-target.v0.json",
+  "claimCeiling": "Interior-carrier comparison on one independently authored synthetic boundary-response target only.",
+  "control": {
+    "id": "muscle-tension",
+    "delta": 0.1,
+    "support": [-0.55, 0.1]
+  },
+  "grid": {
+    "resolution": [25, 25, 29],
+    "bounds": {
+      "right": [-0.8, 0.8],
+      "dorsal": [-0.75, 0.75],
+      "anterior": [-0.8, 0.5]
+    },
+    "isoValue": 0
+  },
+  "camera": {
+    "id": "right-sagittal-boundary-observation-v0",
+    "projection": "orthographic-right-sagittal",
+    "bounds": {
+      "right": [-0.8, 0.8],
+      "dorsal": [-0.75, 0.75],
+      "anterior": [-0.8, 0.5]
+    }
+  },
+  "extraction": {
+    "longitudinalClosureCells": 2
+  },
+  "baselineFit": {
+    "maximumNormalizedRmse": 0.14,
+    "minimumObservedStationFraction": 1,
+    "maximumBetweenRowNormalizedRmseGap": 0.02
+  },
+  "response": {
+    "maximumNormalizedRmse": 0.22,
+    "minimumDirectionAgreement": 0.8,
+    "minimumLocalityRatio": 2.5,
+    "maximumSecondDifference": 0.12
+  },
+  "surface": {
+    "minimumAnisotropicTargetFraction": 0.4,
+    "requiredComponentIds": [
+      "pelvis",
+      "gluteal-carrier",
+      "haunch-bulk",
+      "ischial-tether"
+    ]
+  },
+  "rows": [
+    {
+      "id": "scalar-metaball-control",
+      "role": "undifferentiated-interior-control",
+      "compilerId": "scalar-metaball-sdf-v0",
+      "extractorId": "marching-tetrahedra-zero-isosurface-v0",
+      "identityMode": "none",
+      "evidenceDisposition": "control-observation"
+    },
+    {
+      "id": "anisotropic-identity-challenger",
+      "role": "identity-bearing-interior-challenger",
+      "compilerId": "anisotropic-tissue-field-v0",
+      "extractorId": "identity-carrying-marching-tetrahedra-v0",
+      "identityMode": "mixture-weights",
+      "evidenceDisposition": "candidate-evidence"
+    }
+  ],
+  "counterfeits": [
+    "candidate-generated-target",
+    "shared-effective-compiler",
+    "unequal-baseline-fit",
+    "requested-effective-route-substitution",
+    "internal-only-attribution",
+    "open-or-blank-surface",
+    "stale-or-partial-output"
+  ],
+  "promotion": "none"
+}
