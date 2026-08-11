@@ -1,0 +1,999 @@
+{
+  "schema": "kaminos.fur-signal-metric-atlas-result.v0",
+  "effectiveRoute": {
+    "extractor": "blender-python",
+    "blenderVersion": "5.1.2",
+    "generation": {
+      "jobType": "trellis2mlx_fast",
+      "steps": 6,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "seedBinding": "reuse-flux-seed"
+    }
+  },
+  "sourceCampaign": "artifacts/latest-envelope-basin-reconstruction-v0/campaign.json",
+  "sourcePlate": {
+    "path": "artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png",
+    "sha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4"
+  },
+  "metricRanges": {
+    "small_component": {
+      "lower": 0.0,
+      "upper": 0.878059970131012,
+      "constant": false
+    },
+    "component_sheetness": {
+      "lower": 0.33809375446080014,
+      "upper": 0.9999999996613366,
+      "constant": false
+    },
+    "boundary_fraction": {
+      "lower": 0.0,
+      "upper": 1.0,
+      "constant": false
+    },
+    "normal_disorder": {
+      "lower": 0.0,
+      "upper": 0.34946421412311196,
+      "constant": false
+    },
+    "aspect_ratio": {
+      "lower": 0.8304161979947092,
+      "upper": 3.1582423689443124,
+      "constant": false
+    },
+    "relative_area": {
+      "lower": 2.3813363505398157e-07,
+      "upper": 6.905253179989641e-05,
+      "constant": false
+    }
+  },
+  "discrimination": [
+    {
+      "controlQuantile": 0.99,
+      "threshold": 0.3025011084360847,
+      "furCoverage": 0.7063299647471553,
+      "skinCoverage": 0.009911742701516122,
+      "furCoverageBySeed": {
+        "80301": 0.9310663328553025,
+        "80302": 0.24496562484762788,
+        "80413": 0.9429579365385357
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.0009761771242237315,
+        "80302": 0.0017806609127274378,
+        "80413": 0.0269783900675972
+      },
+      "separation": 0.6964182220456392,
+      "metric": "relative_area"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 0.9999999904997976,
+      "furCoverage": 0.26729942549176594,
+      "skinCoverage": 0.010089051021839067,
+      "furCoverageBySeed": {
+        "80301": 0.2903672735227632,
+        "80302": 0.16526890633380467,
+        "80413": 0.34626209661873
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.01911853282655202,
+        "80302": 0.00481736875822862,
+        "80413": 0.006331251480736562
+      },
+      "separation": 0.2572103744699269,
+      "metric": "component_sheetness"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 0.884313476591232,
+      "furCoverage": 0.07413660594635892,
+      "skinCoverage": 0.010116497212551957,
+      "furCoverageBySeed": {
+        "80301": 0.05904085948324056,
+        "80302": 0.09576283582817299,
+        "80413": 0.06760612252766318
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.021969177726545788,
+        "80302": 0.0035360999994955636,
+        "80413": 0.004844213911614519
+      },
+      "separation": 0.06402010873380695,
+      "metric": "normal_disorder"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 0.7877176784559109,
+      "furCoverage": 0.026462136038985496,
+      "skinCoverage": 0.010073332963282305,
+      "furCoverageBySeed": {
+        "80301": 0.003961984395128947,
+        "80302": 0.07305329367594715,
+        "80413": 0.0023711300458804027
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.017472532037302427,
+        "80302": 0.006108726247345403,
+        "80413": 0.006638740605199087
+      },
+      "separation": 0.01638880307570319,
+      "metric": "candidate_signal"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 1.0,
+      "furCoverage": 0.0,
+      "skinCoverage": 0.0,
+      "furCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "separation": 0.0,
+      "metric": "small_component"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 1.0,
+      "furCoverage": 0.0,
+      "skinCoverage": 0.0,
+      "furCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "separation": 0.0,
+      "metric": "boundary_fraction"
+    },
+    {
+      "controlQuantile": 0.99,
+      "threshold": 1.0,
+      "furCoverage": 0.0,
+      "skinCoverage": 0.0,
+      "furCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "skinCoverageBySeed": {
+        "80301": 0.0,
+        "80302": 0.0,
+        "80413": 0.0
+      },
+      "separation": 0.0,
+      "metric": "aspect_ratio"
+    }
+  ],
+  "quantitativeStatus": "candidate",
+  "candidateMetrics": [
+    "relative_area",
+    "component_sheetness"
+  ],
+  "visualAdmission": "pending-agent-inspection",
+  "decisionPredicate": {
+    "controlQuantile": 0.99,
+    "minimumMeanSeparation": 0.15,
+    "minimumFurCoverageEverySeed": 0.05,
+    "maximumSkinCoverageAnySeed": 0.03,
+    "visualRequirement": "A passing channel must form coherent coat-localized regions on fur casts without comparably lighting the matched skin controls. Statistics alone cannot satisfy this requirement."
+  },
+  "assets": [
+    {
+      "family": "fur",
+      "seed": "80301",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80301/output.glb",
+      "sourceSha256": "68ba45a262e049b6a771a56a21e8fcd92f8da6b86a99731d0fffae4b8763bd4b",
+      "expectedSha256": "68ba45a262e049b6a771a56a21e8fcd92f8da6b86a99731d0fffae4b8763bd4b",
+      "vertexCount": 93947,
+      "triangleCount": 41141,
+      "componentCount": 26514,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.7079091101576427,
+          "p90": 0.8157111668512939,
+          "p99": 0.8157111668512939,
+          "max": 0.8157111668512939
+        },
+        "component_sheetness": {
+          "min": 0.04956647754342647,
+          "median": 0.9617198351346469,
+          "p90": 0.999999999673412,
+          "p99": 0.999999999779756,
+          "max": 0.9999999998484933
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 0.6666666666666666,
+          "p90": 1.0,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.0008466569707648031,
+          "p90": 0.21911921888002894,
+          "p99": 0.4872850324054445,
+          "max": 0.988342883187027
+        },
+        "aspect_ratio": {
+          "min": 1.157312342566865,
+          "median": 1.8736229568406324,
+          "p90": 3.140433353492927,
+          "p99": 7.237202067215645,
+          "max": 84.92570884880394
+        },
+        "relative_area": {
+          "min": 1.1824535497553957e-08,
+          "median": 4.323939593237605e-05,
+          "p90": 6.989532993618954e-05,
+          "p99": 0.00010702247240400458,
+          "max": 0.00043383367448857296
+        }
+      },
+      "views": {
+        "candidate_signal": "views/fur-seed80301-candidate_signal.png",
+        "small_component": "views/fur-seed80301-small_component.png",
+        "component_sheetness": "views/fur-seed80301-component_sheetness.png",
+        "boundary_fraction": "views/fur-seed80301-boundary_fraction.png",
+        "normal_disorder": "views/fur-seed80301-normal_disorder.png",
+        "aspect_ratio": "views/fur-seed80301-aspect_ratio.png",
+        "relative_area": "views/fur-seed80301-relative_area.png",
+        "relative_area_selected": "views/fur-seed80301-relative_area_selected.png",
+        "component_sheetness_selected": "views/fur-seed80301-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 79733,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1895425170660019,
+          "p90Chroma": 0.23137256503105164
+        },
+        "small_component": {
+          "foregroundPixels": 79765,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.24575164914131165,
+          "p90Chroma": 0.22352942824363708
+        },
+        "component_sheetness": {
+          "foregroundPixels": 80182,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.26274511218070984,
+          "p90Chroma": 0.20000001788139343
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 78922,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.26274511218070984,
+          "p90Chroma": 0.18431374430656433
+        },
+        "normal_disorder": {
+          "foregroundPixels": 51099,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.18300653994083405,
+          "p90Chroma": 0.11764705181121826
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 55745,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.08758169412612915,
+          "p90Chroma": 0.08627451211214066
+        },
+        "relative_area": {
+          "foregroundPixels": 80046,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.26013073325157166,
+          "p90Chroma": 0.2039215862751007
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 80242,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.19346407055854797,
+          "p90Chroma": 0.3490196168422699,
+          "selectedPixels": 77399
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 41586,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1751634031534195,
+          "p90Chroma": 0.2549019753932953,
+          "selectedPixels": 23373
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.9310663328553025,
+        "component_sheetness": 0.2903672735227632
+      },
+      "candidateSignal": {
+        "min": 0.10602654650711538,
+        "median": 0.6434731654470054,
+        "p90": 0.7494382729384459,
+        "p99": 0.7737285717897346,
+        "max": 0.8709843731984541
+      }
+    },
+    {
+      "family": "fur",
+      "seed": "80302",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80302/output.glb",
+      "sourceSha256": "34283aec6930be508c4cfd5878148afe2c6ddce863f34deb6f0e123f4fa404da",
+      "expectedSha256": "34283aec6930be508c4cfd5878148afe2c6ddce863f34deb6f0e123f4fa404da",
+      "vertexCount": 157060,
+      "triangleCount": 82036,
+      "componentCount": 40209,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.7333278536503598,
+          "p90": 0.8666639268251799,
+          "p99": 0.8666639268251799,
+          "max": 0.8666639268251799
+        },
+        "component_sheetness": {
+          "min": 0.026598442820907175,
+          "median": 0.866781835443671,
+          "p90": 0.9999999989126808,
+          "p99": 0.9999999996151301,
+          "max": 0.9999999998779255
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 0.6666666666666666,
+          "p90": 1.0,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.024632470619602408,
+          "p90": 0.30177219557117935,
+          "p99": 0.6028212593196995,
+          "max": 0.9987809521930591
+        },
+        "aspect_ratio": {
+          "min": 1.1604690812258542,
+          "median": 3.1538200649070802,
+          "p90": 10.246312938256452,
+          "p99": 29.326523158301512,
+          "max": 867.7105663569713
+        },
+        "relative_area": {
+          "min": 1.0413780587565844e-08,
+          "median": 1.1325120545257855e-05,
+          "p90": 3.430456476450757e-05,
+          "p99": 9.630735360546626e-05,
+          "max": 0.0008103567693014387
+        }
+      },
+      "views": {
+        "candidate_signal": "views/fur-seed80302-candidate_signal.png",
+        "small_component": "views/fur-seed80302-small_component.png",
+        "component_sheetness": "views/fur-seed80302-component_sheetness.png",
+        "boundary_fraction": "views/fur-seed80302-boundary_fraction.png",
+        "normal_disorder": "views/fur-seed80302-normal_disorder.png",
+        "aspect_ratio": "views/fur-seed80302-aspect_ratio.png",
+        "relative_area": "views/fur-seed80302-relative_area.png",
+        "relative_area_selected": "views/fur-seed80302-relative_area_selected.png",
+        "component_sheetness_selected": "views/fur-seed80302-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 59792,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.20784315466880798,
+          "p90Chroma": 0.25882354378700256
+        },
+        "small_component": {
+          "foregroundPixels": 59605,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.2967320680618286,
+          "p90Chroma": 0.2392157018184662
+        },
+        "component_sheetness": {
+          "foregroundPixels": 60229,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.2705882489681244,
+          "p90Chroma": 0.24313728511333466
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 58840,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.27581700682640076,
+          "p90Chroma": 0.20000000298023224
+        },
+        "normal_disorder": {
+          "foregroundPixels": 53019,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.20653598010540009,
+          "p90Chroma": 0.11764707416296005
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 57008,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1594771295785904,
+          "p90Chroma": 0.125490203499794
+        },
+        "relative_area": {
+          "foregroundPixels": 59146,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.27973857522010803,
+          "p90Chroma": 0.1568627506494522
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 53102,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.24967321753501892,
+          "p90Chroma": 0.3764706254005432,
+          "selectedPixels": 41758
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 35491,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.16470588743686676,
+          "p90Chroma": 0.22352942824363708,
+          "selectedPixels": 13507
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.24496562484762788,
+        "component_sheetness": 0.16526890633380467
+      },
+      "candidateSignal": {
+        "min": 0.1476150069480727,
+        "median": 0.6351491164111995,
+        "p90": 0.7801601213019741,
+        "p99": 0.8331831647190582,
+        "max": 0.8996805530636051
+      }
+    },
+    {
+      "family": "fur",
+      "seed": "80413",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80413/output.glb",
+      "sourceSha256": "23511154da5f6674f8c3a7e66c906fac9076b1bd5e532daef2b5cbdd389151f4",
+      "expectedSha256": "23511154da5f6674f8c3a7e66c906fac9076b1bd5e532daef2b5cbdd389151f4",
+      "vertexCount": 126574,
+      "triangleCount": 51874,
+      "componentCount": 37463,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.7818957080144684,
+          "p90": 0.7818957080144684,
+          "p99": 0.7818957080144684,
+          "max": 0.7818957080144684
+        },
+        "component_sheetness": {
+          "min": 0.021831305550092606,
+          "median": 0.9999999826899563,
+          "p90": 0.9999999997305076,
+          "p99": 0.9999999998028417,
+          "max": 0.9999999998975735
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 1.0,
+          "p90": 1.0,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.0,
+          "p90": 0.24139240845464421,
+          "p99": 0.4878239112837449,
+          "max": 0.9877180216156092
+        },
+        "aspect_ratio": {
+          "min": 1.1565109506805997,
+          "median": 1.766930857717378,
+          "p90": 2.887341758955346,
+          "p99": 7.746334397963456,
+          "max": 206.96757282192883
+        },
+        "relative_area": {
+          "min": 1.3538815417913492e-08,
+          "median": 5.138305882498482e-05,
+          "p90": 7.718696703781559e-05,
+          "p99": 0.00010951132609753397,
+          "max": 0.00026663109860975293
+        }
+      },
+      "views": {
+        "candidate_signal": "views/fur-seed80413-candidate_signal.png",
+        "small_component": "views/fur-seed80413-small_component.png",
+        "component_sheetness": "views/fur-seed80413-component_sheetness.png",
+        "boundary_fraction": "views/fur-seed80413-boundary_fraction.png",
+        "normal_disorder": "views/fur-seed80413-normal_disorder.png",
+        "aspect_ratio": "views/fur-seed80413-aspect_ratio.png",
+        "relative_area": "views/fur-seed80413-relative_area.png",
+        "relative_area_selected": "views/fur-seed80413-relative_area_selected.png",
+        "component_sheetness_selected": "views/fur-seed80413-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 81180,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1921568661928177,
+          "p90Chroma": 0.2352941334247589
+        },
+        "small_component": {
+          "foregroundPixels": 81756,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.2352941334247589,
+          "p90Chroma": 0.20784315466880798
+        },
+        "component_sheetness": {
+          "foregroundPixels": 81643,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.27450981736183167,
+          "p90Chroma": 0.16470588743686676
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 81353,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.2679738700389862,
+          "p90Chroma": 0.1764705926179886
+        },
+        "normal_disorder": {
+          "foregroundPixels": 50328,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.19738562405109406,
+          "p90Chroma": 0.11764706671237946
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 52619,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.08627450466156006,
+          "p90Chroma": 0.08627451211214066
+        },
+        "relative_area": {
+          "foregroundPixels": 81798,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.25882354378700256,
+          "p90Chroma": 0.2039215862751007
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 81812,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.19869282841682434,
+          "p90Chroma": 0.3450980484485626,
+          "selectedPixels": 78511
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 48584,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.18431372940540314,
+          "p90Chroma": 0.2705882489681244,
+          "selectedPixels": 30008
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.9429579365385357,
+        "component_sheetness": 0.34626209661873
+      },
+      "candidateSignal": {
+        "min": 0.15023063831963118,
+        "median": 0.7184669134795667,
+        "p90": 0.7353507969852626,
+        "p99": 0.7592409554152427,
+        "max": 0.8467044410979476
+      }
+    },
+    {
+      "family": "skin",
+      "seed": "80301",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80301/output.glb",
+      "sourceSha256": "26ecc7c65bce4e9fc0e0c72bc5ae773ba9dd2e1f62e20eb4f33d7fcacae27b44",
+      "expectedSha256": "26ecc7c65bce4e9fc0e0c72bc5ae773ba9dd2e1f62e20eb4f33d7fcacae27b44",
+      "vertexCount": 170701,
+      "triangleCount": 192588,
+      "componentCount": 16115,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.23103181009213136,
+          "p90": 0.8323761485339287,
+          "p99": 0.9161880742669644,
+          "max": 0.9161880742669644
+        },
+        "component_sheetness": {
+          "min": 0.05742409306409313,
+          "median": 0.8128262294852358,
+          "p90": 0.9555067494897607,
+          "p99": 0.9999999976570979,
+          "max": 0.9999999995482542
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 0.0,
+          "p90": 0.6666666666666666,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.003947573960586648,
+          "p90": 0.08597297761353764,
+          "p99": 0.43565605293945747,
+          "max": 0.9994380787481483
+        },
+        "aspect_ratio": {
+          "min": 1.1584157916848348,
+          "median": 2.7997983758059624,
+          "p90": 8.524445626701095,
+          "p99": 33.18928311393666,
+          "max": 619.7250001586519
+        },
+        "relative_area": {
+          "min": 1.6120372145428465e-09,
+          "median": 3.2720760318707265e-06,
+          "p90": 8.291870707064289e-06,
+          "p99": 1.4605272204511168e-05,
+          "max": 3.9596126025801406e-05
+        }
+      },
+      "views": {
+        "candidate_signal": "views/skin-seed80301-candidate_signal.png",
+        "small_component": "views/skin-seed80301-small_component.png",
+        "component_sheetness": "views/skin-seed80301-component_sheetness.png",
+        "boundary_fraction": "views/skin-seed80301-boundary_fraction.png",
+        "normal_disorder": "views/skin-seed80301-normal_disorder.png",
+        "aspect_ratio": "views/skin-seed80301-aspect_ratio.png",
+        "relative_area": "views/skin-seed80301-relative_area.png",
+        "relative_area_selected": "views/skin-seed80301-relative_area_selected.png",
+        "component_sheetness_selected": "views/skin-seed80301-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 57064,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.16078431904315948,
+          "p90Chroma": 0.12941177189350128
+        },
+        "small_component": {
+          "foregroundPixels": 54666,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.18562091886997223,
+          "p90Chroma": 0.1254902184009552
+        },
+        "component_sheetness": {
+          "foregroundPixels": 60868,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.25751635432243347,
+          "p90Chroma": 0.26274508237838745
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 39896,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.15294118225574493,
+          "p90Chroma": 0.10588235408067703
+        },
+        "normal_disorder": {
+          "foregroundPixels": 28404,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.07954198122024536,
+          "p90Chroma": 0.06666667759418488
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 51054,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1267973929643631,
+          "p90Chroma": 0.0941176563501358
+        },
+        "relative_area": {
+          "foregroundPixels": 40940,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.09150326251983643,
+          "p90Chroma": 0.08627451211214066
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 13540,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.05098039656877518,
+          "p90Chroma": 0.0156862773001194,
+          "selectedPixels": 381
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 14091,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.048366010189056396,
+          "p90Chroma": 0.0156862773001194,
+          "selectedPixels": 352
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.0009761771242237315,
+        "component_sheetness": 0.01911853282655202
+      },
+      "candidateSignal": {
+        "min": 0.058715433082389516,
+        "median": 0.3185536097352877,
+        "p90": 0.6586347841744435,
+        "p99": 0.8075169286458532,
+        "max": 0.9274720864831427
+      }
+    },
+    {
+      "family": "skin",
+      "seed": "80302",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb",
+      "sourceSha256": "062deed4fd9c9d9c4730309798af2ee8cb0184e4c7ae537d1da340e69712a232",
+      "expectedSha256": "062deed4fd9c9d9c4730309798af2ee8cb0184e4c7ae537d1da340e69712a232",
+      "vertexCount": 148802,
+      "triangleCount": 198241,
+      "componentCount": 7745,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.12790502122346836,
+          "p90": 0.7338465769919382,
+          "p99": 0.9230644070042633,
+          "max": 0.9230644070042633
+        },
+        "component_sheetness": {
+          "min": 0.12935961651517858,
+          "median": 0.7980895213512129,
+          "p90": 0.9379604845860255,
+          "p99": 0.999999943668352,
+          "max": 0.9999999996184789
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 0.0,
+          "p90": 0.3333333333333333,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.0006067608971904356,
+          "p90": 0.012647587801252044,
+          "p99": 0.1624083489813504,
+          "max": 0.9955427593528386
+        },
+        "aspect_ratio": {
+          "min": 1.1554462621617307,
+          "median": 3.005819190646604,
+          "p90": 9.858928687554847,
+          "p99": 35.103080890102554,
+          "max": 1432.3110259186221
+        },
+        "relative_area": {
+          "min": 6.127672692542919e-10,
+          "median": 3.004264638353067e-06,
+          "p90": 8.10621532582863e-06,
+          "p99": 1.5343239428722632e-05,
+          "max": 3.9366672675344594e-05
+        }
+      },
+      "views": {
+        "candidate_signal": "views/skin-seed80302-candidate_signal.png",
+        "small_component": "views/skin-seed80302-small_component.png",
+        "component_sheetness": "views/skin-seed80302-component_sheetness.png",
+        "boundary_fraction": "views/skin-seed80302-boundary_fraction.png",
+        "normal_disorder": "views/skin-seed80302-normal_disorder.png",
+        "aspect_ratio": "views/skin-seed80302-aspect_ratio.png",
+        "relative_area": "views/skin-seed80302-relative_area.png",
+        "relative_area_selected": "views/skin-seed80302-relative_area_selected.png",
+        "component_sheetness_selected": "views/skin-seed80302-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 58972,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1594771295785904,
+          "p90Chroma": 0.125490203499794
+        },
+        "small_component": {
+          "foregroundPixels": 51805,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.18692810833454132,
+          "p90Chroma": 0.12941177189350128
+        },
+        "component_sheetness": {
+          "foregroundPixels": 64926,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.24575164914131165,
+          "p90Chroma": 0.250980406999588
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 39691,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.14509804546833038,
+          "p90Chroma": 0.10196078568696976
+        },
+        "normal_disorder": {
+          "foregroundPixels": 22179,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.0640522912144661,
+          "p90Chroma": 0.058823537081480026
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 54903,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1267973929643631,
+          "p90Chroma": 0.0941176488995552
+        },
+        "relative_area": {
+          "foregroundPixels": 42516,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.07843136787414551,
+          "p90Chroma": 0.0784313827753067
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 12224,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.05098039656877518,
+          "p90Chroma": 0.0156862773001194,
+          "selectedPixels": 321
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 12233,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.049673207104206085,
+          "p90Chroma": 0.0156862773001194,
+          "selectedPixels": 187
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.0017806609127274378,
+        "component_sheetness": 0.00481736875822862
+      },
+      "candidateSignal": {
+        "min": 0.06985078683636735,
+        "median": 0.25839177399990665,
+        "p90": 0.5755195691479132,
+        "p99": 0.7693908251290548,
+        "max": 0.9287486960327656
+      }
+    },
+    {
+      "family": "skin",
+      "seed": "80413",
+      "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+      "sourceSha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a",
+      "expectedSha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a",
+      "vertexCount": 146153,
+      "triangleCount": 198381,
+      "componentCount": 7530,
+      "metrics": {
+        "small_component": {
+          "min": 0.0,
+          "median": 0.17389236525321772,
+          "p90": 0.6736054142517062,
+          "p99": 0.9201473876522261,
+          "max": 0.9201473876522261
+        },
+        "component_sheetness": {
+          "min": 0.0515723828725243,
+          "median": 0.7440829240439036,
+          "p90": 0.9340180655494726,
+          "p99": 0.9999999800382476,
+          "max": 0.9999999996732549
+        },
+        "boundary_fraction": {
+          "min": 0.0,
+          "median": 0.0,
+          "p90": 0.3333333333333333,
+          "p99": 1.0,
+          "max": 1.0
+        },
+        "normal_disorder": {
+          "min": 0.0,
+          "median": 0.0013948470546161589,
+          "p90": 0.021288992115027144,
+          "p99": 0.20098150404072132,
+          "max": 0.9825475796396146
+        },
+        "aspect_ratio": {
+          "min": 1.1554152168651646,
+          "median": 2.859304100525144,
+          "p90": 8.978594207797135,
+          "p99": 33.382254158017204,
+          "max": 898.3061341648953
+        },
+        "relative_area": {
+          "min": 1.276042574222933e-09,
+          "median": 5.2795696516882595e-06,
+          "p90": 1.416152229715639e-05,
+          "p99": 2.594471040092551e-05,
+          "max": 6.371693042276947e-05
+        }
+      },
+      "views": {
+        "candidate_signal": "views/skin-seed80413-candidate_signal.png",
+        "small_component": "views/skin-seed80413-small_component.png",
+        "component_sheetness": "views/skin-seed80413-component_sheetness.png",
+        "boundary_fraction": "views/skin-seed80413-boundary_fraction.png",
+        "normal_disorder": "views/skin-seed80413-normal_disorder.png",
+        "aspect_ratio": "views/skin-seed80413-aspect_ratio.png",
+        "relative_area": "views/skin-seed80413-relative_area.png",
+        "relative_area_selected": "views/skin-seed80413-relative_area_selected.png",
+        "component_sheetness_selected": "views/skin-seed80413-component_sheetness_selected.png"
+      },
+      "renderValidation": {
+        "candidate_signal": {
+          "foregroundPixels": 51002,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.16078431904315948,
+          "p90Chroma": 0.125490203499794
+        },
+        "small_component": {
+          "foregroundPixels": 44349,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.19607843458652496,
+          "p90Chroma": 0.13725490868091583
+        },
+        "component_sheetness": {
+          "foregroundPixels": 54904,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.23006537556648254,
+          "p90Chroma": 0.21960784494876862
+        },
+        "boundary_fraction": {
+          "foregroundPixels": 32337,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.15555556118488312,
+          "p90Chroma": 0.1098039299249649
+        },
+        "normal_disorder": {
+          "foregroundPixels": 22697,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.08627451211214066,
+          "p90Chroma": 0.06666667014360428
+        },
+        "aspect_ratio": {
+          "foregroundPixels": 46165,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.13464052975177765,
+          "p90Chroma": 0.10196078568696976
+        },
+        "relative_area": {
+          "foregroundPixels": 41903,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.12156862765550613,
+          "p90Chroma": 0.09803923219442368
+        },
+        "relative_area_selected": {
+          "foregroundPixels": 17736,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.1594771295785904,
+          "p90Chroma": 0.2039215862751007,
+          "selectedPixels": 4833
+        },
+        "component_sheetness_selected": {
+          "foregroundPixels": 13751,
+          "nearWhiteFraction": 0.0,
+          "luminanceSpan": 0.04575163871049881,
+          "p90Chroma": 0.0156862773001194,
+          "selectedPixels": 182
+        }
+      },
+      "selectionCoverage": {
+        "relative_area": 0.0269783900675972,
+        "component_sheetness": 0.006331251480736562
+      },
+      "candidateSignal": {
+        "min": 0.04813038772358036,
+        "median": 0.2579544445735926,
+        "p90": 0.5337303464021257,
+        "p99": 0.7722618310229917,
+        "max": 0.913343499932736
+      }
+    }
+  ],
+  "claimCeiling": "Paired topology-signal candidate only. This campaign cannot establish groom quality, production segmentation, hair dynamics, CUDA parity, or a general Trellis fur contract."
+}

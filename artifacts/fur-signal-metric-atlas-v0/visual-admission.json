@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.fur-signal-metric-atlas-visual-admission.v0",
+  "inspectedAt": "2026-08-11",
+  "inspector": "agent-visual-review",
+  "resultSha256": "0720b1392f8ea0f5d8d932894e91ed0c019d79637c1f029f38debd206b30f870",
+  "verdicts": {
+    "mlxFailureCoatVolumeDetector": "admitted",
+    "cleanFurVersusSkinSegmentation": "rejected",
+    "generalFurDetector": "not-supported"
+  },
+  "visibleBasis": "The relative-area threshold learned only from matched skin controls selects a coherent creature-shaped coat over all three malformed MLX fur casts while leaving the skin controls almost entirely dark. The selected fur faces are the malformed exterior representation itself; the images do not reveal an intact skin shell beneath them. Component sheetness confirms a weaker subset but is not required for the admitted claim.",
+  "nextExperiment": "Use the selected malformed geometry as a noisy coat-volume measurement, infer a clean carrier shell, and test one static replacement groom. Do not treat the selection as production fur segmentation.",
+  "inspectedImages": [
+    {"path": "views/fur-seed80301-relative_area_selected.png", "sha256": "5f94e19daeadcadacf0699b7ade1d3a106cc2f266e058e21ede6f9b12344d96b"},
+    {"path": "views/fur-seed80302-relative_area_selected.png", "sha256": "b5fd718484c8569a859f2661a4e8a5c82538f0bdc5ec76b1e93afd9740ecab07"},
+    {"path": "views/fur-seed80413-relative_area_selected.png", "sha256": "2c8b3d3cb3e00ba3aa79a2efbafcddf7f6856a04a4d88e78ad5c6040c24cea1a"},
+    {"path": "views/skin-seed80301-relative_area_selected.png", "sha256": "d9cf4dc1b5bcfe85d7e9a856433b24780231bc132249d25928e51dd8fba111cb"},
+    {"path": "views/skin-seed80302-relative_area_selected.png", "sha256": "0097e9d82439a9f400852ca85bb830b134aeed0ee694ab65027e493c9b121847"},
+    {"path": "views/skin-seed80413-relative_area_selected.png", "sha256": "dde5d30c2d43d370a98e8e4536f1bcd8f4a97ec5dc38dce080b5446489aa92c7"},
+    {"path": "views/fur-seed80301-component_sheetness_selected.png", "sha256": "c7450d2bb7d359fabe74c57df32d7e45197d650c4b9cd0995045a82b7766227d"},
+    {"path": "views/fur-seed80302-component_sheetness_selected.png", "sha256": "9f7904f2abe721902d3a15d8dc479d67a8e332e27418f101a458bfc30b883aea"},
+    {"path": "views/fur-seed80413-component_sheetness_selected.png", "sha256": "0d29b399a7dfcb59638b3f95e40b2ac80950d5663c3fd38c8eb52900954bb673"},
+    {"path": "views/skin-seed80301-component_sheetness_selected.png", "sha256": "204caed0860f42749befb991b159fe39e565419a6fa9ed9c0500aaec5fffc18e"},
+    {"path": "views/skin-seed80302-component_sheetness_selected.png", "sha256": "c86ea7a28c31f36d5beee78ddd25971333bc43b5b898550e1a753034f8b66025"},
+    {"path": "views/skin-seed80413-component_sheetness_selected.png", "sha256": "24b4f373368ee517c5b858fbb380892f544c0d997628be7bcc0271de1c043790"}
+  ]
+}

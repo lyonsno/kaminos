@@ -1,0 +1,74 @@
+{
+  "schema": "kaminos.fur-signal-metric-atlas-campaign.v0",
+  "sourceCampaign": "artifacts/latest-envelope-basin-reconstruction-v0/campaign.json",
+  "sourcePlate": {
+    "path": "artifacts/latest-envelope-basin-reconstruction-v0/source/latest-envelope-029.png",
+    "sha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4"
+  },
+  "effectiveGenerationRoute": {
+    "jobType": "trellis2mlx_fast",
+    "steps": 6,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "seedBinding": "reuse-flux-seed"
+  },
+  "families": {
+    "fur": {
+      "prompt": "This shape covered in short dense fur.",
+      "assets": [
+        {
+          "seed": "80301",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80301/output.glb",
+          "sha256": "68ba45a262e049b6a771a56a21e8fcd92f8da6b86a99731d0fffae4b8763bd4b"
+        },
+        {
+          "seed": "80302",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80302/output.glb",
+          "sha256": "34283aec6930be508c4cfd5878148afe2c6ddce863f34deb6f0e123f4fa404da"
+        },
+        {
+          "seed": "80413",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/short-fur-seed80413/output.glb",
+          "sha256": "23511154da5f6674f8c3a7e66c906fac9076b1bd5e532daef2b5cbdd389151f4"
+        }
+      ]
+    },
+    "skin": {
+      "prompt": "This shape covered in skin.",
+      "assets": [
+        {
+          "seed": "80301",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80301/output.glb",
+          "sha256": "26ecc7c65bce4e9fc0e0c72bc5ae773ba9dd2e1f62e20eb4f33d7fcacae27b44"
+        },
+        {
+          "seed": "80302",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80302/output.glb",
+          "sha256": "062deed4fd9c9d9c4730309798af2ee8cb0184e4c7ae537d1da340e69712a232"
+        },
+        {
+          "seed": "80413",
+          "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+          "sha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a"
+        }
+      ]
+    }
+  },
+  "metrics": [
+    "small_component",
+    "component_sheetness",
+    "boundary_fraction",
+    "normal_disorder",
+    "aspect_ratio",
+    "relative_area",
+    "candidate_signal"
+  ],
+  "decisionPredicate": {
+    "controlQuantile": 0.99,
+    "minimumMeanSeparation": 0.15,
+    "minimumFurCoverageEverySeed": 0.05,
+    "maximumSkinCoverageAnySeed": 0.03,
+    "visualRequirement": "A passing channel must form coherent coat-localized regions on fur casts without comparably lighting the matched skin controls. Statistics alone cannot satisfy this requirement."
+  },
+  "claimCeiling": "Paired topology-signal candidate only. This campaign cannot establish groom quality, production segmentation, hair dynamics, CUDA parity, or a general Trellis fur contract."
+}
