@@ -1,0 +1,16 @@
+{
+  "name": "output",
+  "job_type": "kaminos_blender_cast_cleanup",
+  "job_id": "462c28b41a11",
+  "input_path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "worker": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/tools/blender-cast-cleanup.py"
+  },
+  "output_files": [
+    "cleanup-report.json",
+    "cleanup-spec.json"
+  ],
+  "created_at": 1786427714.994302,
+  "duration_s": 5.4
+}

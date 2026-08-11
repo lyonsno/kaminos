@@ -1,0 +1,84 @@
+{
+  "claimCeiling": "cleaned-temporary-deformation-carrier",
+  "outputDirectory": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0",
+  "profiles": [
+    {
+      "componentPolicy": "largest-connected-surface",
+      "id": "gentle",
+      "renderViews": [
+        "left",
+        "right",
+        "front",
+        "rear"
+      ],
+      "smoothFactor": 0.2,
+      "smoothIterations": 2,
+      "voxelSize": 0.0029985870122909548,
+      "voxelSizeToMaxExtent": 0.003
+    },
+    {
+      "componentPolicy": "largest-connected-surface",
+      "id": "balanced",
+      "renderViews": [
+        "left",
+        "right",
+        "front",
+        "rear"
+      ],
+      "smoothFactor": 0.24,
+      "smoothIterations": 4,
+      "voxelSize": 0.004497880518436432,
+      "voxelSizeToMaxExtent": 0.0045
+    },
+    {
+      "componentPolicy": "largest-connected-surface",
+      "id": "strong",
+      "renderViews": [
+        "left",
+        "right",
+        "front",
+        "rear"
+      ],
+      "smoothFactor": 0.28,
+      "smoothIterations": 6,
+      "voxelSize": 0.0064969385266304015,
+      "voxelSizeToMaxExtent": 0.0065
+    }
+  ],
+  "routeId": "kaminos_blender_cast_cleanup",
+  "schema": "kaminos.cast-cleanup-spec.v0",
+  "source": {
+    "byteLength": 8858864,
+    "geometry": {
+      "bounds": {
+        "extent": [
+          0.31421007215976715,
+          0.7698357999324799,
+          0.9995290040969849
+        ],
+        "max": [
+          0.157636821269989,
+          0.3834211826324463,
+          0.4993285536766052
+        ],
+        "min": [
+          -0.15657325088977814,
+          -0.38641461730003357,
+          -0.5002004504203796
+        ]
+      },
+      "connectedComponentCount": 24032,
+      "triangleCount": 127143,
+      "vertexCount": 148476
+    },
+    "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+    "sha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3"
+  },
+  "sourceMutation": "forbidden-copy-on-write",
+  "worker": {
+    "id": "blender-cast-cleanup-v0",
+    "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/tools/blender-cast-cleanup.py",
+    "sha256": "c231ae58177b81ec3ca535a962fd372a83e66404b4540e7410b07d008e34565d"
+  },
+  "specSha256": "6cd043375eef6c571ef9e9c263f787e91d634ee561e4e8c5ff7c45f2b21a9034"
+}

@@ -1,0 +1,68 @@
+{
+  "requestedUrl": "http://127.0.0.1:8101/?mesh_root=scratch&mesh_path=cat-cast-mannequin-80413-clean-strong.glb",
+  "effectiveUrl": "http://127.0.0.1:8101/?mesh_root=scratch&mesh_path=cat-cast-mannequin-80413-clean-strong.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/Users/noahlyons/dev/operator-scratch",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9447,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9447-31796",
+  "settleMs": 5000,
+  "phase": "capturing-failure-screenshot",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.108",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.16",
+    "WebKit-Version": "537.36 (@4744b886309d987d292e43232776d2206cccb13d)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9447/devtools/browser/9252b07f-2746-49e3-a4e1-55e0c0eb8852"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9447/devtools/browser/9252b07f-2746-49e3-a4e1-55e0c0eb8852\nTrying to load the allocator multiple times. This is *not* supported.\n[31805:28955131:0811/020517.299951:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n",
+  "ok": false,
+  "error": "Error: Error: mesh asset link failed before registration: {\"schema\":\"kaminos.asset-smoke-link.v0\",\"assetType\":\"mesh\",\"status\":\"failed\",\"requestedRoot\":\"scratch\",\"requestedPath\":\"cat-cast-mannequin-80413-clean-strong.glb\",\"effectiveUrl\":\"/api/read?root=scratch&path=cat-cast-mannequin-80413-clean-strong.glb\",\"fileName\":\"cat-cast-mannequin-80413-clean-strong.glb\",\"label\":\"Cat Cast Mannequin 80413 Clean Strong\",\"registeredObjectId\":null,\"registeredAt\":null,\"error\":\"fetch for \\\"http://127.0.0.1:8101/api/read?root=scratch&path=cat-cast-mannequin-80413-clean-strong.glb\\\" responded with 403: Forbidden\"}\n    at waitForAssetLink (<anonymous>:12:19)\n    at <anonymous>:21:30\n    at <anonymous>:80:7\n    at evaluate (file:///private/tmp/kaminos-mushfinger-cast-correspondence-0807/scene-object-witness.mjs:135:11)\n    at async runMeshAssetLinkScenario (file:///private/tmp/kaminos-mushfinger-cast-correspondence-0807/scene-object-witness.mjs:142:32)\n    at async file:///private/tmp/kaminos-mushfinger-cast-correspondence-0807/scene-object-witness.mjs:4925:5",
+  "screenshot": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/selected/kaminos-smoke.png",
+  "screenshotBytes": 283969,
+  "screenshotError": null,
+  "evidence": {}
+}

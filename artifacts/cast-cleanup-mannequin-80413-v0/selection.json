@@ -1,0 +1,55 @@
+{
+  "schema": "kaminos.cast-cleanup-selection.v0",
+  "status": "selected-for-temporary-weight-paint-carrier",
+  "selectedAt": "2026-08-11",
+  "source": {
+    "path": "../current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+    "sha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3",
+    "vertexCount": 148476,
+    "triangleCount": 127143,
+    "connectedComponentCount": 24032
+  },
+  "selection": {
+    "profileId": "strong",
+    "path": "strong/cast.glb",
+    "sha256": "cf0bc10bde66d95926ac18c9a25aacb3e02d302b423a0369e2992a6d689070f8",
+    "byteLength": 4716092,
+    "vertexCount": 43198,
+    "triangleCount": 86392,
+    "connectedComponentCount": 1,
+    "basis": [
+      "gentle and balanced retain visible corrugation from the fragmented source",
+      "strong is the first profile with a coherent paintable surface",
+      "strong preserves the selected source silhouette and major motion landmarks"
+    ]
+  },
+  "visualInspection": {
+    "views": [
+      "left",
+      "right",
+      "front",
+      "rear"
+    ],
+    "preserved": [
+      "ribcage and abdominal transition",
+      "scapular shelf and shoulder mass",
+      "pelvic and hindquarter volume",
+      "hock angle, paws, ears, and tail"
+    ],
+    "knownLosses": [
+      "surface fur and fragment noise are intentionally removed",
+      "facial detail is softened",
+      "this selection has not yet been exercised under painted deformation"
+    ]
+  },
+  "consumerSmoke": {
+    "requestedUrl": "http://127.0.0.1:8101/?mesh_root=scratch&mesh_path=cat-cast-mannequin-80413-clean-strong-mounted.glb",
+    "effectiveUrl": "http://127.0.0.1:8101/?mesh_root=scratch&mesh_path=cat-cast-mannequin-80413-clean-strong-mounted.glb",
+    "requestedRoot": "scratch",
+    "requestedPath": "cat-cast-mannequin-80413-clean-strong-mounted.glb",
+    "registrationStatus": "loaded",
+    "report": "selected/kaminos-smoke-mounted-report.json",
+    "screenshot": "selected/kaminos-smoke-mounted.png"
+  },
+  "claimCeiling": "Clean temporary deformation carrier for weight-paint and motion assays; not anatomical, muscular, authored-production, or final cast truth."
+}

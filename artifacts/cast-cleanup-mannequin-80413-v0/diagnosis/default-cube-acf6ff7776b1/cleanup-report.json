@@ -1,0 +1,247 @@
+{
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "id": "blender-cast-cleanup-v0",
+    "scriptPath": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/tools/blender-cast-cleanup.py",
+    "scriptSha256": "c231ae58177b81ec3ca535a962fd372a83e66404b4540e7410b07d008e34565d",
+    "sourcePath": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+    "sourceSha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3",
+    "specSha256": "6cd043375eef6c571ef9e9c263f787e91d634ee561e4e8c5ff7c45f2b21a9034"
+  },
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "All output bytes and matched-view renders were hashed after export",
+  "outputs": [
+    {
+      "byteLength": 150772400,
+      "cleanupFacts": {
+        "componentsAfterPrune": 1,
+        "componentsBeforePrune": 1
+      },
+      "geometry": {
+        "bounds": {
+          "extent": [
+            2.0,
+            2.0,
+            2.0
+          ],
+          "max": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.0
+          ]
+        },
+        "connectedComponentCount": 1,
+        "triangleCount": 5338668,
+        "vertexCount": 2669336
+      },
+      "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/gentle/cast.glb",
+      "profileId": "gentle",
+      "renders": [
+        {
+          "byteLength": 490682,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/gentle/renders/left.png",
+          "sha256": "79d7406f9bf0994b9776cec9553ed5761675cec7136ffe07f8c0fb2459905d3d",
+          "viewId": "left"
+        },
+        {
+          "byteLength": 470431,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/gentle/renders/right.png",
+          "sha256": "737a580b54a849e322be266fa1f33b4ec80f1c3cb21b50594f9c4980d37b9623",
+          "viewId": "right"
+        },
+        {
+          "byteLength": 470315,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/gentle/renders/front.png",
+          "sha256": "f3e1dd019da80ba58305c6b8618df782c24f9b0bce6bf85110c20a9c424841c9",
+          "viewId": "front"
+        },
+        {
+          "byteLength": 490745,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/gentle/renders/rear.png",
+          "sha256": "93b3837f4c2902eddb865b8dce46860b5873186317e1f0254244352b1a452cc6",
+          "viewId": "rear"
+        }
+      ],
+      "sha256": "92cf531fab8276966a49ac44f0884c3e86f8aa5fb7d9e484ea013bd95a6cab79"
+    },
+    {
+      "byteLength": 67851244,
+      "cleanupFacts": {
+        "componentsAfterPrune": 1,
+        "componentsBeforePrune": 1
+      },
+      "geometry": {
+        "bounds": {
+          "extent": [
+            2.0,
+            2.0,
+            2.0
+          ],
+          "max": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.0
+          ]
+        },
+        "connectedComponentCount": 1,
+        "triangleCount": 2376300,
+        "vertexCount": 1188152
+      },
+      "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/balanced/cast.glb",
+      "profileId": "balanced",
+      "renders": [
+        {
+          "byteLength": 490906,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/balanced/renders/left.png",
+          "sha256": "449c8ce0a4d44cbd94fc336910fd65912329074e61f495677e6fed9280e5271e",
+          "viewId": "left"
+        },
+        {
+          "byteLength": 469418,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/balanced/renders/right.png",
+          "sha256": "f3ff84b6824998dc180e1b0d1f0582f88f375dd7a2e7803eeb86f94a52b66bb7",
+          "viewId": "right"
+        },
+        {
+          "byteLength": 469615,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/balanced/renders/front.png",
+          "sha256": "0fc5f8c305023c0ce8d169c17d5b33cdbba9f71a2cd7671bc86db75ac56fc4b9",
+          "viewId": "front"
+        },
+        {
+          "byteLength": 490863,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/balanced/renders/rear.png",
+          "sha256": "7549520fdb48fd7d1c11d4b84c03cfb13db98af7f9b0011b22b0ecd6bd231444",
+          "viewId": "rear"
+        }
+      ],
+      "sha256": "d0cdb800583b75727df88585379b9f7f17dc14380f261962d3a9bc1c621d2188"
+    },
+    {
+      "byteLength": 33166244,
+      "cleanupFacts": {
+        "componentsAfterPrune": 1,
+        "componentsBeforePrune": 1
+      },
+      "geometry": {
+        "bounds": {
+          "extent": [
+            2.0,
+            2.0,
+            2.0
+          ],
+          "max": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "min": [
+            -1.0,
+            -1.0,
+            -1.0
+          ]
+        },
+        "connectedComponentCount": 1,
+        "triangleCount": 1145772,
+        "vertexCount": 572888
+      },
+      "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/strong/cast.glb",
+      "profileId": "strong",
+      "renders": [
+        {
+          "byteLength": 490980,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/strong/renders/left.png",
+          "sha256": "5f17b57131cae5aa4ef22d448087d92a745f8489cdd4cec0ce651c52006e82bb",
+          "viewId": "left"
+        },
+        {
+          "byteLength": 469925,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/strong/renders/right.png",
+          "sha256": "e15d51e56c4111d80b95c5ce0936b910ca57c9889934bd1d3990e5d8164919ea",
+          "viewId": "right"
+        },
+        {
+          "byteLength": 469649,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/strong/renders/front.png",
+          "sha256": "39762197ec92b50747d5b2e34d555e50f70e157d0607805a2752c18413fa4354",
+          "viewId": "front"
+        },
+        {
+          "byteLength": 490723,
+          "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/strong/renders/rear.png",
+          "sha256": "14444e8db88d9c047c9685c7a896e26441acc5b2ef027ae1bc855686fd92f04a",
+          "viewId": "rear"
+        }
+      ],
+      "sha256": "cba5543f54ffc9d3e7d59a215721b0547098d7c756ea5228e8d599fd91cfac75"
+    }
+  ],
+  "requestedRoute": {
+    "id": "kaminos_blender_cast_cleanup",
+    "sourcePath": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/current-mannequin-registration-successor-v0/trellis/mannequin-seed80413/output.glb",
+    "sourceSha256": "262fe609ded81759ab7c13512caf37eadf75faa436bdecf5feed5794f73d0fe3",
+    "specSha256": "6cd043375eef6c571ef9e9c263f787e91d634ee561e4e8c5ff7c45f2b21a9034"
+  },
+  "schema": "kaminos.cast-cleanup-report.v0",
+  "sourceWitness": {
+    "geometry": {
+      "bounds": {
+        "extent": [
+          2.0,
+          2.0,
+          2.0
+        ],
+        "max": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "min": [
+          -1.0,
+          -1.0,
+          -1.0
+        ]
+      },
+      "connectedComponentCount": 24033,
+      "triangleCount": 127155,
+      "vertexCount": 148484
+    },
+    "renders": [
+      {
+        "byteLength": 491102,
+        "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/source/renders/left.png",
+        "sha256": "8cce6c7eb5929cfbf1351d1bedb7950d1e289a057bba77b75c77f7d0e87ec011",
+        "viewId": "left"
+      },
+      {
+        "byteLength": 470069,
+        "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/source/renders/right.png",
+        "sha256": "1f1f66a4c38d737859c489687517d011719bb28194b954d8e428e25f9aad218a",
+        "viewId": "right"
+      },
+      {
+        "byteLength": 470069,
+        "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/source/renders/front.png",
+        "sha256": "abfb3fc7910bd201b497b6a881ca316fd5b9c621a81c49d0f861510d533ad9bd",
+        "viewId": "front"
+      },
+      {
+        "byteLength": 491102,
+        "path": "/private/tmp/kaminos-mushfinger-cast-correspondence-0807/artifacts/cast-cleanup-mannequin-80413-v0/source/renders/rear.png",
+        "sha256": "fe0d43caa1fcba2206ec2fa0be91b37e78f6b15bb4a3a3e3e4b26fd9e4cb415a",
+        "viewId": "rear"
+      }
+    ]
+  },
+  "status": "succeeded"
+}
