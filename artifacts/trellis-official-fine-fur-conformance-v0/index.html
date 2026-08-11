@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TRELLIS official fur route discriminator</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #111315; color: #eceeed; }
+    body { margin: 0; padding: 28px; }
+    main { max-width: 1500px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    .lede { margin: 0 0 24px; max-width: 1000px; color: #b8bfbc; line-height: 1.45; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    article { min-width: 0; border: 1px solid #343a37; background: #1a1e1c; border-radius: 6px; overflow: hidden; }
+    img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: contain; background: #0b0c0d; }
+    .copy { padding: 14px; }
+    h2 { margin: 0 0 8px; font-size: 17px; letter-spacing: 0; }
+    p { margin: 0; color: #bdc4c0; line-height: 1.42; font-size: 14px; }
+    code { color: #ddc98a; }
+    .partial { color: #e5bd72; }
+    @media (max-width: 980px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Official fine-fur source: route discriminator</h1>
+	  <p class="lede">Same source image and seed <code>80301</code>. This is an unmatched qualitative row: MLX and MPS use separate materials, lighting, framing, and reconstruction routes. MLX target-face pressure does not repair the flake failure. The MPS-requested run shows materially more coherent directional organization on the cloak exterior, but remains partial: it misses the 500k-face target and does not recover clean source-like tufts or a coherent attached figure.</p>
+  <section class="grid">
+    <article>
+      <img src="source/official-dwarf-fur-cloak.webp" alt="Official TRELLIS dwarf fur cloak source">
+      <div class="copy"><h2>Official source</h2><p>Clean overlapping directional fur tufts around a coherent dwarf figure.</p></div>
+    </article>
+    <article>
+      <img src="output/orbit/az120-el12.png" alt="MLX 200 thousand face route">
+      <div class="copy"><h2>MLX, 200k requested</h2><p>149,311 final faces. The cloak volume survives, but fur becomes disconnected irregular triangular flakes.</p></div>
+    </article>
+    <article>
+      <img src="higher-face-output/orbit/az120-el12.png" alt="MLX one million face route">
+      <div class="copy"><h2>MLX, 1m requested</h2><p>153,251 final faces. <span class="partial">No material visual improvement</span>; cleanup collapses the higher request to nearly the same output.</p></div>
+    </article>
+    <article>
+      <img src="mps-geometry-output/dense-render-az120-el12.png" alt="MPS dense geometry route">
+	      <div class="copy"><h2>MPS-requested dense decode</h2><p>27,134,294 final faces; CPU fallback was permitted. Directional exterior organization is visibly stronger, but it reads as striated fleece rather than clean tufts; figure and underside remain malformed.</p></div>
+    </article>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "official-dwarf-fur-cloak",
+  "job_type": "trellis_mac_fine_fur_mps_geometry_0810",
+  "job_id": "6cf665109e3e",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/source/official-dwarf-fur-cloak.webp",
+  "input_name": "official-dwarf-fur-cloak.webp",
+  "params": {
+    "seed": "80301",
+    "pipeline_type": "512",
+    "steps": "6",
+    "target_faces": "500000"
+  },
+  "output_files": [
+    "output.glb",
+    "run-report.json"
+  ],
+  "created_at": 1786409835.519951,
+  "duration_s": 441.9
+}

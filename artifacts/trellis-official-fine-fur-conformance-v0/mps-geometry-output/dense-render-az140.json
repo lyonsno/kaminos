@@ -1,0 +1,43 @@
+{
+  "effectiveRoute": {
+    "azimuthDegrees": 140.0,
+    "blenderVersion": "5.1.2",
+    "cyclesDevice": "CPU",
+    "elevationDegrees": 25.0,
+    "engine": "CYCLES",
+    "projection": "orthographic",
+    "resolution": [
+      640,
+      640
+    ],
+    "samples": 8
+  },
+  "geometry": {
+    "bounds": {
+      "high": [
+        0.37496045231819153,
+        0.5598543882369995,
+        0.36112236976623535
+      ],
+      "low": [
+        -0.4282376766204834,
+        -0.4984303116798401,
+        -0.2980590760707855
+      ]
+    },
+    "meshCount": 1,
+    "polygonCount": 27134294,
+    "vertexCount": 4775197
+  },
+  "output": {
+    "bytes": 380187,
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/mps-geometry-output/dense-render-az140.png",
+    "sha256": "69ecab747d4be9a57a77cfc3fc3cf2ca52e983e2f50fb67d4da2a55d2795788d"
+  },
+  "schema": "kaminos.dense-glb-cpu-render.v1",
+  "source": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/mps-geometry-output/output.glb",
+    "sha256": "de991bc18b4b3a689de25dcde24665058960b7b4877079c7e3c28c58a5047d2d"
+  },
+  "status": "completed"
+}

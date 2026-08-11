@@ -1,0 +1,56 @@
+{
+  "effectiveRoute": {
+    "backend": "mps",
+    "device": "mps:0",
+    "env": {
+      "ATTN_BACKEND": "sdpa",
+      "PYTORCH_ENABLE_MPS_FALLBACK": "1",
+      "SPARSE_ATTN_BACKEND": "sdpa",
+      "SPARSE_CONV_BACKEND": "flex_gemm"
+    },
+    "jobType": "trellis_mac_fine_fur_mps_geometry_0810",
+    "pipelineType": "512",
+    "seed": 80301,
+    "steps": 6,
+    "targetFaces": 500000,
+    "texture": false,
+    "torchVersion": "2.12.1"
+  },
+  "failurePhase": null,
+  "geometry": {
+    "finalFaces": 27134294,
+    "finalVertices": 4775197,
+    "rawFaces": 29784342,
+    "rawVertices": 5972092,
+    "simplifier": "pymeshlab-quadric-edge-collapse-preserve-topology",
+    "textureOrUvStageEntered": false
+  },
+  "lastTrustworthyEvidence": "geometry-only-glb-exported",
+  "output": {
+    "bytes": 382914708,
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/mps-geometry-output/output.glb",
+    "sha256": "de991bc18b4b3a689de25dcde24665058960b7b4877079c7e3c28c58a5047d2d"
+  },
+  "runner": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/run_mps_geometry_control.py",
+    "sha256": "ed5f3518cbe1e0beb05d519dbeca00a63fde84eb6a5ab9f30a89b580c9ae5e8c"
+  },
+  "schema": "kaminos.trellis_mps_geometry_run.v1",
+  "source": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/source/official-dwarf-fur-cloak.webp",
+    "sha256": "933c10aeebb2920b08cb34a08ab1878817b64eb9e30efdcc3d76731069fc0849"
+  },
+  "status": "completed",
+  "timingsSeconds": {
+    "geometry-export": 0.9755130000412464,
+    "geometry-simplification": 180.7183916249778,
+    "inference": 172.61970320896944,
+    "pipeline-load": 84.18962629197631,
+    "total": 441.3442107499577
+  },
+  "trellis": {
+    "commit": "d58628f4f5b9c3de8274cb110074154f4b31cef2",
+    "dirty": true,
+    "root": "/Users/noahlyons/dev/trellis-mac"
+  }
+}
