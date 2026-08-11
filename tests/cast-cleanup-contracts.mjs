@@ -154,6 +154,47 @@ test('failure reports fail loud with a phase and last trustworthy evidence', () 
   assert.throws(() => validateCastCleanupReport(silent, spec), /last trustworthy evidence/i);
 });
 
+test('pre-spec source-verification failure is admitted only as rejected unverified evidence', () => {
+  const spec = makeSpec();
+  const failed = {
+    schema: CAST_CLEANUP_REPORT_SCHEMA,
+    status: 'failed',
+    requestedRoute: {
+      id: 'kaminos_blender_cast_cleanup',
+      sourcePath: spec.source.path,
+      sourceSha256: 'unknown',
+      specSha256: 'unknown',
+    },
+    effectiveRoute: {
+      id: 'blender-cast-cleanup-v0',
+      blenderVersion: '5.1.2',
+      sourcePath: spec.source.path,
+      sourceSha256: 'missing',
+      scriptPath: spec.worker.path,
+      scriptSha256: spec.worker.sha256,
+      specSha256: 'unknown',
+    },
+    outputs: [],
+    failurePhase: 'source-verification',
+    lastTrustworthyEvidence: 'Worker started; no source identity was admitted',
+  };
+
+  assert.deepEqual(validateCastCleanupReport(failed, spec), {
+    accepted: false,
+    status: 'failed',
+    failurePhase: 'source-verification',
+    routeIdentity: 'unverified',
+  });
+
+  const falseLaterPhase = structuredClone(failed);
+  falseLaterPhase.failurePhase = 'source-import';
+  assert.throws(() => validateCastCleanupReport(falseLaterPhase, spec), /source-verification phase/i);
+
+  const falseOutput = structuredClone(failed);
+  falseOutput.outputs.push(output('gentle'));
+  assert.throws(() => validateCastCleanupReport(falseOutput, spec), /cannot contain outputs/i);
+});
+
 test('preparation failure writes a durable phase report before primary output exists', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'cast-cleanup-failure-'));
   const missingSource = join(directory, 'missing.glb');

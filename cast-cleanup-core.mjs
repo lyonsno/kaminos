@@ -142,6 +142,31 @@ function requireRouteIdentity(report, spec) {
   requireString(effective.blenderVersion, 'effective Blender version');
 }
 
+function hasUnverifiedPreSpecIdentity(report) {
+  const requested = requireObject(report.requestedRoute, 'requested route');
+  const effective = requireObject(report.effectiveRoute, 'effective route');
+  return requested.sourceSha256 === 'unknown'
+    && requested.specSha256 === 'unknown'
+    && effective.specSha256 === 'unknown';
+}
+
+function requireUnverifiedPreSpecFailure(report, spec) {
+  const requested = requireObject(report.requestedRoute, 'requested route');
+  const effective = requireObject(report.effectiveRoute, 'effective route');
+  if (report.failurePhase !== 'source-verification') {
+    throw new Error('unverified route identity is valid only during the source-verification phase');
+  }
+  if (report.outputs.length !== 0) throw new Error('unverified source-verification failure cannot contain outputs');
+  if (requested.id !== CAST_CLEANUP_ROUTE_ID) throw new Error('requested route id mismatch');
+  requireString(requested.sourcePath, 'requested source path');
+  if (effective.id !== spec.worker.id) throw new Error('effective worker id mismatch');
+  requireString(effective.sourcePath, 'effective source path');
+  if (effective.sourceSha256 !== 'missing') requireHash(effective.sourceSha256, 'unverified effective source hash');
+  if (effective.scriptPath !== spec.worker.path) throw new Error('effective worker path mismatch');
+  if (effective.scriptSha256 !== spec.worker.sha256) throw new Error('effective worker hash mismatch');
+  requireString(effective.blenderVersion, 'effective Blender version');
+}
+
 function validateOutput(output, profile) {
   requireObject(output, `${profile.id} output`);
   if (output.profileId !== profile.id) throw new Error(`${profile.id} output profile id mismatch`);
@@ -189,15 +214,25 @@ export function validateCastCleanupReport(report, spec) {
   requireObject(report, 'cleanup report');
   requireObject(spec, 'cleanup spec');
   if (report.schema !== CAST_CLEANUP_REPORT_SCHEMA) throw new Error('cleanup report schema mismatch');
-  requireRouteIdentity(report, spec);
   requireString(report.lastTrustworthyEvidence, 'last trustworthy evidence');
 
   if (report.status === 'failed') {
     requireString(report.failurePhase, 'failure phase');
     if (!Array.isArray(report.outputs)) throw new TypeError('failed report outputs must be an array');
+    if (hasUnverifiedPreSpecIdentity(report)) {
+      requireUnverifiedPreSpecFailure(report, spec);
+      return {
+        accepted: false,
+        status: 'failed',
+        failurePhase: report.failurePhase,
+        routeIdentity: 'unverified',
+      };
+    }
+    requireRouteIdentity(report, spec);
     return { accepted: false, status: 'failed', failurePhase: report.failurePhase };
   }
   if (report.status !== 'succeeded') throw new Error('cleanup report status must be succeeded or failed');
+  requireRouteIdentity(report, spec);
   if (report.failurePhase !== null) throw new Error('successful cleanup report cannot carry a failure phase');
   validateSourceWitness(report, spec);
   if (!Array.isArray(report.outputs) || report.outputs.length !== spec.profiles.length) {
