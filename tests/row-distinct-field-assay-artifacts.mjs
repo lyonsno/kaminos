@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,6 +45,20 @@ async function withTemporaryDirectory(run) {
   } finally {
     await rm(path, { recursive: true, force: true });
   }
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(
+      (key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`,
+    ).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalHash(value) {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
 }
 
 test('artifact writer emits hashed result, fixed-camera contact sheet, and four meshes', async () => {
@@ -250,12 +265,48 @@ test('overlapping tissue compiler relabel cannot produce an authoritative report
         frozenAssayCard: structuredClone(assayCard),
         frozenTarget: structuredClone(target),
       }),
-      /overlap compiler identity does not match executed implementation/,
+      /overlap assay card identity does not match authoritative route/,
     );
     const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
     assert.equal(report.status, 'failed');
-    assert.equal(report.failurePhase, 'assay-build');
+    assert.equal(report.failurePhase, 'input-validation');
     assert.equal(report.requestedCompilerId, 'scalar-metaball-sdf-v0');
+    assert.equal(report.effectiveCompilerId, null);
+    assert.deepEqual(report.outputs, []);
+  });
+});
+
+test('coordinated overlap card and payload substitution fails before geometry', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    const coordinatedCard = structuredClone(overlapCard);
+    const coordinatedTarget = structuredClone(overlapTarget);
+    const coordinatedDescriptor = structuredClone(overlapDescriptor);
+    coordinatedTarget.id = 'substituted-target';
+    coordinatedDescriptor.tissues[0].strength += 0.01;
+    coordinatedCard.targetIdentity = {
+      id: coordinatedTarget.id,
+      sha256: canonicalHash(coordinatedTarget),
+    };
+    coordinatedCard.descriptorIdentity = {
+      id: coordinatedDescriptor.id,
+      sha256: canonicalHash(coordinatedDescriptor),
+    };
+
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueControlArtifacts({
+        outDir,
+        overlapCard: coordinatedCard,
+        overlapTarget: coordinatedTarget,
+        descriptor: coordinatedDescriptor,
+        frozenSweepCard: structuredClone(fullSurfaceCard),
+        frozenAssayCard: structuredClone(assayCard),
+        frozenTarget: structuredClone(target),
+      }),
+      /overlap assay card identity does not match authoritative route/,
+    );
+    const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'input-validation');
     assert.equal(report.effectiveCompilerId, null);
     assert.deepEqual(report.outputs, []);
   });

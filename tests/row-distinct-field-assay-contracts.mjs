@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -38,6 +39,20 @@ function build(card = assayCard) {
     assayCard: structuredClone(card),
     target: structuredClone(target),
   });
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(
+      (key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`,
+    ).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalHash(value) {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
 }
 
 function edgeUseCounts(mesh) {
@@ -319,7 +334,7 @@ test('overlapping assay rejects frozen scalar substitution and tissue identity c
       frozenAssayCard: structuredClone(assayCard),
       frozenTarget: structuredClone(target),
     }),
-    /frozen scalar control identity does not match/,
+    /overlap assay card identity does not match authoritative route/,
   );
   const collapsed = structuredClone(overlapDescriptor);
   collapsed.tissues[1].id = collapsed.tissues[0].id;
@@ -352,7 +367,7 @@ test('overlapping assay rejects compiler relabeling and closed fixture substitut
   compilerRelabel.compilerId = 'scalar-metaball-sdf-v0';
   assert.throws(
     () => buildOverlap({ card: compilerRelabel }),
-    /overlap compiler identity does not match executed implementation/,
+    /overlap assay card identity does not match authoritative route/,
   );
 
   const targetRelabel = structuredClone(overlapTarget);
@@ -374,5 +389,27 @@ test('overlapping assay rejects compiler relabeling and closed fixture substitut
   assert.throws(
     () => buildOverlap({ descriptorPayload: descriptorPayloadSwap }),
     /overlap descriptor identity does not match closed fixture/,
+  );
+
+  const coordinatedCard = structuredClone(overlapCard);
+  const coordinatedTarget = structuredClone(overlapTarget);
+  const coordinatedDescriptor = structuredClone(overlapDescriptor);
+  coordinatedTarget.id = 'substituted-target';
+  coordinatedDescriptor.tissues[0].strength += 0.01;
+  coordinatedCard.targetIdentity = {
+    id: coordinatedTarget.id,
+    sha256: canonicalHash(coordinatedTarget),
+  };
+  coordinatedCard.descriptorIdentity = {
+    id: coordinatedDescriptor.id,
+    sha256: canonicalHash(coordinatedDescriptor),
+  };
+  assert.throws(
+    () => buildOverlap({
+      card: coordinatedCard,
+      targetPayload: coordinatedTarget,
+      descriptorPayload: coordinatedDescriptor,
+    }),
+    /overlap assay card identity does not match authoritative route/,
   );
 });

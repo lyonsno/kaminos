@@ -9,6 +9,7 @@ import {
   buildOverlappingAnisotropicTissueControlAssay,
   buildRowDistinctScalarAnisotropicAssay,
   buildTargetSdfFullSurfaceSweep,
+  validateOverlappingAnisotropicTissueControlInputs,
 } from './row-distinct-field-assay-core.mjs';
 
 export const ROW_DISTINCT_ARTIFACT_ROUTE = 'bounded-hindquarter-row-distinct-field-mesh-v0';
@@ -545,6 +546,14 @@ export async function writeOverlappingAnisotropicTissueControlArtifacts({
       );
     }
     report.effectiveRouteId = OVERLAPPING_TISSUE_ARTIFACT_ROUTE;
+    validateOverlappingAnisotropicTissueControlInputs({
+      overlapCard,
+      overlapTarget,
+      descriptor,
+      frozenSweepCard,
+      frozenAssayCard,
+      frozenTarget,
+    });
     phase = 'assay-build';
     const assay = buildOverlappingAnisotropicTissueControlAssay({
       overlapCard,

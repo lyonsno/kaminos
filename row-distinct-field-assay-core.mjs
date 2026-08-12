@@ -8,6 +8,18 @@ export const OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA =
   'kaminos.overlapping-anisotropic-tissue-control-result.v0';
 export const OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID =
   'overlapping-anisotropic-tissue-field-v0';
+const AUTHORITATIVE_OVERLAP_CARD_ID =
+  'bounded-hindquarter-overlapping-anisotropic-tissue-control-v0';
+const AUTHORITATIVE_OVERLAP_CARD_HASH =
+  'afd862ca3012267e9fad0bf22153f0bf56503ea0f8df960771ca777b9a6527da';
+const AUTHORITATIVE_OVERLAP_TARGET_ID =
+  'bounded-hindquarter-overlapping-muscle-fat-response-v0';
+const AUTHORITATIVE_OVERLAP_TARGET_HASH =
+  'f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6';
+const AUTHORITATIVE_OVERLAP_DESCRIPTOR_ID =
+  'bounded-hindquarter-muscle-fat-overlap-v0';
+const AUTHORITATIVE_OVERLAP_DESCRIPTOR_HASH =
+  '45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4';
 
 const ASSAY_CARD_SCHEMA = 'kaminos.row-distinct-scalar-anisotropic-assay.v0';
 const TARGET_SCHEMA = 'kaminos.row-distinct-boundary-response-target.v0';
@@ -947,7 +959,7 @@ export function buildTargetSdfFullSurfaceSweep({ sweepCard, assayCard, target } 
   return { ...result, assayHash: hashValue(result) };
 }
 
-function validateOverlapInputs({
+export function validateOverlappingAnisotropicTissueControlInputs({
   overlapCard,
   overlapTarget,
   descriptor,
@@ -959,6 +971,10 @@ function validateOverlapInputs({
     || overlapTarget?.schema !== OVERLAP_TARGET_SCHEMA
     || descriptor?.schema !== OVERLAP_DESCRIPTOR_SCHEMA) {
     throw new Error('overlapping tissue assay card, target, and descriptor schemas are required');
+  }
+  if (overlapCard.id !== AUTHORITATIVE_OVERLAP_CARD_ID
+    || hashValue(overlapCard) !== AUTHORITATIVE_OVERLAP_CARD_HASH) {
+    throw new Error('overlap assay card identity does not match authoritative route');
   }
   if (overlapTarget.authority?.sourceKind !== 'independently-authored-synthetic-observation') {
     throw new Error('candidate-independent overlapping tissue target authority is required');
@@ -972,12 +988,12 @@ function validateOverlapInputs({
   if (overlapCard.compilerId !== OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID) {
     throw new Error('overlap compiler identity does not match executed implementation');
   }
-  if (overlapTarget.id !== overlapCard.targetIdentity?.id
-    || hashValue(overlapTarget) !== overlapCard.targetIdentity?.sha256) {
+  if (overlapTarget.id !== AUTHORITATIVE_OVERLAP_TARGET_ID
+    || hashValue(overlapTarget) !== AUTHORITATIVE_OVERLAP_TARGET_HASH) {
     throw new Error('overlap target identity does not match closed fixture');
   }
-  if (descriptor.id !== overlapCard.descriptorIdentity?.id
-    || hashValue(descriptor) !== overlapCard.descriptorIdentity?.sha256) {
+  if (descriptor.id !== AUTHORITATIVE_OVERLAP_DESCRIPTOR_ID
+    || hashValue(descriptor) !== AUTHORITATIVE_OVERLAP_DESCRIPTOR_HASH) {
     throw new Error('overlap descriptor identity does not match closed fixture');
   }
   const tissueIds = descriptor.tissues?.map((tissue) => tissue.id) ?? [];
@@ -1246,7 +1262,7 @@ export function buildOverlappingAnisotropicTissueControlAssay({
   frozenAssayCard,
   frozenTarget,
 } = {}) {
-  validateOverlapInputs({
+  validateOverlappingAnisotropicTissueControlInputs({
     overlapCard,
     overlapTarget,
     descriptor,
