@@ -90,6 +90,189 @@ test('all-neighbor restoration beats the frozen severity-0.32 coordinate-search 
   assert.ok(result.selected.metrics.maximumRelativeVolumeError <= 1e-9);
 });
 
+test('repeated all-neighbor restoration preserves a complete deterministic decision ledger', () => {
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = createNBodyAllNeighborRestorationConfig();
+  requestedConfig.iterationBudget = 6;
+  const result = solveNBodyAllNeighborRestoration({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig,
+  });
+
+  assert.equal(result.work.iterations, 6);
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
+  assert.equal(result.invariance.maximumVectorDifference, 0);
+  assert.equal(result.invariance.maximumMetricsDifference, 0);
+  assert.deepEqual(
+    result.work.rows.map(row => row.after.maximumPhysicalResidual),
+    [
+      0.000867525141,
+      0.000567305107,
+      0.000393831894,
+      0.000364239532,
+      0.00033234777,
+      0.000314269245,
+    ],
+  );
+  assert.equal(result.work.rows[0].after.maximumPhysicalResidual, 0.000867525141);
+  assert.deepEqual(
+    {
+      pairwisePenetration:result.start.metrics.pairwisePenetration,
+      skeletalPenetration:result.start.metrics.skeletalPenetration,
+      compartmentEscape:result.start.metrics.compartmentEscape,
+    },
+    {
+      pairwisePenetration:0.001615321454,
+      skeletalPenetration:0.001615326586,
+      compartmentEscape:0.000454052962,
+    },
+  );
+  assert.deepEqual(
+    result.work.rows[0].candidateReceipts.find(candidate => candidate.selected)
+      .constraintFamilies,
+    {
+      pairwisePenetration:0,
+      skeletalPenetration:0.000867525141,
+      compartmentEscape:0.000744046643,
+    },
+  );
+  assert.equal(result.invariance.rows[0].metrics.pairwisePenetration, 0.000259103564);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0.000259103564);
+  assert.equal(result.work.rows[1].violatedKinds.includes('pairwise-clearance'), false);
+  assert.equal(result.work.rows[2].violatedKinds.includes('pairwise-clearance'), true);
+  for (const row of result.work.rows) {
+    assert.ok(row.after.maximumPhysicalResidual < row.before.maximumPhysicalResidual);
+    assert.ok(row.after.merit < row.before.merit);
+    assert.equal(row.candidateReceipts.length, requestedConfig.trustRegionRadii.length);
+    assert.equal(row.candidateReceipts.filter(candidate => candidate.selected).length, 1);
+    for (const candidate of row.candidateReceipts) {
+      if (candidate.selected) {
+        assert.equal(candidate.rejectionReason, null);
+      } else {
+        assert.match(candidate.rejectionReason, /^(higher-ranked-admissible-candidate|non-improving-physical-residual|non-improving-merit)$/);
+      }
+    }
+  }
+  assert.deepEqual(
+    result.invariance.rows[0].work,
+    result.invariance.rows[1].work,
+  );
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+});
+
+test('all-neighbor restoration retains every trust-radius disposition', () => {
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = createNBodyAllNeighborRestorationConfig();
+  const result = solveNBodyAllNeighborRestoration({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig,
+  });
+  const row = result.work.rows[0];
+
+  assert.equal(row.candidateReceipts.length, requestedConfig.trustRegionRadii.length);
+  assert.equal(row.candidateReceipts.filter(candidate => candidate.selected).length, 1);
+  assert.deepEqual(
+    row.candidateReceipts.map(candidate => candidate.radius).sort((left, right) => right - left),
+    requestedConfig.trustRegionRadii,
+  );
+  assert.ok(row.candidateReceipts.every(candidate =>
+    candidate.selected ? candidate.rejectionReason === null : candidate.rejectionReason,
+  ));
+});
+
+test('family-filter configuration is a distinct no-resurrection route', () => {
+  const config = createNBodyAllNeighborRestorationConfig({
+    acceptancePolicy:'family-pareto-no-resurrection',
+  });
+  assert.equal(
+    config.algorithm,
+    'all-neighbor-p8-family-filter-restoration-v0',
+  );
+  assert.equal(config.acceptancePolicy, 'family-pareto-no-resurrection');
+  assert.equal(config.familyRegressionTolerance, 1e-12);
+});
+
+test('family-filter restoration exposes the first no-debt-trading plateau', () => {
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = createNBodyAllNeighborRestorationConfig({
+    acceptancePolicy:'family-pareto-no-resurrection',
+  });
+  requestedConfig.iterationBudget = 6;
+  const result = solveNBodyAllNeighborRestoration({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig,
+  });
+
+  assert.equal(result.route.effective, 'all-neighbor-p8-family-filter-restoration-v0');
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
+  assert.equal(result.status, 'stalled-family-filter-restoration');
+  assert.equal(result.work.iterations, 0);
+  assert.equal(result.work.attempts, 1);
+  assert.equal(result.work.rows[0].accepted, false);
+  assert.equal(result.work.rows[0].terminalReason, 'no-admissible-trust-region-candidate');
+  assert.equal(result.selected.maximumPhysicalResidual, COORDINATE_SEARCH_FLOOR);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0.001615321454);
+  assert.equal(result.selected.metrics.compartmentEscape, 0.000454052962);
+  assert.equal(
+    result.work.rows[0].candidateReceipts.length,
+    requestedConfig.trustRegionRadii.length,
+  );
+  assert.deepEqual(
+    result.work.rows[0].candidateReceipts.map(candidate => candidate.radius),
+    requestedConfig.trustRegionRadii,
+  );
+  assert.equal(
+    result.work.rows[0].candidateReceipts.filter(candidate => candidate.selected).length,
+    0,
+  );
+  assert.ok(result.work.rows[0].candidateReceipts.every(candidate =>
+    candidate.rejectionReason === 'constraint-family-regression' ||
+      candidate.rejectionReason === 'non-improving-physical-residual' ||
+      candidate.rejectionReason === 'non-improving-merit',
+  ));
+  assert.equal(
+    result.work.rows[0].candidateReceipts.some(
+      candidate => candidate.rejectionReason === 'higher-ranked-admissible-candidate',
+    ),
+    false,
+  );
+  for (const candidate of result.work.rows[0].candidateReceipts) {
+    assert.deepEqual(Object.keys(candidate.constraintFamilies).sort(), [
+      'compartmentEscape',
+      'pairwisePenetration',
+      'skeletalPenetration',
+    ]);
+    assert.ok(Object.values(candidate.constraintFamilies).every(Number.isFinite));
+    if (candidate.rejectionReason === 'constraint-family-regression') {
+      assert.ok(candidate.regressedFamilies.length > 0);
+      assert.ok(candidate.regressedFamilies.every(key =>
+        candidate.constraintFamilies[key] >
+          result.start.metrics[key] + requestedConfig.familyRegressionTolerance,
+      ));
+    }
+  }
+  assert.ok(result.work.rows[0].candidateReceipts.some(candidate =>
+    candidate.regressedFamilies.includes('compartmentEscape'),
+  ));
+  assert.deepEqual(result.selected.vector, result.start.vector);
+  assert.deepEqual(result.invariance.rows[0].work, result.invariance.rows[1].work);
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+});
+
 test('restoration fails loud on an incomplete route config before evaluation', () => {
   const fixture = createNBodyLocalizedChallengeSuite().find(
     row => row.assayProfile.severity === 0.32,
@@ -142,6 +325,26 @@ test('restoration assay writes a durable terminal failure before primary output'
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
 });
 
+test('restoration assay preserves an invalid requested acceptance policy in failure evidence', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-restoration-policy-failure-'));
+  await assert.rejects(
+    runNBodyPackingRestorationAssay({
+      outDir,
+      acceptancePolicy:'family-pareto-no-resurrection-typo',
+    }),
+    /acceptancePolicy is unsupported/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(
+    report.route.requested,
+    'unsupported-acceptance-policy:family-pareto-no-resurrection-typo',
+  );
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'solve-all-neighbor-restoration');
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
 test('restoration assay rejects a canonical homotopy result from another problem', async () => {
   const sourceRoot = path.resolve('artifacts/nbody-packing-localized-challenge-v0');
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-restoration-substitute-'));
@@ -168,4 +371,26 @@ test('restoration assay rejects a canonical homotopy result from another problem
   assert.equal(report.status, 'failed');
   assert.equal(report.failurePhase, 'bind-problem-and-baselines');
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
+test('source-bound family-filter assay preserves the exact zero-step plateau', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-family-filter-assay-'));
+  const { result, report } = await runNBodyPackingRestorationAssay({
+    outDir,
+    iterationBudget:6,
+    acceptancePolicy:'family-pareto-no-resurrection',
+  });
+  assert.equal(report.status, 'complete-family-filter-floor-exposed');
+  assert.equal(report.route.requested, 'all-neighbor-p8-family-filter-restoration-v0');
+  assert.equal(report.route.effective, 'all-neighbor-p8-family-filter-restoration-v0');
+  assert.equal(report.route.fallbackUsed, false);
+  assert.equal(result.status, 'stalled-family-filter-restoration');
+  assert.equal(result.work.iterations, 0);
+  assert.equal(result.work.attempts, 1);
+  assert.equal(result.work.rows[0].candidateReceipts.length, 7);
+  assert.deepEqual(result.selected.vector, result.start.vector);
+  assert.equal(result.invariance.candidateEnumeration, 'passed');
+  assert.deepEqual(result.invariance.rows[0].work, result.invariance.rows[1].work);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'run-report.json')), true);
 });

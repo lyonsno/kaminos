@@ -1,9 +1,9 @@
 {
   "schema": "kaminos.nbody-packing-all-neighbor-restoration-assay.v0",
-  "status": "complete-mechanism-floor-improved",
+  "status": "complete-family-filter-floor-exposed",
   "route": {
-    "requested": "all-neighbor-p8-merit-trust-region-restoration-v0",
-    "effective": "all-neighbor-p8-merit-trust-region-restoration-v0",
+    "requested": "all-neighbor-p8-family-filter-restoration-v0",
+    "effective": "all-neighbor-p8-family-filter-restoration-v0",
     "fallbackUsed": false
   },
   "source": {
@@ -23,16 +23,16 @@
   "comparison": {
     "coordinateSearchFloor": 0.001615326586,
     "homotopyFloor": 0.000945973079,
-    "restorationResidual": 0.000867525141,
-    "improvementVersusCoordinateSearch": 1.8619939753423238,
-    "improvementVersusHomotopy": 1.090427279040666
+    "restorationResidual": 0.001615326586,
+    "improvementVersusCoordinateSearch": 1,
+    "improvementVersusHomotopy": 0.5856234195603093
   },
   "bindings": {
-    "resultJsonSha256": "88c569f8d99da75136afbb954f6679d06de50200055c90f1128ce4bd5ae24c0c",
-    "resultSha256": "199b0fece0ee25e947d5055a4446419b1518d066602f35ab6af4d3caa8132710"
+    "resultJsonSha256": "40790dfaff8c12fb775cbd43bc7fe62d012db88d6a194b974da2638a1fcde365",
+    "resultSha256": "38b519fee4ec6fc096030adffe107c4a9c909dec1e6b4ddd7840b0beb9a54e24"
   },
-  "claimCeiling": "bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality",
+  "claimCeiling": "bounded-severity-0.32-no-family-regression-filter-not-global-feasibility-or-optimality",
   "identity": {
-    "sha256": "8177a6f76c92e0a86df3df01e44b95e6e74f22a500599cff76a151bab98fa152"
+    "sha256": "83b30b8a635a0e4de40d032de8cea4e9364fdf8bcdd63d614b38dd6c3c1e7427"
   }
 }

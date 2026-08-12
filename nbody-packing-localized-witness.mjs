@@ -22,6 +22,8 @@ export const NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE =
   'nbody-packing-localized-hard-boundary-v0';
 export const NBODY_PACKING_RESTORATION_WITNESS_ROUTE =
   'nbody-packing-all-neighbor-restoration-v0';
+export const NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE =
+  'nbody-packing-all-neighbor-restoration-trajectory-v0';
 export const NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA =
   'kaminos.nbody-packing-localized-boundary-witness.v0';
 
@@ -274,7 +276,10 @@ export async function admitNBodyPackingLocalizedVisualInspection({
   const outputRoot = path.resolve(outDir);
   const reportPath = path.join(outputRoot, 'report.json');
   const report = JSON.parse(String(await readFile(reportPath)));
-  const verdictKeys = report.route?.effective === NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+  const verdictKeys = [
+    NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
+    NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
+  ].includes(report.route?.effective)
     ? RESTORATION_VISUAL_VERDICT_KEYS
     : report.route?.effective === NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE
       ? HARD_BOUNDARY_VISUAL_VERDICT_KEYS
@@ -293,6 +298,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
       NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
       NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
       NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
+      NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
     ].includes(report.route?.effective) ||
     report.route?.fallbackUsed !== false
   ) throw new Error('localized visual admission requires exact pending witness');

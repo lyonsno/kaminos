@@ -14,12 +14,16 @@ import {
   evaluateNBodyUnifiedKktState,
 } from './nbody-packing-unified-kkt.mjs';
 import {
+  createNBodyAllNeighborRestorationConfig,
+} from './nbody-packing-restoration.mjs';
+import {
   LOCALIZED_CHALLENGE_RESULT_SCHEMA,
   LOCALIZED_CONTINUATION_RESULT_SCHEMA,
 } from './nbody-packing-localized-challenge.mjs';
 import {
   NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
   NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
+  NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
@@ -52,6 +56,41 @@ function verifyCanonicalIdentity(value, label) {
   delete core.identity;
   if (value.identity?.sha256 !== hashMusclePackingCanonicalJson(core)) {
     throw new Error(`localized hard witness rejects stale ${label} identity`);
+  }
+}
+
+function validateCurrentScalarRestorationContract(result, iterationBudget) {
+  const expectedConfig = createNBodyAllNeighborRestorationConfig();
+  expectedConfig.iterationBudget = iterationBudget;
+  const candidateKeys = [
+    'constraintFamilies',
+    'maximumPhysicalResidual',
+    'merit',
+    'radius',
+    'regressedFamilies',
+    'rejectionReason',
+    'selected',
+    'vector',
+    'violationEnergy',
+  ];
+  const candidateRows = result.work?.rows?.flatMap(row => row.candidateReceipts || []) || [];
+  if (
+    JSON.stringify(result.config?.requested) !== JSON.stringify(expectedConfig) ||
+    JSON.stringify(result.config?.effective) !== JSON.stringify(expectedConfig) ||
+    result.mechanism?.acceptancePolicy !== 'scalar-merit' ||
+    candidateRows.length !== result.work?.attempts * expectedConfig.trustRegionRadii.length ||
+    candidateRows.some(candidate =>
+      JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys) ||
+      JSON.stringify(Object.keys(candidate.constraintFamilies || {}).sort()) !==
+        JSON.stringify([
+          'compartmentEscape',
+          'pairwisePenetration',
+          'skeletalPenetration',
+        ]) ||
+      !Array.isArray(candidate.regressedFamilies)
+    )
+  ) {
+    throw new Error('localized hard witness rejects result outside current scalar configuration contract');
   }
 }
 
@@ -159,28 +198,41 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
   patternResultPath =
     'artifacts/nbody-packing-localized-challenge-v0/oracle-pattern-search-032.json',
   restorationResultPath = null,
+  trajectoryResultPath = null,
 } = {}) {
   const outputRoot = path.resolve(outDir);
   let phase = 'read-source-results';
   let lastTrustworthyEvidence = { phase:'none' };
   await mkdir(outputRoot, { recursive:true });
   try {
-    const [challengeBytes, continuationBytes, patternBytes, restorationBytes] = await Promise.all([
+    const [
+      challengeBytes,
+      continuationBytes,
+      patternBytes,
+      restorationBytes,
+      trajectoryBytes,
+    ] = await Promise.all([
       readFile(path.resolve(challengeResultPath)),
       readFile(path.resolve(continuationResultPath)),
       readFile(path.resolve(patternResultPath)),
       restorationResultPath ? readFile(path.resolve(restorationResultPath)) : Promise.resolve(null),
+      trajectoryResultPath ? readFile(path.resolve(trajectoryResultPath)) : Promise.resolve(null),
     ]);
     const challenge = JSON.parse(String(challengeBytes));
     const continuation = JSON.parse(String(continuationBytes));
     const pattern = JSON.parse(String(patternBytes));
     const restoration = restorationBytes ? JSON.parse(String(restorationBytes)) : null;
+    const trajectory = trajectoryBytes ? JSON.parse(String(trajectoryBytes)) : null;
+    if (trajectory && !restoration) {
+      throw new Error('localized hard witness trajectory requires the admitted one-step comparison');
+    }
     lastTrustworthyEvidence = {
       phase:'source-results-read',
       challengeSha256:sha256(challengeBytes),
       continuationSha256:sha256(continuationBytes),
       patternSha256:sha256(patternBytes),
       restorationSha256:restorationBytes ? sha256(restorationBytes) : null,
+      trajectorySha256:trajectoryBytes ? sha256(trajectoryBytes) : null,
     };
     phase = 'bind-source-identities';
     const suite = createNBodyLocalizedChallengeSuite();
@@ -191,6 +243,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     });
     if (restoration) {
       verifyCanonicalIdentity(restoration, 'restoration');
+      validateCurrentScalarRestorationContract(restoration, 1);
       if (
         restoration.schema !== 'kaminos.nbody-packing-all-neighbor-restoration-result.v0' ||
         restoration.status !== 'restoration-floor-improved' ||
@@ -203,6 +256,26 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         restoration.start?.maximumPhysicalResidual !== 0.001615326586 ||
         !(restoration.selected?.maximumPhysicalResidual < 0.000945973079)
       ) throw new Error('localized hard witness rejects substituted restoration evidence');
+    }
+    if (trajectory) {
+      verifyCanonicalIdentity(trajectory, 'restoration trajectory');
+      validateCurrentScalarRestorationContract(trajectory, 6);
+      if (
+        trajectory.schema !== 'kaminos.nbody-packing-all-neighbor-restoration-result.v0' ||
+        trajectory.status !== 'restoration-floor-improved' ||
+        trajectory.route?.effective !== 'all-neighbor-p8-merit-trust-region-restoration-v0' ||
+        trajectory.route?.fallbackUsed !== false ||
+        trajectory.source?.problemSha256 !== problem.identity.sha256 ||
+        trajectory.config?.effective?.iterationBudget !== 6 ||
+        trajectory.work?.iterations !== 6 ||
+        trajectory.work?.rows?.some(row => row.accepted !== true) ||
+        trajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+        trajectory.mechanism?.contactGraphRowsConsumed !== false ||
+        trajectory.invariance?.candidateEnumeration !== 'passed' ||
+        trajectory.start?.maximumPhysicalResidual !== 0.001615326586 ||
+        !(trajectory.selected?.maximumPhysicalResidual <
+          (restoration?.selected?.maximumPhysicalResidual ?? 0.000945973079))
+      ) throw new Error('localized hard witness rejects substituted restoration trajectory');
     }
     const passRow = challenge.rows.find(row => row.fixtureSha256 === passFixture.identity.sha256);
     const failRow = challenge.rows.find(row => row.fixtureSha256 === failFixture.identity.sha256);
@@ -232,10 +305,18 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       problem,
       vector:restoration.selected.vector,
     }) : null;
+    const trajectoryState = trajectory ? evaluateNBodyUnifiedKktState({
+      problem,
+      vector:trajectory.selected.vector,
+    }) : null;
     if (
       restorationState &&
       restorationState.maximumPhysicalResidual !== restoration.selected.maximumPhysicalResidual
     ) throw new Error('localized hard witness rejects stale restoration metrics');
+    if (
+      trajectoryState &&
+      trajectoryState.maximumPhysicalResidual !== trajectory.selected.maximumPhysicalResidual
+    ) throw new Error('localized hard witness rejects stale restoration trajectory metrics');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'source-identities-bound',
@@ -243,9 +324,13 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     };
     phase = 'write-primary';
     const fixtures = { lastPass:passFixture, firstFail:failFixture };
-    const comparison = restoration
-      ? { challenge, continuation, pattern, restoration }
-      : { challenge, continuation, pattern };
+    const comparison = {
+      challenge,
+      continuation,
+      pattern,
+      ...(restoration ? { restoration } : {}),
+      ...(trajectory ? { trajectory } : {}),
+    };
     const fixtureBytes = jsonBytes(fixtures);
     const comparisonBytes = jsonBytes(comparison);
     const bindings = {
@@ -306,6 +391,17 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           truth:'One simultaneous direction derived from every violated pair, bone, and compartment row beats both frozen local-search floors without oracle coordinates or a contact graph. Residual debt remains.',
         },
       } : {}),
+      ...(trajectory ? {
+        'repeated-all-neighbor-restoration': {
+          label:'0.32 repeated all-neighbor restoration', severity:0.32,
+          status:trajectory.status, warning:true,
+          source:failFixture.crowded,
+          muscles:trajectoryState.muscles,
+          metrics:trajectoryState.metrics,
+          emphasisMarkers:createPairDebtEmphasisMarkers(trajectoryState),
+          truth:'Six deterministic simultaneous all-neighbor steps lower the maximum residual, but scalar merit resurrects pair debt that the first step had cleared. This is a debt-trading failure, not convergence or feasibility.',
+        },
+      } : {}),
       reference: {
         label:'Manufactured feasibility witness', severity:null,
         status:'existence witness outside candidate carrier', warning:false,
@@ -315,19 +411,28 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         truth:'This withheld manufactured state proves fixture feasibility, not feasibility in the frozen two-mode candidate carrier.',
       },
     };
-    const orderedStates = restoration
-      ? [...STATE_KEYS.slice(0, -1), 'all-neighbor-restoration', 'reference']
-      : [...STATE_KEYS];
-    const witnessRoute = restoration
-      ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
-      : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
+    const orderedStates = [
+      ...STATE_KEYS.slice(0, -1),
+      ...(restoration ? ['all-neighbor-restoration'] : []),
+      ...(trajectory ? ['repeated-all-neighbor-restoration'] : []),
+      'reference',
+    ];
+    const witnessRoute = trajectory
+      ? NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE
+      : restoration
+        ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+        : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const display = {
       title:restoration
-        ? 'All-neighbor restoration · six-body hard boundary'
+        ? trajectory
+          ? 'Repeated all-neighbor restoration · six-body hard boundary'
+          : 'All-neighbor restoration · six-body hard boundary'
         : 'Localized hard boundary · six bodies',
       authority:'Synthetic two-obstacle mechanism falsifier · no anatomical admission',
       explanation:restoration
-        ? 'Severity 0.32 creates a gross cold failure. Continuation, one-coordinate search, and homotopy establish local floors. The new state applies one <strong>simultaneous all-neighbor restoration direction</strong> and descends below both recorded floors; this is a mechanism advance, not feasibility or optimality closure.'
+        ? trajectory
+          ? 'Severity 0.32 creates a gross cold failure. Compare the admitted one-step state with six <strong>simultaneous all-neighbor restoration</strong> steps. Although the maximum residual descends, the repeated scalar-merit trajectory resurrects pairwise debt after clearing it. This exposes a debt-trading failure and motivates constraint-family-aware acceptance.'
+          : 'Severity 0.32 creates a gross cold failure. Continuation, one-coordinate search, and homotopy establish local floors. The new state applies one <strong>simultaneous all-neighbor restoration direction</strong> and descends below both recorded floors; this is a mechanism advance, not feasibility or optimality closure.'
         : 'Severity 0.32 creates a gross cold failure. Exact 0.28 continuation and an independent same-basis coordinate search reduce the debt by roughly two orders of magnitude but do not clear it. This establishes a <strong>globalization defect</strong>; it does <strong>not</strong> yet establish a carrier representation limit.',
       orderedStates,
       defaultState:'fail-crowded',
@@ -369,6 +474,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           restorationVersusHomotopyFloor:
             0.000945973079 / restoration.selected.maximumPhysicalResidual,
         } : {}),
+        ...(trajectory ? {
+          trajectoryMaximumPhysicalResidual:
+            trajectory.selected.maximumPhysicalResidual,
+          trajectoryVersusOneStep:
+            restoration.selected.maximumPhysicalResidual /
+              trajectory.selected.maximumPhysicalResidual,
+          trajectoryAcceptedIterations:trajectory.work.iterations,
+        } : {}),
       },
       bindings:{
         ...bindings,
@@ -377,12 +490,15 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         continuationResultSha256:sha256(continuationBytes),
         patternResultSha256:sha256(patternBytes),
         ...(restorationBytes ? { restorationResultSha256:sha256(restorationBytes) } : {}),
+        ...(trajectoryBytes ? { trajectoryResultSha256:sha256(trajectoryBytes) } : {}),
       },
       requiredStates:orderedStates,
       requiredModes:['volume','slice'],
       claimCeiling: {
-        admittedClaim:restoration
-          ? 'one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants'
+        admittedClaim:trajectory
+          ? 'six deterministic simultaneous all-neighbor restoration steps on severity 0.32 monotonically lower the maximum residual while retaining exact attachment and volume invariants, but reintroduce pairwise penetration after the one-step state cleared it; scalar-merit repetition therefore fails the no-debt-trading architecture predicate'
+          : restoration
+            ? 'one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants'
           : 'severity 0.32 exposes a gross cold-start globalization failure and an unresolved same-basis residual floor after continuation and coordinate search',
         anatomicalAdmission:'none',
         nonGoals:[
@@ -406,9 +522,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     ]);
     return { outputRoot, report, states };
   } catch (error) {
-    const requestedRoute = restorationResultPath
-      ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
-      : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
+    const requestedRoute = trajectoryResultPath
+      ? NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE
+      : restorationResultPath
+        ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+        : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const failure = {
       schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
       status:'failed',
@@ -429,9 +547,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-localized-hard-boundary-v0';
   const restorationResultPath = process.argv[3] || null;
+  const trajectoryResultPath = process.argv[4] || null;
   const result = await writeNBodyPackingLocalizedHardBoundaryWitness({
     outDir,
     restorationResultPath,
+    trajectoryResultPath,
   });
   process.stdout.write(`${JSON.stringify({
     outputRoot:result.outputRoot,

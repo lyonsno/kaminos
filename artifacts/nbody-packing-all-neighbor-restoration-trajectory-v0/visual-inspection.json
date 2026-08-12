@@ -1,0 +1,300 @@
+{
+  "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-12T06:53:41.296Z",
+  "summary": "Eight final-config states inspected in transparent volume and opaque slices. The one-step scalar restoration visibly clears pairwise debt while the six-step scalar trajectory resurrects a red pairwise marker as skeletal and compartment residuals decrease; identity, endpoints, volume, obstacle, and compartment context remain legible.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "crowdedDebtLegible": true,
+    "lastPassClearanceLegible": true,
+    "coldFailureGrosslyWrong": true,
+    "warmStartResidualLegible": true,
+    "coordinateFloorResidualLegible": true,
+    "manufacturedWitnessAuthorityCeilingLegible": true,
+    "stableIdentityLegible": true,
+    "fixedAttachmentsLegible": true,
+    "individualVolumeLegible": true,
+    "packingSemanticsNotInverted": true,
+    "restorationDeltaLegible": true,
+    "restorationResidualMarkersLegible": true
+  },
+  "route": {
+    "requested": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+    "effective": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "pass-crowded",
+      "mode": "volume",
+      "png": "pass-crowded-volume.png",
+      "pngSha256": "69c2d0dcc2b90e005b05670ce13f23b8eadb74857731e3bc8944f639b5e58770",
+      "captureReport": "pass-crowded-volume-capture-report.json",
+      "captureReportSha256": "250918b38c9efe4e549847051d48082ca19ed4e584599251607c7e28931257ff",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "pass-crowded",
+      "mode": "slice",
+      "png": "pass-crowded-slice.png",
+      "pngSha256": "c7848977649958bb8761ffb574fe528c32b47124f3e938f417915185e57a206e",
+      "captureReport": "pass-crowded-slice-capture-report.json",
+      "captureReportSha256": "96d155b0d1f0be03033ed3ef113b7d9b5a11fedf296083a410b66a151932a279",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "volume",
+      "png": "last-pass-volume.png",
+      "pngSha256": "b3893163f027fc8dc7bcaea1851ff27dd89df861357ace462b8c26b78a8553de",
+      "captureReport": "last-pass-volume-capture-report.json",
+      "captureReportSha256": "07dfc774649f74d8937150118248ea28acded6f1302326c53350dd9d2af79876",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "slice",
+      "png": "last-pass-slice.png",
+      "pngSha256": "0dc1b5ec4e45e6854b67a6b9013e2e3075089bce3c407c321203fdef12a8586b",
+      "captureReport": "last-pass-slice-capture-report.json",
+      "captureReportSha256": "3427c565ac1130b3590d651ccf2e7cb0d6bd7b2b10d55279340cf7c610a209ad",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "volume",
+      "png": "fail-crowded-volume.png",
+      "pngSha256": "c301923329243b3bee02dced905eddfa5a35ad64a80fd5209f95c658473eabb0",
+      "captureReport": "fail-crowded-volume-capture-report.json",
+      "captureReportSha256": "861f8884395db784182585b609bbc1ba07dd966c549f9116aeaf6ad6f5aa25aa",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "slice",
+      "png": "fail-crowded-slice.png",
+      "pngSha256": "f70fbeebe77a23716656a18cf9ab6e45e257a3985a97ccbfe3560fb88e2f2217",
+      "captureReport": "fail-crowded-slice-capture-report.json",
+      "captureReportSha256": "ac44137e4fcb829f535b68a0f56b60e1dc3146bcb9d2b92d5a5c88a979a8a26b",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "volume",
+      "png": "first-fail-volume.png",
+      "pngSha256": "eb274a19b5548c9b7288fd0e3e7ba45eeaa18bead134e9c1072820ee3e5ef78f",
+      "captureReport": "first-fail-volume-capture-report.json",
+      "captureReportSha256": "525b71ec5d47ab8d063148a296f802af1075c1046ba59d6cbcc1a03fe4c5deab",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "slice",
+      "png": "first-fail-slice.png",
+      "pngSha256": "ed5a4b31ddbff090253e656417b9951a346fe2b7dcb21aeab2721b433a3d6e08",
+      "captureReport": "first-fail-slice-capture-report.json",
+      "captureReportSha256": "4fb3afabc7982a6b0fe0140217782caa0a3ff9bb852d0e9e39e1ec4ca94961e2",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "volume",
+      "png": "same-basis-feasible-volume.png",
+      "pngSha256": "d27608cb0e97f46886b11a40d45c62ab991d34787061c6309694365e8dfc1b5b",
+      "captureReport": "same-basis-feasible-volume-capture-report.json",
+      "captureReportSha256": "d5da2cefcba653361d1481f42b22f63cbaf83f1a8d3e1f3ba4c0416bcd2c75df",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "slice",
+      "png": "same-basis-feasible-slice.png",
+      "pngSha256": "4ee759590ee6eed7d8bb59b88f32f0fb8e1baa23dbc35b9c544ab79e7e1d7d1f",
+      "captureReport": "same-basis-feasible-slice-capture-report.json",
+      "captureReportSha256": "d8d3a715a7e3e901a5192f42e8d3aaaf747db8b5e746497bc513c679ed6e4b5a",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "all-neighbor-restoration",
+      "mode": "volume",
+      "png": "all-neighbor-restoration-volume.png",
+      "pngSha256": "5dac1d5e82d734dafed140f4ca4a770dd1e4f98cfbfeb0fbf1f666e1ba855351",
+      "captureReport": "all-neighbor-restoration-volume-capture-report.json",
+      "captureReportSha256": "c6f78022e629034269b31a91623e32896188b4fb66bc2938c460768c2efb594e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "all-neighbor-restoration",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "all-neighbor-restoration",
+      "mode": "slice",
+      "png": "all-neighbor-restoration-slice.png",
+      "pngSha256": "7d14344114e782c3dc6ae8d669ef946bda389042cd6d641f94a6a7266234bac5",
+      "captureReport": "all-neighbor-restoration-slice-capture-report.json",
+      "captureReportSha256": "d4e78c1e8b3cce1fc1a2783d35e4ac748d898d4850034a5358bb4eb0e37fcebb",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "all-neighbor-restoration",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "repeated-all-neighbor-restoration",
+      "mode": "volume",
+      "png": "repeated-all-neighbor-restoration-volume.png",
+      "pngSha256": "96be03dcd80c1df4f926af48e1ca3ddbb292f3a5dc1d130475f36a70f8e26e94",
+      "captureReport": "repeated-all-neighbor-restoration-volume-capture-report.json",
+      "captureReportSha256": "55c79e5ccd13d7d4cb99ad980ecaa657c50ed74f2f08fbfa7ab97f57d059f75e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "repeated-all-neighbor-restoration",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "repeated-all-neighbor-restoration",
+      "mode": "slice",
+      "png": "repeated-all-neighbor-restoration-slice.png",
+      "pngSha256": "d9d9079b619bc01d6891933ffebecd1c23bb38356fdeec9063719978f6a75256",
+      "captureReport": "repeated-all-neighbor-restoration-slice-capture-report.json",
+      "captureReportSha256": "17c907d85b1b24573ec5d5b8acea3429a397df82e5b155418eae5cfe085be900",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "repeated-all-neighbor-restoration",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "volume",
+      "png": "reference-volume.png",
+      "pngSha256": "6a2d3b4d376e9af226bcef377ba50eb0fb43c8ca4b2957dc180d08e7c03ec412",
+      "captureReport": "reference-volume-capture-report.json",
+      "captureReportSha256": "f762fd320cef2e1149353d3da928a1d2effa54adce2f5488a6a5531504804357",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "slice",
+      "png": "reference-slice.png",
+      "pngSha256": "657a403af4ff4647ad479f7f7a488d66d8f843dd6dd659f79d20f82b9502f002",
+      "captureReport": "reference-slice-capture-report.json",
+      "captureReportSha256": "d26a4db83f646669d906d8023413c96856985faf8034cda2ffa8ddff2ed3ad21",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      }
+    }
+  ],
+  "claimCeiling": {
+    "admittedClaim": "six deterministic simultaneous all-neighbor restoration steps on severity 0.32 monotonically lower the maximum residual while retaining exact attachment and volume invariants, but reintroduce pairwise penetration after the one-step state cleared it; scalar-merit repetition therefore fails the no-debt-trading architecture predicate",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "same-basis-representation-impossibility",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "identity": {
+    "sha256": "c8376b15ff3987a242007973dedf46b53cea144250c8fb19896b0f3595199d19"
+  }
+}

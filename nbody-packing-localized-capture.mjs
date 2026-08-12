@@ -9,7 +9,8 @@ import { captureIndependentBrowserScreenshot } from './lib/receipt-bearing-brows
 
 const STATES = Object.freeze([
   'pass-crowded', 'last-pass', 'fail-crowded', 'first-fail',
-  'same-basis-feasible', 'all-neighbor-restoration', 'reference',
+  'same-basis-feasible', 'all-neighbor-restoration',
+  'repeated-all-neighbor-restoration', 'reference',
 ]);
 export const NBODY_PACKING_LOCALIZED_CAPTURE_VIEWPORT = Object.freeze({
   width:1400,

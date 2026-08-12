@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
+  NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   admitNBodyPackingLocalizedVisualInspection,
   renderNBodyPackingLocalizedChallengeHtml,
   validateNBodyPackingLocalizedCaptureBinding,
@@ -235,6 +236,126 @@ test('hard-boundary writer rejects a pattern search from a substituted continuat
     }),
     /pattern-search seed does not bind the continuation result/,
   );
+});
+
+test('trajectory witness rejects canonically valid results from the old scalar config contract', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-stale-trajectory-'));
+  const current = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+    'utf8',
+  ));
+  for (const config of [current.config.requested, current.config.effective]) {
+    delete config.acceptancePolicy;
+    delete config.familyRegressionTolerance;
+  }
+  delete current.mechanism.acceptancePolicy;
+  for (const row of current.work.rows) for (const candidate of row.candidateReceipts) {
+    delete candidate.constraintFamilies;
+    delete candidate.regressedFamilies;
+  }
+  for (const row of current.invariance.rows) for (const work of row.work) {
+    for (const candidate of work.candidateReceipts) {
+      delete candidate.constraintFamilies;
+      delete candidate.regressedFamilies;
+    }
+  }
+  delete current.identity;
+  current.identity = { sha256:hashMusclePackingCanonicalJson(current) };
+  const stalePath = path.join(outDir, 'stale-trajectory.json');
+  fs.writeFileSync(stalePath, `${JSON.stringify(current, null, 2)}\n`);
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      restorationResultPath:
+        'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+      trajectoryResultPath:
+        stalePath,
+    }),
+    /current scalar configuration contract/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.requested, NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'bind-source-identities');
+  assert.equal(fs.existsSync(path.join(outDir, 'index.html')), false);
+});
+
+test('trajectory writer binds final-config one-step and six-step results into eight states', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-current-trajectory-'));
+  const { report, states } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    restorationResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+    trajectoryResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+  });
+  assert.equal(report.route.effective, NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE);
+  assert.deepEqual(report.requiredStates, [
+    'pass-crowded',
+    'last-pass',
+    'fail-crowded',
+    'first-fail',
+    'same-basis-feasible',
+    'all-neighbor-restoration',
+    'repeated-all-neighbor-restoration',
+    'reference',
+  ]);
+  assert.equal(Object.keys(states).length, 8);
+  assert.equal(states['all-neighbor-restoration'].metrics.pairwisePenetration, 0);
+  assert.equal(
+    states['repeated-all-neighbor-restoration'].metrics.pairwisePenetration,
+    0.000259103564,
+  );
+  assert.match(report.claimCeiling.admittedClaim, /reintroduce pairwise penetration/);
+});
+
+test('trajectory visual admission requires sixteen route-bound captures', async () => {
+  const sourceDir = path.resolve(
+    'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0',
+  );
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-trajectory-admission-'));
+  const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    restorationResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+    trajectoryResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+  });
+  for (const state of report.requiredStates) for (const mode of report.requiredModes) {
+    const stem = `${state}-${mode}`;
+    fs.copyFileSync(path.join(sourceDir, `${stem}.png`), path.join(outDir, `${stem}.png`));
+    fs.copyFileSync(
+      path.join(sourceDir, `${stem}-capture-report.json`),
+      path.join(outDir, `${stem}-capture-report.json`),
+    );
+  }
+  const inspection = {
+    observedAt:'2026-08-12T00:00:00.000Z',
+    summary:'Eight current-config states inspected in transparent volume and opaque slices.',
+    verdict:{
+      nonblank:true,
+      orbitable:true,
+      sameCameraComparison:true,
+      crowdedDebtLegible:true,
+      lastPassClearanceLegible:true,
+      coldFailureGrosslyWrong:true,
+      warmStartResidualLegible:true,
+      coordinateFloorResidualLegible:true,
+      manufacturedWitnessAuthorityCeilingLegible:true,
+      stableIdentityLegible:true,
+      fixedAttachmentsLegible:true,
+      individualVolumeLegible:true,
+      packingSemanticsNotInverted:true,
+      restorationDeltaLegible:true,
+      restorationResidualMarkersLegible:true,
+    },
+  };
+  const admitted = await admitNBodyPackingLocalizedVisualInspection({ outDir, inspection });
+  assert.equal(admitted.report.status, 'complete-agent-visual-inspected');
+  assert.equal(admitted.report.visualInspection.captureCount, 16);
+  assert.equal(admitted.receipt.route.effective,
+    NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE);
 });
 
 test('hard-boundary pair markers bind exact violated segment identities', () => {

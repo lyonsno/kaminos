@@ -23,16 +23,16 @@
   "comparison": {
     "coordinateSearchFloor": 0.001615326586,
     "homotopyFloor": 0.000945973079,
-    "restorationResidual": 0.000867525141,
-    "improvementVersusCoordinateSearch": 1.8619939753423238,
-    "improvementVersusHomotopy": 1.090427279040666
+    "restorationResidual": 0.000314269245,
+    "improvementVersusCoordinateSearch": 5.139944845700699,
+    "improvementVersusHomotopy": 3.0100720768906295
   },
   "bindings": {
-    "resultJsonSha256": "88c569f8d99da75136afbb954f6679d06de50200055c90f1128ce4bd5ae24c0c",
-    "resultSha256": "199b0fece0ee25e947d5055a4446419b1518d066602f35ab6af4d3caa8132710"
+    "resultJsonSha256": "0ace81a43d60675a5678b3748d0b81fbd9dbfbeda386e89881bcec93ac79abd2",
+    "resultSha256": "27bf9222b77fca86bcb94396f3003d26bdb4312a9324666d7adde0fb104ac95c"
   },
   "claimCeiling": "bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality",
   "identity": {
-    "sha256": "8177a6f76c92e0a86df3df01e44b95e6e74f22a500599cff76a151bab98fa152"
+    "sha256": "2d477a613b3f5c8b2ad0ffc3dd982e4d0a29db5e60bcf1dec0754284ed3fee2c"
   }
 }

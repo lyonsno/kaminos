@@ -5,10 +5,13 @@ export const NBODY_PACKING_RESTORATION_RESULT_SCHEMA =
   'kaminos.nbody-packing-all-neighbor-restoration-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
+const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
 const CONFIG_KEYS = Object.freeze([
+  'acceptancePolicy',
   'algorithm',
   'candidateEnumeration',
   'convergenceTolerance',
+  'familyRegressionTolerance',
   'finiteDifferenceStep',
   'iterationBudget',
   'meritNormOrder',
@@ -26,13 +29,27 @@ function validateConfig(config) {
   if (JSON.stringify(Object.keys(config || {}).sort()) !== JSON.stringify(CONFIG_KEYS)) {
     throw new Error(`restoration requestedConfig requires exact keys: ${CONFIG_KEYS.join(', ')}`);
   }
-  if (config.algorithm !== ALGORITHM) {
-    throw new Error(`restoration algorithm must be ${ALGORITHM}`);
+  const algorithmByPolicy = {
+    'scalar-merit':ALGORITHM,
+    'family-pareto-no-resurrection':FAMILY_FILTER_ALGORITHM,
+  };
+  if (!Object.hasOwn(algorithmByPolicy, config.acceptancePolicy)) {
+    throw new Error('restoration acceptancePolicy is unsupported');
+  }
+  if (config.algorithm !== algorithmByPolicy[config.acceptancePolicy]) {
+    throw new Error(
+      `restoration algorithm must match acceptancePolicy ${config.acceptancePolicy}`,
+    );
   }
   if (!['canonical', 'reverse'].includes(config.candidateEnumeration)) {
     throw new Error('restoration candidateEnumeration must be canonical or reverse');
   }
-  for (const key of ['convergenceTolerance', 'finiteDifferenceStep', 'violationWeight']) {
+  for (const key of [
+    'convergenceTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'violationWeight',
+  ]) {
     if (!Number.isFinite(config[key]) || config[key] <= 0) {
       throw new Error(`restoration ${key} must be positive and finite`);
     }
@@ -85,6 +102,24 @@ function hardResidualComponents(state) {
     state.metrics.endpointDrift,
     state.metrics.maximumRelativeVolumeError,
   ];
+}
+
+const CONSTRAINT_FAMILY_METRIC_KEYS = Object.freeze([
+  'pairwisePenetration',
+  'skeletalPenetration',
+  'compartmentEscape',
+]);
+
+function constraintFamilyMetrics(receipt) {
+  return Object.fromEntries(
+    CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, receipt.metrics[key]]),
+  );
+}
+
+function familyRegressions(before, candidate, tolerance) {
+  return CONSTRAINT_FAMILY_METRIC_KEYS.filter(
+    key => candidate.metrics[key] > before.metrics[key] + tolerance,
+  );
 }
 
 function stateReceipt(state, config) {
@@ -164,7 +199,31 @@ function solveEnumeration(problem, startVector, config) {
         finiteDifferenceSpan;
     }
     const gradientNorm = Math.hypot(...gradient);
-    if (!(gradientNorm > 0) || !Number.isFinite(gradientNorm)) break;
+    if (!(gradientNorm > 0) || !Number.isFinite(gradientNorm)) {
+      workRows.push({
+        iteration,
+        accepted:false,
+        acceptedTrustRegionRadius:null,
+        terminalReason:'zero-or-nonfinite-merit-gradient',
+        gradientNorm:Number.isFinite(gradientNorm) ? rounded(gradientNorm) : null,
+        directionNonzeroCoordinateCount:0,
+        allConstraintRowCount:current.rowCount,
+        violatedConstraintKeys:[...current.violatedConstraintKeys],
+        violatedKinds:[...current.violatedKinds],
+        before:{
+          maximumPhysicalResidual:current.maximumPhysicalResidual,
+          merit:current.merit,
+          violationEnergy:current.violationEnergy,
+        },
+        after:{
+          maximumPhysicalResidual:current.maximumPhysicalResidual,
+          merit:current.merit,
+          violationEnergy:current.violationEnergy,
+        },
+        candidateReceipts:[],
+      });
+      break;
+    }
     const direction = gradient.map(value => -value / gradientNorm);
     const enumeratedRadii = config.candidateEnumeration === 'canonical'
       ? [...config.trustRegionRadii]
@@ -179,17 +238,85 @@ function solveEnumeration(problem, startVector, config) {
       return { radius, state, receipt:stateReceipt(state, config) };
     });
     candidates.sort((left, right) => compareReceipts(left.receipt, right.receipt));
-    const accepted = candidates.find(candidate =>
-      candidate.receipt.maximumPhysicalResidual <
-        current.maximumPhysicalResidual - 1e-12 &&
-      candidate.receipt.merit < current.merit - 1e-15);
-    if (!accepted) break;
+    const accepted = candidates.find(candidate => {
+      const improvesResidual = candidate.receipt.maximumPhysicalResidual <
+        current.maximumPhysicalResidual - 1e-12;
+      const improvesMerit = candidate.receipt.merit < current.merit - 1e-15;
+      const passesFamilyFilter = config.acceptancePolicy === 'scalar-merit' ||
+        familyRegressions(
+          current,
+          candidate.receipt,
+          config.familyRegressionTolerance,
+        ).length === 0;
+      return improvesResidual && improvesMerit && passesFamilyFilter;
+    });
     const before = structuredClone(current);
+    const candidateReceipts = [...candidates]
+      .sort((left, right) => right.radius - left.radius)
+      .map(candidate => {
+        const improvesResidual = candidate.receipt.maximumPhysicalResidual <
+          before.maximumPhysicalResidual - 1e-12;
+        const improvesMerit = candidate.receipt.merit < before.merit - 1e-15;
+        const regressedFamilies = familyRegressions(
+          before,
+          candidate.receipt,
+          config.familyRegressionTolerance,
+        );
+        return {
+          radius:candidate.radius,
+          vector:[...candidate.receipt.vector],
+          maximumPhysicalResidual:candidate.receipt.maximumPhysicalResidual,
+          merit:candidate.receipt.merit,
+          violationEnergy:candidate.receipt.violationEnergy,
+          constraintFamilies:constraintFamilyMetrics(candidate.receipt),
+          regressedFamilies,
+          selected:candidate === accepted,
+          rejectionReason:candidate === accepted
+            ? null
+            : config.acceptancePolicy === 'family-pareto-no-resurrection' &&
+                regressedFamilies.length > 0
+              ? 'constraint-family-regression'
+            : !improvesResidual
+              ? 'non-improving-physical-residual'
+              : !improvesMerit
+                ? 'non-improving-merit'
+                : 'higher-ranked-admissible-candidate',
+        };
+      });
+    if (!accepted) {
+      workRows.push({
+        iteration,
+        accepted:false,
+        acceptedTrustRegionRadius:null,
+        terminalReason:'no-admissible-trust-region-candidate',
+        gradientNorm:rounded(gradientNorm),
+        directionNonzeroCoordinateCount:direction.filter(
+          value => Math.abs(value) > 1e-12,
+        ).length,
+        allConstraintRowCount:before.rowCount,
+        violatedConstraintKeys:[...before.violatedConstraintKeys],
+        violatedKinds:[...before.violatedKinds],
+        before:{
+          maximumPhysicalResidual:before.maximumPhysicalResidual,
+          merit:before.merit,
+          violationEnergy:before.violationEnergy,
+        },
+        after:{
+          maximumPhysicalResidual:before.maximumPhysicalResidual,
+          merit:before.merit,
+          violationEnergy:before.violationEnergy,
+        },
+        candidateReceipts,
+      });
+      break;
+    }
     currentState = accepted.state;
     current = accepted.receipt;
     workRows.push({
       iteration,
+      accepted:true,
       acceptedTrustRegionRadius:accepted.radius,
+      terminalReason:null,
       gradientNorm:rounded(gradientNorm),
       directionNonzeroCoordinateCount:direction.filter(value => Math.abs(value) > 1e-12).length,
       allConstraintRowCount:before.rowCount,
@@ -205,15 +332,22 @@ function solveEnumeration(problem, startVector, config) {
         merit:current.merit,
         violationEnergy:current.violationEnergy,
       },
+      candidateReceipts,
     });
   }
+  const acceptedIterations = workRows.filter(row => row.accepted).length;
   return {
     start,
     selected:{
       ...structuredClone(current),
       muscles:structuredClone(currentState.muscles),
     },
-    work:{ iterations:workRows.length, evaluationCount, rows:workRows },
+    work:{
+      iterations:acceptedIterations,
+      attempts:workRows.length,
+      evaluationCount,
+      rows:workRows,
+    },
   };
 }
 
@@ -227,11 +361,18 @@ function equivalenceRow(enumeration, result) {
   };
 }
 
-export function createNBodyAllNeighborRestorationConfig() {
+export function createNBodyAllNeighborRestorationConfig({
+  acceptancePolicy = 'scalar-merit',
+} = {}) {
+  const algorithm = acceptancePolicy === 'family-pareto-no-resurrection'
+    ? FAMILY_FILTER_ALGORITHM
+    : ALGORITHM;
   return {
-    algorithm:ALGORITHM,
+    acceptancePolicy,
+    algorithm,
     candidateEnumeration:'canonical',
     convergenceTolerance:1e-7,
+    familyRegressionTolerance:1e-12,
     finiteDifferenceStep:1e-5,
     iterationBudget:1,
     meritNormOrder:8,
@@ -267,12 +408,20 @@ export function solveNBodyAllNeighborRestoration({
   const status = primary.selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance
     ? 'converged-all-neighbor-restoration'
     : primary.selected.maximumPhysicalResidual < primary.start.maximumPhysicalResidual - 1e-12
-      ? 'restoration-floor-improved'
-      : 'stalled-all-neighbor-restoration';
+      ? requestedConfig.acceptancePolicy === 'family-pareto-no-resurrection'
+        ? 'family-filter-floor-improved'
+        : 'restoration-floor-improved'
+      : requestedConfig.acceptancePolicy === 'family-pareto-no-resurrection'
+        ? 'stalled-family-filter-restoration'
+        : 'stalled-all-neighbor-restoration';
   const core = {
     schema:NBODY_PACKING_RESTORATION_RESULT_SCHEMA,
     status,
-    route:{ requested:ALGORITHM, effective:ALGORITHM, fallbackUsed:false },
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
     source:{ problemSha256:problem.identity.sha256 },
     config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
     mechanism: {
@@ -280,6 +429,7 @@ export function solveNBodyAllNeighborRestoration({
       objective:'p8-hard-residual-plus-weighted-all-row-violation-energy',
       trustRegionPolicy:'bounded-simultaneous-all-coordinate-line-search',
       constraintKinds:['pairwise-clearance', 'skeletal-clearance', 'compartment-clearance'],
+      acceptancePolicy:requestedConfig.acceptancePolicy,
       oracleTargetCoordinatesConsumed:false,
       contactGraphRowsConsumed:false,
       carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
@@ -297,8 +447,9 @@ export function solveNBodyAllNeighborRestoration({
         equivalenceRow(alternateConfig.candidateEnumeration, alternate),
       ],
     },
-    claimCeiling:
-      'bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality',
+    claimCeiling:requestedConfig.acceptancePolicy === 'family-pareto-no-resurrection'
+      ? 'bounded-severity-0.32-no-family-regression-filter-not-global-feasibility-or-optimality'
+      : 'bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }
