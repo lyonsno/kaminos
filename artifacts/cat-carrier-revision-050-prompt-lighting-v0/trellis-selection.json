@@ -1,0 +1,41 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-prompt-lighting.trellis-selection.v0",
+  "selectionBasis": "Five visually admitted FLUX outputs answer three current reconstruction questions: whether the minimal skin basin survives in 3D across two seeds, whether literal thick slab construction repairs the weak stone cast, and whether low-shadow versus high-shadow lighting changes Trellis geometry against the existing neutral dragon control.",
+  "sourceResultLedger": "result-ledger.json",
+  "sourceResultLedgerSha256": "5a856268345dd36d5a83cbc26fab7db6bc4b62a1c3c0864d6d875a8078f30265",
+  "route": {
+    "jobType": "trellis2mlx_fast",
+    "seed": 42,
+    "steps": 6,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "candidates": [
+    {
+      "cellId": "generic-04-seed80301",
+      "role": "minimal-biological-completion-seed-a",
+      "visualBasis": "Five-word skin operation preserves the carrier while resolving a coherent living quadruped."
+    },
+    {
+      "cellId": "generic-04-seed80302",
+      "role": "minimal-biological-completion-seed-b",
+      "visualBasis": "Second seed independently reaches the same source-led biological basin."
+    },
+    {
+      "cellId": "stone-thick-overlapping-slabs-seed80301",
+      "role": "literal-three-dimensional-stone-construction",
+      "visualBasis": "Thick separated overlapping slabs replace the earlier crack-led stone ambiguity."
+    },
+    {
+      "cellId": "dragon-lighting-01-seed80301",
+      "role": "low-shadow-lighting-treatment",
+      "visualBasis": "Even diffuse light retains the dragon basin while exposing structure with minimal cast shadow."
+    },
+    {
+      "cellId": "dragon-lighting-02-seed80301",
+      "role": "high-shadow-lighting-treatment",
+      "visualBasis": "Raking light retains the dragon basin while introducing deliberate high-contrast shape ambiguity."
+    }
+  ],
+  "claimCeiling": "These five authenticated images reconstructed through the local trellis2mlx_fast route only; no general lighting, topology, riggability, arbitrary-image, production, or registration claim."
+}
