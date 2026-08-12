@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.trellis-selection.v0",
+  "selectionBasis": "One visually inspected, structurally faithful revision-048 result per distinct successful surface mechanism. Explicit-cat and open-creature restatements are retained in Flux evidence but not reconstructed because they add no new elaboration mechanism.",
+  "route": {
+    "jobType": "trellis2mlx_fast",
+    "steps": 6,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "candidates": [
+    {
+      "cellId": "revision-048-dragon-seed80301",
+      "role": "scaled-anatomical-elaboration",
+      "visualBasis": "Strong head, trunk, tail, stance, and rear-leg retention with legible scales and horns."
+    },
+    {
+      "cellId": "revision-048-golem-seed80301",
+      "role": "rigid-segmented-surface",
+      "visualBasis": "Cleanest morphology transfer; stone plates make rigid component reconstruction observable."
+    },
+    {
+      "cellId": "revision-048-phantom-seed80302",
+      "role": "translucent-nonrigid-surface",
+      "visualBasis": "Carrier persists through a radically translucent completion with strong internal and edge cues."
+    },
+    {
+      "cellId": "revision-048-maquette-seed80301",
+      "role": "neutral-finished-completion",
+      "visualBasis": "Most finished neutral completion while retaining authored proportions and stance."
+    },
+    {
+      "cellId": "revision-048-skin-seed80302",
+      "role": "continuous-skin",
+      "visualBasis": "Clean continuous skin completion with strong source silhouette and no distracting surface marks."
+    },
+    {
+      "cellId": "revision-048-fur-seed80302",
+      "role": "continuous-fur",
+      "visualBasis": "Best compromise between dense coat, legible face, and carrier proportion retention."
+    }
+  ]
+}
