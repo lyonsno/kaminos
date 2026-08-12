@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -280,7 +280,7 @@ export function renderOverlappingAnisotropicTissueControlSvg(assay) {
 `;
 }
 
-export function renderOverlappingAnisotropicTissueInteractionSvg(assay) {
+export function renderOverlappingAnisotropicTissueInteractionSvg(assay, generationId = null) {
   if (assay?.schema !== 'kaminos.overlapping-anisotropic-interaction-law-result.v0'
     || assay.status !== 'completed'
     || assay.evidenceVerdict?.passed !== true
@@ -362,9 +362,61 @@ export function renderOverlappingAnisotropicTissueInteractionSvg(assay) {
   ${rowsSvg}
   <text x="55" y="1515" class="sub">source assay ${escapeXml(assay.sourceAssayHash)} · independent controls ${escapeXml(assay.independentControlsHash)}</text>
   <text x="55" y="1538" class="sub">lowest RMSE ${escapeXml(assay.verdict.bestCandidateId)} · admitted ${escapeXml(assay.verdict.admittedCandidateId ?? 'none')} · ${escapeXml(assay.verdict.inference)}</text>
-  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · one partly synthetic fitted fixture only</text>
+  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · generation ${escapeXml(generationId ?? 'unbound')} · one partly synthetic fitted fixture only</text>
 </svg>
 `;
+}
+
+export function renderInteractionFailureTombstone({ generationId, failurePhase, error }) {
+  const errorText = error instanceof Error ? error.message : String(error);
+  const errorLines = Array.from(
+    { length: Math.ceil(errorText.length / 72) },
+    (_, index) => errorText.slice(index * 72, (index + 1) * 72),
+  ).slice(0, 3);
+  const errorSvg = errorLines.map((line, index) => (
+    `<text x="55" y="${245 + index * 30}" class="error">${escapeXml(line)}</text>`
+  )).join('\n  ');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <rect width="100%" height="100%" fill="#180b0d"/>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fill: #f4d9dc; }
+    .heading { font-size: 34px; font-weight: 800; fill: #ff8f9b; }
+    .meta { font-size: 16px; }
+    .error { font-size: 14px; fill: #ffc1c8; }
+  </style>
+  <text x="55" y="82" class="heading">INTERACTION ASSAY FAILED</text>
+  <text x="55" y="145" class="meta">generation ${escapeXml(generationId)}</text>
+  <text x="55" y="185" class="meta">failure phase ${escapeXml(failurePhase)}</text>
+  ${errorSvg}
+  <text x="55" y="330" class="meta">No assay result or mesh product is admitted for this generation.</text>
+  <text x="55" y="370" class="meta">Consult report.json; prior successful sibling files are non-current.</text>
+</svg>
+`;
+}
+
+export async function writeInteractionFailureTombstones({
+  outDir,
+  generationId,
+  failurePhase,
+  error,
+}) {
+  const message = error instanceof Error ? error.message : String(error);
+  await Promise.all([
+    writeFile(join(outDir, 'assay.json'), `${JSON.stringify({
+      schema: 'kaminos.overlapping-anisotropic-interaction-law-result.v0',
+      status: 'failed',
+      generationId,
+      failurePhase,
+      error: message,
+      outputs: [],
+    }, null, 2)}\n`, 'utf8'),
+    writeFile(join(outDir, 'contact-sheet.svg'), renderInteractionFailureTombstone({
+      generationId,
+      failurePhase,
+      error: message,
+    }), 'utf8'),
+  ]);
 }
 
 export function renderRowDistinctAssaySvg(assay, target) {
@@ -778,6 +830,7 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
   requestedTargetPath = null,
   requestedDescriptorPath = null,
   requestedRouteId = OVERLAPPING_INTERACTION_ARTIFACT_ROUTE,
+  generationId = randomUUID(),
 } = {}) {
   if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('outDir is required');
   await mkdir(outDir, { recursive: true });
@@ -785,6 +838,7 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
   const report = {
     schema: 'kaminos.overlapping-anisotropic-interaction-law-run-report.v0',
     status: 'running',
+    generationId,
     requestedRouteId,
     effectiveRouteId: null,
     effectiveCompilerId: null,
@@ -840,6 +894,7 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
 
     phase = 'artifact-write';
     const serializedAssay = structuredClone(assay);
+    serializedAssay.generationId = generationId;
     const meshRef = (relativePath) => ({ encoding: 'obj', outputRef: relativePath });
     for (const entry of serializedAssay.additive) {
       const amplitudeId = String(entry.amplitude).replace('.', 'p');
@@ -861,7 +916,7 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
     }
     const products = [
       ['assay.json', `${JSON.stringify(serializedAssay, null, 2)}\n`],
-      ['contact-sheet.svg', renderOverlappingAnisotropicTissueInteractionSvg(assay)],
+      ['contact-sheet.svg', renderOverlappingAnisotropicTissueInteractionSvg(assay, generationId)],
     ];
     for (const entry of assay.additive) {
       const amplitudeId = String(entry.amplitude).replace('.', 'p');
@@ -905,6 +960,12 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
     report.lastTrustworthyEvidence = report.outputs.length === 0
       ? 'output directory and failure report only; no primary artifact accepted'
       : `${report.outputs.length} artifact(s) reread and hashed before failure`;
+    await writeInteractionFailureTombstones({
+      outDir,
+      generationId,
+      failurePhase: phase,
+      error,
+    });
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     throw error;
   }

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import {
   OVERLAPPING_INTERACTION_ARTIFACT_ROUTE,
+  writeInteractionFailureTombstones,
   writeOverlappingAnisotropicTissueInteractionArtifacts,
 } from '../row-distinct-field-assay-artifacts.mjs';
 
@@ -37,6 +39,7 @@ async function main(argv) {
     : fallbackOut;
   const outDir = resolve(recoverableOut);
   await mkdir(outDir, { recursive: true });
+  const generationId = randomUUID();
   let phase = 'cli-parse';
   let requestedRouteId = null;
   try {
@@ -85,6 +88,7 @@ async function main(argv) {
       requestedTargetPath,
       requestedDescriptorPath,
       requestedRouteId,
+      generationId,
     });
     process.stdout.write(`${JSON.stringify({
       status: result.report.status,
@@ -104,16 +108,28 @@ async function main(argv) {
     })}\n`);
   } catch (error) {
     if (phase === 'cli-parse' || phase === 'input-read') {
-      await writeFile(join(outDir, 'report.json'), `${JSON.stringify({
+      const failedReport = {
         schema: 'kaminos.overlapping-anisotropic-interaction-law-run-report.v0',
         status: 'failed',
+        generationId,
         failurePhase: phase,
         requestedRouteId,
         effectiveRouteId: null,
         outputs: [],
         error: error instanceof Error ? error.message : String(error),
         lastTrustworthyEvidence: 'output directory and failure report only; no primary artifact accepted',
-      }, null, 2)}\n`, 'utf8');
+      };
+      await writeInteractionFailureTombstones({
+        outDir,
+        generationId,
+        failurePhase: phase,
+        error,
+      });
+      await writeFile(
+        join(outDir, 'report.json'),
+        `${JSON.stringify(failedReport, null, 2)}\n`,
+        'utf8',
+      );
     }
     throw error;
   }

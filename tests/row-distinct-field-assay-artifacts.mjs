@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -16,6 +19,11 @@ import { buildRowDistinctScalarAnisotropicAssay } from '../row-distinct-field-as
 const assayCard = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-scalar-anisotropic-assay.v0.json', import.meta.url),
   'utf8',
+));
+const execFileAsync = promisify(execFile);
+const interactionRunnerPath = fileURLToPath(new URL(
+  '../scripts/run-overlapping-anisotropic-tissue-interaction-assay.mjs',
+  import.meta.url,
 ));
 const target = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-hindquarter-target.v0.json', import.meta.url),
@@ -334,6 +342,7 @@ test('interaction writer emits every signed candidate as hashed 3D and 2D eviden
       frozenTarget: structuredClone(target),
     });
     assert.equal(result.report.status, 'completed');
+    assert.match(result.report.generationId, /^[0-9a-f-]{36}$/);
     assert.equal(result.report.evidencePassed, true);
     assert.equal(result.report.hypothesisPassed, false);
     assert.equal(result.report.conclusive, true);
@@ -343,6 +352,7 @@ test('interaction writer emits every signed candidate as hashed 3D and 2D eviden
     ).length, 54);
     assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
     const serialized = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    assert.equal(serialized.generationId, result.report.generationId);
     assert.equal(serialized.candidates.length, overlapInteractionCard.candidates.length);
     assert.ok(serialized.candidates.every((candidate) => candidate.amplitudes.every(
       (entry) => entry.mesh.vertices === undefined && entry.mesh.outputRef,
@@ -353,6 +363,7 @@ test('interaction writer emits every signed candidate as hashed 3D and 2D eviden
     assert.match(svg, /normalized-product-subtractive-0\.5/);
     assert.match(svg, /normalized-product-additive-32/);
     assert.match(svg, /fit-only \/ quality fail/);
+    assert.match(svg, new RegExp(result.report.generationId));
     assert.doesNotMatch(svg, /normalized-product-additive-32[\s\S]{0,200}· PASS/);
     assert.match(svg, new RegExp(result.assay.assayHash));
   });
@@ -380,5 +391,85 @@ test('interaction card substitution fails before construction and leaves an hone
     assert.equal(report.failurePhase, 'input-validation');
     assert.equal(report.effectiveRouteId, rowDistinctArtifacts.OVERLAPPING_INTERACTION_ARTIFACT_ROUTE);
     assert.deepEqual(report.outputs, []);
+  });
+});
+
+test('failed interaction reruns replace stale success presentation with generation-matched tombstones', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    const argumentsFor = (overrides = {}) => ({
+      outDir,
+      interactionCard: structuredClone(overlapInteractionCard),
+      overlapCard: structuredClone(overlapCard),
+      overlapTarget: structuredClone(overlapTarget),
+      descriptor: structuredClone(overlapDescriptor),
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+      ...overrides,
+    });
+    const successful = await rowDistinctArtifacts
+      .writeOverlappingAnisotropicTissueInteractionArtifacts(argumentsFor());
+
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueInteractionArtifacts(
+        argumentsFor({ requestedRouteId: 'counterfeit-route' }),
+      ),
+      /requested route counterfeit-route is unavailable/,
+    );
+    const routeReport = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    const routeAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    const routeSvg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.equal(routeReport.status, 'failed');
+    assert.notEqual(routeReport.generationId, successful.report.generationId);
+    assert.equal(routeAssay.status, 'failed');
+    assert.equal(routeAssay.generationId, routeReport.generationId);
+    assert.match(routeSvg, /INTERACTION ASSAY FAILED/);
+    assert.match(routeSvg, new RegExp(routeReport.generationId));
+    assert.doesNotMatch(routeSvg, /normalized-product-additive-32/);
+
+    const counterfeit = structuredClone(overlapInteractionCard);
+    counterfeit.candidates.at(-1).coefficient = 31;
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueInteractionArtifacts(
+        argumentsFor({ interactionCard: counterfeit }),
+      ),
+      /overlap interaction card identity does not match authoritative assay/,
+    );
+    const cardReport = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    const cardAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    const cardSvg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.equal(cardReport.status, 'failed');
+    assert.notEqual(cardReport.generationId, routeReport.generationId);
+    assert.equal(cardAssay.generationId, cardReport.generationId);
+    assert.match(cardSvg, new RegExp(cardReport.generationId));
+    assert.doesNotMatch(cardSvg, /normalized-product-additive-32/);
+
+    await assert.rejects(
+      execFileAsync(process.execPath, [
+        interactionRunnerPath,
+        '--out', outDir,
+        '--interaction-card', join(outDir, 'missing-interaction-card.json'),
+      ]),
+      /ENOENT/,
+    );
+    const inputReport = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    const inputAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    const inputSvg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.equal(inputReport.status, 'failed');
+    assert.equal(inputReport.failurePhase, 'input-read');
+    assert.notEqual(inputReport.generationId, cardReport.generationId);
+    assert.equal(inputAssay.generationId, inputReport.generationId);
+    assert.match(inputSvg, /ENOENT/);
+    assert.match(inputSvg, new RegExp(inputReport.generationId));
+    assert.doesNotMatch(inputSvg, /normalized-product-additive-32/);
+
+    const restored = await rowDistinctArtifacts
+      .writeOverlappingAnisotropicTissueInteractionArtifacts(argumentsFor());
+    const restoredAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    const restoredSvg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.equal(restored.report.status, 'completed');
+    assert.equal(restoredAssay.generationId, restored.report.generationId);
+    assert.match(restoredSvg, new RegExp(restored.report.generationId));
+    assert.match(restoredSvg, /normalized-product-additive-32/);
   });
 });
