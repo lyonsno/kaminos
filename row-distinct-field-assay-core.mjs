@@ -6,6 +6,8 @@ export const TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA =
   'kaminos.target-sdf-full-surface-sweep-result.v0';
 export const OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA =
   'kaminos.overlapping-anisotropic-tissue-control-result.v0';
+export const OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID =
+  'overlapping-anisotropic-tissue-field-v0';
 
 const ASSAY_CARD_SCHEMA = 'kaminos.row-distinct-scalar-anisotropic-assay.v0';
 const TARGET_SCHEMA = 'kaminos.row-distinct-boundary-response-target.v0';
@@ -967,6 +969,17 @@ function validateOverlapInputs({
       !== 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json') {
     throw new Error('overlapping tissue source references do not match the closed assay');
   }
+  if (overlapCard.compilerId !== OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID) {
+    throw new Error('overlap compiler identity does not match executed implementation');
+  }
+  if (overlapTarget.id !== overlapCard.targetIdentity?.id
+    || hashValue(overlapTarget) !== overlapCard.targetIdentity?.sha256) {
+    throw new Error('overlap target identity does not match closed fixture');
+  }
+  if (descriptor.id !== overlapCard.descriptorIdentity?.id
+    || hashValue(descriptor) !== overlapCard.descriptorIdentity?.sha256) {
+    throw new Error('overlap descriptor identity does not match closed fixture');
+  }
   const tissueIds = descriptor.tissues?.map((tissue) => tissue.id) ?? [];
   if (tissueIds.length !== 2
     || new Set(tissueIds).size !== 2
@@ -1301,7 +1314,7 @@ export function buildOverlappingAnisotropicTissueControlAssay({
       targetTissueId: control.targetTissueId,
       targetStateId: control.targetStateId,
       requestedCompilerId: overlapCard.compilerId,
-      effectiveCompilerId: overlapCard.compilerId,
+      effectiveCompilerId: OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID,
       requestedExtractorId: overlapCard.extractorId,
       effectiveExtractorId: overlapCard.extractorId,
       amplitudes: overlapCard.amplitudes.map((amplitude) => overlapControlAmplitude({
@@ -1447,11 +1460,19 @@ export function buildOverlappingAnisotropicTissueControlAssay({
     promotion: overlapCard.promotion,
     targetId: overlapTarget.id,
     targetHash: hashValue(overlapTarget),
+    requestedTargetRef: overlapCard.targetRef,
+    effectiveTargetId: overlapTarget.id,
+    effectiveTargetHash: hashValue(overlapTarget),
     descriptorId: descriptor.id,
     descriptorHash: hashValue(descriptor),
+    requestedDescriptorRef: overlapCard.descriptorRef,
+    effectiveDescriptorId: descriptor.id,
+    effectiveDescriptorHash: hashValue(descriptor),
     overlapCardId: overlapCard.id,
     overlapCardHash: hashValue(overlapCard),
-    compilerId: overlapCard.compilerId,
+    compilerId: OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID,
+    requestedCompilerId: overlapCard.compilerId,
+    effectiveCompilerId: OVERLAPPING_ANISOTROPIC_TISSUE_COMPILER_ID,
     extractorId: overlapCard.extractorId,
     grid: structuredClone(overlapCard.grid),
     sectionPlanes: structuredClone(overlapCard.sectionPlanes),

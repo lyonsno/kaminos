@@ -292,6 +292,12 @@ test('overlapping anisotropic assay perturbs muscle and fat independently in 3D'
   assert.equal(assay.frozenScalarControl.sourceAssayHash, overlapCard.frozenScalarControl.sourceAssayHash);
   assert.equal(assay.frozenScalarControl.compilerId, 'scalar-metaball-sdf-v0');
   assert.equal(assay.frozenScalarControl.reoptimizedForOverlapAssay, false);
+  assert.equal(assay.requestedTargetRef, overlapCard.targetRef);
+  assert.equal(assay.effectiveTargetId, overlapCard.targetIdentity.id);
+  assert.equal(assay.effectiveTargetHash, overlapCard.targetIdentity.sha256);
+  assert.equal(assay.requestedDescriptorRef, overlapCard.descriptorRef);
+  assert.equal(assay.effectiveDescriptorId, overlapCard.descriptorIdentity.id);
+  assert.equal(assay.effectiveDescriptorHash, overlapCard.descriptorIdentity.sha256);
   assert.equal(assay.evidenceVerdict.passed, true);
   assert.equal(assay.hypothesisVerdict.passed, false);
   assert.deepEqual(assay.hypothesisVerdict.failures, [{
@@ -326,6 +332,47 @@ test('overlapping assay rejects frozen scalar substitution and tissue identity c
       frozenAssayCard: structuredClone(assayCard),
       frozenTarget: structuredClone(target),
     }),
-    /distinct muscle and fat tissue identities are required/,
+    /overlap descriptor identity does not match closed fixture/,
+  );
+});
+
+test('overlapping assay rejects compiler relabeling and closed fixture substitution', () => {
+  const buildOverlap = ({ card = overlapCard, targetPayload = overlapTarget, descriptorPayload = overlapDescriptor } = {}) => (
+    rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay({
+      overlapCard: structuredClone(card),
+      overlapTarget: structuredClone(targetPayload),
+      descriptor: structuredClone(descriptorPayload),
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+    })
+  );
+
+  const compilerRelabel = structuredClone(overlapCard);
+  compilerRelabel.compilerId = 'scalar-metaball-sdf-v0';
+  assert.throws(
+    () => buildOverlap({ card: compilerRelabel }),
+    /overlap compiler identity does not match executed implementation/,
+  );
+
+  const targetRelabel = structuredClone(overlapTarget);
+  targetRelabel.id = 'substituted-target';
+  assert.throws(
+    () => buildOverlap({ targetPayload: targetRelabel }),
+    /overlap target identity does not match closed fixture/,
+  );
+
+  const descriptorRelabel = structuredClone(overlapDescriptor);
+  descriptorRelabel.id = 'substituted-descriptor';
+  assert.throws(
+    () => buildOverlap({ descriptorPayload: descriptorRelabel }),
+    /overlap descriptor identity does not match closed fixture/,
+  );
+
+  const descriptorPayloadSwap = structuredClone(overlapDescriptor);
+  descriptorPayloadSwap.tissues[0].strength += 0.01;
+  assert.throws(
+    () => buildOverlap({ descriptorPayload: descriptorPayloadSwap }),
+    /overlap descriptor identity does not match closed fixture/,
   );
 });

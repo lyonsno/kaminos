@@ -7,18 +7,21 @@
   "effectiveCompilerId": "overlapping-anisotropic-tissue-field-v0",
   "requestedExtractorId": "marching-tetrahedra-zero-isosurface-v0",
   "effectiveExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "requestedOverlapCardPath": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json",
+  "requestedTargetPath": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "requestedDescriptorPath": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
   "evidencePrimary": "full-surface-3d",
   "sectionSource": "extracted-mesh-triangle-plane-intersections",
   "outputs": [
     {
       "relativePath": "assay.json",
-      "byteLength": 3872532,
-      "sha256": "ea94db9ae51beaa4da5fea7ec1596bd692c1cca299baa8b38c8583a98084a755"
+      "byteLength": 3873219,
+      "sha256": "89710fc0a003eb31a9b9ae3223cd82c507910ffa5d68631449f473c81e2782f8"
     },
     {
       "relativePath": "contact-sheet.svg",
       "byteLength": 2671032,
-      "sha256": "06cbe1d29d66f5d8097c8df6c9b5b2997c320e9b404930a33fd64075701c27a8"
+      "sha256": "4700b6fbdc6403cb54d55fed3227d2410de66c9f4c2e74d8f2403e4dfa0dac26"
     },
     {
       "relativePath": "baseline-overlapping-anisotropic.obj",
@@ -121,10 +124,17 @@
       "sha256": "fe65b36e768838691e53b898aeee6eec22fb90d550fc5b7562a0227cf8ac21ab"
     }
   ],
-  "assayHash": "38ecc78c90e3cda9a104a1be7b3b09596658854486d8b2b58ecd39fd8ac0d971",
+  "assayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
   "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
   "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
-  "overlapCardHash": "0e47c865c691ecd538565d2458e0621d9709240df448ed9d32069a19ec6f1165",
+  "overlapCardHash": "afd862ca3012267e9fad0bf22153f0bf56503ea0f8df960771ca777b9a6527da",
+  "effectiveOverlapCardId": "bounded-hindquarter-overlapping-anisotropic-tissue-control-v0",
+  "requestedTargetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "effectiveTargetId": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
+  "effectiveTargetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
+  "requestedDescriptorRef": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
+  "effectiveDescriptorId": "bounded-hindquarter-muscle-fat-overlap-v0",
+  "effectiveDescriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
   "evidencePassed": true,
   "hypothesisPassed": false,
   "failurePhase": null,

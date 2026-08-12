@@ -513,6 +513,9 @@ export async function writeOverlappingAnisotropicTissueControlArtifacts({
   frozenSweepCard,
   frozenAssayCard,
   frozenTarget,
+  requestedOverlapCardPath = null,
+  requestedTargetPath = null,
+  requestedDescriptorPath = null,
   requestedRouteId = OVERLAPPING_TISSUE_ARTIFACT_ROUTE,
 } = {}) {
   if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('outDir is required');
@@ -527,6 +530,9 @@ export async function writeOverlappingAnisotropicTissueControlArtifacts({
     effectiveCompilerId: null,
     requestedExtractorId: overlapCard?.extractorId ?? null,
     effectiveExtractorId: null,
+    requestedOverlapCardPath,
+    requestedTargetPath,
+    requestedDescriptorPath,
     evidencePrimary: 'full-surface-3d',
     sectionSource: 'extracted-mesh-triangle-plane-intersections',
     outputs: [],
@@ -552,7 +558,14 @@ export async function writeOverlappingAnisotropicTissueControlArtifacts({
     report.targetHash = assay.targetHash;
     report.descriptorHash = assay.descriptorHash;
     report.overlapCardHash = assay.overlapCardHash;
-    report.effectiveCompilerId = assay.compilerId;
+    report.effectiveOverlapCardId = assay.overlapCardId;
+    report.requestedTargetRef = assay.requestedTargetRef;
+    report.effectiveTargetId = assay.effectiveTargetId;
+    report.effectiveTargetHash = assay.effectiveTargetHash;
+    report.requestedDescriptorRef = assay.requestedDescriptorRef;
+    report.effectiveDescriptorId = assay.effectiveDescriptorId;
+    report.effectiveDescriptorHash = assay.effectiveDescriptorHash;
+    report.effectiveCompilerId = assay.effectiveCompilerId;
     report.effectiveExtractorId = assay.extractorId;
     report.evidencePassed = assay.evidenceVerdict.passed;
     report.hypothesisPassed = assay.hypothesisVerdict.passed;

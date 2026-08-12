@@ -94,6 +94,6 @@
         <text x="991" y="1473" class="metric">volume 0.951 · surface mixture muscle 0.195 / fat 0.805</text>
       </g>
   <text x="55" y="1515" class="sub">descriptor 45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4 · target f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6</text>
-  <text x="55" y="1538" class="sub">card 0e47c865c691ecd538565d2458e0621d9709240df448ed9d32069a19ec6f1165 · extractor marching-tetrahedra-zero-isosurface-v0</text>
-  <text x="55" y="1561" class="sub">assay 38ecc78c90e3cda9a104a1be7b3b09596658854486d8b2b58ecd39fd8ac0d971 · bounded synthetic evidence only; promotion none</text>
+  <text x="55" y="1538" class="sub">card afd862ca3012267e9fad0bf22153f0bf56503ea0f8df960771ca777b9a6527da · extractor marching-tetrahedra-zero-isosurface-v0</text>
+  <text x="55" y="1561" class="sub">assay eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66 · bounded synthetic evidence only; promotion none</text>
 </svg>

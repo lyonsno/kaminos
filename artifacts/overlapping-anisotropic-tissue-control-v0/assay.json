@@ -5,11 +5,19 @@
   "promotion": "none",
   "targetId": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
   "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
+  "requestedTargetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "effectiveTargetId": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
+  "effectiveTargetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
   "descriptorId": "bounded-hindquarter-muscle-fat-overlap-v0",
   "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
+  "requestedDescriptorRef": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
+  "effectiveDescriptorId": "bounded-hindquarter-muscle-fat-overlap-v0",
+  "effectiveDescriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
   "overlapCardId": "bounded-hindquarter-overlapping-anisotropic-tissue-control-v0",
-  "overlapCardHash": "0e47c865c691ecd538565d2458e0621d9709240df448ed9d32069a19ec6f1165",
+  "overlapCardHash": "afd862ca3012267e9fad0bf22153f0bf56503ea0f8df960771ca777b9a6527da",
   "compilerId": "overlapping-anisotropic-tissue-field-v0",
+  "requestedCompilerId": "overlapping-anisotropic-tissue-field-v0",
+  "effectiveCompilerId": "overlapping-anisotropic-tissue-field-v0",
   "extractorId": "marching-tetrahedra-zero-isosurface-v0",
   "grid": {
     "resolution": [
@@ -146214,5 +146222,5 @@
       }
     ]
   },
-  "assayHash": "38ecc78c90e3cda9a104a1be7b3b09596658854486d8b2b58ecd39fd8ac0d971"
+  "assayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66"
 }

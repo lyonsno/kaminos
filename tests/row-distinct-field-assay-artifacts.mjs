@@ -181,6 +181,15 @@ test('overlapping tissue writer emits hashed 3D products and mesh-derived 2D dia
     assert.equal(result.report.sectionSource, 'extracted-mesh-triangle-plane-intersections');
     assert.equal(result.report.requestedRouteId, rowDistinctArtifacts.OVERLAPPING_TISSUE_ARTIFACT_ROUTE);
     assert.equal(result.report.effectiveRouteId, rowDistinctArtifacts.OVERLAPPING_TISSUE_ARTIFACT_ROUTE);
+    assert.equal(result.report.requestedCompilerId, overlapCard.compilerId);
+    assert.equal(result.report.effectiveCompilerId, overlapCard.compilerId);
+    assert.equal(result.report.requestedTargetRef, overlapCard.targetRef);
+    assert.equal(result.report.effectiveTargetHash, overlapCard.targetIdentity.sha256);
+    assert.equal(result.report.requestedDescriptorRef, overlapCard.descriptorRef);
+    assert.equal(result.report.effectiveDescriptorHash, overlapCard.descriptorIdentity.sha256);
+    assert.equal(result.report.requestedOverlapCardPath, null);
+    assert.equal(result.report.requestedTargetPath, null);
+    assert.equal(result.report.requestedDescriptorPath, null);
     assert.ok(result.report.outputs.filter((output) => output.relativePath.endsWith('.obj')).length >= 13);
     assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
     const serializedAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
@@ -223,6 +232,31 @@ test('overlapping tissue route substitution leaves a phase-named failure report'
     assert.equal(report.status, 'failed');
     assert.equal(report.failurePhase, 'input-validation');
     assert.equal(report.effectiveRouteId, null);
+    assert.deepEqual(report.outputs, []);
+  });
+});
+
+test('overlapping tissue compiler relabel cannot produce an authoritative report', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    const relabeled = structuredClone(overlapCard);
+    relabeled.compilerId = 'scalar-metaball-sdf-v0';
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueControlArtifacts({
+        outDir,
+        overlapCard: relabeled,
+        overlapTarget: structuredClone(overlapTarget),
+        descriptor: structuredClone(overlapDescriptor),
+        frozenSweepCard: structuredClone(fullSurfaceCard),
+        frozenAssayCard: structuredClone(assayCard),
+        frozenTarget: structuredClone(target),
+      }),
+      /overlap compiler identity does not match executed implementation/,
+    );
+    const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'assay-build');
+    assert.equal(report.requestedCompilerId, 'scalar-metaball-sdf-v0');
+    assert.equal(report.effectiveCompilerId, null);
     assert.deepEqual(report.outputs, []);
   });
 });

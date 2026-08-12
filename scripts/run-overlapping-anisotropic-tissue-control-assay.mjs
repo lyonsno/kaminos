@@ -43,6 +43,12 @@ async function main(argv) {
     const args = options(argv);
     requestedRouteId = args.get('--route') ?? OVERLAPPING_TISSUE_ARTIFACT_ROUTE;
     phase = 'input-read';
+    const requestedOverlapCardPath = args.get('--overlap-card')
+      ?? 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json';
+    const requestedTargetPath = args.get('--overlap-target')
+      ?? 'fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json';
+    const requestedDescriptorPath = args.get('--descriptor')
+      ?? 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json';
     const [
       overlapCard,
       overlapTarget,
@@ -51,12 +57,9 @@ async function main(argv) {
       frozenAssayCard,
       frozenTarget,
     ] = await Promise.all([
-      readJson(args.get('--overlap-card')
-        ?? 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json'),
-      readJson(args.get('--overlap-target')
-        ?? 'fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json'),
-      readJson(args.get('--descriptor')
-        ?? 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json'),
+      readJson(requestedOverlapCardPath),
+      readJson(requestedTargetPath),
+      readJson(requestedDescriptorPath),
       readJson(args.get('--frozen-sweep-card')
         ?? 'fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json'),
       readJson(args.get('--frozen-card')
@@ -72,6 +75,9 @@ async function main(argv) {
       frozenSweepCard,
       frozenAssayCard,
       frozenTarget,
+      requestedOverlapCardPath,
+      requestedTargetPath,
+      requestedDescriptorPath,
       requestedRouteId,
     });
     process.stdout.write(`${JSON.stringify({
