@@ -20,6 +20,14 @@ const AUTHORITATIVE_OVERLAP_DESCRIPTOR_ID =
   'bounded-hindquarter-muscle-fat-overlap-v0';
 const AUTHORITATIVE_OVERLAP_DESCRIPTOR_HASH =
   '45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4';
+const OVERLAP_INTERACTION_CARD_SCHEMA =
+  'kaminos.overlapping-anisotropic-interaction-law-assay.v0';
+const AUTHORITATIVE_OVERLAP_INTERACTION_CARD_ID =
+  'bounded-hindquarter-overlap-interaction-law-v0';
+const AUTHORITATIVE_OVERLAP_INTERACTION_CARD_HASH =
+  '4d7c3095ee345f3524fff68a390b61338c6393259178e306a65cbbd3da4605ba';
+const AUTHORITATIVE_OVERLAP_SOURCE_ASSAY_HASH =
+  'eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66';
 
 const ASSAY_CARD_SCHEMA = 'kaminos.row-distinct-scalar-anisotropic-assay.v0';
 const TARGET_SCHEMA = 'kaminos.row-distinct-boundary-response-target.v0';
@@ -207,7 +215,7 @@ function contributionAt(point, primitive) {
   return primitive.strength * (1 - q) ** 2;
 }
 
-function createField(primitives, grid, extraction, isoValue = 0.22) {
+function createField(primitives, grid, extraction, isoValue = 0.22, interaction = null) {
   const [low, high] = grid.bounds.anterior;
   const step = (high - low) / (grid.resolution[2] - 1);
   const margin = step * extraction.longitudinalClosureCells;
@@ -221,10 +229,23 @@ function createField(primitives, grid, extraction, isoValue = 0.22) {
   return {
     primitives,
     evaluate(point) {
-      const contribution = primitives.reduce(
-        (sum, primitive) => sum + contributionAt(point, primitive),
-        0,
-      );
+      const componentTotals = new Map();
+      let contribution = 0;
+      for (const primitive of primitives) {
+        const value = contributionAt(point, primitive);
+        contribution += value;
+        if (primitive.componentId) {
+          componentTotals.set(
+            primitive.componentId,
+            (componentTotals.get(primitive.componentId) ?? 0) + value,
+          );
+        }
+      }
+      if (interaction?.law === 'signed-normalized-product-v0') {
+        const muscle = componentTotals.get('muscle') ?? 0;
+        const fat = componentTotals.get('fat') ?? 0;
+        contribution += interaction.coefficient * muscle * fat / Math.max(isoValue, 1e-12);
+      }
       return contribution * longitudinalWeight(point[2]) - isoValue;
     },
     contributions(point) {
@@ -234,6 +255,51 @@ function createField(primitives, grid, extraction, isoValue = 0.22) {
       })).filter((entry) => entry.value > 0);
     },
   };
+}
+
+export function validateOverlappingAnisotropicTissueInteractionCard(interactionCard) {
+  if (interactionCard?.schema !== OVERLAP_INTERACTION_CARD_SCHEMA
+    || interactionCard.id !== AUTHORITATIVE_OVERLAP_INTERACTION_CARD_ID
+    || hashValue(interactionCard) !== AUTHORITATIVE_OVERLAP_INTERACTION_CARD_HASH) {
+    throw new Error('overlap interaction card identity does not match authoritative assay');
+  }
+  if (interactionCard.sourceAssayHash !== AUTHORITATIVE_OVERLAP_SOURCE_ASSAY_HASH
+    || interactionCard.sourceCardRef
+      !== 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json'
+    || interactionCard.targetRef
+      !== 'fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json'
+    || interactionCard.descriptorRef
+      !== 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json') {
+    throw new Error('overlap interaction assay does not bind the admitted source surfaces');
+  }
+  if (interactionCard.baselineLaw?.id !== 'additive-field-sum-v0'
+    || interactionCard.candidates?.length !== 16
+    || interactionCard.candidates.some((candidate) => (
+      candidate.law !== 'signed-normalized-product-v0'
+      || !Number.isFinite(candidate.coefficient)
+      || candidate.coefficient === 0
+    ))) {
+    throw new Error('overlap interaction candidate family does not match the closed discriminator');
+  }
+  if (interactionCard.decision?.stressAmplitude !== 0.5
+    || interactionCard.decision.maximumCombinedFullSurfaceNormalizedRmse
+      !== 0.12
+    || interactionCard.decision.requireClosedSingleComponent !== true
+    || interactionCard.decision.requireIndependentControlAssayHashUnchanged !== true
+    || interactionCard.decision.requireConclusivePassOrObservedLimit !== true
+    || interactionCard.promotion !== 'none') {
+    throw new Error('overlap interaction decision predicate or promotion changed');
+  }
+}
+
+function validateOverlapInteractionCard(interactionCard, sourceAssay) {
+  validateOverlappingAnisotropicTissueInteractionCard(interactionCard);
+  if (sourceAssay.assayHash !== AUTHORITATIVE_OVERLAP_SOURCE_ASSAY_HASH
+    || interactionCard.sourceAssayHash !== sourceAssay.assayHash
+    || interactionCard.targetRef !== sourceAssay.requestedTargetRef
+    || interactionCard.descriptorRef !== sourceAssay.requestedDescriptorRef) {
+    throw new Error('overlap interaction assay source execution identity changed');
+  }
 }
 
 function interpolateIso(a, b, valueA, valueB) {
@@ -1513,6 +1579,244 @@ export function buildOverlappingAnisotropicTissueControlAssay({
     },
     evidenceVerdict: { passed: evidenceFailures.length === 0, failures: evidenceFailures },
     hypothesisVerdict: { passed: hypothesisFailures.length === 0, failures: hypothesisFailures },
+  };
+  return { ...result, assayHash: hashValue(result) };
+}
+
+function buildOverlapInteractionAmplitude({
+  amplitude,
+  candidate,
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  baselinePrimitivesForAssay,
+}) {
+  let perturbed = baselinePrimitivesForAssay;
+  for (const control of Object.values(overlapCard.controls)) {
+    perturbed = perturbOverlapPrimitives(perturbed, descriptor, control, amplitude).primitives;
+  }
+  const field = createField(
+    perturbed,
+    overlapCard.grid,
+    { longitudinalClosureCells: 2 },
+    descriptor.isoValue,
+    candidate,
+  );
+  const mesh = extractMesh(field, overlapCard.grid);
+  const referenceField = overlapReferenceField(
+    overlapTarget,
+    overlapCard.grid,
+    'combined',
+    amplitude,
+    overlapCard.referenceAmplitude,
+  );
+  const referenceMesh = extractMesh(referenceField, overlapCard.grid);
+  const fullSurface = fullSurfaceEvidence(mesh, referenceField, overlapTarget.normalizationSpan);
+  const referenceFullSurface = fullSurfaceEvidence(
+    referenceMesh,
+    referenceField,
+    overlapTarget.normalizationSpan,
+  );
+  return {
+    amplitude,
+    mesh,
+    topology: topologyEvidence(mesh),
+    fullSurface,
+    surfaceAreaRelativeError: Math.abs(fullSurface.area - referenceFullSurface.area)
+      / Math.max(referenceFullSurface.area, 1e-12),
+    volumeRelativeError: Math.abs(fullSurface.volume - referenceFullSurface.volume)
+      / Math.max(referenceFullSurface.volume, 1e-12),
+    surfaceIdentity: surfaceEvidence(field, mesh, 'mixture-weights'),
+    observations: observeBoundary(
+      field,
+      scaleOverlapTarget(
+        overlapTarget,
+        'combined',
+        amplitude,
+        overlapCard.referenceAmplitude,
+      ),
+      'perturbed',
+    ),
+    reference: {
+      mesh: referenceMesh,
+      topology: topologyEvidence(referenceMesh),
+      fullSurface: referenceFullSurface,
+    },
+    sections: overlapCard.sectionPlanes.map(
+      (anterior) => sliceMeshAtAnterior(mesh, anterior),
+    ),
+    referenceSections: overlapCard.sectionPlanes.map(
+      (anterior) => sliceMeshAtAnterior(referenceMesh, anterior),
+    ),
+  };
+}
+
+export function buildOverlappingAnisotropicTissueInteractionAssay({
+  interactionCard,
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  frozenSweepCard,
+  frozenAssayCard,
+  frozenTarget,
+} = {}) {
+  const sourceAssay = buildOverlappingAnisotropicTissueControlAssay({
+    overlapCard,
+    overlapTarget,
+    descriptor,
+    frozenSweepCard,
+    frozenAssayCard,
+    frozenTarget,
+  });
+  validateOverlapInteractionCard(interactionCard, sourceAssay);
+
+  const baselinePrimitivesForAssay = overlapBaselinePrimitives(overlapTarget, descriptor);
+  const additive = sourceAssay.combined.map((entry) => {
+    const referenceField = overlapReferenceField(
+      overlapTarget,
+      overlapCard.grid,
+      'combined',
+      entry.amplitude,
+      overlapCard.referenceAmplitude,
+    );
+    const referenceFullSurface = fullSurfaceEvidence(
+      entry.reference.mesh,
+      referenceField,
+      overlapTarget.normalizationSpan,
+    );
+    return {
+      ...entry,
+      surfaceAreaRelativeError: Math.abs(entry.fullSurface.area - referenceFullSurface.area)
+        / Math.max(referenceFullSurface.area, 1e-12),
+      volumeRelativeError: Math.abs(entry.fullSurface.volume - referenceFullSurface.volume)
+        / Math.max(referenceFullSurface.volume, 1e-12),
+      reference: {
+        ...entry.reference,
+        fullSurface: referenceFullSurface,
+      },
+    };
+  });
+  const candidates = interactionCard.candidates.map((candidate) => {
+    const amplitudes = overlapCard.amplitudes.map((amplitude) => (
+      buildOverlapInteractionAmplitude({
+        amplitude,
+        candidate,
+        overlapCard,
+        overlapTarget,
+        descriptor,
+        baselinePrimitivesForAssay,
+      })
+    ));
+    const stress = amplitudes.find(
+      (entry) => entry.amplitude === interactionCard.decision.stressAmplitude,
+    );
+    const topologyPass = amplitudes.every((entry) => (
+      entry.topology.closed && entry.topology.componentCount === 1
+    ));
+    const qualityPass = amplitudes.every((entry, index) => (
+      entry.topology.closed
+        && entry.topology.componentCount === 1
+        && entry.surfaceAreaRelativeError <= additive[index].surfaceAreaRelativeError
+        && entry.volumeRelativeError <= additive[index].volumeRelativeError
+    ));
+    const fitPass = stress.fullSurface.normalizedRmse
+      <= interactionCard.decision.maximumCombinedFullSurfaceNormalizedRmse;
+    const qualifies = topologyPass && qualityPass && fitPass;
+    return {
+      id: candidate.id,
+      law: candidate.law,
+      coefficient: candidate.coefficient,
+      amplitudes,
+      stress,
+      topologyPass,
+      qualityPass,
+      fitPass,
+      qualifies,
+    };
+  });
+  const additiveStress = additive.find(
+    (entry) => entry.amplitude === interactionCard.decision.stressAmplitude,
+  );
+  const rankedCandidates = [...candidates].sort(
+    (left, right) => left.stress.fullSurface.normalizedRmse
+      - right.stress.fullSurface.normalizedRmse,
+  );
+  const evidenceFailures = [];
+  for (const candidate of candidates) {
+    for (const entry of candidate.amplitudes) {
+      if (entry.topology.vertexCount === 0
+        || !Number.isFinite(entry.fullSurface.normalizedRmse)
+        || entry.reference.topology.vertexCount === 0) {
+        evidenceFailures.push({
+          code: 'interaction-candidate-evidence-invalid',
+          candidateId: candidate.id,
+          amplitude: entry.amplitude,
+        });
+      }
+    }
+  }
+  const passed = candidates.some((candidate) => candidate.qualifies);
+  const positiveCandidates = candidates
+    .filter((candidate) => candidate.coefficient > 0)
+    .sort((left, right) => left.coefficient - right.coefficient);
+  const positiveMinimumBracketed = positiveCandidates.some((candidate, index) => {
+    if (index === 0) return false;
+    const previous = positiveCandidates[index - 1];
+    return candidate.stress.topology.componentCount !== 1
+      || !candidate.stress.topology.closed
+      || candidate.stress.fullSurface.normalizedRmse
+        >= previous.stress.fullSurface.normalizedRmse;
+  });
+  const qualityFitIncompatibilityObserved = positiveCandidates.some(
+    (candidate) => candidate.qualityPass && !candidate.fitPass,
+  ) && positiveCandidates.some(
+    (candidate) => candidate.fitPass && !candidate.qualityPass,
+  );
+  const conclusive = passed || positiveMinimumBracketed || qualityFitIncompatibilityObserved;
+  const qualifyingCandidates = candidates.filter((candidate) => candidate.qualifies).sort(
+    (left, right) => left.stress.fullSurface.normalizedRmse
+      - right.stress.fullSurface.normalizedRmse,
+  );
+  const result = {
+    schema: 'kaminos.overlapping-anisotropic-interaction-law-result.v0',
+    status: 'completed',
+    claimCeiling: interactionCard.claimCeiling,
+    promotion: interactionCard.promotion,
+    interactionCardId: interactionCard.id,
+    interactionCardHash: hashValue(interactionCard),
+    sourceAssayHash: sourceAssay.assayHash,
+    independentControlsHash: hashValue(sourceAssay.controls),
+    targetHash: sourceAssay.targetHash,
+    descriptorHash: sourceAssay.descriptorHash,
+    overlapCardHash: sourceAssay.overlapCardHash,
+    effectiveCompilerId: sourceAssay.effectiveCompilerId,
+    extractorId: sourceAssay.extractorId,
+    grid: structuredClone(sourceAssay.grid),
+    sectionPlanes: structuredClone(sourceAssay.sectionPlanes),
+    amplitudes: structuredClone(sourceAssay.amplitudes),
+    frozenScalarControl: structuredClone(sourceAssay.frozenScalarControl),
+    additive,
+    additiveStress,
+    candidates,
+    evidenceVerdict: {
+      passed: evidenceFailures.length === 0,
+      failures: evidenceFailures,
+    },
+    verdict: {
+      passed,
+      conclusive,
+      positiveMinimumBracketed,
+      qualityFitIncompatibilityObserved,
+      improved: (rankedCandidates[0]?.stress.fullSurface.normalizedRmse ?? Infinity)
+        < additiveStress.fullSurface.normalizedRmse,
+      bestCandidateId: rankedCandidates[0]?.id ?? null,
+      admittedCandidateId: qualifyingCandidates[0]?.id ?? null,
+      inference: passed
+        ? 'missing-overlap-interaction-law-supported'
+        : conclusive
+          ? 'bounded-signed-product-family-failed-quality-fit-incompatibility'
+          : 'signed-product-family-inconclusive-range',
+    },
   };
   return { ...result, assayHash: hashValue(result) };
 }

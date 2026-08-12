@@ -1,0 +1,110 @@
+{
+  "schema": "kaminos.overlapping-anisotropic-interaction-law-assay.v0",
+  "id": "bounded-hindquarter-overlap-interaction-law-v0",
+  "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
+  "sourceCardRef": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json",
+  "targetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "descriptorRef": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
+  "baselineLaw": {
+    "id": "additive-field-sum-v0",
+    "formula": "muscle + fat"
+  },
+  "candidates": [
+    {
+      "id": "normalized-product-subtractive-0.5",
+      "law": "signed-normalized-product-v0",
+      "coefficient": -0.5
+    },
+    {
+      "id": "normalized-product-subtractive-0.25",
+      "law": "signed-normalized-product-v0",
+      "coefficient": -0.25
+    },
+    {
+      "id": "normalized-product-subtractive-0.125",
+      "law": "signed-normalized-product-v0",
+      "coefficient": -0.125
+    },
+    {
+      "id": "normalized-product-additive-0.125",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 0.125
+    },
+    {
+      "id": "normalized-product-additive-0.25",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 0.25
+    },
+    {
+      "id": "normalized-product-additive-0.5",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 0.5
+    },
+    {
+      "id": "normalized-product-additive-1",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 1.0
+    },
+    {
+      "id": "normalized-product-additive-2",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 2.0
+    },
+    {
+      "id": "normalized-product-additive-4",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 4.0
+    },
+    {
+      "id": "normalized-product-additive-8",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 8.0
+    },
+    {
+      "id": "normalized-product-additive-16",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 16.0
+    },
+    {
+      "id": "normalized-product-additive-24",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 24.0
+    },
+    {
+      "id": "normalized-product-additive-28",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 28.0
+    },
+    {
+      "id": "normalized-product-additive-30",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 30.0
+    },
+    {
+      "id": "normalized-product-additive-31",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 31.0
+    },
+    {
+      "id": "normalized-product-additive-32",
+      "law": "signed-normalized-product-v0",
+      "coefficient": 32.0
+    }
+  ],
+  "decision": {
+    "stressAmplitude": 0.5,
+    "maximumCombinedFullSurfaceNormalizedRmse": 0.12,
+    "requireClosedSingleComponent": true,
+    "requireIndependentControlAssayHashUnchanged": true,
+    "requireConclusivePassOrObservedLimit": true
+  },
+  "claimCeiling": "One bounded synthetic fixture may distinguish missing overlap interaction math from failure of this small coupling family only.",
+  "counterfeits": [
+    "candidate-tunes-the-independent-control-rows",
+    "candidate-changes-target-descriptor-grid-extractor-camera-or-threshold",
+    "best-only-output-hides-failed-candidates-or-one-coupling-sign",
+    "topology-break-presented-as-fit-improvement",
+    "source-assay-or-frozen-scalar-substitution"
+  ],
+  "promotion": "none"
+}

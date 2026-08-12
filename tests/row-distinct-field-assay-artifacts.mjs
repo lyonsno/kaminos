@@ -37,6 +37,10 @@ const overlapDescriptor = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json', import.meta.url),
   'utf8',
 ));
+const overlapInteractionCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-interaction-law-assay.v0.json', import.meta.url),
+  'utf8',
+));
 
 async function withTemporaryDirectory(run) {
   const path = await mkdtemp(join(tmpdir(), 'row-distinct-assay-'));
@@ -308,6 +312,73 @@ test('coordinated overlap card and payload substitution fails before geometry', 
     assert.equal(report.status, 'failed');
     assert.equal(report.failurePhase, 'input-validation');
     assert.equal(report.effectiveCompilerId, null);
+    assert.deepEqual(report.outputs, []);
+  });
+});
+
+test('interaction writer emits every signed candidate as hashed 3D and 2D evidence', async () => {
+  assert.equal(
+    typeof rowDistinctArtifacts.writeOverlappingAnisotropicTissueInteractionArtifacts,
+    'function',
+    'the interaction discriminator needs a candidate-complete artifact route',
+  );
+  await withTemporaryDirectory(async (outDir) => {
+    const result = await rowDistinctArtifacts.writeOverlappingAnisotropicTissueInteractionArtifacts({
+      outDir,
+      interactionCard: structuredClone(overlapInteractionCard),
+      overlapCard: structuredClone(overlapCard),
+      overlapTarget: structuredClone(overlapTarget),
+      descriptor: structuredClone(overlapDescriptor),
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+    });
+    assert.equal(result.report.status, 'completed');
+    assert.equal(result.report.evidencePassed, true);
+    assert.equal(result.report.hypothesisPassed, false);
+    assert.equal(result.report.conclusive, true);
+    assert.equal(result.report.bestCandidateId, 'normalized-product-additive-32');
+    assert.equal(result.report.outputs.filter(
+      (output) => output.relativePath.endsWith('.obj'),
+    ).length, 54);
+    assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
+    const serialized = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    assert.equal(serialized.candidates.length, overlapInteractionCard.candidates.length);
+    assert.ok(serialized.candidates.every((candidate) => candidate.amplitudes.every(
+      (entry) => entry.mesh.vertices === undefined && entry.mesh.outputRef,
+    )));
+    const svg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.match(svg, /Signed overlap interaction law/);
+    assert.match(svg, /additive field sum/);
+    assert.match(svg, /normalized-product-subtractive-0\.5/);
+    assert.match(svg, /normalized-product-additive-32/);
+    assert.match(svg, /fit-only \/ quality fail/);
+    assert.doesNotMatch(svg, /normalized-product-additive-32[\s\S]{0,200}· PASS/);
+    assert.match(svg, new RegExp(result.assay.assayHash));
+  });
+});
+
+test('interaction card substitution fails before construction and leaves an honest report', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    const counterfeit = structuredClone(overlapInteractionCard);
+    counterfeit.candidates.at(-1).coefficient = 31;
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueInteractionArtifacts({
+        outDir,
+        interactionCard: counterfeit,
+        overlapCard: structuredClone(overlapCard),
+        overlapTarget: structuredClone(overlapTarget),
+        descriptor: structuredClone(overlapDescriptor),
+        frozenSweepCard: structuredClone(fullSurfaceCard),
+        frozenAssayCard: structuredClone(assayCard),
+        frozenTarget: structuredClone(target),
+      }),
+      /overlap interaction card identity does not match authoritative assay/,
+    );
+    const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'input-validation');
+    assert.equal(report.effectiveRouteId, rowDistinctArtifacts.OVERLAPPING_INTERACTION_ARTIFACT_ROUTE);
     assert.deepEqual(report.outputs, []);
   });
 });

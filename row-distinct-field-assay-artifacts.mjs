@@ -6,10 +6,12 @@ import {
   OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA,
   ROW_DISTINCT_FIELD_ASSAY_SCHEMA,
   TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA,
+  buildOverlappingAnisotropicTissueInteractionAssay,
   buildOverlappingAnisotropicTissueControlAssay,
   buildRowDistinctScalarAnisotropicAssay,
   buildTargetSdfFullSurfaceSweep,
   validateOverlappingAnisotropicTissueControlInputs,
+  validateOverlappingAnisotropicTissueInteractionCard,
 } from './row-distinct-field-assay-core.mjs';
 
 export const ROW_DISTINCT_ARTIFACT_ROUTE = 'bounded-hindquarter-row-distinct-field-mesh-v0';
@@ -17,6 +19,8 @@ export const TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE =
   'bounded-hindquarter-target-sdf-full-surface-sweep-v0';
 export const OVERLAPPING_TISSUE_ARTIFACT_ROUTE =
   'bounded-hindquarter-overlapping-anisotropic-tissue-control-v0';
+export const OVERLAPPING_INTERACTION_ARTIFACT_ROUTE =
+  'bounded-hindquarter-overlapping-anisotropic-interaction-law-v0';
 
 function escapeXml(value) {
   return String(value)
@@ -272,6 +276,93 @@ export function renderOverlappingAnisotropicTissueControlSvg(assay) {
   <text x="55" y="1515" class="sub">descriptor ${escapeXml(assay.descriptorHash)} · target ${escapeXml(assay.targetHash)}</text>
   <text x="55" y="1538" class="sub">card ${escapeXml(assay.overlapCardHash)} · extractor ${escapeXml(assay.extractorId)}</text>
   <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · bounded synthetic evidence only; promotion none</text>
+</svg>
+`;
+}
+
+export function renderOverlappingAnisotropicTissueInteractionSvg(assay) {
+  if (assay?.schema !== 'kaminos.overlapping-anisotropic-interaction-law-result.v0'
+    || assay.status !== 'completed'
+    || assay.evidenceVerdict?.passed !== true
+    || assay.amplitudes?.length < 3) {
+    throw new Error('completed overlap interaction evidence is required');
+  }
+  const width = 1480;
+  const height = 1590;
+  const columnWidth = 440;
+  const columnGap = 28;
+  const left = 55;
+  const rowTop = 150;
+  const rowHeight = 450;
+  const rejected = assay.candidates.find(
+    (candidate) => candidate.id === 'normalized-product-subtractive-0.5',
+  );
+  const admitted = assay.candidates.find(
+    (candidate) => candidate.id === assay.verdict.bestCandidateId,
+  );
+  if (!rejected || !admitted) throw new Error('signed interaction comparison columns are required');
+  const columns = [
+    { id: rejected.id, title: rejected.id, entries: rejected.amplitudes, candidate: rejected },
+    { id: 'additive-field-sum-v0', title: 'additive field sum', entries: assay.additive },
+    { id: admitted.id, title: admitted.id, entries: admitted.amplitudes, candidate: admitted },
+  ];
+  const rowsSvg = assay.amplitudes.map((amplitude, rowIndex) => {
+    const y = rowTop + rowIndex * rowHeight;
+    return columns.map((column, columnIndex) => {
+      const x = left + columnIndex * (columnWidth + columnGap);
+      const candidate = column.entries[rowIndex];
+      const meshPanel = { x, y: y + 42, width: columnWidth, height: 245 };
+      const sectionPanel = { x, y: y + 309, width: columnWidth, height: 92 };
+      const fitPass = candidate.fullSurface.normalizedRmse <= 0.12
+        && candidate.topology.closed
+        && candidate.topology.componentCount === 1;
+      const outcome = column.candidate?.qualifies
+        ? 'PASS'
+        : fitPass && column.candidate
+          ? 'fit-only / quality fail'
+          : fitPass
+            ? 'within fit bound'
+            : 'miss';
+      return `<g id="interaction-${escapeXml(amplitude)}-${escapeXml(column.id)}">
+        <text x="${x}" y="${y + 17}" class="panel-title">${escapeXml(column.title)}</text>
+        <text x="${x}" y="${y + 36}" class="metric">surf ${candidate.fullSurface.normalizedRmse.toFixed(4)} · ${candidate.topology.closed ? 'closed' : 'OPEN'} · ${candidate.topology.componentCount}c · ${outcome}</text>
+        <rect x="${meshPanel.x}" y="${meshPanel.y}" width="${meshPanel.width}" height="${meshPanel.height}" rx="12" class="mesh-panel"/>
+        ${projectedMeshSvg(candidate.reference.mesh, meshPanel, assay.grid.bounds, 'mesh-reference', 1000)}
+        ${projectedMeshSvg(candidate.mesh, meshPanel, assay.grid.bounds, 'mesh-candidate', 1000)}
+        ${meshSectionsSvg(candidate.sections, candidate.referenceSections, sectionPanel, assay.grid.bounds)}
+        <text x="${x}" y="${y + 423}" class="metric">area err ${candidate.surfaceAreaRelativeError.toFixed(3)} · volume err ${candidate.volumeRelativeError.toFixed(3)} · target bound 0.1200</text>
+      </g>`;
+    }).join('');
+  }).join('');
+  const amplitudeLabels = assay.amplitudes.map((amplitude, index) => (
+    `<text x="12" y="${rowTop + index * rowHeight + 18}" class="amplitude" transform="rotate(-90 12 ${rowTop + index * rowHeight + 18})">amplitude ${amplitude}</text>`
+  )).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="#071018"/>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fill: #dceaf0; }
+    .heading { font-size: 25px; font-weight: 700; }
+    .sub { font-size: 13px; fill: #96acb6; }
+    .panel-title { font-size: 14px; font-weight: 700; }
+    .metric { font-size: 10px; fill: #bfd0d7; }
+    .amplitude { font-size: 12px; font-weight: 700; fill: #f3c47a; }
+    .mesh-panel, .section-panel { fill: #101a24; stroke: #304657; }
+    .mesh-reference { fill: #ed74cb; fill-opacity: .10; stroke: #ff9ee0; stroke-opacity: .32; stroke-width: .38; }
+    .mesh-candidate { fill: #27d8c5; fill-opacity: .20; stroke: #67f3e4; stroke-opacity: .44; stroke-width: .42; }
+    .section-reference { stroke: #f18bd1; stroke-width: 1.2; opacity: .62; }
+    .section-candidate { stroke: #65efe2; stroke-width: .8; opacity: .78; }
+    .section-label { font-size: 8px; fill: #d6e5eb; }
+  </style>
+  <text x="55" y="39" class="heading">Signed overlap interaction law</text>
+  <text x="55" y="66" class="sub">magenta = fixed combined target · cyan = extracted identity-bearing carrier · independent muscle/fat rows are frozen by source assay hash</text>
+  <text x="55" y="89" class="sub">left preserves rejected negative-sign topology pressure · center is unchanged additive field sum · right is the best predeclared positive candidate</text>
+  <text x="55" y="112" class="sub">full-surface 3D primary plus mesh-derived sections; every signed candidate remains in assay.json and as a complete OBJ product</text>
+  ${amplitudeLabels}
+  ${rowsSvg}
+  <text x="55" y="1515" class="sub">source assay ${escapeXml(assay.sourceAssayHash)} · independent controls ${escapeXml(assay.independentControlsHash)}</text>
+  <text x="55" y="1538" class="sub">lowest RMSE ${escapeXml(assay.verdict.bestCandidateId)} · admitted ${escapeXml(assay.verdict.admittedCandidateId ?? 'none')} · ${escapeXml(assay.verdict.inference)}</text>
+  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · one partly synthetic fitted fixture only</text>
 </svg>
 `;
 }
@@ -659,6 +750,152 @@ export async function writeOverlappingAnisotropicTissueControlArtifacts({
     report.status = 'completed';
     report.failurePhase = null;
     report.lastTrustworthyEvidence = 'all 3D meshes and mesh-derived diagnostics reread and hashed from disk';
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    return { assay, report, reportPath };
+  } catch (error) {
+    report.status = 'failed';
+    report.failurePhase = phase;
+    report.error = error instanceof Error ? error.message : String(error);
+    report.lastTrustworthyEvidence = report.outputs.length === 0
+      ? 'output directory and failure report only; no primary artifact accepted'
+      : `${report.outputs.length} artifact(s) reread and hashed before failure`;
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    throw error;
+  }
+}
+
+export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
+  outDir,
+  interactionCard,
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  frozenSweepCard,
+  frozenAssayCard,
+  frozenTarget,
+  requestedInteractionCardPath = null,
+  requestedOverlapCardPath = null,
+  requestedTargetPath = null,
+  requestedDescriptorPath = null,
+  requestedRouteId = OVERLAPPING_INTERACTION_ARTIFACT_ROUTE,
+} = {}) {
+  if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const reportPath = join(outDir, 'report.json');
+  const report = {
+    schema: 'kaminos.overlapping-anisotropic-interaction-law-run-report.v0',
+    status: 'running',
+    requestedRouteId,
+    effectiveRouteId: null,
+    effectiveCompilerId: null,
+    effectiveExtractorId: null,
+    requestedInteractionCardPath,
+    requestedOverlapCardPath,
+    requestedTargetPath,
+    requestedDescriptorPath,
+    evidencePrimary: 'full-surface-3d',
+    sectionSource: 'extracted-mesh-triangle-plane-intersections',
+    outputs: [],
+  };
+  let phase = 'input-validation';
+  try {
+    if (requestedRouteId !== OVERLAPPING_INTERACTION_ARTIFACT_ROUTE) {
+      throw new Error(
+        `requested route ${requestedRouteId} is unavailable; effective route would be ${OVERLAPPING_INTERACTION_ARTIFACT_ROUTE}`,
+      );
+    }
+    report.effectiveRouteId = OVERLAPPING_INTERACTION_ARTIFACT_ROUTE;
+    validateOverlappingAnisotropicTissueInteractionCard(interactionCard);
+    phase = 'assay-build';
+    const assay = buildOverlappingAnisotropicTissueInteractionAssay({
+      interactionCard,
+      overlapCard,
+      overlapTarget,
+      descriptor,
+      frozenSweepCard,
+      frozenAssayCard,
+      frozenTarget,
+    });
+    report.assayHash = assay.assayHash;
+    report.sourceAssayHash = assay.sourceAssayHash;
+    report.independentControlsHash = assay.independentControlsHash;
+    report.interactionCardHash = assay.interactionCardHash;
+    report.targetHash = assay.targetHash;
+    report.descriptorHash = assay.descriptorHash;
+    report.effectiveCompilerId = assay.effectiveCompilerId;
+    report.effectiveExtractorId = assay.extractorId;
+    report.evidencePassed = assay.evidenceVerdict.passed;
+    report.hypothesisPassed = assay.verdict.passed;
+    report.conclusive = assay.verdict.conclusive;
+    report.bestCandidateId = assay.verdict.bestCandidateId;
+    report.admittedCandidateId = assay.verdict.admittedCandidateId;
+    report.inference = assay.verdict.inference;
+    report.qualityFitIncompatibilityObserved = assay.verdict.qualityFitIncompatibilityObserved;
+    if (!assay.evidenceVerdict.passed) {
+      throw new Error(`interaction assay evidence failed: ${JSON.stringify(assay.evidenceVerdict.failures)}`);
+    }
+    if (!assay.verdict.conclusive) {
+      throw new Error('interaction candidate family ended before a pass or positive minimum bracket');
+    }
+
+    phase = 'artifact-write';
+    const serializedAssay = structuredClone(assay);
+    const meshRef = (relativePath) => ({ encoding: 'obj', outputRef: relativePath });
+    for (const entry of serializedAssay.additive) {
+      const amplitudeId = String(entry.amplitude).replace('.', 'p');
+      entry.mesh = meshRef(`additive-amplitude-${amplitudeId}.obj`);
+      entry.reference.mesh = meshRef(`reference-amplitude-${amplitudeId}.obj`);
+    }
+    serializedAssay.additiveStress = serializedAssay.additive.find(
+      (entry) => entry.amplitude === interactionCard.decision.stressAmplitude,
+    );
+    for (const candidate of serializedAssay.candidates) {
+      for (const entry of candidate.amplitudes) {
+        const amplitudeId = String(entry.amplitude).replace('.', 'p');
+        entry.mesh = meshRef(`${safeId(candidate.id)}-amplitude-${amplitudeId}.obj`);
+        entry.reference.mesh = meshRef(`reference-amplitude-${amplitudeId}.obj`);
+      }
+      candidate.stress = candidate.amplitudes.find(
+        (entry) => entry.amplitude === interactionCard.decision.stressAmplitude,
+      );
+    }
+    const products = [
+      ['assay.json', `${JSON.stringify(serializedAssay, null, 2)}\n`],
+      ['contact-sheet.svg', renderOverlappingAnisotropicTissueInteractionSvg(assay)],
+    ];
+    for (const entry of assay.additive) {
+      const amplitudeId = String(entry.amplitude).replace('.', 'p');
+      products.push([
+        `additive-amplitude-${amplitudeId}.obj`,
+        meshToObj(entry.mesh, `additive-amplitude-${amplitudeId}`),
+      ]);
+      products.push([
+        `reference-amplitude-${amplitudeId}.obj`,
+        meshToObj(entry.reference.mesh, `interaction-reference-amplitude-${amplitudeId}`),
+      ]);
+    }
+    for (const candidate of assay.candidates) {
+      for (const entry of candidate.amplitudes) {
+        const amplitudeId = String(entry.amplitude).replace('.', 'p');
+        products.push([
+          `${safeId(candidate.id)}-amplitude-${amplitudeId}.obj`,
+          meshToObj(entry.mesh, `${candidate.id}-amplitude-${amplitudeId}`),
+        ]);
+      }
+    }
+    for (const [relativePath, contents] of products) {
+      const path = join(outDir, relativePath);
+      await writeFile(path, contents, 'utf8');
+      const bytes = await readFile(path);
+      report.outputs.push({
+        relativePath,
+        byteLength: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      });
+    }
+    report.status = 'completed';
+    report.failurePhase = null;
+    report.lastTrustworthyEvidence = 'all candidate-complete 3D meshes and 2D diagnostics reread and hashed from disk';
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     return { assay, report, reportPath };
   } catch (error) {

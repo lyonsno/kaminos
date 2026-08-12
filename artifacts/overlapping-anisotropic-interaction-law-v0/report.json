@@ -1,0 +1,311 @@
+{
+  "schema": "kaminos.overlapping-anisotropic-interaction-law-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "bounded-hindquarter-overlapping-anisotropic-interaction-law-v0",
+  "effectiveRouteId": "bounded-hindquarter-overlapping-anisotropic-interaction-law-v0",
+  "effectiveCompilerId": "overlapping-anisotropic-tissue-field-v0",
+  "effectiveExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "requestedInteractionCardPath": "fixtures/analytical-tissue/overlapping-anisotropic-interaction-law-assay.v0.json",
+  "requestedOverlapCardPath": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json",
+  "requestedTargetPath": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "requestedDescriptorPath": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
+  "evidencePrimary": "full-surface-3d",
+  "sectionSource": "extracted-mesh-triangle-plane-intersections",
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 33673930,
+      "sha256": "18e4284350ec8c2fbd11e2ea6af223bb88a8b4441b91b317d4ca0ec1ce488296"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 2790733,
+      "sha256": "1ef1c03dba6cf6b837e297758ae131050a572a7b90eacba07082961dcc43d860"
+    },
+    {
+      "relativePath": "additive-amplitude-0p1.obj",
+      "byteLength": 445573,
+      "sha256": "e816a9e33203732327e86e7fc02b6a9698b7bbf02f07a22081e97c261bdd41aa"
+    },
+    {
+      "relativePath": "reference-amplitude-0p1.obj",
+      "byteLength": 531907,
+      "sha256": "22d211138e869244f082f0e3101b9e70de04fde162b89c6a61cfd7653994c632"
+    },
+    {
+      "relativePath": "additive-amplitude-0p25.obj",
+      "byteLength": 507585,
+      "sha256": "70922d5ff18713f03cba5975480c259003bbd66863fd65f922664021928d9612"
+    },
+    {
+      "relativePath": "reference-amplitude-0p25.obj",
+      "byteLength": 713910,
+      "sha256": "c5ae40de3e757104315272158d836c27948993fbc20ea243be2d6688a3eb555f"
+    },
+    {
+      "relativePath": "additive-amplitude-0p5.obj",
+      "byteLength": 621459,
+      "sha256": "0a55b3909624e92f58cc6d6712f6deae2145c5af9c3610c2177810e6c1087812"
+    },
+    {
+      "relativePath": "reference-amplitude-0p5.obj",
+      "byteLength": 1044460,
+      "sha256": "c3f587f22476e49675e2ddb6a033defc27195b991d62ad56505e8d50ee1ee658"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.5-amplitude-0p1.obj",
+      "byteLength": 464864,
+      "sha256": "c1dbf2fbe998ba1e4bfbc6e494aead36dafd740887d95298e4cf038a666465fa"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.5-amplitude-0p25.obj",
+      "byteLength": 538356,
+      "sha256": "0ad39c21d83a804b379c0ebd53834e5db26130f53d95b8138b814b81a21bbf20"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.5-amplitude-0p5.obj",
+      "byteLength": 684218,
+      "sha256": "f35318b63171221e98933a62e4b8af448cf2437dbd741e1fbb9079dfde3e9eac"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.25-amplitude-0p1.obj",
+      "byteLength": 434186,
+      "sha256": "8859859fe44dce36441c8494b45a9d988a446f002beeee22a8b875580c2bc52f"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.25-amplitude-0p25.obj",
+      "byteLength": 501784,
+      "sha256": "89b43ea877af32eb8b4a81304c3907ad05d7a055c9cd18ef99a428d7e4c22108"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.25-amplitude-0p5.obj",
+      "byteLength": 608235,
+      "sha256": "59226ea4f45cbcd7060f89909802890bea0757f40563103d2a122304585a9da7"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.125-amplitude-0p1.obj",
+      "byteLength": 441512,
+      "sha256": "74b05fefeda7d1d31e96ff365ae942c69c8d38c2c0c7084253ad46b215d12a9a"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.125-amplitude-0p25.obj",
+      "byteLength": 503712,
+      "sha256": "3b357fa0b0b8faa2dfa53097c3213908574e3b2e7daec2fa19e61bb290e1cf8b"
+    },
+    {
+      "relativePath": "normalized-product-subtractive-0.125-amplitude-0p5.obj",
+      "byteLength": 613477,
+      "sha256": "6311d2d16c76879ee508d11c5e774ede881be83600fa9ab04fb0b374409a49c7"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.125-amplitude-0p1.obj",
+      "byteLength": 448742,
+      "sha256": "35a4543efa0a62552246df51b176fd2e40f11ecbd1cde4e3cf8ac77e2aea2ac6"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.125-amplitude-0p25.obj",
+      "byteLength": 510654,
+      "sha256": "e8378e4b79e22134c618331ddadd997825a55f6e3c427f5f7e418e66c073e7cd"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.125-amplitude-0p5.obj",
+      "byteLength": 625370,
+      "sha256": "def2eb960e95b3630635956709e9ef39f68af80831973bb3fc371d45b5c2eb19"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.25-amplitude-0p1.obj",
+      "byteLength": 450926,
+      "sha256": "9beb63eeb1feb16d8504183e6743b32fcbf7b0af618288007f9985aeb4f07a4d"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.25-amplitude-0p25.obj",
+      "byteLength": 513910,
+      "sha256": "7537220e863f8a9f9eae3b07efd8a6cda384010a877c2475842ee0191964cfea"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.25-amplitude-0p5.obj",
+      "byteLength": 629023,
+      "sha256": "7160d04b44d9216798107099fc42988ff5c23f16b94adf6a812958d5ac2fa877"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.5-amplitude-0p1.obj",
+      "byteLength": 454784,
+      "sha256": "2fc5fbbedcb001425b5feac41831a3b1b06fcfa4ae3069b85fcae6f1bf99c693"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.5-amplitude-0p25.obj",
+      "byteLength": 515448,
+      "sha256": "5c48ca0c4020d2ee04540bf41dccffca448be96e6b5ecabd10177676ca4af886"
+    },
+    {
+      "relativePath": "normalized-product-additive-0.5-amplitude-0p5.obj",
+      "byteLength": 635776,
+      "sha256": "ac07be440b7ca98c603ec74a0daeb74e164411f1841a50f795acac9141d1ea62"
+    },
+    {
+      "relativePath": "normalized-product-additive-1-amplitude-0p1.obj",
+      "byteLength": 460466,
+      "sha256": "afdadfed447128ce8cf383b66eae377eed038263c4f8bee86aa5d24cb3fb66b0"
+    },
+    {
+      "relativePath": "normalized-product-additive-1-amplitude-0p25.obj",
+      "byteLength": 521464,
+      "sha256": "1541f76dbddbd6f59353d0193f57b7f92540b96da28f9cd053478c1d8a8c3d39"
+    },
+    {
+      "relativePath": "normalized-product-additive-1-amplitude-0p5.obj",
+      "byteLength": 649515,
+      "sha256": "8a748b056ac1ca905ca2dcca079687764f5926b6577f64eb26763caed2a81e2c"
+    },
+    {
+      "relativePath": "normalized-product-additive-2-amplitude-0p1.obj",
+      "byteLength": 468358,
+      "sha256": "5622e3fc71bf17d1c8a165f42d462d5ddc41056fce8980795edb7f994f51f386"
+    },
+    {
+      "relativePath": "normalized-product-additive-2-amplitude-0p25.obj",
+      "byteLength": 525772,
+      "sha256": "10de5d91cce85a5e41e996783523c320e9445a1825ef0d0cd4d23fc530314206"
+    },
+    {
+      "relativePath": "normalized-product-additive-2-amplitude-0p5.obj",
+      "byteLength": 659197,
+      "sha256": "424debfa99fa5ed071d3948c4ee3a8e61ce1df5e872e1cd174b12cfb4160237f"
+    },
+    {
+      "relativePath": "normalized-product-additive-4-amplitude-0p1.obj",
+      "byteLength": 481212,
+      "sha256": "71e1c5ae5c5314aea8bbd94cdc1e40f13657eaf7da967dcebbd55c9ac88f9491"
+    },
+    {
+      "relativePath": "normalized-product-additive-4-amplitude-0p25.obj",
+      "byteLength": 543040,
+      "sha256": "6cd5da4c0e1fa48a65bffdd6e8bce77a59a7be8f113fca99f6d72dc234d17cd1"
+    },
+    {
+      "relativePath": "normalized-product-additive-4-amplitude-0p5.obj",
+      "byteLength": 674382,
+      "sha256": "41a803453b6a862ba7cc1a7a0246683171cedc474483e085d98e8631ce7cb682"
+    },
+    {
+      "relativePath": "normalized-product-additive-8-amplitude-0p1.obj",
+      "byteLength": 490179,
+      "sha256": "f5a05d6cee326af6589a502f38328844774f23ba975ee9e11cee4af66750a849"
+    },
+    {
+      "relativePath": "normalized-product-additive-8-amplitude-0p25.obj",
+      "byteLength": 560166,
+      "sha256": "76be32f3f8a96a7f5bc6354cf129edaed03dadd70523edf0d3f7249c4e62f9e0"
+    },
+    {
+      "relativePath": "normalized-product-additive-8-amplitude-0p5.obj",
+      "byteLength": 685578,
+      "sha256": "51690d2d8ba8bfad633d32fe9d187546733246eeae42c0ac8169bb4542703747"
+    },
+    {
+      "relativePath": "normalized-product-additive-16-amplitude-0p1.obj",
+      "byteLength": 500213,
+      "sha256": "ce79921ce553a372fd3def666e2e540c0185373ea3cfe6fc8e4a2837a5f7cce2"
+    },
+    {
+      "relativePath": "normalized-product-additive-16-amplitude-0p25.obj",
+      "byteLength": 573355,
+      "sha256": "3d59e78f33a94b9c5b45222b31cfd7660e98a07f26c693061829e1bd971a7f1e"
+    },
+    {
+      "relativePath": "normalized-product-additive-16-amplitude-0p5.obj",
+      "byteLength": 708665,
+      "sha256": "8c69f807871cdcb2a6e4f44194726727653ba65f3d56117150f21533f71aaf06"
+    },
+    {
+      "relativePath": "normalized-product-additive-24-amplitude-0p1.obj",
+      "byteLength": 500378,
+      "sha256": "224bbee8efa0da1bddc1cf7b5038c9fb6d9bdb804238fc05c331d93d0abc321a"
+    },
+    {
+      "relativePath": "normalized-product-additive-24-amplitude-0p25.obj",
+      "byteLength": 578056,
+      "sha256": "52fdae5f884c96200d396b977cd1793bcf35f9f5ea029413b3e6050ac5445139"
+    },
+    {
+      "relativePath": "normalized-product-additive-24-amplitude-0p5.obj",
+      "byteLength": 714783,
+      "sha256": "13c3be50229a329021d770075d5d1042620e67e7a53be554b57f1126d10d88d1"
+    },
+    {
+      "relativePath": "normalized-product-additive-28-amplitude-0p1.obj",
+      "byteLength": 504415,
+      "sha256": "14d18331ce9682fc685671cd070165927ecbf32a2c44e6871cb19705ad8f69a0"
+    },
+    {
+      "relativePath": "normalized-product-additive-28-amplitude-0p25.obj",
+      "byteLength": 583545,
+      "sha256": "a4410e8ca240b0071f725d56fcf33a36e63fda69f36775d6cb44173713700353"
+    },
+    {
+      "relativePath": "normalized-product-additive-28-amplitude-0p5.obj",
+      "byteLength": 719735,
+      "sha256": "25df4cdd61184eb429f15ed2d7e86cb9fc7c9f0a60f2af74599c2da30d7255ef"
+    },
+    {
+      "relativePath": "normalized-product-additive-30-amplitude-0p1.obj",
+      "byteLength": 504021,
+      "sha256": "4e32b5e56475b1b6e164718b956e830ef589f754b1240a36058584279bbb71c4"
+    },
+    {
+      "relativePath": "normalized-product-additive-30-amplitude-0p25.obj",
+      "byteLength": 583261,
+      "sha256": "5031d5c0961eaad528b09720590173eb1d761f85ca42b4db716776893ab2c380"
+    },
+    {
+      "relativePath": "normalized-product-additive-30-amplitude-0p5.obj",
+      "byteLength": 722375,
+      "sha256": "951bc9f056259a04a2c217955f31d95465f4ac418f8687d954a05562c9bb7756"
+    },
+    {
+      "relativePath": "normalized-product-additive-31-amplitude-0p1.obj",
+      "byteLength": 503639,
+      "sha256": "7ef2370ec13ec78528eae90d15e0159b1bbcd59111207debf6b5dc7850865c7f"
+    },
+    {
+      "relativePath": "normalized-product-additive-31-amplitude-0p25.obj",
+      "byteLength": 583894,
+      "sha256": "9fa83f10fa0416947584f9d1c1a3c9c52fe4a56a6f848de7053e42b328fad981"
+    },
+    {
+      "relativePath": "normalized-product-additive-31-amplitude-0p5.obj",
+      "byteLength": 723129,
+      "sha256": "76fde9ba74f613aa21f476f301762302448e3e44b5ca3a35be746039c42d1ae7"
+    },
+    {
+      "relativePath": "normalized-product-additive-32-amplitude-0p1.obj",
+      "byteLength": 504680,
+      "sha256": "63958914cc36fd255fc4c6f042c4b1e1ad79c228ed198726b0fd36d6914ef457"
+    },
+    {
+      "relativePath": "normalized-product-additive-32-amplitude-0p25.obj",
+      "byteLength": 585132,
+      "sha256": "0656541464ed927b7aba2398bc16856653ed68afd9072c5020eff32886da4f2c"
+    },
+    {
+      "relativePath": "normalized-product-additive-32-amplitude-0p5.obj",
+      "byteLength": 723420,
+      "sha256": "c65721ead6b4f171d842d8b87afcb55c924c068a9bcfeed614b49c586ec9c68d"
+    }
+  ],
+  "assayHash": "ed1142fa2ed9ce1929f955998312b5b50158ed22144ec3add788a77354bac21e",
+  "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
+  "independentControlsHash": "e34158d718de67af8612db70e9f91bc10d23a5b869907daac738c236cdb83433",
+  "interactionCardHash": "4d7c3095ee345f3524fff68a390b61338c6393259178e306a65cbbd3da4605ba",
+  "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
+  "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
+  "evidencePassed": true,
+  "hypothesisPassed": false,
+  "conclusive": true,
+  "bestCandidateId": "normalized-product-additive-32",
+  "admittedCandidateId": null,
+  "inference": "bounded-signed-product-family-failed-quality-fit-incompatibility",
+  "qualityFitIncompatibilityObserved": true,
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all candidate-complete 3D meshes and 2D diagnostics reread and hashed from disk"
+}

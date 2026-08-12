@@ -33,6 +33,10 @@ const overlapDescriptor = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json', import.meta.url),
   'utf8',
 ));
+const overlapInteractionCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-interaction-law-assay.v0.json', import.meta.url),
+  'utf8',
+));
 
 function build(card = assayCard) {
   return buildRowDistinctScalarAnisotropicAssay({
@@ -412,4 +416,71 @@ test('overlapping assay rejects compiler relabeling and closed fixture substitut
     }),
     /overlap assay card identity does not match authoritative route/,
   );
+});
+
+test('overlap-aware interaction assay preserves the admitted independent rows and exposes every candidate', () => {
+  assert.equal(
+    typeof rowDistinctCore.buildOverlappingAnisotropicTissueInteractionAssay,
+    'function',
+    'the combined-stress miss needs a separate interaction-law discriminator',
+  );
+  const sourceAssay = rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay({
+    overlapCard: structuredClone(overlapCard),
+    overlapTarget: structuredClone(overlapTarget),
+    descriptor: structuredClone(overlapDescriptor),
+    frozenSweepCard: structuredClone(fullSurfaceCard),
+    frozenAssayCard: structuredClone(assayCard),
+    frozenTarget: structuredClone(target),
+  });
+  const assay = rowDistinctCore.buildOverlappingAnisotropicTissueInteractionAssay({
+    interactionCard: structuredClone(overlapInteractionCard),
+    overlapCard: structuredClone(overlapCard),
+    overlapTarget: structuredClone(overlapTarget),
+    descriptor: structuredClone(overlapDescriptor),
+    frozenSweepCard: structuredClone(fullSurfaceCard),
+    frozenAssayCard: structuredClone(assayCard),
+    frozenTarget: structuredClone(target),
+  });
+
+  assert.equal(assay.sourceAssayHash, sourceAssay.assayHash);
+  assert.equal(assay.independentControlsHash, canonicalHash(sourceAssay.controls));
+  assert.equal(assay.targetHash, sourceAssay.targetHash);
+  assert.equal(assay.descriptorHash, sourceAssay.descriptorHash);
+  assert.equal(assay.extractorId, sourceAssay.extractorId);
+  assert.deepEqual(
+    assay.candidates.map((candidate) => candidate.id),
+    overlapInteractionCard.candidates.map((candidate) => candidate.id),
+  );
+  assert.ok(assay.candidates.every((candidate) => candidate.amplitudes.length === 3));
+  assert.ok(assay.candidates.every((candidate) => candidate.amplitudes.every(
+    (entry) => entry.topology.vertexCount > 0
+      && Number.isFinite(entry.fullSurface.normalizedRmse)
+      && Number.isFinite(entry.surfaceAreaRelativeError)
+      && Number.isFinite(entry.volumeRelativeError)
+      && Number.isFinite(entry.reference.fullSurface.area)
+      && Number.isFinite(entry.reference.fullSurface.volume),
+  )));
+  assert.ok(assay.candidates.every((candidate) => Number.isFinite(
+    candidate.stress.fullSurface.normalizedRmse,
+  )));
+  const stressErrors = assay.candidates.map(
+    (candidate) => candidate.stress.fullSurface.normalizedRmse,
+  );
+  assert.equal(
+    assay.verdict.improved,
+    Math.min(...stressErrors) < assay.additiveStress.fullSurface.normalizedRmse,
+  );
+  assert.equal(
+    assay.verdict.passed,
+    assay.candidates.some((candidate) => (
+      candidate.stress.fullSurface.normalizedRmse
+        <= overlapInteractionCard.decision.maximumCombinedFullSurfaceNormalizedRmse
+      && candidate.amplitudes.every((entry, index) => (
+        entry.surfaceAreaRelativeError <= assay.additive[index].surfaceAreaRelativeError
+        && entry.volumeRelativeError <= assay.additive[index].volumeRelativeError
+      ))
+    )),
+  );
+  assert.equal(assay.verdict.conclusive, true);
+  assert.equal(assay.promotion, 'none');
 });
