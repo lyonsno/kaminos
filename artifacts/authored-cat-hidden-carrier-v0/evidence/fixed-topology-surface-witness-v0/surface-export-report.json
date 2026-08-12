@@ -1,0 +1,89 @@
+{
+  "artifacts": {
+    "authoredCarrier": {
+      "byteLength": 103112,
+      "path": "authored-carrier-surface.glb",
+      "sha256": "7e7f347491d6221b096fcedb037ae9de2e9189de970fd47fd097dc0c45240b60"
+    },
+    "comparison": {
+      "byteLength": 285408,
+      "path": "carrier-coat-recovery-comparison.glb",
+      "sha256": "e50cabce3082cfe2dc5c556b0edd95d791f9d75ab3c955c456146d3ec05aa52a"
+    },
+    "syntheticCoat": {
+      "byteLength": 103108,
+      "path": "synthetic-coat-surface.glb",
+      "sha256": "6f23c815ba256d89c2e3cb6f97a5008f1430ef0fcfc7e6dd12d42943e87e8c84"
+    },
+    "uniformRecovery": {
+      "byteLength": 103108,
+      "path": "uniform-recovery-surface.glb",
+      "sha256": "da07dd00bb63e9bbdd09000f3c7fb86dd8e471b24e449f54f563aba760990933"
+    }
+  },
+  "claimCeiling": "Exact source-topology, rigidly presented visualization of the authored carrier, synthetic coat, and uniform-inset recovery. The source is an open disconnected triangle surface; these GLBs do not establish a watertight hidden carrier, volumetric recovery, or production geometry.",
+  "completedAt": "2026-08-12T19:59:24.465299Z",
+  "inputs": {
+    "assayDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/uniform-inset-medium-scapular-v0",
+    "observationSha256": "98aee3e9ca3a5a0c716c85b7c03d3849966d4134d6058fbf40155c92329bbf02",
+    "recoveredCarrierSha256": "0f8f3c07da545cb485215edabe43c5ab03300b10792de7ca84a08199dd4519e8",
+    "repoRoot": ".",
+    "reportSha256": "961ee182de2e3899a6454280aef1a77cd65b0e901e2973a514d244a17f2b3c89",
+    "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+    "sourceSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "operatorVisualAdmission": "not-requested",
+  "presentationTransform": {
+    "contract": "rigid-translation-and-rotation-only-no-shape-change",
+    "exportTranslation": [
+      39.392974853515625,
+      -4.171779210962809,
+      -16.71138353689681
+    ],
+    "reason": "center exact geometry and map source -Y dorsal direction to viewer +Y",
+    "sourceWorldCenter": [
+      -39.392974853515625,
+      4.171779210962809,
+      16.71138353689681
+    ],
+    "viewerRotationQuaternion": [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  },
+  "route": {
+    "backend": "python-numpy-cpu",
+    "effective": "fixed-source-topology-glb-surface-witness-v0",
+    "requested": "fixed-source-topology-glb-surface-witness-v0"
+  },
+  "safetyCharacterization": "Deterministic isolated cat-envelope triangle surfaces with no generator output, biological corruption, infestation, repeated-orifice, or misplaced-growth imagery.",
+  "schema": "kaminos.authored-cat-hidden-carrier-surface-export.v0",
+  "status": "captured",
+  "terminal": true,
+  "topology": {
+    "boundaryEdgeCount": 3765,
+    "boundsDiagonal": 81.06731592455735,
+    "boundsMax": [
+      -29.2323056838336,
+      28.155922224863055,
+      47.7677695744906
+    ],
+    "boundsMin": [
+      -49.55364402319765,
+      -19.812363802937437,
+      -14.345002500696978
+    ],
+    "componentCount": 936,
+    "degenerateTriangleCount": 0,
+    "interiorEdgeCount": 954,
+    "nonManifoldEdgeCount": 0,
+    "referencedVertexCount": 3764,
+    "surfaceClass": "open-disconnected-triangle-surface",
+    "triangleCount": 1891,
+    "vertexCount": 3764,
+    "windingFlippedOnWorldSpaceExport": true
+  },
+  "visualArtifactsValidated": true
+}
