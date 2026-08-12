@@ -183,6 +183,23 @@ class HiddenCarrierAssayTest(unittest.TestCase):
             self.assertFalse((out / "recovered-carrier.npz").exists())
             self.assertEqual(json.loads((out / "report.json").read_text()), report)
 
+    def test_unremovable_stale_primary_overwrites_prior_success_with_terminal_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            stale_report = out / "report.json"
+            stale_report.write_text('{"status":"captured","terminal":true}\n')
+            prior_sha = sha256(stale_report)
+            (out / "observation.npz").mkdir()
+            (out / "recovered-carrier.npz").write_bytes(b"stale recovery")
+            report = self.run_in(out)
+            self.assertEqual(report["status"], "failed")
+            self.assertTrue(report["terminal"])
+            self.assertEqual(report["failurePhase"], "output-initialization")
+            self.assertEqual(report["priorTerminalReportSha256"], prior_sha)
+            self.assertIn("could not invalidate", report["reason"])
+            self.assertEqual(json.loads(stale_report.read_text()), report)
+            self.assertFalse((out / "recovered-carrier.npz").exists())
+
     def test_repeated_execution_recomputes_artifacts_and_preserves_prior_receipt_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             first = self.run_in(directory)

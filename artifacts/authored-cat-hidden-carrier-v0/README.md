@@ -47,12 +47,12 @@ Ran 8 tests
 OK
 ```
 
-The runner tests first failed on the explicit unimplemented transaction and then on each tightened evidence contract before implementation. After implementation, they cover exact successful identity, portable effective locators, missing and digest-mismatched sources, forbidden route/profile fallback, missing and blank primaries, partial recovery cardinality, malformed CLI arguments, prior-run invalidation after an early failure, deterministic artifact recomputation, implementation identity, and terminal-report preservation:
+The runner tests first failed on the explicit unimplemented transaction and then on each tightened evidence contract before implementation. After implementation, they cover exact successful identity, portable effective locators, missing and digest-mismatched sources, forbidden route/profile fallback, missing and blank primaries, partial recovery cardinality, malformed CLI arguments, prior-run invalidation after an early failure, unremovable stale-primary behavior, deterministic artifact recomputation, implementation identity, and terminal-report preservation:
 
 ```text
 python3 -m unittest artifacts/authored-cat-hidden-carrier-v0/test_hidden_carrier_assay.py
-.........
-Ran 9 tests
+..........
+Ran 10 tests
 OK
 ```
 

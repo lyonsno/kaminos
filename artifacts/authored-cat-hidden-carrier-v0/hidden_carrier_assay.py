@@ -215,6 +215,17 @@ def _option_value(argv, option):
     return None
 
 
+def _invalidate_known_outputs(output_dir):
+    failures = []
+    for name in KNOWN_OUTPUTS:
+        path = Path(output_dir) / name
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as error:
+            failures.append(f"{name}: {type(error).__name__}: {error}")
+    return failures
+
+
 def _argument_failure(*, output_dir, requested, phase, reason):
     if output_dir is None:
         return None
@@ -223,8 +234,6 @@ def _argument_failure(*, output_dir, requested, phase, reason):
     report_path = output_dir / "report.json"
     state_path = output_dir / "run-state.json"
     prior_report_sha256 = _sha256(report_path) if report_path.is_file() else None
-    for name in KNOWN_OUTPUTS:
-        (output_dir / name).unlink(missing_ok=True)
     report = _base_report(
         execution_id=str(uuid.uuid4()),
         started_at=_now(),
@@ -234,6 +243,11 @@ def _argument_failure(*, output_dir, requested, phase, reason):
     report["status"] = "failed"
     report["failurePhase"] = phase
     report["reason"] = reason
+    _write_json(report_path, report)
+    invalidation_failures = _invalidate_known_outputs(output_dir)
+    if invalidation_failures:
+        report["reason"] = f"{reason}; could not invalidate primaries: {'; '.join(invalidation_failures)}"
+        report["lastTrustworthyEvidence"]["primaryInvalidationFailures"] = invalidation_failures
     return _finish_report(report_path, state_path, report)
 
 
@@ -257,8 +271,6 @@ def run_assay(
     report_path = output_dir / "report.json"
     state_path = output_dir / "run-state.json"
     prior_report_sha256 = _sha256(report_path) if report_path.is_file() else None
-    for name in KNOWN_OUTPUTS:
-        (output_dir / name).unlink(missing_ok=True)
 
     requested = {
         "repoRoot": requested_repo_root,
@@ -293,6 +305,13 @@ def run_assay(
     )
 
     try:
+        phase = "output-initialization"
+        invalidation_failures = _invalidate_known_outputs(output_dir)
+        if invalidation_failures:
+            report["lastTrustworthyEvidence"]["primaryInvalidationFailures"] = invalidation_failures
+            raise AssayFailure(
+                f"could not invalidate prior primaries: {'; '.join(invalidation_failures)}"
+            )
         phase = "route-validation"
         if requested_route != ROUTE:
             raise AssayFailure(

@@ -13,12 +13,12 @@ This is the first durable numerical evidence transaction for the authored-cat hi
 - Recovery arm: `uniform-inset-negative-control-v0`
 - Uniform inset: `0.94`
 - Calibration authority: assay-author-selected from the prior authored-truth depth summary; this is not a solver-inferred depth.
-- Terminal execution: `d083558f-02bd-478e-bfab-06a6b120ce48`
-- Terminal report SHA-256: `6dae2494ef1680bf320a71b2be80e21e16eacab91839d9c0e794810f743ff408`
-- Runner SHA-256: `2aeb3857e64d46c7ed7926ef077901047d08b11a57393a021bbcae74341c1365`
+- Terminal execution: `0aea5323-c5b0-459c-902e-78b9bef4805d`
+- Terminal report SHA-256: `bd961f0801192f6bef2058a72c28460c1a5e84e518e56775233810e631c57697`
+- Runner SHA-256: `e4c040fc98e0ff07c3246bff13e46ca745303ecddb6171f9dd22f964db155bcb`
 - Fixture implementation SHA-256: `9e6b0f2a1773d716152dbc92c89e3e668fa4ec4fa39243a827ca72c1143e5509`
 
-The terminal report records prior terminal digest `4364955fb9d9443f480a58633b6e771524d6a5ad78890f6f6d017e54b1439bd1`. That earlier local transaction was superseded when public-safe portable locators became mandatory evidence. The terminal execution recomputed the primaries; it did not accept the earlier files as cached evidence.
+The terminal report records prior terminal digest `6dae2494ef1680bf320a71b2be80e21e16eacab91839d9c0e794810f743ff408`. That earlier local transaction was superseded after an unremovable stale-primary path exposed a pre-receipt false-closure risk. The terminal execution recomputed the primaries after the receipt-first invalidation repair; it did not accept the earlier files as cached evidence.
 
 ## Result
 

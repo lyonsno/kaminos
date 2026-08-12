@@ -51,9 +51,9 @@
     "uniformInsetAuthority": "assay-author-explicit-config",
     "uniformInsetCalibration": "fixture-author-selected-from-prior-authored-truth-depth-summary"
   },
-  "executionId": "d083558f-02bd-478e-bfab-06a6b120ce48",
+  "executionId": "0aea5323-c5b0-459c-902e-78b9bef4805d",
   "failurePhase": null,
-  "finishedAt": "2026-08-12T08:02:49.036345Z",
+  "finishedAt": "2026-08-12T08:09:31.476356Z",
   "implementation": {
     "fixture": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_fixture.py",
@@ -61,7 +61,7 @@
     },
     "runner": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_assay.py",
-      "sha256": "2aeb3857e64d46c7ed7926ef077901047d08b11a57393a021bbcae74341c1365"
+      "sha256": "e4c040fc98e0ff07c3246bff13e46ca745303ecddb6171f9dd22f964db155bcb"
     }
   },
   "lastTrustworthyEvidence": {
@@ -90,7 +90,7 @@
     },
     "rmse": 0.2508719729407156
   },
-  "priorTerminalReportSha256": "4364955fb9d9443f480a58633b6e771524d6a5ad78890f6f6d017e54b1439bd1",
+  "priorTerminalReportSha256": "6dae2494ef1680bf320a71b2be80e21e16eacab91839d9c0e794810f743ff408",
   "reason": null,
   "requestedConfig": {
     "outputDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/uniform-inset-medium-scapular-v0",
@@ -114,7 +114,7 @@
     "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
     "vertexCount": 3764
   },
-  "startedAt": "2026-08-12T08:02:49.022471Z",
+  "startedAt": "2026-08-12T08:09:31.461505Z",
   "status": "captured",
   "terminal": true,
   "truthIsolation": {
