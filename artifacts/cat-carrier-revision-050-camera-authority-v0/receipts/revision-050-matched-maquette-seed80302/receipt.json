@@ -1,0 +1,73 @@
+{
+  "job_id": "e559dca0c75d",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-maquette-seed80302",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/prompts/maquette.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-maquette-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+  "effective_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "--image-paths",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+    "--prompt-file",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/prompts/maquette.txt",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-maquette-seed80302/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "512",
+    "--width",
+    "512",
+    "--steps",
+    "8",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "80302",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "effective_cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808",
+  "effective_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "seed": "42",
+    "steps": "8",
+    "width": "512"
+  },
+  "effective_timeout": 1800,
+  "ignored_params": null,
+  "started_at": 1786539693.856768,
+  "finished_at": 1786539729.015448,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e559dca0c75d/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e559dca0c75d/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e559dca0c75d/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 31039,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

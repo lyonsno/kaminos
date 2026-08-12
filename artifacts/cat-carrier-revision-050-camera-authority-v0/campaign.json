@@ -1,0 +1,363 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-camera-authority.v0",
+  "campaignQuestion": "Does revision-050's more species-specific authored structure change FLUX elaboration under matched conditioning, and how much of that structure survives two modest oblique views?",
+  "sources": {
+    "revision-050-matched": {
+      "id": "revision-050-matched",
+      "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "blendSha256": "9f0409d99321ec4d74d237ba6cff1f425b402aeae653db43e699f53150b11fbe",
+      "object": "Cube.056",
+      "plate": "source/revision-050-matched/plate.png",
+      "plateSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+      "renderManifest": "source/revision-050-matched/render-manifest.json"
+    },
+    "revision-050-oblique-negative-35": {
+      "id": "revision-050-oblique-negative-35",
+      "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "blendSha256": "9f0409d99321ec4d74d237ba6cff1f425b402aeae653db43e699f53150b11fbe",
+      "object": "Cube.056",
+      "plate": "source/revision-050-oblique-negative-35/plate.png",
+      "plateSha256": "0ad01b35bcdfe4f5a74cd26bc493009eb6e535f337b57bba090d8ce16c07d678",
+      "renderManifest": "source/revision-050-oblique-negative-35/render-manifest.json"
+    },
+    "revision-050-oblique-positive-35": {
+      "id": "revision-050-oblique-positive-35",
+      "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+      "blendSha256": "9f0409d99321ec4d74d237ba6cff1f425b402aeae653db43e699f53150b11fbe",
+      "object": "Cube.056",
+      "plate": "source/revision-050-oblique-positive-35/plate.png",
+      "plateSha256": "183869676a99ca4c046b8d7fe5c9be381b7c879b85d6c409ceaa57d4a19d5117",
+      "renderManifest": "source/revision-050-oblique-positive-35/render-manifest.json"
+    }
+  },
+  "promptFamilies": [
+    {
+      "id": "dragon",
+      "prompt": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "promptFile": "prompts/dragon.txt",
+      "promptFileSha256": "b4ba717153b2b711a80ea83267b3ad81a66059e97be2d10948904d3a81e34831"
+    },
+    {
+      "id": "golem",
+      "prompt": "Elaborate this armature into a finished creature of mossy weathered stone with lichen and cracked plates.",
+      "promptFile": "prompts/golem.txt",
+      "promptFileSha256": "a11932cf6dff97020a6e529d1f074f1aa013992938af478e3ad1ec172a9c5bd3"
+    },
+    {
+      "id": "maquette",
+      "prompt": "Elaborate this partially finished maquette into a finished creature.",
+      "promptFile": "prompts/maquette.txt",
+      "promptFileSha256": "658e350f97e27d513c3fc4331f99d65f1c8ec02b1270593b5b7af4e2d80bfaf0"
+    },
+    {
+      "id": "cat",
+      "prompt": "This shape as a cat.",
+      "promptFile": "prompts/cat.txt",
+      "promptFileSha256": "918cf5bf353e180c0fe05156f376c392117e84ae4dc332b6a0709bbb844a788c"
+    }
+  ],
+  "seeds": [
+    80301,
+    80302,
+    80413
+  ],
+  "fluxRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "cells": [
+    {
+      "id": "revision-050-matched-dragon-seed80301",
+      "sourceId": "revision-050-matched",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-matched-dragon-seed80301"
+    },
+    {
+      "id": "revision-050-matched-dragon-seed80302",
+      "sourceId": "revision-050-matched",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-050-matched-dragon-seed80302"
+    },
+    {
+      "id": "revision-050-matched-dragon-seed80413",
+      "sourceId": "revision-050-matched",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-050-matched-dragon-seed80413"
+    },
+    {
+      "id": "revision-050-matched-golem-seed80301",
+      "sourceId": "revision-050-matched",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-matched-golem-seed80301"
+    },
+    {
+      "id": "revision-050-matched-golem-seed80302",
+      "sourceId": "revision-050-matched",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-050-matched-golem-seed80302"
+    },
+    {
+      "id": "revision-050-matched-golem-seed80413",
+      "sourceId": "revision-050-matched",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-050-matched-golem-seed80413"
+    },
+    {
+      "id": "revision-050-matched-maquette-seed80301",
+      "sourceId": "revision-050-matched",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-matched-maquette-seed80301"
+    },
+    {
+      "id": "revision-050-matched-maquette-seed80302",
+      "sourceId": "revision-050-matched",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-050-matched-maquette-seed80302"
+    },
+    {
+      "id": "revision-050-matched-maquette-seed80413",
+      "sourceId": "revision-050-matched",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-050-matched-maquette-seed80413"
+    },
+    {
+      "id": "revision-050-matched-cat-seed80301",
+      "sourceId": "revision-050-matched",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-matched-cat-seed80301"
+    },
+    {
+      "id": "revision-050-matched-cat-seed80302",
+      "sourceId": "revision-050-matched",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-050-matched-cat-seed80302"
+    },
+    {
+      "id": "revision-050-matched-cat-seed80413",
+      "sourceId": "revision-050-matched",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-050-matched-cat-seed80413"
+    },
+    {
+      "id": "revision-050-oblique-negative-35-dragon-seed80301",
+      "sourceId": "revision-050-oblique-negative-35",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-negative-35-dragon-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-negative-35-golem-seed80301",
+      "sourceId": "revision-050-oblique-negative-35",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-negative-35-golem-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-negative-35-maquette-seed80301",
+      "sourceId": "revision-050-oblique-negative-35",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-negative-35-maquette-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-negative-35-cat-seed80301",
+      "sourceId": "revision-050-oblique-negative-35",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-negative-35-cat-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-positive-35-dragon-seed80301",
+      "sourceId": "revision-050-oblique-positive-35",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-positive-35-dragon-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-positive-35-golem-seed80301",
+      "sourceId": "revision-050-oblique-positive-35",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-positive-35-golem-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-positive-35-maquette-seed80301",
+      "sourceId": "revision-050-oblique-positive-35",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-positive-35-maquette-seed80301"
+    },
+    {
+      "id": "revision-050-oblique-positive-35-cat-seed80301",
+      "sourceId": "revision-050-oblique-positive-35",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-050-oblique-positive-35-cat-seed80301"
+    }
+  ],
+  "comparisonControls": [
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-dragon-seed80301",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "seed": 80301,
+      "output": "runs/revision-048-dragon-seed80301/output.png",
+      "outputSha256": "1e5a5284925a149d6f6125c374d447d0644806f43d78451b79da6b5074dd11bf"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-dragon-seed80302",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "seed": 80302,
+      "output": "runs/revision-048-dragon-seed80302/output.png",
+      "outputSha256": "ccef01a905728bff26c922a5bc41d1ef4c7e644202328510abd4745cf59f872b"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-dragon-seed80413",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "seed": 80413,
+      "output": "runs/revision-048-dragon-seed80413/output.png",
+      "outputSha256": "6f359a4da3ee3ea2ffa704bbb364970d8804e5f182655005e42ff5bd6d722738"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-golem-seed80301",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "seed": 80301,
+      "output": "runs/revision-048-golem-seed80301/output.png",
+      "outputSha256": "7c60876bab19bb6abf7eb709abe3d5f8952284bdadb4aa0f6b7954652c267213"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-golem-seed80302",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "seed": 80302,
+      "output": "runs/revision-048-golem-seed80302/output.png",
+      "outputSha256": "25daeed0fc01c0d2149311ef72c1b39c90d098577f3a9b2966f68954b606b100"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-golem-seed80413",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "seed": 80413,
+      "output": "runs/revision-048-golem-seed80413/output.png",
+      "outputSha256": "de3355b1ef3abc53dee0b0a907a04fffb25025f621f9f679257343a74f88fee6"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-maquette-seed80301",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "seed": 80301,
+      "output": "runs/revision-048-maquette-seed80301/output.png",
+      "outputSha256": "c93f1d41880fabf50ad0551ce862d5e013904a3a874e4ae956b0aa1589cfc91c"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-maquette-seed80302",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "seed": 80302,
+      "output": "runs/revision-048-maquette-seed80302/output.png",
+      "outputSha256": "65838404209f94752bcd55c5aef1aac4bcbacc45404494be1a88eb57ee4d9d3d"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-maquette-seed80413",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "seed": 80413,
+      "output": "runs/revision-048-maquette-seed80413/output.png",
+      "outputSha256": "de0f2c26095a0c23023499576fc8f0a47caa0feb1e9c8e0bdb6d86540bd8c85a"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-cat-seed80301",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "seed": 80301,
+      "output": "runs/revision-048-cat-seed80301/output.png",
+      "outputSha256": "1b49c99498cf7465e846595a5373dc733446ddf235bd9472605b3b3a8f01c033"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-cat-seed80302",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "seed": 80302,
+      "output": "runs/revision-048-cat-seed80302/output.png",
+      "outputSha256": "1737d64b82ba0636262986cfeba1337a9c9d095f7353838db607ff4380999665"
+    },
+    {
+      "campaignRoot": "../cat-carrier-cross-basin-authority-v0",
+      "campaignLedgerSha256": "6550626ac4b5b97ca72d8906d90be7d74ab07c6b6bad526e5385abfadc1aaf0a",
+      "cellId": "revision-048-cat-seed80413",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "seed": 80413,
+      "output": "runs/revision-048-cat-seed80413/output.png",
+      "outputSha256": "670c74397c17c0fe9eb76211828ea50ad6f9689ca140f4a73bb7ca27fc63a59b"
+    }
+  ],
+  "trellisPromotion": "After complete FLUX visual inspection, reconstruct structurally informative successes across basins and views; attractiveness alone is insufficient.",
+  "claimCeiling": "Exact frozen plates, prompt text, seeds, effective route, and visibly inspected outputs only; no arbitrary-view, arbitrary-carrier, anatomical-fidelity, production, or general TRELLIS claim."
+}

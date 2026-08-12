@@ -1,0 +1,49 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-source-plate.v0",
+  "source": {
+    "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+    "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-050.blend",
+    "sha256": "9f0409d99321ec4d74d237ba6cff1f425b402aeae653db43e699f53150b11fbe",
+    "object": "Cube.056",
+    "evaluatedVertexCount": 621,
+    "evaluatedPolygonCount": 610,
+    "worldBounds": {
+      "low": [
+        -2.7596547603607178,
+        -11.374311447143555,
+        -13.088443756103516
+      ],
+      "high": [
+        1.793639898300171,
+        5.077723026275635,
+        1.050088882446289
+      ]
+    }
+  },
+  "view": {
+    "id": "revision-050-oblique-positive-35",
+    "yawFromMatchedDegrees": 35.0,
+    "cameraType": "ORTHO",
+    "cameraLocation": [
+      21.792457580566406,
+      6.456571578979492,
+      -3.5653486251831055
+    ],
+    "cameraRotationEuler": [
+      -1.469983696937561,
+      5.238398514961773e-08,
+      -1.1636978387832642
+    ],
+    "orthographicScale": 19.938169479370117
+  },
+  "plate": {
+    "path": "plate.png",
+    "dimensions": [
+      768,
+      768
+    ],
+    "byteLength": 665056,
+    "sha256": "183869676a99ca4c046b8d7fe5c9be381b7c879b85d6c409ceaa57d4a19d5117"
+  },
+  "claimCeiling": "Authenticated source-conditioning plate only; no generator behavior claim."
+}

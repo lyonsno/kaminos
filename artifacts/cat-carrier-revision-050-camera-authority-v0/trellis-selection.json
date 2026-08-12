@@ -1,0 +1,48 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-camera-authority.trellis-selection.v0",
+  "selectionBasis": "Three matched-view surface mechanisms plus one fixed golem prompt/seed reconstructed from profile, front-biased, and rear-biased source views. Selection tests whether stronger revision-050 FLUX authority survives image-to-3D reconstruction; attractiveness alone is not an admission predicate.",
+  "sourceCampaign": "campaign.json",
+  "sourceCampaignSha256": "5afb6ac645eb1d15030f1edc99ac53a976d991fa14c2a9fd6cd1705f284500b7",
+  "sourceResultLedger": "result-ledger.json",
+  "sourceResultLedgerSha256": "78f3fd1edcc5dedf06d04aa8271de6f1e70e7631ceda7930f463d4ea3403d2e5",
+  "route": {
+    "jobType": "trellis2mlx_fast",
+    "seed": 42,
+    "steps": 6,
+    "targetFaces": 200000,
+    "textureSize": 1024
+  },
+  "candidates": [
+    {
+      "cellId": "revision-050-matched-dragon-seed80301",
+      "role": "dense-organic-elaboration",
+      "visualBasis": "Strong matched-view carrier retention under scales, horns, and secondary anatomical elaboration."
+    },
+    {
+      "cellId": "revision-050-matched-maquette-seed80301",
+      "role": "maximal-source-correspondence",
+      "visualBasis": "Structure-led completion most tightly preserves authored proportions and stance."
+    },
+    {
+      "cellId": "revision-050-matched-cat-seed80301",
+      "role": "source-congruent-class-completion",
+      "visualBasis": "Literal cat prompt tests a low-detail completion already near the authored carrier basin."
+    },
+    {
+      "cellId": "revision-050-matched-golem-seed80301",
+      "role": "golem-profile-camera-control",
+      "visualBasis": "Rigid plates expose morphology and occlusion transfer from the near-profile source."
+    },
+    {
+      "cellId": "revision-050-oblique-negative-35-golem-seed80301",
+      "role": "golem-front-oblique-camera-control",
+      "visualBasis": "Same prompt and seed as the profile control; only the front-biased source view changes."
+    },
+    {
+      "cellId": "revision-050-oblique-positive-35-golem-seed80301",
+      "role": "golem-rear-oblique-camera-control",
+      "visualBasis": "Same prompt and seed as the profile control; only the rear-biased source view changes."
+    }
+  ],
+  "claimCeiling": "Selected revision-050 images reconstructed through the authenticated local trellis2mlx_fast route only; no arbitrary-image, arbitrary-view, topology, riggability, production, or general TRELLIS claim."
+}
