@@ -100,8 +100,16 @@ test('independent response rows and held-out additive combination pass in full 3
   assert.equal(assay.promotion, 'none');
 });
 
-test('surface-only causal null cannot counterfeit identity-bearing response', () => {
+test('source-row response null cannot counterfeit independently named response', () => {
   const assay = build();
+  assert.equal(assay.candidate.id, 'source-row-attributable-explicit-response-shell');
+  assert.deepEqual(assay.candidate.carrierCoupling, {
+    status: 'not-exercised',
+    provenanceOnlyCarrierId: 'labeled-anisotropic-components-v0',
+  });
+  assert.equal(assay.candidate.interiorCarrierId, undefined);
+  assert.equal(assay.causalNull.id, 'source-row-response-null');
+  assert.equal(assay.causalNull.verdict.scope, 'missing-response-only');
   assert.equal(assay.causalNull.topology.closed, true);
   assert.equal(assay.causalNull.topology.componentCount, 1);
   assert.equal(assay.causalNull.verdict.passed, false);
@@ -109,6 +117,10 @@ test('surface-only causal null cannot counterfeit identity-bearing response', ()
     (failure) => failure.code === 'independent-response-missing',
   ));
   assert.equal(assay.verdict.passed, true);
+  assert.equal(
+    assay.verdict.inference,
+    'source-row-attributable-explicit-shell-supported-on-additive-fixture',
+  );
 });
 
 test('coordinated assay-card threshold substitution cannot retain route authority', () => {

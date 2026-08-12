@@ -4,8 +4,8 @@
   "claimCeiling": "A fixed-topology explicit response shell may preserve two independently authored semantic responses and their held-out additive combination on one bounded synthetic fixture only.",
   "promotion": "none",
   "assayCardId": "bounded-hindquarter-explicit-response-shell-v0",
-  "assayCardHash": "8a1340aabd752501101f7b5f1ff15cfb9d15622c2c8f3d355e418551b35c96db",
-  "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
+  "assayCardHash": "ec645d760e3bb1e86db0a33cce24278de2ae4006114f11add968cacba4f8ec0e",
+  "priorCarrierAssayProvenanceHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
   "construction": {
     "sourceFields": [
       "baseline",
@@ -5657,8 +5657,11 @@
     }
   },
   "candidate": {
-    "id": "factored-hybrid-leading-hypothesis",
-    "interiorCarrierId": "labeled-anisotropic-components-v0",
+    "id": "source-row-attributable-explicit-response-shell",
+    "carrierCoupling": {
+      "status": "not-exercised",
+      "provenanceOnlyCarrierId": "labeled-anisotropic-components-v0"
+    },
     "surfaceFormationId": "fixed-topology-elliptical-station-response-shell-v0",
     "vertexBindings": [
       {
@@ -25962,7 +25965,7 @@
     }
   },
   "causalNull": {
-    "id": "explicit-shell-causal-null",
+    "id": "source-row-response-null",
     "topology": {
       "closed": true,
       "componentCount": 1,
@@ -25974,6 +25977,7 @@
       "outputRef": "causal-null.obj"
     },
     "verdict": {
+      "scope": "missing-response-only",
       "passed": false,
       "failures": [
         {
@@ -26097,8 +26101,33 @@
       "fullSurfaceNormalizedRmse": 0.0009591507269907359,
       "passed": true
     },
-    "inference": "factored-explicit-response-shell-supported-on-additive-fixture"
+    "inference": "source-row-attributable-explicit-shell-supported-on-additive-fixture"
   },
-  "assayHash": "307e94d281750690f24d4ff0a85a7cb5d8df87f81f45fb1ed9f49e238e6ef33d",
-  "generationId": "36d601d9-3593-4804-847a-31372939e759"
+  "assayHash": "9230adb4c6681a325b53a57f4778a8546468519816b94996fbe98245cd99d76f",
+  "generationId": "b1c5cfc9-dba6-48c6-ad74-64e8fa587e94",
+  "presentation": {
+    "cameraId": "right-sagittal-boundary-observation-v0:global-sweep-v0",
+    "projectionId": "anterior-right-dorsal-oblique-linear-v0",
+    "projectedBounds": {
+      "horizontal": [
+        -1.0754999999999997,
+        0.7547000000000001
+      ],
+      "vertical": [
+        -1.2531489988314721,
+        0.9168992639196226
+      ]
+    },
+    "sectionBounds": {
+      "right": [
+        -1.2700000000000005,
+        1.2700000000000005
+      ],
+      "dorsal": [
+        -0.9200000000000006,
+        1.1800000000000015
+      ]
+    },
+    "scope": "all-candidate-and-reference-states"
+  }
 }

@@ -8,7 +8,7 @@ export const EXPLICIT_RESPONSE_SHELL_ASSAY_CARD_ID =
   'bounded-hindquarter-explicit-response-shell-v0';
 export const EXPLICIT_RESPONSE_SHELL_RADIAL_SEGMENTS = 48;
 const AUTHORITATIVE_EXPLICIT_RESPONSE_SHELL_ASSAY_CARD_HASH =
-  '8a1340aabd752501101f7b5f1ff15cfb9d15622c2c8f3d355e418551b35c96db';
+  'ec645d760e3bb1e86db0a33cce24278de2ae4006114f11add968cacba4f8ec0e';
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -509,7 +509,7 @@ export function buildExplicitResponseShellAssay({
     promotion: assayCard.promotion,
     assayCardId: assayCard.id,
     assayCardHash: hashValue(assayCard),
-    sourceAssayHash: assayCard.sourceAssayHash,
+    priorCarrierAssayProvenanceHash: assayCard.priorCarrierAssayProvenanceHash,
     construction: {
       sourceFields: [
         assayCard.construction.baselineField,
@@ -531,18 +531,22 @@ export function buildExplicitResponseShellAssay({
       referenceStates,
     },
     candidate: {
-      id: 'factored-hybrid-leading-hypothesis',
-      interiorCarrierId: assayCard.construction.interiorCarrierId,
+      id: 'source-row-attributable-explicit-response-shell',
+      carrierCoupling: {
+        status: 'not-exercised',
+        provenanceOnlyCarrierId: assayCard.construction.priorInteriorCarrierProvenanceId,
+      },
       surfaceFormationId: assayCard.construction.surfaceFormationId,
       vertexBindings: bindings,
       topology: baseline.topology,
       compiledStates,
     },
     causalNull: {
-      id: 'explicit-shell-causal-null',
+      id: 'source-row-response-null',
       topology: baseline.topology,
       mesh: baseline.mesh,
       verdict: {
+        scope: 'missing-response-only',
         passed: nullFailures.length === 0,
         failures: nullFailures,
       },
@@ -552,7 +556,7 @@ export function buildExplicitResponseShellAssay({
       independent,
       combined,
       inference: verdictPassed
-        ? 'factored-explicit-response-shell-supported-on-additive-fixture'
+        ? 'source-row-attributable-explicit-shell-supported-on-additive-fixture'
         : 'explicit-response-shell-not-supported-on-additive-fixture',
     },
   };

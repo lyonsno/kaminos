@@ -33,18 +33,44 @@ function meshToObj(mesh, objectId) {
   return `${lines.join('\n')}\n`;
 }
 
-function projectedMeshSvg(mesh, comparisonMesh, panel, className, radialSegments = 48) {
-  const projectRaw = ([right, dorsal, anterior]) => [
+function projectVertex([right, dorsal, anterior]) {
+  return [
     anterior * 0.82 + right * 0.68,
     -dorsal + anterior * 0.18 - right * 0.18,
   ];
-  const points = mesh.vertices.map(projectRaw);
-  const comparisonPoints = comparisonMesh.vertices.map(projectRaw);
-  const combined = [...points, ...comparisonPoints];
-  const lowX = Math.min(...combined.map(([x]) => x));
-  const highX = Math.max(...combined.map(([x]) => x));
-  const lowY = Math.min(...combined.map(([, y]) => y));
-  const highY = Math.max(...combined.map(([, y]) => y));
+}
+
+function assayMeshes(assay) {
+  return [
+    ...Object.values(assay.candidate.compiledStates).map((state) => state.mesh),
+    ...Object.values(assay.evaluation.referenceStates).map((state) => state.mesh),
+  ];
+}
+
+export function buildExplicitResponseShellObservation(assay) {
+  const vertices = assayMeshes(assay).flatMap((mesh) => mesh.vertices);
+  if (vertices.length === 0) throw new Error('explicit shell observation requires mesh vertices');
+  const projected = vertices.map(projectVertex);
+  const bounds = (values) => [Math.min(...values), Math.max(...values)];
+  return {
+    cameraId: 'right-sagittal-boundary-observation-v0:global-sweep-v0',
+    projectionId: 'anterior-right-dorsal-oblique-linear-v0',
+    projectedBounds: {
+      horizontal: bounds(projected.map(([horizontal]) => horizontal)),
+      vertical: bounds(projected.map(([, vertical]) => vertical)),
+    },
+    sectionBounds: {
+      right: bounds(vertices.map(([right]) => right)),
+      dorsal: bounds(vertices.map(([, dorsal]) => dorsal)),
+    },
+    scope: 'all-candidate-and-reference-states',
+  };
+}
+
+function projectedMeshSvg(mesh, panel, className, observation, radialSegments = 48) {
+  const points = mesh.vertices.map(projectVertex);
+  const [lowX, highX] = observation.projectedBounds.horizontal;
+  const [lowY, highY] = observation.projectedBounds.vertical;
   const project = (index) => {
     const [x, y] = points[index];
     return [
@@ -72,16 +98,13 @@ function projectedMeshSvg(mesh, comparisonMesh, panel, className, radialSegments
   return `${rings}${longitudinals}`;
 }
 
-function meshSectionsSvg(candidate, reference, panel, radialSegments = 48) {
+function meshSectionsSvg(candidate, reference, panel, observation, radialSegments = 48) {
   const ringCount = Math.floor((candidate.vertices.length - 2) / radialSegments);
   const ringIds = [2, Math.floor(ringCount / 2), ringCount - 3];
   const gap = 8;
   const width = (panel.width - gap * 2) / 3;
-  const all = [...candidate.vertices, ...reference.vertices];
-  const lowX = Math.min(...all.map((vertex) => vertex[0]));
-  const highX = Math.max(...all.map((vertex) => vertex[0]));
-  const lowY = Math.min(...all.map((vertex) => vertex[1]));
-  const highY = Math.max(...all.map((vertex) => vertex[1]));
+  const [lowX, highX] = observation.sectionBounds.right;
+  const [lowY, highY] = observation.sectionBounds.dorsal;
   const path = (mesh, ringId, x) => {
     const vertices = mesh.vertices.slice(
       ringId * radialSegments,
@@ -100,7 +123,11 @@ function meshSectionsSvg(candidate, reference, panel, radialSegments = 48) {
   }).join('');
 }
 
-export function renderExplicitResponseShellSvg(assay, generationId) {
+export function renderExplicitResponseShellSvg(
+  assay,
+  generationId,
+  observation = buildExplicitResponseShellObservation(assay),
+) {
   if (assay?.status !== 'completed' || assay?.verdict?.passed !== true) {
     throw new Error('completed admitted explicit response-shell assay is required');
   }
@@ -128,13 +155,15 @@ export function renderExplicitResponseShellSvg(assay, generationId) {
       const y = top + rowIndex * rowHeight;
       const meshPanel = { x, y: y + 44, width: columnWidth, height: 205 };
       const sectionPanel = { x, y: y + 267, width: columnWidth, height: 58 };
-      return `<g id="${safeId(stateId)}">
+      const projectedBounds = escapeXml(JSON.stringify(observation.projectedBounds));
+      const sectionBounds = escapeXml(JSON.stringify(observation.sectionBounds));
+      return `<g id="${safeId(stateId)}" data-camera-id="${escapeXml(observation.cameraId)}" data-projected-bounds="${projectedBounds}" data-section-bounds="${sectionBounds}">
         <text class="panel-title" x="${x}" y="${y + 17}">${escapeXml(title)}</text>
         <text class="metric" x="${x}" y="${y + 36}">amplitude ${entry.amplitude} · 3D RMSE ${metric.fullSurfaceNormalizedRmse.toFixed(6)} · closed ${candidate.topology.closed ? 'yes' : 'NO'} · vertices ${candidate.topology.vertexCount}</text>
         <rect class="mesh-panel" x="${meshPanel.x}" y="${meshPanel.y}" width="${meshPanel.width}" height="${meshPanel.height}" rx="10"/>
-        ${projectedMeshSvg(reference.mesh, candidate.mesh, meshPanel, 'mesh-reference')}
-        ${projectedMeshSvg(candidate.mesh, reference.mesh, meshPanel, 'mesh-candidate')}
-        ${meshSectionsSvg(candidate.mesh, reference.mesh, sectionPanel)}
+        ${projectedMeshSvg(reference.mesh, meshPanel, 'mesh-reference', observation)}
+        ${projectedMeshSvg(candidate.mesh, meshPanel, 'mesh-candidate', observation)}
+        ${meshSectionsSvg(candidate.mesh, reference.mesh, sectionPanel, observation)}
       </g>`;
     }).join('')
   )).join('');
@@ -155,9 +184,9 @@ export function renderExplicitResponseShellSvg(assay, generationId) {
     .section-candidate { fill: none; stroke: #6af2e3; stroke-width: .9; opacity: .9; }
   </style>
   <text class="heading" x="45" y="37">Fixed-topology explicit response shell</text>
-  <text class="sub" x="45" y="64">full-surface 3D primary plus mesh-derived sections · magenta reference · cyan response shell</text>
+  <text class="sub" x="45" y="64">full-surface 3D primary plus mesh-derived sections · one global viewport · magenta reference · cyan response shell</text>
   <text class="sub" x="45" y="87">combined held out from construction · construction sources baseline + independent muscle + independent fat only</text>
-  <text class="sub" x="45" y="110">surface-only causal null: independent response missing · this is an additive interface result, not anatomy or nonlinear skin mechanics</text>
+  <text class="sub" x="45" y="110">source-row response null: independent response missing · carrier coupling not exercised · not anatomy or nonlinear skin mechanics</text>
   ${panels}
   <text class="sub" x="45" y="1181">generation ${escapeXml(generationId)} · assay ${escapeXml(assay.assayHash)}</text>
   <text class="sub" x="45" y="1204">compiler ${escapeXml(assay.construction.effectiveCompilerId)} · promotion none · bounded synthetic fixture only</text>
@@ -252,9 +281,11 @@ export async function writeExplicitResponseShellArtifacts({
       throw new Error('explicit response-shell assay card identity is not authoritative');
     }
     const assay = buildExplicitResponseShellAssay({ assayCard, target });
+    const observation = buildExplicitResponseShellObservation(assay);
     failurePhase = 'artifact-publication';
     const serialized = structuredClone(assay);
     serialized.generationId = generationId;
+    serialized.presentation = observation;
     const productPaths = [];
     for (const [stateId, state] of Object.entries(assay.candidate.compiledStates)) {
       const relativePath = `candidate-${safeId(stateId)}.obj`;
@@ -277,7 +308,7 @@ export async function writeExplicitResponseShellArtifacts({
     await writeJson(join(outDir, 'assay.json'), serialized);
     await writeFile(
       join(outDir, 'contact-sheet.svg'),
-      renderExplicitResponseShellSvg(assay, generationId),
+      renderExplicitResponseShellSvg(assay, generationId, observation),
       'utf8',
     );
     productPaths.push('assay.json', 'contact-sheet.svg');
@@ -302,6 +333,7 @@ export async function writeExplicitResponseShellArtifacts({
       effectiveTargetHash: assay.evaluation.targetHash,
       effectiveCompilerId: assay.construction.effectiveCompilerId,
       constructionProjectionHash: assay.construction.projectionHash,
+      effectiveObservation: observation,
       assayHash: assay.assayHash,
       evidencePassed: assay.verdict.passed,
       hypothesisPassed: assay.verdict.passed && assay.causalNull.verdict.passed === false,

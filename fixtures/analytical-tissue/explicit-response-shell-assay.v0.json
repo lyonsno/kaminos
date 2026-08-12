@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.explicit-response-shell-assay.v0",
   "id": "bounded-hindquarter-explicit-response-shell-v0",
-  "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
+  "priorCarrierAssayProvenanceHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
   "targetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
   "targetIdentity": {
     "id": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
@@ -14,7 +14,7 @@
     "referenceAmplitude": 0.1,
     "radialSegments": 48,
     "surfaceFormationId": "fixed-topology-elliptical-station-response-shell-v0",
-    "interiorCarrierId": "labeled-anisotropic-components-v0"
+    "priorInteriorCarrierProvenanceId": "labeled-anisotropic-components-v0"
   },
   "controls": {
     "muscle-tension": {

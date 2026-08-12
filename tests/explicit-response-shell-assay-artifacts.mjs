@@ -62,6 +62,10 @@ test('explicit shell writer publishes candidate-complete hashed 3D and 2D eviden
     );
     assert.equal(result.report.evidencePassed, true);
     assert.equal(result.report.hypothesisPassed, true);
+    assert.equal(
+      result.report.effectiveObservation.cameraId,
+      'right-sagittal-boundary-observation-v0:global-sweep-v0',
+    );
     assert.equal(result.report.outputs.length, 23);
     assert.equal(
       result.report.outputs.filter((entry) => entry.relativePath.endsWith('.obj')).length,
@@ -73,6 +77,15 @@ test('explicit shell writer publishes candidate-complete hashed 3D and 2D eviden
     assert.equal(serialized.generationId, result.report.generationId);
     assert.equal(serialized.construction.combinedTargetReadCount, 0);
     assert.equal(serialized.evaluation.heldOutFields[0], 'combined');
+    assert.deepEqual(serialized.presentation, result.report.effectiveObservation);
+    assert.deepEqual(Object.keys(serialized.presentation.projectedBounds), [
+      'horizontal',
+      'vertical',
+    ]);
+    assert.deepEqual(Object.keys(serialized.presentation.sectionBounds), [
+      'right',
+      'dorsal',
+    ]);
     assert.ok(Object.values(serialized.candidate.compiledStates).every(
       (state) => state.mesh.vertices === undefined && state.mesh.outputRef,
     ));
@@ -83,8 +96,20 @@ test('explicit shell writer publishes candidate-complete hashed 3D and 2D eviden
     const svg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
     assert.match(svg, /Fixed-topology explicit response shell/);
     assert.match(svg, /combined held out from construction/);
-    assert.match(svg, /surface-only causal null: independent response missing/);
+    assert.match(svg, /source-row response null: independent response missing/);
+    assert.match(svg, /carrier coupling not exercised/);
     assert.match(svg, /full-surface 3D primary plus mesh-derived sections/);
+    const cameraOccurrences = svg.match(new RegExp(
+      `data-camera-id="${result.report.effectiveObservation.cameraId}"`,
+      'g',
+    )) ?? [];
+    assert.equal(cameraOccurrences.length, 9);
+    const projectedBounds = svg.match(/data-projected-bounds="[^"]+"/g) ?? [];
+    assert.equal(projectedBounds.length, 9);
+    assert.equal(new Set(projectedBounds).size, 1);
+    const sectionBounds = svg.match(/data-section-bounds="[^"]+"/g) ?? [];
+    assert.equal(sectionBounds.length, 9);
+    assert.equal(new Set(sectionBounds).size, 1);
     assert.match(svg, new RegExp(result.report.generationId));
     assert.match(svg, new RegExp(result.assay.assayHash));
   });

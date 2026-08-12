@@ -1,18 +1,43 @@
 {
   "schema": "kaminos.explicit-response-shell-artifact-report.v0",
   "status": "completed",
-  "generationId": "36d601d9-3593-4804-847a-31372939e759",
+  "generationId": "b1c5cfc9-dba6-48c6-ad74-64e8fa587e94",
   "requestedRouteId": "bounded-hindquarter-explicit-response-shell-v0",
   "effectiveRouteId": "bounded-hindquarter-explicit-response-shell-v0",
   "requestedAssayCardPath": "fixtures/analytical-tissue/explicit-response-shell-assay.v0.json",
   "requestedTargetPath": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
   "effectiveAssayCardId": "bounded-hindquarter-explicit-response-shell-v0",
-  "effectiveAssayCardHash": "8a1340aabd752501101f7b5f1ff15cfb9d15622c2c8f3d355e418551b35c96db",
+  "effectiveAssayCardHash": "ec645d760e3bb1e86db0a33cce24278de2ae4006114f11add968cacba4f8ec0e",
   "effectiveTargetId": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
   "effectiveTargetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
   "effectiveCompilerId": "fixed-topology-elliptical-station-response-shell-v0",
   "constructionProjectionHash": "0af3339501b8af70f3b51bd97e219244049e182d74684b2d03461d8a917b6e58",
-  "assayHash": "307e94d281750690f24d4ff0a85a7cb5d8df87f81f45fb1ed9f49e238e6ef33d",
+  "effectiveObservation": {
+    "cameraId": "right-sagittal-boundary-observation-v0:global-sweep-v0",
+    "projectionId": "anterior-right-dorsal-oblique-linear-v0",
+    "projectedBounds": {
+      "horizontal": [
+        -1.0754999999999997,
+        0.7547000000000001
+      ],
+      "vertical": [
+        -1.2531489988314721,
+        0.9168992639196226
+      ]
+    },
+    "sectionBounds": {
+      "right": [
+        -1.2700000000000005,
+        1.2700000000000005
+      ],
+      "dorsal": [
+        -0.9200000000000006,
+        1.1800000000000015
+      ]
+    },
+    "scope": "all-candidate-and-reference-states"
+  },
+  "assayHash": "9230adb4c6681a325b53a57f4778a8546468519816b94996fbe98245cd99d76f",
   "evidencePassed": true,
   "hypothesisPassed": true,
   "outputs": [
@@ -98,15 +123,15 @@
     },
     {
       "relativePath": "causal-null.obj",
-      "sha256": "28efdc25ccf57746ed2541dce7d891b3f4be78673ea586f9e75ceabd977bf17e"
+      "sha256": "15ef1a21d79d476b7e7429b4271239b02a0343935067e6078da22c976e650e36"
     },
     {
       "relativePath": "assay.json",
-      "sha256": "827622da3ac3a321c745b07f784b80ca78437f39bf1d905867b9c067434b139d"
+      "sha256": "7a21a83158afbc219927a1bdcd393c9bad159c46ecab312702f020b610b96d43"
     },
     {
       "relativePath": "contact-sheet.svg",
-      "sha256": "ab353d0db208cfffbf097b3ccf13168e9c485b7fb43fc41aaba8d154907a40a0"
+      "sha256": "07ba0db32aec68458341ed1b506ed6eecb4119233982c61603c7d157b57a60b7"
     }
   ]
 }
