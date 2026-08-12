@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.overlapping-anisotropic-interaction-law-run-report.v0",
   "status": "completed",
-  "generationId": "7c4b9446-f8dc-4ad8-be99-e40f22fd15a0",
+  "generationId": "d335119c-364b-4640-8160-ba713d6e6e3d",
   "requestedRouteId": "bounded-hindquarter-overlapping-anisotropic-interaction-law-v0",
   "effectiveRouteId": "bounded-hindquarter-overlapping-anisotropic-interaction-law-v0",
   "effectiveCompilerId": "overlapping-anisotropic-tissue-field-v0",
@@ -15,13 +15,13 @@
   "outputs": [
     {
       "relativePath": "assay.json",
-      "byteLength": 33674384,
-      "sha256": "ddf7084b842caf729f6858b6738291ddda585e04ab8610da8a753f3b6a137526"
+      "byteLength": 33746632,
+      "sha256": "b5ad60fbf288d902151130f393c5801f31dad4ad255c0370356e5b4ba1f27c56"
     },
     {
       "relativePath": "contact-sheet.svg",
-      "byteLength": 2790784,
-      "sha256": "630e85bb5ce9c067b942d27be1c94da819a43dfeb888a07ba76f9f9af601d3ce"
+      "byteLength": 2792654,
+      "sha256": "1991a62ebcb1316e3cc571ea000045907476c8db3b4f02f9985655bc1f9b40bc"
     },
     {
       "relativePath": "additive-amplitude-0p1.obj",
@@ -294,19 +294,29 @@
       "sha256": "c65721ead6b4f171d842d8b87afcb55c924c068a9bcfeed614b49c586ec9c68d"
     }
   ],
-  "assayHash": "aa01f42b923a568e9cc112ae6faa119a610c2dcc389effba1641b2d7c2b0c3ce",
+  "assayHash": "8f22b02f452f94a311bd0a5b88841699dc720c5cc75d8d18af4b76fbdb3ac68d",
   "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
   "independentControlsHash": "e34158d718de67af8612db70e9f91bc10d23a5b869907daac738c236cdb83433",
   "interactionCardHash": "0da2e331b45bae438c0cd089c40b4d9a1ecaa9d297e564d1a401acb6806880b3",
   "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
   "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
   "evidencePassed": true,
+  "evidenceAuthority": "narrowed",
+  "completeReferenceSet": false,
+  "referenceLimitations": [
+    {
+      "code": "combined-reference-grid-uncontained",
+      "amplitudes": [
+        0.5
+      ]
+    }
+  ],
   "hypothesisPassed": false,
   "conclusive": true,
   "bestCandidateId": "normalized-product-additive-32",
   "admittedCandidateId": null,
   "inference": "bounded-signed-product-family-failed-quality-fit-incompatibility",
-  "qualityFitIncompatibilityObserved": true,
+  "qualityFitIncompatibilityObserved": false,
   "failurePhase": null,
   "lastTrustworthyEvidence": "all candidate-complete 3D meshes and 2D diagnostics reread and hashed from disk"
 }

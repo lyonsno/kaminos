@@ -488,3 +488,94 @@ test('overlap-aware interaction assay preserves the admitted independent rows an
   assert.equal(assay.verdict.conclusive, true);
   assert.equal(assay.promotion, 'none');
 });
+
+test('interaction reference containment exposes the open combined stress target without erasing the finite verdict', () => {
+  const assay = rowDistinctCore.buildOverlappingAnisotropicTissueInteractionAssay({
+    interactionCard: structuredClone(overlapInteractionCard),
+    overlapCard: structuredClone(overlapCard),
+    overlapTarget: structuredClone(overlapTarget),
+    descriptor: structuredClone(overlapDescriptor),
+    frozenSweepCard: structuredClone(fullSurfaceCard),
+    frozenAssayCard: structuredClone(assayCard),
+    frozenTarget: structuredClone(target),
+  });
+
+  assert.deepEqual(
+    assay.additive.map((entry) => entry.referenceContainment.contained),
+    [true, true, false],
+  );
+  assert.deepEqual(assay.additiveStress.referenceContainment.extents.right, [-1.27, 1.27]);
+  assert.deepEqual(assay.additiveStress.referenceContainment.bounds.right, [-1.15, 1.15]);
+  assert.equal(assay.additiveStress.reference.topology.closed, false);
+  assert.equal(assay.evidenceVerdict.authority, 'narrowed');
+  assert.deepEqual(assay.evidenceVerdict.limitations, [{
+    code: 'combined-reference-grid-uncontained',
+    amplitudes: [0.5],
+  }]);
+
+  const fitCandidates = assay.candidates.filter((candidate) => candidate.fitPass);
+  assert.deepEqual(fitCandidates.map((candidate) => candidate.id), [
+    'normalized-product-additive-32',
+  ]);
+  assert.equal(fitCandidates[0].qualityDecision.status, 'failed');
+  assert.deepEqual(fitCandidates[0].qualityDecision.containedFailureAmplitudes, [0.1]);
+  assert.deepEqual(fitCandidates[0].qualityDecision.uncontainedAmplitudes, [0.5]);
+  assert.equal(assay.verdict.passed, false);
+  assert.equal(assay.verdict.conclusive, true);
+  assert.deepEqual(assay.verdict.containedQualityRejectedFitCandidateIds, [
+    'normalized-product-additive-32',
+  ]);
+  assert.deepEqual(assay.verdict.indeterminateFitCandidateIds, []);
+});
+
+test('quality evidence that fails only against an uncontained reference remains indeterminate', () => {
+  assert.equal(
+    typeof rowDistinctCore.classifyInteractionQualityEvidence,
+    'function',
+    'the interaction verdict needs an explicit contained-reference authority classifier',
+  );
+  const decision = rowDistinctCore.classifyInteractionQualityEvidence({
+    candidateAmplitudes: [
+      {
+        amplitude: 0.1,
+        surfaceAreaRelativeError: 0.1,
+        volumeRelativeError: 0.1,
+        referenceContainment: { contained: true },
+      },
+      {
+        amplitude: 0.5,
+        surfaceAreaRelativeError: 0.3,
+        volumeRelativeError: 0.3,
+        referenceContainment: { contained: false },
+      },
+    ],
+    additive: [
+      { amplitude: 0.1, surfaceAreaRelativeError: 0.1, volumeRelativeError: 0.1 },
+      { amplitude: 0.5, surfaceAreaRelativeError: 0.2, volumeRelativeError: 0.2 },
+    ],
+  });
+  assert.deepEqual(decision, {
+    status: 'indeterminate',
+    containedFailureAmplitudes: [],
+    uncontainedAmplitudes: [0.5],
+  });
+
+  const containedFailure = rowDistinctCore.classifyInteractionQualityEvidence({
+    candidateAmplitudes: [{
+      amplitude: 0.1,
+      surfaceAreaRelativeError: 0.2,
+      volumeRelativeError: 0.1,
+      referenceContainment: { contained: true },
+    }],
+    additive: [{
+      amplitude: 0.1,
+      surfaceAreaRelativeError: 0.1,
+      volumeRelativeError: 0.1,
+    }],
+  });
+  assert.deepEqual(containedFailure, {
+    status: 'failed',
+    containedFailureAmplitudes: [0.1],
+    uncontainedAmplitudes: [],
+  });
+});

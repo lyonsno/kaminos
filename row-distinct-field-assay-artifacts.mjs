@@ -288,11 +288,11 @@ export function renderOverlappingAnisotropicTissueInteractionSvg(assay, generati
     throw new Error('completed overlap interaction evidence is required');
   }
   const width = 1480;
-  const height = 1590;
+  const height = 1620;
   const columnWidth = 440;
   const columnGap = 28;
   const left = 55;
-  const rowTop = 150;
+  const rowTop = 170;
   const rowHeight = 450;
   const rejected = assay.candidates.find(
     (candidate) => candidate.id === 'normalized-product-subtractive-0.5',
@@ -337,6 +337,11 @@ export function renderOverlappingAnisotropicTissueInteractionSvg(assay, generati
   const amplitudeLabels = assay.amplitudes.map((amplitude, index) => (
     `<text x="12" y="${rowTop + index * rowHeight + 18}" class="amplitude" transform="rotate(-90 12 ${rowTop + index * rowHeight + 18})">amplitude ${amplitude}</text>`
   )).join('');
+  const referenceAuthority = assay.evidenceVerdict.authority === 'narrowed'
+    ? `NARROWED AUTHORITY · amplitude ${assay.evidenceVerdict.limitations
+      .flatMap((limitation) => limitation.amplitudes)
+      .join(', ')} reference grid-clipped/open · RMSE remains analytic-field evidence; mesh area/volume does not`
+    : 'COMPLETE REFERENCE SET · all authored target extents lie inside the extraction grid';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#071018"/>
@@ -353,16 +358,18 @@ export function renderOverlappingAnisotropicTissueInteractionSvg(assay, generati
     .section-reference { stroke: #f18bd1; stroke-width: 1.2; opacity: .62; }
     .section-candidate { stroke: #65efe2; stroke-width: .8; opacity: .78; }
     .section-label { font-size: 8px; fill: #d6e5eb; }
+    .warning { font-size: 12px; font-weight: 700; fill: #ffbe73; }
   </style>
   <text x="55" y="39" class="heading">Signed overlap interaction law</text>
   <text x="55" y="66" class="sub">magenta = fixed combined target · cyan = extracted identity-bearing carrier · independent muscle/fat rows are frozen by source assay hash</text>
   <text x="55" y="89" class="sub">left preserves rejected negative-sign topology pressure · center is unchanged additive field sum · right is the best predeclared positive candidate</text>
   <text x="55" y="112" class="sub">full-surface 3D primary plus mesh-derived sections; every signed candidate remains in assay.json and as a complete OBJ product</text>
+  <text x="55" y="137" class="warning">${escapeXml(referenceAuthority)}</text>
   ${amplitudeLabels}
   ${rowsSvg}
-  <text x="55" y="1515" class="sub">source assay ${escapeXml(assay.sourceAssayHash)} · independent controls ${escapeXml(assay.independentControlsHash)}</text>
-  <text x="55" y="1538" class="sub">lowest RMSE ${escapeXml(assay.verdict.bestCandidateId)} · admitted ${escapeXml(assay.verdict.admittedCandidateId ?? 'none')} · ${escapeXml(assay.verdict.inference)}</text>
-  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · generation ${escapeXml(generationId ?? 'unbound')} · one partly synthetic fitted fixture only</text>
+  <text x="55" y="1540" class="sub">source assay ${escapeXml(assay.sourceAssayHash)} · independent controls ${escapeXml(assay.independentControlsHash)}</text>
+  <text x="55" y="1563" class="sub">lowest RMSE ${escapeXml(assay.verdict.bestCandidateId)} · admitted ${escapeXml(assay.verdict.admittedCandidateId ?? 'none')} · ${escapeXml(assay.verdict.inference)}</text>
+  <text x="55" y="1586" class="sub">assay ${escapeXml(assay.assayHash)} · generation ${escapeXml(generationId ?? 'unbound')} · one partly synthetic fitted fixture only</text>
 </svg>
 `;
 }
@@ -879,6 +886,9 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
     report.effectiveCompilerId = assay.effectiveCompilerId;
     report.effectiveExtractorId = assay.extractorId;
     report.evidencePassed = assay.evidenceVerdict.passed;
+    report.evidenceAuthority = assay.evidenceVerdict.authority;
+    report.completeReferenceSet = assay.evidenceVerdict.completeReferenceSet;
+    report.referenceLimitations = structuredClone(assay.evidenceVerdict.limitations);
     report.hypothesisPassed = assay.verdict.passed;
     report.conclusive = assay.verdict.conclusive;
     report.bestCandidateId = assay.verdict.bestCandidateId;
@@ -889,7 +899,7 @@ export async function writeOverlappingAnisotropicTissueInteractionArtifacts({
       throw new Error(`interaction assay evidence failed: ${JSON.stringify(assay.evidenceVerdict.failures)}`);
     }
     if (!assay.verdict.conclusive) {
-      throw new Error('interaction candidate family ended before a pass or positive minimum bracket');
+      throw new Error('interaction candidate family ended without an authoritative finite disposition');
     }
 
     phase = 'artifact-write';

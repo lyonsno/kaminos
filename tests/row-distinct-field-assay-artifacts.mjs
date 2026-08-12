@@ -344,6 +344,12 @@ test('interaction writer emits every signed candidate as hashed 3D and 2D eviden
     assert.equal(result.report.status, 'completed');
     assert.match(result.report.generationId, /^[0-9a-f-]{36}$/);
     assert.equal(result.report.evidencePassed, true);
+    assert.equal(result.report.evidenceAuthority, 'narrowed');
+    assert.equal(result.report.completeReferenceSet, false);
+    assert.deepEqual(result.report.referenceLimitations, [{
+      code: 'combined-reference-grid-uncontained',
+      amplitudes: [0.5],
+    }]);
     assert.equal(result.report.hypothesisPassed, false);
     assert.equal(result.report.conclusive, true);
     assert.equal(result.report.bestCandidateId, 'normalized-product-additive-32');
@@ -363,6 +369,9 @@ test('interaction writer emits every signed candidate as hashed 3D and 2D eviden
     assert.match(svg, /normalized-product-subtractive-0\.5/);
     assert.match(svg, /normalized-product-additive-32/);
     assert.match(svg, /fit-only \/ quality fail/);
+    assert.match(svg, /NARROWED AUTHORITY/);
+    assert.match(svg, /amplitude 0\.5 reference grid-clipped\/open/);
+    assert.match(svg, /RMSE remains analytic-field evidence/);
     assert.match(svg, new RegExp(result.report.generationId));
     assert.doesNotMatch(svg, /normalized-product-additive-32[\s\S]{0,200}· PASS/);
     assert.match(svg, new RegExp(result.assay.assayHash));

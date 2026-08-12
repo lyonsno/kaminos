@@ -1172,6 +1172,42 @@ function scaleOverlapTarget(target, stateId, amplitude, referenceAmplitude) {
   return scaled;
 }
 
+function overlapTargetContainment(target, grid, stateId, amplitude, referenceAmplitude) {
+  const scaled = scaleOverlapTarget(target, stateId, amplitude, referenceAmplitude);
+  const first = scaled.stations[0];
+  const last = scaled.stations.at(-1);
+  const firstSpacing = scaled.stations[1].anterior - first.anterior;
+  const lastSpacing = last.anterior - scaled.stations.at(-2).anterior;
+  const precise = (value) => Number(value.toFixed(12));
+  const extents = {
+    right: [
+      precise(-Math.max(...scaled.stations.map((station) => station.perturbed.halfWidth))),
+      precise(Math.max(...scaled.stations.map((station) => station.perturbed.halfWidth))),
+    ],
+    dorsal: [
+      precise(Math.min(...scaled.stations.map((station) => station.perturbed.bottom))),
+      precise(Math.max(...scaled.stations.map((station) => station.perturbed.top))),
+    ],
+    anterior: [
+      precise(first.anterior - firstSpacing * 0.5),
+      precise(last.anterior + lastSpacing * 0.5),
+    ],
+  };
+  const bounds = structuredClone(grid.bounds);
+  const margins = Object.fromEntries(Object.keys(extents).map((axis) => [axis, [
+    precise(extents[axis][0] - bounds[axis][0]),
+    precise(bounds[axis][1] - extents[axis][1]),
+  ]]));
+  return {
+    stateId,
+    amplitude,
+    extents,
+    bounds,
+    margins,
+    contained: Object.values(margins).every(([low, high]) => low > 0 && high > 0),
+  };
+}
+
 function overlapReferenceField(target, grid, stateId, amplitude, referenceAmplitude) {
   return createIndependentTargetField(
     scaleOverlapTarget(target, stateId, amplitude, referenceAmplitude),
@@ -1625,6 +1661,13 @@ function buildOverlapInteractionAmplitude({
   );
   return {
     amplitude,
+    referenceContainment: overlapTargetContainment(
+      overlapTarget,
+      overlapCard.grid,
+      'combined',
+      amplitude,
+      overlapCard.referenceAmplitude,
+    ),
     mesh,
     topology: topologyEvidence(mesh),
     fullSurface,
@@ -1654,6 +1697,35 @@ function buildOverlapInteractionAmplitude({
     referenceSections: overlapCard.sectionPlanes.map(
       (anterior) => sliceMeshAtAnterior(referenceMesh, anterior),
     ),
+  };
+}
+
+export function classifyInteractionQualityEvidence({ candidateAmplitudes, additive }) {
+  const additiveByAmplitude = new Map(additive.map((entry) => [entry.amplitude, entry]));
+  const containedFailureAmplitudes = [];
+  const uncontainedAmplitudes = [];
+  for (const entry of candidateAmplitudes) {
+    const baseline = additiveByAmplitude.get(entry.amplitude);
+    if (!baseline) {
+      throw new Error(`Missing additive quality reference for amplitude ${entry.amplitude}`);
+    }
+    if (entry.referenceContainment?.contained !== true) {
+      uncontainedAmplitudes.push(entry.amplitude);
+      continue;
+    }
+    if (entry.surfaceAreaRelativeError > baseline.surfaceAreaRelativeError
+      || entry.volumeRelativeError > baseline.volumeRelativeError) {
+      containedFailureAmplitudes.push(entry.amplitude);
+    }
+  }
+  return {
+    status: containedFailureAmplitudes.length > 0
+      ? 'failed'
+      : uncontainedAmplitudes.length > 0
+        ? 'indeterminate'
+        : 'passed',
+    containedFailureAmplitudes,
+    uncontainedAmplitudes,
   };
 }
 
@@ -1692,6 +1764,13 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
     );
     return {
       ...entry,
+      referenceContainment: overlapTargetContainment(
+        overlapTarget,
+        overlapCard.grid,
+        'combined',
+        entry.amplitude,
+        overlapCard.referenceAmplitude,
+      ),
       surfaceAreaRelativeError: Math.abs(entry.fullSurface.area - referenceFullSurface.area)
         / Math.max(referenceFullSurface.area, 1e-12),
       volumeRelativeError: Math.abs(entry.fullSurface.volume - referenceFullSurface.volume)
@@ -1719,12 +1798,11 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
     const topologyPass = amplitudes.every((entry) => (
       entry.topology.closed && entry.topology.componentCount === 1
     ));
-    const qualityPass = amplitudes.every((entry, index) => (
-      entry.topology.closed
-        && entry.topology.componentCount === 1
-        && entry.surfaceAreaRelativeError <= additive[index].surfaceAreaRelativeError
-        && entry.volumeRelativeError <= additive[index].volumeRelativeError
-    ));
+    const qualityDecision = classifyInteractionQualityEvidence({
+      candidateAmplitudes: amplitudes,
+      additive,
+    });
+    const qualityPass = qualityDecision.status === 'passed';
     const fitPass = stress.fullSurface.normalizedRmse
       <= interactionCard.decision.maximumCombinedFullSurfaceNormalizedRmse;
     const qualifies = topologyPass && qualityPass && fitPass;
@@ -1735,6 +1813,7 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
       amplitudes,
       stress,
       topologyPass,
+      qualityDecision,
       qualityPass,
       fitPass,
       qualifies,
@@ -1776,13 +1855,28 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
   const qualityFitIncompatibilityObserved = positiveCandidates.some(
     (candidate) => candidate.qualityPass && !candidate.fitPass,
   ) && positiveCandidates.some(
-    (candidate) => candidate.fitPass && !candidate.qualityPass,
+    (candidate) => candidate.fitPass && candidate.qualityDecision.status === 'failed',
   );
-  const conclusive = passed || positiveMinimumBracketed || qualityFitIncompatibilityObserved;
+  const fitCandidates = candidates.filter(
+    (candidate) => candidate.fitPass && candidate.topologyPass,
+  );
+  const containedQualityRejectedFitCandidateIds = fitCandidates
+    .filter((candidate) => candidate.qualityDecision.status === 'failed')
+    .map((candidate) => candidate.id);
+  const indeterminateFitCandidateIds = fitCandidates
+    .filter((candidate) => candidate.qualityDecision.status === 'indeterminate')
+    .map((candidate) => candidate.id);
+  const finiteFamilyRejected = fitCandidates.length > 0
+    ? containedQualityRejectedFitCandidateIds.length === fitCandidates.length
+    : positiveMinimumBracketed;
+  const conclusive = passed || finiteFamilyRejected;
   const qualifyingCandidates = candidates.filter((candidate) => candidate.qualifies).sort(
     (left, right) => left.stress.fullSurface.normalizedRmse
       - right.stress.fullSurface.normalizedRmse,
   );
+  const uncontainedReferenceAmplitudes = additive
+    .filter((entry) => !entry.referenceContainment.contained)
+    .map((entry) => entry.amplitude);
   const result = {
     schema: 'kaminos.overlapping-anisotropic-interaction-law-result.v0',
     status: 'completed',
@@ -1810,12 +1904,23 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
     evidenceVerdict: {
       passed: evidenceFailures.length === 0,
       failures: evidenceFailures,
+      authority: uncontainedReferenceAmplitudes.length > 0 ? 'narrowed' : 'complete',
+      completeReferenceSet: uncontainedReferenceAmplitudes.length === 0,
+      limitations: uncontainedReferenceAmplitudes.length > 0
+        ? [{
+          code: 'combined-reference-grid-uncontained',
+          amplitudes: uncontainedReferenceAmplitudes,
+        }]
+        : [],
     },
     verdict: {
       passed,
       conclusive,
       positiveMinimumBracketed,
       qualityFitIncompatibilityObserved,
+      finiteFamilyRejected,
+      containedQualityRejectedFitCandidateIds,
+      indeterminateFitCandidateIds,
       improved: (rankedCandidates[0]?.stress.fullSurface.normalizedRmse ?? Infinity)
         < additiveStress.fullSurface.normalizedRmse,
       bestCandidateId: rankedCandidates[0]?.id ?? null,
