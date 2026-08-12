@@ -3,8 +3,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA,
   ROW_DISTINCT_FIELD_ASSAY_SCHEMA,
   TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA,
+  buildOverlappingAnisotropicTissueControlAssay,
   buildRowDistinctScalarAnisotropicAssay,
   buildTargetSdfFullSurfaceSweep,
 } from './row-distinct-field-assay-core.mjs';
@@ -12,6 +14,8 @@ import {
 export const ROW_DISTINCT_ARTIFACT_ROUTE = 'bounded-hindquarter-row-distinct-field-mesh-v0';
 export const TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE =
   'bounded-hindquarter-target-sdf-full-surface-sweep-v0';
+export const OVERLAPPING_TISSUE_ARTIFACT_ROUTE =
+  'bounded-hindquarter-overlapping-anisotropic-tissue-control-v0';
 
 function escapeXml(value) {
   return String(value)
@@ -187,6 +191,85 @@ export function renderTargetSdfFullSurfaceSvg(assay) {
   ${rowsSvg}
   <text x="55" y="1515" class="sub">reference ${escapeXml(assay.reference.authority)} · extractor ${escapeXml(assay.reference.effectiveExtractorId)}</text>
   <text x="55" y="1538" class="sub">target ${escapeXml(assay.targetHash)} · card ${escapeXml(assay.sweepCardHash)}</text>
+  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · bounded synthetic evidence only; promotion none</text>
+</svg>
+`;
+}
+
+export function renderOverlappingAnisotropicTissueControlSvg(assay) {
+  if (assay?.schema !== OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA
+    || assay.status !== 'completed'
+    || assay.evidenceVerdict?.passed !== true
+    || assay.amplitudes?.length < 3) {
+    throw new Error('completed overlapping tissue evidence is required');
+  }
+  const width = 1480;
+  const height = 1590;
+  const columnWidth = 440;
+  const columnGap = 28;
+  const left = 55;
+  const rowTop = 150;
+  const rowHeight = 450;
+  const columns = [
+    { id: 'muscle-tension', title: 'muscle-tension' },
+    { id: 'fat-distribution', title: 'fat-distribution' },
+    { id: 'combined', title: 'combined' },
+  ];
+  const rowsSvg = assay.amplitudes.map((amplitude, rowIndex) => {
+    const y = rowTop + rowIndex * rowHeight;
+    return columns.map((column, columnIndex) => {
+      const x = left + columnIndex * (columnWidth + columnGap);
+      const candidate = column.id === 'combined'
+        ? assay.combined[rowIndex]
+        : assay.controls[column.id].amplitudes[rowIndex];
+      const meshPanel = { x, y: y + 42, width: columnWidth, height: 245 };
+      const sectionPanel = { x, y: y + 309, width: columnWidth, height: 92 };
+      const identity = candidate.surfaceIdentity.componentFractions;
+      const responseText = column.id === 'combined'
+        ? `sum ${candidate.superposition.normalizedRmse.toFixed(4)}`
+        : `resp ${candidate.response.normalizedRmse.toFixed(4)} · x-talk ${candidate.spatialCrosstalkRatio.toFixed(3)}`;
+      return `<g id="overlap-${escapeXml(amplitude)}-${escapeXml(column.id)}">
+        <text x="${x}" y="${y + 17}" class="panel-title">${escapeXml(column.title)}</text>
+        <text x="${x}" y="${y + 36}" class="metric">surf ${candidate.fullSurface.normalizedRmse.toFixed(4)} · ${responseText} · ${candidate.topology.closed ? 'closed' : 'OPEN'} · ${candidate.topology.componentCount}c</text>
+        <rect x="${meshPanel.x}" y="${meshPanel.y}" width="${meshPanel.width}" height="${meshPanel.height}" rx="12" class="mesh-panel"/>
+        ${projectedMeshSvg(candidate.reference.mesh, meshPanel, assay.grid.bounds, 'mesh-reference', 1000)}
+        ${projectedMeshSvg(candidate.mesh, meshPanel, assay.grid.bounds, 'mesh-candidate', 1000)}
+        ${meshSectionsSvg(candidate.sections, candidate.referenceSections, sectionPanel, assay.grid.bounds)}
+        <text x="${x}" y="${y + 423}" class="metric">volume ${candidate.fullSurface.volume.toFixed(3)} · surface mixture muscle ${(identity.muscle ?? 0).toFixed(3)} / fat ${(identity.fat ?? 0).toFixed(3)}</text>
+      </g>`;
+    }).join('');
+  }).join('');
+  const amplitudeLabels = assay.amplitudes.map((amplitude, index) => (
+    `<text x="12" y="${rowTop + index * rowHeight + 18}" class="amplitude" transform="rotate(-90 12 ${rowTop + index * rowHeight + 18})">amplitude ${amplitude}</text>`
+  )).join('');
+  const hypothesis = assay.hypothesisVerdict.passed
+    ? 'lead hypothesis passed all predeclared bounds'
+    : `lead hypothesis missed ${assay.hypothesisVerdict.failures.length} predeclared bound(s)`;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="#071018"/>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fill: #dceaf0; }
+    .heading { font-size: 25px; font-weight: 700; }
+    .sub { font-size: 13px; fill: #96acb6; }
+    .panel-title { font-size: 16px; font-weight: 700; }
+    .metric { font-size: 10px; fill: #bfd0d7; }
+    .amplitude { font-size: 12px; font-weight: 700; fill: #f3c47a; }
+    .mesh-panel, .section-panel { fill: #101a24; stroke: #304657; }
+    .mesh-reference { fill: #ed74cb; fill-opacity: .10; stroke: #ff9ee0; stroke-opacity: .32; stroke-width: .38; }
+    .mesh-candidate { fill: #27d8c5; fill-opacity: .20; stroke: #67f3e4; stroke-opacity: .44; stroke-width: .42; }
+    .section-reference { stroke: #f18bd1; stroke-width: 1.2; opacity: .62; }
+    .section-candidate { stroke: #65efe2; stroke-width: .8; opacity: .78; }
+    .section-label { font-size: 8px; fill: #d6e5eb; }
+  </style>
+  <text x="55" y="39" class="heading">Overlapping anisotropic tissue control</text>
+  <text x="55" y="66" class="sub">full-surface 3D: magenta = independent authored response · cyan = fitted muscle/fat carrier · muscle and fat contributors overlap but retain identity</text>
+  <text x="55" y="89" class="sub">mesh-derived sections: the same extracted meshes are cut at three anterior planes; no profile-only substitute</text>
+  <text x="55" y="112" class="sub">${escapeXml(hypothesis)} · scalar metaballs remain frozen at ${escapeXml(assay.frozenScalarControl.sourceAssayHash.slice(0, 12))}; no rescue or refit</text>
+  ${amplitudeLabels}
+  ${rowsSvg}
+  <text x="55" y="1515" class="sub">descriptor ${escapeXml(assay.descriptorHash)} · target ${escapeXml(assay.targetHash)}</text>
+  <text x="55" y="1538" class="sub">card ${escapeXml(assay.overlapCardHash)} · extractor ${escapeXml(assay.extractorId)}</text>
   <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · bounded synthetic evidence only; promotion none</text>
 </svg>
 `;
@@ -408,6 +491,152 @@ export async function writeTargetSdfFullSurfaceArtifacts({
     report.status = 'completed';
     report.failurePhase = null;
     report.lastTrustworthyEvidence = 'all 3D meshes and 2D diagnostics reread and hashed from disk';
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    return { assay, report, reportPath };
+  } catch (error) {
+    report.status = 'failed';
+    report.failurePhase = phase;
+    report.error = error instanceof Error ? error.message : String(error);
+    report.lastTrustworthyEvidence = report.outputs.length === 0
+      ? 'output directory and failure report only; no primary artifact accepted'
+      : `${report.outputs.length} artifact(s) reread and hashed before failure`;
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    throw error;
+  }
+}
+
+export async function writeOverlappingAnisotropicTissueControlArtifacts({
+  outDir,
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  frozenSweepCard,
+  frozenAssayCard,
+  frozenTarget,
+  requestedRouteId = OVERLAPPING_TISSUE_ARTIFACT_ROUTE,
+} = {}) {
+  if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const reportPath = join(outDir, 'report.json');
+  const report = {
+    schema: 'kaminos.overlapping-anisotropic-tissue-control-run-report.v0',
+    status: 'running',
+    requestedRouteId,
+    effectiveRouteId: null,
+    requestedCompilerId: overlapCard?.compilerId ?? null,
+    effectiveCompilerId: null,
+    requestedExtractorId: overlapCard?.extractorId ?? null,
+    effectiveExtractorId: null,
+    evidencePrimary: 'full-surface-3d',
+    sectionSource: 'extracted-mesh-triangle-plane-intersections',
+    outputs: [],
+  };
+  let phase = 'input-validation';
+  try {
+    if (requestedRouteId !== OVERLAPPING_TISSUE_ARTIFACT_ROUTE) {
+      throw new Error(
+        `requested route ${requestedRouteId} is unavailable; effective route would be ${OVERLAPPING_TISSUE_ARTIFACT_ROUTE}`,
+      );
+    }
+    report.effectiveRouteId = OVERLAPPING_TISSUE_ARTIFACT_ROUTE;
+    phase = 'assay-build';
+    const assay = buildOverlappingAnisotropicTissueControlAssay({
+      overlapCard,
+      overlapTarget,
+      descriptor,
+      frozenSweepCard,
+      frozenAssayCard,
+      frozenTarget,
+    });
+    report.assayHash = assay.assayHash;
+    report.targetHash = assay.targetHash;
+    report.descriptorHash = assay.descriptorHash;
+    report.overlapCardHash = assay.overlapCardHash;
+    report.effectiveCompilerId = assay.compilerId;
+    report.effectiveExtractorId = assay.extractorId;
+    report.evidencePassed = assay.evidenceVerdict.passed;
+    report.hypothesisPassed = assay.hypothesisVerdict.passed;
+    if (!assay.evidenceVerdict.passed) {
+      throw new Error(`overlapping tissue evidence failed: ${JSON.stringify(assay.evidenceVerdict.failures)}`);
+    }
+
+    phase = 'artifact-write';
+    const serializedAssay = structuredClone(assay);
+    serializedAssay.baseline.mesh = {
+      encoding: 'obj',
+      outputRef: 'baseline-overlapping-anisotropic.obj',
+    };
+    serializedAssay.baseline.reference.mesh = {
+      encoding: 'obj',
+      outputRef: 'baseline-reference.obj',
+    };
+    for (const [controlId, control] of Object.entries(serializedAssay.controls)) {
+      for (const entry of control.amplitudes) {
+        const amplitudeId = String(entry.amplitude).replace('.', 'p');
+        entry.mesh = {
+          encoding: 'obj',
+          outputRef: `${safeId(controlId)}-amplitude-${amplitudeId}.obj`,
+        };
+        entry.reference.mesh = {
+          encoding: 'obj',
+          outputRef: `${safeId(controlId)}-reference-amplitude-${amplitudeId}.obj`,
+        };
+      }
+    }
+    for (const entry of serializedAssay.combined) {
+      const amplitudeId = String(entry.amplitude).replace('.', 'p');
+      entry.mesh = {
+        encoding: 'obj',
+        outputRef: `combined-amplitude-${amplitudeId}.obj`,
+      };
+      entry.reference.mesh = {
+        encoding: 'obj',
+        outputRef: `combined-reference-amplitude-${amplitudeId}.obj`,
+      };
+    }
+    const products = [
+      ['assay.json', `${JSON.stringify(serializedAssay, null, 2)}\n`],
+      ['contact-sheet.svg', renderOverlappingAnisotropicTissueControlSvg(assay)],
+      ['baseline-overlapping-anisotropic.obj', meshToObj(assay.baseline.mesh, 'overlapping-anisotropic-baseline')],
+      ['baseline-reference.obj', meshToObj(assay.baseline.reference.mesh, 'overlapping-anisotropic-baseline-reference')],
+    ];
+    for (const [controlId, control] of Object.entries(assay.controls)) {
+      for (const entry of control.amplitudes) {
+        const amplitudeId = String(entry.amplitude).replace('.', 'p');
+        products.push([
+          `${safeId(controlId)}-amplitude-${amplitudeId}.obj`,
+          meshToObj(entry.mesh, `${controlId}-amplitude-${amplitudeId}`),
+        ]);
+        products.push([
+          `${safeId(controlId)}-reference-amplitude-${amplitudeId}.obj`,
+          meshToObj(entry.reference.mesh, `${controlId}-reference-amplitude-${amplitudeId}`),
+        ]);
+      }
+    }
+    for (const entry of assay.combined) {
+      const amplitudeId = String(entry.amplitude).replace('.', 'p');
+      products.push([
+        `combined-amplitude-${amplitudeId}.obj`,
+        meshToObj(entry.mesh, `combined-amplitude-${amplitudeId}`),
+      ]);
+      products.push([
+        `combined-reference-amplitude-${amplitudeId}.obj`,
+        meshToObj(entry.reference.mesh, `combined-reference-amplitude-${amplitudeId}`),
+      ]);
+    }
+    for (const [relativePath, contents] of products) {
+      const path = join(outDir, relativePath);
+      await writeFile(path, contents, 'utf8');
+      const bytes = await readFile(path);
+      report.outputs.push({
+        relativePath,
+        byteLength: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      });
+    }
+    report.status = 'completed';
+    report.failurePhase = null;
+    report.lastTrustworthyEvidence = 'all 3D meshes and mesh-derived diagnostics reread and hashed from disk';
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     return { assay, report, reportPath };
   } catch (error) {

@@ -4,10 +4,15 @@ export const ROW_DISTINCT_FIELD_ASSAY_SCHEMA =
   'kaminos.row-distinct-scalar-anisotropic-result.v0';
 export const TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA =
   'kaminos.target-sdf-full-surface-sweep-result.v0';
+export const OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA =
+  'kaminos.overlapping-anisotropic-tissue-control-result.v0';
 
 const ASSAY_CARD_SCHEMA = 'kaminos.row-distinct-scalar-anisotropic-assay.v0';
 const TARGET_SCHEMA = 'kaminos.row-distinct-boundary-response-target.v0';
 const FULL_SURFACE_CARD_SCHEMA = 'kaminos.target-sdf-full-surface-sweep-assay.v0';
+const OVERLAP_CARD_SCHEMA = 'kaminos.overlapping-anisotropic-tissue-control-assay.v0';
+const OVERLAP_TARGET_SCHEMA = 'kaminos.overlapping-tissue-boundary-response-target.v0';
+const OVERLAP_DESCRIPTOR_SCHEMA = 'kaminos.overlapping-anisotropic-tissue-descriptor.v0';
 const SCALAR_ROW = Object.freeze({
   id: 'scalar-metaball-control',
   role: 'undifferentiated-interior-control',
@@ -188,7 +193,7 @@ function contributionAt(point, primitive) {
   return primitive.strength * (1 - q) ** 2;
 }
 
-function createField(primitives, grid, extraction) {
+function createField(primitives, grid, extraction, isoValue = 0.22) {
   const [low, high] = grid.bounds.anterior;
   const step = (high - low) / (grid.resolution[2] - 1);
   const margin = step * extraction.longitudinalClosureCells;
@@ -206,7 +211,7 @@ function createField(primitives, grid, extraction) {
         (sum, primitive) => sum + contributionAt(point, primitive),
         0,
       );
-      return contribution * longitudinalWeight(point[2]) - 0.22;
+      return contribution * longitudinalWeight(point[2]) - isoValue;
     },
     contributions(point) {
       return primitives.map((primitive) => ({
@@ -936,6 +941,541 @@ export function buildTargetSdfFullSurfaceSweep({ sweepCard, assayCard, target } 
     },
     amplitudes: amplitudeResults,
     verdict: { passed: failures.length === 0, failures },
+  };
+  return { ...result, assayHash: hashValue(result) };
+}
+
+function validateOverlapInputs({
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  frozenSweepCard,
+  frozenAssayCard,
+  frozenTarget,
+}) {
+  if (overlapCard?.schema !== OVERLAP_CARD_SCHEMA
+    || overlapTarget?.schema !== OVERLAP_TARGET_SCHEMA
+    || descriptor?.schema !== OVERLAP_DESCRIPTOR_SCHEMA) {
+    throw new Error('overlapping tissue assay card, target, and descriptor schemas are required');
+  }
+  if (overlapTarget.authority?.sourceKind !== 'independently-authored-synthetic-observation') {
+    throw new Error('candidate-independent overlapping tissue target authority is required');
+  }
+  if (overlapCard.targetRef
+      !== 'fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json'
+    || overlapCard.descriptorRef
+      !== 'fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json') {
+    throw new Error('overlapping tissue source references do not match the closed assay');
+  }
+  const tissueIds = descriptor.tissues?.map((tissue) => tissue.id) ?? [];
+  if (tissueIds.length !== 2
+    || new Set(tissueIds).size !== 2
+    || !tissueIds.includes('muscle')
+    || !tissueIds.includes('fat')) {
+    throw new Error('distinct muscle and fat tissue identities are required');
+  }
+  if (descriptor.promotion !== 'none' || overlapCard.promotion !== 'none') {
+    throw new Error('overlapping tissue assay cannot promote a representation');
+  }
+  if (!Array.isArray(overlapCard.amplitudes) || overlapCard.amplitudes.length < 3
+    || overlapCard.amplitudes.some((value, index) => (
+      !Number.isFinite(value) || value <= 0
+        || (index > 0 && value <= overlapCard.amplitudes[index - 1])
+    ))) {
+    throw new Error('overlapping tissue assay requires increasing small, medium, and stress amplitudes');
+  }
+  if (overlapCard.extractorId !== 'marching-tetrahedra-zero-isosurface-v0') {
+    throw new Error('overlapping tissue extractor substitution is not allowed');
+  }
+  for (const [controlId, control] of Object.entries(overlapCard.controls ?? {})) {
+    if (!tissueIds.includes(control.targetTissueId)
+      || !overlapTarget.stations?.every((station) => station[control.targetStateId])) {
+      throw new Error(`control ${controlId} does not bind a target tissue and authored response state`);
+    }
+  }
+  validateFullSurfaceInputs(frozenSweepCard, frozenAssayCard, frozenTarget);
+}
+
+function overlapBaselinePrimitives(target, descriptor) {
+  const isolatedIsoRadius = Math.sqrt(1 - Math.sqrt(descriptor.isoValue));
+  return target.stations.flatMap((station, stationIndex) => {
+    const centerY = (station.baseline.top + station.baseline.bottom) * 0.5;
+    const radii = [
+      station.baseline.halfWidth,
+      (station.baseline.top - station.baseline.bottom) * 0.5,
+      stationSpacing(target, stationIndex) * 0.78,
+    ];
+    return descriptor.tissues.map((tissue) => ({
+      id: `${tissue.id}-${stationIndex}`,
+      componentId: tissue.id,
+      center: [0, centerY, station.anterior],
+      radii: radii.map(
+        (radius, axis) => radius * tissue.radiusScale[axis] / isolatedIsoRadius,
+      ),
+      strength: tissue.strength,
+    }));
+  });
+}
+
+function supportWeight(anterior, support) {
+  const [low, high] = support;
+  if (anterior < low || anterior > high) return 0;
+  const t = (anterior - low) / Math.max(high - low, 1e-12);
+  return 0.25 + Math.sin(Math.PI * t) * 0.75;
+}
+
+function perturbOverlapPrimitives(primitives, descriptor, control, amplitude) {
+  const tissue = descriptor.tissues.find((entry) => entry.id === control.targetTissueId);
+  const modifiedIds = [];
+  const next = primitives.map((primitive) => {
+    const copy = {
+      ...primitive,
+      center: [...primitive.center],
+      radii: [...primitive.radii],
+    };
+    if (primitive.componentId !== control.targetTissueId) return copy;
+    const weight = supportWeight(primitive.center[2], control.support);
+    if (weight <= 0) return copy;
+    copy.radii = copy.radii.map(
+      (radius, axis) => radius * (1 + amplitude * tissue.control.radiusRate[axis] * weight),
+    );
+    copy.center[1] += amplitude * tissue.control.dorsalTranslationRate * weight;
+    modifiedIds.push(copy.id);
+    return copy;
+  });
+  return {
+    primitives: next,
+    mutation: {
+      targetTissueId: control.targetTissueId,
+      targetPrimitiveCount: modifiedIds.length,
+      nonTargetPrimitiveCount: 0,
+      modifiedPrimitiveIds: modifiedIds,
+    },
+  };
+}
+
+function scaleOverlapTarget(target, stateId, amplitude, referenceAmplitude) {
+  const scaled = structuredClone(target);
+  const scale = amplitude / referenceAmplitude;
+  scaled.stations = scaled.stations.map((station) => ({
+    ...station,
+    perturbed: Object.fromEntries(['top', 'bottom', 'halfWidth'].map((field) => [
+      field,
+      station.baseline[field] + (station[stateId][field] - station.baseline[field]) * scale,
+    ])),
+  }));
+  scaled.authority = {
+    ...scaled.authority,
+    derivation: `${stateId} displacement scaled by ${scale}`,
+  };
+  return scaled;
+}
+
+function overlapReferenceField(target, grid, stateId, amplitude, referenceAmplitude) {
+  return createIndependentTargetField(
+    scaleOverlapTarget(target, stateId, amplitude, referenceAmplitude),
+    grid,
+    'perturbed',
+    referenceAmplitude,
+    referenceAmplitude,
+  );
+}
+
+function overlapResponseLedger(baseline, perturbed, scaledTarget, control) {
+  return responseLedger(baseline, perturbed, scaledTarget, {
+    control: { support: control.support },
+  });
+}
+
+function boundaryFitEvidence(observations, target, stateId) {
+  const errors = [];
+  for (let index = 0; index < target.stations.length; index += 1) {
+    for (const field of ['top', 'bottom', 'halfWidth']) {
+      errors.push(
+        (observations[index][field] - target.stations[index][stateId][field])
+          / target.normalizationSpan,
+      );
+    }
+  }
+  return { normalizedRmse: rmse(errors) };
+}
+
+function contributionTotals(field, point) {
+  const totals = new Map();
+  for (const contribution of field.contributions(point)) {
+    if (!contribution.componentId) continue;
+    totals.set(
+      contribution.componentId,
+      (totals.get(contribution.componentId) ?? 0) + contribution.value,
+    );
+  }
+  return totals;
+}
+
+function causalSurfaceAttribution(baselineField, perturbedField, mesh, targetTissueId) {
+  let targetAbsoluteDelta = 0;
+  let nonTargetAbsoluteDelta = 0;
+  for (const vertex of mesh.vertices) {
+    const baseline = contributionTotals(baselineField, vertex);
+    const perturbed = contributionTotals(perturbedField, vertex);
+    for (const tissueId of new Set([...baseline.keys(), ...perturbed.keys()])) {
+      const delta = Math.abs((perturbed.get(tissueId) ?? 0) - (baseline.get(tissueId) ?? 0));
+      if (tissueId === targetTissueId) targetAbsoluteDelta += delta;
+      else nonTargetAbsoluteDelta += delta;
+    }
+  }
+  return {
+    sampleCount: mesh.vertices.length,
+    targetTissueId,
+    targetAbsoluteDelta,
+    nonTargetAbsoluteDelta,
+    targetCausalFraction: targetAbsoluteDelta
+      / Math.max(targetAbsoluteDelta + nonTargetAbsoluteDelta, 1e-12),
+  };
+}
+
+function responseSuperposition(baseline, muscle, fat, combined, normalizationSpan) {
+  const errors = [];
+  for (let index = 0; index < baseline.length; index += 1) {
+    for (const field of ['top', 'bottom', 'halfWidth']) {
+      const expected = muscle[index][field] + fat[index][field] - baseline[index][field];
+      errors.push((combined[index][field] - expected) / normalizationSpan);
+    }
+  }
+  return { normalizedRmse: rmse(errors) };
+}
+
+function overlapControlAmplitude({
+  amplitude,
+  controlId,
+  control,
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  baselinePrimitivesForAssay,
+  baselineField,
+  baselineObservations,
+}) {
+  const perturbation = perturbOverlapPrimitives(
+    baselinePrimitivesForAssay,
+    descriptor,
+    control,
+    amplitude,
+  );
+  const field = createField(
+    perturbation.primitives,
+    overlapCard.grid,
+    { longitudinalClosureCells: 2 },
+    descriptor.isoValue,
+  );
+  const mesh = extractMesh(field, overlapCard.grid);
+  const scaledTarget = scaleOverlapTarget(
+    overlapTarget,
+    control.targetStateId,
+    amplitude,
+    overlapCard.referenceAmplitude,
+  );
+  const referenceField = overlapReferenceField(
+    overlapTarget,
+    overlapCard.grid,
+    control.targetStateId,
+    amplitude,
+    overlapCard.referenceAmplitude,
+  );
+  const referenceMesh = extractMesh(referenceField, overlapCard.grid);
+  const observations = observeBoundary(field, scaledTarget, 'perturbed');
+  const response = overlapResponseLedger(
+    baselineObservations,
+    observations,
+    scaledTarget,
+    control,
+  );
+  return {
+    controlId,
+    amplitude,
+    mutation: perturbation.mutation,
+    mesh,
+    topology: topologyEvidence(mesh),
+    fullSurface: fullSurfaceEvidence(mesh, referenceField, overlapTarget.normalizationSpan),
+    surfaceIdentity: surfaceEvidence(field, mesh, 'mixture-weights'),
+    causalSurfaceAttribution: causalSurfaceAttribution(
+      baselineField,
+      field,
+      mesh,
+      control.targetTissueId,
+    ),
+    response,
+    spatialCrosstalkRatio: 1 / Math.max(response.localityRatio, 1e-12),
+    observations,
+    reference: {
+      mesh: referenceMesh,
+      topology: topologyEvidence(referenceMesh),
+      fullSurface: fullSurfaceEvidence(
+        referenceMesh,
+        referenceField,
+        overlapTarget.normalizationSpan,
+      ),
+    },
+    sections: overlapCard.sectionPlanes.map(
+      (anterior) => sliceMeshAtAnterior(mesh, anterior),
+    ),
+    referenceSections: overlapCard.sectionPlanes.map(
+      (anterior) => sliceMeshAtAnterior(referenceMesh, anterior),
+    ),
+  };
+}
+
+export function buildOverlappingAnisotropicTissueControlAssay({
+  overlapCard,
+  overlapTarget,
+  descriptor,
+  frozenSweepCard,
+  frozenAssayCard,
+  frozenTarget,
+} = {}) {
+  validateOverlapInputs({
+    overlapCard,
+    overlapTarget,
+    descriptor,
+    frozenSweepCard,
+    frozenAssayCard,
+    frozenTarget,
+  });
+  const frozenSweep = buildTargetSdfFullSurfaceSweep({
+    sweepCard: frozenSweepCard,
+    assayCard: frozenAssayCard,
+    target: frozenTarget,
+  });
+  if (frozenSweep.assayHash !== overlapCard.frozenScalarControl.sourceAssayHash
+    || overlapCard.frozenScalarControl.compilerId !== SCALAR_ROW.compilerId) {
+    throw new Error('frozen scalar control identity does not match the reviewed source assay');
+  }
+
+  const baselinePrimitivesForAssay = overlapBaselinePrimitives(overlapTarget, descriptor);
+  const baselineField = createField(
+    baselinePrimitivesForAssay,
+    overlapCard.grid,
+    { longitudinalClosureCells: 2 },
+    descriptor.isoValue,
+  );
+  const baselineMesh = extractMesh(baselineField, overlapCard.grid);
+  const baselineObservations = observeBoundary(baselineField, overlapTarget, 'baseline');
+  const baselineReferenceField = createIndependentTargetField(
+    overlapTarget,
+    overlapCard.grid,
+    'baseline',
+    overlapCard.referenceAmplitude,
+    overlapCard.referenceAmplitude,
+  );
+  const baselineReferenceMesh = extractMesh(baselineReferenceField, overlapCard.grid);
+  const baselineReferenceFullSurface = fullSurfaceEvidence(
+    baselineReferenceMesh,
+    baselineReferenceField,
+    overlapTarget.normalizationSpan,
+  );
+  const baselineFullSurface = fullSurfaceEvidence(
+    baselineMesh,
+    baselineReferenceField,
+    overlapTarget.normalizationSpan,
+  );
+  const baseline = {
+    mesh: baselineMesh,
+    topology: topologyEvidence(baselineMesh),
+    fullSurface: baselineFullSurface,
+    reference: {
+      mesh: baselineReferenceMesh,
+      topology: topologyEvidence(baselineReferenceMesh),
+      fullSurface: baselineReferenceFullSurface,
+    },
+    boundaryFit: boundaryFitEvidence(baselineObservations, overlapTarget, 'baseline'),
+    volumeRelativeError: Math.abs(
+      baselineFullSurface.volume - baselineReferenceFullSurface.volume
+    ) / Math.max(baselineReferenceFullSurface.volume, 1e-12),
+    observations: baselineObservations,
+    surfaceIdentity: surfaceEvidence(baselineField, baselineMesh, 'mixture-weights'),
+    primitiveCount: baselinePrimitivesForAssay.length,
+  };
+
+  const controls = Object.fromEntries(Object.entries(overlapCard.controls).map(
+    ([controlId, control]) => [controlId, {
+      targetTissueId: control.targetTissueId,
+      targetStateId: control.targetStateId,
+      requestedCompilerId: overlapCard.compilerId,
+      effectiveCompilerId: overlapCard.compilerId,
+      requestedExtractorId: overlapCard.extractorId,
+      effectiveExtractorId: overlapCard.extractorId,
+      amplitudes: overlapCard.amplitudes.map((amplitude) => overlapControlAmplitude({
+        amplitude,
+        controlId,
+        control,
+        overlapCard,
+        overlapTarget,
+        descriptor,
+        baselinePrimitivesForAssay,
+        baselineField,
+        baselineObservations,
+      })),
+    }],
+  ));
+
+  const combined = overlapCard.amplitudes.map((amplitude, amplitudeIndex) => {
+    let perturbed = baselinePrimitivesForAssay;
+    for (const control of Object.values(overlapCard.controls)) {
+      perturbed = perturbOverlapPrimitives(perturbed, descriptor, control, amplitude).primitives;
+    }
+    const field = createField(
+      perturbed,
+      overlapCard.grid,
+      { longitudinalClosureCells: 2 },
+      descriptor.isoValue,
+    );
+    const mesh = extractMesh(field, overlapCard.grid);
+    const scaledTarget = scaleOverlapTarget(
+      overlapTarget,
+      'combined',
+      amplitude,
+      overlapCard.referenceAmplitude,
+    );
+    const referenceField = overlapReferenceField(
+      overlapTarget,
+      overlapCard.grid,
+      'combined',
+      amplitude,
+      overlapCard.referenceAmplitude,
+    );
+    const referenceMesh = extractMesh(referenceField, overlapCard.grid);
+    const observations = observeBoundary(field, scaledTarget, 'perturbed');
+    return {
+      amplitude,
+      mesh,
+      topology: topologyEvidence(mesh),
+      fullSurface: fullSurfaceEvidence(mesh, referenceField, overlapTarget.normalizationSpan),
+      surfaceIdentity: surfaceEvidence(field, mesh, 'mixture-weights'),
+      observations,
+      reference: {
+        mesh: referenceMesh,
+        topology: topologyEvidence(referenceMesh),
+      },
+      sections: overlapCard.sectionPlanes.map(
+        (anterior) => sliceMeshAtAnterior(mesh, anterior),
+      ),
+      referenceSections: overlapCard.sectionPlanes.map(
+        (anterior) => sliceMeshAtAnterior(referenceMesh, anterior),
+      ),
+      superposition: responseSuperposition(
+        baselineObservations,
+        controls['muscle-tension'].amplitudes[amplitudeIndex].observations,
+        controls['fat-distribution'].amplitudes[amplitudeIndex].observations,
+        observations,
+        overlapTarget.normalizationSpan,
+      ),
+    };
+  });
+
+  const evidenceFailures = [];
+  const allSurfaces = [
+    baseline,
+    ...Object.values(controls).flatMap((control) => control.amplitudes),
+    ...combined,
+  ];
+  if (allSurfaces.some((surface) => (
+    !surface.topology.closed
+      || surface.topology.componentCount !== 1
+      || surface.topology.vertexCount < overlapCard.evidence.minimumVertices
+  ))) {
+    evidenceFailures.push({ code: 'envelope-topology-invalid' });
+  }
+  if (Object.values(controls).some((control) => control.amplitudes.some((entry) => (
+    entry.sections.some(
+      (section) => section.segments.length < overlapCard.evidence.minimumSectionSegments,
+    ) || !entry.reference.topology.closed || entry.reference.topology.componentCount !== 1
+  ))) || combined.some((entry) => entry.sections.some(
+    (section) => section.segments.length < overlapCard.evidence.minimumSectionSegments,
+  ))) {
+    evidenceFailures.push({ code: 'mesh-derived-section-or-reference-invalid' });
+  }
+
+  const hypothesisFailures = [];
+  if (baseline.fullSurface.normalizedRmse
+      > overlapCard.evidence.maximumBaselineNormalizedRmse) {
+    hypothesisFailures.push({ code: 'baseline-fit-exceeded' });
+  }
+  if (baseline.volumeRelativeError
+      > overlapCard.evidence.maximumBaselineVolumeRelativeError) {
+    hypothesisFailures.push({ code: 'baseline-volume-fit-exceeded' });
+  }
+  for (const [controlId, control] of Object.entries(controls)) {
+    for (const entry of control.amplitudes) {
+      if (entry.response.normalizedRmse > overlapCard.evidence.maximumResponseNormalizedRmse) {
+        hypothesisFailures.push({ code: 'response-fit-exceeded', controlId, amplitude: entry.amplitude });
+      }
+      if (entry.fullSurface.normalizedRmse
+          > overlapCard.evidence.maximumControlFullSurfaceNormalizedRmse) {
+        hypothesisFailures.push({
+          code: 'control-full-surface-fit-exceeded',
+          controlId,
+          amplitude: entry.amplitude,
+        });
+      }
+      if (entry.spatialCrosstalkRatio > overlapCard.evidence.maximumSpatialCrosstalkRatio) {
+        hypothesisFailures.push({ code: 'spatial-crosstalk-exceeded', controlId, amplitude: entry.amplitude });
+      }
+      if (entry.causalSurfaceAttribution.targetCausalFraction
+          < overlapCard.evidence.minimumTargetCausalFraction) {
+        hypothesisFailures.push({ code: 'surface-attribution-insufficient', controlId, amplitude: entry.amplitude });
+      }
+    }
+  }
+  for (const entry of combined) {
+    if (entry.fullSurface.normalizedRmse
+        > overlapCard.evidence.maximumCombinedFullSurfaceNormalizedRmse) {
+      hypothesisFailures.push({
+        code: 'combined-full-surface-fit-exceeded',
+        amplitude: entry.amplitude,
+      });
+    }
+    if (entry.superposition.normalizedRmse
+        > overlapCard.evidence.maximumCombinedSuperpositionNormalizedRmse) {
+      hypothesisFailures.push({ code: 'combined-superposition-exceeded', amplitude: entry.amplitude });
+    }
+  }
+
+  const result = {
+    schema: OVERLAPPING_ANISOTROPIC_TISSUE_CONTROL_SCHEMA,
+    status: 'completed',
+    claimCeiling: overlapCard.claimCeiling,
+    promotion: overlapCard.promotion,
+    targetId: overlapTarget.id,
+    targetHash: hashValue(overlapTarget),
+    descriptorId: descriptor.id,
+    descriptorHash: hashValue(descriptor),
+    overlapCardId: overlapCard.id,
+    overlapCardHash: hashValue(overlapCard),
+    compilerId: overlapCard.compilerId,
+    extractorId: overlapCard.extractorId,
+    grid: structuredClone(overlapCard.grid),
+    sectionPlanes: structuredClone(overlapCard.sectionPlanes),
+    amplitudes: structuredClone(overlapCard.amplitudes),
+    baseline,
+    controls,
+    combined,
+    frozenScalarControl: {
+      sourceAssayHash: frozenSweep.assayHash,
+      compilerId: SCALAR_ROW.compilerId,
+      sourceCardRef: overlapCard.frozenScalarControl.sourceCardRef,
+      reoptimizedForOverlapAssay: false,
+      amplitudes: frozenSweep.amplitudes.map((entry) => {
+        const scalar = entry.rows.find((row) => row.id === SCALAR_ROW.id);
+        return {
+          amplitude: entry.amplitude,
+          primitiveCount: scalar.controlComplexity.primitiveCount,
+          topology: scalar.topology,
+          fullSurface: scalar.fullSurface,
+        };
+      }),
+    },
+    evidenceVerdict: { passed: evidenceFailures.length === 0, failures: evidenceFailures },
+    hypothesisVerdict: { passed: hypothesisFailures.length === 0, failures: hypothesisFailures },
   };
   return { ...result, assayHash: hashValue(result) };
 }

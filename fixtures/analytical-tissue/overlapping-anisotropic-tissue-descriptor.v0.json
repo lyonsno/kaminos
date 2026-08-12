@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.overlapping-anisotropic-tissue-descriptor.v0",
+  "id": "bounded-hindquarter-muscle-fat-overlap-v0",
+  "authority": "provisional-representation-fixture",
+  "isoValue": 0.22,
+  "tissues": [
+    {
+      "id": "muscle",
+      "strength": 0.78,
+      "radiusScale": [0.78, 0.78, 0.92],
+      "control": {
+        "radiusRate": [0.9, 1.2, 0.08],
+        "dorsalTranslationRate": 0.13
+      }
+    },
+    {
+      "id": "fat",
+      "strength": 0.58,
+      "radiusScale": [1.02, 1.02, 1.04],
+      "control": {
+        "radiusRate": [1.0, 0.8, 0.12],
+        "dorsalTranslationRate": -0.08
+      }
+    }
+  ],
+  "construction": "At every authored longitudinal station, a compact deep muscle ellipsoid and a broader fat ellipsoid overlap in the same observation volume while retaining stable tissue ids.",
+  "promotion": "none"
+}

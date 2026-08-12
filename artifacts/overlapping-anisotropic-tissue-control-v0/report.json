@@ -1,0 +1,132 @@
+{
+  "schema": "kaminos.overlapping-anisotropic-tissue-control-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "bounded-hindquarter-overlapping-anisotropic-tissue-control-v0",
+  "effectiveRouteId": "bounded-hindquarter-overlapping-anisotropic-tissue-control-v0",
+  "requestedCompilerId": "overlapping-anisotropic-tissue-field-v0",
+  "effectiveCompilerId": "overlapping-anisotropic-tissue-field-v0",
+  "requestedExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "effectiveExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "evidencePrimary": "full-surface-3d",
+  "sectionSource": "extracted-mesh-triangle-plane-intersections",
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 3872532,
+      "sha256": "ea94db9ae51beaa4da5fea7ec1596bd692c1cca299baa8b38c8583a98084a755"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 2671032,
+      "sha256": "06cbe1d29d66f5d8097c8df6c9b5b2997c320e9b404930a33fd64075701c27a8"
+    },
+    {
+      "relativePath": "baseline-overlapping-anisotropic.obj",
+      "byteLength": 410115,
+      "sha256": "1da97dd7bca7faac54b84f0fb2d62cf7702286b8c8d475f8b57453bbe106fc91"
+    },
+    {
+      "relativePath": "baseline-reference.obj",
+      "byteLength": 432772,
+      "sha256": "8b195fe3662be1f3a1b98236c3567b0a09ece09cbfcf2e2de177c88101dd5a66"
+    },
+    {
+      "relativePath": "muscle-tension-amplitude-0p1.obj",
+      "byteLength": 426309,
+      "sha256": "3604456c7a4adcec4044a2b30e55859fb122b931b3ef45cbec819da0576ffdb7"
+    },
+    {
+      "relativePath": "muscle-tension-reference-amplitude-0p1.obj",
+      "byteLength": 470482,
+      "sha256": "c511e090f019467323d59f89ad880ecc29a59bf8249725ab60e8a339e027a75a"
+    },
+    {
+      "relativePath": "muscle-tension-amplitude-0p25.obj",
+      "byteLength": 457865,
+      "sha256": "c258b0fff616edfdbe6d2fab447ff57073d71a73aad95b80800edf1e285ee967"
+    },
+    {
+      "relativePath": "muscle-tension-reference-amplitude-0p25.obj",
+      "byteLength": 529903,
+      "sha256": "cd0f3c7932ae4707779214cf6bbf99e48c19e6ae3264c31523dd169d3c215400"
+    },
+    {
+      "relativePath": "muscle-tension-amplitude-0p5.obj",
+      "byteLength": 526514,
+      "sha256": "078a9be0e1ecdc29526feadd6de4ae4362ae0c2f277888144ce40aa699e3f1fc"
+    },
+    {
+      "relativePath": "muscle-tension-reference-amplitude-0p5.obj",
+      "byteLength": 663384,
+      "sha256": "ddfdb5a8a333b0d37932fd36e553bd2c3c036f213ee5ac43bcf8c1125d9ebe1c"
+    },
+    {
+      "relativePath": "fat-distribution-amplitude-0p1.obj",
+      "byteLength": 418741,
+      "sha256": "b696db823791ce4d4c8dbb6efdea68063d784c57e488916ab8df78b7d9cf4c74"
+    },
+    {
+      "relativePath": "fat-distribution-reference-amplitude-0p1.obj",
+      "byteLength": 490505,
+      "sha256": "fc1330584ffffeebf431a398da3dce6d158a29a0177a6771357c859d8471de10"
+    },
+    {
+      "relativePath": "fat-distribution-amplitude-0p25.obj",
+      "byteLength": 454110,
+      "sha256": "00a7576791c3801d2bd5571fe19ae56083772553293edbb7ef43f6778473ba9e"
+    },
+    {
+      "relativePath": "fat-distribution-reference-amplitude-0p25.obj",
+      "byteLength": 585609,
+      "sha256": "9dac34ecffb21b4b56768bb708be009c16c5e41fd4d0225f1aee20f2d0f2bf49"
+    },
+    {
+      "relativePath": "fat-distribution-amplitude-0p5.obj",
+      "byteLength": 541770,
+      "sha256": "0d54705b490dd0a89e45b2fbb2c1cf15654f56064cbf8f2f688784a82411f143"
+    },
+    {
+      "relativePath": "fat-distribution-reference-amplitude-0p5.obj",
+      "byteLength": 771165,
+      "sha256": "4601df3d2a338c0ca774bfd24b467ef372c0d085b4edb1dc7e527ff491051623"
+    },
+    {
+      "relativePath": "combined-amplitude-0p1.obj",
+      "byteLength": 445573,
+      "sha256": "5d41331467b7a9b645185de4a3563219844487925f07c3eb6d3ae1d56ba43ad5"
+    },
+    {
+      "relativePath": "combined-reference-amplitude-0p1.obj",
+      "byteLength": 531904,
+      "sha256": "397c4d8dddb4ce79caa1e0a187710c53c2d03c1a223ba5045c48d7a5f505fc37"
+    },
+    {
+      "relativePath": "combined-amplitude-0p25.obj",
+      "byteLength": 507585,
+      "sha256": "0f4629b0b5242073fdf71af5a2c65935dd6f0d67eef378b9befa4a82dcbf7db5"
+    },
+    {
+      "relativePath": "combined-reference-amplitude-0p25.obj",
+      "byteLength": 713907,
+      "sha256": "755f52f5b6d2bf8cd4c14e9aabfb43b421ce7ecb2920e9d8dec1f52d86e612f7"
+    },
+    {
+      "relativePath": "combined-amplitude-0p5.obj",
+      "byteLength": 621459,
+      "sha256": "530cb40e4eda20d0c42d4ae7600ef745f8b2cc255eccf47ae20a35b77e259d4a"
+    },
+    {
+      "relativePath": "combined-reference-amplitude-0p5.obj",
+      "byteLength": 1044457,
+      "sha256": "fe65b36e768838691e53b898aeee6eec22fb90d550fc5b7562a0227cf8ac21ab"
+    }
+  ],
+  "assayHash": "38ecc78c90e3cda9a104a1be7b3b09596658854486d8b2b58ecd39fd8ac0d971",
+  "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
+  "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
+  "overlapCardHash": "0e47c865c691ecd538565d2458e0621d9709240df448ed9d32069a19ec6f1165",
+  "evidencePassed": true,
+  "hypothesisPassed": false,
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all 3D meshes and mesh-derived diagnostics reread and hashed from disk"
+}

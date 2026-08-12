@@ -20,6 +20,18 @@ const fullSurfaceCard = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json', import.meta.url),
   'utf8',
 ));
+const overlapCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json', import.meta.url),
+  'utf8',
+));
+const overlapTarget = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json', import.meta.url),
+  'utf8',
+));
+const overlapDescriptor = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json', import.meta.url),
+  'utf8',
+));
 
 function build(card = assayCard) {
   return buildRowDistinctScalarAnisotropicAssay({
@@ -222,5 +234,98 @@ test('stress target clipping fails the 3D evidence gate instead of blaming a can
     sweep.verdict.failures.some(
       (failure) => failure.code === 'perturbed-reference-topology-invalid',
     ),
+  );
+});
+
+test('overlapping anisotropic assay perturbs muscle and fat independently in 3D', () => {
+  assert.equal(
+    typeof rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay,
+    'function',
+    'the lead hypothesis needs an overlapping identity-bearing tissue discriminator',
+  );
+  const assay = rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay({
+    overlapCard: structuredClone(overlapCard),
+    overlapTarget: structuredClone(overlapTarget),
+    descriptor: structuredClone(overlapDescriptor),
+    frozenSweepCard: structuredClone(fullSurfaceCard),
+    frozenAssayCard: structuredClone(assayCard),
+    frozenTarget: structuredClone(target),
+  });
+  assert.equal(assay.schema, 'kaminos.overlapping-anisotropic-tissue-control-result.v0');
+  assert.deepEqual(assay.amplitudes, [0.1, 0.25, 0.5]);
+  assert.deepEqual(Object.keys(assay.controls), ['muscle-tension', 'fat-distribution']);
+  assert.equal(assay.baseline.topology.closed, true);
+  assert.equal(assay.baseline.topology.componentCount, 1);
+  assert.ok(assay.baseline.mesh.vertices.length > 100);
+  assert.ok(Number.isFinite(assay.baseline.boundaryFit.normalizedRmse));
+  assert.ok(Number.isFinite(assay.baseline.volumeRelativeError));
+  for (const [controlId, control] of Object.entries(assay.controls)) {
+    assert.equal(control.requestedCompilerId, overlapCard.compilerId);
+    assert.equal(control.effectiveCompilerId, overlapCard.compilerId);
+    assert.equal(control.requestedExtractorId, overlapCard.extractorId);
+    assert.equal(control.effectiveExtractorId, overlapCard.extractorId);
+    assert.equal(control.targetTissueId, overlapCard.controls[controlId].targetTissueId);
+    assert.equal(control.amplitudes.length, 3);
+    for (const amplitude of control.amplitudes) {
+      assert.equal(amplitude.topology.closed, true, `${controlId}@${amplitude.amplitude}`);
+      assert.equal(amplitude.topology.componentCount, 1, `${controlId}@${amplitude.amplitude}`);
+      assert.ok(Number.isFinite(amplitude.fullSurface.normalizedRmse));
+      assert.ok(Number.isFinite(amplitude.fullSurface.volume));
+      assert.ok(Number.isFinite(amplitude.spatialCrosstalkRatio));
+      assert.equal(amplitude.mutation.targetTissueId, control.targetTissueId);
+      assert.ok(amplitude.mutation.targetPrimitiveCount > 0);
+      assert.equal(amplitude.mutation.nonTargetPrimitiveCount, 0);
+      assert.equal(amplitude.causalSurfaceAttribution.nonTargetAbsoluteDelta, 0);
+      assert.ok(amplitude.causalSurfaceAttribution.targetAbsoluteDelta > 0);
+      assert.deepEqual(
+        amplitude.sections.map((section) => section.anterior),
+        overlapCard.sectionPlanes,
+      );
+      assert.ok(amplitude.sections.every(
+        (section) => section.source === 'extracted-mesh-triangle-plane-intersections'
+          && section.segments.length >= overlapCard.evidence.minimumSectionSegments,
+      ));
+    }
+  }
+  assert.equal(assay.combined.length, 3);
+  assert.ok(assay.combined.every((entry) => Number.isFinite(entry.superposition.normalizedRmse)));
+  assert.equal(assay.frozenScalarControl.sourceAssayHash, overlapCard.frozenScalarControl.sourceAssayHash);
+  assert.equal(assay.frozenScalarControl.compilerId, 'scalar-metaball-sdf-v0');
+  assert.equal(assay.frozenScalarControl.reoptimizedForOverlapAssay, false);
+  assert.equal(assay.evidenceVerdict.passed, true);
+  assert.equal(assay.hypothesisVerdict.passed, false);
+  assert.deepEqual(assay.hypothesisVerdict.failures, [{
+    code: 'combined-full-surface-fit-exceeded',
+    amplitude: 0.5,
+  }]);
+  assert.equal(assay.promotion, 'none');
+});
+
+test('overlapping assay rejects frozen scalar substitution and tissue identity collapse', () => {
+  const substitutedControl = structuredClone(overlapCard);
+  substitutedControl.frozenScalarControl.sourceAssayHash = '0'.repeat(64);
+  assert.throws(
+    () => rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay({
+      overlapCard: substitutedControl,
+      overlapTarget: structuredClone(overlapTarget),
+      descriptor: structuredClone(overlapDescriptor),
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+    }),
+    /frozen scalar control identity does not match/,
+  );
+  const collapsed = structuredClone(overlapDescriptor);
+  collapsed.tissues[1].id = collapsed.tissues[0].id;
+  assert.throws(
+    () => rowDistinctCore.buildOverlappingAnisotropicTissueControlAssay({
+      overlapCard: structuredClone(overlapCard),
+      overlapTarget: structuredClone(overlapTarget),
+      descriptor: collapsed,
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+    }),
+    /distinct muscle and fat tissue identities are required/,
   );
 });

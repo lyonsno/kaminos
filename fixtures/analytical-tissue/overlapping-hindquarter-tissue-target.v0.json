@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.overlapping-tissue-boundary-response-target.v0",
+  "id": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
+  "authority": {
+    "sourceKind": "independently-authored-synthetic-observation",
+    "construction": "Baseline plus separate muscle, fat, and additive combined boundary states were authored as observations before fitting the overlapping tissue carrier.",
+    "claimCeiling": "Synthetic boundary and full-surface response only; not anatomical, feline, or operator-authored morphology."
+  },
+  "frame": {
+    "units": "fixture-unit",
+    "axes": ["right", "dorsal", "anterior"],
+    "cameraId": "right-sagittal-boundary-observation-v0"
+  },
+  "normalizationSpan": 1.5,
+  "stations": [
+    {"anterior": -0.65, "baseline": {"top": 0.18, "bottom": -0.16, "halfWidth": 0.20}, "muscleTension": {"top": 0.18, "bottom": -0.16, "halfWidth": 0.20}, "fatDistribution": {"top": 0.19, "bottom": -0.18, "halfWidth": 0.22}, "combined": {"top": 0.19, "bottom": -0.18, "halfWidth": 0.22}},
+    {"anterior": -0.525, "baseline": {"top": 0.36, "bottom": -0.29, "halfWidth": 0.36}, "muscleTension": {"top": 0.37, "bottom": -0.29, "halfWidth": 0.37}, "fatDistribution": {"top": 0.38, "bottom": -0.32, "halfWidth": 0.40}, "combined": {"top": 0.39, "bottom": -0.32, "halfWidth": 0.41}},
+    {"anterior": -0.4, "baseline": {"top": 0.50, "bottom": -0.39, "halfWidth": 0.48}, "muscleTension": {"top": 0.55, "bottom": -0.40, "halfWidth": 0.52}, "fatDistribution": {"top": 0.52, "bottom": -0.43, "halfWidth": 0.54}, "combined": {"top": 0.57, "bottom": -0.44, "halfWidth": 0.58}},
+    {"anterior": -0.275, "baseline": {"top": 0.58, "bottom": -0.45, "halfWidth": 0.55}, "muscleTension": {"top": 0.67, "bottom": -0.47, "halfWidth": 0.61}, "fatDistribution": {"top": 0.61, "bottom": -0.51, "halfWidth": 0.63}, "combined": {"top": 0.70, "bottom": -0.53, "halfWidth": 0.69}},
+    {"anterior": -0.15, "baseline": {"top": 0.60, "bottom": -0.47, "halfWidth": 0.57}, "muscleTension": {"top": 0.68, "bottom": -0.49, "halfWidth": 0.62}, "fatDistribution": {"top": 0.63, "bottom": -0.54, "halfWidth": 0.66}, "combined": {"top": 0.71, "bottom": -0.56, "halfWidth": 0.71}},
+    {"anterior": -0.025, "baseline": {"top": 0.57, "bottom": -0.44, "halfWidth": 0.54}, "muscleTension": {"top": 0.61, "bottom": -0.45, "halfWidth": 0.58}, "fatDistribution": {"top": 0.59, "bottom": -0.50, "halfWidth": 0.62}, "combined": {"top": 0.63, "bottom": -0.51, "halfWidth": 0.66}},
+    {"anterior": 0.1, "baseline": {"top": 0.49, "bottom": -0.37, "halfWidth": 0.46}, "muscleTension": {"top": 0.50, "bottom": -0.37, "halfWidth": 0.47}, "fatDistribution": {"top": 0.50, "bottom": -0.41, "halfWidth": 0.51}, "combined": {"top": 0.51, "bottom": -0.41, "halfWidth": 0.52}},
+    {"anterior": 0.225, "baseline": {"top": 0.35, "bottom": -0.26, "halfWidth": 0.32}, "muscleTension": {"top": 0.35, "bottom": -0.26, "halfWidth": 0.32}, "fatDistribution": {"top": 0.35, "bottom": -0.28, "halfWidth": 0.34}, "combined": {"top": 0.35, "bottom": -0.28, "halfWidth": 0.34}},
+    {"anterior": 0.35, "baseline": {"top": 0.16, "bottom": -0.14, "halfWidth": 0.18}, "muscleTension": {"top": 0.16, "bottom": -0.14, "halfWidth": 0.18}, "fatDistribution": {"top": 0.16, "bottom": -0.15, "halfWidth": 0.19}, "combined": {"top": 0.16, "bottom": -0.15, "halfWidth": 0.19}}
+  ]
+}

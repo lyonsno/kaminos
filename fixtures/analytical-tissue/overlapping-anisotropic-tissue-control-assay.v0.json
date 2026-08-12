@@ -1,0 +1,62 @@
+{
+  "schema": "kaminos.overlapping-anisotropic-tissue-control-assay.v0",
+  "id": "bounded-hindquarter-overlapping-anisotropic-tissue-control-v0",
+  "targetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "descriptorRef": "fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json",
+  "claimCeiling": "Independent muscle and fat control, surface attribution, and envelope coherence on one fitted synthetic hindquarter fixture only.",
+  "compilerId": "overlapping-anisotropic-tissue-field-v0",
+  "extractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "referenceAmplitude": 0.1,
+  "amplitudes": [0.1, 0.25, 0.5],
+  "controls": {
+    "muscle-tension": {
+      "targetTissueId": "muscle",
+      "targetStateId": "muscleTension",
+      "support": [-0.65, 0.1]
+    },
+    "fat-distribution": {
+      "targetTissueId": "fat",
+      "targetStateId": "fatDistribution",
+      "support": [-0.65, 0.225]
+    }
+  },
+  "grid": {
+    "resolution": [35, 35, 29],
+    "bounds": {
+      "right": [-1.15, 1.15],
+      "dorsal": [-1.0, 1.25],
+      "anterior": [-0.8, 0.5]
+    },
+    "isoValue": 0
+  },
+  "sectionPlanes": [-0.4, -0.275, -0.15],
+  "evidence": {
+    "minimumVertices": 100,
+    "minimumSectionSegments": 8,
+    "maximumBaselineNormalizedRmse": 0.08,
+    "maximumBaselineVolumeRelativeError": 0.2,
+    "maximumResponseNormalizedRmse": 0.18,
+    "maximumControlFullSurfaceNormalizedRmse": 0.1,
+    "maximumCombinedFullSurfaceNormalizedRmse": 0.12,
+    "maximumSpatialCrosstalkRatio": 0.45,
+    "maximumCombinedSuperpositionNormalizedRmse": 0.08,
+    "minimumTargetCausalFraction": 0.95
+  },
+  "frozenScalarControl": {
+    "sourceAssayHash": "d63ca3dca09b7e5c04c59ebf0ac459b460f0417fdc5f2aa4d9352c2abe02a343",
+    "compilerId": "scalar-metaball-sdf-v0",
+    "sourceCardRef": "fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json",
+    "disposition": "unchanged-negative-control-no-overlap-refit"
+  },
+  "counterfeits": [
+    "collapsed-muscle-fat-identity",
+    "non-target-primitive-mutation",
+    "internal-only-attribution-without-extracted-surface-effect",
+    "profile-only-evidence-presented-as-3d",
+    "open-fragmented-or-blank-envelope",
+    "frozen-scalar-control-reoptimized-for-new-target",
+    "requested-effective-route-or-extractor-substitution",
+    "stale-partial-or-unhashed-output"
+  ],
+  "promotion": "none"
+}

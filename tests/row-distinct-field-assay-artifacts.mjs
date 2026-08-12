@@ -24,6 +24,18 @@ const fullSurfaceCard = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json', import.meta.url),
   'utf8',
 ));
+const overlapCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-control-assay.v0.json', import.meta.url),
+  'utf8',
+));
+const overlapTarget = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json', import.meta.url),
+  'utf8',
+));
+const overlapDescriptor = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/overlapping-anisotropic-tissue-descriptor.v0.json', import.meta.url),
+  'utf8',
+));
 
 async function withTemporaryDirectory(run) {
   const path = await mkdtemp(join(tmpdir(), 'row-distinct-assay-'));
@@ -146,4 +158,71 @@ test('full-surface renderer rejects partial evidence', () => {
     }),
     /admitted target-SDF full-surface sweep is required/,
   );
+});
+
+test('overlapping tissue writer emits hashed 3D products and mesh-derived 2D diagnostics', async () => {
+  assert.equal(
+    typeof rowDistinctArtifacts.writeOverlappingAnisotropicTissueControlArtifacts,
+    'function',
+    'the overlap discriminator needs a durable visual evidence route',
+  );
+  await withTemporaryDirectory(async (outDir) => {
+    const result = await rowDistinctArtifacts.writeOverlappingAnisotropicTissueControlArtifacts({
+      outDir,
+      overlapCard: structuredClone(overlapCard),
+      overlapTarget: structuredClone(overlapTarget),
+      descriptor: structuredClone(overlapDescriptor),
+      frozenSweepCard: structuredClone(fullSurfaceCard),
+      frozenAssayCard: structuredClone(assayCard),
+      frozenTarget: structuredClone(target),
+    });
+    assert.equal(result.report.status, 'completed');
+    assert.equal(result.report.evidencePrimary, 'full-surface-3d');
+    assert.equal(result.report.sectionSource, 'extracted-mesh-triangle-plane-intersections');
+    assert.equal(result.report.requestedRouteId, rowDistinctArtifacts.OVERLAPPING_TISSUE_ARTIFACT_ROUTE);
+    assert.equal(result.report.effectiveRouteId, rowDistinctArtifacts.OVERLAPPING_TISSUE_ARTIFACT_ROUTE);
+    assert.ok(result.report.outputs.filter((output) => output.relativePath.endsWith('.obj')).length >= 13);
+    assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
+    const serializedAssay = JSON.parse(await readFile(join(outDir, 'assay.json'), 'utf8'));
+    const outputPaths = new Set(result.report.outputs.map((output) => output.relativePath));
+    assert.equal(serializedAssay.baseline.mesh.outputRef, 'baseline-overlapping-anisotropic.obj');
+    assert.equal(serializedAssay.baseline.mesh.vertices, undefined);
+    assert.ok(outputPaths.has(serializedAssay.baseline.mesh.outputRef));
+    assert.ok(Object.values(serializedAssay.controls).every((control) => (
+      control.amplitudes.every((entry) => (
+        outputPaths.has(entry.mesh.outputRef) && outputPaths.has(entry.reference.mesh.outputRef)
+      ))
+    )));
+    const svg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.match(svg, /Overlapping anisotropic tissue control/);
+    assert.match(svg, /muscle-tension/);
+    assert.match(svg, /fat-distribution/);
+    assert.match(svg, /combined/);
+    assert.match(svg, /full-surface 3D/);
+    assert.match(svg, /mesh-derived sections/);
+    assert.match(svg, new RegExp(result.assay.assayHash));
+  });
+});
+
+test('overlapping tissue route substitution leaves a phase-named failure report', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    await assert.rejects(
+      rowDistinctArtifacts.writeOverlappingAnisotropicTissueControlArtifacts({
+        outDir,
+        overlapCard: structuredClone(overlapCard),
+        overlapTarget: structuredClone(overlapTarget),
+        descriptor: structuredClone(overlapDescriptor),
+        frozenSweepCard: structuredClone(fullSurfaceCard),
+        frozenAssayCard: structuredClone(assayCard),
+        frozenTarget: structuredClone(target),
+        requestedRouteId: 'scalar-rescue-fallback',
+      }),
+      /requested route scalar-rescue-fallback is unavailable/,
+    );
+    const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'input-validation');
+    assert.equal(report.effectiveRouteId, null);
+    assert.deepEqual(report.outputs, []);
+  });
 });
