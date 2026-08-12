@@ -1,0 +1,367 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.v0",
+  "campaignQuestion": "Does revision-048's stronger feline organization preserve authored structure across useful completion basins, and does it improve source authority over revision-029 under matched prompts and seeds?",
+  "sources": {
+    "revision-029": {
+      "id": "revision-029",
+      "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+      "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-029.blend",
+      "blendSha256": "0df08915c9319ec37bf0de02bd6bd59b028bcb77d7870ca91a2663afe40e8360",
+      "object": "Cube.056",
+      "plate": "source/revision-029/plate.png",
+      "plateSha256": "c5dc6cc7eb8c82a7933514f5c8ebc4024bafbc45accc3c8949aea1a44cb154e4",
+      "renderManifest": "source/revision-029/render-manifest.json"
+    },
+    "revision-048": {
+      "id": "revision-048",
+      "requestedBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-048.blend",
+      "effectiveBlend": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-048.blend",
+      "blendSha256": "8605e613e21d6e9cb102e187f3f2a3d2ca5c55fd9835df1e38926c829ce953e2",
+      "object": "Cube.056",
+      "plate": "source/revision-048/plate.png",
+      "plateSha256": "9e2fa35f901222bfaa66f0c9fe0a771eecdbb3bd1086d5bdd156244b05687e26",
+      "renderManifest": "source/revision-048/render-manifest.json"
+    }
+  },
+  "historicalPrecedent": {
+    "role": "fertile-basin-precedent-not-causal-control",
+    "source": "../authored-envelope-v0/plate3/plate.png",
+    "sourcePlateSha256": "50bac29be1534e847a02013c8bd054cfd433d7d0335c536423f6a5e5cab36ed8",
+    "sourceGeometry": "/Users/noahlyons/dev/operator-scratch/meshes/authored_cat_envelope.glb",
+    "sourceGeometrySha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
+    "outputsRoot": "../authored-envelope-v0"
+  },
+  "seeds": [
+    80301,
+    80302,
+    80413
+  ],
+  "promptFamilies": [
+    {
+      "id": "dragon",
+      "prompt": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "promptFile": "prompts/dragon.txt",
+      "surfaceClass": "material-plus-anatomical-embellishment"
+    },
+    {
+      "id": "golem",
+      "prompt": "Elaborate this armature into a finished creature of mossy weathered stone with lichen and cracked plates.",
+      "promptFile": "prompts/golem.txt",
+      "surfaceClass": "rigid-segmented-surface"
+    },
+    {
+      "id": "phantom",
+      "prompt": "Elaborate this armature into a finished creature with translucent drifting form and hollow glowing eyes.",
+      "promptFile": "prompts/phantom.txt",
+      "surfaceClass": "translucent-nonrigid-surface"
+    },
+    {
+      "id": "maquette",
+      "prompt": "Elaborate this partially finished maquette into a finished creature.",
+      "promptFile": "prompts/maquette.txt",
+      "surfaceClass": "neutral-completion"
+    },
+    {
+      "id": "skin",
+      "prompt": "This shape covered in skin.",
+      "promptFile": "prompts/skin.txt",
+      "surfaceClass": "continuous-skin"
+    },
+    {
+      "id": "fur",
+      "prompt": "This shape covered in fur.",
+      "promptFile": "prompts/fur.txt",
+      "surfaceClass": "continuous-fur"
+    },
+    {
+      "id": "cat",
+      "prompt": "This shape as a cat.",
+      "promptFile": "prompts/cat.txt",
+      "surfaceClass": "species-explicit"
+    },
+    {
+      "id": "unknown-creature",
+      "prompt": "This shape as an unknown creature.",
+      "promptFile": "prompts/unknown-creature.txt",
+      "surfaceClass": "species-open"
+    }
+  ],
+  "fluxRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "cells": [
+    {
+      "id": "revision-048-dragon-seed80301",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-dragon-seed80301"
+    },
+    {
+      "id": "revision-048-dragon-seed80302",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-dragon-seed80302"
+    },
+    {
+      "id": "revision-048-dragon-seed80413",
+      "sourceId": "revision-048",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-dragon-seed80413"
+    },
+    {
+      "id": "revision-048-golem-seed80301",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-golem-seed80301"
+    },
+    {
+      "id": "revision-048-golem-seed80302",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-golem-seed80302"
+    },
+    {
+      "id": "revision-048-golem-seed80413",
+      "sourceId": "revision-048",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-golem-seed80413"
+    },
+    {
+      "id": "revision-048-phantom-seed80301",
+      "sourceId": "revision-048",
+      "family": "phantom",
+      "promptFile": "prompts/phantom.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-phantom-seed80301"
+    },
+    {
+      "id": "revision-048-phantom-seed80302",
+      "sourceId": "revision-048",
+      "family": "phantom",
+      "promptFile": "prompts/phantom.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-phantom-seed80302"
+    },
+    {
+      "id": "revision-048-phantom-seed80413",
+      "sourceId": "revision-048",
+      "family": "phantom",
+      "promptFile": "prompts/phantom.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-phantom-seed80413"
+    },
+    {
+      "id": "revision-048-maquette-seed80301",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-maquette-seed80301"
+    },
+    {
+      "id": "revision-048-maquette-seed80302",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-maquette-seed80302"
+    },
+    {
+      "id": "revision-048-maquette-seed80413",
+      "sourceId": "revision-048",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-maquette-seed80413"
+    },
+    {
+      "id": "revision-048-skin-seed80301",
+      "sourceId": "revision-048",
+      "family": "skin",
+      "promptFile": "prompts/skin.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-skin-seed80301"
+    },
+    {
+      "id": "revision-048-skin-seed80302",
+      "sourceId": "revision-048",
+      "family": "skin",
+      "promptFile": "prompts/skin.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-skin-seed80302"
+    },
+    {
+      "id": "revision-048-skin-seed80413",
+      "sourceId": "revision-048",
+      "family": "skin",
+      "promptFile": "prompts/skin.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-skin-seed80413"
+    },
+    {
+      "id": "revision-048-fur-seed80301",
+      "sourceId": "revision-048",
+      "family": "fur",
+      "promptFile": "prompts/fur.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-fur-seed80301"
+    },
+    {
+      "id": "revision-048-fur-seed80302",
+      "sourceId": "revision-048",
+      "family": "fur",
+      "promptFile": "prompts/fur.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-fur-seed80302"
+    },
+    {
+      "id": "revision-048-fur-seed80413",
+      "sourceId": "revision-048",
+      "family": "fur",
+      "promptFile": "prompts/fur.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-fur-seed80413"
+    },
+    {
+      "id": "revision-048-cat-seed80301",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-cat-seed80301"
+    },
+    {
+      "id": "revision-048-cat-seed80302",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-cat-seed80302"
+    },
+    {
+      "id": "revision-048-cat-seed80413",
+      "sourceId": "revision-048",
+      "family": "cat",
+      "promptFile": "prompts/cat.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-cat-seed80413"
+    },
+    {
+      "id": "revision-048-unknown-creature-seed80301",
+      "sourceId": "revision-048",
+      "family": "unknown-creature",
+      "promptFile": "prompts/unknown-creature.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-048-unknown-creature-seed80301"
+    },
+    {
+      "id": "revision-048-unknown-creature-seed80302",
+      "sourceId": "revision-048",
+      "family": "unknown-creature",
+      "promptFile": "prompts/unknown-creature.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-048-unknown-creature-seed80302"
+    },
+    {
+      "id": "revision-048-unknown-creature-seed80413",
+      "sourceId": "revision-048",
+      "family": "unknown-creature",
+      "promptFile": "prompts/unknown-creature.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-048-unknown-creature-seed80413"
+    },
+    {
+      "id": "revision-029-dragon-seed80301",
+      "sourceId": "revision-029",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-029-dragon-seed80301"
+    },
+    {
+      "id": "revision-029-dragon-seed80302",
+      "sourceId": "revision-029",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-029-dragon-seed80302"
+    },
+    {
+      "id": "revision-029-dragon-seed80413",
+      "sourceId": "revision-029",
+      "family": "dragon",
+      "promptFile": "prompts/dragon.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-029-dragon-seed80413"
+    },
+    {
+      "id": "revision-029-golem-seed80301",
+      "sourceId": "revision-029",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-029-golem-seed80301"
+    },
+    {
+      "id": "revision-029-golem-seed80302",
+      "sourceId": "revision-029",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-029-golem-seed80302"
+    },
+    {
+      "id": "revision-029-golem-seed80413",
+      "sourceId": "revision-029",
+      "family": "golem",
+      "promptFile": "prompts/golem.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-029-golem-seed80413"
+    },
+    {
+      "id": "revision-029-maquette-seed80301",
+      "sourceId": "revision-029",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80301,
+      "outputDir": "runs/revision-029-maquette-seed80301"
+    },
+    {
+      "id": "revision-029-maquette-seed80302",
+      "sourceId": "revision-029",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80302,
+      "outputDir": "runs/revision-029-maquette-seed80302"
+    },
+    {
+      "id": "revision-029-maquette-seed80413",
+      "sourceId": "revision-029",
+      "family": "maquette",
+      "promptFile": "prompts/maquette.txt",
+      "seed": 80413,
+      "outputDir": "runs/revision-029-maquette-seed80413"
+    }
+  ],
+  "trellisPromotion": "After visual inspection, promote at most one structurally faithful winner from each genuinely distinct surface basin; do not reconstruct every attractive image.",
+  "claimCeiling": "Exact source revisions, frozen plates, prompt text, seeds, and effective Flux route only. This campaign cannot establish arbitrary-carrier control, general model semantics, anatomical fidelity, production suitability, riggability, or TRELLIS behavior."
+}
