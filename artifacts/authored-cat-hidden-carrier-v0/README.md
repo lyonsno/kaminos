@@ -24,6 +24,10 @@ The GLB is the fixture's source authority. The nearby `latest-envelope-029.png` 
 
 The uniform inset is intentionally a negative control. It is not the volumetric/SDF recovery promised by the campaign charter, and a favorable short-coat result cannot promote it into that role.
 
+`rendered_observation_volume.py` and `rendered_observation_assay.py` provide the first genuinely correspondence-free spatial arm. Truth-side code renders six calibrated orthographic depth and silhouette views. The serialized recovery bundle contains no source positions, triangles, vertex ids, authored normals, authored coat depths, or procedural-support labels. Dependency-light NumPy code fuses those observations into a visual-hull volume, compares a uniform erosion against one frozen provisional spatial erosion, and opens the authenticated carrier only afterward in a separate scorer.
+
+The first frozen result is `evidence/rendered-observation-volume-v0/`. Its branch classification is `UNIFORM_CONTROL_HOLDS`: the observation predicate is valid, but the provisional spatial prior over-erodes the source-specific carrier more severely than the uniform volumetric control. This is a first-informative negative solver result, not a recovery success.
+
 `hidden_carrier_assay.py` now wraps that fixture in a replayable CPU transaction. It:
 
 - invalidates known primary artifacts before every execution and records the prior terminal-report digest;
@@ -77,4 +81,4 @@ The exact malformed-MLX carrier-recovery mechanism remains at Kaminos `12586e135
 
 This slice establishes authenticated carrier loading, deterministic spatially varying synthetic coats, truth-isolated negative-control inputs, and falsifiable residual metrics. It does not establish silhouette recovery, volumetric recovery, VLM utility, arbitrary-source behavior, grooming, deformation, or visual admission.
 
-The next mechanism slice adds observable strand/volume evidence and a spatially varying volumetric/SDF arm whose regional error can be compared against this uniform-inset control and the existing malformed-coat mechanism.
+The next mechanism slice redirects the failed depth prior while retaining the rendered-observation firewall. It should estimate a conservative spatial field from fused outer-volume evidence instead of increasing authored dorsal/AP erosion, and it must compare against the frozen uniform volumetric control and the existing malformed-coat mechanism without reopening oracle correspondence.

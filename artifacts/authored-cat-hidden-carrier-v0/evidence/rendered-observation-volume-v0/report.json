@@ -1,0 +1,462 @@
+{
+  "artifacts": {
+    "recoveredVolumes": {
+      "arrays": {
+        "bounds": {
+          "dtype": "float64",
+          "shape": [
+            2,
+            3
+          ]
+        },
+        "inwardDistance": {
+          "dtype": "float32",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "outerOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "spatialDepthPrior": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            129,
+            129
+          ]
+        },
+        "spatialOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "uniformOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        }
+      },
+      "byteLength": 98398,
+      "path": "recovered-volumes.npz",
+      "sha256": "c4f949d20fcec5cfca8f737085a6f1daa428394016501ee3eaffcbcbde07b4dd"
+    },
+    "renderedObservation": {
+      "arrays": {
+        "bounds": {
+          "dtype": "float64",
+          "shape": [
+            2,
+            3
+          ]
+        },
+        "depth_mX": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_mY": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_mZ": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pX": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pY": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pZ": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mX": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mY": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mZ": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pX": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pY": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pZ": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "rasterSize": {
+          "dtype": "int64",
+          "shape": [
+            1
+          ]
+        }
+      },
+      "byteLength": 122485,
+      "path": "rendered-observation.npz",
+      "sha256": "006b47c83470abc04c9ad085240995d87adfd69dc5c2b49f9af90ad90b0ff3d9"
+    }
+  },
+  "claimCeiling": "Source-specific correspondence-free six-view volumetric recovery comparison under one agent-authored provisional spatial prior; not arbitrary-source coat estimation, anatomy, coherent production topology, grooming, or deformation evidence.",
+  "effectiveConfig": {
+    "backend": "python-numpy-cpu",
+    "gridSize": 129,
+    "outputDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/rendered-observation-volume-v0",
+    "profile": "short-with-bounded-dorsal-ap-support-v0",
+    "rasterSize": 160,
+    "recoveryArm": "uniform-and-provisional-spatial-volume-erosion-v0",
+    "repoRoot": ".",
+    "route": "cpu-numpy-rendered-observation-volume-v0",
+    "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+    "spatialPrior": {
+      "amplitude": 1.0,
+      "apCenter": 0.65,
+      "apWidth": 0.24,
+      "authority": "agent-authored-provisional-pre-implementation",
+      "baseDepth": 0.94,
+      "dorsalStart": 0.4
+    },
+    "uniformDepth": 0.94
+  },
+  "executionId": "2977fd54-2b21-48cc-9be5-2368237a9ae6",
+  "failurePhase": null,
+  "finishedAt": "2026-08-12T21:14:26.478517Z",
+  "implementation": {
+    "fixture": {
+      "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_fixture.py",
+      "sha256": "9e6b0f2a1773d716152dbc92c89e3e668fa4ec4fa39243a827ca72c1143e5509"
+    },
+    "runner": {
+      "path": "artifacts/authored-cat-hidden-carrier-v0/rendered_observation_assay.py",
+      "sha256": "936e21d9975b036b2166ad69b978aa7995b4aac121342cf7407e786d8da76c40"
+    },
+    "volume": {
+      "path": "artifacts/authored-cat-hidden-carrier-v0/rendered_observation_volume.py",
+      "sha256": "9071205eefa143ed2f4ac41fda484e2ae582f604c9fd131fe43035eda06206f9"
+    }
+  },
+  "informationFirewall": {
+    "forbidden": [
+      "source-positions",
+      "source-triangles",
+      "source-vertex-ids",
+      "authored-carrier-normals",
+      "authored-coat-depths",
+      "authored-procedural-support",
+      "pre-recovery-source-correspondence"
+    ],
+    "recoveryInputs": "rendered-depth-silhouette-camera-bounds-and-declared-prior-only",
+    "truthAccessPhase": "post-recovery-scoring-only"
+  },
+  "lastTrustworthyEvidence": {
+    "heldOutScoreClassification": "UNIFORM_CONTROL_HOLDS",
+    "observation": {
+      "arrays": {
+        "bounds": {
+          "dtype": "float64",
+          "shape": [
+            2,
+            3
+          ]
+        },
+        "depth_mX": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_mY": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_mZ": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pX": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pY": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "depth_pZ": {
+          "dtype": "float32",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mX": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mY": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_mZ": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pX": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pY": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "mask_pZ": {
+          "dtype": "uint8",
+          "shape": [
+            160,
+            160
+          ]
+        },
+        "rasterSize": {
+          "dtype": "int64",
+          "shape": [
+            1
+          ]
+        }
+      },
+      "byteLength": 122485,
+      "path": "rendered-observation.npz",
+      "sha256": "006b47c83470abc04c9ad085240995d87adfd69dc5c2b49f9af90ad90b0ff3d9"
+    },
+    "recovery": {
+      "arrays": {
+        "bounds": {
+          "dtype": "float64",
+          "shape": [
+            2,
+            3
+          ]
+        },
+        "inwardDistance": {
+          "dtype": "float32",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "outerOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "spatialDepthPrior": {
+          "dtype": "float32",
+          "shape": [
+            1,
+            129,
+            129
+          ]
+        },
+        "spatialOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        },
+        "uniformOccupancy": {
+          "dtype": "uint8",
+          "shape": [
+            129,
+            129,
+            129
+          ]
+        }
+      },
+      "byteLength": 98398,
+      "path": "recovered-volumes.npz",
+      "sha256": "c4f949d20fcec5cfca8f737085a6f1daa428394016501ee3eaffcbcbde07b4dd"
+    }
+  },
+  "operatorVisualAdmission": "not-requested",
+  "priorTerminalReportSha256": null,
+  "reason": null,
+  "requestedConfig": {
+    "backend": "python-numpy-cpu",
+    "gridSize": 129,
+    "outputDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/rendered-observation-volume-v0",
+    "profile": "short-with-bounded-dorsal-ap-support-v0",
+    "rasterSize": 160,
+    "recoveryArm": "uniform-and-provisional-spatial-volume-erosion-v0",
+    "repoRoot": ".",
+    "route": "cpu-numpy-rendered-observation-volume-v0",
+    "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+    "spatialPrior": {
+      "amplitude": 1.0,
+      "apCenter": 0.65,
+      "apWidth": 0.24,
+      "authority": "agent-authored-provisional-pre-implementation",
+      "baseDepth": 0.94,
+      "dorsalStart": 0.4
+    },
+    "uniformDepth": 0.94
+  },
+  "safetyCharacterization": "Deterministic isolated authored-cat depth, silhouette, and binary-volume evidence; no generator output or hostile biological imagery.",
+  "schema": "kaminos.rendered-observation-hidden-carrier-volume.v0",
+  "score": {
+    "arms": {
+      "spatial": {
+        "meanSixViewSilhouetteIou": 0.36436447963789953,
+        "occupancyIou": 0.09916778142128253,
+        "relativeVolumeError": -0.8989683386695126,
+        "sixViewSilhouetteIou": [
+          0.43093192333113023,
+          0.43093192333113023,
+          0.35170697012802277,
+          0.35170697012802277,
+          0.3104545454545454,
+          0.3104545454545454
+        ],
+        "sourceNormalizedBoundaryError": 0.027418436349736886,
+        "sourceNormalizedComplementBoundaryError": 0.02675531685722849,
+        "sourceNormalizedSupportBoundaryError": 0.04035759228474309,
+        "voxelCount": 8520
+      },
+      "uniform": {
+        "meanSixViewSilhouetteIou": 0.47129557328994687,
+        "occupancyIou": 0.15714876765766297,
+        "relativeVolumeError": -0.8392149887347325,
+        "sixViewSilhouetteIou": [
+          0.6215025335977088,
+          0.6215025335977088,
+          0.423963133640553,
+          0.423963133640553,
+          0.3684210526315789,
+          0.3684210526315789
+        ],
+        "sourceNormalizedBoundaryError": 0.023622339829674727,
+        "sourceNormalizedComplementBoundaryError": 0.023612066783249095,
+        "sourceNormalizedSupportBoundaryError": 0.01795968021658569,
+        "voxelCount": 13559
+      }
+    },
+    "classification": "UNIFORM_CONTROL_HOLDS",
+    "improvements": {
+      "complementBoundary": -0.13312049736405474,
+      "globalBoundary": -0.16069942890642216,
+      "silhouetteDelta": -0.10693109365204734,
+      "supportBoundary": -1.2471219864746268
+    },
+    "schema": "kaminos.rendered-observation-hidden-carrier-volume.v0",
+    "supportRole": "held-out-procedural-support-scoring-only",
+    "thresholds": {
+      "globalBoundaryImprovement": 0.05,
+      "maximumComplementBoundaryWorsening": 0.05,
+      "maximumSilhouetteIouLoss": 0.005,
+      "supportBoundaryImprovement": 0.15
+    },
+    "truthAccessPhase": "post-recovery-scoring-only",
+    "truthRole": "authenticated-carrier-rendered-visual-hull-scoring-proxy"
+  },
+  "source": {
+    "contentClass": "operator-authored-carrier-export-held-out-scoring-truth",
+    "path": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+    "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "startedAt": "2026-08-12T21:14:23.217748Z",
+  "status": "captured",
+  "terminal": true
+}

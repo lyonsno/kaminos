@@ -1,0 +1,71 @@
+{
+  "artifact": {
+    "byteLength": 7273,
+    "path": "registered-volume-cross-sections.png",
+    "pixelSize": [
+      784,
+      524
+    ],
+    "sha256": "f1d843401938e430a010e7f7cdcaaed226d9d89982245cdcd12bd33902b00509"
+  },
+  "claimCeiling": "Registered same-grid cross-section evidence for held-out truth versus outer, uniform, and provisional spatial volume candidates; not a coherent surface or production mesh.",
+  "inputs": {
+    "assayReportSha256": "326528d2565a71f396df0dfbbba117a031b3108c0174e5a46499eb66f2dedf53",
+    "recoverySha256": "c4f949d20fcec5cfca8f737085a6f1daa428394016501ee3eaffcbcbde07b4dd",
+    "sourceSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "operatorVisualAdmission": "not-requested",
+  "registration": {
+    "bottomRow": {
+      "index": 83,
+      "plane": "Z",
+      "selection": "normalized-AP-0.65"
+    },
+    "colors": {
+      "candidateOnly": "red",
+      "columnBorder": [
+        "gold",
+        "violet",
+        "orange"
+      ],
+      "overlap": "off-white",
+      "truthOnly": "cyan"
+    },
+    "columns": [
+      "outer-observation-volume",
+      "uniform-recovery",
+      "spatial-recovery"
+    ],
+    "gridShape": [
+      129,
+      129,
+      129
+    ],
+    "sharedBounds": [
+      [
+        -72.11934960807206,
+        -29.505678107183556,
+        -17.070568931055124
+      ],
+      [
+        -4.590512263907726,
+        38.023159236980774,
+        50.45826841310921
+      ]
+    ],
+    "topRow": {
+      "index": 62,
+      "plane": "X",
+      "selection": "truth-max-area"
+    }
+  },
+  "route": {
+    "backend": "python-numpy-cpu",
+    "effective": "registered-volume-cross-section-png-v0",
+    "requested": "registered-volume-cross-section-png-v0"
+  },
+  "safetyCharacterization": "Abstract registered binary-volume cross-sections of an authored cat fixture; no generator output or hostile biological imagery.",
+  "schema": "kaminos.rendered-observation-hidden-carrier-diagnostic.v0",
+  "status": "captured",
+  "terminal": true
+}
