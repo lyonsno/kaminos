@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.13453848659992218,
+      0.4999305307865143,
+      0.31916314363479614
+    ],
+    "low": [
+      -0.13392727077007294,
+      -0.5001412630081177,
+      -0.3161383867263794
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/output.glb",
+    "sha256": "c1330fd20d151bb26d5dc64073ed88f6d147c694429346f5c14411ad6b9e261d"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 567337,
+      "cameraLocation": [
+        2.1392250061035156,
+        -0.00010536611080169678,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.1000789403915405,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az000-el12.png",
+      "sha256": "a44b384ff54ca0fa8baed272ae3e13e06531714cc2ee3e7cab9b140a0525f9e9"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 558552,
+      "cameraLocation": [
+        1.069765329360962,
+        1.8522530794143677,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 0.9123366475105286,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az060-el12.png",
+      "sha256": "0a5fdace87f0bd95137500750dca685ddcf55f179c838cec3724cc866f710357"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 552597,
+      "cameraLocation": [
+        -1.0691540241241455,
+        1.8522530794143677,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 0.9123366475105286,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az120-el12.png",
+      "sha256": "4e1f5e22706c0e589eca5935cdc5524385c6f540b290fd0f48fb3adb0a1cd867"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 551688,
+      "cameraLocation": [
+        -2.138613700866699,
+        -0.00010536611080169678,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.1000789403915405,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az180-el12.png",
+      "sha256": "2ba32058486d6375155139dab81bb2aac8f90d2f45264dfd8d411000aa6ef25c"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 547126,
+      "cameraLocation": [
+        -1.0691540241241455,
+        -1.8524638414382935,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 0.9123366475105286,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az240-el12.png",
+      "sha256": "e037e24e2bf8a8c6dced021ab66f063cd10edf7b6f869d58ef8f1693e04aa160"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 557142,
+      "cameraLocation": [
+        1.069765329360962,
+        -1.8524638414382935,
+        0.4561536908149719
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 0.9123366475105286,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/orbit/az300-el12.png",
+      "sha256": "3e593c63b126738f7dffa5306ba59a98a4353442c3e3e5616258b2150479591b"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 147107
+}

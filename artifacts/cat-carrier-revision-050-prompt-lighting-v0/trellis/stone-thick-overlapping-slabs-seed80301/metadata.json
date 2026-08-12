@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "2e9449bca4c6",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786575541.5045362,
+  "duration_s": 127.4
+}

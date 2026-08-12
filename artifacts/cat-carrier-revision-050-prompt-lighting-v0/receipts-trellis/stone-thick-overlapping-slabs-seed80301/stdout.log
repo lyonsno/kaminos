@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 42.5s
+  1881 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 15.8s (1881 tokens)
+  No-cascade: using LR SLat directly (1,881 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 8461 voxels
+  Level 1 → 2: 37788 voxels
+  Level 2 → 3: 168695 voxels
+  Level 3 → 4: 770362 voxels
+  Decoded: 16.3s (770,362 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  770,362 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.6s
+  770,362 vertices, 1,742,436 faces
+  Pre-simplify: 70,053V 199,999F (0.7s)
+  Removed 16080 duplicate faces
+  Removed 49365 non-manifold faces
+  Filled 1508 holes (835 too large, max_perimeter=0.03)
+  Cleanup: 70,053V 199,999F → 70,783V 140,429F
+  Cleanup: 5.6s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 12.9s (1,881 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 8461 voxels
+  Level 1 → 2: 37788 voxels
+  Level 2 → 3: 168695 voxels
+  Level 3 → 4: 770362 voxels
+  Decoded: 8.8s (770,362 voxels, 6 channels)
+  PBR attrs: RGB [0.01, 0.54] metallic [-0.01, 1.01] roughness [0.14, 1.01]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 147,107V 140,429F (5.3s)
+    Rasterizing UV space (140,429 tris, 1024x1024, MLX)...
+    595,768 pixels covered (1.4s)
+    Interpolated 595,768 positions (0.1s)
+    Sampled voxel attrs (2.3s)
+    Inpainted seams (1.2s)
+
+  Saved: /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/output.glb (8.7MB)
+
+Total: 126.8s
