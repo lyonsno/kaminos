@@ -1,0 +1,43 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.submissions.v0",
+  "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+  "sourceSha256": "56ea3103f3751b6e693e9fe4b85ee14d31cee9980c2ecde1560f0e4b729d344b",
+  "routes": {
+    "sf3d": {
+      "jobId": "9122cbcba82c",
+      "jobType": "sf3d",
+      "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d",
+      "requestedParams": {},
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "sf3d",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d"
+      ]
+    },
+    "trellis": {
+      "jobId": "934f19823531",
+      "jobType": "trellis2mlx_fast",
+      "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis",
+      "requestedParams": {
+        "seed": 42,
+        "steps": 6,
+        "target_faces": 200000,
+        "texture_size": 1024
+      },
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    }
+  }
+}

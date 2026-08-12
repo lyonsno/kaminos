@@ -1,0 +1,34 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.v0",
+  "question": "Does a spatial reconstruction of FLUX's naturalistic polygonal cat preserve the same compact-prompt basins when rendered back through FLUX?",
+  "source": {
+    "path": "../authored-envelope-v0/gen-sp-cat/output.png",
+    "sha256": "56ea3103f3751b6e693e9fe4b85ee14d31cee9980c2ecde1560f0e4b729d344b",
+    "prompt": "This shape as a cat.",
+    "seed": 80301,
+    "sourceCarrierVertices": 3764
+  },
+  "routes": [
+    {
+      "id": "sf3d",
+      "jobType": "sf3d",
+      "params": {}
+    },
+    {
+      "id": "trellis",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": 42,
+        "steps": 6,
+        "target_faces": 200000,
+        "texture_size": 1024
+      }
+    }
+  ],
+  "selectionPriority": [
+    "naturalistic cat fidelity",
+    "complete coherent anatomy",
+    "visible tessellation scale comparable to the authored carrier"
+  ],
+  "claimCeiling": "Exact source and effective-route reconstruction behavior only; second-pass FLUX claims require a separately frozen matched matrix."
+}
