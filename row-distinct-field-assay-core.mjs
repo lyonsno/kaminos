@@ -25,7 +25,7 @@ const OVERLAP_INTERACTION_CARD_SCHEMA =
 const AUTHORITATIVE_OVERLAP_INTERACTION_CARD_ID =
   'bounded-hindquarter-overlap-interaction-law-v0';
 const AUTHORITATIVE_OVERLAP_INTERACTION_CARD_HASH =
-  '4d7c3095ee345f3524fff68a390b61338c6393259178e306a65cbbd3da4605ba';
+  '0da2e331b45bae438c0cd089c40b4d9a1ecaa9d297e564d1a401acb6806880b3';
 const AUTHORITATIVE_OVERLAP_SOURCE_ASSAY_HASH =
   'eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66';
 
@@ -287,6 +287,12 @@ export function validateOverlappingAnisotropicTissueInteractionCard(interactionC
     || interactionCard.decision.requireClosedSingleComponent !== true
     || interactionCard.decision.requireIndependentControlAssayHashUnchanged !== true
     || interactionCard.decision.requireConclusivePassOrObservedLimit !== true
+    || interactionCard.decision.surfaceQualityFollowup?.status
+      !== 'post-visual-falsifier-before-result-admission'
+    || interactionCard.decision.surfaceQualityFollowup?.comparison
+      !== 'nonregression-against-unchanged-additive-row-at-every-amplitude'
+    || canonicalJson(interactionCard.decision.surfaceQualityFollowup?.metrics)
+      !== canonicalJson(['surfaceAreaRelativeError', 'volumeRelativeError'])
     || interactionCard.promotion !== 'none') {
     throw new Error('overlap interaction decision predicate or promotion changed');
   }
@@ -1795,6 +1801,9 @@ export function buildOverlappingAnisotropicTissueInteractionAssay({
     sectionPlanes: structuredClone(sourceAssay.sectionPlanes),
     amplitudes: structuredClone(sourceAssay.amplitudes),
     frozenScalarControl: structuredClone(sourceAssay.frozenScalarControl),
+    surfaceQualityFollowup: structuredClone(
+      interactionCard.decision.surfaceQualityFollowup,
+    ),
     additive,
     additiveStress,
     candidates,

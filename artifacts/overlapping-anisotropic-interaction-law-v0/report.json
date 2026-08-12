@@ -14,13 +14,13 @@
   "outputs": [
     {
       "relativePath": "assay.json",
-      "byteLength": 33673930,
-      "sha256": "18e4284350ec8c2fbd11e2ea6af223bb88a8b4441b91b317d4ca0ec1ce488296"
+      "byteLength": 33674326,
+      "sha256": "8ae8ec1d5991ec9401b76e0ffc514fbb94fe126b00f4ada1f967dc14bb24f64b"
     },
     {
       "relativePath": "contact-sheet.svg",
       "byteLength": 2790733,
-      "sha256": "1ef1c03dba6cf6b837e297758ae131050a572a7b90eacba07082961dcc43d860"
+      "sha256": "dc6a74c60703432d98dd23d1c62987409fca5855296a8c4dd37f2ced9018abe3"
     },
     {
       "relativePath": "additive-amplitude-0p1.obj",
@@ -293,10 +293,10 @@
       "sha256": "c65721ead6b4f171d842d8b87afcb55c924c068a9bcfeed614b49c586ec9c68d"
     }
   ],
-  "assayHash": "ed1142fa2ed9ce1929f955998312b5b50158ed22144ec3add788a77354bac21e",
+  "assayHash": "aa01f42b923a568e9cc112ae6faa119a610c2dcc389effba1641b2d7c2b0c3ce",
   "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
   "independentControlsHash": "e34158d718de67af8612db70e9f91bc10d23a5b869907daac738c236cdb83433",
-  "interactionCardHash": "4d7c3095ee345f3524fff68a390b61338c6393259178e306a65cbbd3da4605ba",
+  "interactionCardHash": "0da2e331b45bae438c0cd089c40b4d9a1ecaa9d297e564d1a401acb6806880b3",
   "targetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
   "descriptorHash": "45a34c1350566d064f8fa9d466e579069e834cf6ad0e853b32ceac6fc113f3a4",
   "evidencePassed": true,

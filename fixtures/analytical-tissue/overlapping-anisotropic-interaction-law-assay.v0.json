@@ -96,7 +96,13 @@
     "maximumCombinedFullSurfaceNormalizedRmse": 0.12,
     "requireClosedSingleComponent": true,
     "requireIndependentControlAssayHashUnchanged": true,
-    "requireConclusivePassOrObservedLimit": true
+    "requireConclusivePassOrObservedLimit": true,
+    "surfaceQualityFollowup": {
+      "status": "post-visual-falsifier-before-result-admission",
+      "trigger": "normalized-product-additive-32 rendered serrated mesh-derived sections despite crossing the stress RMSE bound",
+      "comparison": "nonregression-against-unchanged-additive-row-at-every-amplitude",
+      "metrics": ["surfaceAreaRelativeError", "volumeRelativeError"]
+    }
   },
   "claimCeiling": "One bounded synthetic fixture may distinguish missing overlap interaction math from failure of this small coupling family only.",
   "counterfeits": [

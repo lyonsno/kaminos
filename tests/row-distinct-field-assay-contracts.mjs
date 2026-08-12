@@ -443,6 +443,10 @@ test('overlap-aware interaction assay preserves the admitted independent rows an
   });
 
   assert.equal(assay.sourceAssayHash, sourceAssay.assayHash);
+  assert.equal(
+    assay.surfaceQualityFollowup.status,
+    'post-visual-falsifier-before-result-admission',
+  );
   assert.equal(assay.independentControlsHash, canonicalHash(sourceAssay.controls));
   assert.equal(assay.targetHash, sourceAssay.targetHash);
   assert.equal(assay.descriptorHash, sourceAssay.descriptorHash);
