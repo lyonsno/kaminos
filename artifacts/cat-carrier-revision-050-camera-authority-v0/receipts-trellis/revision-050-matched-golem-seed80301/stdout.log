@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 15.6s
+  2247 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 8.1s (2247 tokens)
+  No-cascade: using LR SLat directly (2,247 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 11101 voxels
+  Level 1 → 2: 53063 voxels
+  Level 2 → 3: 241848 voxels
+  Level 3 → 4: 1052860 voxels
+  Decoded: 13.1s (1,052,860 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  1,052,860 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.7s
+  1,052,860 vertices, 2,150,904 faces
+  Pre-simplify: 84,785V 200,000F (0.8s)
+  Removed 6547 duplicate faces
+  Removed 27252 non-manifold faces
+  Filled 2312 holes (618 too large, max_perimeter=0.03)
+  Cleanup: 84,785V 200,000F → 86,545V 174,973F
+  Cleanup: 4.8s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 4.4s (2,247 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 11101 voxels
+  Level 1 → 2: 53063 voxels
+  Level 2 → 3: 241848 voxels
+  Level 3 → 4: 1052860 voxels
+  Decoded: 6.4s (1,052,860 voxels, 6 channels)
+  PBR attrs: RGB [-0.05, 0.70] metallic [0.31, 0.36] roughness [0.96, 0.98]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 161,014V 174,973F (3.8s)
+    Rasterizing UV space (174,973 tris, 1024x1024, MLX)...
+    646,670 pixels covered (0.7s)
+    Interpolated 646,670 positions (0.0s)
+    Sampled voxel attrs (1.0s)
+    Inpainted seams (0.5s)
+
+  Saved: /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-golem-seed80301/output.glb (9.7MB)
+
+Total: 68.1s

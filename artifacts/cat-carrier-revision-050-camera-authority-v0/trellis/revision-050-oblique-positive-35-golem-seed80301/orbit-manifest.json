@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.17529328167438507,
+      0.49799805879592896,
+      0.37594494223594666
+    ],
+    "low": [
+      -0.16876156628131866,
+      -0.500335693359375,
+      -0.37666481733322144
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/output.glb",
+    "sha256": "c923e79d4840eb7b0fbbef28e89493af08da0cddeb118aa3f52488b81ccebde1"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 634653,
+      "cameraLocation": [
+        2.286344528198242,
+        -0.0011688172817230225,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.098167061805725,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az000-el12.png",
+      "sha256": "ddb45316206df8d05315e17e92db3cd9d69dbeba3f63fe915f026a1cf3bba325"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 619322,
+      "cameraLocation": [
+        1.1448051929473877,
+        1.976035237312317,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.0468553304672241,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az060-el12.png",
+      "sha256": "14f61ba998605c39281e793095ca6a10e36e472aba986228c7226c8425c3d482"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 609195,
+      "cameraLocation": [
+        -1.1382734775543213,
+        1.976035237312317,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.0468553304672241,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az120-el12.png",
+      "sha256": "176e4459ce4c6926cf6283fe01a73b81eaf59e73dab95929214ce7fe1dbbad7f"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 617090,
+      "cameraLocation": [
+        -2.279812812805176,
+        -0.0011688172817230225,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.098167061805725,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az180-el12.png",
+      "sha256": "1949c9574119832d9fd2889263e6278f924f0d806bce199983726153351f03a0"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 599908,
+      "cameraLocation": [
+        -1.1382734775543213,
+        -1.9783729314804077,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.0468553304672241,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az240-el12.png",
+      "sha256": "0fa3531b8083da0d7522a6c6f491d67d6faa447e5d0a28fe5c4e98fe6953f070"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 613160,
+      "cameraLocation": [
+        1.1448051929473877,
+        -1.9783729314804077,
+        0.48492342233657837
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.0468554496765137,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/orbit/az300-el12.png",
+      "sha256": "979d32d0138fe255c1f7273a93f3638ac554c20b130544fdc5ca5e294665ada3"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 62217
+}

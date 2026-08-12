@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "1eb3be3656d2",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-oblique-positive-35-golem-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786542558.923109,
+  "duration_s": 139.4
+}

@@ -1,0 +1,24 @@
+{
+  "job_id": "e71cd524a1d8",
+  "status": "done",
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-dragon-seed80301",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "submitted_at": 1786542115.081609,
+  "started_at": 1786542115.095683,
+  "finished_at": 1786542171.926176,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-dragon-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "pid": 31039,
+  "warnings": [
+    "volatile_output"
+  ]
+}

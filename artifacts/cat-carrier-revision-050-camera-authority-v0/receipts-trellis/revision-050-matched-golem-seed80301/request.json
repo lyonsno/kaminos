@@ -1,0 +1,13 @@
+{
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-golem-seed80301",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "job_id": "e63852804e80",
+  "submitted_at": 1786542115.183821
+}

@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.14048902690410614,
+      0.4992685317993164,
+      0.3262723982334137
+    ],
+    "low": [
+      -0.13768070936203003,
+      -0.5003510117530823,
+      -0.32541877031326294
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/output.glb",
+    "sha256": "6075c63002e4c8761006e97fbe78a1a9bad94aabf1882a36df208cced600162b"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 543631,
+      "cameraLocation": [
+        2.1587181091308594,
+        -0.0005412399768829346,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.0995814800262451,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az000-el12.png",
+      "sha256": "57040bf55888bd2382b45d5f03cd23e90f5b9f85750d5b672f678835745883a6"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 537994,
+      "cameraLocation": [
+        1.0800611972808838,
+        1.8677476644515991,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 0.930990993976593,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az060-el12.png",
+      "sha256": "792b9b56454cbb3bd9e01090387ef6413046fe6a3574a0e959888675b8bc64ed"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 536979,
+      "cameraLocation": [
+        -1.0772528648376465,
+        1.8677476644515991,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 0.930990993976593,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az120-el12.png",
+      "sha256": "a414951142fab45755b9ecdd2a6ba2227b206b42e3df6147c9e7911144085bbe"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 533243,
+      "cameraLocation": [
+        -2.155910015106201,
+        -0.0005412399768829346,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.0995814800262451,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az180-el12.png",
+      "sha256": "b105057978cffbd784a394961d2248a4da9ab004da31f80c01e3bb0edced9499"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 535115,
+      "cameraLocation": [
+        -1.0772528648376465,
+        -1.8688300848007202,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 0.930990993976593,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az240-el12.png",
+      "sha256": "b994537941bb8c2945aaeb528cffe38373002528464da1cb3f0c65467e91bdb0"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 546313,
+      "cameraLocation": [
+        1.0800611972808838,
+        -1.8688300848007202,
+        0.4589781165122986
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 0.9309910535812378,
+      "path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/orbit/az300-el12.png",
+      "sha256": "ef12341dac30465392dd16216269aa6b2c194128fc95a34d9d35f2df968b2047"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 160927
+}

@@ -1,0 +1,112 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-camera-authority.trellis-results.v0",
+  "selection": "trellis-selection.json",
+  "selectionSha256": "6dfe1050daaabc261648462fb3942a9fae2f617ea827ebbae164be464b24797d",
+  "submissions": "trellis-submissions.json",
+  "submissionsSha256": "1c95d90b89b463a311cbe92541bf19abe594f403cc4c24e73397938b14c1536c",
+  "collectedAt": 1786542566.785027,
+  "cells": {
+    "revision-050-matched-dragon-seed80301": {
+      "jobId": "e71cd524a1d8",
+      "role": "dense-organic-elaboration",
+      "input": "runs/revision-050-matched-dragon-seed80301/output.png",
+      "inputSha256": "30fd69f1cb9bf75ab66cfdca8c5104dabf931ed3a23b2795b6846f46aee0706b",
+      "output": "trellis/revision-050-matched-dragon-seed80301/output.glb",
+      "outputSha256": "2fd60ca653372c3c11fb9468633275aa4f738b6c3810561386bd71b9f7530c2d",
+      "outputBytes": 9524824,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-dragon-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-matched-dragon-seed80301/receipt.json"
+    },
+    "revision-050-matched-maquette-seed80301": {
+      "jobId": "d7ab51bf8b10",
+      "role": "maximal-source-correspondence",
+      "input": "runs/revision-050-matched-maquette-seed80301/output.png",
+      "inputSha256": "878e06a8183668c1947a8c768b6d015598e246ebe962b33aec70eb894d6f62f6",
+      "output": "trellis/revision-050-matched-maquette-seed80301/output.glb",
+      "outputSha256": "f87cb37e3250b82d6a2dc1f9673bd9675cfcf9c37133c6d69887bd9c54184aba",
+      "outputBytes": 9970524,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-maquette-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-maquette-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-matched-maquette-seed80301/receipt.json"
+    },
+    "revision-050-matched-cat-seed80301": {
+      "jobId": "511a8fc85ef8",
+      "role": "source-congruent-class-completion",
+      "input": "runs/revision-050-matched-cat-seed80301/output.png",
+      "inputSha256": "cab5c012471b8ddf76e73cc667874b7a39917fc8a6092ad8de617c0df82cd085",
+      "output": "trellis/revision-050-matched-cat-seed80301/output.glb",
+      "outputSha256": "6075c63002e4c8761006e97fbe78a1a9bad94aabf1882a36df208cced600162b",
+      "outputBytes": 9388424,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-cat-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-matched-cat-seed80301/receipt.json"
+    },
+    "revision-050-matched-golem-seed80301": {
+      "jobId": "e63852804e80",
+      "role": "golem-profile-camera-control",
+      "input": "runs/revision-050-matched-golem-seed80301/output.png",
+      "inputSha256": "d80bafda5dbeaaf2ec74cbf6179106155963134d3000a8eb8b4d6063ce3ab5e0",
+      "output": "trellis/revision-050-matched-golem-seed80301/output.glb",
+      "outputSha256": "2698c0c8320fedfcf7e339a2686a9acc3367ba812b83038c3685759b7306b090",
+      "outputBytes": 9715980,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-golem-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-matched-golem-seed80301/receipt.json"
+    },
+    "revision-050-oblique-negative-35-golem-seed80301": {
+      "jobId": "0bdd27990d84",
+      "role": "golem-front-oblique-camera-control",
+      "input": "runs/revision-050-oblique-negative-35-golem-seed80301/output.png",
+      "inputSha256": "be6defa4d987eb3ad040878dfefc4669034e7971e464fea4a4053e53730b00ec",
+      "output": "trellis/revision-050-oblique-negative-35-golem-seed80301/output.glb",
+      "outputSha256": "7c19f2ec1b1a943b9d78271fb61387c8ad1a04a6837c9193958159d8c5c244c0",
+      "outputBytes": 8462028,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-oblique-negative-35-golem-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-negative-35-golem-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-oblique-negative-35-golem-seed80301/receipt.json"
+    },
+    "revision-050-oblique-positive-35-golem-seed80301": {
+      "jobId": "1eb3be3656d2",
+      "role": "golem-rear-oblique-camera-control",
+      "input": "runs/revision-050-oblique-positive-35-golem-seed80301/output.png",
+      "inputSha256": "8943f3a3b72b55f5255e939a22958b6cd7f6f0aea3b88f6a1b103b2096c531ff",
+      "output": "trellis/revision-050-oblique-positive-35-golem-seed80301/output.glb",
+      "outputSha256": "c923e79d4840eb7b0fbbef28e89493af08da0cddeb118aa3f52488b81ccebde1",
+      "outputBytes": 4993072,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-oblique-positive-35-golem-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-050-oblique-positive-35-golem-seed80301/receipt.json"
+    }
+  }
+}

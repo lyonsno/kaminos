@@ -1,0 +1,120 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-camera-authority.trellis-submissions.v0",
+  "selection": "trellis-selection.json",
+  "cells": {
+    "revision-050-matched-dragon-seed80301": {
+      "jobId": "e71cd524a1d8",
+      "role": "dense-organic-elaboration",
+      "input": "runs/revision-050-matched-dragon-seed80301/output.png",
+      "inputSha256": "30fd69f1cb9bf75ab66cfdca8c5104dabf931ed3a23b2795b6846f46aee0706b",
+      "outputDir": "trellis/revision-050-matched-dragon-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-dragon-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "revision-050-matched-maquette-seed80301": {
+      "jobId": "d7ab51bf8b10",
+      "role": "maximal-source-correspondence",
+      "input": "runs/revision-050-matched-maquette-seed80301/output.png",
+      "inputSha256": "878e06a8183668c1947a8c768b6d015598e246ebe962b33aec70eb894d6f62f6",
+      "outputDir": "trellis/revision-050-matched-maquette-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-maquette-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-maquette-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "revision-050-matched-cat-seed80301": {
+      "jobId": "511a8fc85ef8",
+      "role": "source-congruent-class-completion",
+      "input": "runs/revision-050-matched-cat-seed80301/output.png",
+      "inputSha256": "cab5c012471b8ddf76e73cc667874b7a39917fc8a6092ad8de617c0df82cd085",
+      "outputDir": "trellis/revision-050-matched-cat-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-cat-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-cat-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "revision-050-matched-golem-seed80301": {
+      "jobId": "e63852804e80",
+      "role": "golem-profile-camera-control",
+      "input": "runs/revision-050-matched-golem-seed80301/output.png",
+      "inputSha256": "d80bafda5dbeaaf2ec74cbf6179106155963134d3000a8eb8b4d6063ce3ab5e0",
+      "outputDir": "trellis/revision-050-matched-golem-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-matched-golem-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "revision-050-oblique-negative-35-golem-seed80301": {
+      "jobId": "0bdd27990d84",
+      "role": "golem-front-oblique-camera-control",
+      "input": "runs/revision-050-oblique-negative-35-golem-seed80301/output.png",
+      "inputSha256": "be6defa4d987eb3ad040878dfefc4669034e7971e464fea4a4053e53730b00ec",
+      "outputDir": "trellis/revision-050-oblique-negative-35-golem-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-oblique-negative-35-golem-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-negative-35-golem-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "revision-050-oblique-positive-35-golem-seed80301": {
+      "jobId": "1eb3be3656d2",
+      "role": "golem-rear-oblique-camera-control",
+      "input": "runs/revision-050-oblique-positive-35-golem-seed80301/output.png",
+      "inputSha256": "8943f3a3b72b55f5255e939a22958b6cd7f6f0aea3b88f6a1b103b2096c531ff",
+      "outputDir": "trellis/revision-050-oblique-positive-35-golem-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-oblique-positive-35-golem-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/trellis/revision-050-oblique-positive-35-golem-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    }
+  }
+}

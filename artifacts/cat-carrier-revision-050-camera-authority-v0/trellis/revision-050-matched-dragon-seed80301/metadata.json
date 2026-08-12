@@ -1,0 +1,18 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "e71cd524a1d8",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786542171.926176,
+  "duration_s": 56.8
+}
