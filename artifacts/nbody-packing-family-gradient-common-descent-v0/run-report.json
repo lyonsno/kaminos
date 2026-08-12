@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.nbody-packing-family-gradient-common-descent-assay.v0",
+  "status": "complete-common-descent-step-admitted",
+  "route": {
+    "requested": "family-gradient-minimum-norm-common-descent-v0",
+    "effective": "family-gradient-minimum-norm-common-descent-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "pattern": {
+      "path": "artifacts/nbody-packing-localized-challenge-v0/oracle-pattern-search-032.json",
+      "fileSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
+      "resultSha256": "a697e6567f88d34ba7f8e78b60bbfa188d89e0e896be1b704a11017658d1bb93"
+    },
+    "homotopy": {
+      "path": "artifacts/nbody-packing-localized-challenge-v0/homotopy-032-fine-0875-to-1.json",
+      "fileSha256": "57f08fe1090d059bc250093522463579050af2ab66db491d39ffdacc15a67736",
+      "resultSha256": "cfaede5e816f6dfc04b2e99230b9d47f2a093c8cda8b393ecb563610184daa2b"
+    }
+  },
+  "comparison": {
+    "coordinateSearchFloor": 0.001615326586,
+    "homotopyFloor": 0.000945973079,
+    "commonDescentResidual": 0.000125037313,
+    "improvementVersusCoordinateSearch": 12.918756387543292,
+    "improvementVersusHomotopy": 7.56552629213969
+  },
+  "bindings": {
+    "resultJsonSha256": "b56ad0f0acd77ff102ed5a2e2bc51bd38b4f040516875ba13dc2778f8dd1380c",
+    "resultSha256": "1d9f7e75ccedce16d0d212339ecd2ad347480cb8d86d86af703cc8c10708bf83"
+  },
+  "claimCeiling": "bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility",
+  "identity": {
+    "sha256": "986d93212b2d734cfc3da9ebb7e1392be59fba29c93453ce50ee0a39fbe6240f"
+  }
+}

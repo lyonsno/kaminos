@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice",
+    "outputPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/fail-crowded-slice.png",
+    "reportPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/fail-crowded-slice-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 15184,
+    "processGroupId": 15184,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 15184,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 15320,
+      "processGroupId": 15320,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 15320,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3653,
+    "retainedBytes": 3653,
+    "truncated": false,
+    "tail": "[0812/033350.946276:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033351.047748:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.906584:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n[0812/033351.906723:INFO:CONSOLE:0] \"[.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n[0812/033351.908911:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033352.034964:INFO:CONSOLE:0] \"[.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n[0812/033352.036564:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033352.257499:INFO:CONSOLE:0] \"[.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n[0812/033352.258143:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00488400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n157877 bytes written to file repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/fail-crowded-slice.png\n[0812/033352.597855:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033352.624726:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n[0812/033352.674783:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00537200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.810151:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00537200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.812451:INFO:CONSOLE:0] \"[.WebGL-0x13c00537200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/fail-crowded-slice.png",
+    "sizeBytes": 157877,
+    "sha256": "365e89887decf334fdc4d8ef90a9b6829adcc4a7a8da3080fd244fa9e06c1884",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 42,
+      "idatBytes": 157352
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "fail-crowded",
+      "witnessMode": "slice",
+      "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
+      "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+      "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 187321,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/fail-crowded-slice.png",
+      "sizeBytes": 157877,
+      "sha256": "365e89887decf334fdc4d8ef90a9b6829adcc4a7a8da3080fd244fa9e06c1884",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 42,
+        "idatBytes": 157352
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 187321,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=fail-crowded&mode=slice",
+    "httpStatus": 200,
+    "sizeBytes": 186333,
+    "sha256": "92dd91cca446d1fcab2ceecb89947512855905185885efcb6bd9798ee8b09e11"
+  }
+}

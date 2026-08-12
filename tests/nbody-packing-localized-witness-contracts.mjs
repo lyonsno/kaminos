@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
+  NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
   NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   admitNBodyPackingLocalizedVisualInspection,
   renderNBodyPackingLocalizedChallengeHtml,
@@ -310,6 +311,58 @@ test('trajectory writer binds final-config one-step and six-step results into ei
   assert.match(report.claimCeiling.admittedClaim, /reintroduce pairwise penetration/);
 });
 
+test('common-descent writer binds the source-bound result as a ninth comparison state', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-descent-'));
+  const { report, states } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    restorationResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+    trajectoryResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+    commonDescentResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+  });
+  assert.equal(report.route.effective,
+    'nbody-packing-family-gradient-common-descent-v0');
+  assert.equal(report.requiredStates.length, 9);
+  assert.equal(Object.keys(states).length, 9);
+  assert.equal(states['family-common-descent'].metrics.pairwisePenetration, 0);
+  assert.equal(states['family-common-descent'].metrics.skeletalPenetration, 0.000125037313);
+  assert.equal(states['family-common-descent'].metrics.compartmentEscape, 0);
+  assert.match(report.claimCeiling.admittedClaim, /without trading tracked family debt/);
+});
+
+test('common-descent witness rejects a canonically rehashed incomplete route config', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-stale-common-'));
+  const current = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+    'utf8',
+  ));
+  delete current.config.requested.familyRegressionTolerance;
+  delete current.config.effective.familyRegressionTolerance;
+  delete current.identity;
+  current.identity = { sha256:hashMusclePackingCanonicalJson(current) };
+  const stalePath = path.join(outDir, 'stale-common-descent.json');
+  fs.writeFileSync(stalePath, `${JSON.stringify(current, null, 2)}\n`);
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      restorationResultPath:
+        'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+      trajectoryResultPath:
+        'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+      commonDescentResultPath:stalePath,
+    }),
+    /current common-descent contract/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.requested, NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE);
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'bind-source-identities');
+  assert.equal(fs.existsSync(path.join(outDir, 'index.html')), false);
+});
+
 test('trajectory visual admission requires sixteen route-bound captures', async () => {
   const sourceDir = path.resolve(
     'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0',
@@ -356,6 +409,56 @@ test('trajectory visual admission requires sixteen route-bound captures', async 
   assert.equal(admitted.report.visualInspection.captureCount, 16);
   assert.equal(admitted.receipt.route.effective,
     NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE);
+});
+
+test('common-descent visual admission requires eighteen route-bound captures', async () => {
+  const sourceDir = path.resolve(
+    'artifacts/nbody-packing-family-gradient-common-descent-viewer-v0',
+  );
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-admission-'));
+  const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    restorationResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
+    trajectoryResultPath:
+      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
+    commonDescentResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+  });
+  for (const state of report.requiredStates) for (const mode of report.requiredModes) {
+    const stem = `${state}-${mode}`;
+    fs.copyFileSync(path.join(sourceDir, `${stem}.png`), path.join(outDir, `${stem}.png`));
+    fs.copyFileSync(
+      path.join(sourceDir, `${stem}-capture-report.json`),
+      path.join(outDir, `${stem}-capture-report.json`),
+    );
+  }
+  const inspection = {
+    observedAt:'2026-08-12T00:00:00.000Z',
+    summary:'Nine route-bound states inspected in transparent volume and opaque slices.',
+    verdict:{
+      nonblank:true,
+      orbitable:true,
+      sameCameraComparison:true,
+      crowdedDebtLegible:true,
+      lastPassClearanceLegible:true,
+      coldFailureGrosslyWrong:true,
+      warmStartResidualLegible:true,
+      coordinateFloorResidualLegible:true,
+      manufacturedWitnessAuthorityCeilingLegible:true,
+      stableIdentityLegible:true,
+      fixedAttachmentsLegible:true,
+      individualVolumeLegible:true,
+      packingSemanticsNotInverted:true,
+      restorationDeltaLegible:true,
+      restorationResidualMarkersLegible:true,
+    },
+  };
+  const admitted = await admitNBodyPackingLocalizedVisualInspection({ outDir, inspection });
+  assert.equal(admitted.report.status, 'complete-agent-visual-inspected');
+  assert.equal(admitted.report.visualInspection.captureCount, 18);
+  assert.equal(admitted.receipt.route.effective,
+    NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE);
 });
 
 test('hard-boundary pair markers bind exact violated segment identities', () => {

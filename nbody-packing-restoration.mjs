@@ -3,9 +3,12 @@ import { evaluateNBodyUnifiedKktState } from './nbody-packing-unified-kkt.mjs';
 
 export const NBODY_PACKING_RESTORATION_RESULT_SCHEMA =
   'kaminos.nbody-packing-all-neighbor-restoration-result.v0';
+export const NBODY_PACKING_COMMON_DESCENT_RESULT_SCHEMA =
+  'kaminos.nbody-packing-family-gradient-common-descent-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
+const COMMON_DESCENT_ALGORITHM = 'family-gradient-minimum-norm-common-descent-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -163,6 +166,296 @@ function compareReceipts(left, right) {
 
 function clampVector(vector, bounds) {
   return vector.map(value => rounded(Math.max(bounds[0], Math.min(bounds[1], value))));
+}
+
+function dot(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function normalized(vector) {
+  const norm = Math.hypot(...vector);
+  if (!(norm > 0) || !Number.isFinite(norm)) return { norm, vector:null };
+  return { norm, vector:vector.map(value => value / norm) };
+}
+
+function minimumNormConvexCombination(vectors) {
+  const candidates = [];
+  for (let index = 0; index < vectors.length; index += 1) {
+    const weights = vectors.map((_, vectorIndex) => vectorIndex === index ? 1 : 0);
+    candidates.push({ weights, vector:[...vectors[index]] });
+  }
+  for (let left = 0; left < vectors.length; left += 1) {
+    for (let right = left + 1; right < vectors.length; right += 1) {
+      const delta = vectors[right].map((value, axis) => value - vectors[left][axis]);
+      const denominator = dot(delta, delta);
+      const t = denominator > 0
+        ? Math.max(0, Math.min(1, -dot(vectors[left], delta) / denominator))
+        : 0;
+      const weights = vectors.map((_, index) =>
+        index === left ? 1 - t : index === right ? t : 0
+      );
+      candidates.push({
+        weights,
+        vector:vectors[left].map((value, axis) => value + t * delta[axis]),
+      });
+    }
+  }
+  if (vectors.length === 3) {
+    const a = vectors[0].map((value, axis) => value - vectors[2][axis]);
+    const b = vectors[1].map((value, axis) => value - vectors[2][axis]);
+    const aa = dot(a, a);
+    const ab = dot(a, b);
+    const bb = dot(b, b);
+    const ac = dot(a, vectors[2]);
+    const bc = dot(b, vectors[2]);
+    const determinant = aa * bb - ab * ab;
+    if (Math.abs(determinant) > 1e-15) {
+      const first = (-ac * bb + ab * bc) / determinant;
+      const second = (-bc * aa + ab * ac) / determinant;
+      const weights = [first, second, 1 - first - second];
+      if (weights.every(value => value >= -1e-12 && value <= 1 + 1e-12)) {
+        const clampedWeights = weights.map(value => Math.max(0, Math.min(1, value)));
+        const total = clampedWeights.reduce((sum, value) => sum + value, 0);
+        const normalizedWeights = clampedWeights.map(value => value / total);
+        candidates.push({
+          weights:normalizedWeights,
+          vector:vectors[0].map((_, axis) => vectors.reduce(
+            (sum, vector, index) => sum + normalizedWeights[index] * vector[axis],
+            0,
+          )),
+        });
+      }
+    }
+  }
+  candidates.sort((left, right) => {
+    const normDifference = dot(left.vector, left.vector) - dot(right.vector, right.vector);
+    if (Math.abs(normDifference) > 1e-15) return normDifference;
+    return JSON.stringify(left.weights).localeCompare(JSON.stringify(right.weights));
+  });
+  return candidates[0];
+}
+
+export function createNBodyFamilyGradientCommonDescentConfig() {
+  return {
+    algorithm:COMMON_DESCENT_ALGORITHM,
+    candidateEnumeration:'canonical',
+    directionalDerivativeTolerance:1e-10,
+    familyRegressionTolerance:1e-12,
+    finiteDifferenceStep:1e-5,
+    translationBounds:[-0.3, 0.3],
+    trustRegionRadii:[0.004, 0.002, 0.001, 0.0005, 0.00025, 0.000125, 0.0000625],
+  };
+}
+
+export function solveNBodyFamilyGradientCommonDescent({
+  problem,
+  startVector,
+  requestedConfig = createNBodyFamilyGradientCommonDescentConfig(),
+} = {}) {
+  const expectedKeys = [
+    'algorithm',
+    'candidateEnumeration',
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'translationBounds',
+    'trustRegionRadii',
+  ];
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(`common descent requestedConfig requires exact keys: ${expectedKeys.join(', ')}`);
+  }
+  if (requestedConfig.algorithm !== COMMON_DESCENT_ALGORITHM) {
+    throw new Error('common descent algorithm identity is unsupported');
+  }
+  if (!['canonical', 'reverse'].includes(requestedConfig.candidateEnumeration)) {
+    throw new Error('common descent candidateEnumeration must be canonical or reverse');
+  }
+  for (const key of [
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+  ]) {
+    if (!Number.isFinite(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`common descent ${key} must be positive and finite`);
+    }
+  }
+  if (
+    !Array.isArray(requestedConfig.translationBounds) ||
+    requestedConfig.translationBounds.length !== 2 ||
+    !requestedConfig.translationBounds.every(Number.isFinite) ||
+    requestedConfig.translationBounds[0] >= requestedConfig.translationBounds[1]
+  ) throw new Error('common descent translationBounds must be an ordered finite pair');
+  if (
+    !Array.isArray(requestedConfig.trustRegionRadii) ||
+    requestedConfig.trustRegionRadii.length === 0 ||
+    requestedConfig.trustRegionRadii.some(value => !Number.isFinite(value) || value <= 0) ||
+    requestedConfig.trustRegionRadii.some(
+      (value, index) => index > 0 && value >= requestedConfig.trustRegionRadii[index - 1],
+    )
+  ) throw new Error('common descent trustRegionRadii must be strictly decreasing');
+  validateStart(problem, startVector, requestedConfig.translationBounds);
+
+  const startState = evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  const beforeFamilies = Object.fromEntries(
+    CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, startState.metrics[key]]),
+  );
+  let evaluationCount = 1;
+  const gradients = CONSTRAINT_FAMILY_METRIC_KEYS.map(key => {
+    const values = [];
+    for (let axis = 0; axis < startVector.length; axis += 1) {
+      const positive = clampVector(startVector.map(
+        (value, index) => index === axis
+          ? value + requestedConfig.finiteDifferenceStep
+          : value,
+      ), requestedConfig.translationBounds);
+      const negative = clampVector(startVector.map(
+        (value, index) => index === axis
+          ? value - requestedConfig.finiteDifferenceStep
+          : value,
+      ), requestedConfig.translationBounds);
+      const span = positive[axis] - negative[axis];
+      if (!(span > 0)) throw new Error(`common descent finite-difference span collapsed at ${axis}`);
+      const positiveState = evaluateNBodyUnifiedKktState({ problem, vector:positive });
+      const negativeState = evaluateNBodyUnifiedKktState({ problem, vector:negative });
+      evaluationCount += 2;
+      values.push((positiveState.metrics[key] - negativeState.metrics[key]) / span);
+    }
+    const unit = normalized(values);
+    return {
+      key,
+      vector:values.map(value => rounded(value)),
+      norm:rounded(unit.norm),
+      normalizedVector:unit.vector?.map(value => rounded(value)) || null,
+    };
+  });
+  const degenerateFamilies = gradients.filter(row => !row.normalizedVector).map(row => row.key);
+  const combination = degenerateFamilies.length === 0
+    ? minimumNormConvexCombination(gradients.map(row => row.normalizedVector))
+    : null;
+  const combined = combination ? normalized(combination.vector) : { norm:0, vector:null };
+  const direction = combined.vector?.map(value => -value) || null;
+  const predictedDirectionalDerivatives = direction
+    ? Object.fromEntries(gradients.map(row => [row.key, rounded(dot(row.normalizedVector, direction))]))
+    : Object.fromEntries(CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, null]));
+  const predictedCommonDescent = direction !== null &&
+    Object.values(predictedDirectionalDerivatives).every(
+      value => value < -requestedConfig.directionalDerivativeTolerance,
+    );
+
+  const enumeratedRadii = requestedConfig.candidateEnumeration === 'canonical'
+    ? [...requestedConfig.trustRegionRadii]
+    : [...requestedConfig.trustRegionRadii].reverse();
+  const candidates = direction ? enumeratedRadii.map(radius => {
+    const vector = clampVector(
+      startVector.map((value, axis) => value + radius * direction[axis]),
+      requestedConfig.translationBounds,
+    );
+    const state = evaluateNBodyUnifiedKktState({ problem, vector });
+    evaluationCount += 1;
+    const families = Object.fromEntries(
+      CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, state.metrics[key]]),
+    );
+    const regressedFamilies = CONSTRAINT_FAMILY_METRIC_KEYS.filter(
+      key => families[key] > beforeFamilies[key] + requestedConfig.familyRegressionTolerance,
+    );
+    return {
+      radius,
+      vector,
+      state,
+      maximumPhysicalResidual:state.maximumPhysicalResidual,
+      constraintFamilies:families,
+      regressedFamilies,
+    };
+  }) : [];
+  candidates.sort((left, right) => {
+    if (left.maximumPhysicalResidual !== right.maximumPhysicalResidual) {
+      return left.maximumPhysicalResidual - right.maximumPhysicalResidual;
+    }
+    return hashMusclePackingCanonicalJson(left.vector)
+      .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+  });
+  const accepted = predictedCommonDescent ? candidates.find(candidate =>
+    candidate.maximumPhysicalResidual < startState.maximumPhysicalResidual - 1e-12 &&
+    candidate.regressedFamilies.length === 0
+  ) : null;
+  const candidateReceipts = [...candidates]
+    .sort((left, right) => right.radius - left.radius)
+    .map(candidate => ({
+      radius:candidate.radius,
+      vector:[...candidate.vector],
+      maximumPhysicalResidual:candidate.maximumPhysicalResidual,
+      constraintFamilies:structuredClone(candidate.constraintFamilies),
+      regressedFamilies:[...candidate.regressedFamilies],
+      selected:candidate === accepted,
+      rejectionReason:candidate === accepted
+        ? null
+        : !predictedCommonDescent
+          ? 'no-predicted-common-descent-direction'
+          : candidate.regressedFamilies.length > 0
+            ? 'constraint-family-regression'
+            : !(candidate.maximumPhysicalResidual < startState.maximumPhysicalResidual - 1e-12)
+              ? 'non-improving-physical-residual'
+              : 'higher-ranked-admissible-candidate',
+    }));
+  const selectedState = accepted?.state || startState;
+  const selectedVector = accepted?.vector || startVector;
+  const core = {
+    schema:NBODY_PACKING_COMMON_DESCENT_RESULT_SCHEMA,
+    status:accepted
+      ? 'common-descent-step-accepted'
+      : predictedCommonDescent
+        ? 'nonlinear-common-descent-radius-floor'
+        : 'local-family-gradient-cone-certificate',
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:{
+      vector:[...startVector],
+      maximumPhysicalResidual:startState.maximumPhysicalResidual,
+      metrics:structuredClone(startState.metrics),
+    },
+    directionConstruction:{
+      familyKeys:[...CONSTRAINT_FAMILY_METRIC_KEYS],
+      gradients,
+      degenerateFamilies,
+      convexWeights:combination?.weights.map(value => rounded(value)) || null,
+      minimumNorm:rounded(combined.norm),
+      direction:direction?.map(value => rounded(value)) || null,
+      predictedDirectionalDerivatives,
+      predictedCommonDescent,
+    },
+    selected:{
+      vector:[...selectedVector],
+      maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
+      metrics:structuredClone(selectedState.metrics),
+      muscles:structuredClone(selectedState.muscles),
+    },
+    work:{
+      iterations:accepted ? 1 : 0,
+      attempts:direction ? 1 : 0,
+      evaluationCount,
+      terminalReason:accepted
+        ? null
+        : predictedCommonDescent
+          ? 'no-family-admissible-trust-region-candidate'
+          : 'no-predicted-common-descent-direction',
+      candidateReceipts,
+    },
+    mechanism:{
+      directionBasis:'minimum-norm-convex-combination-of-normalized-family-gradients',
+      nonlinearAcceptance:'no-family-regression-and-lower-maximum-physical-residual',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }
 
 function solveEnumeration(problem, startVector, config) {

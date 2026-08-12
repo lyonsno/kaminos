@@ -12,9 +12,12 @@ import {
 import { hashMusclePackingCanonicalJson } from '../muscle-compartment-packing-core.mjs';
 import {
   createNBodyAllNeighborRestorationConfig,
+  createNBodyFamilyGradientCommonDescentConfig,
   solveNBodyAllNeighborRestoration,
+  solveNBodyFamilyGradientCommonDescent,
 } from '../nbody-packing-restoration.mjs';
 import {
+  runNBodyPackingCommonDescentAssay,
   runNBodyPackingRestorationAssay,
 } from '../nbody-packing-restoration-assay.mjs';
 
@@ -201,6 +204,91 @@ test('family-filter configuration is a distinct no-resurrection route', () => {
   assert.equal(config.familyRegressionTolerance, 1e-12);
 });
 
+test('family-gradient common descent clears debt without trading constraint families', () => {
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = createNBodyFamilyGradientCommonDescentConfig();
+  const canonical = solveNBodyFamilyGradientCommonDescent({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig,
+  });
+  const reverseConfig = {
+    ...createNBodyFamilyGradientCommonDescentConfig(),
+    candidateEnumeration:'reverse',
+  };
+  const reverse = solveNBodyFamilyGradientCommonDescent({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig:reverseConfig,
+  });
+
+  assert.equal(canonical.status, 'common-descent-step-accepted');
+  assert.equal(
+    canonical.route.effective,
+    'family-gradient-minimum-norm-common-descent-v0',
+  );
+  assert.equal(canonical.route.fallbackUsed, false);
+  assert.deepEqual(canonical.directionConstruction.convexWeights, [
+    0.400373729290055,
+    0.383885600001276,
+    0.215740670708669,
+  ]);
+  assert.equal(canonical.directionConstruction.minimumNorm, 0.410725948212845);
+  assert.deepEqual(canonical.directionConstruction.predictedDirectionalDerivatives, {
+    pairwisePenetration:-0.410725948212845,
+    skeletalPenetration:-0.410725948212845,
+    compartmentEscape:-0.410725948212845,
+  });
+  assert.equal(canonical.directionConstruction.predictedCommonDescent, true);
+  assert.equal(canonical.work.iterations, 1);
+  assert.equal(canonical.work.attempts, 1);
+  assert.equal(canonical.work.terminalReason, null);
+  assert.equal(canonical.work.candidateReceipts.length, 7);
+  assert.deepEqual(
+    canonical.work.candidateReceipts.map(candidate => candidate.radius),
+    requestedConfig.trustRegionRadii,
+  );
+  assert.equal(
+    canonical.work.candidateReceipts.filter(candidate => candidate.selected).length,
+    1,
+  );
+  assert.equal(
+    canonical.work.candidateReceipts.find(candidate => candidate.selected).radius,
+    0.004,
+  );
+  assert.ok(canonical.work.candidateReceipts.every(
+    candidate => candidate.regressedFamilies.length === 0,
+  ));
+  assert.deepEqual(
+    {
+      pairwisePenetration:canonical.selected.metrics.pairwisePenetration,
+      skeletalPenetration:canonical.selected.metrics.skeletalPenetration,
+      compartmentEscape:canonical.selected.metrics.compartmentEscape,
+    },
+    {
+      pairwisePenetration:0,
+      skeletalPenetration:0.000125037313,
+      compartmentEscape:0,
+    },
+  );
+  assert.equal(canonical.selected.maximumPhysicalResidual, 0.000125037313);
+  assert.ok(canonical.selected.maximumPhysicalResidual < HOMOTOPY_FLOOR);
+  assert.equal(canonical.selected.metrics.endpointDrift, 0);
+  assert.equal(canonical.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.equal(canonical.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(canonical.mechanism.contactGraphRowsConsumed, false);
+  assert.equal(canonical.mechanism.carrierDegreesOfFreedomPerMember, 4);
+  assert.deepEqual(canonical.directionConstruction, reverse.directionConstruction);
+  assert.deepEqual(canonical.selected, reverse.selected);
+  assert.deepEqual(canonical.work, reverse.work);
+  const core = structuredClone(canonical);
+  delete core.identity;
+  assert.equal(canonical.identity.sha256, hashMusclePackingCanonicalJson(core));
+});
+
 test('family-filter restoration exposes the first no-debt-trading plateau', () => {
   const fixture = createNBodyLocalizedChallengeSuite().find(
     row => row.assayProfile.severity === 0.32,
@@ -322,6 +410,62 @@ test('restoration assay writes a durable terminal failure before primary output'
   assert.equal(report.failurePhase, 'read-frozen-inputs');
   assert.equal(report.route.effective, null);
   assert.equal(report.lastTrustworthyEvidence.phase, 'none');
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
+test('source-bound common-descent assay preserves exact mechanism and source custody', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-common-descent-assay-'));
+  const { result, report } = await runNBodyPackingCommonDescentAssay({ outDir });
+  assert.equal(report.status, 'complete-common-descent-step-admitted');
+  assert.equal(
+    report.route.effective,
+    'family-gradient-minimum-norm-common-descent-v0',
+  );
+  assert.equal(report.route.fallbackUsed, false);
+  assert.equal(report.source.fixtureSha256,
+    '9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd');
+  assert.equal(report.source.problemSha256,
+    'cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c');
+  assert.equal(result.status, 'common-descent-step-accepted');
+  assert.equal(result.selected.maximumPhysicalResidual, 0.000125037313);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0);
+  assert.equal(result.selected.metrics.compartmentEscape, 0);
+  assert.equal(result.work.candidateReceipts.length, 7);
+  assert.ok(result.work.candidateReceipts.every(
+    candidate => candidate.regressedFamilies.length === 0,
+  ));
+  assert.equal(report.bindings.resultSha256, result.identity.sha256);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'run-report.json')), true);
+});
+
+test('common-descent assay rejects a canonically rehashed foreign homotopy source', async () => {
+  const sourceRoot = path.resolve('artifacts/nbody-packing-localized-challenge-v0');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-common-descent-substitute-'));
+  const homotopy = JSON.parse(fs.readFileSync(
+    path.join(sourceRoot, 'homotopy-032-fine-0875-to-1.json'),
+    'utf8',
+  ));
+  homotopy.source.problemSha256 = 'f'.repeat(64);
+  homotopy.source.fixtureSha256 = 'e'.repeat(64);
+  delete homotopy.identity;
+  homotopy.identity = { sha256:hashMusclePackingCanonicalJson(homotopy) };
+  const substitutedPath = path.join(outDir, 'substituted-homotopy.json');
+  fs.writeFileSync(substitutedPath, `${JSON.stringify(homotopy, null, 2)}\n`);
+  await assert.rejects(
+    runNBodyPackingCommonDescentAssay({
+      outDir,
+      patternResultPath:path.join(sourceRoot, 'oracle-pattern-search-032.json'),
+      homotopyResultPath:substitutedPath,
+    }),
+    /substituted homotopy floor/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.requested,
+    'family-gradient-minimum-norm-common-descent-v0');
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'bind-problem-and-baselines');
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
 });
 
