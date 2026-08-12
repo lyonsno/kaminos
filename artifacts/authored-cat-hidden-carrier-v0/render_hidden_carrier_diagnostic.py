@@ -63,7 +63,8 @@ def _git_identity(repo_root):
         )
         return completed.stdout.strip()
 
-    return {"commit": run("rev-parse", "HEAD"), "branch": run("branch", "--show-current")}
+    # Durable public evidence must not publish private worktree or agent branch names.
+    return {"commit": run("rev-parse", "HEAD"), "branch": "feature-worktree"}
 
 
 def _color_ramp(values):
@@ -270,7 +271,8 @@ def _base_receipt(repo_root, assay_dir, output_dir, expected_report_sha256):
         "finishedAt": None,
         "failurePhase": None,
         "reason": None,
-        "visualAdmitted": False,
+        "visualArtifactValidated": False,
+        "operatorVisualAdmission": "not-requested",
         "requestedConfig": {
             "route": ROUTE,
             "backend": BACKEND,
@@ -369,7 +371,7 @@ def build_diagnostic(*, repo_root, assay_dir, output_dir, expected_report_sha256
 
         git_identity = _git_identity(repo_root)
         receipt["status"] = "captured"
-        receipt["visualAdmitted"] = True
+        receipt["visualArtifactValidated"] = True
         receipt["effectiveConfig"] = {
             "route": ROUTE,
             "backend": BACKEND,
@@ -405,7 +407,7 @@ def build_diagnostic(*, repo_root, assay_dir, output_dir, expected_report_sha256
         receipt["status"] = "failed"
         receipt["failurePhase"] = phase
         receipt["reason"] = str(error)
-        receipt["visualAdmitted"] = False
+        receipt["visualArtifactValidated"] = False
     receipt["terminal"] = True
     receipt["finishedAt"] = _now()
     assay._write_json(report_path, receipt)

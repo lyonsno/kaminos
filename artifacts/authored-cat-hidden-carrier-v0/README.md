@@ -51,8 +51,8 @@ The runner tests first failed on the explicit unimplemented transaction and then
 
 ```text
 python3 -m unittest artifacts/authored-cat-hidden-carrier-v0/test_hidden_carrier_assay.py
-.............
-Ran 13 tests
+..............
+Ran 14 tests
 OK
 ```
 

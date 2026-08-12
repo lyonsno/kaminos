@@ -316,6 +316,66 @@ class HiddenCarrierAssayTest(unittest.TestCase):
             self.assertFalse((out / "observation.npz").exists())
             self.assertFalse((out / "recovered-carrier.npz").exists())
 
+    def test_cli_parse_failure_uses_parser_selected_last_repeated_output_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cases = (
+                lambda earlier, selected: [
+                    "--output-dir",
+                    str(earlier),
+                    f"--output-dir={selected}",
+                ],
+                lambda earlier, selected: [
+                    f"--output-dir={earlier}",
+                    "--output-dir",
+                    str(selected),
+                ],
+            )
+            for index, output_arguments in enumerate(cases):
+                with self.subTest(index=index):
+                    earlier = root / f"earlier-{index}"
+                    selected = root / f"selected-{index}"
+                    earlier.mkdir()
+                    selected.mkdir()
+                    for target in (earlier, selected):
+                        (target / "report.json").write_text(
+                            '{"status":"captured","terminal":true}\n'
+                        )
+                        (target / "observation.npz").write_bytes(b"stale observation")
+                        (target / "recovered-carrier.npz").write_bytes(b"stale recovery")
+                    earlier_hashes = {
+                        name: sha256(earlier / name)
+                        for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+                    }
+                    selected_prior_sha = sha256(selected / "report.json")
+                    status = assay.main(
+                        [
+                            "--repo-root",
+                            str(REPO),
+                            "--source",
+                            str(SOURCE),
+                            *output_arguments(earlier, selected),
+                            "--profile",
+                            "short-v0",
+                            "--uniform-inset",
+                        ]
+                    )
+
+                    self.assertEqual(status, 2)
+                    report = json.loads((selected / "report.json").read_text())
+                    self.assertEqual(report["status"], "failed")
+                    self.assertEqual(report["failurePhase"], "argument-parse")
+                    self.assertEqual(report["priorTerminalReportSha256"], selected_prior_sha)
+                    self.assertFalse((selected / "observation.npz").exists())
+                    self.assertFalse((selected / "recovered-carrier.npz").exists())
+                    self.assertEqual(
+                        {
+                            name: sha256(earlier / name)
+                            for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+                        },
+                        earlier_hashes,
+                    )
+
     def test_absolute_requested_paths_publish_portable_complete_identity(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
             report = self.run_in(

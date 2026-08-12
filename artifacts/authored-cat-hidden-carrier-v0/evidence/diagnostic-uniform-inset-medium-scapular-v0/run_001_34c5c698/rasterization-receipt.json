@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.svg-rasterization-receipt.v0",
+  "status": "captured",
+  "terminal": true,
+  "capturedAt": "2026-08-12T12:55:24Z",
+  "requestedRoute": "chrome-headless-local-svg-raster-v0",
+  "effectiveRoute": "chrome-headless-local-svg-raster-v0",
+  "backend": "Google Chrome 151.0.7922.137 headless",
+  "source": {
+    "path": "hidden-carrier-diagnostic.svg",
+    "sha256": "4eb7138c43b32d5471b5cb3446985b4c9b9b3d24831fd6a1083874c00526b1f9",
+    "width": 1800,
+    "height": 1180
+  },
+  "artifact": {
+    "path": "hidden-carrier-diagnostic.png",
+    "sha256": "6cbd61833170ae3c0036c3d2ea785685341e671b4e18ce12da6506d271ac57c9",
+    "width": 1800,
+    "height": 1180,
+    "format": "image/png"
+  },
+  "controls": {
+    "windowSize": "1800,1180",
+    "hideScrollbars": true,
+    "isolatedProfile": true
+  },
+  "claimCeiling": "Raster-equivalent browser capture of the digest-bound SVG; this receipt adds no scientific or visual-admission authority."
+}

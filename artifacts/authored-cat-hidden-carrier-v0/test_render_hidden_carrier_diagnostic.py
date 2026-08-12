@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parents[1]
 ASSAY = ROOT / "evidence/uniform-inset-medium-scapular-v0"
-REPORT_SHA256 = "37c8c15bc261bbf92c39db001020a5d4bc0c85659e3191c0029f46c1e2ddaf05"
+REPORT_SHA256 = "923b5c4b3f77234aa4e90eb78b5ef595be0769d3f46933f89b913a0e22460ced"
 sys.path.insert(0, str(ROOT))
 
 import render_hidden_carrier_diagnostic as diagnostic  # noqa: E402
@@ -33,7 +33,8 @@ class HiddenCarrierDiagnosticTest(unittest.TestCase):
             svg = output / "hidden-carrier-diagnostic.svg"
             self.assertEqual(receipt["status"], "captured")
             self.assertTrue(receipt["terminal"])
-            self.assertTrue(receipt["visualAdmitted"])
+            self.assertTrue(receipt["visualArtifactValidated"])
+            self.assertEqual(receipt["operatorVisualAdmission"], "not-requested")
             self.assertGreater(svg.stat().st_size, 100_000)
             body = svg.read_text()
             for label in (
@@ -72,7 +73,7 @@ class HiddenCarrierDiagnosticTest(unittest.TestCase):
             )
             self.assertEqual(receipt["status"], "failed")
             self.assertTrue(receipt["terminal"])
-            self.assertFalse(receipt["visualAdmitted"])
+            self.assertFalse(receipt["visualArtifactValidated"])
             self.assertEqual(receipt["failurePhase"], "input-validation")
             self.assertIn("report digest mismatch", receipt["reason"])
             self.assertFalse((output / "hidden-carrier-diagnostic.svg").exists())
@@ -93,7 +94,7 @@ class HiddenCarrierDiagnosticTest(unittest.TestCase):
                 expected_report_sha256=REPORT_SHA256,
             )
             self.assertEqual(receipt["status"], "failed")
-            self.assertFalse(receipt["visualAdmitted"])
+            self.assertFalse(receipt["visualArtifactValidated"])
             self.assertEqual(receipt["failurePhase"], "input-validation")
             self.assertIn("observation digest mismatch", receipt["reason"])
             self.assertFalse((output / "hidden-carrier-diagnostic.svg").exists())

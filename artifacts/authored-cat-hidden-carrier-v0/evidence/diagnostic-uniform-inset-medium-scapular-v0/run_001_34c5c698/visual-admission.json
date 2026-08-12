@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.agent-visual-inspection.v0",
+  "status": "admitted-safe-for-operator-presentation",
+  "inspectorRole": "owning-agent-preflight",
+  "inspectedAt": "2026-08-12T12:55:24Z",
+  "artifacts": {
+    "diagnosticPng": {
+      "path": "hidden-carrier-diagnostic.png",
+      "sha256": "6cbd61833170ae3c0036c3d2ea785685341e671b4e18ce12da6506d271ac57c9"
+    },
+    "viewerWitnessPng": {
+      "path": "viewer-page-witness.png",
+      "sha256": "20c1df90d2498e7fd0c88ae24d5f2dc9ea51c55e4c20715df1b9bfff6c72579a"
+    },
+    "viewerWitnessReport": {
+      "custody": "private-coordination-surface",
+      "sha256": "bfba8ee8c7f101fc13e180bef6fb1e1a364ca0b237c77f19d22a7e656164968d"
+    }
+  },
+  "safetyCharacterization": "Safe diagnostic abstraction on an isolated dark background. It contains sparse cat-envelope point projections and color-coded errors only. No infestation, corruption, repeated-orifice, misplaced-growth, graphic biological failure, or hostile imagery is visible.",
+  "visualInspection": {
+    "complete": true,
+    "legible": true,
+    "observedDelta": "Across matched lateral, anterior, and dorsal projections, short-coat vertices remain predominantly cyan/low-error while a concentrated yellow-red residual crosses the deeper scapular/shoulder envelope. The error localization agrees with the 7.27x regional RMSE split and is clearest in lateral and dorsal views.",
+    "presentationNotes": "The full-resolution diagnostic is materially clearer than the embedded Kaminos image plane, but the exercised viewer route remains legible and correctly registers the image as a scene object.",
+    "limitations": "This is a corresponding-vertex truth-fixture visualization. The observed normals are authored-carrier normals, and the sparse ribbed point pattern reflects fixture sampling rather than fur strand structure."
+  },
+  "operatorAdmission": "not-yet-requested",
+  "scientificAdmission": "supporting-negative-control-evidence-only"
+}

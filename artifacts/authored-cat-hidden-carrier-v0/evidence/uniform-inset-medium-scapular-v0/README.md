@@ -13,12 +13,12 @@ This is the first durable numerical evidence transaction for the authored-cat hi
 - Recovery arm: `uniform-inset-negative-control-v0`
 - Uniform inset: `0.94`
 - Calibration authority: assay-author-selected from the prior authored-truth depth summary; this is not a solver-inferred depth.
-- Terminal execution: `ebaa8d02-9246-45f1-84f2-139000a11465`
-- Terminal report SHA-256: `37c8c15bc261bbf92c39db001020a5d4bc0c85659e3191c0029f46c1e2ddaf05`
-- Runner SHA-256: `0bec690cfda3d3eeea57e624f0cbd1c1867d3127dd8eef1ecea8b55b367b2fa6`
+- Terminal execution: `ae663468-a3a7-4bab-b92b-44b8911fb703`
+- Terminal report SHA-256: `923b5c4b3f77234aa4e90eb78b5ef595be0769d3f46933f89b913a0e22460ced`
+- Runner SHA-256: `b870bd17a50d867d07f42840c03b4ce607c7f663c545a6057ab4f66c2298a4ce`
 - Fixture implementation SHA-256: `9e6b0f2a1773d716152dbc92c89e3e668fa4ec4fa39243a827ca72c1143e5509`
 
-The terminal report records prior terminal digest `bd961f0801192f6bef2058a72c28460c1a5e84e518e56775233810e631c57697`. The terminal execution recomputed both primaries after the fresh-review corrections; it did not accept the prior files as cached evidence. Requested repository-local paths are now stable public locators, and requested backend and inset-calibration identity are explicit beside the effective values.
+The terminal report records prior terminal digest `37c8c15bc261bbf92c39db001020a5d4bc0c85659e3191c0029f46c1e2ddaf05`. The terminal execution recomputed both primaries after the final repeated-option precedence correction; it did not accept the prior files as cached evidence. Requested repository-local paths remain stable public locators, and requested backend and inset-calibration identity remain explicit beside the effective values.
 
 ## Result
 

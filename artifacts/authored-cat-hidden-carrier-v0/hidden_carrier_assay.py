@@ -250,12 +250,13 @@ def _finish_report(report_path, state_path, report):
 
 def _option_value(argv, option):
     prefix = f"{option}="
+    selected = None
     for index, value in enumerate(argv):
         if value.startswith(prefix):
-            return value[len(prefix) :]
-        if value == option and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
-            return argv[index + 1]
-    return None
+            selected = value[len(prefix) :]
+        elif value == option and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
+            selected = argv[index + 1]
+    return selected
 
 
 def _invalidate_known_outputs(output_dir):
