@@ -1,0 +1,96 @@
+{
+  "artifacts": {
+    "procedural-support-mask": {
+      "byteLength": 163728,
+      "path": "procedural-support-mask.glb",
+      "sha256": "392b133d6ea327be7724afd17a75550b2a87861c3103b297ad77f3b15350e1a4"
+    },
+    "registered-coat-vectors": {
+      "byteLength": 194192,
+      "path": "registered-coat-vectors.glb",
+      "sha256": "81b2f75291175f0ebcfdddcb97a43c276dd824219cbd09e538d9b9154d6a9bf7"
+    },
+    "registered-recovery-vectors": {
+      "byteLength": 194756,
+      "path": "registered-recovery-vectors.glb",
+      "sha256": "780e5accaf748533f87ccbeba37f6c2f1cd4c906c27904e0aa764abddf6735f7"
+    }
+  },
+  "claimCeiling": "Exact procedural support membership and corresponding-vertex displacement vectors under the authored fixture. No anatomical shoulder/scapular interpretation is established.",
+  "coatVectors": {
+    "count": 3764,
+    "maximumLength": 2.3486707904312643,
+    "medianLength": 0.9411206626028873,
+    "minimumLength": 0.8106737022002127
+  },
+  "completedAt": "2026-08-12T20:11:37.232736Z",
+  "inputs": {
+    "assayDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/uniform-inset-medium-scapular-v0",
+    "observationSha256": "98aee3e9ca3a5a0c716c85b7c03d3849966d4134d6058fbf40155c92329bbf02",
+    "recoveredCarrierSha256": "0f8f3c07da545cb485215edabe43c5ab03300b10792de7ca84a08199dd4519e8",
+    "repoRoot": ".",
+    "reportSha256": "961ee182de2e3899a6454280aef1a77cd65b0e901e2973a514d244a17f2b3c89",
+    "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+    "sourceSha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e"
+  },
+  "operatorVisualAdmission": "not-requested",
+  "presentationTransform": {
+    "contract": "rigid-translation-and-rotation-only-no-shape-change",
+    "exportTranslation": [
+      39.392974853515625,
+      -4.171779210962809,
+      -16.71138353689681
+    ],
+    "sourceWorldCenter": [
+      -39.392974853515625,
+      4.171779210962809,
+      16.71138353689681
+    ],
+    "viewerRotationQuaternion": [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ]
+  },
+  "recoveryVectors": {
+    "inwardCount": 1861,
+    "outwardCount": 1903,
+    "signedMaximum": 1.408670790431266,
+    "signedMedian": 0.0011206626028866197,
+    "signedMinimum": -0.12932629779978866,
+    "windingFlippedOnWorldSpaceExport": true,
+    "zeroCount": 0
+  },
+  "region": {
+    "anatomicalInterpretation": "unverified",
+    "bumpDepthMax": 1.509665329769104,
+    "bumpDepthMedian": 0.1676070517736934,
+    "bumpDepthMin": 6.732377592411076e-05,
+    "fixtureProfileId": "short-with-medium-scapular-v0",
+    "honestLabel": "bounded-dorsal-ap-procedural-support-v0",
+    "selectedFraction": 0.2587672688629118,
+    "selectedNormalizedBoundsMax": [
+      1.0,
+      0.548321183533938,
+      0.8479724686221494
+    ],
+    "selectedNormalizedBoundsMin": [
+      0.0,
+      0.024083085437941753,
+      0.45086609696136676
+    ],
+    "selectedVertexCount": 974,
+    "selectionRule": "normalized AP z in [0.45,0.85] and normalized dorsal support 1-y >= 0.45; positive sinusoidal bump only"
+  },
+  "route": {
+    "backend": "python-numpy-cpu",
+    "effective": "registered-corresponding-vertex-displacement-v0",
+    "requested": "registered-corresponding-vertex-displacement-v0"
+  },
+  "safetyCharacterization": "Deterministic isolated faceted cat geometry and diagnostic lines only; no generator or TRELLIS output.",
+  "schema": "kaminos.authored-cat-hidden-carrier-registered-diagnostic.v0",
+  "status": "captured",
+  "terminal": true,
+  "visualArtifactsValidated": true
+}
