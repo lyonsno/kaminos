@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 
 export const ROW_DISTINCT_FIELD_ASSAY_SCHEMA =
   'kaminos.row-distinct-scalar-anisotropic-result.v0';
+export const TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA =
+  'kaminos.target-sdf-full-surface-sweep-result.v0';
 
 const ASSAY_CARD_SCHEMA = 'kaminos.row-distinct-scalar-anisotropic-assay.v0';
 const TARGET_SCHEMA = 'kaminos.row-distinct-boundary-response-target.v0';
+const FULL_SURFACE_CARD_SCHEMA = 'kaminos.target-sdf-full-surface-sweep-assay.v0';
 const SCALAR_ROW = Object.freeze({
   id: 'scalar-metaball-control',
   role: 'undifferentiated-interior-control',
@@ -462,6 +465,241 @@ function topologyClosed(mesh) {
   return mesh.faces.length > 0 && [...edges.values()].every((count) => count === 2);
 }
 
+function topologyEvidence(mesh) {
+  const adjacency = new Map();
+  const connect = (a, b) => {
+    if (!adjacency.has(a)) adjacency.set(a, new Set());
+    adjacency.get(a).add(b);
+  };
+  for (const face of mesh.faces) {
+    for (let index = 0; index < face.length; index += 1) {
+      const a = face[index];
+      const b = face[(index + 1) % face.length];
+      connect(a, b);
+      connect(b, a);
+    }
+  }
+  const visited = new Set();
+  let componentCount = 0;
+  for (const start of adjacency.keys()) {
+    if (visited.has(start)) continue;
+    componentCount += 1;
+    const stack = [start];
+    while (stack.length > 0) {
+      const vertex = stack.pop();
+      if (visited.has(vertex)) continue;
+      visited.add(vertex);
+      for (const neighbor of adjacency.get(vertex) ?? []) stack.push(neighbor);
+    }
+  }
+  return {
+    closed: topologyClosed(mesh),
+    componentCount,
+    vertexCount: mesh.vertices.length,
+    faceCount: mesh.faces.length,
+  };
+}
+
+function meshAreaAndVolume(mesh) {
+  const center = [0, 1, 2].map((axis) => (
+    mesh.vertices.reduce((sum, vertex) => sum + vertex[axis], 0)
+      / Math.max(mesh.vertices.length, 1)
+  ));
+  let area = 0;
+  let signedVolume = 0;
+  for (const face of mesh.faces) {
+    const [a, b, c] = face.map((index) => mesh.vertices[index]);
+    const ab = b.map((value, axis) => value - a[axis]);
+    const ac = c.map((value, axis) => value - a[axis]);
+    let normal = cross(ab, ac);
+    const faceCenter = [0, 1, 2].map((axis) => (a[axis] + b[axis] + c[axis]) / 3);
+    const outward = faceCenter.map((value, axis) => value - center[axis]);
+    if (dot(normal, outward) < 0) normal = normal.map((value) => -value);
+    area += Math.hypot(...normal) * 0.5;
+    signedVolume += dot(a, cross(b, c)) * (dot(cross(ab, ac), outward) < 0 ? -1 : 1) / 6;
+  }
+  return { area, volume: Math.abs(signedVolume) };
+}
+
+function targetStationState(target, station, stateId, amplitude, referenceAmplitude) {
+  if (stateId === 'baseline') return station.baseline;
+  const scale = amplitude / referenceAmplitude;
+  return Object.fromEntries(['top', 'bottom', 'halfWidth'].map((field) => [
+    field,
+    station.baseline[field] + (station.perturbed[field] - station.baseline[field]) * scale,
+  ]));
+}
+
+function createIndependentTargetField(target, grid, stateId, amplitude, referenceAmplitude) {
+  const stationParameters = target.stations.map((station) => {
+    const state = targetStationState(target, station, stateId, amplitude, referenceAmplitude);
+    return {
+      anterior: station.anterior,
+      centerY: (state.top + state.bottom) * 0.5,
+      radiusY: (state.top - state.bottom) * 0.5,
+      radiusX: state.halfWidth,
+    };
+  });
+  const first = stationParameters[0];
+  const last = stationParameters.at(-1);
+  const firstSpacing = stationParameters[1].anterior - first.anterior;
+  const lastSpacing = last.anterior - stationParameters.at(-2).anterior;
+  const closureLow = Math.max(grid.bounds.anterior[0], first.anterior - firstSpacing * 0.5);
+  const closureHigh = Math.min(grid.bounds.anterior[1], last.anterior + lastSpacing * 0.5);
+  const parametersAt = (anterior) => {
+    if (anterior <= first.anterior) return first;
+    if (anterior >= last.anterior) return last;
+    const upperIndex = stationParameters.findIndex((station) => station.anterior >= anterior);
+    const lower = stationParameters[upperIndex - 1];
+    const upper = stationParameters[upperIndex];
+    const t = (anterior - lower.anterior) / (upper.anterior - lower.anterior);
+    return {
+      centerY: lower.centerY + (upper.centerY - lower.centerY) * t,
+      radiusY: lower.radiusY + (upper.radiusY - lower.radiusY) * t,
+      radiusX: lower.radiusX + (upper.radiusX - lower.radiusX) * t,
+    };
+  };
+  return {
+    authority: 'independent-frozen-station-loft',
+    evaluate(point) {
+      const [right, dorsal, anterior] = point;
+      const section = parametersAt(anterior);
+      const normalizedRadius = Math.hypot(
+        right / section.radiusX,
+        (dorsal - section.centerY) / section.radiusY,
+      );
+      const radialDistance = (1 - normalizedRadius) * Math.min(
+        section.radiusX,
+        section.radiusY,
+      );
+      return Math.min(radialDistance, anterior - closureLow, closureHigh - anterior);
+    },
+  };
+}
+
+function fullSurfaceEvidence(mesh, referenceField, normalizationSpan) {
+  let weightedSquaredError = 0;
+  let totalArea = 0;
+  let maximumError = 0;
+  let sampledTriangleCount = 0;
+  for (const face of mesh.faces) {
+    const [a, b, c] = face.map((index) => mesh.vertices[index]);
+    const ab = b.map((value, axis) => value - a[axis]);
+    const ac = c.map((value, axis) => value - a[axis]);
+    const triangleArea = Math.hypot(...cross(ab, ac)) * 0.5;
+    if (triangleArea <= 1e-14) continue;
+    const centroid = [0, 1, 2].map((axis) => (a[axis] + b[axis] + c[axis]) / 3);
+    const error = Math.abs(referenceField.evaluate(centroid)) / normalizationSpan;
+    weightedSquaredError += triangleArea * error * error;
+    totalArea += triangleArea;
+    maximumError = Math.max(maximumError, error);
+    sampledTriangleCount += 1;
+  }
+  const geometry = meshAreaAndVolume(mesh);
+  return {
+    normalizedRmse: Math.sqrt(weightedSquaredError / Math.max(totalArea, 1e-12)),
+    maximumNormalizedError: maximumError,
+    sampledTriangleCount,
+    area: geometry.area,
+    volume: geometry.volume,
+  };
+}
+
+function sliceMeshAtAnterior(mesh, anterior) {
+  const epsilon = 1e-9;
+  const segments = [];
+  for (const face of mesh.faces) {
+    const vertices = face.map((index) => mesh.vertices[index]);
+    const intersections = [];
+    for (const [leftIndex, rightIndex] of [[0, 1], [1, 2], [2, 0]]) {
+      const left = vertices[leftIndex];
+      const right = vertices[rightIndex];
+      const leftDistance = left[2] - anterior;
+      const rightDistance = right[2] - anterior;
+      if (Math.abs(leftDistance) <= epsilon) intersections.push([left[0], left[1]]);
+      if (leftDistance * rightDistance < -epsilon * epsilon) {
+        const t = leftDistance / (leftDistance - rightDistance);
+        intersections.push([
+          left[0] + (right[0] - left[0]) * t,
+          left[1] + (right[1] - left[1]) * t,
+        ]);
+      }
+    }
+    const unique = [...new Map(intersections.map((point) => [
+      point.map((value) => value.toFixed(8)).join(':'), point,
+    ])).values()];
+    if (unique.length < 2) continue;
+    let pair = [unique[0], unique[1]];
+    let greatestDistance = 0;
+    for (let a = 0; a < unique.length; a += 1) {
+      for (let b = a + 1; b < unique.length; b += 1) {
+        const distance = Math.hypot(
+          unique[a][0] - unique[b][0],
+          unique[a][1] - unique[b][1],
+        );
+        if (distance > greatestDistance) {
+          greatestDistance = distance;
+          pair = [unique[a], unique[b]];
+        }
+      }
+    }
+    if (greatestDistance > epsilon) segments.push(pair);
+  }
+  return {
+    anterior,
+    source: 'extracted-mesh-triangle-plane-intersections',
+    segments,
+  };
+}
+
+function scaledTarget(target, amplitude, referenceAmplitude) {
+  const scaled = structuredClone(target);
+  scaled.stations = scaled.stations.map((station) => ({
+    ...station,
+    perturbed: targetStationState(target, station, 'perturbed', amplitude, referenceAmplitude),
+  }));
+  scaled.authority = {
+    ...scaled.authority,
+    derivation: `frozen displacement scaled by ${amplitude / referenceAmplitude}`,
+  };
+  return scaled;
+}
+
+function validateFullSurfaceInputs(sweepCard, assayCard, target) {
+  validateInputs(assayCard, target);
+  if (sweepCard?.schema !== FULL_SURFACE_CARD_SCHEMA) {
+    throw new Error('target-SDF full-surface sweep card is required');
+  }
+  if (sweepCard.sourceAssayCardRef
+      !== 'fixtures/analytical-tissue/row-distinct-scalar-anisotropic-assay.v0.json'
+    || sweepCard.targetRef !== assayCard.targetRef) {
+    throw new Error('full-surface sweep source references do not match the reviewed assay');
+  }
+  if (sweepCard.extractorId !== 'marching-tetrahedra-zero-isosurface-v0') {
+    throw new Error('full-surface sweep extractor substitution is not allowed');
+  }
+  if (!Array.isArray(sweepCard.amplitudes) || sweepCard.amplitudes.length < 3
+    || sweepCard.amplitudes.some((value, index) => (
+      !Number.isFinite(value) || value <= 0 || (index > 0 && value <= sweepCard.amplitudes[index - 1])
+    ))) {
+    throw new Error('full-surface sweep requires three or more increasing positive amplitudes');
+  }
+  if (sweepCard.referenceAmplitude !== assayCard.control.delta) {
+    throw new Error('full-surface reference amplitude must match the reviewed target displacement');
+  }
+  const sourceBoundsCovered = ['right', 'dorsal', 'anterior'].every((axis) => (
+    sweepCard.grid.bounds[axis][0] <= assayCard.grid.bounds[axis][0]
+      && sweepCard.grid.bounds[axis][1] >= assayCard.grid.bounds[axis][1]
+  ));
+  if (!sourceBoundsCovered) {
+    throw new Error('full-surface sweep observation volume must cover the reviewed bounds');
+  }
+  if (!Array.isArray(sweepCard.sectionPlanes) || sweepCard.sectionPlanes.length < 1) {
+    throw new Error('full-surface sweep requires diagnostic section planes');
+  }
+  if (sweepCard.promotion !== 'none') throw new Error('full-surface sweep cannot promote a formulation');
+}
+
 function compileRow(row, assayCard, target) {
   const mode = row.id === SCALAR_ROW.id ? 'scalar' : 'anisotropic';
   const baselinePrimitivesForRow = baselinePrimitives(target, mode);
@@ -568,4 +806,135 @@ export function buildRowDistinctScalarAnisotropicAssay({ assayCard, target } = {
     rows,
   };
   return { ...assay, assayHash: hashValue(assay) };
+}
+
+export function buildTargetSdfFullSurfaceSweep({ sweepCard, assayCard, target } = {}) {
+  validateFullSurfaceInputs(sweepCard, assayCard, target);
+  const effectiveAssayCard = structuredClone(assayCard);
+  effectiveAssayCard.grid = structuredClone(sweepCard.grid);
+  effectiveAssayCard.camera.bounds = structuredClone(sweepCard.grid.bounds);
+  const baselineField = createIndependentTargetField(
+    target,
+    sweepCard.grid,
+    'baseline',
+    sweepCard.referenceAmplitude,
+    sweepCard.referenceAmplitude,
+  );
+  const baselineMesh = extractMesh(baselineField, sweepCard.grid);
+  const baselineTopology = topologyEvidence(baselineMesh);
+  const baselineFullSurface = fullSurfaceEvidence(
+    baselineMesh,
+    baselineField,
+    target.normalizationSpan,
+  );
+  const amplitudeResults = sweepCard.amplitudes.map((amplitude) => {
+    const amplitudeTarget = scaledTarget(target, amplitude, sweepCard.referenceAmplitude);
+    const referenceField = createIndependentTargetField(
+      target,
+      sweepCard.grid,
+      'perturbed',
+      amplitude,
+      sweepCard.referenceAmplitude,
+    );
+    const referenceMesh = extractMesh(referenceField, sweepCard.grid);
+    const card = structuredClone(effectiveAssayCard);
+    card.control.delta = amplitude;
+    const candidateAssay = buildRowDistinctScalarAnisotropicAssay({
+      assayCard: card,
+      target: amplitudeTarget,
+    });
+    return {
+      amplitude,
+      reference: {
+        mesh: referenceMesh,
+        topology: topologyEvidence(referenceMesh),
+        fullSurface: fullSurfaceEvidence(
+          referenceMesh,
+          referenceField,
+          target.normalizationSpan,
+        ),
+        sections: sweepCard.sectionPlanes.map(
+          (anterior) => sliceMeshAtAnterior(referenceMesh, anterior),
+        ),
+      },
+      rows: candidateAssay.rows.map((row) => ({
+        id: row.id,
+        role: row.role,
+        requestedCompilerId: row.requestedCompilerId,
+        effectiveCompilerId: row.effectiveCompilerId,
+        requestedExtractorId: row.requestedExtractorId,
+        effectiveExtractorId: row.effectiveExtractorId,
+        identityMode: row.identityMode,
+        controlComplexity: {
+          primitiveCount: baselinePrimitives(
+            amplitudeTarget,
+            row.id === SCALAR_ROW.id ? 'scalar' : 'anisotropic',
+          ).length,
+        },
+        mesh: row.perturbed.mesh,
+        topology: topologyEvidence(row.perturbed.mesh),
+        fullSurface: fullSurfaceEvidence(
+          row.perturbed.mesh,
+          referenceField,
+          target.normalizationSpan,
+        ),
+        sections: sweepCard.sectionPlanes.map(
+          (anterior) => sliceMeshAtAnterior(row.perturbed.mesh, anterior),
+        ),
+        profileResponse: row.response,
+        surfaceIdentity: row.surface,
+      })),
+    };
+  });
+  const failures = [];
+  if (!baselineTopology.closed || baselineTopology.componentCount !== 1
+    || baselineMesh.vertices.length < sweepCard.evidence.minimumReferenceVertices) {
+    failures.push({ code: 'reference-surface-invalid' });
+  }
+  if (baselineFullSurface.normalizedRmse
+    > sweepCard.evidence.maximumReferenceSelfNormalizedRmse) {
+    failures.push({ code: 'reference-extraction-error-exceeded' });
+  }
+  if (amplitudeResults.some((entry) => (
+    !entry.reference.topology.closed || entry.reference.topology.componentCount !== 1
+  ))) {
+    failures.push({ code: 'perturbed-reference-topology-invalid' });
+  }
+  if (amplitudeResults.some((entry) => (
+    [...entry.rows, entry.reference].some((surface) => surface.sections.some(
+      (section) => section.segments.length < sweepCard.evidence.minimumSectionSegments,
+    ))
+  ))) {
+    failures.push({ code: 'mesh-derived-section-empty' });
+  }
+  const result = {
+    schema: TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA,
+    status: 'completed',
+    claimCeiling: sweepCard.claimCeiling,
+    promotion: sweepCard.promotion,
+    targetId: target.id,
+    targetHash: hashValue(target),
+    sourceAssayCardId: assayCard.id,
+    sourceAssayCardHash: hashValue(assayCard),
+    sweepCardId: sweepCard.id,
+    sweepCardHash: hashValue(sweepCard),
+    grid: structuredClone(sweepCard.grid),
+    sectionPlanes: structuredClone(sweepCard.sectionPlanes),
+    reference: {
+      authority: baselineField.authority,
+      requestedExtractorId: sweepCard.extractorId,
+      effectiveExtractorId: sweepCard.extractorId,
+      baseline: {
+        mesh: baselineMesh,
+        topology: baselineTopology,
+        fullSurface: baselineFullSurface,
+        sections: sweepCard.sectionPlanes.map(
+          (anterior) => sliceMeshAtAnterior(baselineMesh, anterior),
+        ),
+      },
+    },
+    amplitudes: amplitudeResults,
+    verdict: { passed: failures.length === 0, failures },
+  };
+  return { ...result, assayHash: hashValue(result) };
 }

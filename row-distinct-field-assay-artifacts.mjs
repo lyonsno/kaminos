@@ -4,10 +4,14 @@ import { join } from 'node:path';
 
 import {
   ROW_DISTINCT_FIELD_ASSAY_SCHEMA,
+  TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA,
   buildRowDistinctScalarAnisotropicAssay,
+  buildTargetSdfFullSurfaceSweep,
 } from './row-distinct-field-assay-core.mjs';
 
 export const ROW_DISTINCT_ARTIFACT_ROUTE = 'bounded-hindquarter-row-distinct-field-mesh-v0';
+export const TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE =
+  'bounded-hindquarter-target-sdf-full-surface-sweep-v0';
 
 function escapeXml(value) {
   return String(value)
@@ -47,6 +51,145 @@ function profilePath(stations, panel, camera) {
 
 function targetProfile(target, stateId) {
   return target.stations.map((station) => ({ anterior: station.anterior, ...station[stateId] }));
+}
+
+function projectedMeshSvg(mesh, panel, bounds, className, maximumFaces = 2600) {
+  const corners = [];
+  for (const right of bounds.right) {
+    for (const dorsal of bounds.dorsal) {
+      for (const anterior of bounds.anterior) corners.push([right, dorsal, anterior]);
+    }
+  }
+  const rawProject = ([right, dorsal, anterior]) => [
+    anterior * 0.88 + right * 0.58,
+    -dorsal + anterior * 0.22 - right * 0.16,
+  ];
+  const projectedCorners = corners.map(rawProject);
+  const lowX = Math.min(...projectedCorners.map((point) => point[0]));
+  const highX = Math.max(...projectedCorners.map((point) => point[0]));
+  const lowY = Math.min(...projectedCorners.map((point) => point[1]));
+  const highY = Math.max(...projectedCorners.map((point) => point[1]));
+  const project = (vertex) => {
+    const [x, y] = rawProject(vertex);
+    return [
+      panel.x + 10 + (x - lowX) / (highX - lowX) * (panel.width - 20),
+      panel.y + 10 + (y - lowY) / (highY - lowY) * (panel.height - 20),
+    ];
+  };
+  const stride = Math.max(1, Math.ceil(mesh.faces.length / maximumFaces));
+  const faces = mesh.faces
+    .filter((_, index) => index % stride === 0)
+    .map((face) => ({
+      points: face.map((index) => project(mesh.vertices[index])),
+      depth: face.reduce((sum, index) => {
+        const [right, dorsal, anterior] = mesh.vertices[index];
+        return sum + right * 0.45 + dorsal * 0.12 + anterior * 0.2;
+      }, 0) / face.length,
+    }))
+    .sort((left, right) => left.depth - right.depth);
+  return faces.map(({ points }) => (
+    `<polygon points="${points.map((point) => point.map((value) => value.toFixed(2)).join(',')).join(' ')}" class="${className}"/>`
+  )).join('');
+}
+
+function meshSectionsSvg(candidateSections, referenceSections, panel, bounds) {
+  const gap = 7;
+  const sectionWidth = (panel.width - gap * 2) / 3;
+  const sectionHeight = panel.height;
+  const drawSegments = (section, index, className) => {
+    const originX = panel.x + index * (sectionWidth + gap);
+    return section.segments.map((segment) => {
+      const points = segment.map(([right, dorsal]) => [
+        originX + (right - bounds.right[0]) / (bounds.right[1] - bounds.right[0]) * sectionWidth,
+        panel.y + sectionHeight
+          - (dorsal - bounds.dorsal[0]) / (bounds.dorsal[1] - bounds.dorsal[0]) * sectionHeight,
+      ]);
+      return `<line x1="${points[0][0].toFixed(2)}" y1="${points[0][1].toFixed(2)}" x2="${points[1][0].toFixed(2)}" y2="${points[1][1].toFixed(2)}" class="${className}"/>`;
+    }).join('');
+  };
+  return candidateSections.map((section, index) => (
+    `<g><rect x="${panel.x + index * (sectionWidth + gap)}" y="${panel.y}" width="${sectionWidth}" height="${sectionHeight}" class="section-panel"/>${drawSegments(referenceSections[index], index, 'section-reference')}${drawSegments(section, index, 'section-candidate')}<text x="${panel.x + index * (sectionWidth + gap) + 5}" y="${panel.y + 13}" class="section-label">z ${section.anterior}</text></g>`
+  )).join('');
+}
+
+export function renderTargetSdfFullSurfaceSvg(assay) {
+  if (assay?.schema !== TARGET_SDF_FULL_SURFACE_SWEEP_SCHEMA
+    || assay.status !== 'completed'
+    || assay.verdict?.passed !== true
+    || assay.amplitudes?.length < 3) {
+    throw new Error('admitted target-SDF full-surface sweep is required');
+  }
+  const width = 1480;
+  const height = 1590;
+  const columnWidth = 440;
+  const columnGap = 28;
+  const left = 55;
+  const rowTop = 145;
+  const rowHeight = 450;
+  const columns = [
+    { id: 'target-reference', title: 'independent target field' },
+    { id: 'scalar-metaball-control', title: 'dense scalar metaballs' },
+    { id: 'anisotropic-identity-challenger', title: 'anisotropic identity fields' },
+  ];
+  const rowsSvg = assay.amplitudes.map((amplitudeEntry, rowIndex) => {
+    const y = rowTop + rowIndex * rowHeight;
+    return columns.map((column, columnIndex) => {
+      const x = left + columnIndex * (columnWidth + columnGap);
+      const candidate = columnIndex === 0
+        ? amplitudeEntry.reference
+        : amplitudeEntry.rows.find((row) => row.id === column.id);
+      const meshPanel = { x, y: y + 42, width: columnWidth, height: 245 };
+      const sectionPanel = { x, y: y + 309, width: columnWidth, height: 92 };
+      const referenceMesh = amplitudeEntry.reference.mesh;
+      const referenceSections = amplitudeEntry.reference.sections;
+      const topology = candidate.topology;
+      const metric = candidate.fullSurface;
+      const primitiveText = candidate.controlComplexity
+        ? ` · ${candidate.controlComplexity.primitiveCount} primitives`
+        : '';
+      return `<g id="amplitude-${escapeXml(amplitudeEntry.amplitude)}-${escapeXml(column.id)}">
+        <text x="${x}" y="${y + 17}" class="panel-title">${escapeXml(column.title)}</text>
+        <text x="${x}" y="${y + 36}" class="metric">RMSE ${metric.normalizedRmse.toFixed(4)} · max ${metric.maximumNormalizedError.toFixed(4)} · ${topology.closed ? 'closed' : 'OPEN'} · ${topology.componentCount} component(s)${primitiveText}</text>
+        <rect x="${meshPanel.x}" y="${meshPanel.y}" width="${meshPanel.width}" height="${meshPanel.height}" rx="12" class="mesh-panel"/>
+        ${columnIndex === 0 ? '' : projectedMeshSvg(referenceMesh, meshPanel, assay.grid.bounds, 'mesh-reference')}
+        ${projectedMeshSvg(candidate.mesh, meshPanel, assay.grid.bounds, columnIndex === 0 ? 'mesh-target' : 'mesh-candidate')}
+        ${meshSectionsSvg(candidate.sections, referenceSections, sectionPanel, assay.grid.bounds)}
+        <text x="${x}" y="${y + 423}" class="metric">area ${metric.area.toFixed(3)} · volume ${metric.volume.toFixed(3)} · all ${metric.sampledTriangleCount} triangles measured</text>
+      </g>`;
+    }).join('');
+  }).join('');
+  const amplitudeLabels = assay.amplitudes.map((entry, index) => (
+    `<text x="12" y="${rowTop + index * rowHeight + 18}" class="amplitude" transform="rotate(-90 12 ${rowTop + index * rowHeight + 18})">amplitude ${entry.amplitude}</text>`
+  )).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="#071018"/>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fill: #dceaf0; }
+    .heading { font-size: 25px; font-weight: 700; }
+    .sub { font-size: 13px; fill: #96acb6; }
+    .panel-title { font-size: 16px; font-weight: 700; }
+    .metric { font-size: 10px; fill: #bfd0d7; }
+    .amplitude { font-size: 12px; font-weight: 700; fill: #f3c47a; }
+    .mesh-panel, .section-panel { fill: #101a24; stroke: #304657; }
+    .mesh-target { fill: #e8b45b; fill-opacity: .30; stroke: #ffd78e; stroke-opacity: .42; stroke-width: .45; }
+    .mesh-reference { fill: #ed74cb; fill-opacity: .10; stroke: #ff9ee0; stroke-opacity: .30; stroke-width: .38; }
+    .mesh-candidate { fill: #27d8c5; fill-opacity: .20; stroke: #67f3e4; stroke-opacity: .42; stroke-width: .42; }
+    .section-reference { stroke: #f18bd1; stroke-width: 1.2; opacity: .62; }
+    .section-candidate { stroke: #65efe2; stroke-width: .8; opacity: .78; }
+    .section-label { font-size: 8px; fill: #d6e5eb; }
+  </style>
+  <text x="55" y="39" class="heading">Target-field extraction and amplitude sweep</text>
+  <text x="55" y="66" class="sub">full-surface 3D primary: every extracted triangle contributes to error, area, volume, and topology evidence</text>
+  <text x="55" y="89" class="sub">mesh-derived 2D sections: magenta = independent target · cyan = candidate · same grid, extractor family, and observation volume</text>
+  <text x="55" y="112" class="sub">3D panels deterministically subsample triangles for legibility; OBJ products preserve every triangle</text>
+  ${amplitudeLabels}
+  ${rowsSvg}
+  <text x="55" y="1515" class="sub">reference ${escapeXml(assay.reference.authority)} · extractor ${escapeXml(assay.reference.effectiveExtractorId)}</text>
+  <text x="55" y="1538" class="sub">target ${escapeXml(assay.targetHash)} · card ${escapeXml(assay.sweepCardHash)}</text>
+  <text x="55" y="1561" class="sub">assay ${escapeXml(assay.assayHash)} · bounded synthetic evidence only; promotion none</text>
+</svg>
+`;
 }
 
 export function renderRowDistinctAssaySvg(assay, target) {
@@ -188,6 +331,92 @@ export async function writeRowDistinctAssayArtifacts({
     report.lastTrustworthyEvidence = report.outputs.length === 0
       ? 'output directory and failure report only; no primary artifact accepted'
       : `${report.outputs.length} primary artifact(s) reread and hashed from disk`;
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    throw error;
+  }
+}
+
+export async function writeTargetSdfFullSurfaceArtifacts({
+  outDir,
+  sweepCard,
+  assayCard,
+  target,
+  requestedRouteId = TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE,
+} = {}) {
+  if (typeof outDir !== 'string' || outDir.length === 0) throw new Error('outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const reportPath = join(outDir, 'report.json');
+  const report = {
+    schema: 'kaminos.target-sdf-full-surface-run-report.v0',
+    status: 'running',
+    requestedRouteId,
+    effectiveRouteId: null,
+    requestedExtractorId: sweepCard?.extractorId ?? null,
+    effectiveExtractorId: null,
+    evidencePrimary: 'full-surface-3d',
+    sectionSource: 'extracted-mesh-triangle-plane-intersections',
+    outputs: [],
+  };
+  let phase = 'input-validation';
+  try {
+    if (requestedRouteId !== TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE) {
+      throw new Error(
+        `requested route ${requestedRouteId} is unavailable; effective route would be ${TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE}`,
+      );
+    }
+    report.effectiveRouteId = TARGET_SDF_FULL_SURFACE_ARTIFACT_ROUTE;
+    phase = 'assay-build';
+    const assay = buildTargetSdfFullSurfaceSweep({ sweepCard, assayCard, target });
+    report.assayHash = assay.assayHash;
+    report.targetHash = assay.targetHash;
+    report.sweepCardHash = assay.sweepCardHash;
+    report.effectiveExtractorId = assay.reference.effectiveExtractorId;
+    report.admissionPassed = assay.verdict.passed;
+    if (!assay.verdict.passed) {
+      throw new Error(`full-surface reference evidence failed: ${JSON.stringify(assay.verdict.failures)}`);
+    }
+
+    phase = 'artifact-write';
+    const products = [
+      ['assay.json', `${JSON.stringify(assay, null, 2)}\n`],
+      ['contact-sheet.svg', renderTargetSdfFullSurfaceSvg(assay)],
+      ['reference-baseline.obj', meshToObj(assay.reference.baseline.mesh, 'target-reference-baseline')],
+    ];
+    for (const amplitude of assay.amplitudes) {
+      const amplitudeId = String(amplitude.amplitude).replace('.', 'p');
+      products.push([
+        `reference-amplitude-${amplitudeId}.obj`,
+        meshToObj(amplitude.reference.mesh, `target-reference-amplitude-${amplitudeId}`),
+      ]);
+      for (const row of amplitude.rows) {
+        products.push([
+          `${safeId(row.id)}-amplitude-${amplitudeId}.obj`,
+          meshToObj(row.mesh, `${row.id}-amplitude-${amplitudeId}`),
+        ]);
+      }
+    }
+    for (const [relativePath, contents] of products) {
+      const path = join(outDir, relativePath);
+      await writeFile(path, contents, 'utf8');
+      const bytes = await readFile(path);
+      report.outputs.push({
+        relativePath,
+        byteLength: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      });
+    }
+    report.status = 'completed';
+    report.failurePhase = null;
+    report.lastTrustworthyEvidence = 'all 3D meshes and 2D diagnostics reread and hashed from disk';
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    return { assay, report, reportPath };
+  } catch (error) {
+    report.status = 'failed';
+    report.failurePhase = phase;
+    report.error = error instanceof Error ? error.message : String(error);
+    report.lastTrustworthyEvidence = report.outputs.length === 0
+      ? 'output directory and failure report only; no primary artifact accepted'
+      : `${report.outputs.length} artifact(s) reread and hashed before failure`;
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     throw error;
   }

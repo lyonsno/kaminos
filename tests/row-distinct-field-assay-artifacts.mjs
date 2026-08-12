@@ -9,6 +9,7 @@ import {
   renderRowDistinctAssaySvg,
   writeRowDistinctAssayArtifacts,
 } from '../row-distinct-field-assay-artifacts.mjs';
+import * as rowDistinctArtifacts from '../row-distinct-field-assay-artifacts.mjs';
 import { buildRowDistinctScalarAnisotropicAssay } from '../row-distinct-field-assay-core.mjs';
 
 const assayCard = JSON.parse(await readFile(
@@ -17,6 +18,10 @@ const assayCard = JSON.parse(await readFile(
 ));
 const target = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-hindquarter-target.v0.json', import.meta.url),
+  'utf8',
+));
+const fullSurfaceCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json', import.meta.url),
   'utf8',
 ));
 
@@ -83,4 +88,62 @@ test('route substitution fails loud and still leaves a phase-named report', asyn
     assert.equal(report.effectiveRouteId, null);
     assert.deepEqual(report.outputs, []);
   });
+});
+
+test('full-surface writer emits hashed 3D meshes and mesh-derived 2D diagnostics', async () => {
+  assert.equal(
+    typeof rowDistinctArtifacts.writeTargetSdfFullSurfaceArtifacts,
+    'function',
+    'the full-surface assay needs a durable artifact route',
+  );
+  await withTemporaryDirectory(async (outDir) => {
+    const result = await rowDistinctArtifacts.writeTargetSdfFullSurfaceArtifacts({
+      outDir,
+      sweepCard: structuredClone(fullSurfaceCard),
+      assayCard: structuredClone(assayCard),
+      target: structuredClone(target),
+    });
+    assert.equal(result.report.status, 'completed');
+    assert.equal(result.report.evidencePrimary, 'full-surface-3d');
+    assert.equal(result.report.sectionSource, 'extracted-mesh-triangle-plane-intersections');
+    assert.equal(result.report.outputs.filter((output) => output.relativePath.endsWith('.obj')).length, 10);
+    assert.ok(result.report.outputs.every((output) => /^[0-9a-f]{64}$/.test(output.sha256)));
+    const svg = await readFile(join(outDir, 'contact-sheet.svg'), 'utf8');
+    assert.match(svg, /full-surface 3D primary/);
+    assert.match(svg, /mesh-derived 2D sections/);
+    assert.match(svg, /amplitude 0\.5/);
+    assert.match(svg, new RegExp(result.assay.assayHash));
+  });
+});
+
+test('full-surface route substitution fails before any mesh can look authoritative', async () => {
+  await withTemporaryDirectory(async (outDir) => {
+    await assert.rejects(
+      rowDistinctArtifacts.writeTargetSdfFullSurfaceArtifacts({
+        outDir,
+        sweepCard: structuredClone(fullSurfaceCard),
+        assayCard: structuredClone(assayCard),
+        target: structuredClone(target),
+        requestedRouteId: 'profile-only-fallback',
+      }),
+      /requested route profile-only-fallback is unavailable/,
+    );
+    const report = JSON.parse(await readFile(join(outDir, 'report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'input-validation');
+    assert.equal(report.effectiveRouteId, null);
+    assert.deepEqual(report.outputs, []);
+  });
+});
+
+test('full-surface renderer rejects partial evidence', () => {
+  assert.throws(
+    () => rowDistinctArtifacts.renderTargetSdfFullSurfaceSvg({
+      schema: 'kaminos.target-sdf-full-surface-sweep-result.v0',
+      status: 'partial',
+      verdict: { passed: true },
+      amplitudes: [{}, {}, {}],
+    }),
+    /admitted target-SDF full-surface sweep is required/,
+  );
 });

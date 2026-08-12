@@ -1,0 +1,78 @@
+{
+  "schema": "kaminos.target-sdf-full-surface-run-report.v0",
+  "status": "completed",
+  "requestedRouteId": "bounded-hindquarter-target-sdf-full-surface-sweep-v0",
+  "effectiveRouteId": "bounded-hindquarter-target-sdf-full-surface-sweep-v0",
+  "requestedExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "effectiveExtractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "evidencePrimary": "full-surface-3d",
+  "sectionSource": "extracted-mesh-triangle-plane-intersections",
+  "outputs": [
+    {
+      "relativePath": "assay.json",
+      "byteLength": 21646098,
+      "sha256": "5f0e60949cac17e16cd8368cbf8e14c403240673459adcd0b615cff238e8b8d8"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "byteLength": 4271008,
+      "sha256": "93be08a6f0a40b27d6653c2c2d6c228907e603b4c5fe98b8f7f662059e493900"
+    },
+    {
+      "relativePath": "reference-baseline.obj",
+      "byteLength": 432755,
+      "sha256": "64c37a98799687abe3bb066719bd92f466adce9434d08c7aca21d34ddb79cf2b"
+    },
+    {
+      "relativePath": "reference-amplitude-0p1.obj",
+      "byteLength": 470474,
+      "sha256": "648c2f13a966285174702630cdbbb8c4da60c6714951fe61eafc8c2e93df4c7f"
+    },
+    {
+      "relativePath": "scalar-metaball-control-amplitude-0p1.obj",
+      "byteLength": 465327,
+      "sha256": "b8bb2cc3ab9aa477f096b34e283377f6723a2c1548bb49293a06d8f63367ca2b"
+    },
+    {
+      "relativePath": "anisotropic-identity-challenger-amplitude-0p1.obj",
+      "byteLength": 502427,
+      "sha256": "fcb383c653044e1b54b477f69871d75497a519502b07d1a39d540c29f4ff8d96"
+    },
+    {
+      "relativePath": "reference-amplitude-0p25.obj",
+      "byteLength": 529895,
+      "sha256": "e2931c3f5b17166a62ad3e7350502479e937c6688402203c3f25f5380abee584"
+    },
+    {
+      "relativePath": "scalar-metaball-control-amplitude-0p25.obj",
+      "byteLength": 515577,
+      "sha256": "7c553ccf1da7e0207c6358c64e882c7a4928246e5450ee9a90a90729c63d2480"
+    },
+    {
+      "relativePath": "anisotropic-identity-challenger-amplitude-0p25.obj",
+      "byteLength": 599760,
+      "sha256": "27083cac900c13ceea911aabfa08f9ba25cbb5907efeb5b87d21e5770bf89e40"
+    },
+    {
+      "relativePath": "reference-amplitude-0p5.obj",
+      "byteLength": 663376,
+      "sha256": "584912088446dd623a2052f35da6c7b176dc25ea86aa43f820be950cbfd81b5c"
+    },
+    {
+      "relativePath": "scalar-metaball-control-amplitude-0p5.obj",
+      "byteLength": 665349,
+      "sha256": "2cc02b6d8f620b741e62e0d482cade7f62fb3d137e86429eb76ec0a41ab5ff91"
+    },
+    {
+      "relativePath": "anisotropic-identity-challenger-amplitude-0p5.obj",
+      "byteLength": 801448,
+      "sha256": "1466b5e886d632f29b662469ba49cc1de555e6ed582a76f166d02998b7dabb81"
+    }
+  ],
+  "assayHash": "f7a72b21af591bbf3319d5e8b49847c9db69d5c0bfffd7f6329eae220ea768f4",
+  "targetHash": "a1175f96382bd3d7aa51f1c15596916cc4a4e82ff49db83957b08ebb0721ea08",
+  "sweepCardHash": "06cbec9e5f93d63eeb1c4452ac99fe6326f6f4f06be22ef1be12b09c89c0e70e",
+  "admissionPassed": true,
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "all 3D meshes and 2D diagnostics reread and hashed from disk"
+}

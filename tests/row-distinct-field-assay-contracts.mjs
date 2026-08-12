@@ -6,6 +6,7 @@ import {
   ROW_DISTINCT_FIELD_ASSAY_SCHEMA,
   buildRowDistinctScalarAnisotropicAssay,
 } from '../row-distinct-field-assay-core.mjs';
+import * as rowDistinctCore from '../row-distinct-field-assay-core.mjs';
 
 const assayCard = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-scalar-anisotropic-assay.v0.json', import.meta.url),
@@ -13,6 +14,10 @@ const assayCard = JSON.parse(await readFile(
 ));
 const target = JSON.parse(await readFile(
   new URL('../fixtures/analytical-tissue/row-distinct-hindquarter-target.v0.json', import.meta.url),
+  'utf8',
+));
+const fullSurfaceCard = JSON.parse(await readFile(
+  new URL('../fixtures/analytical-tissue/target-sdf-full-surface-sweep-assay.v0.json', import.meta.url),
   'utf8',
 ));
 
@@ -149,4 +154,63 @@ test('assay result is deterministic and binds target, card, grid, and effective 
   assert.deepEqual(first.camera, assayCard.camera);
   assert.ok(first.rows.every((row) => row.requestedCompilerId === row.effectiveCompilerId));
   assert.ok(first.rows.every((row) => row.requestedExtractorId === row.effectiveExtractorId));
+});
+
+test('target-SDF sweep produces primary full-surface evidence and mesh-derived sections', () => {
+  assert.equal(
+    typeof rowDistinctCore.buildTargetSdfFullSurfaceSweep,
+    'function',
+    'the assay needs a full-surface builder rather than another profile-only projection',
+  );
+  const sweep = rowDistinctCore.buildTargetSdfFullSurfaceSweep({
+    sweepCard: structuredClone(fullSurfaceCard),
+    assayCard: structuredClone(assayCard),
+    target: structuredClone(target),
+  });
+  assert.equal(sweep.schema, 'kaminos.target-sdf-full-surface-sweep-result.v0');
+  assert.deepEqual(sweep.amplitudes.map((entry) => entry.amplitude), [0.1, 0.25, 0.5]);
+  assert.equal(sweep.reference.requestedExtractorId, fullSurfaceCard.extractorId);
+  assert.equal(sweep.reference.effectiveExtractorId, fullSurfaceCard.extractorId);
+  assert.equal(sweep.reference.baseline.topology.closed, true);
+  assert.equal(sweep.reference.baseline.topology.componentCount, 1);
+  assert.ok(sweep.reference.baseline.mesh.vertices.length > 100);
+  assert.ok(Number.isFinite(sweep.reference.baseline.fullSurface.area));
+  assert.ok(Number.isFinite(sweep.reference.baseline.fullSurface.volume));
+  for (const amplitude of sweep.amplitudes) {
+    assert.equal(amplitude.reference.topology.closed, true);
+    assert.equal(amplitude.reference.topology.componentCount, 1);
+    for (const row of amplitude.rows) {
+      assert.ok(Number.isFinite(row.fullSurface.normalizedRmse), row.id);
+      assert.ok(Number.isFinite(row.fullSurface.maximumNormalizedError), row.id);
+      assert.ok(row.fullSurface.sampledTriangleCount > 100, row.id);
+      assert.deepEqual(
+        row.sections.map((section) => section.anterior),
+        fullSurfaceCard.sectionPlanes,
+      );
+      assert.ok(
+        row.sections.every(
+          (section) => section.source === 'extracted-mesh-triangle-plane-intersections'
+            && section.segments.length >= fullSurfaceCard.evidence.minimumSectionSegments,
+        ),
+        `${row.id} sections must be cut from the assayed 3D mesh`,
+      );
+    }
+  }
+  assert.equal(sweep.promotion, 'none');
+});
+
+test('stress target clipping fails the 3D evidence gate instead of blaming a candidate', () => {
+  const clipped = structuredClone(fullSurfaceCard);
+  clipped.grid = structuredClone(assayCard.grid);
+  const sweep = rowDistinctCore.buildTargetSdfFullSurfaceSweep({
+    sweepCard: clipped,
+    assayCard: structuredClone(assayCard),
+    target: structuredClone(target),
+  });
+  assert.equal(sweep.verdict.passed, false);
+  assert.ok(
+    sweep.verdict.failures.some(
+      (failure) => failure.code === 'perturbed-reference-topology-invalid',
+    ),
+  );
 });

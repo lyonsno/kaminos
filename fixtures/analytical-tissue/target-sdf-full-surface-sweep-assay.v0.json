@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.target-sdf-full-surface-sweep-assay.v0",
+  "id": "bounded-hindquarter-target-sdf-full-surface-sweep-v0",
+  "sourceAssayCardRef": "fixtures/analytical-tissue/row-distinct-scalar-anisotropic-assay.v0.json",
+  "targetRef": "fixtures/analytical-tissue/row-distinct-hindquarter-target.v0.json",
+  "claimCeiling": "Full-surface extraction and amplitude-response comparison on one independently authored synthetic hindquarter target only.",
+  "referenceAmplitude": 0.1,
+  "amplitudes": [0.1, 0.25, 0.5],
+  "grid": {
+    "resolution": [35, 35, 29],
+    "bounds": {
+      "right": [-1.15, 1.15],
+      "dorsal": [-1.0, 1.25],
+      "anterior": [-0.8, 0.5]
+    },
+    "isoValue": 0
+  },
+  "extractorId": "marching-tetrahedra-zero-isosurface-v0",
+  "sectionPlanes": [-0.4, -0.275, -0.15],
+  "evidence": {
+    "minimumReferenceVertices": 100,
+    "minimumSectionSegments": 8,
+    "maximumReferenceSelfNormalizedRmse": 0.03
+  },
+  "counterfeits": [
+    "profile-only-evidence-presented-as-3d",
+    "sections-not-cut-from-extracted-mesh",
+    "candidate-generated-reference-volume",
+    "requested-effective-extractor-substitution",
+    "open-or-blank-reference-surface",
+    "single-amplitude-response-presented-as-stress-evidence",
+    "stress-reference-clipped-by-observation-bounds",
+    "stale-or-partial-output"
+  ],
+  "promotion": "none"
+}
