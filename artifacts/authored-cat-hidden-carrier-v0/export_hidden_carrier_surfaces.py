@@ -330,7 +330,11 @@ def _write_glb(path, surfaces, triangles, *, topology, comparison):
                 ],
             }
         )
-        node = {"name": surface["label"], "mesh": surface_index}
+        node = {
+            "name": surface["label"],
+            "mesh": surface_index,
+            "rotation": [0.0, 0.0, 1.0, 0.0],
+        }
         if comparison:
             node["translation"] = [float(comparison_offsets[surface_index]), 0.0, 0.0]
         nodes.append(node)
@@ -446,10 +450,11 @@ def export_surfaces(*, repo_root, source_path, assay_dir, output_dir, expected_r
             source["positions"].min(axis=0) + source["positions"].max(axis=0)
         ) * 0.5
         presentation_transform = {
-            "contract": "rigid-translation-only-no-shape-change",
+            "contract": "rigid-translation-and-rotation-only-no-shape-change",
             "sourceWorldCenter": [float(value) for value in presentation_center],
             "exportTranslation": [float(value) for value in -presentation_center],
-            "reason": "center exact geometry for deterministic viewer framing",
+            "viewerRotationQuaternion": [0.0, 0.0, 1.0, 0.0],
+            "reason": "center exact geometry and map source -Y dorsal direction to viewer +Y",
         }
 
         surface_arrays = []
@@ -525,7 +530,7 @@ def export_surfaces(*, repo_root, source_path, assay_dir, output_dir, expected_r
             "visualArtifactsValidated": True,
             "operatorVisualAdmission": "not-requested",
             "claimCeiling": (
-                "Exact source-topology, rigidly recentered visualization of the authored carrier, synthetic coat, "
+                "Exact source-topology, rigidly presented visualization of the authored carrier, synthetic coat, "
                 "and uniform-inset recovery. The source is an open disconnected triangle surface; "
                 "these GLBs do not establish a watertight hidden carrier, volumetric recovery, or production geometry."
             ),
@@ -540,8 +545,9 @@ def export_surfaces(*, repo_root, source_path, assay_dir, output_dir, expected_r
             "# Hidden-carrier exact-topology surface witness\n\n"
             "These GLBs preserve the authenticated source primitive's triangle connectivity while "
             "substituting the authored carrier, synthetic observed-coat, and uniform-inset recovered "
-            "vertex positions. A recorded rigid translation centers the geometry for viewer framing; "
-            "it does not change shape. These are the actual fixed-topology surfaces behind the earlier point plate.\n\n"
+            "vertex positions. Recorded rigid translation and rotation center and orient the geometry "
+            "for viewer framing; they do not change shape. These are the actual fixed-topology surfaces "
+            "behind the earlier point plate.\n\n"
             f"Topology: {topology['vertexCount']} vertices, {topology['triangleCount']} triangles, "
             f"{topology['componentCount']} connected components, {topology['boundaryEdgeCount']} boundary edges, "
             f"{topology['nonManifoldEdgeCount']} non-manifold edges, and "

@@ -79,10 +79,15 @@ class HiddenCarrierSurfaceExportTest(unittest.TestCase):
             )
             self.assertEqual(
                 receipt["presentationTransform"]["contract"],
-                "rigid-translation-only-no-shape-change",
+                "rigid-translation-and-rotation-only-no-shape-change",
+            )
+            self.assertEqual(
+                receipt["presentationTransform"]["viewerRotationQuaternion"],
+                [0.0, 0.0, 1.0, 0.0],
             )
             self.assertEqual(recovered_indices.size, 5673)
             self.assertEqual(document["nodes"][0]["name"], "UNIFORM-INSET RECOVERY")
+            self.assertEqual(document["nodes"][0]["rotation"], [0.0, 0.0, 1.0, 0.0])
             self.assertTrue(document["materials"][0]["doubleSided"])
 
             authored_path = output / "authored-carrier-surface.glb"
