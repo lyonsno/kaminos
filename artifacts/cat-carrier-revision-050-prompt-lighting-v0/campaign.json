@@ -1,0 +1,249 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-prompt-lighting.v0",
+  "source": {
+    "path": "../cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+    "sha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+    "originCampaign": "../cat-carrier-revision-050-camera-authority-v0",
+    "originSourceId": "revision-050-matched"
+  },
+  "fluxRoute": {
+    "jobType": "mflux_flux2_edit_promptfile",
+    "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48
+  },
+  "promptRecords": [
+    {
+      "id": "generic-01",
+      "text": "Creature.",
+      "file": "prompts/generic-01.txt",
+      "bytesSha256": "0721477166390a9eaefb777aab503373d4d7205ece8e84052940b7dacf74eb60",
+      "bytesUtf8": "Creature.\n"
+    },
+    {
+      "id": "generic-02",
+      "text": "This shape as a creature.",
+      "file": "prompts/generic-02.txt",
+      "bytesSha256": "d6ace9deca01913b15fde77159ffbcc5b3b6d77ed10d16a93ef2e68cff0c6c5b",
+      "bytesUtf8": "This shape as a creature.\n"
+    },
+    {
+      "id": "generic-03",
+      "text": "Complete this creature.",
+      "file": "prompts/generic-03.txt",
+      "bytesSha256": "e236f6dced75885deba67e313020ef5b14993f1b6124a9bba5f996456843938a",
+      "bytesUtf8": "Complete this creature.\n"
+    },
+    {
+      "id": "generic-04",
+      "text": "This shape covered in skin.",
+      "file": "prompts/generic-04.txt",
+      "bytesSha256": "d559c1145ae6793580742ea42a9f6cecf432b053e2fecf37636af1b690af28e3",
+      "bytesUtf8": "This shape covered in skin.\n"
+    },
+    {
+      "id": "generic-05",
+      "text": "Elaborate this shape into a finished creature.",
+      "file": "prompts/generic-05.txt",
+      "bytesSha256": "9eacc31cb547099d0cb4c36fc1c494293987799de7ac9d1b448c6837162a45e1",
+      "bytesUtf8": "Elaborate this shape into a finished creature.\n"
+    },
+    {
+      "id": "generic-06",
+      "text": "Elaborate this shape into a richly detailed creature.",
+      "file": "prompts/generic-06.txt",
+      "bytesSha256": "646d6cb7a19824a3dce95c9c9c703a1b68d677932ffc3b8ce92e15f44c18b102",
+      "bytesUtf8": "Elaborate this shape into a richly detailed creature.\n"
+    },
+    {
+      "id": "dragon-lighting-01",
+      "text": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Even diffuse studio lighting.",
+      "file": "prompts/dragon-lighting-01.txt",
+      "bytesSha256": "0d63a282dccaf3ff111c5068d5c605e18e8b026d2c96e32f422b775c83a81fd1",
+      "bytesUtf8": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Even diffuse studio lighting.\n"
+    },
+    {
+      "id": "dragon-lighting-02",
+      "text": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Raking side lighting.",
+      "file": "prompts/dragon-lighting-02.txt",
+      "bytesSha256": "13513ea87d615d998624914e1483ea96149fb23a01c9feb0a915e604d90e7a21",
+      "bytesUtf8": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Raking side lighting.\n"
+    },
+    {
+      "id": "dragon-lighting-03",
+      "text": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Soft rim light with frontal fill.",
+      "file": "prompts/dragon-lighting-03.txt",
+      "bytesSha256": "0ffc97d55a354505c26989d4a39b08c87a1c5ecae8bd6f822cc9262b85266f6e",
+      "bytesUtf8": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head. Soft rim light with frontal fill.\n"
+    },
+    {
+      "id": "stone-thick-overlapping-slabs",
+      "text": "This creature built from thick overlapping weathered stone slabs.",
+      "file": "prompts/stone-thick-overlapping-slabs.txt",
+      "bytesSha256": "bcd3c71fdfa4bbfbacac0a86f608a40727680a6524bc8598193f83f909482c1b",
+      "bytesUtf8": "This creature built from thick overlapping weathered stone slabs.\n"
+    }
+  ],
+  "cells": [
+    {
+      "id": "generic-01-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-01",
+      "seed": 80301,
+      "outputDir": "runs/generic-01-seed80301"
+    },
+    {
+      "id": "generic-01-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-01",
+      "seed": 80302,
+      "outputDir": "runs/generic-01-seed80302"
+    },
+    {
+      "id": "generic-02-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-02",
+      "seed": 80301,
+      "outputDir": "runs/generic-02-seed80301"
+    },
+    {
+      "id": "generic-02-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-02",
+      "seed": 80302,
+      "outputDir": "runs/generic-02-seed80302"
+    },
+    {
+      "id": "generic-03-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-03",
+      "seed": 80301,
+      "outputDir": "runs/generic-03-seed80301"
+    },
+    {
+      "id": "generic-03-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-03",
+      "seed": 80302,
+      "outputDir": "runs/generic-03-seed80302"
+    },
+    {
+      "id": "generic-04-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-04",
+      "seed": 80301,
+      "outputDir": "runs/generic-04-seed80301"
+    },
+    {
+      "id": "generic-04-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-04",
+      "seed": 80302,
+      "outputDir": "runs/generic-04-seed80302"
+    },
+    {
+      "id": "generic-05-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-05",
+      "seed": 80301,
+      "outputDir": "runs/generic-05-seed80301"
+    },
+    {
+      "id": "generic-05-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-05",
+      "seed": 80302,
+      "outputDir": "runs/generic-05-seed80302"
+    },
+    {
+      "id": "generic-06-seed80301",
+      "group": "generic-ladder",
+      "promptId": "generic-06",
+      "seed": 80301,
+      "outputDir": "runs/generic-06-seed80301"
+    },
+    {
+      "id": "generic-06-seed80302",
+      "group": "generic-ladder",
+      "promptId": "generic-06",
+      "seed": 80302,
+      "outputDir": "runs/generic-06-seed80302"
+    },
+    {
+      "id": "dragon-lighting-01-seed80301",
+      "group": "dragon-lighting",
+      "basePhrase": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "lightingClause": "Even diffuse studio lighting.",
+      "promptId": "dragon-lighting-01",
+      "seed": 80301,
+      "outputDir": "runs/dragon-lighting-01-seed80301"
+    },
+    {
+      "id": "dragon-lighting-02-seed80301",
+      "group": "dragon-lighting",
+      "basePhrase": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "lightingClause": "Raking side lighting.",
+      "promptId": "dragon-lighting-02",
+      "seed": 80301,
+      "outputDir": "runs/dragon-lighting-02-seed80301"
+    },
+    {
+      "id": "dragon-lighting-03-seed80301",
+      "group": "dragon-lighting",
+      "basePhrase": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "lightingClause": "Soft rim light with frontal fill.",
+      "promptId": "dragon-lighting-03",
+      "seed": 80301,
+      "outputDir": "runs/dragon-lighting-03-seed80301"
+    },
+    {
+      "id": "stone-thick-overlapping-slabs-seed80301",
+      "group": "stone-diagnostic",
+      "promptId": "stone-thick-overlapping-slabs",
+      "seed": 80301,
+      "outputDir": "runs/stone-thick-overlapping-slabs-seed80301"
+    }
+  ],
+  "externalControls": [
+    {
+      "id": "revision-050-matched-dragon-seed80301",
+      "kind": "external-control",
+      "campaignRoot": "../cat-carrier-revision-050-camera-authority-v0",
+      "campaignLedger": "../cat-carrier-revision-050-camera-authority-v0/result-ledger.json",
+      "campaignLedgerSha256": "78f3fd1edcc5dedf06d04aa8271de6f1e70e7631ceda7930f463d4ea3403d2e5",
+      "sourcePath": "../cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+      "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+      "prompt": "Elaborate this armature into a finished creature with scaly hide, ridged spine, and horned head.",
+      "promptSha256": "a97e0ace75e5dd0822cd45a72e6aa066a05b59fae477c82fc7b19ce3f7d7df82",
+      "seed": 80301,
+      "jobId": "ed195f597090",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/prompts/dragon.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "../cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-dragon-seed80301/output.png",
+      "outputSha256": "30fd69f1cb9bf75ab66cfdca8c5104dabf931ed3a23b2795b6846f46aee0706b",
+      "failureState": "none"
+    },
+    {
+      "id": "revision-050-matched-golem-seed80301",
+      "kind": "external-control",
+      "campaignRoot": "../cat-carrier-revision-050-camera-authority-v0",
+      "campaignLedger": "../cat-carrier-revision-050-camera-authority-v0/result-ledger.json",
+      "campaignLedgerSha256": "78f3fd1edcc5dedf06d04aa8271de6f1e70e7631ceda7930f463d4ea3403d2e5",
+      "sourcePath": "../cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+      "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+      "prompt": "Elaborate this armature into a finished creature of mossy weathered stone with lichen and cracked plates.",
+      "promptSha256": "bf8e55597dfbba3b8acb91373ccc03e14d7502bf281d9a712e2b95369cfa2f58",
+      "seed": 80301,
+      "jobId": "462f3598367d",
+      "effectiveRoute": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/prompts/golem.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+      "output": "../cat-carrier-revision-050-camera-authority-v0/runs/revision-050-matched-golem-seed80301/output.png",
+      "outputSha256": "d80bafda5dbeaaf2ec74cbf6179106155963134d3000a8eb8b4d6063ce3ab5e0",
+      "failureState": "none"
+    }
+  ],
+  "claimCeiling": "Exact source, prompt bytes, seed, requested and effective FLUX route, settings, terminal receipt, and visibly inspectable output differences only; no selection, basin interpretation, lighting-validity judgment, TRELLIS promotion, general prompt law, arbitrary-carrier claim, or production claim."
+}

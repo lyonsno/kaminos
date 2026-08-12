@@ -1,0 +1,375 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-prompt-lighting.submissions.v0",
+  "campaign": "campaign.json",
+  "campaignSha256": "d8f9c6f71e1106d531d8f832c6a22e6a40b049d997b39b8c6ffcdf324c76bd70",
+  "cells": {
+    "generic-01-seed80301": {
+      "jobId": "79b71ae63820",
+      "request": {
+        "cellId": "generic-01-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-01.txt",
+        "promptBytesSha256": "0721477166390a9eaefb777aab503373d4d7205ece8e84052940b7dacf74eb60",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-01-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-01.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "874b4728f8279388db0f1f00f8b90b6b56dc2055b00a154189ce472237d1ddaa"
+    },
+    "generic-01-seed80302": {
+      "jobId": "87f83cae701d",
+      "request": {
+        "cellId": "generic-01-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-01.txt",
+        "promptBytesSha256": "0721477166390a9eaefb777aab503373d4d7205ece8e84052940b7dacf74eb60",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-01-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-01.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "77936ef65e184b381d0b5767bf6282c388dc8a84d8ed3eb1899ba4b6b53f9296"
+    },
+    "generic-02-seed80301": {
+      "jobId": "f6dd45c62594",
+      "request": {
+        "cellId": "generic-02-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-02.txt",
+        "promptBytesSha256": "d6ace9deca01913b15fde77159ffbcc5b3b6d77ed10d16a93ef2e68cff0c6c5b",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-02-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-02.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "2bce139db7918e389b2457aaa31ff83b357bd2321e034d53b36d120d122a5fe2"
+    },
+    "generic-02-seed80302": {
+      "jobId": "c76677e7a27b",
+      "request": {
+        "cellId": "generic-02-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-02.txt",
+        "promptBytesSha256": "d6ace9deca01913b15fde77159ffbcc5b3b6d77ed10d16a93ef2e68cff0c6c5b",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-02-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-02.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "3aaae3b5f20b3107a4a35a04bf43a8fe1abf4fc2aacbce4616b22bad2f6ea086"
+    },
+    "generic-03-seed80301": {
+      "jobId": "c0df7cbe522d",
+      "request": {
+        "cellId": "generic-03-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-03.txt",
+        "promptBytesSha256": "e236f6dced75885deba67e313020ef5b14993f1b6124a9bba5f996456843938a",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-03-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-03.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "7eea5431e04ef2fab434a5ea582c825f20484bc89d6421131c1146940c90912b"
+    },
+    "generic-03-seed80302": {
+      "jobId": "7451ba371ee3",
+      "request": {
+        "cellId": "generic-03-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-03.txt",
+        "promptBytesSha256": "e236f6dced75885deba67e313020ef5b14993f1b6124a9bba5f996456843938a",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-03-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-03.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "048f94dbfaa0b19ecc5498763a9f5323d2b17d0002653a2930c8be8e3e8c2336"
+    },
+    "generic-04-seed80301": {
+      "jobId": "eb909f455c07",
+      "request": {
+        "cellId": "generic-04-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-04.txt",
+        "promptBytesSha256": "d559c1145ae6793580742ea42a9f6cecf432b053e2fecf37636af1b690af28e3",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-04-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-04.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "b77514ff77d7b93d841802ef43ee6a6f8b392b37e870dc9b4863b1cde90f785f"
+    },
+    "generic-04-seed80302": {
+      "jobId": "8d1723393ce4",
+      "request": {
+        "cellId": "generic-04-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-04.txt",
+        "promptBytesSha256": "d559c1145ae6793580742ea42a9f6cecf432b053e2fecf37636af1b690af28e3",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-04-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-04.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "3137a8c867b800a7eaed09ff6fe2ab9ecfb0ec491d89c99b3bd2a2aee4a91242"
+    },
+    "generic-05-seed80301": {
+      "jobId": "5812980657f7",
+      "request": {
+        "cellId": "generic-05-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-05.txt",
+        "promptBytesSha256": "9eacc31cb547099d0cb4c36fc1c494293987799de7ac9d1b448c6837162a45e1",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-05-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-05.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "21844454015081a606f476312eb623c46a1675106d50061af7878ba1794e36a6"
+    },
+    "generic-05-seed80302": {
+      "jobId": "65bf4dd83657",
+      "request": {
+        "cellId": "generic-05-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-05.txt",
+        "promptBytesSha256": "9eacc31cb547099d0cb4c36fc1c494293987799de7ac9d1b448c6837162a45e1",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-05-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-05.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "1722a40b3570c96043160bb9da451b6d3c00c1c91c4046d1ac155f8289338bbe"
+    },
+    "generic-06-seed80301": {
+      "jobId": "acad0878921d",
+      "request": {
+        "cellId": "generic-06-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-06.txt",
+        "promptBytesSha256": "646d6cb7a19824a3dce95c9c9c703a1b68d677932ffc3b8ce92e15f44c18b102",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-06-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-06.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "22ef7e7a879962317f8b3ba369e23aac15aec3c03e2152bb14629fcd9308462f"
+    },
+    "generic-06-seed80302": {
+      "jobId": "02683daa8784",
+      "request": {
+        "cellId": "generic-06-seed80302",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-06.txt",
+        "promptBytesSha256": "646d6cb7a19824a3dce95c9c9c703a1b68d677932ffc3b8ce92e15f44c18b102",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-06-seed80302",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-06.txt",
+          "seed": "80302",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "32cff270014d3df614d7607a50f3b37f4499a7922ed34bdf2488d9542247b95a"
+    },
+    "dragon-lighting-01-seed80301": {
+      "jobId": "27ea87416321",
+      "request": {
+        "cellId": "dragon-lighting-01-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-01.txt",
+        "promptBytesSha256": "0d63a282dccaf3ff111c5068d5c605e18e8b026d2c96e32f422b775c83a81fd1",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-01.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "443d17ef6124e732cc068689e8f4e543246de3d687b59b07947aea31cfce7798"
+    },
+    "dragon-lighting-02-seed80301": {
+      "jobId": "b2d4b3c1383f",
+      "request": {
+        "cellId": "dragon-lighting-02-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-02.txt",
+        "promptBytesSha256": "13513ea87d615d998624914e1483ea96149fb23a01c9feb0a915e604d90e7a21",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-02-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-02.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "6fa6eb914198c74860a2d6e59403967d244560f383f8f6dc18fd4813fcb9aeba"
+    },
+    "dragon-lighting-03-seed80301": {
+      "jobId": "c643e0e1e3be",
+      "request": {
+        "cellId": "dragon-lighting-03-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-03.txt",
+        "promptBytesSha256": "0ffc97d55a354505c26989d4a39b08c87a1c5ecae8bd6f822cc9262b85266f6e",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-03-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/dragon-lighting-03.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "ea01a68f7bb61bcbae3062706c740d7594bf227a46fd66a97a81471d12ccc2c6"
+    },
+    "stone-thick-overlapping-slabs-seed80301": {
+      "jobId": "2b9d2c6fa7fc",
+      "request": {
+        "cellId": "stone-thick-overlapping-slabs-seed80301",
+        "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+        "sourceSha256": "ef0e51a852abe8796f8e8c593911a08f4867940ad720f41fbbe6fb8127aee633",
+        "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/stone-thick-overlapping-slabs.txt",
+        "promptBytesSha256": "bcd3c71fdfa4bbfbacac0a86f608a40727680a6524bc8598193f83f909482c1b",
+        "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/stone-thick-overlapping-slabs.txt",
+          "seed": "80301",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "width": "512",
+          "height": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        }
+      },
+      "requestSha256": "465d1c5e494707e9d006962ecc13deac28f6cea6540610b892a8992e4ac0eeb7"
+    }
+  }
+}
