@@ -1,0 +1,101 @@
+{
+  "schema": "kaminos.cat-carrier-revision-050-prompt-lighting.trellis-submissions.v0",
+  "selection": "trellis-selection.json",
+  "cells": {
+    "generic-04-seed80301": {
+      "jobId": "96a3f4b3a201",
+      "role": "minimal-biological-completion-seed-a",
+      "input": "runs/generic-04-seed80301/output.png",
+      "inputSha256": "fe04f2866fe8888a53c1e038d0493236867afac65e44761e34054091e393b0dc",
+      "outputDir": "trellis/generic-04-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-04-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/generic-04-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "generic-04-seed80302": {
+      "jobId": "636d5d27c3d8",
+      "role": "minimal-biological-completion-seed-b",
+      "input": "runs/generic-04-seed80302/output.png",
+      "inputSha256": "4f0655bf382f34600ae19d19578db90b0df84e2c56a77da73f3411a95383e123",
+      "outputDir": "trellis/generic-04-seed80302",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/generic-04-seed80302/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/generic-04-seed80302",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "stone-thick-overlapping-slabs-seed80301": {
+      "jobId": "2e9449bca4c6",
+      "role": "literal-three-dimensional-stone-construction",
+      "input": "runs/stone-thick-overlapping-slabs-seed80301/output.png",
+      "inputSha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117",
+      "outputDir": "trellis/stone-thick-overlapping-slabs-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "dragon-lighting-01-seed80301": {
+      "jobId": "408f87353ccd",
+      "role": "low-shadow-lighting-treatment",
+      "input": "runs/dragon-lighting-01-seed80301/output.png",
+      "inputSha256": "7a4fc1c118e0ee65484b6235d5ff17cacea802c9e9588262f5eb2420d8c75bd8",
+      "outputDir": "trellis/dragon-lighting-01-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/dragon-lighting-01-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    },
+    "dragon-lighting-02-seed80301": {
+      "jobId": "a0026717f595",
+      "role": "high-shadow-lighting-treatment",
+      "input": "runs/dragon-lighting-02-seed80301/output.png",
+      "inputSha256": "ff974846a29bf7a39a598788adffc00329f53996c8d7c070129ecf8c8480d8f1",
+      "outputDir": "trellis/dragon-lighting-02-seed80301",
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "trellis2mlx_fast",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-02-seed80301/output.png",
+        "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/dragon-lighting-02-seed80301",
+        "-p",
+        "seed=42",
+        "steps=6",
+        "target_faces=200000",
+        "texture_size=1024"
+      ]
+    }
+  }
+}
