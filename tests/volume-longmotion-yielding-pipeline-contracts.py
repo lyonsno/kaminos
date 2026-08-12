@@ -54,6 +54,7 @@ class YieldingFitContracts(unittest.TestCase):
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
                 yield_pending_dir=pending, yield_check_steps=10,
+                yield_min_steps=0,
                 **shared,
             )
             (pending / "waiter").write_text("x")
@@ -61,6 +62,7 @@ class YieldingFitContracts(unittest.TestCase):
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
                 yield_pending_dir=pending, yield_check_steps=10,
+                yield_min_steps=0,
                 **shared,
             )
             self.assertFalse(second["finished"])
@@ -73,6 +75,7 @@ class YieldingFitContracts(unittest.TestCase):
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
                 yield_pending_dir=pending, yield_check_steps=10,
+                yield_min_steps=0,
                 **shared,
             )
             self.assertTrue(third["finished"])
@@ -80,6 +83,29 @@ class YieldingFitContracts(unittest.TestCase):
             self.assertEqual(third["completedSteps"], 40)
             # First (uninterrupted) chunk finished normally
             self.assertTrue(first["finished"])
+
+    def test_minimum_quantum_defers_yield_after_resume(self) -> None:
+        # Two yield-aware jobs ping-ponging on 50-step quanta spent a whole
+        # night paying process startup for slivers of work. A resumed (or
+        # fresh) fit must run at least yield_min_steps before it may yield,
+        # even with a waiter present the entire time.
+        medium = synthetic_medium()
+        lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
+        with tempfile.TemporaryDirectory() as scratch:
+            ckpt = Path(scratch) / "fit.npz"
+            pending = Path(scratch) / "pending"
+            pending.mkdir()
+            (pending / "waiter").write_text("x")
+            result = ORACLE.fit_modes(
+                medium, lattice, [synthetic_camera()],
+                mode_count=3, iterations=30, fit_width=32, fit_samples_per_cell=4,
+                seed=7, init="analytical", learning_rate=0.05,
+                checkpoint_path=ckpt, yield_pending_dir=pending,
+                yield_check_steps=10, yield_min_steps=20,
+            )
+            self.assertFalse(result["finished"])
+            self.assertGreaterEqual(result["completedSteps"], 20,
+                                    "yielded before the minimum quantum elapsed")
 
     def test_checkpoint_preserves_adam_moments(self) -> None:
         medium = synthetic_medium()
@@ -94,6 +120,7 @@ class YieldingFitContracts(unittest.TestCase):
                 mode_count=3, iterations=40, fit_width=32, fit_samples_per_cell=4,
                 seed=7, init="analytical", learning_rate=0.05,
                 checkpoint_path=ckpt, yield_pending_dir=pending, yield_check_steps=10,
+                yield_min_steps=0,
             )
             archive = np.load(ckpt)
             opt_keys = [k for k in archive.files if k.startswith("opt.")]

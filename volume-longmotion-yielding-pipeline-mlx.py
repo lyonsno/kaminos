@@ -164,6 +164,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 checkpoint_path=stage_ckpt,
                 yield_pending_dir=yield_dir,
                 yield_check_steps=args.yield_check_steps,
+                yield_min_steps=args.yield_min_steps,
             )
             if not result["finished"]:
                 save_progress(progress_path, progress)
@@ -242,6 +243,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 checkpoint_path=hop_ckpt,
                 yield_pending_dir=yield_dir,
                 yield_check_steps=args.yield_check_steps,
+                yield_min_steps=args.yield_min_steps,
             )
             if not fit["finished"]:
                 save_progress(progress_path, progress)
@@ -333,6 +335,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=20260727)
     parser.add_argument("--yield-pending-dir", type=Path, default=None)
     parser.add_argument("--yield-check-steps", type=int, default=50)
+    parser.add_argument("--yield-min-steps", type=int, default=300)
     parser.add_argument("--resubmit-cli", type=Path, default=None)
     parser.add_argument("--route-identity", default="sjb/longmotion-yielding-pipeline")
     return parser.parse_args(argv)

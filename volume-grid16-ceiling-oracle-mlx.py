@@ -245,6 +245,7 @@ def fit_modes(
     checkpoint_path: Path | None = None,
     yield_pending_dir: Path | None = None,
     yield_check_steps: int = 50,
+    yield_min_steps: int = 300,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -515,6 +516,7 @@ def fit_modes(
         if (
             checkpoint_path is not None
             and step > start_step
+            and (step - start_step) >= yield_min_steps
             and (step - start_step) % yield_check_steps == 0
             and someone_is_waiting()
         ):
