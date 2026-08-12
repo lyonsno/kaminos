@@ -1,0 +1,25 @@
+{
+  "name": "plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "02683daa8784",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-camera-authority-v0/source/revision-050-matched/plate.png",
+  "input_name": "plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-revision-050-prompt-lighting-v0/prompts/generic-06.txt",
+    "seed": "80302",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786569336.469077,
+  "duration_s": 69.0
+}
