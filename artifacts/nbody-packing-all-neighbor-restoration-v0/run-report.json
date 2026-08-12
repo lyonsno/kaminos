@@ -1,0 +1,38 @@
+{
+  "schema": "kaminos.nbody-packing-all-neighbor-restoration-assay.v0",
+  "status": "complete-mechanism-floor-improved",
+  "route": {
+    "requested": "all-neighbor-p8-merit-trust-region-restoration-v0",
+    "effective": "all-neighbor-p8-merit-trust-region-restoration-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "pattern": {
+      "path": "artifacts/nbody-packing-localized-challenge-v0/oracle-pattern-search-032.json",
+      "fileSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
+      "resultSha256": "a697e6567f88d34ba7f8e78b60bbfa188d89e0e896be1b704a11017658d1bb93"
+    },
+    "homotopy": {
+      "path": "artifacts/nbody-packing-localized-challenge-v0/homotopy-032-fine-0875-to-1.json",
+      "fileSha256": "57f08fe1090d059bc250093522463579050af2ab66db491d39ffdacc15a67736",
+      "resultSha256": "cfaede5e816f6dfc04b2e99230b9d47f2a093c8cda8b393ecb563610184daa2b"
+    }
+  },
+  "comparison": {
+    "coordinateSearchFloor": 0.001615326586,
+    "homotopyFloor": 0.000945973079,
+    "restorationResidual": 0.000867525141,
+    "improvementVersusCoordinateSearch": 1.8619939753423238,
+    "improvementVersusHomotopy": 1.090427279040666
+  },
+  "bindings": {
+    "resultJsonSha256": "1c2e3e76df8c7add0cb71388123cb3d5dde488ec7c15cfe636c3097c49408de9",
+    "resultSha256": "1498f017ceac3b26b126976a15b62520791c5c098c13b1b166ffddda599e4e02"
+  },
+  "claimCeiling": "bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality",
+  "identity": {
+    "sha256": "a79e9a61473135be9237aade299b73d2a1954d92e667623cf4ea2896bf7b51b3"
+  }
+}

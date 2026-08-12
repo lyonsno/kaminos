@@ -20,6 +20,8 @@ export const NBODY_PACKING_LOCALIZED_WITNESS_ROUTE =
   'nbody-packing-localized-boundary-v0';
 export const NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE =
   'nbody-packing-localized-hard-boundary-v0';
+export const NBODY_PACKING_RESTORATION_WITNESS_ROUTE =
+  'nbody-packing-all-neighbor-restoration-v0';
 export const NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA =
   'kaminos.nbody-packing-localized-boundary-witness.v0';
 
@@ -45,6 +47,10 @@ const HARD_BOUNDARY_VISUAL_VERDICT_KEYS = Object.freeze([
   'manufacturedWitnessAuthorityCeilingLegible', 'stableIdentityLegible',
   'fixedAttachmentsLegible', 'individualVolumeLegible',
   'packingSemanticsNotInverted',
+]);
+const RESTORATION_VISUAL_VERDICT_KEYS = Object.freeze([
+  ...HARD_BOUNDARY_VISUAL_VERDICT_KEYS,
+  'restorationDeltaLegible', 'restorationResidualMarkersLegible',
 ]);
 
 function sha256(bytes) {
@@ -268,9 +274,11 @@ export async function admitNBodyPackingLocalizedVisualInspection({
   const outputRoot = path.resolve(outDir);
   const reportPath = path.join(outputRoot, 'report.json');
   const report = JSON.parse(String(await readFile(reportPath)));
-  const verdictKeys = report.route?.effective === NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE
-    ? HARD_BOUNDARY_VISUAL_VERDICT_KEYS
-    : VISUAL_VERDICT_KEYS;
+  const verdictKeys = report.route?.effective === NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+    ? RESTORATION_VISUAL_VERDICT_KEYS
+    : report.route?.effective === NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE
+      ? HARD_BOUNDARY_VISUAL_VERDICT_KEYS
+      : VISUAL_VERDICT_KEYS;
   if (
     typeof inspection?.observedAt !== 'string' || !inspection.observedAt ||
     typeof inspection?.summary !== 'string' || !inspection.summary ||
@@ -284,6 +292,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
     ![
       NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
       NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
+      NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
     ].includes(report.route?.effective) ||
     report.route?.fallbackUsed !== false
   ) throw new Error('localized visual admission requires exact pending witness');
@@ -297,7 +306,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
     }
   }
   const captures = [];
-  for (const state of STATE_KEYS) for (const mode of ['volume','slice']) {
+  for (const state of report.requiredStates) for (const mode of report.requiredModes) {
     const stem = `${state}-${mode}`;
     const pngBytes = await readFile(path.join(outputRoot, `${stem}.png`));
     const captureReportBytes = await readFile(path.join(outputRoot, `${stem}-capture-report.json`));

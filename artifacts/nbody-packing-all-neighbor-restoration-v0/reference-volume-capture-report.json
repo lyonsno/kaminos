@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 88874,
+    "processGroupId": 88874,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 88874,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 88888,
+      "processGroupId": 88888,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 88888,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3925,
+    "retainedBytes": 3925,
+    "truncated": false,
+    "tail": "[0812/011842.373636:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/011842.436012:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.804180:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.804218:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.805717:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.821463:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.822834:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.836523:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.837506:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/011842.851437:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n206950 bytes written to file repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png\n[0812/011843.053188:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/011843.074617:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011843.107414:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011843.477132:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011843.478494:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
+    "sizeBytes": 206950,
+    "sha256": "b60b933243f42c193294388bae7d5c0d5ffe23425ba96052635a08d734bee7be",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 54,
+      "idatBytes": 206281
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "reference",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
+      "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+      "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 148197,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
+      "sizeBytes": 206950,
+      "sha256": "b60b933243f42c193294388bae7d5c0d5ffe23425ba96052635a08d734bee7be",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 54,
+        "idatBytes": 206281
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 148197,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "httpStatus": 200,
+    "sizeBytes": 147207,
+    "sha256": "f24b2e0f643b275eec8d14a1995d24770b327f2561c364e12a306ad61335b943"
+  }
+}

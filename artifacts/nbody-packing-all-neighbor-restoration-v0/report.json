@@ -1,0 +1,315 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-all-neighbor-restoration-v0",
+    "effective": "nbody-packing-all-neighbor-restoration-v0",
+    "fallbackUsed": false
+  },
+  "bracket": {
+    "lastPass": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.28-assay-v0",
+      "fixtureSha256": "aed0b56838f46525fb04e9f8fac486559d413ec7b006b70bcf7023d5deff30e3",
+      "severity": 0.28,
+      "resultSha256": "a3cb732629bdde25999a4ed333376118ab41988b2d79bb5bffd71781cc7031a5"
+    },
+    "firstFail": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.32-assay-v0",
+      "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+      "severity": 0.32,
+      "resultSha256": "0a4699c7d8b017cc3e934760a8ffd18c3df2e062b74662a953e7e20456c2efc6",
+      "failure": {
+        "phase": "unified-kkt-globalization-line-search",
+        "lastTrustworthyEvidence": "selected",
+        "residual": 0.171504028818,
+        "violatedConstraints": [
+          {
+            "key": "pair:density-06-00:1|density-06-01:1",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.009302930286137
+          },
+          {
+            "key": "pair:density-06-00:1|density-06-01:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.002060345232162
+          },
+          {
+            "key": "pair:density-06-00:2|density-06-01:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.039090795893135
+          },
+          {
+            "key": "pair:density-06-02:2|density-06-03:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.018355860489719
+          },
+          {
+            "key": "pair:density-06-04:2|density-06-05:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.018394045966458
+          },
+          {
+            "key": "bone:density-06-00:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.021341374986674
+          },
+          {
+            "key": "bone:density-06-00:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.0213413749908
+          },
+          {
+            "key": "bone:density-06-00:1|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.072844459433558
+          },
+          {
+            "key": "bone:density-06-00:2|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.138776722390867
+          },
+          {
+            "key": "bone:density-06-01:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.029322385799656
+          },
+          {
+            "key": "bone:density-06-01:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.029322385802673
+          },
+          {
+            "key": "bone:density-06-01:1|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.026649473120085
+          },
+          {
+            "key": "bone:density-06-01:2|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.171504028817599
+          },
+          {
+            "key": "bone:density-06-01:3|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.12037883072749
+          },
+          {
+            "key": "compartment-upper:density-06-01:4:2",
+            "kind": "compartment-clearance",
+            "signedGap": -0.095426301722882
+          },
+          {
+            "key": "bone:density-06-02:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.126128904837188
+          },
+          {
+            "key": "bone:density-06-02:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.12612890484285
+          },
+          {
+            "key": "bone:density-06-03:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.110509249815333
+          },
+          {
+            "key": "bone:density-06-03:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.110509249809728
+          },
+          {
+            "key": "bone:density-06-04:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.024875829058782
+          },
+          {
+            "key": "bone:density-06-04:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.024875829065887
+          },
+          {
+            "key": "bone:density-06-05:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.006156407698262
+          },
+          {
+            "key": "bone:density-06-05:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.006156407690945
+          }
+        ],
+        "linearizedConstraintKeys": [
+          "bone:density-06-00:1|density-6-offset-bone",
+          "bone:density-06-00:1|density-six-offset-short-bone",
+          "bone:density-06-00:2|density-6-offset-bone",
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-00:3|density-six-offset-short-bone",
+          "bone:density-06-01:1|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:2|density-six-offset-short-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-01:3|density-six-offset-short-bone",
+          "bone:density-06-02:1|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "bone:density-06-04:1|density-6-offset-bone",
+          "bone:density-06-04:2|density-6-offset-bone",
+          "bone:density-06-05:2|density-6-offset-bone",
+          "bone:density-06-05:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-00:1|density-06-01:0",
+          "pair:density-06-00:1|density-06-01:1",
+          "pair:density-06-00:1|density-06-01:2",
+          "pair:density-06-00:2|density-06-01:1",
+          "pair:density-06-00:2|density-06-01:2",
+          "pair:density-06-02:1|density-06-03:2",
+          "pair:density-06-02:2|density-06-03:2",
+          "pair:density-06-04:2|density-06-05:2"
+        ],
+        "projectedConstraintKeys": [
+          "bone:density-06-00:1|density-6-offset-bone",
+          "bone:density-06-00:1|density-six-offset-short-bone",
+          "bone:density-06-00:2|density-6-offset-bone",
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-01:1|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:2|density-six-offset-short-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-01:3|density-six-offset-short-bone",
+          "bone:density-06-02:1|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "bone:density-06-04:1|density-6-offset-bone",
+          "bone:density-06-04:2|density-6-offset-bone",
+          "bone:density-06-05:2|density-6-offset-bone",
+          "bone:density-06-05:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-00:1|density-06-01:0",
+          "pair:density-06-00:1|density-06-01:1",
+          "pair:density-06-00:1|density-06-01:2",
+          "pair:density-06-00:2|density-06-01:2",
+          "pair:density-06-02:1|density-06-03:2",
+          "pair:density-06-02:2|density-06-03:2",
+          "pair:density-06-04:2|density-06-05:2"
+        ],
+        "candidateResiduals": [
+          {
+            "lineScale": 1,
+            "maximumPhysicalResidual": 0.396861913563,
+            "pairwisePenetration": 0,
+            "skeletalPenetration": 0.073465639626,
+            "compartmentEscape": 0.396861913563
+          },
+          {
+            "lineScale": 0.5,
+            "maximumPhysicalResidual": 0.38242592425,
+            "pairwisePenetration": 0.01793690168,
+            "skeletalPenetration": 0.06996614241,
+            "compartmentEscape": 0.38242592425
+          },
+          {
+            "lineScale": 0.25,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.027454245116,
+            "skeletalPenetration": 0.112991061408,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.125,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.032129286741,
+            "skeletalPenetration": 0.125994368389,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.0625,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.0344463377,
+            "skeletalPenetration": 0.132596496447,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.03125,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.035599799588,
+            "skeletalPenetration": 0.135771667849,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.015625,
+            "maximumPhysicalResidual": 0.375139744191,
+            "pairwisePenetration": 0.036175271422,
+            "skeletalPenetration": 0.137300165426,
+            "compartmentEscape": 0.375139744191
+          },
+          {
+            "lineScale": 0.0078125,
+            "maximumPhysicalResidual": 0.374553933619,
+            "pairwisePenetration": 0.036462693417,
+            "skeletalPenetration": 0.138045567169,
+            "compartmentEscape": 0.374553933619
+          }
+        ]
+      }
+    }
+  },
+  "classification": {
+    "coldMaximumPhysicalResidual": 0.171504028818,
+    "warmMaximumPhysicalResidual": 0.002679616613,
+    "patternMaximumPhysicalResidual": 0.001615326586,
+    "patternStatus": "same-basis-feasibility-unresolved",
+    "traversalInvariance": "passed",
+    "restorationMaximumPhysicalResidual": 0.000867525141,
+    "restorationVersusCoordinateFloor": 1.8619939753423238,
+    "restorationVersusHomotopyFloor": 1.090427279040666
+  },
+  "bindings": {
+    "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+    "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5",
+    "indexHtmlSha256": "f24b2e0f643b275eec8d14a1995d24770b327f2561c364e12a306ad61335b943",
+    "challengeResultSha256": "ee7fc0d1c84d9554e6247ffcc3859f8e2c0a3ca5da3e7e8f42456c3a4c8a2dc8",
+    "continuationResultSha256": "2b1fac7780f94d16aec89dd3dc20f3396a525f4d6087688ae83d431a0522f805",
+    "patternResultSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
+    "restorationResultSha256": "1c2e3e76df8c7add0cb71388123cb3d5dde488ec7c15cfe636c3097c49408de9",
+    "visualInspectionSha256": "89c3085a7b5ddf2201f6c585b313d03ae05d650cfb6c6815f4d3a58766ddf54c",
+    "captureReceiptSetSha256": "8da36d917d88a92c7870381e0368cabedff2ef55143a3bb48947c5e3bfd9022e"
+  },
+  "requiredStates": [
+    "pass-crowded",
+    "last-pass",
+    "fail-crowded",
+    "first-fail",
+    "same-basis-feasible",
+    "all-neighbor-restoration",
+    "reference"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "same-basis-representation-impossibility",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "89c3085a7b5ddf2201f6c585b313d03ae05d650cfb6c6815f4d3a58766ddf54c",
+    "captureCount": 14
+  },
+  "identity": {
+    "sha256": "a83a6c5f12662918d8c41fb79c971fa62b7d955dd0fe07f53e79e2eea5a26805"
+  }
+}

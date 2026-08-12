@@ -19,6 +19,7 @@ import {
 } from './nbody-packing-localized-challenge.mjs';
 import {
   NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
+  NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
@@ -157,25 +158,29 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     'artifacts/nbody-packing-localized-challenge-v0/continuation-028-to-032.json',
   patternResultPath =
     'artifacts/nbody-packing-localized-challenge-v0/oracle-pattern-search-032.json',
+  restorationResultPath = null,
 } = {}) {
   const outputRoot = path.resolve(outDir);
   let phase = 'read-source-results';
   let lastTrustworthyEvidence = { phase:'none' };
   await mkdir(outputRoot, { recursive:true });
   try {
-    const [challengeBytes, continuationBytes, patternBytes] = await Promise.all([
+    const [challengeBytes, continuationBytes, patternBytes, restorationBytes] = await Promise.all([
       readFile(path.resolve(challengeResultPath)),
       readFile(path.resolve(continuationResultPath)),
       readFile(path.resolve(patternResultPath)),
+      restorationResultPath ? readFile(path.resolve(restorationResultPath)) : Promise.resolve(null),
     ]);
     const challenge = JSON.parse(String(challengeBytes));
     const continuation = JSON.parse(String(continuationBytes));
     const pattern = JSON.parse(String(patternBytes));
+    const restoration = restorationBytes ? JSON.parse(String(restorationBytes)) : null;
     lastTrustworthyEvidence = {
       phase:'source-results-read',
       challengeSha256:sha256(challengeBytes),
       continuationSha256:sha256(continuationBytes),
       patternSha256:sha256(patternBytes),
+      restorationSha256:restorationBytes ? sha256(restorationBytes) : null,
     };
     phase = 'bind-source-identities';
     const suite = createNBodyLocalizedChallengeSuite();
@@ -184,6 +189,21 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     const problem = validateSources({
       challenge, continuation, pattern, passFixture, failFixture,
     });
+    if (restoration) {
+      verifyCanonicalIdentity(restoration, 'restoration');
+      if (
+        restoration.schema !== 'kaminos.nbody-packing-all-neighbor-restoration-result.v0' ||
+        restoration.status !== 'restoration-floor-improved' ||
+        restoration.route?.effective !== 'all-neighbor-p8-merit-trust-region-restoration-v0' ||
+        restoration.route?.fallbackUsed !== false ||
+        restoration.source?.problemSha256 !== problem.identity.sha256 ||
+        restoration.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+        restoration.mechanism?.contactGraphRowsConsumed !== false ||
+        restoration.invariance?.candidateEnumeration !== 'passed' ||
+        restoration.start?.maximumPhysicalResidual !== 0.001615326586 ||
+        !(restoration.selected?.maximumPhysicalResidual < 0.000945973079)
+      ) throw new Error('localized hard witness rejects substituted restoration evidence');
+    }
     const passRow = challenge.rows.find(row => row.fixtureSha256 === passFixture.identity.sha256);
     const failRow = challenge.rows.find(row => row.fixtureSha256 === failFixture.identity.sha256);
     if (!passRow || !failRow) {
@@ -208,6 +228,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       problem,
       vector:continuation.solverResult.selected.vector,
     });
+    const restorationState = restoration ? evaluateNBodyUnifiedKktState({
+      problem,
+      vector:restoration.selected.vector,
+    }) : null;
+    if (
+      restorationState &&
+      restorationState.maximumPhysicalResidual !== restoration.selected.maximumPhysicalResidual
+    ) throw new Error('localized hard witness rejects stale restoration metrics');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'source-identities-bound',
@@ -215,7 +243,9 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     };
     phase = 'write-primary';
     const fixtures = { lastPass:passFixture, firstFail:failFixture };
-    const comparison = { challenge, continuation, pattern };
+    const comparison = restoration
+      ? { challenge, continuation, pattern, restoration }
+      : { challenge, continuation, pattern };
     const fixtureBytes = jsonBytes(fixtures);
     const comparisonBytes = jsonBytes(comparison);
     const bindings = {
@@ -265,6 +295,17 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         emphasisMarkers:createPairDebtEmphasisMarkers(patternState),
         truth:'Independent same-basis coordinate search descends further but does not clear debt. Representation feasibility remains unresolved.',
       },
+      ...(restoration ? {
+        'all-neighbor-restoration': {
+          label:'0.32 all-neighbor restoration', severity:0.32,
+          status:restoration.status, warning:true,
+          source:failFixture.crowded,
+          muscles:restorationState.muscles,
+          metrics:restorationState.metrics,
+          emphasisMarkers:createPairDebtEmphasisMarkers(restorationState),
+          truth:'One simultaneous direction derived from every violated pair, bone, and compartment row beats both frozen local-search floors without oracle coordinates or a contact graph. Residual debt remains.',
+        },
+      } : {}),
       reference: {
         label:'Manufactured feasibility witness', severity:null,
         status:'existence witness outside candidate carrier', warning:false,
@@ -274,11 +315,21 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         truth:'This withheld manufactured state proves fixture feasibility, not feasibility in the frozen two-mode candidate carrier.',
       },
     };
+    const orderedStates = restoration
+      ? [...STATE_KEYS.slice(0, -1), 'all-neighbor-restoration', 'reference']
+      : [...STATE_KEYS];
+    const witnessRoute = restoration
+      ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+      : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const display = {
-      title:'Localized hard boundary · six bodies',
+      title:restoration
+        ? 'All-neighbor restoration · six-body hard boundary'
+        : 'Localized hard boundary · six bodies',
       authority:'Synthetic two-obstacle mechanism falsifier · no anatomical admission',
-      explanation:'Severity 0.32 creates a gross cold failure. Exact 0.28 continuation and an independent same-basis coordinate search reduce the debt by roughly two orders of magnitude but do not clear it. This establishes a <strong>globalization defect</strong>; it does <strong>not</strong> yet establish a carrier representation limit.',
-      orderedStates:[...STATE_KEYS],
+      explanation:restoration
+        ? 'Severity 0.32 creates a gross cold failure. Continuation, one-coordinate search, and homotopy establish local floors. The new state applies one <strong>simultaneous all-neighbor restoration direction</strong> and descends below both recorded floors; this is a mechanism advance, not feasibility or optimality closure.'
+        : 'Severity 0.32 creates a gross cold failure. Exact 0.28 continuation and an independent same-basis coordinate search reduce the debt by roughly two orders of magnitude but do not clear it. This establishes a <strong>globalization defect</strong>; it does <strong>not</strong> yet establish a carrier representation limit.',
+      orderedStates,
       defaultState:'fail-crowded',
     };
     const payload = {
@@ -292,14 +343,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({
       payload,
       bindings,
-      route:NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
+      route:witnessRoute,
     }));
     const reportCore = {
       schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
       status:'complete-pending-agent-visual-inspection',
       route:{
-        requested:NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
-        effective:NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
+        requested:witnessRoute,
+        effective:witnessRoute,
         fallbackUsed:false,
       },
       bracket:structuredClone(challenge.bracket),
@@ -310,6 +361,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         patternMaximumPhysicalResidual:patternState.maximumPhysicalResidual,
         patternStatus:pattern.status,
         traversalInvariance:continuation.solverResult.invariance.candidateEnumeration,
+        ...(restoration ? {
+          restorationMaximumPhysicalResidual:
+            restoration.selected.maximumPhysicalResidual,
+          restorationVersusCoordinateFloor:
+            patternState.maximumPhysicalResidual / restoration.selected.maximumPhysicalResidual,
+          restorationVersusHomotopyFloor:
+            0.000945973079 / restoration.selected.maximumPhysicalResidual,
+        } : {}),
       },
       bindings:{
         ...bindings,
@@ -317,11 +376,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         challengeResultSha256:sha256(challengeBytes),
         continuationResultSha256:sha256(continuationBytes),
         patternResultSha256:sha256(patternBytes),
+        ...(restorationBytes ? { restorationResultSha256:sha256(restorationBytes) } : {}),
       },
-      requiredStates:[...STATE_KEYS],
+      requiredStates:orderedStates,
       requiredModes:['volume','slice'],
       claimCeiling: {
-        admittedClaim:'severity 0.32 exposes a gross cold-start globalization failure and an unresolved same-basis residual floor after continuation and coordinate search',
+        admittedClaim:restoration
+          ? 'one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants'
+          : 'severity 0.32 exposes a gross cold-start globalization failure and an unresolved same-basis residual floor after continuation and coordinate search',
         anatomicalAdmission:'none',
         nonGoals:[
           'same-basis-representation-impossibility',
@@ -344,11 +406,14 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     ]);
     return { outputRoot, report, states };
   } catch (error) {
+    const requestedRoute = restorationResultPath
+      ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
+      : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const failure = {
       schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
       status:'failed',
       route:{
-        requested:NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
+        requested:requestedRoute,
         effective:null,
         fallbackUsed:false,
       },
@@ -363,7 +428,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-localized-hard-boundary-v0';
-  const result = await writeNBodyPackingLocalizedHardBoundaryWitness({ outDir });
+  const restorationResultPath = process.argv[3] || null;
+  const result = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    restorationResultPath,
+  });
   process.stdout.write(`${JSON.stringify({
     outputRoot:result.outputRoot,
     report:result.report,
