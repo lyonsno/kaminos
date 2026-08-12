@@ -418,6 +418,90 @@ class HiddenCarrierAssayTest(unittest.TestCase):
                 ):
                     self.assertIn(field, identity)
 
+    def test_abbreviated_output_directory_is_rejected_in_success_and_malformed_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            abbreviation_forms = (
+                lambda selected: ["--output-d", str(selected)],
+                lambda selected: [f"--output-d={selected}"],
+            )
+            for index, abbreviation in enumerate(abbreviation_forms):
+                with self.subTest(kind="mixed-valid", index=index):
+                    earlier = root / f"earlier-{index}"
+                    selected = root / f"selected-{index}"
+                    earlier.mkdir()
+                    selected.mkdir()
+                    for target in (earlier, selected):
+                        (target / "report.json").write_text(
+                            '{"status":"captured","terminal":true}\n'
+                        )
+                        (target / "observation.npz").write_bytes(b"stale observation")
+                        (target / "recovered-carrier.npz").write_bytes(b"stale recovery")
+                    selected_hashes = {
+                        name: sha256(selected / name)
+                        for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+                    }
+                    status = assay.main(
+                        [
+                            "--repo-root",
+                            str(REPO),
+                            "--source",
+                            str(SOURCE),
+                            "--output-dir",
+                            str(earlier),
+                            *abbreviation(selected),
+                            "--profile",
+                            "short-v0",
+                            "--uniform-inset",
+                            "0.94",
+                        ]
+                    )
+                    self.assertEqual(status, 2)
+                    earlier_report = json.loads((earlier / "report.json").read_text())
+                    self.assertEqual(earlier_report["status"], "failed")
+                    self.assertEqual(earlier_report["failurePhase"], "argument-parse")
+                    self.assertFalse((earlier / "observation.npz").exists())
+                    self.assertFalse((earlier / "recovered-carrier.npz").exists())
+                    self.assertEqual(
+                        {
+                            name: sha256(selected / name)
+                            for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+                        },
+                        selected_hashes,
+                    )
+
+            abbreviated_only = root / "abbreviated-only"
+            abbreviated_only.mkdir()
+            (abbreviated_only / "report.json").write_text(
+                '{"status":"captured","terminal":true}\n'
+            )
+            (abbreviated_only / "observation.npz").write_bytes(b"stale observation")
+            (abbreviated_only / "recovered-carrier.npz").write_bytes(b"stale recovery")
+            before = {
+                name: sha256(abbreviated_only / name)
+                for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+            }
+            status = assay.main(
+                [
+                    "--repo-root",
+                    str(REPO),
+                    "--source",
+                    str(SOURCE),
+                    f"--output-d={abbreviated_only}",
+                    "--profile",
+                    "short-v0",
+                    "--uniform-inset",
+                ]
+            )
+            self.assertEqual(status, 2)
+            self.assertEqual(
+                {
+                    name: sha256(abbreviated_only / name)
+                    for name in ("report.json", "observation.npz", "recovered-carrier.npz")
+                },
+                before,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -468,7 +468,7 @@ def run_assay(
 
 def main(argv=None):
     raw_argv = list(sys.argv[1:] if argv is None else argv)
-    parser = _ReportableArgumentParser(description=__doc__)
+    parser = _ReportableArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--repo-root")
     parser.add_argument("--source")
     parser.add_argument("--output-dir")

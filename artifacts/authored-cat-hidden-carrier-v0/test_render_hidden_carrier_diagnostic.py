@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parents[1]
 ASSAY = ROOT / "evidence/uniform-inset-medium-scapular-v0"
-REPORT_SHA256 = "923b5c4b3f77234aa4e90eb78b5ef595be0769d3f46933f89b913a0e22460ced"
+REPORT_SHA256 = "961ee182de2e3899a6454280aef1a77cd65b0e901e2973a514d244a17f2b3c89"
 sys.path.insert(0, str(ROOT))
 
 import render_hidden_carrier_diagnostic as diagnostic  # noqa: E402

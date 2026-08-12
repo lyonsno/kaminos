@@ -51,9 +51,9 @@
     "uniformInsetAuthority": "assay-author-explicit-config",
     "uniformInsetCalibration": "fixture-author-selected-from-prior-authored-truth-depth-summary"
   },
-  "executionId": "ae663468-a3a7-4bab-b92b-44b8911fb703",
+  "executionId": "1b1f7e3c-f0a8-4b20-84a9-0f8a26a90571",
   "failurePhase": null,
-  "finishedAt": "2026-08-12T13:00:01.401143Z",
+  "finishedAt": "2026-08-12T13:14:40.865753Z",
   "implementation": {
     "fixture": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_fixture.py",
@@ -61,7 +61,7 @@
     },
     "runner": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_assay.py",
-      "sha256": "b870bd17a50d867d07f42840c03b4ce607c7f663c545a6057ab4f66c2298a4ce"
+      "sha256": "8be6f3ccb0c3b5f4e76aa8e6b1a0972dd2689932583f1a96059c6d9b781c6063"
     }
   },
   "lastTrustworthyEvidence": {
@@ -90,7 +90,7 @@
     },
     "rmse": 0.2508719729407156
   },
-  "priorTerminalReportSha256": "37c8c15bc261bbf92c39db001020a5d4bc0c85659e3191c0029f46c1e2ddaf05",
+  "priorTerminalReportSha256": "923b5c4b3f77234aa4e90eb78b5ef595be0769d3f46933f89b913a0e22460ced",
   "reason": null,
   "requestedConfig": {
     "backend": "python-numpy-cpu",
@@ -117,7 +117,7 @@
     "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
     "vertexCount": 3764
   },
-  "startedAt": "2026-08-12T13:00:01.377992Z",
+  "startedAt": "2026-08-12T13:14:40.852650Z",
   "status": "captured",
   "terminal": true,
   "truthIsolation": {
