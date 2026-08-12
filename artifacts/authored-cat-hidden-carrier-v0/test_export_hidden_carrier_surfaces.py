@@ -60,7 +60,27 @@ class HiddenCarrierSurfaceExportTest(unittest.TestCase):
             recovered_path = output / "uniform-recovery-surface.glb"
             document, recovered_positions, recovered_indices = primitive_arrays(recovered_path)
             expected_recovered = np.load(ASSAY / "recovered-carrier.npz")["positions"]
-            np.testing.assert_allclose(recovered_positions, expected_recovered, atol=4e-6)
+            authored_world = load_glb_surface(SOURCE)["positions"]
+            presentation_center = (authored_world.min(axis=0) + authored_world.max(axis=0)) * 0.5
+            np.testing.assert_allclose(
+                recovered_positions + presentation_center,
+                expected_recovered,
+                atol=4e-6,
+            )
+            np.testing.assert_allclose(
+                receipt["presentationTransform"]["sourceWorldCenter"],
+                presentation_center,
+                atol=1e-12,
+            )
+            np.testing.assert_allclose(
+                receipt["presentationTransform"]["exportTranslation"],
+                -presentation_center,
+                atol=1e-12,
+            )
+            self.assertEqual(
+                receipt["presentationTransform"]["contract"],
+                "rigid-translation-only-no-shape-change",
+            )
             self.assertEqual(recovered_indices.size, 5673)
             self.assertEqual(document["nodes"][0]["name"], "UNIFORM-INSET RECOVERY")
             self.assertTrue(document["materials"][0]["doubleSided"])
@@ -68,8 +88,8 @@ class HiddenCarrierSurfaceExportTest(unittest.TestCase):
             authored_path = output / "authored-carrier-surface.glb"
             _, authored_positions, authored_indices = primitive_arrays(authored_path)
             np.testing.assert_allclose(
-                authored_positions,
-                load_glb_surface(SOURCE)["positions"],
+                authored_positions + presentation_center,
+                authored_world,
                 atol=4e-6,
             )
             np.testing.assert_array_equal(recovered_indices, authored_indices)
@@ -77,7 +97,11 @@ class HiddenCarrierSurfaceExportTest(unittest.TestCase):
             observed_path = output / "synthetic-coat-surface.glb"
             _, observed_positions, observed_indices = primitive_arrays(observed_path)
             expected_observed = np.load(ASSAY / "observation.npz")["observedPositions"]
-            np.testing.assert_allclose(observed_positions, expected_observed, atol=4e-6)
+            np.testing.assert_allclose(
+                observed_positions + presentation_center,
+                expected_observed,
+                atol=4e-6,
+            )
             np.testing.assert_array_equal(recovered_indices, observed_indices)
 
             comparison_path = output / "carrier-coat-recovery-comparison.glb"
