@@ -34,6 +34,8 @@ SCHEMA = "kaminos.authored-cat-hidden-carrier-assay.v0"
 ROUTE = "cpu-numpy-authored-cat-hidden-carrier-v0"
 RECOVERY_ARM = "uniform-inset-negative-control-v0"
 BACKEND = "python-numpy-cpu"
+UNIFORM_INSET_AUTHORITY = "assay-author-explicit-config"
+UNIFORM_INSET_CALIBRATION = "fixture-author-selected-from-prior-authored-truth-depth-summary"
 KNOWN_OUTPUTS = ("observation.npz", "recovered-carrier.npz")
 
 
@@ -95,12 +97,50 @@ def _implementation_identity(repo_root):
     return identities
 
 
-def _repo_locator_or_absolute(path, repo_root):
+def _public_path_locator(path, repo_root=None):
     path = Path(path).resolve()
-    try:
-        return path.relative_to(Path(repo_root).resolve()).as_posix()
-    except ValueError:
-        return str(path)
+    if repo_root is not None:
+        try:
+            return path.relative_to(Path(repo_root).resolve()).as_posix() or "."
+        except ValueError:
+            pass
+    digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16]
+    return f"external-path:{path.name or 'root'}:{digest}"
+
+
+def _requested_config(
+    *,
+    repo_root,
+    source_path,
+    output_dir,
+    profile,
+    recovery_arm,
+    uniform_inset,
+    route,
+):
+    resolved_root = None
+    if repo_root is not None:
+        resolved_root = Path(repo_root).expanduser().resolve()
+    return {
+        "repoRoot": "." if resolved_root is not None else None,
+        "sourcePath": (
+            _public_path_locator(Path(source_path).expanduser().resolve(), resolved_root)
+            if source_path is not None
+            else None
+        ),
+        "outputDir": (
+            _public_path_locator(Path(output_dir).expanduser().resolve(), resolved_root)
+            if output_dir is not None
+            else None
+        ),
+        "profile": profile,
+        "recoveryArm": recovery_arm,
+        "uniformInset": uniform_inset,
+        "uniformInsetAuthority": UNIFORM_INSET_AUTHORITY,
+        "uniformInsetCalibration": UNIFORM_INSET_CALIBRATION,
+        "route": route,
+        "backend": BACKEND,
+    }
 
 
 def _write_npz(path, **arrays):
@@ -209,7 +249,10 @@ def _finish_report(report_path, state_path, report):
 
 
 def _option_value(argv, option):
+    prefix = f"{option}="
     for index, value in enumerate(argv):
+        if value.startswith(prefix):
+            return value[len(prefix) :]
         if value == option and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
             return argv[index + 1]
     return None
@@ -261,26 +304,23 @@ def run_assay(
     requested_route=ROUTE,
     recovery_arm=RECOVERY_ARM,
 ):
-    requested_repo_root = str(repo_root)
     repo_root = Path(repo_root).expanduser().resolve()
-    requested_source = str(source_path)
     source_path = Path(source_path).expanduser().resolve()
-    requested_output_dir = str(output_dir)
     output_dir = Path(output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "report.json"
     state_path = output_dir / "run-state.json"
     prior_report_sha256 = _sha256(report_path) if report_path.is_file() else None
 
-    requested = {
-        "repoRoot": requested_repo_root,
-        "sourcePath": requested_source,
-        "outputDir": requested_output_dir,
-        "profile": profile,
-        "recoveryArm": recovery_arm,
-        "uniformInset": uniform_inset,
-        "route": requested_route,
-    }
+    requested = _requested_config(
+        repo_root=repo_root,
+        source_path=source_path,
+        output_dir=output_dir,
+        profile=profile,
+        recovery_arm=recovery_arm,
+        uniform_inset=uniform_inset,
+        route=requested_route,
+    )
     execution_id = str(uuid.uuid4())
     started_at = _now()
     report = _base_report(
@@ -289,7 +329,6 @@ def run_assay(
         requested=requested,
         prior_report_sha256=prior_report_sha256,
     )
-    report["implementation"] = _implementation_identity(repo_root)
     phase = "output-initialization"
     _write_json(report_path, report)
     _write_json(
@@ -312,6 +351,9 @@ def run_assay(
             raise AssayFailure(
                 f"could not invalidate prior primaries: {'; '.join(invalidation_failures)}"
             )
+        phase = "implementation-identity"
+        report["implementation"] = _implementation_identity(repo_root)
+        _write_json(report_path, report)
         phase = "route-validation"
         if requested_route != ROUTE:
             raise AssayFailure(
@@ -333,14 +375,12 @@ def run_assay(
             "backend": BACKEND,
             "repoRoot": ".",
             "sourcePath": contract["source"]["path"],
-            "outputDir": _repo_locator_or_absolute(output_dir, repo_root),
+            "outputDir": _public_path_locator(output_dir, repo_root),
             "profile": profile,
             "recoveryArm": recovery_arm,
             "uniformInset": uniform_inset,
-            "uniformInsetAuthority": "assay-author-explicit-config",
-            "uniformInsetCalibration": (
-                "fixture-author-selected-from-prior-authored-truth-depth-summary"
-            ),
+            "uniformInsetAuthority": UNIFORM_INSET_AUTHORITY,
+            "uniformInsetCalibration": UNIFORM_INSET_CALIBRATION,
             "sourceLocator": contract["source"]["path"],
             "sourceSha256": contract["source"]["sha256"],
         }
@@ -439,9 +479,20 @@ def main(argv=None):
         args = parser.parse_args(raw_argv)
     except AssayArgumentError as error:
         reason = str(error)
+        repo_root = _option_value(raw_argv, "--repo-root")
+        source_path = _option_value(raw_argv, "--source")
+        output_dir = _option_value(raw_argv, "--output-dir")
         _argument_failure(
-            output_dir=_option_value(raw_argv, "--output-dir"),
-            requested={"rawArgv": raw_argv},
+            output_dir=output_dir,
+            requested=_requested_config(
+                repo_root=repo_root,
+                source_path=source_path,
+                output_dir=output_dir,
+                profile=_option_value(raw_argv, "--profile"),
+                recovery_arm=_option_value(raw_argv, "--recovery-arm") or RECOVERY_ARM,
+                uniform_inset=_option_value(raw_argv, "--uniform-inset"),
+                route=_option_value(raw_argv, "--route") or ROUTE,
+            ),
             phase="argument-parse",
             reason=reason,
         )
@@ -462,7 +513,15 @@ def main(argv=None):
         reason = f"missing required arguments: {', '.join(missing)}"
         _argument_failure(
             output_dir=args.output_dir,
-            requested=vars(args),
+            requested=_requested_config(
+                repo_root=args.repo_root,
+                source_path=args.source,
+                output_dir=args.output_dir,
+                profile=args.profile,
+                recovery_arm=args.recovery_arm,
+                uniform_inset=args.uniform_inset,
+                route=args.route,
+            ),
             phase="argument-validation",
             reason=reason,
         )

@@ -47,13 +47,30 @@ class HiddenCarrierAssayTest(unittest.TestCase):
             self.assertIsNone(report["failurePhase"])
             self.assertEqual(report["requestedConfig"]["route"], assay.ROUTE)
             self.assertEqual(report["effectiveConfig"]["route"], assay.ROUTE)
-            self.assertEqual(report["requestedConfig"]["sourcePath"], str(SOURCE))
+            self.assertEqual(
+                report["requestedConfig"]["sourcePath"],
+                "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+            )
+            self.assertEqual(report["requestedConfig"]["repoRoot"], ".")
+            self.assertEqual(report["requestedConfig"]["backend"], assay.BACKEND)
+            self.assertEqual(
+                report["requestedConfig"]["uniformInsetAuthority"],
+                "assay-author-explicit-config",
+            )
+            self.assertEqual(
+                report["requestedConfig"]["uniformInsetCalibration"],
+                "fixture-author-selected-from-prior-authored-truth-depth-summary",
+            )
             self.assertEqual(
                 report["effectiveConfig"]["sourcePath"],
                 "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
             )
             self.assertEqual(report["effectiveConfig"]["repoRoot"], ".")
-            self.assertEqual(report["effectiveConfig"]["outputDir"], str(Path(directory).resolve()))
+            self.assertEqual(
+                report["effectiveConfig"]["outputDir"],
+                report["requestedConfig"]["outputDir"],
+            )
+            self.assertTrue(report["effectiveConfig"]["outputDir"].startswith("external-path:"))
             self.assertEqual(
                 report["implementation"]["runner"],
                 {
@@ -200,6 +217,30 @@ class HiddenCarrierAssayTest(unittest.TestCase):
             self.assertEqual(json.loads(stale_report.read_text()), report)
             self.assertFalse((out / "recovered-carrier.npz").exists())
 
+    def test_implementation_identity_failure_replaces_prior_success_and_primaries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / "evidence"
+            out.mkdir()
+            stale_report = out / "report.json"
+            stale_report.write_text('{"status":"captured","terminal":true}\n')
+            prior_sha = sha256(stale_report)
+            (out / "observation.npz").write_bytes(b"stale observation")
+            (out / "recovered-carrier.npz").write_bytes(b"stale recovery")
+            bad_repo_root = root / "not-the-implementation-root"
+            bad_repo_root.mkdir()
+
+            report = self.run_in(out, repo_root=bad_repo_root)
+
+            self.assertEqual(report["status"], "failed")
+            self.assertTrue(report["terminal"])
+            self.assertEqual(report["failurePhase"], "implementation-identity")
+            self.assertEqual(report["priorTerminalReportSha256"], prior_sha)
+            self.assertNotEqual(report["executionId"], "")
+            self.assertFalse((out / "observation.npz").exists())
+            self.assertFalse((out / "recovered-carrier.npz").exists())
+            self.assertEqual(json.loads(stale_report.read_text()), report)
+
     def test_repeated_execution_recomputes_artifacts_and_preserves_prior_receipt_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             first = self.run_in(directory)
@@ -245,6 +286,77 @@ class HiddenCarrierAssayTest(unittest.TestCase):
             self.assertEqual(report["priorTerminalReportSha256"], prior_sha)
             self.assertFalse((out / "observation.npz").exists())
             self.assertFalse((out / "recovered-carrier.npz").exists())
+
+    def test_cli_parse_failure_recovers_equals_form_output_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / "observation.npz").write_bytes(b"stale observation")
+            (out / "recovered-carrier.npz").write_bytes(b"stale recovery")
+            (out / "report.json").write_text('{"status":"captured","terminal":true}\n')
+            prior_sha = sha256(out / "report.json")
+
+            status = assay.main(
+                [
+                    "--repo-root",
+                    str(REPO),
+                    "--source",
+                    str(SOURCE),
+                    f"--output-dir={out}",
+                    "--profile",
+                    "short-v0",
+                    "--uniform-inset",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            report = json.loads((out / "report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "argument-parse")
+            self.assertEqual(report["priorTerminalReportSha256"], prior_sha)
+            self.assertFalse((out / "observation.npz").exists())
+            self.assertFalse((out / "recovered-carrier.npz").exists())
+
+    def test_absolute_requested_paths_publish_portable_complete_identity(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            report = self.run_in(
+                Path(directory).resolve(),
+                repo_root=REPO.resolve(),
+                source_path=SOURCE.resolve(),
+            )
+            serialized = json.dumps(report, sort_keys=True)
+            relative_output = Path(directory).resolve().relative_to(REPO.resolve()).as_posix()
+
+            self.assertNotIn(str(REPO.resolve()), serialized)
+            self.assertEqual(
+                report["requestedConfig"],
+                {
+                    "repoRoot": ".",
+                    "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
+                    "outputDir": relative_output,
+                    "profile": "short-with-medium-scapular-v0",
+                    "recoveryArm": assay.RECOVERY_ARM,
+                    "uniformInset": 0.94,
+                    "uniformInsetAuthority": "assay-author-explicit-config",
+                    "uniformInsetCalibration": (
+                        "fixture-author-selected-from-prior-authored-truth-depth-summary"
+                    ),
+                    "route": assay.ROUTE,
+                    "backend": assay.BACKEND,
+                },
+            )
+            for label in ("requestedConfig", "effectiveConfig"):
+                identity = report[label]
+                for field in (
+                    "sourcePath",
+                    "route",
+                    "backend",
+                    "profile",
+                    "recoveryArm",
+                    "uniformInset",
+                    "uniformInsetAuthority",
+                    "uniformInsetCalibration",
+                ):
+                    self.assertIn(field, identity)
 
 
 if __name__ == "__main__":

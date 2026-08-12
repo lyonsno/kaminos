@@ -9,16 +9,16 @@ This is the first durable numerical evidence transaction for the authored-cat hi
 - Source vertices: `3764`
 - Profile: `short-with-medium-scapular-v0`
 - Requested/effective route: `cpu-numpy-authored-cat-hidden-carrier-v0`
-- Effective backend: `python-numpy-cpu`
+- Requested/effective backend: `python-numpy-cpu`
 - Recovery arm: `uniform-inset-negative-control-v0`
 - Uniform inset: `0.94`
 - Calibration authority: assay-author-selected from the prior authored-truth depth summary; this is not a solver-inferred depth.
-- Terminal execution: `0aea5323-c5b0-459c-902e-78b9bef4805d`
-- Terminal report SHA-256: `bd961f0801192f6bef2058a72c28460c1a5e84e518e56775233810e631c57697`
-- Runner SHA-256: `e4c040fc98e0ff07c3246bff13e46ca745303ecddb6171f9dd22f964db155bcb`
+- Terminal execution: `ebaa8d02-9246-45f1-84f2-139000a11465`
+- Terminal report SHA-256: `37c8c15bc261bbf92c39db001020a5d4bc0c85659e3191c0029f46c1e2ddaf05`
+- Runner SHA-256: `0bec690cfda3d3eeea57e624f0cbd1c1867d3127dd8eef1ecea8b55b367b2fa6`
 - Fixture implementation SHA-256: `9e6b0f2a1773d716152dbc92c89e3e668fa4ec4fa39243a827ca72c1143e5509`
 
-The terminal report records prior terminal digest `6dae2494ef1680bf320a71b2be80e21e16eacab91839d9c0e794810f743ff408`. That earlier local transaction was superseded after an unremovable stale-primary path exposed a pre-receipt false-closure risk. The terminal execution recomputed the primaries after the receipt-first invalidation repair; it did not accept the earlier files as cached evidence.
+The terminal report records prior terminal digest `bd961f0801192f6bef2058a72c28460c1a5e84e518e56775233810e631c57697`. The terminal execution recomputed both primaries after the fresh-review corrections; it did not accept the prior files as cached evidence. Requested repository-local paths are now stable public locators, and requested backend and inset-calibration identity are explicit beside the effective values.
 
 ## Result
 

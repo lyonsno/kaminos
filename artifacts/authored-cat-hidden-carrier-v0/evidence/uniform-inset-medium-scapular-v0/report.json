@@ -51,9 +51,9 @@
     "uniformInsetAuthority": "assay-author-explicit-config",
     "uniformInsetCalibration": "fixture-author-selected-from-prior-authored-truth-depth-summary"
   },
-  "executionId": "0aea5323-c5b0-459c-902e-78b9bef4805d",
+  "executionId": "ebaa8d02-9246-45f1-84f2-139000a11465",
   "failurePhase": null,
-  "finishedAt": "2026-08-12T08:09:31.476356Z",
+  "finishedAt": "2026-08-12T12:45:04.278363Z",
   "implementation": {
     "fixture": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_fixture.py",
@@ -61,7 +61,7 @@
     },
     "runner": {
       "path": "artifacts/authored-cat-hidden-carrier-v0/hidden_carrier_assay.py",
-      "sha256": "e4c040fc98e0ff07c3246bff13e46ca745303ecddb6171f9dd22f964db155bcb"
+      "sha256": "0bec690cfda3d3eeea57e624f0cbd1c1867d3127dd8eef1ecea8b55b367b2fa6"
     }
   },
   "lastTrustworthyEvidence": {
@@ -90,16 +90,19 @@
     },
     "rmse": 0.2508719729407156
   },
-  "priorTerminalReportSha256": "6dae2494ef1680bf320a71b2be80e21e16eacab91839d9c0e794810f743ff408",
+  "priorTerminalReportSha256": "bd961f0801192f6bef2058a72c28460c1a5e84e518e56775233810e631c57697",
   "reason": null,
   "requestedConfig": {
+    "backend": "python-numpy-cpu",
     "outputDir": "artifacts/authored-cat-hidden-carrier-v0/evidence/uniform-inset-medium-scapular-v0",
     "profile": "short-with-medium-scapular-v0",
     "recoveryArm": "uniform-inset-negative-control-v0",
     "repoRoot": ".",
     "route": "cpu-numpy-authored-cat-hidden-carrier-v0",
     "sourcePath": "artifacts/registration-consumer-v0/inputs/authored_cat_envelope.glb",
-    "uniformInset": 0.94
+    "uniformInset": 0.94,
+    "uniformInsetAuthority": "assay-author-explicit-config",
+    "uniformInsetCalibration": "fixture-author-selected-from-prior-authored-truth-depth-summary"
   },
   "schema": "kaminos.authored-cat-hidden-carrier-assay.v0",
   "source": {
@@ -114,7 +117,7 @@
     "sha256": "cf5a6ba393d40c29171d97b0e8b506d450623f3d37c079e3874371d70f296a4e",
     "vertexCount": 3764
   },
-  "startedAt": "2026-08-12T08:09:31.461505Z",
+  "startedAt": "2026-08-12T12:45:04.266110Z",
   "status": "captured",
   "terminal": true,
   "truthIsolation": {
