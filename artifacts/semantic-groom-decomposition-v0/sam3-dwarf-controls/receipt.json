@@ -1,0 +1,482 @@
+{
+  "boxes": null,
+  "detections": [
+    {
+      "box": [
+        346.3198547363281,
+        169.60568237304688,
+        544.7271728515625,
+        451.7435607910156
+      ],
+      "index": 22,
+      "label": "long braided beard",
+      "mask_pixels": 21678,
+      "score": 0.8743876814842224
+    },
+    {
+      "box": [
+        194.84092712402344,
+        135.42816162109375,
+        806.0885009765625,
+        858.3775634765625
+      ],
+      "index": 18,
+      "label": "shaggy fur cloak",
+      "mask_pixels": 120028,
+      "score": 0.7901256680488586
+    },
+    {
+      "box": [
+        466.1734313964844,
+        467.6054382324219,
+        559.4390258789062,
+        562.2332763671875
+      ],
+      "index": 55,
+      "label": "leather belt and pouch",
+      "mask_pixels": 5177,
+      "score": 0.7779146432876587
+    },
+    {
+      "box": [
+        289.4696044921875,
+        441.7773742675781,
+        410.63287353515625,
+        627.9458618164062
+      ],
+      "index": 56,
+      "label": "leather belt and pouch",
+      "mask_pixels": 7342,
+      "score": 0.7269274592399597
+    },
+    {
+      "box": [
+        308.3192138671875,
+        450.2024841308594,
+        393.36993408203125,
+        551.2153930664062
+      ],
+      "index": 57,
+      "label": "leather belt and pouch",
+      "mask_pixels": 4019,
+      "score": 0.7096013426780701
+    },
+    {
+      "box": [
+        378.65234375,
+        46.809383392333984,
+        579.5053100585938,
+        235.20208740234375
+      ],
+      "index": 29,
+      "label": "metal armor",
+      "mask_pixels": 11781,
+      "score": 0.7072188854217529
+    },
+    {
+      "box": [
+        343.849365234375,
+        162.35763549804688,
+        547.4947509765625,
+        452.5128173828125
+      ],
+      "index": 23,
+      "label": "hair",
+      "mask_pixels": 22112,
+      "score": 0.6975248456001282
+    },
+    {
+      "box": [
+        348.1535339355469,
+        175.37550354003906,
+        548.963623046875,
+        452.43536376953125
+      ],
+      "index": 19,
+      "label": "beard",
+      "mask_pixels": 21540,
+      "score": 0.6949611306190491
+    },
+    {
+      "box": [
+        417.5971374511719,
+        146.4875946044922,
+        523.396728515625,
+        206.227294921875
+      ],
+      "index": 97,
+      "label": "exposed face and hand",
+      "mask_pixels": 3155,
+      "score": 0.6649761199951172
+    },
+    {
+      "box": [
+        563.6139526367188,
+        450.7200927734375,
+        624.9796752929688,
+        505.4654846191406
+      ],
+      "index": 58,
+      "label": "leather belt and pouch",
+      "mask_pixels": 1719,
+      "score": 0.6582675576210022
+    },
+    {
+      "box": [
+        192.05990600585938,
+        134.59310913085938,
+        806.6731567382812,
+        858.9119873046875
+      ],
+      "index": 0,
+      "label": "fur",
+      "mask_pixels": 104449,
+      "score": 0.6119460463523865
+    },
+    {
+      "box": [
+        354.5184020996094,
+        423.146484375,
+        607.0020141601562,
+        570.3492431640625
+      ],
+      "index": 59,
+      "label": "leather belt and pouch",
+      "mask_pixels": 8718,
+      "score": 0.6083143353462219
+    },
+    {
+      "box": [
+        368.8131103515625,
+        177.26220703125,
+        546.4191284179688,
+        324.2193298339844
+      ],
+      "index": 20,
+      "label": "beard",
+      "mask_pixels": 12288,
+      "score": 0.6026939749717712
+    },
+    {
+      "box": [
+        346.16497802734375,
+        132.63482666015625,
+        548.076904296875,
+        458.9560546875
+      ],
+      "index": 98,
+      "label": "exposed face and hand",
+      "mask_pixels": 22352,
+      "score": 0.5346842408180237
+    },
+    {
+      "box": [
+        615.7056274414062,
+        368.20721435546875,
+        735.9303588867188,
+        535.2843017578125
+      ],
+      "index": 30,
+      "label": "metal armor",
+      "mask_pixels": 8533,
+      "score": 0.5157807469367981
+    },
+    {
+      "box": [
+        354.8057861328125,
+        429.3229675292969,
+        603.1199951171875,
+        473.8188171386719
+      ],
+      "index": 60,
+      "label": "leather belt and pouch",
+      "mask_pixels": 6802,
+      "score": 0.4449891149997711
+    },
+    {
+      "box": [
+        405.3848571777344,
+        433.15533447265625,
+        475.7035217285156,
+        568.3161010742188
+      ],
+      "index": 61,
+      "label": "leather belt and pouch",
+      "mask_pixels": 3705,
+      "score": 0.42227429151535034
+    },
+    {
+      "box": [
+        492.8707275390625,
+        313.3180847167969,
+        611.7505493164062,
+        416.168701171875
+      ],
+      "index": 62,
+      "label": "leather belt and pouch",
+      "mask_pixels": 2939,
+      "score": 0.39639195799827576
+    },
+    {
+      "box": [
+        326.8757629394531,
+        286.8507995605469,
+        619.953857421875,
+        443.7759094238281
+      ],
+      "index": 31,
+      "label": "metal armor",
+      "mask_pixels": 12068,
+      "score": 0.3825799524784088
+    },
+    {
+      "box": [
+        255.99078369140625,
+        161.2431182861328,
+        751.4692993164062,
+        672.6828002929688
+      ],
+      "index": 32,
+      "label": "metal armor",
+      "mask_pixels": 46463,
+      "score": 0.3766734004020691
+    },
+    {
+      "box": [
+        284.2477722167969,
+        795.671630859375,
+        379.4932861328125,
+        855.1538696289062
+      ],
+      "index": 63,
+      "label": "leather belt and pouch",
+      "mask_pixels": 1644,
+      "score": 0.3703806698322296
+    },
+    {
+      "box": [
+        184.31881713867188,
+        45.4412956237793,
+        300.68475341796875,
+        127.28724670410156
+      ],
+      "index": 99,
+      "label": "exposed face and hand",
+      "mask_pixels": 5002,
+      "score": 0.3659789264202118
+    },
+    {
+      "box": [
+        437.6580505371094,
+        232.3026123046875,
+        537.237060546875,
+        459.1586608886719
+      ],
+      "index": 24,
+      "label": "hair",
+      "mask_pixels": 7445,
+      "score": 0.34674298763275146
+    },
+    {
+      "box": [
+        556.63623046875,
+        291.90765380859375,
+        719.06640625,
+        358.2405090332031
+      ],
+      "index": 33,
+      "label": "metal armor",
+      "mask_pixels": 4819,
+      "score": 0.3429981768131256
+    },
+    {
+      "box": [
+        286.4248962402344,
+        665.9830322265625,
+        407.39935302734375,
+        730.275634765625
+      ],
+      "index": 34,
+      "label": "metal armor",
+      "mask_pixels": 3042,
+      "score": 0.31891846656799316
+    },
+    {
+      "box": [
+        323.5729675292969,
+        144.09933471679688,
+        552.6102905273438,
+        460.0418701171875
+      ],
+      "index": 1,
+      "label": "fur",
+      "mask_pixels": 21600,
+      "score": 0.3139789402484894
+    },
+    {
+      "box": [
+        496.1918029785156,
+        709.4511108398438,
+        622.6578369140625,
+        744.984130859375
+      ],
+      "index": 35,
+      "label": "metal armor",
+      "mask_pixels": 2286,
+      "score": 0.3095185458660126
+    },
+    {
+      "box": [
+        547.5831909179688,
+        287.48248291015625,
+        751.4851684570312,
+        533.63037109375
+      ],
+      "index": 36,
+      "label": "metal armor",
+      "mask_pixels": 15986,
+      "score": 0.2937527894973755
+    },
+    {
+      "box": [
+        347.9259338378906,
+        469.8672180175781,
+        478.302490234375,
+        683.6867065429688
+      ],
+      "index": 37,
+      "label": "metal armor",
+      "mask_pixels": 8504,
+      "score": 0.28853780031204224
+    },
+    {
+      "box": [
+        255.63217163085938,
+        157.65997314453125,
+        623.0504760742188,
+        443.5396423339844
+      ],
+      "index": 38,
+      "label": "metal armor",
+      "mask_pixels": 14367,
+      "score": 0.2865588366985321
+    },
+    {
+      "box": [
+        435.37420654296875,
+        454.5564880371094,
+        469.44146728515625,
+        564.55517578125
+      ],
+      "index": 64,
+      "label": "leather belt and pouch",
+      "mask_pixels": 1808,
+      "score": 0.2771822214126587
+    },
+    {
+      "box": [
+        334.2271423339844,
+        191.0675048828125,
+        454.9490966796875,
+        456.92919921875
+      ],
+      "index": 25,
+      "label": "hair",
+      "mask_pixels": 6684,
+      "score": 0.27556779980659485
+    }
+  ],
+  "duration_s": 10.313385009765625,
+  "effective_model_path": "/Users/noahlyons/dev/scripts/quant/models/sam3.1-bf16",
+  "effective_predict_multi": "sam3_1.generate.predict_multi",
+  "effective_processor": "sam3_1.Sam31Processor",
+  "finished_at": 1786495608.913821,
+  "image": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/trellis-official-fine-fur-conformance-v0/source/official-dwarf-fur-cloak.webp",
+  "image_size": [
+    932,
+    932
+  ],
+  "max_results": 32,
+  "model": "/Users/noahlyons/dev/scripts/quant/models/sam3.1-bf16",
+  "ok": true,
+  "outputs": {
+    "cutout_00": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-00.png",
+    "cutout_01": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-01.png",
+    "cutout_02": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-02.png",
+    "cutout_03": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-03.png",
+    "cutout_04": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-04.png",
+    "cutout_05": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-05.png",
+    "cutout_06": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-06.png",
+    "cutout_07": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-07.png",
+    "cutout_08": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-08.png",
+    "cutout_09": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-09.png",
+    "cutout_10": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-10.png",
+    "cutout_11": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-11.png",
+    "cutout_12": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-12.png",
+    "cutout_13": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-13.png",
+    "cutout_14": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-14.png",
+    "cutout_15": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-15.png",
+    "cutout_16": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-16.png",
+    "cutout_17": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-17.png",
+    "cutout_18": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-18.png",
+    "cutout_19": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-19.png",
+    "cutout_20": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-20.png",
+    "cutout_21": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-21.png",
+    "cutout_22": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-22.png",
+    "cutout_23": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-23.png",
+    "cutout_24": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-24.png",
+    "cutout_25": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-25.png",
+    "cutout_26": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-26.png",
+    "cutout_27": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-27.png",
+    "cutout_28": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-28.png",
+    "cutout_29": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-29.png",
+    "cutout_30": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-30.png",
+    "cutout_31": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/cutout-31.png",
+    "mask_00": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-00.png",
+    "mask_01": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-01.png",
+    "mask_02": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-02.png",
+    "mask_03": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-03.png",
+    "mask_04": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-04.png",
+    "mask_05": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-05.png",
+    "mask_06": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-06.png",
+    "mask_07": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-07.png",
+    "mask_08": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-08.png",
+    "mask_09": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-09.png",
+    "mask_10": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-10.png",
+    "mask_11": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-11.png",
+    "mask_12": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-12.png",
+    "mask_13": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-13.png",
+    "mask_14": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-14.png",
+    "mask_15": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-15.png",
+    "mask_16": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-16.png",
+    "mask_17": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-17.png",
+    "mask_18": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-18.png",
+    "mask_19": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-19.png",
+    "mask_20": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-20.png",
+    "mask_21": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-21.png",
+    "mask_22": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-22.png",
+    "mask_23": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-23.png",
+    "mask_24": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-24.png",
+    "mask_25": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-25.png",
+    "mask_26": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-26.png",
+    "mask_27": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-27.png",
+    "mask_28": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-28.png",
+    "mask_29": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-29.png",
+    "mask_30": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-30.png",
+    "mask_31": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/mask-31.png",
+    "overlay": "/private/tmp/molten-semantic-groom-sam-dwarf-v0/overlay.png"
+  },
+  "phase": "complete",
+  "prompt": [
+    "fur",
+    "shaggy fur cloak",
+    "beard",
+    "long braided beard",
+    "hair",
+    "metal armor",
+    "leather belt and pouch",
+    "exposed face and hand"
+  ],
+  "started_at": 1786495598.600436,
+  "threshold": 0.1
+}
