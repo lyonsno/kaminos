@@ -1,0 +1,48 @@
+{
+  "schema": "kaminos.explicit-response-shell-assay.v0",
+  "id": "bounded-hindquarter-explicit-response-shell-v0",
+  "sourceAssayHash": "eb23f78ae2a8692431b923798068411b77cd1a36756da8fa0229fc3454e4ff66",
+  "targetRef": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "targetIdentity": {
+    "id": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
+    "sha256": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6"
+  },
+  "construction": {
+    "baselineField": "baseline",
+    "independentResponseFields": ["muscleTension", "fatDistribution"],
+    "heldOutEvaluationField": "combined",
+    "referenceAmplitude": 0.1,
+    "radialSegments": 48,
+    "surfaceFormationId": "fixed-topology-elliptical-station-response-shell-v0",
+    "interiorCarrierId": "labeled-anisotropic-components-v0"
+  },
+  "controls": {
+    "muscle-tension": {
+      "sourceField": "muscleTension",
+      "targetTissueId": "muscle"
+    },
+    "fat-distribution": {
+      "sourceField": "fatDistribution",
+      "targetTissueId": "fat"
+    }
+  },
+  "amplitudes": [0.1, 0.25, 0.5],
+  "evaluation": {
+    "maximumIndependentFullSurfaceNormalizedRmse": 0.005,
+    "maximumCombinedFullSurfaceNormalizedRmse": 0.005,
+    "requireClosedSingleComponent": true,
+    "requireStableVertexIdentity": true,
+    "requireHeldOutConstructionInvariance": true
+  },
+  "claimCeiling": "A fixed-topology explicit response shell may preserve two independently authored semantic responses and their held-out additive combination on one bounded synthetic fixture only.",
+  "counterfeits": [
+    "combined-target-used-during-shell-construction",
+    "independent-response-rows-regenerated-from-combined-target",
+    "vertex-identity-or-topology-changes-between-states",
+    "clipped-stress-reference-mesh-used-as-construction-source",
+    "unlabeled-displacement-basis-presented-as-tissue-attribution",
+    "held-out-target-mutation-changes-compiled-shell",
+    "nonadditive-skin-mechanics-inferred-from-additive-source-rows"
+  ],
+  "promotion": "none"
+}

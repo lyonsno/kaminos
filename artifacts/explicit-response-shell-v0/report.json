@@ -1,0 +1,112 @@
+{
+  "schema": "kaminos.explicit-response-shell-artifact-report.v0",
+  "status": "completed",
+  "generationId": "36d601d9-3593-4804-847a-31372939e759",
+  "requestedRouteId": "bounded-hindquarter-explicit-response-shell-v0",
+  "effectiveRouteId": "bounded-hindquarter-explicit-response-shell-v0",
+  "requestedAssayCardPath": "fixtures/analytical-tissue/explicit-response-shell-assay.v0.json",
+  "requestedTargetPath": "fixtures/analytical-tissue/overlapping-hindquarter-tissue-target.v0.json",
+  "effectiveAssayCardId": "bounded-hindquarter-explicit-response-shell-v0",
+  "effectiveAssayCardHash": "8a1340aabd752501101f7b5f1ff15cfb9d15622c2c8f3d355e418551b35c96db",
+  "effectiveTargetId": "bounded-hindquarter-overlapping-muscle-fat-response-v0",
+  "effectiveTargetHash": "f20e3244f8f243514e62ae418bcd06b04f599e3daa6b4108e98b02ca9c0112e6",
+  "effectiveCompilerId": "fixed-topology-elliptical-station-response-shell-v0",
+  "constructionProjectionHash": "0af3339501b8af70f3b51bd97e219244049e182d74684b2d03461d8a917b6e58",
+  "assayHash": "307e94d281750690f24d4ff0a85a7cb5d8df87f81f45fb1ed9f49e238e6ef33d",
+  "evidencePassed": true,
+  "hypothesisPassed": true,
+  "outputs": [
+    {
+      "relativePath": "candidate-baseline.obj",
+      "sha256": "02313f5c8e913684ff05b27dfcac2cdb1d19c76a7ac43536660aa85355ad7c2e"
+    },
+    {
+      "relativePath": "candidate-muscle-tension_0.1.obj",
+      "sha256": "1b1120e9727c65527d1a379fbb57ec9ecc5e6e26d3c7e8ee4349b705abeb8128"
+    },
+    {
+      "relativePath": "candidate-fat-distribution_0.1.obj",
+      "sha256": "2fb1bcc3fa172ef60f7099d0207dd781f2b41bb3dbe88322885332e9244a3427"
+    },
+    {
+      "relativePath": "candidate-combined_0.1.obj",
+      "sha256": "16951a950257bcfc0f216c0043cf4eac7971ff7066815c6dd723926e2866f143"
+    },
+    {
+      "relativePath": "candidate-muscle-tension_0.25.obj",
+      "sha256": "e01bc28dd6cdeb50cba395238a1c110ac8c2390115e00a6478ed0be5f78f9247"
+    },
+    {
+      "relativePath": "candidate-fat-distribution_0.25.obj",
+      "sha256": "8ddb1cf15d56b06fd023523f939947ec40b9323fc117b6ce71b7897ddc60ac6e"
+    },
+    {
+      "relativePath": "candidate-combined_0.25.obj",
+      "sha256": "fe4084febc16b64823b6a6b30c48a2bb77b84700585b47fff3e17c951dd3ca4c"
+    },
+    {
+      "relativePath": "candidate-muscle-tension_0.5.obj",
+      "sha256": "b4009a42c559f5389ea75b8cc8240b1bd2d90d61589fc39c63b39ac64587da03"
+    },
+    {
+      "relativePath": "candidate-fat-distribution_0.5.obj",
+      "sha256": "136c62b264eb3fc50f98b0f0d1657c235709931f69b79b4a9f39368c15c73a42"
+    },
+    {
+      "relativePath": "candidate-combined_0.5.obj",
+      "sha256": "3979ba06f5d255631638fa02bb7d8c350b10ddcaeb43648c1f0eb8f83a866695"
+    },
+    {
+      "relativePath": "reference-baseline.obj",
+      "sha256": "dd8b5a564ef5fedf5783d87e24149b8b01296ddd4eb784dd46a7c831951fd96d"
+    },
+    {
+      "relativePath": "reference-muscle-tension_0.1.obj",
+      "sha256": "910d4bbb719789066b27a439b79463f4f6962e1d44d089101c5c728fb76849fb"
+    },
+    {
+      "relativePath": "reference-fat-distribution_0.1.obj",
+      "sha256": "a50dabebb2f77e183ef91a58ed11b5f64d3034b5133d160483be946e4043b908"
+    },
+    {
+      "relativePath": "reference-combined_0.1.obj",
+      "sha256": "8941eb1f2c129cf6df84af6aa4e62bb4901e56f529ef50bf9e54ce3d51d3efdc"
+    },
+    {
+      "relativePath": "reference-muscle-tension_0.25.obj",
+      "sha256": "a97e312b621c26eee4c2e54898a54a46db71fb1b24ef3ea30d4b4b031dd0952b"
+    },
+    {
+      "relativePath": "reference-fat-distribution_0.25.obj",
+      "sha256": "2c1b8f5664caf219ef4687e45a6a4213c8e52d7d8e1087278c5dc6db75b043d0"
+    },
+    {
+      "relativePath": "reference-combined_0.25.obj",
+      "sha256": "e0747fdb0057e3b1c181a1018451001f3a429f56f0ba2cb7004a0d4edb38cd8a"
+    },
+    {
+      "relativePath": "reference-muscle-tension_0.5.obj",
+      "sha256": "debf636b90bfff6a37ee27a273ebd392cb5c5a840826c4d06375904942c210ac"
+    },
+    {
+      "relativePath": "reference-fat-distribution_0.5.obj",
+      "sha256": "c5c25e49ac737ebdd50ad370fcbbe67db7b5303168200d1f6582bf9f7b50d232"
+    },
+    {
+      "relativePath": "reference-combined_0.5.obj",
+      "sha256": "4ee9ad634137c1b6e719671dafe2d78cabb93422878c1171f7d50fc0bb7dcadd"
+    },
+    {
+      "relativePath": "causal-null.obj",
+      "sha256": "28efdc25ccf57746ed2541dce7d891b3f4be78673ea586f9e75ceabd977bf17e"
+    },
+    {
+      "relativePath": "assay.json",
+      "sha256": "827622da3ac3a321c745b07f784b80ca78437f39bf1d905867b9c067434b139d"
+    },
+    {
+      "relativePath": "contact-sheet.svg",
+      "sha256": "ab353d0db208cfffbf097b3ccf13168e9c485b7fb43fc41aaba8d154907a40a0"
+    }
+  ]
+}
