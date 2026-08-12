@@ -862,8 +862,9 @@ export function buildTargetSdfFullSurfaceSweep({ sweepCard, assayCard, target } 
         role: row.role,
         requestedCompilerId: row.requestedCompilerId,
         effectiveCompilerId: row.effectiveCompilerId,
-        requestedExtractorId: row.requestedExtractorId,
-        effectiveExtractorId: row.effectiveExtractorId,
+        sourceRowExtractorId: row.effectiveExtractorId,
+        requestedExtractorId: sweepCard.extractorId,
+        effectiveExtractorId: sweepCard.extractorId,
         identityMode: row.identityMode,
         controlComplexity: {
           primitiveCount: baselinePrimitives(

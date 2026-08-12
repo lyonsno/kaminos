@@ -180,6 +180,16 @@ test('target-SDF sweep produces primary full-surface evidence and mesh-derived s
     assert.equal(amplitude.reference.topology.closed, true);
     assert.equal(amplitude.reference.topology.componentCount, 1);
     for (const row of amplitude.rows) {
+      assert.equal(
+        row.requestedExtractorId,
+        fullSurfaceCard.extractorId,
+        `${row.id} must request the sweep extractor rather than inherit a historical row label`,
+      );
+      assert.equal(
+        row.effectiveExtractorId,
+        fullSurfaceCard.extractorId,
+        `${row.id} must report the extraction implementation actually consumed by the sweep`,
+      );
       assert.ok(Number.isFinite(row.fullSurface.normalizedRmse), row.id);
       assert.ok(Number.isFinite(row.fullSurface.maximumNormalizedError), row.id);
       assert.ok(row.fullSurface.sampledTriangleCount > 100, row.id);
