@@ -1,8 +1,8 @@
 {
   "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
   "status": "passed-agent-inspection",
-  "observedAt": "2026-08-12T05:33:54.870Z",
-  "summary": "Reinspected the exact source-bound seven-state volume/slice witness after P2 repair. The gross cold failure remains distinct; the all-neighbor state removes coordinate-floor pair debt while retaining visible skeletal and compartment residual markers.",
+  "observedAt": "2026-08-12T08:32:32.576Z",
+  "summary": "Seven corrected row-authority states inspected in transparent volume and opaque slices. The scalar step lowers the compiled-row maximum while its higher skeletal debt remains numerically and visually marked; fixed attachments, stable member identities, and residual wall/bone debt remain legible.",
   "verdict": {
     "nonblank": true,
     "orbitable": true,
@@ -30,229 +30,229 @@
       "state": "pass-crowded",
       "mode": "volume",
       "png": "pass-crowded-volume.png",
-      "pngSha256": "58eed431d30ad288c3d0df15e69ed71439b58ad245c897d288d153c9fc1f1ef1",
+      "pngSha256": "4d4b63ed46d5d95937b5ae907bedb81b8cd05b6807a15da5be4ac96e92860fef",
       "captureReport": "pass-crowded-volume-capture-report.json",
-      "captureReportSha256": "2820511a8bed85b6104d9915c86dbf0b7a624893643f45f0e95495f2acc43bc3",
+      "captureReportSha256": "75aad5205f6c65dfe035d2d8e42bd2629623a4e8f92dc59e4017767e2eddeea9",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "pass-crowded",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "pass-crowded",
       "mode": "slice",
       "png": "pass-crowded-slice.png",
-      "pngSha256": "f0822631d81e0a50543cf9bb8b816766a5065763c15f483ccf18264f93f43f95",
+      "pngSha256": "5e44c49bc7faedcf37b4dd0908992e924c7aa8a472e7e815828cf2b6e1b2ecca",
       "captureReport": "pass-crowded-slice-capture-report.json",
-      "captureReportSha256": "cf8d4c5e2f22a61a8b743ee191696856290fd74d56890d9d5625441c4defa830",
+      "captureReportSha256": "22af461056d6fb2f67f81d0a2c337a92e1760ddcb6a5e0e749aa594ede26a281",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "pass-crowded",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "last-pass",
       "mode": "volume",
       "png": "last-pass-volume.png",
-      "pngSha256": "49d6c158f7bb726afe0f8765a480167ea29f864e31631926e2d7f902c0f12849",
+      "pngSha256": "284971ccaa9bdef529b6722b3eeafd73143acc4d06ee0263c52ff556e9a6822d",
       "captureReport": "last-pass-volume-capture-report.json",
-      "captureReportSha256": "1925a933064d8fa457199ca41abb75da71133a9874ff272d3c777e82c00e1f50",
+      "captureReportSha256": "356a8505143a11ab105604634677939e578268239317bbe8f72584b4a60a9067",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "last-pass",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "last-pass",
       "mode": "slice",
       "png": "last-pass-slice.png",
-      "pngSha256": "67e82589b6eeb1a9367ea9acfb5e3ec2ef157e91548a2eda8c4ca070d98677b6",
+      "pngSha256": "07d62bcef82d5184a76f5da54ab6b5d6f1f99376f2de32b0a814ad30b6771853",
       "captureReport": "last-pass-slice-capture-report.json",
-      "captureReportSha256": "7457b5ac616099a6c1dfd53802396c6c61d70c578c11829bfc7b50e85cbd5e72",
+      "captureReportSha256": "dc27a3a2188d84bf17f3c77403e997c03e5315757178687fb981d432a65edf62",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "last-pass",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "fail-crowded",
       "mode": "volume",
       "png": "fail-crowded-volume.png",
-      "pngSha256": "38c9322ab8a64e2436e2e6c0786f4d48b6f03503ade312cbf3719458224122d7",
+      "pngSha256": "0d8826be200b178b0bd8c4000d861dc781279286cb8f54ab186b1b89e3e3a9c3",
       "captureReport": "fail-crowded-volume-capture-report.json",
-      "captureReportSha256": "61e28e31a7b0fe67f6957bfdbceb96def14f053c7c40813308fbbce44fea8183",
+      "captureReportSha256": "f6a1d451f52beeddb908752eb206ec308252dca3da0b5094dd3e88efdeeba4d2",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "fail-crowded",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "fail-crowded",
       "mode": "slice",
       "png": "fail-crowded-slice.png",
-      "pngSha256": "d6ded5674827cb69849ac1f06255b25d82ad1deb5a4a735aecf7cb99d2e4fbfc",
+      "pngSha256": "54f7d2efc69a23ae2491fba42395159f33ec483571aa866b2e84dbb001adb166",
       "captureReport": "fail-crowded-slice-capture-report.json",
-      "captureReportSha256": "587c0a4f9f2b92c81ecb1bec456292bed4f82906d78aedf8354f0cfb5ca6aa77",
+      "captureReportSha256": "63fd31d7365814f22645484946139d2426e8c8b3174df43cb1fd7433fd34ed83",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "fail-crowded",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "first-fail",
       "mode": "volume",
       "png": "first-fail-volume.png",
-      "pngSha256": "677cc0551a1c7599e9e8b5fc412001f122a6f3a82424fd4d6eb7895c7d8328da",
+      "pngSha256": "ab1c5ef3407bcb38fe6ef712a77ba6158c362b122a498eed1b9672f130e5837a",
       "captureReport": "first-fail-volume-capture-report.json",
-      "captureReportSha256": "ab311e8af3317845af12b09443e1397ca5c7241f9f4884235bed99ec85b685c4",
+      "captureReportSha256": "11fa36e6d26382c2221edd5519c698233934e7a95bfefdc4ce65657d08e7ddda",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "first-fail",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "first-fail",
       "mode": "slice",
       "png": "first-fail-slice.png",
-      "pngSha256": "fc4c9b863da2e7b18e62bba1c41f786ab6b4f4a20dd215dd3d828ecbf0c70f98",
+      "pngSha256": "52b19089098c257b9c8d477bd240574c600a52fef77a221d56045f5f2ec48363",
       "captureReport": "first-fail-slice-capture-report.json",
-      "captureReportSha256": "07e5c730de4bd5b18c2db2b3e7bed74b60eca252c4ee1e0f0e5ebbbcd350e6dc",
+      "captureReportSha256": "61d67643f90d23dbdcd7366434839c0fbdc5175e2dc344fad6ef3b7ad9edeffa",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "first-fail",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "same-basis-feasible",
       "mode": "volume",
       "png": "same-basis-feasible-volume.png",
-      "pngSha256": "543f690be89a01abe05e2e72ef3867efb1553aa6613848b7799ec6c7ca620895",
+      "pngSha256": "14f5e1553a216b27cfbd156f60bed5309994e8936c961e267cf1d38cc420d1f0",
       "captureReport": "same-basis-feasible-volume-capture-report.json",
-      "captureReportSha256": "f9b702601f09d2aa94887b12786ccf3536b6c0b83e88e6bfeafcd7891c018682",
+      "captureReportSha256": "dc30130b32ceec272c569ea28c22263026dadc9a5b795251d7eb6e5876b51c4d",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "same-basis-feasible",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "same-basis-feasible",
       "mode": "slice",
       "png": "same-basis-feasible-slice.png",
-      "pngSha256": "a93241f8131d855f7093a86a81b97924f40a60d4f367118e0e2c49f7f912925b",
+      "pngSha256": "5d6c9fb897b35a168727c0b338b7d1d1a207354bb336fcb5215bb0f385b89ffe",
       "captureReport": "same-basis-feasible-slice-capture-report.json",
-      "captureReportSha256": "04f25bd82bc621c04b97085fdd76a3fcb074d9e1255d149fdbc34215eed4b0c3",
+      "captureReportSha256": "a6118ab62d729845c9defba4ca0239196640a29c513b95ccdb404ba9da87c18e",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "same-basis-feasible",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "all-neighbor-restoration",
       "mode": "volume",
       "png": "all-neighbor-restoration-volume.png",
-      "pngSha256": "fceee1557c0f06b87e3bd1723d2b9460d10911f973a55d886b95c7155ec9211d",
+      "pngSha256": "a5ac0c4e4fbd03d768f539fbe6444b8c5d337d7cf9b125963d98ed95da3a10ed",
       "captureReport": "all-neighbor-restoration-volume-capture-report.json",
-      "captureReportSha256": "a8d486671359b4e2008dd6ef4d0e38cd02faf4fd3dfc422e611a57fdc34ae89f",
+      "captureReportSha256": "bb790660db04e62410fc22d332fdd36cdcb0d3caff826ab3b2888f6bd6d05a84",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "all-neighbor-restoration",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "all-neighbor-restoration",
       "mode": "slice",
       "png": "all-neighbor-restoration-slice.png",
-      "pngSha256": "f5e3c7d15aa7b9ca0686629ec95d74e385fc937e1c4fba235143aadcc210d0e8",
+      "pngSha256": "65150b681a6352d48fd5eb4428b2cc04235d8f8a924e78963f3695fe10ad2e0e",
       "captureReport": "all-neighbor-restoration-slice-capture-report.json",
-      "captureReportSha256": "e90bd97f77e162e12641da0808da9cd79d26b44bfc7806823a0344a5d7ca1aa8",
+      "captureReportSha256": "6cf385b8a9a252473cb941cfd4ac73aadd4ebf42154609c28ecd53f87af8e77f",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "all-neighbor-restoration",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "reference",
       "mode": "volume",
       "png": "reference-volume.png",
-      "pngSha256": "b60b933243f42c193294388bae7d5c0d5ffe23425ba96052635a08d734bee7be",
+      "pngSha256": "4684e5adb483854a4ccd8b77b4880f2adbcdb6df56b62f3e6a3bef406f2f8c9e",
       "captureReport": "reference-volume-capture-report.json",
-      "captureReportSha256": "a0a684786d56ec0267a4c88a1259f8c32591c2b33fe60eb0eaecd07edf63394b",
+      "captureReportSha256": "9031ca11f8393afb05910141ddea0c64753bf41beea071ea2b8f8981409c0fb3",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "reference",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     },
     {
       "state": "reference",
       "mode": "slice",
       "png": "reference-slice.png",
-      "pngSha256": "3bc33ecc54ed3cc9e0b89a80bf38405393865bc217e09d6814256952f5bd3a05",
+      "pngSha256": "97bc16f7b02671e74bcdce82a006bf1e001fe2940fa8913fe73cfe3b0aa71dee",
       "captureReport": "reference-slice-capture-report.json",
-      "captureReportSha256": "88b22d3f544e34d52742306c01a3d8ca4b8f2bef219fc86d18c0722ede315d00",
+      "captureReportSha256": "e28a31909b6eb7c98302e4b3eecb4ce9d81c36840ee47770d9fce112e8a9f6c1",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "reference",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       }
     }
   ],
   "claimCeiling": {
-    "admittedClaim": "one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants",
+    "admittedClaim": "one simultaneous all-neighbor restoration step on severity 0.32 lowers the compiled-row maximum residual while retaining exact attachment and volume invariants",
     "anatomicalAdmission": "none",
     "nonGoals": [
       "same-basis-representation-impossibility",
@@ -263,6 +263,6 @@
     ]
   },
   "identity": {
-    "sha256": "d10a103ff07cb8b142fde6d34737cf28ffa49bc592dd1fc8206329fa92eaa557"
+    "sha256": "8a452210f1a387f139996cd02f4f627d97551a9accf34665b3db836d84612d7d"
   }
 }

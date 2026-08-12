@@ -29,9 +29,9 @@
     "rejectedCandidates": []
   },
   "invocation": {
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume",
-    "outputPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/pass-crowded-volume.png",
-    "reportPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/pass-crowded-volume-capture-report.json",
+    "url": "http://127.0.0.1:8869/?state=pass-crowded&mode=volume",
+    "outputPath": "repo://pass-crowded-volume.png",
+    "reportPath": "repo://pass-crowded-volume-capture-report.json",
     "viewport": {
       "width": 1400,
       "height": 900
@@ -50,8 +50,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 89467,
-    "processGroupId": 89467,
+    "pid": 45699,
+    "processGroupId": 45699,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -60,7 +60,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 89467,
+      "processGroupId": 45699,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -72,8 +72,8 @@
       "path": "tmp://independent-headless-profile"
     },
     "domProbe": {
-      "pid": 89691,
-      "processGroupId": 89691,
+      "pid": 45718,
+      "processGroupId": 45718,
       "detachedProcessGroup": true,
       "exit": {
         "timedOut": false,
@@ -82,7 +82,7 @@
         "spawnError": null
       },
       "cleanup": {
-        "processGroupId": 89691,
+        "processGroupId": 45718,
         "graceMs": 1000,
         "groupPresentBefore": false,
         "actions": [],
@@ -93,15 +93,15 @@
   },
   "stderr": {
     "limitBytes": 65536,
-    "totalBytes": 3646,
-    "retainedBytes": 3646,
+    "totalBytes": 3519,
+    "retainedBytes": 3519,
     "truncated": false,
-    "tail": "[0812/025247.657415:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/025247.792487:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/025248.683333:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n[0812/025248.683411:INFO:CONSOLE:0] \"[.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n[0812/025248.686441:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/025249.006058:INFO:CONSOLE:0] \"[.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n[0812/025249.007865:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/025249.323915:INFO:CONSOLE:0] \"[.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n[0812/025249.325139:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n247487 bytes written to file repo://artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/pass-crowded-volume.png\n[0812/025249.896028:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/025249.919782:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n[0812/025249.959441:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/025250.597834:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/025250.599232:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume (0)\n"
+    "tail": "[0812/043624.178676:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/043624.261995:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043624.679828:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n[0812/043624.682055:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n[0812/043624.683521:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043624.698495:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n[0812/043624.699900:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043624.713925:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n[0812/043624.715004:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/043624.729316:INFO:CONSOLE:0] \"[.WebGL-0x13c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n247747 bytes written to file repo://pass-crowded-volume.png\n[0812/043624.943438:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/043624.967436:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n[0812/043625.004291:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043625.427209:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043625.428620:INFO:CONSOLE:0] \"[.WebGL-0x10c00557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8869/?state=pass-crowded&mode=volume (0)\n"
   },
   "primaryOutput": {
-    "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/pass-crowded-volume.png",
-    "sizeBytes": 247487,
-    "sha256": "69c2d0dcc2b90e005b05670ce13f23b8eadb74857731e3bc8944f639b5e58770",
+    "path": "repo://pass-crowded-volume.png",
+    "sizeBytes": 247747,
+    "sha256": "f89a149ead80a78948ca8baba8252dd95355a79eadd6f4dda1b65c55dca3ffb2",
     "png": {
       "width": 1400,
       "height": 900,
@@ -111,23 +111,23 @@
       "filter": 0,
       "interlace": 0,
       "chunkCount": 64,
-      "idatBytes": 246698
+      "idatBytes": 246958
     }
   },
   "domReceipt": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume",
+    "url": "http://127.0.0.1:8869/?state=pass-crowded&mode=volume",
     "dataset": {
       "witnessLoaded": "true",
       "witnessState": "pass-crowded",
       "witnessMode": "volume",
       "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
       "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-      "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+      "resultsSha256": "cc6eafb0c81d5ba1c2a55fad05891a3e5ce98cc0cab3845a6b919b607baab367"
     },
     "stdout": {
       "limitBytes": 65536,
-      "totalBytes": 167760,
+      "totalBytes": 168030,
       "retainedBytes": 65536,
       "truncated": true,
       "retention": "prefix-only-no-dom-body-in-report"
@@ -161,9 +161,9 @@
       "rejectedCandidates": []
     },
     "primaryOutput": {
-      "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/pass-crowded-volume.png",
-      "sizeBytes": 247487,
-      "sha256": "69c2d0dcc2b90e005b05670ce13f23b8eadb74857731e3bc8944f639b5e58770",
+      "path": "repo://pass-crowded-volume.png",
+      "sizeBytes": 247747,
+      "sha256": "f89a149ead80a78948ca8baba8252dd95355a79eadd6f4dda1b65c55dca3ffb2",
       "png": {
         "width": 1400,
         "height": 900,
@@ -173,23 +173,23 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 64,
-        "idatBytes": 246698
+        "idatBytes": 246958
       }
     },
     "domReceipt": {
       "status": "complete",
-      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume",
+      "url": "http://127.0.0.1:8869/?state=pass-crowded&mode=volume",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "pass-crowded",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-trajectory-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6"
+        "resultsSha256": "cc6eafb0c81d5ba1c2a55fad05891a3e5ce98cc0cab3845a6b919b607baab367"
       },
       "stdout": {
         "limitBytes": 65536,
-        "totalBytes": 167760,
+        "totalBytes": 168030,
         "retainedBytes": 65536,
         "truncated": true,
         "retention": "prefix-only-no-dom-body-in-report"
@@ -198,9 +198,9 @@
   },
   "sourceDocument": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/?state=pass-crowded&mode=volume",
+    "url": "http://127.0.0.1:8869/?state=pass-crowded&mode=volume",
     "httpStatus": 200,
-    "sizeBytes": 166830,
-    "sha256": "40f6b2f7f03b449b1451af5fc84a9ac1708c6fff5c0bfdd020c2b3369d0c72ab"
+    "sizeBytes": 167100,
+    "sha256": "17346fda087c4cd26db7fcf4c41d811f208ad9d6df9c9f5b098bf3b6a49b7cb0"
   }
 }

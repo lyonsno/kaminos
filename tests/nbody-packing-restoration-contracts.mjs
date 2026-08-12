@@ -21,8 +21,7 @@ import {
   runNBodyPackingRestorationAssay,
 } from '../nbody-packing-restoration-assay.mjs';
 
-const COORDINATE_SEARCH_FLOOR = 0.001615326586;
-const HOMOTOPY_FLOOR = 0.000945973079;
+const COMPILED_ROW_COORDINATE_SEARCH_FLOOR = 0.004815758612;
 const COORDINATE_SEARCH_VECTOR = Object.freeze([
   0.079358289678991,
   -0.164657554847671,
@@ -50,7 +49,50 @@ const COORDINATE_SEARCH_VECTOR = Object.freeze([
   -0.013337308333688,
 ]);
 
-test('all-neighbor restoration beats the frozen severity-0.32 coordinate-search floor', () => {
+function compiledConstraintFamilyMaxima(rows) {
+  const byKind = {
+    'pairwise-clearance':'pairwisePenetration',
+    'skeletal-clearance':'skeletalPenetration',
+    'compartment-clearance':'compartmentEscape',
+  };
+  const maxima = {
+    pairwisePenetration:0,
+    skeletalPenetration:0,
+    compartmentEscape:0,
+  };
+  for (const row of rows) {
+    const family = byKind[row.kind];
+    if (family) maxima[family] = Math.max(maxima[family], Math.max(0, -row.signedGap));
+  }
+  return Object.fromEntries(Object.entries(maxima).map(
+    ([family, value]) => [family, Number(value.toFixed(12))],
+  ));
+}
+
+test('unified KKT publishes compiled constraint-row family maxima as its physical ledger', () => {
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const state = evaluateNBodyUnifiedKktState({
+    problem,
+    vector:COORDINATE_SEARCH_VECTOR,
+  });
+  const compiled = compiledConstraintFamilyMaxima(state.rows);
+
+  assert.deepEqual(
+    {
+      pairwisePenetration:state.metrics.pairwisePenetration,
+      skeletalPenetration:state.metrics.skeletalPenetration,
+      compartmentEscape:state.metrics.compartmentEscape,
+    },
+    compiled,
+  );
+  assert.equal(compiled.compartmentEscape, 0.004815758612);
+  assert.equal(state.maximumPhysicalResidual, compiled.compartmentEscape);
+});
+
+test('all-neighbor restoration improves the compiled-row severity-0.32 baseline', () => {
   const fixture = createNBodyLocalizedChallengeSuite().find(
     row => row.assayProfile.severity === 0.32,
   );
@@ -66,12 +108,12 @@ test('all-neighbor restoration beats the frozen severity-0.32 coordinate-search 
     requestedConfig,
   });
 
-  assert.equal(current.maximumPhysicalResidual, COORDINATE_SEARCH_FLOOR);
+  assert.equal(current.maximumPhysicalResidual, COMPILED_ROW_COORDINATE_SEARCH_FLOOR);
   assert.ok(
-    result.selected.maximumPhysicalResidual < HOMOTOPY_FLOOR,
-    `restoration route has not beaten the frozen homotopy floor: ${result.selected.maximumPhysicalResidual}`,
+    result.selected.maximumPhysicalResidual < current.maximumPhysicalResidual,
+    `restoration route has not improved compiled-row debt: ${result.selected.maximumPhysicalResidual}`,
   );
-  assert.equal(result.selected.maximumPhysicalResidual, 0.000867525141);
+  assert.equal(result.selected.maximumPhysicalResidual, 0.00447138638);
   assert.equal(result.status, 'restoration-floor-improved');
   assert.equal(result.route.effective,
     'all-neighbor-p8-merit-trust-region-restoration-v0');
@@ -84,6 +126,7 @@ test('all-neighbor restoration beats the frozen severity-0.32 coordinate-search 
   assert.equal(result.invariance.maximumMetricsDifference, 0);
   assert.equal(result.work.iterations, 1);
   assert.ok(result.work.rows[0].directionNonzeroCoordinateCount > 1);
+  assert.equal(result.work.rows[0].acceptedTrustRegionRadius, 0.001);
   assert.deepEqual(result.work.rows[0].violatedKinds, [
     'compartment-clearance',
     'pairwise-clearance',
@@ -106,22 +149,13 @@ test('repeated all-neighbor restoration preserves a complete deterministic decis
     requestedConfig,
   });
 
-  assert.equal(result.work.iterations, 6);
+  assert.equal(result.work.iterations, 5);
+  assert.equal(result.work.attempts, 6);
   assert.equal(result.invariance.candidateEnumeration, 'passed');
   assert.equal(result.invariance.maximumVectorDifference, 0);
   assert.equal(result.invariance.maximumMetricsDifference, 0);
-  assert.deepEqual(
-    result.work.rows.map(row => row.after.maximumPhysicalResidual),
-    [
-      0.000867525141,
-      0.000567305107,
-      0.000393831894,
-      0.000364239532,
-      0.00033234777,
-      0.000314269245,
-    ],
-  );
-  assert.equal(result.work.rows[0].after.maximumPhysicalResidual, 0.000867525141);
+  assert.equal(result.work.rows.length, 6);
+  assert.equal(result.selected.maximumPhysicalResidual, 0.00311519149);
   assert.deepEqual(
     {
       pairwisePenetration:result.start.metrics.pairwisePenetration,
@@ -131,23 +165,14 @@ test('repeated all-neighbor restoration preserves a complete deterministic decis
     {
       pairwisePenetration:0.001615321454,
       skeletalPenetration:0.001615326586,
-      compartmentEscape:0.000454052962,
+      compartmentEscape:0.004815758612,
     },
   );
-  assert.deepEqual(
-    result.work.rows[0].candidateReceipts.find(candidate => candidate.selected)
-      .constraintFamilies,
-    {
-      pairwisePenetration:0,
-      skeletalPenetration:0.000867525141,
-      compartmentEscape:0.000744046643,
-    },
-  );
-  assert.equal(result.invariance.rows[0].metrics.pairwisePenetration, 0.000259103564);
-  assert.equal(result.selected.metrics.pairwisePenetration, 0.000259103564);
-  assert.equal(result.work.rows[1].violatedKinds.includes('pairwise-clearance'), false);
-  assert.equal(result.work.rows[2].violatedKinds.includes('pairwise-clearance'), true);
-  for (const row of result.work.rows) {
+  assert.equal(result.invariance.rows[0].metrics.pairwisePenetration, 0.002472001529);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0.002472001529);
+  assert.ok(result.selected.metrics.pairwisePenetration > result.start.metrics.pairwisePenetration);
+  for (const row of result.work.rows.slice(0, -1)) {
+    assert.equal(row.accepted, true);
     assert.ok(row.after.maximumPhysicalResidual < row.before.maximumPhysicalResidual);
     assert.ok(row.after.merit < row.before.merit);
     assert.equal(row.candidateReceipts.length, requestedConfig.trustRegionRadii.length);
@@ -160,6 +185,11 @@ test('repeated all-neighbor restoration preserves a complete deterministic decis
       }
     }
   }
+  const terminal = result.work.rows.at(-1);
+  assert.equal(terminal.accepted, false);
+  assert.equal(terminal.terminalReason, 'no-admissible-trust-region-candidate');
+  assert.equal(terminal.after.maximumPhysicalResidual, terminal.before.maximumPhysicalResidual);
+  assert.equal(terminal.candidateReceipts.filter(candidate => candidate.selected).length, 0);
   assert.deepEqual(
     result.invariance.rows[0].work,
     result.invariance.rows[1].work,
@@ -232,15 +262,15 @@ test('family-gradient common descent clears debt without trading constraint fami
   );
   assert.equal(canonical.route.fallbackUsed, false);
   assert.deepEqual(canonical.directionConstruction.convexWeights, [
-    0.400373729290055,
-    0.383885600001276,
-    0.215740670708669,
+    0.2525995924815,
+    0.42240697146204,
+    0.32499343605646,
   ]);
-  assert.equal(canonical.directionConstruction.minimumNorm, 0.410725948212845);
+  assert.equal(canonical.directionConstruction.minimumNorm, 0.24913205776668);
   assert.deepEqual(canonical.directionConstruction.predictedDirectionalDerivatives, {
-    pairwisePenetration:-0.410725948212845,
-    skeletalPenetration:-0.410725948212845,
-    compartmentEscape:-0.410725948212845,
+    pairwisePenetration:-0.24913205776668,
+    skeletalPenetration:-0.24913205776668,
+    compartmentEscape:-0.24913205776668,
   });
   assert.equal(canonical.directionConstruction.predictedCommonDescent, true);
   assert.equal(canonical.work.iterations, 1);
@@ -257,11 +287,16 @@ test('family-gradient common descent clears debt without trading constraint fami
   );
   assert.equal(
     canonical.work.candidateReceipts.find(candidate => candidate.selected).radius,
-    0.004,
+    0.00025,
   );
-  assert.ok(canonical.work.candidateReceipts.every(
-    candidate => candidate.regressedFamilies.length === 0,
-  ));
+  assert.equal(canonical.work.candidateReceipts.filter(
+    candidate => candidate.regressedFamilies.includes('compartmentEscape'),
+  ).length, 4);
+  assert.equal(
+    canonical.work.candidateReceipts.find(candidate => candidate.selected)
+      .regressedFamilies.length,
+    0,
+  );
   assert.deepEqual(
     {
       pairwisePenetration:canonical.selected.metrics.pairwisePenetration,
@@ -269,13 +304,14 @@ test('family-gradient common descent clears debt without trading constraint fami
       compartmentEscape:canonical.selected.metrics.compartmentEscape,
     },
     {
-      pairwisePenetration:0,
-      skeletalPenetration:0.000125037313,
-      compartmentEscape:0,
+      pairwisePenetration:0.001531913516,
+      skeletalPenetration:0.001545080434,
+      compartmentEscape:0.004745541883,
     },
   );
-  assert.equal(canonical.selected.maximumPhysicalResidual, 0.000125037313);
-  assert.ok(canonical.selected.maximumPhysicalResidual < HOMOTOPY_FLOOR);
+  assert.equal(canonical.start.maximumPhysicalResidual, 0.004815758612);
+  assert.equal(canonical.selected.maximumPhysicalResidual, 0.004745541883);
+  assert.ok(canonical.selected.maximumPhysicalResidual < canonical.start.maximumPhysicalResidual);
   assert.equal(canonical.selected.metrics.endpointDrift, 0);
   assert.equal(canonical.selected.metrics.maximumRelativeVolumeError, 0);
   assert.equal(canonical.mechanism.oracleTargetCoordinatesConsumed, false);
@@ -311,9 +347,12 @@ test('family-filter restoration exposes the first no-debt-trading plateau', () =
   assert.equal(result.work.attempts, 1);
   assert.equal(result.work.rows[0].accepted, false);
   assert.equal(result.work.rows[0].terminalReason, 'no-admissible-trust-region-candidate');
-  assert.equal(result.selected.maximumPhysicalResidual, COORDINATE_SEARCH_FLOOR);
+  assert.equal(
+    result.selected.maximumPhysicalResidual,
+    COMPILED_ROW_COORDINATE_SEARCH_FLOOR,
+  );
   assert.equal(result.selected.metrics.pairwisePenetration, 0.001615321454);
-  assert.equal(result.selected.metrics.compartmentEscape, 0.000454052962);
+  assert.equal(result.selected.metrics.compartmentEscape, 0.004815758612);
   assert.equal(
     result.work.rows[0].candidateReceipts.length,
     requestedConfig.trustRegionRadii.length,
@@ -353,7 +392,7 @@ test('family-filter restoration exposes the first no-debt-trading plateau', () =
     }
   }
   assert.ok(result.work.rows[0].candidateReceipts.some(candidate =>
-    candidate.regressedFamilies.includes('compartmentEscape'),
+    candidate.regressedFamilies.includes('skeletalPenetration'),
   ));
   assert.deepEqual(result.selected.vector, result.start.vector);
   assert.deepEqual(result.invariance.rows[0].work, result.invariance.rows[1].work);
@@ -427,13 +466,23 @@ test('source-bound common-descent assay preserves exact mechanism and source cus
   assert.equal(report.source.problemSha256,
     'cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c');
   assert.equal(result.status, 'common-descent-step-accepted');
-  assert.equal(result.selected.maximumPhysicalResidual, 0.000125037313);
-  assert.equal(result.selected.metrics.pairwisePenetration, 0);
-  assert.equal(result.selected.metrics.compartmentEscape, 0);
+  assert.equal(result.start.maximumPhysicalResidual, 0.004815758612);
+  assert.equal(result.selected.maximumPhysicalResidual, 0.004745541883);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0.001531913516);
+  assert.equal(result.selected.metrics.compartmentEscape, 0.004745541883);
   assert.equal(result.work.candidateReceipts.length, 7);
-  assert.ok(result.work.candidateReceipts.every(
-    candidate => candidate.regressedFamilies.length === 0,
-  ));
+  assert.equal(result.work.candidateReceipts.filter(
+    candidate => candidate.regressedFamilies.includes('compartmentEscape'),
+  ).length, 4);
+  assert.equal(
+    result.work.candidateReceipts.find(candidate => candidate.selected).radius,
+    0.00025,
+  );
+  assert.equal(report.comparison.sourceReported.authority,
+    'historical-sampled-metrics-not-used-for-admission');
+  assert.equal(report.comparison.effectiveCompiledRows.coordinateSearchFloor,
+    result.start.maximumPhysicalResidual);
+  assert.equal(report.comparison.effectiveCompiledRows.homotopyFloor, 0.037521132052);
   assert.equal(report.bindings.resultSha256, result.identity.sha256);
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'run-report.json')), true);
@@ -466,6 +515,66 @@ test('common-descent assay rejects a canonically rehashed foreign homotopy sourc
     'family-gradient-minimum-norm-common-descent-v0');
   assert.equal(report.route.effective, null);
   assert.equal(report.failurePhase, 'bind-problem-and-baselines');
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
+test('common-descent assay rejects a canonically rehashed same-problem pattern substitution', async () => {
+  const sourceRoot = path.resolve('artifacts/nbody-packing-localized-challenge-v0');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-common-descent-pattern-pin-'));
+  const pattern = JSON.parse(fs.readFileSync(
+    path.join(sourceRoot, 'oracle-pattern-search-032.json'),
+    'utf8',
+  ));
+  pattern.mechanism.movePolicy = 'counterfeit-same-problem-move-policy';
+  delete pattern.identity;
+  pattern.identity = { sha256:hashMusclePackingCanonicalJson(pattern) };
+  const substitutedPath = path.join(outDir, 'substituted-pattern.json');
+  fs.writeFileSync(substitutedPath, `${JSON.stringify(pattern, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'result.json'), '{"status":"stale-success"}\n');
+
+  await assert.rejects(
+    runNBodyPackingCommonDescentAssay({
+      outDir,
+      patternResultPath:substitutedPath,
+      homotopyResultPath:path.join(sourceRoot, 'homotopy-032-fine-0875-to-1.json'),
+    }),
+    /substituted coordinate-search floor/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.failurePhase, 'bind-problem-and-baselines');
+  assert.equal(report.route.effective, null);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+
+  const rerun = await runNBodyPackingCommonDescentAssay({ outDir });
+  assert.equal(rerun.result.status, 'common-descent-step-accepted');
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), true);
+});
+
+test('common-descent assay rejects a canonically rehashed same-problem homotopy substitution', async () => {
+  const sourceRoot = path.resolve('artifacts/nbody-packing-localized-challenge-v0');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-common-descent-homotopy-pin-'));
+  const homotopy = JSON.parse(fs.readFileSync(
+    path.join(sourceRoot, 'homotopy-032-fine-0875-to-1.json'),
+    'utf8',
+  ));
+  homotopy.stages[0].clearanceScale += 0.000001;
+  delete homotopy.identity;
+  homotopy.identity = { sha256:hashMusclePackingCanonicalJson(homotopy) };
+  const substitutedPath = path.join(outDir, 'substituted-homotopy.json');
+  fs.writeFileSync(substitutedPath, `${JSON.stringify(homotopy, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'result.json'), '{"status":"stale-success"}\n');
+
+  await assert.rejects(
+    runNBodyPackingCommonDescentAssay({
+      outDir,
+      patternResultPath:path.join(sourceRoot, 'oracle-pattern-search-032.json'),
+      homotopyResultPath:substitutedPath,
+    }),
+    /substituted homotopy floor/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.failurePhase, 'bind-problem-and-baselines');
+  assert.equal(report.route.effective, null);
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
 });
 

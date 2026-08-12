@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { createNBodyLocalizedChallengeSuite } from './nbody-packing-assay-core.mjs';
 import { hashMusclePackingCanonicalJson } from './muscle-compartment-packing-core.mjs';
-import { compileNBodyAdaptiveKktProblem } from './nbody-packing-unified-kkt.mjs';
+import {
+  compileNBodyAdaptiveKktProblem,
+  evaluateNBodyUnifiedKktState,
+} from './nbody-packing-unified-kkt.mjs';
 import {
   createNBodyAllNeighborRestorationConfig,
   createNBodyFamilyGradientCommonDescentConfig,
@@ -19,6 +22,17 @@ export const NBODY_PACKING_RESTORATION_ASSAY_SCHEMA =
   'kaminos.nbody-packing-all-neighbor-restoration-assay.v0';
 export const NBODY_PACKING_COMMON_DESCENT_ASSAY_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-assay.v0';
+
+const FROZEN_BASELINES = Object.freeze({
+  pattern:Object.freeze({
+    fileSha256:'56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b',
+    resultSha256:'a697e6567f88d34ba7f8e78b60bbfa188d89e0e896be1b704a11017658d1bb93',
+  }),
+  homotopy:Object.freeze({
+    fileSha256:'57f08fe1090d059bc250093522463579050af2ab66db491d39ffdacc15a67736',
+    resultSha256:'cfaede5e816f6dfc04b2e99230b9d47f2a093c8cda8b393ecb563610184daa2b',
+  }),
+});
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -34,12 +48,27 @@ async function writeAtomically(targetPath, bytes) {
   await rename(temporaryPath, targetPath);
 }
 
+async function invalidatePriorPrimary(outputRoot) {
+  try {
+    await unlink(path.join(outputRoot, 'result.json'));
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+}
+
 function verifyCanonicalIdentity(value, label) {
   const core = structuredClone(value);
   delete core.identity;
   if (value.identity?.sha256 !== hashMusclePackingCanonicalJson(core)) {
     throw new Error(`restoration assay rejects stale ${label} identity`);
   }
+}
+
+function verifyFrozenBaseline(bytes, value, expected, label) {
+  if (
+    sha256(bytes) !== expected.fileSha256 ||
+    value.identity?.sha256 !== expected.resultSha256
+  ) throw new Error(`restoration assay rejects substituted ${label}`);
 }
 
 export async function runNBodyPackingRestorationAssay({
@@ -61,6 +90,9 @@ export async function runNBodyPackingRestorationAssay({
   let lastTrustworthyEvidence = { phase:'none' };
   await mkdir(outputRoot, { recursive:true });
   try {
+    phase = 'invalidate-prior-primary';
+    await invalidatePriorPrimary(outputRoot);
+    phase = 'read-frozen-inputs';
     const [patternBytes, homotopyBytes] = await Promise.all([
       readFile(path.resolve(patternResultPath)),
       readFile(path.resolve(homotopyResultPath)),
@@ -75,6 +107,18 @@ export async function runNBodyPackingRestorationAssay({
       homotopyFileSha256:sha256(homotopyBytes),
     };
     phase = 'bind-problem-and-baselines';
+    verifyFrozenBaseline(
+      patternBytes,
+      pattern,
+      FROZEN_BASELINES.pattern,
+      'coordinate-search floor',
+    );
+    verifyFrozenBaseline(
+      homotopyBytes,
+      homotopy,
+      FROZEN_BASELINES.homotopy,
+      'homotopy floor',
+    );
     const fixture = createNBodyLocalizedChallengeSuite().find(
       row => row.assayProfile.severity === 0.32,
     );
@@ -103,6 +147,14 @@ export async function runNBodyPackingRestorationAssay({
       homotopy.source?.problemSha256 !== problem.identity.sha256 ||
       homotopyFloor?.maximumPhysicalResidual !== 0.000945973079
     ) throw new Error('restoration assay rejects substituted homotopy floor');
+    const patternEffective = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:patternFloor.vector,
+    });
+    const homotopyEffective = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:homotopyFloor.vector,
+    });
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'problem-and-baselines-bound',
@@ -110,6 +162,8 @@ export async function runNBodyPackingRestorationAssay({
       problemSha256:problem.identity.sha256,
       patternResultSha256:pattern.identity.sha256,
       homotopyResultSha256:homotopy.identity.sha256,
+      patternEffectiveMaximumPhysicalResidual:patternEffective.maximumPhysicalResidual,
+      homotopyEffectiveMaximumPhysicalResidual:homotopyEffective.maximumPhysicalResidual,
     };
     phase = 'solve-all-neighbor-restoration';
     const requestedConfig = createNBodyAllNeighborRestorationConfig({ acceptancePolicy });
@@ -122,7 +176,7 @@ export async function runNBodyPackingRestorationAssay({
     phase = 'verify-restoration-result';
     const scalarAdmission = acceptancePolicy === 'scalar-merit' &&
       result.status === 'restoration-floor-improved' &&
-      result.selected.maximumPhysicalResidual < homotopyFloor.maximumPhysicalResidual;
+      result.selected.maximumPhysicalResidual < patternEffective.maximumPhysicalResidual;
     const familyAdmission = acceptancePolicy === 'family-pareto-no-resurrection' &&
       result.status === 'stalled-family-filter-restoration' &&
       result.work.iterations === 0 &&
@@ -139,13 +193,13 @@ export async function runNBodyPackingRestorationAssay({
         Array.isArray(candidate.regressedFamilies)
       ) &&
       JSON.stringify(result.selected.vector) === JSON.stringify(result.start.vector) &&
-      result.selected.maximumPhysicalResidual === patternFloor.maximumPhysicalResidual;
+      result.selected.maximumPhysicalResidual === patternEffective.maximumPhysicalResidual;
     if (
       result.route.requested !== requestedRoute ||
       result.route.effective !== requestedRoute ||
       result.route.fallbackUsed !== false ||
       result.source.problemSha256 !== problem.identity.sha256 ||
-      result.start.maximumPhysicalResidual !== patternFloor.maximumPhysicalResidual ||
+      result.start.maximumPhysicalResidual !== patternEffective.maximumPhysicalResidual ||
       !(scalarAdmission || familyAdmission) ||
       result.mechanism.oracleTargetCoordinatesConsumed !== false ||
       result.mechanism.contactGraphRowsConsumed !== false ||
@@ -166,13 +220,21 @@ export async function runNBodyPackingRestorationAssay({
         homotopy:{ path:homotopyResultPath, fileSha256:sha256(homotopyBytes), resultSha256:homotopy.identity.sha256 },
       },
       comparison:{
-        coordinateSearchFloor:patternFloor.maximumPhysicalResidual,
-        homotopyFloor:homotopyFloor.maximumPhysicalResidual,
+        sourceReported:{
+          coordinateSearchFloor:patternFloor.maximumPhysicalResidual,
+          homotopyFloor:homotopyFloor.maximumPhysicalResidual,
+          authority:'historical-sampled-metrics-not-used-for-admission',
+        },
+        effectiveCompiledRows:{
+          coordinateSearchFloor:patternEffective.maximumPhysicalResidual,
+          homotopyFloor:homotopyEffective.maximumPhysicalResidual,
+          authority:'compiled-constraint-row-family-maxima',
+        },
         restorationResidual:result.selected.maximumPhysicalResidual,
         improvementVersusCoordinateSearch:
-          patternFloor.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
+          patternEffective.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
         improvementVersusHomotopy:
-          homotopyFloor.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
+          homotopyEffective.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
       },
       bindings:{ resultJsonSha256:sha256(resultBytes), resultSha256:result.identity.sha256 },
       claimCeiling:result.claimCeiling,
@@ -217,6 +279,9 @@ export async function runNBodyPackingCommonDescentAssay({
   let lastTrustworthyEvidence = { phase:'none' };
   await mkdir(outputRoot, { recursive:true });
   try {
+    phase = 'invalidate-prior-primary';
+    await invalidatePriorPrimary(outputRoot);
+    phase = 'read-frozen-inputs';
     const [patternBytes, homotopyBytes] = await Promise.all([
       readFile(path.resolve(patternResultPath)),
       readFile(path.resolve(homotopyResultPath)),
@@ -230,8 +295,19 @@ export async function runNBodyPackingCommonDescentAssay({
       patternFileSha256:sha256(patternBytes),
       homotopyFileSha256:sha256(homotopyBytes),
     };
-
     phase = 'bind-problem-and-baselines';
+    verifyFrozenBaseline(
+      patternBytes,
+      pattern,
+      FROZEN_BASELINES.pattern,
+      'coordinate-search floor',
+    );
+    verifyFrozenBaseline(
+      homotopyBytes,
+      homotopy,
+      FROZEN_BASELINES.homotopy,
+      'homotopy floor',
+    );
     const fixture = createNBodyLocalizedChallengeSuite().find(
       row => row.assayProfile.severity === 0.32,
     );
@@ -260,6 +336,14 @@ export async function runNBodyPackingCommonDescentAssay({
       homotopy.source?.problemSha256 !== problem.identity.sha256 ||
       homotopyFloor?.maximumPhysicalResidual !== 0.000945973079
     ) throw new Error('common-descent assay rejects substituted homotopy floor');
+    const patternEffective = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:patternFloor.vector,
+    });
+    const homotopyEffective = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:homotopyFloor.vector,
+    });
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'problem-and-baselines-bound',
@@ -267,6 +351,8 @@ export async function runNBodyPackingCommonDescentAssay({
       problemSha256:problem.identity.sha256,
       patternResultSha256:pattern.identity.sha256,
       homotopyResultSha256:homotopy.identity.sha256,
+      patternEffectiveMaximumPhysicalResidual:patternEffective.maximumPhysicalResidual,
+      homotopyEffectiveMaximumPhysicalResidual:homotopyEffective.maximumPhysicalResidual,
     };
 
     phase = 'solve-family-gradient-common-descent';
@@ -283,16 +369,21 @@ export async function runNBodyPackingCommonDescentAssay({
       result.route?.effective !== requestedRoute ||
       result.route?.fallbackUsed !== false ||
       result.source?.problemSha256 !== problem.identity.sha256 ||
-      result.start?.maximumPhysicalResidual !== patternFloor.maximumPhysicalResidual ||
-      result.selected?.maximumPhysicalResidual !== 0.000125037313 ||
-      result.selected?.metrics?.pairwisePenetration !== 0 ||
-      result.selected?.metrics?.skeletalPenetration !== 0.000125037313 ||
-      result.selected?.metrics?.compartmentEscape !== 0 ||
+      result.start?.maximumPhysicalResidual !== patternEffective.maximumPhysicalResidual ||
+      result.selected?.maximumPhysicalResidual !== 0.004745541883 ||
+      result.selected?.metrics?.pairwisePenetration !== 0.001531913516 ||
+      result.selected?.metrics?.skeletalPenetration !== 0.001545080434 ||
+      result.selected?.metrics?.compartmentEscape !== 0.004745541883 ||
       result.work?.iterations !== 1 ||
       result.work?.attempts !== 1 ||
       result.work?.candidateReceipts?.length !== requestedConfig.trustRegionRadii.length ||
-      result.work.candidateReceipts.some(candidate =>
-        candidate.regressedFamilies.length !== 0
+      result.work.candidateReceipts.filter(candidate => candidate.selected).length !== 1 ||
+      result.work.candidateReceipts.find(candidate => candidate.selected)?.radius !== 0.00025 ||
+      result.work.candidateReceipts.find(candidate => candidate.selected)
+        ?.regressedFamilies.length !== 0 ||
+      ['pairwisePenetration', 'skeletalPenetration', 'compartmentEscape'].some(
+        key => result.selected.metrics[key] >
+          result.start.metrics[key] + requestedConfig.familyRegressionTolerance,
       ) ||
       result.directionConstruction?.predictedCommonDescent !== true ||
       result.mechanism?.oracleTargetCoordinatesConsumed !== false ||
@@ -320,13 +411,21 @@ export async function runNBodyPackingCommonDescentAssay({
         },
       },
       comparison:{
-        coordinateSearchFloor:patternFloor.maximumPhysicalResidual,
-        homotopyFloor:homotopyFloor.maximumPhysicalResidual,
+        sourceReported:{
+          coordinateSearchFloor:patternFloor.maximumPhysicalResidual,
+          homotopyFloor:homotopyFloor.maximumPhysicalResidual,
+          authority:'historical-sampled-metrics-not-used-for-admission',
+        },
+        effectiveCompiledRows:{
+          coordinateSearchFloor:patternEffective.maximumPhysicalResidual,
+          homotopyFloor:homotopyEffective.maximumPhysicalResidual,
+          authority:'compiled-constraint-row-family-maxima',
+        },
         commonDescentResidual:result.selected.maximumPhysicalResidual,
         improvementVersusCoordinateSearch:
-          patternFloor.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
+          patternEffective.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
         improvementVersusHomotopy:
-          homotopyFloor.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
+          homotopyEffective.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
       },
       bindings:{
         resultJsonSha256:sha256(resultBytes),

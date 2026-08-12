@@ -29,7 +29,7 @@
     "rejectedCandidates": []
   },
   "invocation": {
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "url": "http://127.0.0.1:8868/?state=reference&mode=volume",
     "outputPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
     "reportPath": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume-capture-report.json",
     "viewport": {
@@ -50,8 +50,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 88874,
-    "processGroupId": 88874,
+    "pid": 12507,
+    "processGroupId": 12507,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -60,7 +60,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 88874,
+      "processGroupId": 12507,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -72,8 +72,8 @@
       "path": "tmp://independent-headless-profile"
     },
     "domProbe": {
-      "pid": 88888,
-      "processGroupId": 88888,
+      "pid": 12512,
+      "processGroupId": 12512,
       "detachedProcessGroup": true,
       "exit": {
         "timedOut": false,
@@ -82,7 +82,7 @@
         "spawnError": null
       },
       "cleanup": {
-        "processGroupId": 88888,
+        "processGroupId": 12512,
         "graceMs": 1000,
         "groupPresentBefore": false,
         "actions": [],
@@ -93,15 +93,15 @@
   },
   "stderr": {
     "limitBytes": 65536,
-    "totalBytes": 3925,
-    "retainedBytes": 3925,
+    "totalBytes": 3484,
+    "retainedBytes": 3484,
     "truncated": false,
-    "tail": "[0812/011842.373636:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/011842.436012:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.804180:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.804218:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.805717:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.821463:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.822834:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011842.836523:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011842.837506:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/011842.851437:INFO:CONSOLE:0] \"[.WebGL-0x10400518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n206950 bytes written to file repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png\n[0812/011843.053188:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/011843.074617:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n[0812/011843.107414:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011843.477132:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/011843.478494:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume (0)\n"
+    "tail": "[0812/043213.959935:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/043214.022231:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043214.402060:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n[0812/043214.402142:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n[0812/043214.403556:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043214.421038:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n[0812/043214.422688:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043214.437488:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n[0812/043214.438570:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/043214.455190:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n206942 bytes written to file repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png\n[0812/043214.664644:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/043214.687275:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n[0812/043214.723145:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043215.114671:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/043215.116163:INFO:CONSOLE:0] \"[.WebGL-0x12400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8868/?state=reference&mode=volume (0)\n"
   },
   "primaryOutput": {
     "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
-    "sizeBytes": 206950,
-    "sha256": "b60b933243f42c193294388bae7d5c0d5ffe23425ba96052635a08d734bee7be",
+    "sizeBytes": 206942,
+    "sha256": "4684e5adb483854a4ccd8b77b4880f2adbcdb6df56b62f3e6a3bef406f2f8c9e",
     "png": {
       "width": 1400,
       "height": 900,
@@ -111,23 +111,23 @@
       "filter": 0,
       "interlace": 0,
       "chunkCount": 54,
-      "idatBytes": 206281
+      "idatBytes": 206273
     }
   },
   "domReceipt": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "url": "http://127.0.0.1:8868/?state=reference&mode=volume",
     "dataset": {
       "witnessLoaded": "true",
       "witnessState": "reference",
       "witnessMode": "volume",
       "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
       "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-      "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+      "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
     },
     "stdout": {
       "limitBytes": 65536,
-      "totalBytes": 148197,
+      "totalBytes": 148283,
       "retainedBytes": 65536,
       "truncated": true,
       "retention": "prefix-only-no-dom-body-in-report"
@@ -162,8 +162,8 @@
     },
     "primaryOutput": {
       "path": "repo://artifacts/nbody-packing-all-neighbor-restoration-v0/reference-volume.png",
-      "sizeBytes": 206950,
-      "sha256": "b60b933243f42c193294388bae7d5c0d5ffe23425ba96052635a08d734bee7be",
+      "sizeBytes": 206942,
+      "sha256": "4684e5adb483854a4ccd8b77b4880f2adbcdb6df56b62f3e6a3bef406f2f8c9e",
       "png": {
         "width": 1400,
         "height": 900,
@@ -173,23 +173,23 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 54,
-        "idatBytes": 206281
+        "idatBytes": 206273
       }
     },
     "domReceipt": {
       "status": "complete",
-      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+      "url": "http://127.0.0.1:8868/?state=reference&mode=volume",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "reference",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-all-neighbor-restoration-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5"
+        "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a"
       },
       "stdout": {
         "limitBytes": 65536,
-        "totalBytes": 148197,
+        "totalBytes": 148283,
         "retainedBytes": 65536,
         "truncated": true,
         "retention": "prefix-only-no-dom-body-in-report"
@@ -198,9 +198,9 @@
   },
   "sourceDocument": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-all-neighbor-restoration-v0/index.html?state=reference&mode=volume",
+    "url": "http://127.0.0.1:8868/?state=reference&mode=volume",
     "httpStatus": 200,
-    "sizeBytes": 147207,
-    "sha256": "f24b2e0f643b275eec8d14a1995d24770b327f2561c364e12a306ad61335b943"
+    "sizeBytes": 147293,
+    "sha256": "0af01785f4019f9e489f2fdd3d23ef8523f2413db08fe0b2907dc6ee9e8dce62"
   }
 }

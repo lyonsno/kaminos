@@ -261,23 +261,22 @@
   "classification": {
     "coldMaximumPhysicalResidual": 0.171504028818,
     "warmMaximumPhysicalResidual": 0.002679616613,
-    "patternMaximumPhysicalResidual": 0.001615326586,
+    "patternMaximumPhysicalResidual": 0.004815758612,
     "patternStatus": "same-basis-feasibility-unresolved",
     "traversalInvariance": "passed",
-    "restorationMaximumPhysicalResidual": 0.000867525141,
-    "restorationVersusCoordinateFloor": 1.8619939753423238,
-    "restorationVersusHomotopyFloor": 1.090427279040666
+    "restorationMaximumPhysicalResidual": 0.00447138638,
+    "restorationVersusCoordinateFloor": 1.0770168808359613
   },
   "bindings": {
     "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-    "resultsSha256": "dd1ab4db0457da465425eff1bb9e534c8c9da910b126fee2f3527c7be4663cb5",
-    "indexHtmlSha256": "f24b2e0f643b275eec8d14a1995d24770b327f2561c364e12a306ad61335b943",
+    "resultsSha256": "84da9e5204051d20fc312ba55283fc2f8a1770866cec5d9ca830251af484718a",
+    "indexHtmlSha256": "0af01785f4019f9e489f2fdd3d23ef8523f2413db08fe0b2907dc6ee9e8dce62",
     "challengeResultSha256": "ee7fc0d1c84d9554e6247ffcc3859f8e2c0a3ca5da3e7e8f42456c3a4c8a2dc8",
     "continuationResultSha256": "2b1fac7780f94d16aec89dd3dc20f3396a525f4d6087688ae83d431a0522f805",
     "patternResultSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
-    "restorationResultSha256": "1c2e3e76df8c7add0cb71388123cb3d5dde488ec7c15cfe636c3097c49408de9",
-    "visualInspectionSha256": "89c3085a7b5ddf2201f6c585b313d03ae05d650cfb6c6815f4d3a58766ddf54c",
-    "captureReceiptSetSha256": "8da36d917d88a92c7870381e0368cabedff2ef55143a3bb48947c5e3bfd9022e"
+    "restorationResultSha256": "1c05fd6ddc34668f01e2379adad87ffcd824287468922f1a1375242ff0e52105",
+    "visualInspectionSha256": "8fd35e58f46d4b0f9bcd5a75ea278d3f47ec107b5d2c06a70347374396bbab3d",
+    "captureReceiptSetSha256": "20f106f7614b0e14181fd24d08b5d581b36ba82940e9630724c16ad500967228"
   },
   "requiredStates": [
     "pass-crowded",
@@ -293,7 +292,7 @@
     "slice"
   ],
   "claimCeiling": {
-    "admittedClaim": "one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants",
+    "admittedClaim": "one simultaneous all-neighbor restoration step on severity 0.32 lowers the compiled-row maximum residual while retaining exact attachment and volume invariants",
     "anatomicalAdmission": "none",
     "nonGoals": [
       "same-basis-representation-impossibility",
@@ -306,10 +305,10 @@
   "visualInspection": {
     "status": "passed-agent-inspection",
     "artifact": "visual-inspection.json",
-    "receiptSha256": "89c3085a7b5ddf2201f6c585b313d03ae05d650cfb6c6815f4d3a58766ddf54c",
+    "receiptSha256": "8fd35e58f46d4b0f9bcd5a75ea278d3f47ec107b5d2c06a70347374396bbab3d",
     "captureCount": 14
   },
   "identity": {
-    "sha256": "a83a6c5f12662918d8c41fb79c971fa62b7d955dd0fe07f53e79e2eea5a26805"
+    "sha256": "59017f4271b758877f49186858ee8553300c75ea35446184912a0b029a3d4484"
   }
 }

@@ -29,9 +29,9 @@
     "rejectedCandidates": []
   },
   "invocation": {
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume",
-    "outputPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/first-fail-volume.png",
-    "reportPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/first-fail-volume-capture-report.json",
+    "url": "http://127.0.0.1:8870/?state=first-fail&mode=volume",
+    "outputPath": "repo://first-fail-volume.png",
+    "reportPath": "repo://first-fail-volume-capture-report.json",
     "viewport": {
       "width": 1400,
       "height": 900
@@ -50,8 +50,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 15146,
-    "processGroupId": 15146,
+    "pid": 18094,
+    "processGroupId": 18094,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -60,7 +60,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 15146,
+      "processGroupId": 18094,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -72,8 +72,8 @@
       "path": "tmp://independent-headless-profile"
     },
     "domProbe": {
-      "pid": 15299,
-      "processGroupId": 15299,
+      "pid": 18100,
+      "processGroupId": 18100,
       "detachedProcessGroup": true,
       "exit": {
         "timedOut": false,
@@ -82,7 +82,7 @@
         "spawnError": null
       },
       "cleanup": {
-        "processGroupId": 15299,
+        "processGroupId": 18100,
         "graceMs": 1000,
         "groupPresentBefore": false,
         "actions": [],
@@ -93,15 +93,15 @@
   },
   "stderr": {
     "limitBytes": 65536,
-    "totalBytes": 3646,
-    "retainedBytes": 3646,
+    "totalBytes": 3505,
+    "retainedBytes": 3505,
     "truncated": false,
-    "tail": "[0812/033350.441600:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033350.544059:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.202051:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n[0812/033351.203114:INFO:CONSOLE:0] \"[.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n[0812/033351.204554:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.414721:INFO:CONSOLE:0] \"[.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n[0812/033351.416321:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.838017:INFO:CONSOLE:0] \"[.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n[0812/033351.839331:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400559000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n265736 bytes written to file repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/first-fail-volume.png\n[0812/033352.094363:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033352.118773:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n[0812/033352.158155:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.435871:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.438034:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume (0)\n"
+    "tail": "[0812/045908.905036:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/045908.966829:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045909.365505:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n[0812/045909.365581:INFO:CONSOLE:0] \"[.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n[0812/045909.367191:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045909.388521:INFO:CONSOLE:0] \"[.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n[0812/045909.390120:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045909.404567:INFO:CONSOLE:0] \"[.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n[0812/045909.405570:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/045909.420369:INFO:CONSOLE:0] \"[.WebGL-0x12c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n263433 bytes written to file repo://first-fail-volume.png\n[0812/045909.633457:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/045909.654176:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n[0812/045909.689371:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045910.098492:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045910.099969:INFO:CONSOLE:0] \"[.WebGL-0x10c00568400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=first-fail&mode=volume (0)\n"
   },
   "primaryOutput": {
-    "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/first-fail-volume.png",
-    "sizeBytes": 265736,
-    "sha256": "488a787086ba0ba05fef514d17866c03010c6185aac558705a911e9b7f2fdf92",
+    "path": "repo://first-fail-volume.png",
+    "sizeBytes": 263433,
+    "sha256": "6ad49bac59a3c99af1e86731e382f4d38bad5d15a9baf8b5f3634d5cc3e5ba58",
     "png": {
       "width": 1400,
       "height": 900,
@@ -111,23 +111,23 @@
       "filter": 0,
       "interlace": 0,
       "chunkCount": 68,
-      "idatBytes": 264899
+      "idatBytes": 262596
     }
   },
   "domReceipt": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume",
+    "url": "http://127.0.0.1:8870/?state=first-fail&mode=volume",
     "dataset": {
       "witnessLoaded": "true",
       "witnessState": "first-fail",
       "witnessMode": "volume",
       "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
       "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-      "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+      "resultsSha256": "a79c13472a9f5feaa32389097f4561bf136dcb70b0e3fb68f10b4383a8288184"
     },
     "stdout": {
       "limitBytes": 65536,
-      "totalBytes": 187361,
+      "totalBytes": 148642,
       "retainedBytes": 65536,
       "truncated": true,
       "retention": "prefix-only-no-dom-body-in-report"
@@ -161,9 +161,9 @@
       "rejectedCandidates": []
     },
     "primaryOutput": {
-      "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/first-fail-volume.png",
-      "sizeBytes": 265736,
-      "sha256": "488a787086ba0ba05fef514d17866c03010c6185aac558705a911e9b7f2fdf92",
+      "path": "repo://first-fail-volume.png",
+      "sizeBytes": 263433,
+      "sha256": "6ad49bac59a3c99af1e86731e382f4d38bad5d15a9baf8b5f3634d5cc3e5ba58",
       "png": {
         "width": 1400,
         "height": 900,
@@ -173,23 +173,23 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 68,
-        "idatBytes": 264899
+        "idatBytes": 262596
       }
     },
     "domReceipt": {
       "status": "complete",
-      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume",
+      "url": "http://127.0.0.1:8870/?state=first-fail&mode=volume",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "first-fail",
         "witnessMode": "volume",
         "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+        "resultsSha256": "a79c13472a9f5feaa32389097f4561bf136dcb70b0e3fb68f10b4383a8288184"
       },
       "stdout": {
         "limitBytes": 65536,
-        "totalBytes": 187361,
+        "totalBytes": 148642,
         "retainedBytes": 65536,
         "truncated": true,
         "retention": "prefix-only-no-dom-body-in-report"
@@ -198,9 +198,9 @@
   },
   "sourceDocument": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=first-fail&mode=volume",
+    "url": "http://127.0.0.1:8870/?state=first-fail&mode=volume",
     "httpStatus": 200,
-    "sizeBytes": 186333,
-    "sha256": "92dd91cca446d1fcab2ceecb89947512855905185885efcb6bd9798ee8b09e11"
+    "sizeBytes": 147656,
+    "sha256": "c3e33332e7e4061a4d60b4ef3b1a45f7bf945c086a62dd6dfd2da3e48b7a69db"
   }
 }

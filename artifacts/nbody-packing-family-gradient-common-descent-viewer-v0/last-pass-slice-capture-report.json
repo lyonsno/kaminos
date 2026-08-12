@@ -29,9 +29,9 @@
     "rejectedCandidates": []
   },
   "invocation": {
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice",
-    "outputPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/last-pass-slice.png",
-    "reportPath": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/last-pass-slice-capture-report.json",
+    "url": "http://127.0.0.1:8870/?state=last-pass&mode=slice",
+    "outputPath": "repo://last-pass-slice.png",
+    "reportPath": "repo://last-pass-slice-capture-report.json",
     "viewport": {
       "width": 1400,
       "height": 900
@@ -50,8 +50,8 @@
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 15202,
-    "processGroupId": 15202,
+    "pid": 18028,
+    "processGroupId": 18028,
     "detachedProcessGroup": true,
     "exit": {
       "timedOut": false,
@@ -60,7 +60,7 @@
       "spawnError": null
     },
     "cleanup": {
-      "processGroupId": 15202,
+      "processGroupId": 18028,
       "graceMs": 1000,
       "groupPresentBefore": false,
       "actions": [],
@@ -72,8 +72,8 @@
       "path": "tmp://independent-headless-profile"
     },
     "domProbe": {
-      "pid": 15305,
-      "processGroupId": 15305,
+      "pid": 18034,
+      "processGroupId": 18034,
       "detachedProcessGroup": true,
       "exit": {
         "timedOut": false,
@@ -82,7 +82,7 @@
         "spawnError": null
       },
       "cleanup": {
-        "processGroupId": 15305,
+        "processGroupId": 18034,
         "graceMs": 1000,
         "groupPresentBefore": false,
         "actions": [],
@@ -93,15 +93,15 @@
   },
   "stderr": {
     "limitBytes": 65536,
-    "totalBytes": 3632,
-    "retainedBytes": 3632,
+    "totalBytes": 3489,
+    "retainedBytes": 3489,
     "truncated": false,
-    "tail": "[0812/033350.934430:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033351.030505:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.832669:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n[0812/033351.832731:INFO:CONSOLE:0] \"[.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n[0812/033351.834780:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033351.947240:INFO:CONSOLE:0] \"[.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n[0812/033351.948683:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033352.039818:INFO:CONSOLE:0] \"[.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n[0812/033352.040622:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400498400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n157227 bytes written to file repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/last-pass-slice.png\n[0812/033352.286665:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/033352.323481:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n[0812/033352.368511:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.278773:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/033353.281458:INFO:CONSOLE:0] \"[.WebGL-0x11400557200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice (0)\n"
+    "tail": "[0812/045904.081229:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/045904.148459:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045904.538919:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n[0812/045904.538992:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n[0812/045904.540912:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045904.550540:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n[0812/045904.551921:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045904.561072:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n[0812/045904.561817:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0812/045904.571353:INFO:CONSOLE:0] \"[.WebGL-0x11c00558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n154154 bytes written to file repo://last-pass-slice.png\n[0812/045904.752373:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/045904.772819:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n[0812/045904.810877:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045905.206141:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/045905.208222:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8870/?state=last-pass&mode=slice (0)\n"
   },
   "primaryOutput": {
-    "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/last-pass-slice.png",
-    "sizeBytes": 157227,
-    "sha256": "eb3c36262ca4982a82cfc46717ae7791d6d37699251fa917314d3bd5d350ae07",
+    "path": "repo://last-pass-slice.png",
+    "sizeBytes": 154154,
+    "sha256": "d2938c6bdba9dc690bcf6bff3f5ca438e17facdb69178b568df1767a8732042a",
     "png": {
       "width": 1400,
       "height": 900,
@@ -110,24 +110,24 @@
       "compression": 0,
       "filter": 0,
       "interlace": 0,
-      "chunkCount": 42,
-      "idatBytes": 156702
+      "chunkCount": 41,
+      "idatBytes": 153641
     }
   },
   "domReceipt": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice",
+    "url": "http://127.0.0.1:8870/?state=last-pass&mode=slice",
     "dataset": {
       "witnessLoaded": "true",
       "witnessState": "last-pass",
       "witnessMode": "slice",
       "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
       "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-      "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+      "resultsSha256": "a79c13472a9f5feaa32389097f4561bf136dcb70b0e3fb68f10b4383a8288184"
     },
     "stdout": {
       "limitBytes": 65536,
-      "totalBytes": 187301,
+      "totalBytes": 148582,
       "retainedBytes": 65536,
       "truncated": true,
       "retention": "prefix-only-no-dom-body-in-report"
@@ -161,9 +161,9 @@
       "rejectedCandidates": []
     },
     "primaryOutput": {
-      "path": "repo://artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/last-pass-slice.png",
-      "sizeBytes": 157227,
-      "sha256": "eb3c36262ca4982a82cfc46717ae7791d6d37699251fa917314d3bd5d350ae07",
+      "path": "repo://last-pass-slice.png",
+      "sizeBytes": 154154,
+      "sha256": "d2938c6bdba9dc690bcf6bff3f5ca438e17facdb69178b568df1767a8732042a",
       "png": {
         "width": 1400,
         "height": 900,
@@ -172,24 +172,24 @@
         "compression": 0,
         "filter": 0,
         "interlace": 0,
-        "chunkCount": 42,
-        "idatBytes": 156702
+        "chunkCount": 41,
+        "idatBytes": 153641
       }
     },
     "domReceipt": {
       "status": "complete",
-      "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice",
+      "url": "http://127.0.0.1:8870/?state=last-pass&mode=slice",
       "dataset": {
         "witnessLoaded": "true",
         "witnessState": "last-pass",
         "witnessMode": "slice",
         "witnessRoute": "nbody-packing-family-gradient-common-descent-v0",
         "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-        "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd"
+        "resultsSha256": "a79c13472a9f5feaa32389097f4561bf136dcb70b0e3fb68f10b4383a8288184"
       },
       "stdout": {
         "limitBytes": 65536,
-        "totalBytes": 187301,
+        "totalBytes": 148582,
         "retainedBytes": 65536,
         "truncated": true,
         "retention": "prefix-only-no-dom-body-in-report"
@@ -198,9 +198,9 @@
   },
   "sourceDocument": {
     "status": "complete",
-    "url": "http://127.0.0.1:18765/artifacts/nbody-packing-family-gradient-common-descent-viewer-v0/?state=last-pass&mode=slice",
+    "url": "http://127.0.0.1:8870/?state=last-pass&mode=slice",
     "httpStatus": 200,
-    "sizeBytes": 186333,
-    "sha256": "92dd91cca446d1fcab2ceecb89947512855905185885efcb6bd9798ee8b09e11"
+    "sizeBytes": 147656,
+    "sha256": "c3e33332e7e4061a4d60b4ef3b1a45f7bf945c086a62dd6dfd2da3e48b7a69db"
   }
 }

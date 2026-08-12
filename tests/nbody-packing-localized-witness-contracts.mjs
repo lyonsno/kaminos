@@ -303,33 +303,33 @@ test('trajectory writer binds final-config one-step and six-step results into ei
     'reference',
   ]);
   assert.equal(Object.keys(states).length, 8);
-  assert.equal(states['all-neighbor-restoration'].metrics.pairwisePenetration, 0);
+  assert.equal(states['all-neighbor-restoration'].metrics.pairwisePenetration, 0.001482276963);
   assert.equal(
     states['repeated-all-neighbor-restoration'].metrics.pairwisePenetration,
-    0.000259103564,
+    0.002472001529,
   );
-  assert.match(report.claimCeiling.admittedClaim, /reintroduce pairwise penetration/);
+  assert.match(report.claimCeiling.admittedClaim, /increases pairwise debt above its start value/);
 });
 
-test('common-descent writer binds the source-bound result as a ninth comparison state', async () => {
+test('common-descent writer binds the source-bound result as a seventh comparison state', async () => {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-descent-'));
   const { report, states } = await writeNBodyPackingLocalizedHardBoundaryWitness({
     outDir,
-    restorationResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
-    trajectoryResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
     commonDescentResultPath:
       'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
   });
   assert.equal(report.route.effective,
     'nbody-packing-family-gradient-common-descent-v0');
-  assert.equal(report.requiredStates.length, 9);
-  assert.equal(Object.keys(states).length, 9);
-  assert.equal(states['family-common-descent'].metrics.pairwisePenetration, 0);
-  assert.equal(states['family-common-descent'].metrics.skeletalPenetration, 0.000125037313);
-  assert.equal(states['family-common-descent'].metrics.compartmentEscape, 0);
-  assert.match(report.claimCeiling.admittedClaim, /without trading tracked family debt/);
+  assert.equal(report.requiredStates.length, 7);
+  assert.equal(Object.keys(states).length, 7);
+  assert.equal(states['family-common-descent'].metrics.pairwisePenetration, 0.001531913516);
+  assert.equal(states['family-common-descent'].metrics.skeletalPenetration, 0.001545080434);
+  assert.equal(states['family-common-descent'].metrics.compartmentEscape, 0.004745541883);
+  assert.match(report.claimCeiling.admittedClaim, /lowers all compiled constraint-family maxima/);
+  assert.match(
+    fs.readFileSync(path.join(outDir, 'index.html'), 'utf8'),
+    /Family-gradient common descent · six-body hard boundary/,
+  );
 });
 
 test('common-descent witness rejects a canonically rehashed incomplete route config', async () => {
@@ -347,10 +347,6 @@ test('common-descent witness rejects a canonically rehashed incomplete route con
   await assert.rejects(
     writeNBodyPackingLocalizedHardBoundaryWitness({
       outDir,
-      restorationResultPath:
-        'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
-      trajectoryResultPath:
-        'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
       commonDescentResultPath:stalePath,
     }),
     /current common-descent contract/,
@@ -411,17 +407,13 @@ test('trajectory visual admission requires sixteen route-bound captures', async 
     NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE);
 });
 
-test('common-descent visual admission requires eighteen route-bound captures', async () => {
+test('common-descent visual admission requires fourteen route-bound captures', async () => {
   const sourceDir = path.resolve(
     'artifacts/nbody-packing-family-gradient-common-descent-viewer-v0',
   );
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-admission-'));
   const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({
     outDir,
-    restorationResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
-    trajectoryResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
     commonDescentResultPath:
       'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
   });
@@ -435,7 +427,7 @@ test('common-descent visual admission requires eighteen route-bound captures', a
   }
   const inspection = {
     observedAt:'2026-08-12T00:00:00.000Z',
-    summary:'Nine route-bound states inspected in transparent volume and opaque slices.',
+    summary:'Seven route-bound states inspected in transparent volume and opaque slices.',
     verdict:{
       nonblank:true,
       orbitable:true,
@@ -456,7 +448,7 @@ test('common-descent visual admission requires eighteen route-bound captures', a
   };
   const admitted = await admitNBodyPackingLocalizedVisualInspection({ outDir, inspection });
   assert.equal(admitted.report.status, 'complete-agent-visual-inspected');
-  assert.equal(admitted.report.visualInspection.captureCount, 18);
+  assert.equal(admitted.report.visualInspection.captureCount, 14);
   assert.equal(admitted.receipt.route.effective,
     NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE);
 });

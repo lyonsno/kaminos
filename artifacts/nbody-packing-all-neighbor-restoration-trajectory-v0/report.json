@@ -261,27 +261,26 @@
   "classification": {
     "coldMaximumPhysicalResidual": 0.171504028818,
     "warmMaximumPhysicalResidual": 0.002679616613,
-    "patternMaximumPhysicalResidual": 0.001615326586,
+    "patternMaximumPhysicalResidual": 0.004815758612,
     "patternStatus": "same-basis-feasibility-unresolved",
     "traversalInvariance": "passed",
-    "restorationMaximumPhysicalResidual": 0.000867525141,
-    "restorationVersusCoordinateFloor": 1.8619939753423238,
-    "restorationVersusHomotopyFloor": 1.090427279040666,
-    "trajectoryMaximumPhysicalResidual": 0.000314269245,
-    "trajectoryVersusOneStep": 2.760451920772585,
-    "trajectoryAcceptedIterations": 6
+    "restorationMaximumPhysicalResidual": 0.00447138638,
+    "restorationVersusCoordinateFloor": 1.0770168808359613,
+    "trajectoryMaximumPhysicalResidual": 0.00311519149,
+    "trajectoryVersusOneStep": 1.4353488041918092,
+    "trajectoryAcceptedIterations": 5
   },
   "bindings": {
     "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-    "resultsSha256": "8725c070ade2b7e5a419cef6fb7a6499a3ad9ff705c4cebbb3ace588693663a6",
-    "indexHtmlSha256": "40f6b2f7f03b449b1451af5fc84a9ac1708c6fff5c0bfdd020c2b3369d0c72ab",
+    "resultsSha256": "cc6eafb0c81d5ba1c2a55fad05891a3e5ce98cc0cab3845a6b919b607baab367",
+    "indexHtmlSha256": "17346fda087c4cd26db7fcf4c41d811f208ad9d6df9c9f5b098bf3b6a49b7cb0",
     "challengeResultSha256": "ee7fc0d1c84d9554e6247ffcc3859f8e2c0a3ca5da3e7e8f42456c3a4c8a2dc8",
     "continuationResultSha256": "2b1fac7780f94d16aec89dd3dc20f3396a525f4d6087688ae83d431a0522f805",
     "patternResultSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
-    "restorationResultSha256": "88c569f8d99da75136afbb954f6679d06de50200055c90f1128ce4bd5ae24c0c",
-    "trajectoryResultSha256": "0ace81a43d60675a5678b3748d0b81fbd9dbfbeda386e89881bcec93ac79abd2",
-    "visualInspectionSha256": "e399cfa20b5416dd929e0b1358531c53af81cc4485d941d48cb349ec930d5127",
-    "captureReceiptSetSha256": "a856f13f05d5254567d17f51517c0727ac3f6169a784500628a4bc8d2dd9da48"
+    "restorationResultSha256": "1c05fd6ddc34668f01e2379adad87ffcd824287468922f1a1375242ff0e52105",
+    "trajectoryResultSha256": "51f558d879c7373f987e8d617eabe0a7e8dd04743eb4b42b70ec775e4f5d9502",
+    "visualInspectionSha256": "d5dbf8c587b4b7ffe604aa1ee91c74979e2c8315f653eff8e1131b1bf2e62383",
+    "captureReceiptSetSha256": "a45b84bd95b9c95fe78afad7145d25fe91f504c2df15d9ff93785cf3bddc3e79"
   },
   "requiredStates": [
     "pass-crowded",
@@ -298,7 +297,7 @@
     "slice"
   ],
   "claimCeiling": {
-    "admittedClaim": "six deterministic simultaneous all-neighbor restoration steps on severity 0.32 monotonically lower the maximum residual while retaining exact attachment and volume invariants, but reintroduce pairwise penetration after the one-step state cleared it; scalar-merit repetition therefore fails the no-debt-trading architecture predicate",
+    "admittedClaim": "five deterministic simultaneous all-neighbor restoration steps on severity 0.32 lower the compiled-row maximum residual before the sixth attempt stalls, while scalar merit increases pairwise debt above its start value; scalar-merit repetition therefore fails the no-debt-trading architecture predicate",
     "anatomicalAdmission": "none",
     "nonGoals": [
       "same-basis-representation-impossibility",
@@ -311,10 +310,10 @@
   "visualInspection": {
     "status": "passed-agent-inspection",
     "artifact": "visual-inspection.json",
-    "receiptSha256": "e399cfa20b5416dd929e0b1358531c53af81cc4485d941d48cb349ec930d5127",
+    "receiptSha256": "d5dbf8c587b4b7ffe604aa1ee91c74979e2c8315f653eff8e1131b1bf2e62383",
     "captureCount": 16
   },
   "identity": {
-    "sha256": "397ddfa02d074b4227f94f446c44914d887e611b3f82610a47f82d20852eb3d1"
+    "sha256": "e2c936adaeb261c502c33ce04c886ff0aa9bf12a7fc42e2d730e80f8cfdd77fa"
   }
 }

@@ -261,31 +261,24 @@
   "classification": {
     "coldMaximumPhysicalResidual": 0.171504028818,
     "warmMaximumPhysicalResidual": 0.002679616613,
-    "patternMaximumPhysicalResidual": 0.001615326586,
+    "patternMaximumPhysicalResidual": 0.004815758612,
     "patternStatus": "same-basis-feasibility-unresolved",
     "traversalInvariance": "passed",
-    "restorationMaximumPhysicalResidual": 0.000867525141,
-    "restorationVersusCoordinateFloor": 1.8619939753423238,
-    "restorationVersusHomotopyFloor": 1.090427279040666,
-    "trajectoryMaximumPhysicalResidual": 0.000314269245,
-    "trajectoryVersusOneStep": 2.760451920772585,
-    "trajectoryAcceptedIterations": 6,
-    "commonDescentMaximumPhysicalResidual": 0.000125037313,
-    "commonDescentVersusScalarOneStep": 6.938130068422056,
-    "commonDescentSelectedRadius": 0.004
+    "commonDescentMaximumPhysicalResidual": 0.004745541883,
+    "commonDescentVersusCompiledRowStart": 1.0147963563974722,
+    "commonDescentSelectedRadius": 0.00025,
+    "commonDescentRegressingCandidateCount": 4
   },
   "bindings": {
     "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
-    "resultsSha256": "47383da605c9ae44bf66ddb7e8446c2abab973b4297c9e8e9688f68653ad70dd",
-    "indexHtmlSha256": "92dd91cca446d1fcab2ceecb89947512855905185885efcb6bd9798ee8b09e11",
+    "resultsSha256": "a79c13472a9f5feaa32389097f4561bf136dcb70b0e3fb68f10b4383a8288184",
+    "indexHtmlSha256": "c3e33332e7e4061a4d60b4ef3b1a45f7bf945c086a62dd6dfd2da3e48b7a69db",
     "challengeResultSha256": "ee7fc0d1c84d9554e6247ffcc3859f8e2c0a3ca5da3e7e8f42456c3a4c8a2dc8",
     "continuationResultSha256": "2b1fac7780f94d16aec89dd3dc20f3396a525f4d6087688ae83d431a0522f805",
     "patternResultSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
-    "restorationResultSha256": "88c569f8d99da75136afbb954f6679d06de50200055c90f1128ce4bd5ae24c0c",
-    "trajectoryResultSha256": "0ace81a43d60675a5678b3748d0b81fbd9dbfbeda386e89881bcec93ac79abd2",
-    "commonDescentResultSha256": "b56ad0f0acd77ff102ed5a2e2bc51bd38b4f040516875ba13dc2778f8dd1380c",
-    "visualInspectionSha256": "4fa5966a78dae01fb4e1258ec408c9d9f7be0cc6c2074a28f1a45e5b7dca8134",
-    "captureReceiptSetSha256": "5cead8760cc2cbfee8c67e2811741729ca3182b06f449144f01e675eb1308c05"
+    "commonDescentResultSha256": "dd236d22e8d7287a9739e7e237ab56926b5aa38c830d6416e2595df8b006872b",
+    "visualInspectionSha256": "e8c80b116e879d859fde4df18b265bb69e8cdda7e140821781101a95d9dfe1f2",
+    "captureReceiptSetSha256": "874b4c2be8f099c08b0cd8061394e29e4024d468f3c86e6fab4399f39cd11119"
   },
   "requiredStates": [
     "pass-crowded",
@@ -293,8 +286,6 @@
     "fail-crowded",
     "first-fail",
     "same-basis-feasible",
-    "all-neighbor-restoration",
-    "repeated-all-neighbor-restoration",
     "family-common-descent",
     "reference"
   ],
@@ -303,7 +294,7 @@
     "slice"
   ],
   "claimCeiling": {
-    "admittedClaim": "one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 lowers maximum physical residual to 0.000125037313 without trading tracked family debt at any tested radius, clearing pairwise and compartment debt while retaining exact attachment and volume invariants",
+    "admittedClaim": "one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 admits a radius-0.00025 step that lowers all compiled constraint-family maxima from 0.004815758612 to 0.004745541883 while retaining exact attachment and volume invariants; four larger tested radii are rejected for compiled compartment regression",
     "anatomicalAdmission": "none",
     "nonGoals": [
       "same-basis-representation-impossibility",
@@ -316,10 +307,10 @@
   "visualInspection": {
     "status": "passed-agent-inspection",
     "artifact": "visual-inspection.json",
-    "receiptSha256": "4fa5966a78dae01fb4e1258ec408c9d9f7be0cc6c2074a28f1a45e5b7dca8134",
-    "captureCount": 18
+    "receiptSha256": "e8c80b116e879d859fde4df18b265bb69e8cdda7e140821781101a95d9dfe1f2",
+    "captureCount": 14
   },
   "identity": {
-    "sha256": "0c079a04a701a574e9e6979ed8fef4c75fc864812782378316bc33270be1fa09"
+    "sha256": "b6915cf11015f03b020171f781c74ffad44df74366d3679a350408e2992e1eaa"
   }
 }

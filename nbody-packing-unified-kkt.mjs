@@ -239,6 +239,26 @@ function constraintRows(problem, vector) {
   return { muscles, rows };
 }
 
+function compiledConstraintFamilyMetrics(rows) {
+  const metricByKind = {
+    'pairwise-clearance':'pairwisePenetration',
+    'skeletal-clearance':'skeletalPenetration',
+    'compartment-clearance':'compartmentEscape',
+  };
+  const metrics = {
+    pairwisePenetration:0,
+    skeletalPenetration:0,
+    compartmentEscape:0,
+  };
+  for (const row of rows) {
+    const key = metricByKind[row.kind];
+    if (key) metrics[key] = Math.max(metrics[key], Math.max(0, -row.signedGap));
+  }
+  return Object.fromEntries(Object.entries(metrics).map(
+    ([key, value]) => [key, rounded(value)],
+  ));
+}
+
 function maximumResidual(metrics) {
   return Math.max(
     metrics.pairwisePenetration,
@@ -251,7 +271,10 @@ function maximumResidual(metrics) {
 
 function snapshot(problem, vector) {
   const { muscles, rows } = constraintRows(problem, vector);
-  const metrics = measureMuscleCompartmentPacking(problem.crowdedSource, muscles);
+  const metrics = {
+    ...measureMuscleCompartmentPacking(problem.crowdedSource, muscles),
+    ...compiledConstraintFamilyMetrics(rows),
+  };
   return {
     vector:[...vector],
     muscles,

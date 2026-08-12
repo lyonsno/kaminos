@@ -21,18 +21,26 @@
     }
   },
   "comparison": {
-    "coordinateSearchFloor": 0.001615326586,
-    "homotopyFloor": 0.000945973079,
-    "restorationResidual": 0.000314269245,
-    "improvementVersusCoordinateSearch": 5.139944845700699,
-    "improvementVersusHomotopy": 3.0100720768906295
+    "sourceReported": {
+      "coordinateSearchFloor": 0.001615326586,
+      "homotopyFloor": 0.000945973079,
+      "authority": "historical-sampled-metrics-not-used-for-admission"
+    },
+    "effectiveCompiledRows": {
+      "coordinateSearchFloor": 0.004815758612,
+      "homotopyFloor": 0.037521132052,
+      "authority": "compiled-constraint-row-family-maxima"
+    },
+    "restorationResidual": 0.00311519149,
+    "improvementVersusCoordinateSearch": 1.545894892002289,
+    "improvementVersusHomotopy": 12.044566817945435
   },
   "bindings": {
-    "resultJsonSha256": "0ace81a43d60675a5678b3748d0b81fbd9dbfbeda386e89881bcec93ac79abd2",
-    "resultSha256": "27bf9222b77fca86bcb94396f3003d26bdb4312a9324666d7adde0fb104ac95c"
+    "resultJsonSha256": "51f558d879c7373f987e8d617eabe0a7e8dd04743eb4b42b70ec775e4f5d9502",
+    "resultSha256": "e3cf6ad04b4b14dd019e6d416434c85c12f291c52e7b2325159ffcabf9b1b7fb"
   },
   "claimCeiling": "bounded-severity-0.32-restoration-direction-not-global-feasibility-or-optimality",
   "identity": {
-    "sha256": "2d477a613b3f5c8b2ad0ffc3dd982e4d0a29db5e60bcf1dec0754284ed3fee2c"
+    "sha256": "42e1a0fb0657f98747f0b1c821985a98401e095c83f46ad2d8356fd7cd462350"
   }
 }

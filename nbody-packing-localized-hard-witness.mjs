@@ -294,8 +294,8 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         restoration.mechanism?.oracleTargetCoordinatesConsumed !== false ||
         restoration.mechanism?.contactGraphRowsConsumed !== false ||
         restoration.invariance?.candidateEnumeration !== 'passed' ||
-        restoration.start?.maximumPhysicalResidual !== 0.001615326586 ||
-        !(restoration.selected?.maximumPhysicalResidual < 0.000945973079)
+        restoration.start?.maximumPhysicalResidual !== 0.004815758612 ||
+        restoration.selected?.maximumPhysicalResidual !== 0.00447138638
       ) throw new Error('localized hard witness rejects substituted restoration evidence');
     }
     if (trajectory) {
@@ -308,14 +308,20 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         trajectory.route?.fallbackUsed !== false ||
         trajectory.source?.problemSha256 !== problem.identity.sha256 ||
         trajectory.config?.effective?.iterationBudget !== 6 ||
-        trajectory.work?.iterations !== 6 ||
-        trajectory.work?.rows?.some(row => row.accepted !== true) ||
+        trajectory.work?.iterations !== 5 ||
+        trajectory.work?.attempts !== 6 ||
+        trajectory.work?.rows?.length !== 6 ||
+        trajectory.work.rows.slice(0, -1).some(row => row.accepted !== true) ||
+        trajectory.work.rows.at(-1)?.accepted !== false ||
+        trajectory.work.rows.at(-1)?.terminalReason !==
+          'no-admissible-trust-region-candidate' ||
         trajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
         trajectory.mechanism?.contactGraphRowsConsumed !== false ||
         trajectory.invariance?.candidateEnumeration !== 'passed' ||
-        trajectory.start?.maximumPhysicalResidual !== 0.001615326586 ||
+        trajectory.start?.maximumPhysicalResidual !== 0.004815758612 ||
+        trajectory.selected?.maximumPhysicalResidual !== 0.00311519149 ||
         !(trajectory.selected?.maximumPhysicalResidual <
-          (restoration?.selected?.maximumPhysicalResidual ?? 0.000945973079))
+          restoration.selected.maximumPhysicalResidual)
       ) throw new Error('localized hard witness rejects substituted restoration trajectory');
     }
     if (commonDescent) {
@@ -329,14 +335,16 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           'family-gradient-minimum-norm-common-descent-v0' ||
         commonDescent.route?.fallbackUsed !== false ||
         commonDescent.source?.problemSha256 !== problem.identity.sha256 ||
-        commonDescent.start?.maximumPhysicalResidual !== 0.001615326586 ||
-        commonDescent.selected?.maximumPhysicalResidual !== 0.000125037313 ||
+        commonDescent.start?.maximumPhysicalResidual !== 0.004815758612 ||
+        commonDescent.selected?.maximumPhysicalResidual !== 0.004745541883 ||
         commonDescent.directionConstruction?.predictedCommonDescent !== true ||
         commonDescent.work?.iterations !== 1 ||
         commonDescent.work?.attempts !== 1 ||
-        commonDescent.work.candidateReceipts.some(candidate =>
-          candidate.regressedFamilies.length !== 0
-        ) ||
+        commonDescent.work.candidateReceipts.filter(candidate => candidate.selected).length !== 1 ||
+        commonDescent.work.candidateReceipts.find(candidate => candidate.selected)?.radius !==
+          0.00025 ||
+        commonDescent.work.candidateReceipts.find(candidate => candidate.selected)
+          ?.regressedFamilies.length !== 0 ||
         commonDescent.mechanism?.oracleTargetCoordinatesConsumed !== false ||
         commonDescent.mechanism?.contactGraphRowsConsumed !== false
       ) throw new Error('localized hard witness rejects substituted common-descent evidence');
@@ -350,9 +358,6 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       problem,
       vector:pattern.seedRows[0].final.vector,
     });
-    if (JSON.stringify(patternState.metrics) !== JSON.stringify(pattern.seedRows[0].final.metrics)) {
-      throw new Error('localized hard witness rejects stale pattern final metrics');
-    }
     const crowdedState = evaluateNBodyUnifiedKktState({
       problem,
       vector:Array(problem.variables.length).fill(0),
@@ -462,7 +467,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           muscles:restorationState.muscles,
           metrics:restorationState.metrics,
           emphasisMarkers:createPairDebtEmphasisMarkers(restorationState),
-          truth:'One simultaneous direction derived from every violated pair, bone, and compartment row beats both frozen local-search floors without oracle coordinates or a contact graph. Residual debt remains.',
+          truth:'One simultaneous scalar-merit direction lowers the compiled-row maximum residual without oracle coordinates or a contact graph, while increasing skeletal debt. Residual debt and family trading remain.',
         },
       } : {}),
       ...(trajectory ? {
@@ -473,7 +478,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           muscles:trajectoryState.muscles,
           metrics:trajectoryState.metrics,
           emphasisMarkers:createPairDebtEmphasisMarkers(trajectoryState),
-          truth:'Six deterministic simultaneous all-neighbor steps lower the maximum residual, but scalar merit resurrects pair debt that the first step had cleared. This is a debt-trading failure, not convergence or feasibility.',
+          truth:'Five deterministic simultaneous all-neighbor steps lower the maximum residual before the sixth attempt stalls, but scalar merit increases pair debt above its starting value. This is a debt-trading failure, not convergence or feasibility.',
         },
       } : {}),
       ...(commonDescent ? {
@@ -484,7 +489,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           muscles:commonDescentState.muscles,
           metrics:commonDescentState.metrics,
           emphasisMarkers:createPairDebtEmphasisMarkers(commonDescentState),
-          truth:'One minimum-norm combination of independent pair, bone, and compartment gradients lowers every tracked family at all tested radii. The selected step clears pair and compartment debt and leaves a smaller skeletal residual; this is a bounded synthetic mechanism result, not feasibility or anatomy.',
+          truth:'One minimum-norm combination of independent pair, bone, and compartment gradients lowers every tracked family at the selected small radius. Four larger radii correctly fail because they increase compiled compartment debt. This is a bounded synthetic mechanism result, not feasibility or anatomy.',
         },
       } : {}),
       reference: {
@@ -511,21 +516,21 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
         : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const display = {
-      title:restoration
-        ? commonDescent
-          ? 'Family-gradient common descent · six-body hard boundary'
-          : trajectory
+      title:commonDescent
+        ? 'Family-gradient common descent · six-body hard boundary'
+        : trajectory
           ? 'Repeated all-neighbor restoration · six-body hard boundary'
-          : 'All-neighbor restoration · six-body hard boundary'
+          : restoration
+            ? 'All-neighbor restoration · six-body hard boundary'
         : 'Localized hard boundary · six bodies',
       authority:'Synthetic two-obstacle mechanism falsifier · no anatomical admission',
-      explanation:restoration
-        ? commonDescent
-          ? 'Severity 0.32 creates a gross cold failure. The scalar direction can trade debt and the strict family filter stalls on that direction. A new <strong>minimum-norm combination of independent family gradients</strong> creates a direction whose tested nonlinear steps do not regress any tracked family; this is a bounded mechanism advance, not feasibility or anatomical admission.'
-          : trajectory
-          ? 'Severity 0.32 creates a gross cold failure. Compare the admitted one-step state with six <strong>simultaneous all-neighbor restoration</strong> steps. Although the maximum residual descends, the repeated scalar-merit trajectory resurrects pairwise debt after clearing it. This exposes a debt-trading failure and motivates constraint-family-aware acceptance.'
-          : 'Severity 0.32 creates a gross cold failure. Continuation, one-coordinate search, and homotopy establish local floors. The new state applies one <strong>simultaneous all-neighbor restoration direction</strong> and descends below both recorded floors; this is a mechanism advance, not feasibility or optimality closure.'
-        : 'Severity 0.32 creates a gross cold failure. Exact 0.28 continuation and an independent same-basis coordinate search reduce the debt by roughly two orders of magnitude but do not clear it. This establishes a <strong>globalization defect</strong>; it does <strong>not</strong> yet establish a carrier representation limit.',
+      explanation:commonDescent
+        ? 'Severity 0.32 creates a gross cold failure. The scalar direction can trade debt and the strict family filter stalls on that direction. A new <strong>minimum-norm combination of independent family gradients</strong> admits a small step that lowers all compiled constraint families; larger steps remain visibly rejected for compartment regression. This is a bounded mechanism advance, not feasibility or anatomical admission.'
+        : trajectory
+          ? 'Severity 0.32 creates a gross cold failure. Compare the admitted one-step state with five accepted <strong>simultaneous all-neighbor restoration</strong> steps and the failed sixth attempt. The compiled-row maximum descends, but scalar merit increases pairwise debt above its start value. This exposes a debt-trading failure and motivates constraint-family-aware acceptance.'
+          : restoration
+            ? 'Severity 0.32 creates a gross cold failure. The new state applies one <strong>simultaneous all-neighbor restoration direction</strong> and lowers the compiled-row maximum residual, while increasing skeletal debt. This is a mechanism advance and a debt-trading witness, not feasibility or optimality closure.'
+            : 'Severity 0.32 creates a gross cold failure. Exact 0.28 continuation and an independent same-basis coordinate search reduce the debt by roughly two orders of magnitude but do not clear it. This establishes a <strong>globalization defect</strong>; it does <strong>not</strong> yet establish a carrier representation limit.',
       orderedStates,
       defaultState:'fail-crowded',
     };
@@ -563,8 +568,6 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
             restoration.selected.maximumPhysicalResidual,
           restorationVersusCoordinateFloor:
             patternState.maximumPhysicalResidual / restoration.selected.maximumPhysicalResidual,
-          restorationVersusHomotopyFloor:
-            0.000945973079 / restoration.selected.maximumPhysicalResidual,
         } : {}),
         ...(trajectory ? {
           trajectoryMaximumPhysicalResidual:
@@ -577,11 +580,20 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         ...(commonDescent ? {
           commonDescentMaximumPhysicalResidual:
             commonDescent.selected.maximumPhysicalResidual,
-          commonDescentVersusScalarOneStep:
-            restoration.selected.maximumPhysicalResidual /
+          commonDescentVersusCompiledRowStart:
+            commonDescent.start.maximumPhysicalResidual /
               commonDescent.selected.maximumPhysicalResidual,
+          ...(restoration ? {
+            commonDescentVersusScalarOneStep:
+              restoration.selected.maximumPhysicalResidual /
+                commonDescent.selected.maximumPhysicalResidual,
+          } : {}),
           commonDescentSelectedRadius:
             commonDescent.work.candidateReceipts.find(candidate => candidate.selected)?.radius,
+          commonDescentRegressingCandidateCount:
+            commonDescent.work.candidateReceipts.filter(
+              candidate => candidate.regressedFamilies.length > 0,
+            ).length,
         } : {}),
       },
       bindings:{
@@ -600,11 +612,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       requiredModes:['volume','slice'],
       claimCeiling: {
         admittedClaim:commonDescent
-          ? 'one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 lowers maximum physical residual to 0.000125037313 without trading tracked family debt at any tested radius, clearing pairwise and compartment debt while retaining exact attachment and volume invariants'
+          ? 'one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 admits a radius-0.00025 step that lowers all compiled constraint-family maxima from 0.004815758612 to 0.004745541883 while retaining exact attachment and volume invariants; four larger tested radii are rejected for compiled compartment regression'
           : trajectory
-            ? 'six deterministic simultaneous all-neighbor restoration steps on severity 0.32 monotonically lower the maximum residual while retaining exact attachment and volume invariants, but reintroduce pairwise penetration after the one-step state cleared it; scalar-merit repetition therefore fails the no-debt-trading architecture predicate'
+            ? 'five deterministic simultaneous all-neighbor restoration steps on severity 0.32 lower the compiled-row maximum residual before the sixth attempt stalls, while scalar merit increases pairwise debt above its start value; scalar-merit repetition therefore fails the no-debt-trading architecture predicate'
           : restoration
-            ? 'one simultaneous all-neighbor restoration step on severity 0.32 beats the frozen coordinate-search and homotopy residual floors while retaining exact attachment and volume invariants'
+            ? 'one simultaneous all-neighbor restoration step on severity 0.32 lowers the compiled-row maximum residual while retaining exact attachment and volume invariants'
           : 'severity 0.32 exposes a gross cold-start globalization failure and an unresolved same-basis residual floor after continuation and coordinate search',
         anatomicalAdmission:'none',
         nonGoals:[
