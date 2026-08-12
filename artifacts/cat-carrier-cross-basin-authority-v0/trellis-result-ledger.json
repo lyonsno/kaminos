@@ -1,0 +1,94 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.trellis-results.v0",
+  "selection": "trellis-selection.json",
+  "selectionSha256": "68d7a84e93b5bcd2c006f9e0a9b516f7145f718801689b1a3d4fb02e03427566",
+  "submissions": "trellis-submissions.json",
+  "submissionsSha256": "ecc36606e9bb239c80f2ac3bd86b13115aa1c7378fe4326672c08fc3e8deff9e",
+  "collectedAt": 1786535778.528526,
+  "cells": {
+    "revision-048-dragon-seed80301": {
+      "jobId": "3db185a2e52c",
+      "role": "scaled-anatomical-elaboration",
+      "input": "runs/revision-048-dragon-seed80301/output.png",
+      "inputSha256": "1e5a5284925a149d6f6125c374d447d0644806f43d78451b79da6b5074dd11bf",
+      "output": "trellis/revision-048-dragon-seed80301/output.glb",
+      "outputSha256": "165413ae4eac261562d1d3d00642a6667a8cf967246515a8b0bd16409c98cb60",
+      "outputBytes": 10612516,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-dragon-seed80301/receipt.json"
+    },
+    "revision-048-golem-seed80301": {
+      "jobId": "6da27501da3c",
+      "role": "rigid-segmented-surface",
+      "input": "runs/revision-048-golem-seed80301/output.png",
+      "inputSha256": "7c60876bab19bb6abf7eb709abe3d5f8952284bdadb4aa0f6b7954652c267213",
+      "output": "trellis/revision-048-golem-seed80301/output.glb",
+      "outputSha256": "460218177d163dd3e3aa7d8f2725d843f8be5402ab236827e31809b77f00c94e",
+      "outputBytes": 5369600,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-golem-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-golem-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-golem-seed80301/receipt.json"
+    },
+    "revision-048-phantom-seed80302": {
+      "jobId": "065d4b6a5961",
+      "role": "translucent-nonrigid-surface",
+      "input": "runs/revision-048-phantom-seed80302/output.png",
+      "inputSha256": "f74395a1139a0de4c6d3a4908a012d38bf01f90297b1fc6e510869d80bb400cd",
+      "output": "trellis/revision-048-phantom-seed80302/output.glb",
+      "outputSha256": "0e3423d8c35e8f1c518c45a376a4ff923b6dc1871e5f5727dd3a30dc6ed2181d",
+      "outputBytes": 9463688,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-phantom-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-phantom-seed80302/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-phantom-seed80302/receipt.json"
+    },
+    "revision-048-maquette-seed80301": {
+      "jobId": "fd3c55ca4953",
+      "role": "neutral-finished-completion",
+      "input": "runs/revision-048-maquette-seed80301/output.png",
+      "inputSha256": "c93f1d41880fabf50ad0551ce862d5e013904a3a874e4ae956b0aa1589cfc91c",
+      "output": "trellis/revision-048-maquette-seed80301/output.glb",
+      "outputSha256": "c71bcb4eff7f66bd58ea4bf65ce83c0917b81208bc37c355fdcb753aa7a64976",
+      "outputBytes": 9238116,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-maquette-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-maquette-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-maquette-seed80301/receipt.json"
+    },
+    "revision-048-skin-seed80302": {
+      "jobId": "6b174be917a0",
+      "role": "continuous-skin",
+      "input": "runs/revision-048-skin-seed80302/output.png",
+      "inputSha256": "b97d4670fdc3504d2d1db476fc28b6391da5bfd4ac20b42ef81eec366e66cbb1",
+      "output": "trellis/revision-048-skin-seed80302/output.glb",
+      "outputSha256": "60be71996d36a783d57a000dd8c3b8a4a6c2f7fca58d18c4c496b81d0a94cd1d",
+      "outputBytes": 8870668,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-skin-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-skin-seed80302/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-skin-seed80302/receipt.json"
+    },
+    "revision-048-fur-seed80302": {
+      "jobId": "e659731b45e4",
+      "role": "continuous-fur",
+      "input": "runs/revision-048-fur-seed80302/output.png",
+      "inputSha256": "de34725947ce3c5075e841ed7e1f80f2a7873af0098a6b12e355ea3a4a8736ae",
+      "output": "trellis/revision-048-fur-seed80302/output.glb",
+      "outputSha256": "bcbb8aaff8a569f69790376f2248265448a4b69ee3dc868e0c5ab7046d5b385d",
+      "outputBytes": 7463284,
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-fur-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-fur-seed80302/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveParams": {
+        "texture_size": "1024"
+      },
+      "receipt": "receipts-trellis/revision-048-fur-seed80302/receipt.json"
+    }
+  }
+}

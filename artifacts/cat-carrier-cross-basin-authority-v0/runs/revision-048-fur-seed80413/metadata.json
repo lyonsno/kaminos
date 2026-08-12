@@ -1,0 +1,25 @@
+{
+  "name": "plate",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "4015de978c87",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-048/plate.png",
+  "input_name": "plate.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/prompts/fur.txt",
+    "seed": "80413",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1786533460.640434,
+  "duration_s": 79.7
+}

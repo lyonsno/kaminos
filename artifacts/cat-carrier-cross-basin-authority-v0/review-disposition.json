@@ -1,0 +1,46 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.review-disposition.v0",
+  "reviewSurface": "Codex GPT-5.5 read-only review session 019ff5e3-8902-76f0-b718-a572c24bd2e3",
+  "revision": 1,
+  "verdict": "All four material evidence-chain findings are addressed. The visual campaign conclusions were not overturned.",
+  "findings": [
+    {
+      "severity": "high",
+      "finding": "The reconstruction sheet labeled Trellis receipt ids as Flux job ids.",
+      "status": "addressed",
+      "repair": "The sheet now resolves the authenticated Flux ledger and displays separate Flux and Trellis job ids.",
+      "confirmation": "test_job_label_distinguishes_flux_and_trellis_receipts"
+    },
+    {
+      "severity": "high",
+      "finding": "Trellis effective-route validation admitted substring prefix lies.",
+      "status": "addressed",
+      "repair": "The collector now parses shell argv and requires each authority-bearing option exactly once with exact value equality.",
+      "confirmation": "test_seed_prefix_lie_fails_loud; test_output_path_prefix_lie_fails_loud"
+    },
+    {
+      "severity": "medium",
+      "finding": "The human-visible Trellis sheet did not bind its prompt and route display through both authenticated ledgers.",
+      "status": "addressed",
+      "repair": "The builder now binds the current campaign, normalized prompt file, Flux output, Trellis input, Trellis effective route, GLB, and orbit frames before rendering.",
+      "confirmation": "test_rejects_flux_ledger_from_a_stale_campaign; test_display_provenance_binds_prompt_input_and_effective_route; test_display_provenance_rejects_stale_trellis_route"
+    },
+    {
+      "severity": "medium",
+      "finding": "Orbit reuse trusted existing frame paths without rehashing their contents.",
+      "status": "addressed",
+      "repair": "The reuse predicate now verifies all six frame hashes against the orbit manifest.",
+      "confirmation": "test_manifest_is_reused_only_for_the_current_glb"
+    }
+  ],
+  "verification": {
+    "tests": "38 passed",
+    "builders": [
+      "cross-basin-authority.html",
+      "trellis-reconstruction.html"
+    ],
+    "orbitReuse": "6 of 6 current, with frame hashes revalidated",
+    "visualSmoke": "/private/tmp/molten-trellis-sheet-smoke-reviewed/trellis-reconstruction-full.png",
+    "visualInspection": "All six sections rendered, source-adjacent comparisons remained legible, and dual Flux/Trellis provenance was visible."
+  }
+}

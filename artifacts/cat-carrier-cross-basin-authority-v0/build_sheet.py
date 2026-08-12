@@ -10,6 +10,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "cross-basin-authority.html"
+FINDINGS = {
+    "dragon": "Rich elaboration survives the stronger carrier. Against revision 029 at matched seeds, revision 048 more consistently separates neck, shoulder, barrel, and hindquarter while seed still controls creature identity.",
+    "golem": "Cleanest structural transfer and matched comparison. Rigid plates expose revision 048's higher neck and more separated mass organization instead of erasing them.",
+    "phantom": "Radically translucent material and internal detail preserve the carrier's macrostructure across all seeds.",
+    "maquette": "The authority trade is explicit: revision 029 readily becomes finished flesh, while revision 048 often remains close to the low-poly source. Stronger structure now requires stronger or better-targeted elaboration pressure.",
+    "skin": "Continuous skin preserves the carrier strongly; superficial finish varies by seed.",
+    "fur": "Dense coat preserves macro-proportions but partially hides authored surface structure and increases head-prior drift.",
+    "cat": "Species naming alone consistently restates the low-poly carrier instead of elaborating it.",
+    "unknown-creature": "Open whole-result naming also restates or simplifies the carrier rather than adding a finished surface.",
+}
+SENSITIVE_CELLS = {
+    "revision-048-skin-seed80413": "Visible superficial abrasion and irritation marks on otherwise intact skin.",
+}
 
 
 def load(name: str) -> dict:
@@ -51,15 +64,53 @@ def validate_ledger_freshness(
         raise RuntimeError("result ledger does not bind the current submission ledger")
 
 
-def image_cell(path: Path | None, label: str, evidence: str = "") -> str:
+def image_cell(
+    path: Path | None,
+    label: str,
+    evidence: str = "",
+    sensitive_reason: str = "",
+) -> str:
     if path is None:
         return '<div class="empty"><span>not run</span></div>'
     if not path.is_file():
         raise FileNotFoundError(path)
-    return (
+    figure = (
         f'<figure><img src="{esc(relative(path))}" alt="{esc(label)}">'
         f'<figcaption>{esc(label)}<br><code>{esc(digest(path)[:12])}</code>'
         f'{f"<br><span>{esc(evidence)}</span>" if evidence else ""}</figcaption></figure>'
+    )
+    if not sensitive_reason:
+        return figure
+    return (
+        '<details class="sensitive">'
+        f'<summary>Optional reveal<br><span>{esc(sensitive_reason)}</span></summary>'
+        f'{figure}</details>'
+    )
+
+
+def validate_effective_params(results: dict, route: dict) -> str:
+    expected = {
+        "model": str(route["model"]),
+        "quantize": str(route["quantize"]),
+        "width": str(route["width"]),
+        "height": str(route["height"]),
+        "steps": str(route["steps"]),
+        "guidance": str(route["guidance"]),
+        "mlx_cache_limit_gb": str(route["mlxCacheLimitGb"]),
+    }
+    for cell_id, record in results.get("cells", {}).items():
+        params = record.get("effectiveParams") or {}
+        mismatches = {
+            key: (params.get(key), value)
+            for key, value in expected.items()
+            if params.get(key) != value
+        }
+        if mismatches:
+            raise RuntimeError(f"{cell_id} has mixed or unexpected effective settings: {mismatches}")
+    return (
+        f'{expected["model"]} · q{expected["quantize"]} · '
+        f'{expected["width"]}x{expected["height"]} · {expected["steps"]} steps · '
+        f'guidance {expected["guidance"]} · MLX cache {expected["mlx_cache_limit_gb"]} GiB'
     )
 
 
@@ -79,11 +130,11 @@ def main() -> None:
     families = {item["id"]: item for item in campaign["promptFamilies"]}
     sources = campaign["sources"]
     route = campaign["fluxRoute"]
-    settings = (
-        f'{route["model"]} · q{route["quantize"]} · {route["width"]}x{route["height"]} · '
-        f'{route["steps"]} steps · guidance {route["guidance"]} · MLX cache {route["mlxCacheLimitGb"]} GiB'
-    )
+    settings = validate_effective_params(results, route)
     source_paths = {source_id: ROOT / source["plate"] for source_id, source in sources.items()}
+    for source_id, path in source_paths.items():
+        if digest(path) != sources[source_id]["plateSha256"]:
+            raise RuntimeError(f"{source_id} source content does not match the frozen campaign")
     historical_source = (ROOT / precedent["source"]).resolve()
 
     sections = []
@@ -110,7 +161,12 @@ def main() -> None:
                 cell_id = f"{source_id}-{family_id}-seed{seed}"
                 record = results["cells"].get(cell_id)
                 output_cells.append(
-                    image_cell(ROOT / record["output"] if record else None, f"seed {seed}", f'job {record["jobId"]}' if record else "")
+                    image_cell(
+                        ROOT / record["output"] if record else None,
+                        f"seed {seed}",
+                        f'job {record["jobId"]}' if record else "",
+                        SENSITIVE_CELLS.get(cell_id, ""),
+                    )
                 )
             rows.append(
                 '<div class="row">'
@@ -120,7 +176,8 @@ def main() -> None:
                 + "</div>"
             )
         sections.append(
-            f'<section><header><div><h2>{esc(family_id)}</h2><p>{esc(family["surfaceClass"])}</p></div>'
+            f'<section><header><div><h2>{esc(family_id)}</h2><p>{esc(family["surfaceClass"])}</p>'
+            f'<p class="finding">{esc(FINDINGS[family_id])}</p></div>'
             f'<div class="prompt"><b>Prompt</b><span>{esc(family["prompt"])}</span><code>{esc(settings)}</code></div></header>'
             f'<div class="labels"><span>comparison class</span><span>source</span><span>seed 80301</span><span>seed 80302</span><span>seed 80413</span></div>'
             + "".join(rows)
@@ -138,11 +195,14 @@ def main() -> None:
   .summary{{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 28px}} .summary span{{border:1px solid var(--line);padding:5px 9px;border-radius:5px;color:#cbd0d4}}
   section{{border-top:2px solid var(--line);padding:18px 0 24px}} section>header{{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start;margin-bottom:12px}}
   h2{{margin:0;color:var(--accent);font-size:20px;letter-spacing:0}} section header p{{margin:2px 0;color:var(--muted)}} .prompt{{display:grid;grid-template-columns:65px 1fr;gap:2px 12px}}
+  section header .finding{{margin-top:9px;color:#d5d8da;font-size:12px}}
   .prompt code{{grid-column:2;color:#8e989f}} code{{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace}}
   .labels,.row{{display:grid;grid-template-columns:210px repeat(4,minmax(0,1fr));gap:9px}} .labels{{color:#737d84;font-size:11px;text-transform:uppercase;margin-bottom:5px}}
   .row{{background:var(--panel);border-top:1px solid var(--line);padding:10px 0;align-items:start}} .rowhead{{padding:8px 10px;display:flex;flex-direction:column;gap:4px}}
   .rowhead b{{font-size:13px}} .rowhead span,figcaption span{{color:var(--muted);font-size:11px}} figure{{margin:0;min-width:0}} figure img{{display:block;width:100%;aspect-ratio:1/1;object-fit:contain;background:#0d0f10}}
   figcaption{{padding:5px 2px 0;color:#c9cdd0;font-size:11px}} figcaption code{{color:#89939a}} .empty{{aspect-ratio:1/1;background:#131619;display:grid;place-items:center;color:#5f686f}}
+  details.sensitive{{min-height:100%;background:#131619}} details.sensitive summary{{aspect-ratio:1/1;display:grid;place-content:center;padding:18px;color:#d5bd84;cursor:pointer;text-align:center}}
+  details.sensitive summary span{{max-width:230px;color:var(--muted);font-size:11px;font-weight:400}} details.sensitive[open] summary{{aspect-ratio:auto;display:block;padding:8px;text-align:left}}
   .foot{{color:var(--muted);max-width:1200px;margin:20px 0 0}}
   @media(max-width:1000px){{main{{padding:14px}} section>header{{grid-template-columns:1fr}} .labels{{display:none}} .row{{grid-template-columns:1fr 1fr}} .rowhead{{grid-column:1/-1}}}}
 </style>

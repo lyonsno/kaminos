@@ -1,0 +1,64 @@
+{
+  "job_id": "3db185a2e52c",
+  "job_type": "trellis2mlx_fast",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301/output.glb",
+    "--seed",
+    "42",
+    "--resolution",
+    "512",
+    "--steps",
+    "6",
+    "--no-cascade",
+    "--target-faces",
+    "200000",
+    "--texture-size",
+    "1024",
+    "--simplify-first"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1786534864.4193048,
+  "finished_at": 1786534980.211615,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/3db185a2e52c/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/3db185a2e52c/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/3db185a2e52c/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 12729,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "job_id": "119728f460fc",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-029/plate.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-029-dragon-seed80301",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-029/plate.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/prompts/dragon.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-029-dragon-seed80301/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80301 --mlx-cache-limit-gb 48",
+  "effective_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "--image-paths",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-029/plate.png",
+    "--prompt-file",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/prompts/dragon.txt",
+    "--output",
+    "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-029-dragon-seed80301/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "512",
+    "--width",
+    "512",
+    "--steps",
+    "8",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "80301",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "effective_cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808",
+  "effective_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "seed": "42",
+    "steps": "8",
+    "width": "512"
+  },
+  "effective_timeout": 1800,
+  "ignored_params": null,
+  "started_at": 1786534050.821414,
+  "finished_at": 1786534154.8537972,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/119728f460fc/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/119728f460fc/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/119728f460fc/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": false,
+    "pid": 12729,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

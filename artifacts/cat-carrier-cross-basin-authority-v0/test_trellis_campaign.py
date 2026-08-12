@@ -2,6 +2,7 @@
 """Contract for selective, basin-distinct Trellis follow-through."""
 
 import json
+import ast
 import unittest
 from pathlib import Path
 
@@ -40,11 +41,28 @@ class TrellisSelectionContract(unittest.TestCase):
             self.selection["route"],
             {
                 "jobType": "trellis2mlx_fast",
+                "seed": 42,
                 "steps": 6,
                 "targetFaces": 200000,
                 "textureSize": 1024,
             },
         )
+
+    def test_submitter_passes_every_parameter_in_one_parameter_group(self) -> None:
+        tree = ast.parse((ROOT / "submit_trellis.py").read_text())
+        command = next(
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "command" for target in node.targets)
+            and isinstance(node.value, ast.List)
+        )
+        literal_p_flags = [
+            item.value
+            for item in command.elts
+            if isinstance(item, ast.Constant) and item.value == "-p"
+        ]
+        self.assertEqual(literal_p_flags, ["-p"])
 
 
 if __name__ == "__main__":

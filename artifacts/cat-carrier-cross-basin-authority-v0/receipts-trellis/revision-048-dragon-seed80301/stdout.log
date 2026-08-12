@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 44.3s
+  1659 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 14.0s (1659 tokens)
+  No-cascade: using LR SLat directly (1,659 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 6881 voxels
+  Level 1 → 2: 28941 voxels
+  Level 2 → 3: 119306 voxels
+  Level 3 → 4: 488713 voxels
+  Decoded: 9.0s (488,713 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  488,713 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.4s
+  488,713 vertices, 997,746 faces
+  Pre-simplify: 91,713V 199,999F (0.4s)
+  Removed 4250 duplicate faces
+  Removed 20404 non-manifold faces
+  Filled 3844 holes (629 too large, max_perimeter=0.03)
+  Cleanup: 91,713V 199,999F → 94,858V 191,657F
+  Cleanup: 7.8s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 9.0s (1,659 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 6881 voxels
+  Level 1 → 2: 28941 voxels
+  Level 2 → 3: 119306 voxels
+  Level 3 → 4: 488713 voxels
+  Decoded: 4.6s (488,713 voxels, 6 channels)
+  PBR attrs: RGB [0.02, 0.72] metallic [-0.00, 0.00] roughness [-0.03, 0.77]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 176,152V 191,657F (8.5s)
+    Rasterizing UV space (191,657 tris, 1024x1024, MLX)...
+    610,957 pixels covered (1.2s)
+    Interpolated 610,957 positions (0.1s)
+    Sampled voxel attrs (1.4s)
+    Inpainted seams (2.1s)
+
+  Saved: /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301/output.glb (10.6MB)
+
+Total: 115.2s

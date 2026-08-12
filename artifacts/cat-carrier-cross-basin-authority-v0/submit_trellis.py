@@ -53,10 +53,11 @@ def main() -> None:
             route["jobType"],
             str(input_path),
             str(output_dir),
-            "-p", f"seed={cell['seed']}",
-            "-p", f"steps={route['steps']}",
-            "-p", f"target_faces={route['targetFaces']}",
-            "-p", f"texture_size={route['textureSize']}",
+            "-p",
+            f"seed={route['seed']}",
+            f"steps={route['steps']}",
+            f"target_faces={route['targetFaces']}",
+            f"texture_size={route['textureSize']}",
         ]
         completed = subprocess.run(command, check=True, capture_output=True, text=True)
         match = re.search(r"Submitted job ([0-9a-f]{12})", completed.stdout)

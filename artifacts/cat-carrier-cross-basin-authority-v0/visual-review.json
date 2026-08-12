@@ -1,0 +1,46 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.visual-review.v0",
+  "reviewer": "principal-research-review",
+  "reviewScope": "All 24 revision-048 treatment outputs and all 9 matched revision-029 controls, inspected directly at full 512x512 resolution.",
+  "campaignVerdict": "Revision 048 materially increases authored structural authority across divergent completion basins. The increase is not free: under neutral maquette completion, the same carrier is more likely than revision 029 to remain visibly close to the low-poly source instead of accepting prior-driven finishing.",
+  "changedBeliefs": [
+    "Feature-led transformation prompts can preserve the revised carrier while adding radically different anatomy, material, and surface semantics.",
+    "Carrier convergence changes generator behavior before species naming is required; the source is no longer merely a loose silhouette hint.",
+    "More authored structure can inhibit neutral elaboration. Carrier authority and finish pressure are separate controls that now need to be tuned together.",
+    "Whole-result noun prompts preserve source identity but systematically under-elaborate relative to transformation verbs plus concrete feature clauses."
+  ],
+  "matchedControlDisposition": {
+    "dragon": "Local increase in structural authority across all three matched seeds: cleaner neck/shoulder/barrel/hindquarter separation, with seed identity still dominant.",
+    "golem": "Strongest matched evidence because rigid plates expose organization. Revision 048 retains the higher neck and separated masses more cleanly.",
+    "maquette": "Revision 029 produces a polished flesh creature in all three seeds. Revision 048 ranges from partially finished to near-literal carrier, establishing an authority-versus-elaboration trade."
+  },
+  "familyDisposition": {
+    "dragon": "admitted-rich-elaboration",
+    "golem": "admitted-cleanest-structural-transfer",
+    "phantom": "admitted-radical-material-transfer",
+    "maquette": "admitted-authority-trade-witness",
+    "skin": "admitted-continuous-surface; seed 80413 remains behind an explicit visual reveal because of superficial abrasion marks",
+    "fur": "admitted-macrostructure; authored surface detail partially occluded and head prior drifts toward bear/wolf",
+    "cat": "admitted-source-restatement; low elaboration",
+    "unknown-creature": "admitted-source-restatement; low elaboration"
+  },
+  "selectedTrellisCells": [
+    "revision-048-dragon-seed80301",
+    "revision-048-golem-seed80301",
+    "revision-048-phantom-seed80302",
+    "revision-048-maquette-seed80301",
+    "revision-048-skin-seed80302",
+    "revision-048-fur-seed80302"
+  ],
+  "claimCeiling": "Qualitative evidence of prompt-family and carrier-revision effects under one Flux route and three fixed seeds; not a production reliability estimate or universal model claim.",
+  "trellisReviewScope": "Six authenticated GLBs inspected through six hash-bound orthographic texture views each; one fixed Trellis seed 42 and one effective trellis2mlx_fast route.",
+  "trellisCampaignVerdict": "Five of six selected Flux completions reconstruct as coherent closed quadrupeds across a full orbit. Dragon and golem are the strongest structural witnesses; phantom, maquette, and skin preserve macrostructure with mechanism-specific smoothing or arbitrary detail. Fur preserves macro-volume but decodes as dense shard geometry and is not admitted as usable hair.",
+  "trellisDisposition": {
+    "revision-048-dragon-seed80301": "admitted-strong-coherent-orbit",
+    "revision-048-golem-seed80301": "admitted-strong-rigid-component-orbit",
+    "revision-048-phantom-seed80302": "admitted-coherent-orbit-with-arbitrary-flank-detail",
+    "revision-048-maquette-seed80301": "admitted-coherent-angular-neutral-reconstruction",
+    "revision-048-skin-seed80302": "admitted-coherent-smoothed-heavy-reconstruction",
+    "revision-048-fur-seed80302": "macro-volume-only-rejected-as-usable-hair"
+  }
+}

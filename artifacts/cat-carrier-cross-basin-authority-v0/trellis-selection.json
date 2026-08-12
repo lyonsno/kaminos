@@ -3,9 +3,15 @@
   "selectionBasis": "One visually inspected, structurally faithful revision-048 result per distinct successful surface mechanism. Explicit-cat and open-creature restatements are retained in Flux evidence but not reconstructed because they add no new elaboration mechanism.",
   "route": {
     "jobType": "trellis2mlx_fast",
+    "seed": 42,
     "steps": 6,
     "targetFaces": 200000,
     "textureSize": 1024
+  },
+  "launchCorrection": {
+    "observed": "The initial submitter repeated the Greenroom -p option. The CLI retained only texture_size; the route supplied seed, steps, and target_faces from its declared defaults.",
+    "effectiveComparison": "Every selected cast therefore uses the same Trellis seed 42, steps 6, target_faces 200000, and texture_size 1024. This fixed reconstruction seed is the authenticated comparison contract.",
+    "futureSubmitter": "submit_trellis.py now passes every parameter through one -p group. Existing jobs and their original requestedCommand records are not rewritten."
   },
   "candidates": [
     {

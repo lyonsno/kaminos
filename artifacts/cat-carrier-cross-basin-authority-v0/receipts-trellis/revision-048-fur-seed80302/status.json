@@ -1,0 +1,21 @@
+{
+  "job_id": "e659731b45e4",
+  "status": "done",
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-fur-seed80302/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-fur-seed80302",
+  "params": {
+    "texture_size": "1024"
+  },
+  "submitted_at": 1786534078.4203079,
+  "started_at": 1786535335.9266171,
+  "finished_at": 1786535424.517014,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-fur-seed80302/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-fur-seed80302/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+  "pid": 12729,
+  "warnings": [
+    "volatile_output"
+  ]
+}

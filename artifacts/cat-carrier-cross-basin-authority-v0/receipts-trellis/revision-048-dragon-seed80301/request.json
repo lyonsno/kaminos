@@ -1,0 +1,10 @@
+{
+  "job_type": "trellis2mlx_fast",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-dragon-seed80301/output.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/trellis/revision-048-dragon-seed80301",
+  "params": {
+    "texture_size": "1024"
+  },
+  "job_id": "3db185a2e52c",
+  "submitted_at": 1786534078.082365
+}

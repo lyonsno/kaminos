@@ -1,0 +1,30 @@
+{
+  "job_id": "315d8a815322",
+  "status": "done",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-048/plate.png",
+  "output_dir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-phantom-seed80302",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/prompts/phantom.txt",
+    "seed": "80302",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "width": "512",
+    "height": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "mlx_cache_limit_gb": "48",
+    "cwd": "/private/tmp/kaminos-molten-triradial-proposals-0808"
+  },
+  "submitted_at": 1786532037.434509,
+  "started_at": 1786532469.163274,
+  "finished_at": 1786532548.8175292,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/source/revision-048/plate.png --prompt-file /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/prompts/phantom.txt --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-phantom-seed80302/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 80302 --mlx-cache-limit-gb 48",
+  "pid": 12729,
+  "warnings": [
+    "volatile_output"
+  ]
+}

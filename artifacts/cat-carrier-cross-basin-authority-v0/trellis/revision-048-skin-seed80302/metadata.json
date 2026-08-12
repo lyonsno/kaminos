@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "6b174be917a0",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/cat-carrier-cross-basin-authority-v0/runs/revision-048-skin-seed80302/output.png",
+  "input_name": "output.png",
+  "params": {
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786535335.92316,
+  "duration_s": 80.3
+}

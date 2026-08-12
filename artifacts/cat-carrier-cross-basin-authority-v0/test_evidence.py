@@ -6,7 +6,13 @@ import time
 import unittest
 from pathlib import Path
 
-from build_sheet import relative, source_ids_for_family, validate_ledger_freshness
+from build_sheet import (
+    image_cell,
+    relative,
+    source_ids_for_family,
+    validate_effective_params,
+    validate_ledger_freshness,
+)
 from collect_flux import sha256_bytes, validate_output, validate_prompt, validate_status
 
 
@@ -142,6 +148,36 @@ class SheetEvidenceContract(unittest.TestCase):
         ledger["campaignSha256"] = "campaign"
         with self.assertRaises(RuntimeError):
             validate_ledger_freshness(ledger, "campaign", "submissions", state_exists=True)
+
+    def test_rejects_mixed_effective_settings(self) -> None:
+        route = {
+            "model": "flux2-klein-9b",
+            "quantize": 4,
+            "width": 512,
+            "height": 512,
+            "steps": 8,
+            "guidance": 1.0,
+            "mlxCacheLimitGb": 48,
+        }
+        params = {
+            "model": "flux2-klein-9b",
+            "quantize": "4",
+            "width": "512",
+            "height": "512",
+            "steps": "8",
+            "guidance": "1.0",
+            "mlx_cache_limit_gb": "24",
+        }
+        with self.assertRaises(RuntimeError):
+            validate_effective_params({"cells": {"cell": {"effectiveParams": params}}}, route)
+
+    def test_sensitive_cell_requires_explicit_reveal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "fixture.png"
+            image.write_bytes(b"fixture")
+            markup = image_cell(image, "skin seed 80413", sensitive_reason="visible superficial abrasion marks")
+            self.assertIn("<details", markup)
+            self.assertIn("visible superficial abrasion marks", markup)
 
 
 if __name__ == "__main__":
