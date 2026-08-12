@@ -16,7 +16,12 @@ import {
 import {
   createNBodyAllNeighborRestorationConfig,
   createNBodyFamilyGradientCommonDescentConfig,
+  createNBodyFamilyGradientCommonDescentTrajectoryConfig,
 } from './nbody-packing-restoration.mjs';
+import {
+  NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA,
+  NBODY_PACKING_REFINED_COMMON_DESCENT_RADII,
+} from './nbody-packing-restoration-assay.mjs';
 import {
   LOCALIZED_CHALLENGE_RESULT_SCHEMA,
   LOCALIZED_CONTINUATION_RESULT_SCHEMA,
@@ -26,6 +31,7 @@ import {
   NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
   NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
+  NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
@@ -126,6 +132,274 @@ function validateCurrentCommonDescentContract(result) {
       !Array.isArray(candidate.regressedFamilies)
     )
   ) throw new Error('localized hard witness rejects result outside current common-descent contract');
+}
+
+function validateCurrentCommonDescentTrajectoryContract(result) {
+  const expectedConfig = createNBodyFamilyGradientCommonDescentTrajectoryConfig({
+    iterationBudget:8,
+    trustRegionRadii:NBODY_PACKING_REFINED_COMMON_DESCENT_RADII,
+  });
+  const candidateKeys = [
+    'constraintFamilies',
+    'maximumPhysicalResidual',
+    'radius',
+    'regressedFamilies',
+    'rejectionReason',
+    'selected',
+    'vector',
+  ];
+  const rows = result.work?.rows || [];
+  if (
+    JSON.stringify(result.config?.requested) !== JSON.stringify(expectedConfig) ||
+    JSON.stringify(result.config?.effective) !== JSON.stringify(expectedConfig) ||
+    result.mechanism?.directionBasis !==
+      'recomputed-minimum-norm-convex-combination-of-normalized-family-gradients' ||
+    result.mechanism?.nonlinearAcceptance !==
+      'no-family-regression-and-lower-maximum-physical-residual' ||
+    rows.length !== result.work?.attempts ||
+    rows.some(row =>
+      row.candidateReceipts?.length !== expectedConfig.trustRegionRadii.length ||
+      row.candidateReceipts.some(candidate =>
+        JSON.stringify(Object.keys(candidate).sort()) !== JSON.stringify(candidateKeys) ||
+        !Array.isArray(candidate.regressedFamilies)
+      )
+    )
+  ) throw new Error('localized hard witness rejects result outside current common-descent trajectory contract');
+}
+
+const COMMON_DESCENT_FAMILY_KEYS = Object.freeze([
+  'pairwisePenetration',
+  'skeletalPenetration',
+  'compartmentEscape',
+]);
+
+const FROZEN_ADMITTED_COMMON_DESCENT_SOURCE = Object.freeze({
+  resultFileSha256:'dd236d22e8d7287a9739e7e237ab56926b5aa38c830d6416e2595df8b006872b',
+  resultSha256:'879cc405832bce8fb6e04ed2360b1a326614402432fe8dbe86da1d0b53a2dd19',
+  reportFileSha256:'6c0f07050febb3fbf78aab4b5f423d451c7a467cff7a0bc7ba05e225ed2f48b0',
+  reportSha256:'20cbd158b960ce5de258d9dcf6cb40a4512d6ad588838164da17d580d325f4c4',
+});
+
+const FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE = Object.freeze({
+  resultFileSha256:'bcb484441d981ff9f87bc08cfb3b7d1662466b8fff5db448368d674f8f515e1e',
+  resultSha256:'ed4975f0c154116a5f9245553d7208778bf0749dfa3223b46d31ed59913bd2e5',
+  reportFileSha256:'ec1781373a275bb81c55c970627f6c6f8a9d791692efe17caa474c79562645b8',
+  reportSha256:'91e6bf308728bec62117a96389703eb45febc1f087a72368878d744216c9aef7',
+});
+
+function requireExactJson(actual, expected, message) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(message);
+}
+
+function commonDescentStateReceipt(state, { includeMuscles = false } = {}) {
+  return {
+    vector:[...state.vector],
+    maximumPhysicalResidual:state.maximumPhysicalResidual,
+    metrics:structuredClone(state.metrics),
+    ...(includeMuscles ? { muscles:structuredClone(state.muscles) } : {}),
+  };
+}
+
+function reconstructCommonDescentStepCore({ problem, row, trajectoryConfig }) {
+  const config = createNBodyFamilyGradientCommonDescentConfig();
+  config.candidateEnumeration = trajectoryConfig.candidateEnumeration;
+  config.directionalDerivativeTolerance = trajectoryConfig.directionalDerivativeTolerance;
+  config.familyRegressionTolerance = trajectoryConfig.familyRegressionTolerance;
+  config.finiteDifferenceStep = trajectoryConfig.finiteDifferenceStep;
+  config.translationBounds = [...trajectoryConfig.translationBounds];
+  config.trustRegionRadii = [...trajectoryConfig.trustRegionRadii];
+  return {
+    schema:'kaminos.nbody-packing-family-gradient-common-descent-result.v0',
+    status:'common-descent-step-accepted',
+    route:{ requested:config.algorithm, effective:config.algorithm, fallbackUsed:false },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(config), effective:structuredClone(config) },
+    start:structuredClone(row.before),
+    directionConstruction:structuredClone(row.directionConstruction),
+    selected:structuredClone(row.after),
+    work:{
+      iterations:1,
+      attempts:1,
+      evaluationCount:
+        1 + (2 * row.before.vector.length * COMMON_DESCENT_FAMILY_KEYS.length) +
+          row.candidateReceipts.length,
+      terminalReason:null,
+      candidateReceipts:structuredClone(row.candidateReceipts),
+    },
+    mechanism:{
+      directionBasis:'minimum-norm-convex-combination-of-normalized-family-gradients',
+      nonlinearAcceptance:'no-family-regression-and-lower-maximum-physical-residual',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility',
+  };
+}
+
+function validateCommonDescentTrajectorySemantics({ problem, result }) {
+  const tolerance = result.config.effective.familyRegressionTolerance;
+  const rows = result.work.rows;
+  let previousAfter = result.start;
+  for (const [index, row] of rows.entries()) {
+    requireExactJson(
+      row.before,
+      previousAfter,
+      `localized hard witness rejects trajectory semantic ledger continuity at iteration ${index + 1}`,
+    );
+    const beforeState = evaluateNBodyUnifiedKktState({ problem, vector:row.before.vector });
+    requireExactJson(
+      row.before,
+      commonDescentStateReceipt(beforeState),
+      `localized hard witness rejects trajectory semantic ledger before state at iteration ${index + 1}`,
+    );
+    const candidates = row.candidateReceipts.map(candidate => {
+      const state = evaluateNBodyUnifiedKktState({ problem, vector:candidate.vector });
+      const families = Object.fromEntries(
+        COMMON_DESCENT_FAMILY_KEYS.map(key => [key, state.metrics[key]]),
+      );
+      const regressedFamilies = COMMON_DESCENT_FAMILY_KEYS.filter(
+        key => families[key] > row.before.metrics[key] + tolerance,
+      );
+      if (
+        candidate.maximumPhysicalResidual !== state.maximumPhysicalResidual ||
+        JSON.stringify(candidate.constraintFamilies) !== JSON.stringify(families) ||
+        JSON.stringify(candidate.regressedFamilies) !== JSON.stringify(regressedFamilies)
+      ) throw new Error(
+        `localized hard witness rejects trajectory semantic ledger candidate at iteration ${index + 1}`,
+      );
+      return { candidate, state, regressedFamilies };
+    });
+    const admissible = candidates
+      .filter(({ state, regressedFamilies }) =>
+        state.maximumPhysicalResidual < row.before.maximumPhysicalResidual - 1e-12 &&
+        regressedFamilies.length === 0)
+      .sort((left, right) => {
+        if (left.state.maximumPhysicalResidual !== right.state.maximumPhysicalResidual) {
+          return left.state.maximumPhysicalResidual - right.state.maximumPhysicalResidual;
+        }
+        return hashMusclePackingCanonicalJson(left.candidate.vector)
+          .localeCompare(hashMusclePackingCanonicalJson(right.candidate.vector));
+      });
+    const selected = candidates.filter(({ candidate }) => candidate.selected);
+    if (row.accepted !== true || selected.length !== 1 || selected[0] !== admissible[0]) {
+      throw new Error(
+        `localized hard witness rejects trajectory semantic ledger selection at iteration ${index + 1}`,
+      );
+    }
+    for (const candidateRow of candidates) {
+      const expectedReason = candidateRow === admissible[0]
+        ? null
+        : candidateRow.regressedFamilies.length > 0
+          ? 'constraint-family-regression'
+          : !(candidateRow.state.maximumPhysicalResidual <
+              row.before.maximumPhysicalResidual - 1e-12)
+            ? 'non-improving-physical-residual'
+            : 'higher-ranked-admissible-candidate';
+      if (candidateRow.candidate.rejectionReason !== expectedReason) {
+        throw new Error(
+          `localized hard witness rejects trajectory semantic ledger disposition at iteration ${index + 1}`,
+        );
+      }
+    }
+    const afterState = evaluateNBodyUnifiedKktState({ problem, vector:row.after.vector });
+    requireExactJson(
+      row.after,
+      commonDescentStateReceipt(afterState, { includeMuscles:true }),
+      `localized hard witness rejects trajectory semantic ledger after state at iteration ${index + 1}`,
+    );
+    requireExactJson(
+      row.after,
+      commonDescentStateReceipt(selected[0].state, { includeMuscles:true }),
+      `localized hard witness rejects trajectory semantic ledger selected state at iteration ${index + 1}`,
+    );
+    if (
+      row.after.maximumPhysicalResidual >= row.before.maximumPhysicalResidual - 1e-12 ||
+      COMMON_DESCENT_FAMILY_KEYS.some(key =>
+        row.after.metrics[key] > row.before.metrics[key] + tolerance) ||
+      row.after.metrics.endpointDrift !== 0 ||
+      row.after.metrics.maximumRelativeVolumeError !== 0
+    ) throw new Error(
+      `localized hard witness rejects trajectory semantic ledger monotonicity at iteration ${index + 1}`,
+    );
+    const stepCore = reconstructCommonDescentStepCore({
+      problem,
+      row,
+      trajectoryConfig:result.config.effective,
+    });
+    if (hashMusclePackingCanonicalJson(stepCore) !== row.stepResultSha256) {
+      throw new Error(
+        `localized hard witness rejects trajectory semantic ledger step receipt at iteration ${index + 1}`,
+      );
+    }
+    previousAfter = {
+      vector:[...row.after.vector],
+      maximumPhysicalResidual:row.after.maximumPhysicalResidual,
+      metrics:structuredClone(row.after.metrics),
+    };
+  }
+  requireExactJson(
+    result.selected,
+    rows.at(-1).after,
+    'localized hard witness rejects trajectory semantic ledger final selection',
+  );
+  const legacyRadii = createNBodyFamilyGradientCommonDescentConfig().trustRegionRadii;
+  const thirdCandidates = rows[2].candidateReceipts;
+  const isAdmissible = candidate =>
+    candidate.maximumPhysicalResidual < rows[2].before.maximumPhysicalResidual - 1e-12 &&
+    candidate.regressedFamilies.length === 0;
+  if (
+    thirdCandidates.filter(candidate => legacyRadii.includes(candidate.radius)).some(isAdmissible) ||
+    ![0.000015625, 0.0000078125].every(radius =>
+      thirdCandidates.some(candidate => candidate.radius === radius && isAdmissible(candidate)))
+  ) throw new Error('localized hard witness rejects trajectory semantic ledger radius refinement');
+}
+
+function validateCommonDescentTrajectoryReport({
+  report,
+  reportBytes,
+  result,
+  resultBytes,
+  commonDescent,
+  commonDescentBytes,
+  fixture,
+  problem,
+}) {
+  verifyCanonicalIdentity(report, 'common descent trajectory assay report');
+  const expectedStatus = result.status === 'common-descent-trajectory-feasible'
+    ? 'complete-refined-trajectory-feasible'
+    : result.status === 'common-descent-trajectory-local-floor'
+      ? 'complete-refined-trajectory-floor-exposed'
+      : 'complete-refined-trajectory-budget-exhausted';
+  const admittedSource = report.source?.admittedCommonDescent;
+  if (
+    sha256(resultBytes) !== FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE.resultFileSha256 ||
+    result.identity?.sha256 !== FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE.resultSha256 ||
+    sha256(reportBytes) !== FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE.reportFileSha256 ||
+    report.identity?.sha256 !== FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE.reportSha256 ||
+    report.schema !== NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA ||
+    report.status !== expectedStatus ||
+    JSON.stringify(report.route) !== JSON.stringify(result.route) ||
+    report.route?.fallbackUsed !== false ||
+    report.source?.fixtureSha256 !== fixture.identity.sha256 ||
+    report.source?.problemSha256 !== problem.identity.sha256 ||
+    report.bindings?.resultJsonSha256 !== sha256(resultBytes) ||
+    report.bindings?.resultSha256 !== result.identity.sha256 ||
+    admittedSource?.resultFileSha256 !== sha256(commonDescentBytes) ||
+    admittedSource?.resultSha256 !== commonDescent.identity.sha256 ||
+    admittedSource?.resultFileSha256 !== FROZEN_ADMITTED_COMMON_DESCENT_SOURCE.resultFileSha256 ||
+    admittedSource?.resultSha256 !== FROZEN_ADMITTED_COMMON_DESCENT_SOURCE.resultSha256 ||
+    admittedSource?.reportFileSha256 !== FROZEN_ADMITTED_COMMON_DESCENT_SOURCE.reportFileSha256 ||
+    admittedSource?.reportSha256 !== FROZEN_ADMITTED_COMMON_DESCENT_SOURCE.reportSha256 ||
+    JSON.stringify(report.probe?.trustRegionRadii) !==
+      JSON.stringify(result.config.effective.trustRegionRadii) ||
+    report.probe?.iterationBudget !== result.config.effective.iterationBudget ||
+    report.probe?.acceptedIterations !== result.work.iterations ||
+    report.probe?.attemptedIterations !== result.work.attempts ||
+    report.claimCeiling !== result.claimCeiling
+  ) throw new Error('localized hard witness rejects trajectory report binding: admitted-source manifest mismatch');
+  return sha256(reportBytes);
 }
 
 export function createPairDebtEmphasisMarkers({ muscles, rows } = {}) {
@@ -234,6 +508,8 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
   restorationResultPath = null,
   trajectoryResultPath = null,
   commonDescentResultPath = null,
+  commonDescentTrajectoryResultPath = null,
+  commonDescentTrajectoryReportPath = null,
 } = {}) {
   const outputRoot = path.resolve(outDir);
   let phase = 'read-source-results';
@@ -247,6 +523,8 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       restorationBytes,
       trajectoryBytes,
       commonDescentBytes,
+      commonDescentTrajectoryBytes,
+      commonDescentTrajectoryReportBytes,
     ] = await Promise.all([
       readFile(path.resolve(challengeResultPath)),
       readFile(path.resolve(continuationResultPath)),
@@ -256,6 +534,12 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       commonDescentResultPath
         ? readFile(path.resolve(commonDescentResultPath))
         : Promise.resolve(null),
+      commonDescentTrajectoryResultPath
+        ? readFile(path.resolve(commonDescentTrajectoryResultPath))
+        : Promise.resolve(null),
+      commonDescentTrajectoryReportPath
+        ? readFile(path.resolve(commonDescentTrajectoryReportPath))
+        : Promise.resolve(null),
     ]);
     const challenge = JSON.parse(String(challengeBytes));
     const continuation = JSON.parse(String(continuationBytes));
@@ -263,8 +547,23 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     const restoration = restorationBytes ? JSON.parse(String(restorationBytes)) : null;
     const trajectory = trajectoryBytes ? JSON.parse(String(trajectoryBytes)) : null;
     const commonDescent = commonDescentBytes ? JSON.parse(String(commonDescentBytes)) : null;
+    const commonDescentTrajectory = commonDescentTrajectoryBytes
+      ? JSON.parse(String(commonDescentTrajectoryBytes))
+      : null;
+    const commonDescentTrajectoryReport = commonDescentTrajectoryReportBytes
+      ? JSON.parse(String(commonDescentTrajectoryReportBytes))
+      : null;
     if (trajectory && !restoration) {
       throw new Error('localized hard witness trajectory requires the admitted one-step comparison');
+    }
+    if (commonDescentTrajectory && !commonDescent) {
+      throw new Error('localized hard witness common trajectory requires the admitted one-step comparison');
+    }
+    if (commonDescentTrajectory && !commonDescentTrajectoryReport) {
+      throw new Error('localized hard witness common trajectory requires its source-bound assay report');
+    }
+    if (commonDescentTrajectoryReport && !commonDescentTrajectory) {
+      throw new Error('localized hard witness trajectory assay report requires its result');
     }
     lastTrustworthyEvidence = {
       phase:'source-results-read',
@@ -274,6 +573,12 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       restorationSha256:restorationBytes ? sha256(restorationBytes) : null,
       trajectorySha256:trajectoryBytes ? sha256(trajectoryBytes) : null,
       commonDescentSha256:commonDescentBytes ? sha256(commonDescentBytes) : null,
+      commonDescentTrajectorySha256:commonDescentTrajectoryBytes
+        ? sha256(commonDescentTrajectoryBytes)
+        : null,
+      commonDescentTrajectoryReportSha256:commonDescentTrajectoryReportBytes
+        ? sha256(commonDescentTrajectoryReportBytes)
+        : null,
     };
     phase = 'bind-source-identities';
     const suite = createNBodyLocalizedChallengeSuite();
@@ -349,6 +654,43 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         commonDescent.mechanism?.contactGraphRowsConsumed !== false
       ) throw new Error('localized hard witness rejects substituted common-descent evidence');
     }
+    if (commonDescentTrajectory) {
+      verifyCanonicalIdentity(commonDescentTrajectory, 'common descent trajectory');
+      validateCurrentCommonDescentTrajectoryContract(commonDescentTrajectory);
+      if (
+        commonDescentTrajectory.schema !==
+          'kaminos.nbody-packing-family-gradient-common-descent-trajectory-result.v0' ||
+        commonDescentTrajectory.status !== 'common-descent-trajectory-budget-exhausted' ||
+        commonDescentTrajectory.route?.effective !==
+          'family-gradient-minimum-norm-common-descent-trajectory-v0' ||
+        commonDescentTrajectory.route?.fallbackUsed !== false ||
+        commonDescentTrajectory.source?.problemSha256 !== problem.identity.sha256 ||
+        commonDescentTrajectory.start?.maximumPhysicalResidual !== 0.004815758612 ||
+        commonDescentTrajectory.selected?.maximumPhysicalResidual !== 0.004722809214 ||
+        commonDescentTrajectory.work?.iterations !== 8 ||
+        commonDescentTrajectory.work?.attempts !== 8 ||
+        commonDescentTrajectory.work.rows.some(row => row.accepted !== true) ||
+        commonDescentTrajectory.work.rows.some(row =>
+          row.directionConstruction?.predictedCommonDescent !== true ||
+          row.candidateReceipts.filter(candidate => candidate.selected).length !== 1 ||
+          row.candidateReceipts.find(candidate => candidate.selected)
+            ?.regressedFamilies.length !== 0
+        ) ||
+        commonDescentTrajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+        commonDescentTrajectory.mechanism?.contactGraphRowsConsumed !== false
+      ) throw new Error('localized hard witness rejects substituted common-descent trajectory evidence');
+      validateCommonDescentTrajectoryReport({
+        report:commonDescentTrajectoryReport,
+        reportBytes:commonDescentTrajectoryReportBytes,
+        result:commonDescentTrajectory,
+        resultBytes:commonDescentTrajectoryBytes,
+        commonDescent,
+        commonDescentBytes,
+        fixture:failFixture,
+        problem,
+      });
+      validateCommonDescentTrajectorySemantics({ problem, result:commonDescentTrajectory });
+    }
     const passRow = challenge.rows.find(row => row.fixtureSha256 === passFixture.identity.sha256);
     const failRow = challenge.rows.find(row => row.fixtureSha256 === failFixture.identity.sha256);
     if (!passRow || !failRow) {
@@ -382,6 +724,12 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       problem,
       vector:commonDescent.selected.vector,
     }) : null;
+    const commonDescentTrajectoryState = commonDescentTrajectory
+      ? evaluateNBodyUnifiedKktState({
+          problem,
+          vector:commonDescentTrajectory.selected.vector,
+        })
+      : null;
     if (
       restorationState &&
       restorationState.maximumPhysicalResidual !== restoration.selected.maximumPhysicalResidual
@@ -395,6 +743,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       commonDescentState.maximumPhysicalResidual !==
         commonDescent.selected.maximumPhysicalResidual
     ) throw new Error('localized hard witness rejects stale common-descent metrics');
+    if (
+      commonDescentTrajectoryState &&
+      commonDescentTrajectoryState.maximumPhysicalResidual !==
+        commonDescentTrajectory.selected.maximumPhysicalResidual
+    ) throw new Error('localized hard witness rejects stale common-descent trajectory metrics');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'source-identities-bound',
@@ -409,6 +762,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       ...(restoration ? { restoration } : {}),
       ...(trajectory ? { trajectory } : {}),
       ...(commonDescent ? { commonDescent } : {}),
+      ...(commonDescentTrajectory ? { commonDescentTrajectory } : {}),
     };
     const fixtureBytes = jsonBytes(fixtures);
     const comparisonBytes = jsonBytes(comparison);
@@ -492,6 +846,17 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           truth:'One minimum-norm combination of independent pair, bone, and compartment gradients lowers every tracked family at the selected small radius. Four larger radii correctly fail because they increase compiled compartment debt. This is a bounded synthetic mechanism result, not feasibility or anatomy.',
         },
       } : {}),
+      ...(commonDescentTrajectory ? {
+        'repeated-family-common-descent': {
+          label:'0.32 repeated family-gradient common descent', severity:0.32,
+          status:commonDescentTrajectory.status, warning:true,
+          source:failFixture.crowded,
+          muscles:commonDescentTrajectoryState.muscles,
+          metrics:commonDescentTrajectoryState.metrics,
+          emphasisMarkers:createPairDebtEmphasisMarkers(commonDescentTrajectoryState),
+          truth:'Eight recomputed common-descent steps lower every compiled constraint family. Refining the radius ladder admits the previously rejected third direction, disproving the coarse local-floor classification; the six later minimum-radius steps expose inefficient step control rather than carrier impossibility.',
+        },
+      } : {}),
       reference: {
         label:'Manufactured feasibility witness', severity:null,
         status:'existence witness outside candidate carrier', warning:false,
@@ -506,26 +871,33 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       ...(restoration ? ['all-neighbor-restoration'] : []),
       ...(trajectory ? ['repeated-all-neighbor-restoration'] : []),
       ...(commonDescent ? ['family-common-descent'] : []),
+      ...(commonDescentTrajectory ? ['repeated-family-common-descent'] : []),
       'reference',
     ];
-    const witnessRoute = commonDescent
-      ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
+    const witnessRoute = commonDescentTrajectory
+      ? NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
+      : commonDescent
+        ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
       : trajectory
         ? NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE
       : restoration
         ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
         : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const display = {
-      title:commonDescent
-        ? 'Family-gradient common descent · six-body hard boundary'
+      title:commonDescentTrajectory
+        ? 'Repeated family-gradient common descent · six-body hard boundary'
+        : commonDescent
+          ? 'Family-gradient common descent · six-body hard boundary'
         : trajectory
           ? 'Repeated all-neighbor restoration · six-body hard boundary'
           : restoration
             ? 'All-neighbor restoration · six-body hard boundary'
         : 'Localized hard boundary · six bodies',
       authority:'Synthetic two-obstacle mechanism falsifier · no anatomical admission',
-      explanation:commonDescent
-        ? 'Severity 0.32 creates a gross cold failure. The scalar direction can trade debt and the strict family filter stalls on that direction. A new <strong>minimum-norm combination of independent family gradients</strong> admits a small step that lowers all compiled constraint families; larger steps remain visibly rejected for compartment regression. This is a bounded mechanism advance, not feasibility or anatomical admission.'
+      explanation:commonDescentTrajectory
+        ? 'Severity 0.32 creates a gross cold failure. Recomputing the <strong>minimum-norm family-gradient common direction</strong> and refining the trust-radius ladder admits eight family-monotone steps. The formerly reported third-step floor disappears, proving it was radius discretization; six subsequent minimum-radius steps make the remaining step-control inefficiency visible. This is a bounded mechanism result, not feasibility or anatomical admission.'
+        : commonDescent
+          ? 'Severity 0.32 creates a gross cold failure. The scalar direction can trade debt and the strict family filter stalls on that direction. A new <strong>minimum-norm combination of independent family gradients</strong> admits a small step that lowers all compiled constraint families; larger steps remain visibly rejected for compartment regression. This is a bounded mechanism advance, not feasibility or anatomical admission.'
         : trajectory
           ? 'Severity 0.32 creates a gross cold failure. Compare the admitted one-step state with five accepted <strong>simultaneous all-neighbor restoration</strong> steps and the failed sixth attempt. The compiled-row maximum descends, but scalar merit increases pairwise debt above its start value. This exposes a debt-trading failure and motivates constraint-family-aware acceptance.'
           : restoration
@@ -595,6 +967,20 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
               candidate => candidate.regressedFamilies.length > 0,
             ).length,
         } : {}),
+        ...(commonDescentTrajectory ? {
+          commonDescentTrajectoryMaximumPhysicalResidual:
+            commonDescentTrajectory.selected.maximumPhysicalResidual,
+          commonDescentTrajectoryAcceptedIterations:
+            commonDescentTrajectory.work.iterations,
+          commonDescentTrajectoryMinimumRadiusSelections:
+            commonDescentTrajectory.work.rows.filter(row =>
+              row.candidateReceipts.find(candidate => candidate.selected)?.radius ===
+                NBODY_PACKING_REFINED_COMMON_DESCENT_RADII.at(-1)
+            ).length,
+          commonDescentTrajectoryVersusOneStep:
+            commonDescent.selected.maximumPhysicalResidual /
+              commonDescentTrajectory.selected.maximumPhysicalResidual,
+        } : {}),
       },
       bindings:{
         ...bindings,
@@ -607,12 +993,20 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         ...(commonDescentBytes ? {
           commonDescentResultSha256:sha256(commonDescentBytes),
         } : {}),
+        ...(commonDescentTrajectoryBytes ? {
+          commonDescentTrajectoryResultSha256:sha256(commonDescentTrajectoryBytes),
+          commonDescentTrajectoryReportSha256:sha256(commonDescentTrajectoryReportBytes),
+          commonDescentTrajectoryReportIdentitySha256:
+            commonDescentTrajectoryReport.identity.sha256,
+        } : {}),
       },
       requiredStates:orderedStates,
       requiredModes:['volume','slice'],
       claimCeiling: {
-        admittedClaim:commonDescent
-          ? 'one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 admits a radius-0.00025 step that lowers all compiled constraint-family maxima from 0.004815758612 to 0.004745541883 while retaining exact attachment and volume invariants; four larger tested radii are rejected for compiled compartment regression'
+        admittedClaim:commonDescentTrajectory
+          ? 'eight recomputed family-gradient common-descent steps lower every compiled constraint family from the severity-0.32 start while retaining exact attachment and volume invariants; extending the trust-radius ladder admits the formerly rejected third direction and therefore proves the prior local-floor classification was a coarse radius-ladder artifact, while six subsequent minimum-radius selections expose unresolved step-control inefficiency'
+          : commonDescent
+            ? 'one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 admits a radius-0.00025 step that lowers all compiled constraint-family maxima from 0.004815758612 to 0.004745541883 while retaining exact attachment and volume invariants; four larger tested radii are rejected for compiled compartment regression'
           : trajectory
             ? 'five deterministic simultaneous all-neighbor restoration steps on severity 0.32 lower the compiled-row maximum residual before the sixth attempt stalls, while scalar merit increases pairwise debt above its start value; scalar-merit repetition therefore fails the no-debt-trading architecture predicate'
           : restoration
@@ -640,8 +1034,10 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     ]);
     return { outputRoot, report, states };
   } catch (error) {
-    const requestedRoute = commonDescentResultPath
-      ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
+    const requestedRoute = commonDescentTrajectoryResultPath
+      ? NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
+      : commonDescentResultPath
+        ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
       : trajectoryResultPath
         ? NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE
       : restorationResultPath
@@ -669,11 +1065,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const restorationResultPath = process.argv[3] || null;
   const trajectoryResultPath = process.argv[4] || null;
   const commonDescentResultPath = process.argv[5] || null;
+  const commonDescentTrajectoryResultPath = process.argv[6] || null;
+  const commonDescentTrajectoryReportPath = process.argv[7] || null;
   const result = await writeNBodyPackingLocalizedHardBoundaryWitness({
     outDir,
     restorationResultPath,
     trajectoryResultPath,
     commonDescentResultPath,
+    commonDescentTrajectoryResultPath,
+    commonDescentTrajectoryReportPath,
   });
   process.stdout.write(`${JSON.stringify({
     outputRoot:result.outputRoot,

@@ -1,0 +1,64 @@
+{
+  "schema": "kaminos.nbody-packing-family-gradient-common-descent-trajectory-assay.v0",
+  "status": "complete-refined-trajectory-budget-exhausted",
+  "route": {
+    "requested": "family-gradient-minimum-norm-common-descent-trajectory-v0",
+    "effective": "family-gradient-minimum-norm-common-descent-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "admittedCommonDescent": {
+      "resultPath": "artifacts/nbody-packing-family-gradient-common-descent-v0/result.json",
+      "resultFileSha256": "dd236d22e8d7287a9739e7e237ab56926b5aa38c830d6416e2595df8b006872b",
+      "resultSha256": "879cc405832bce8fb6e04ed2360b1a326614402432fe8dbe86da1d0b53a2dd19",
+      "reportPath": "artifacts/nbody-packing-family-gradient-common-descent-v0/run-report.json",
+      "reportFileSha256": "6c0f07050febb3fbf78aab4b5f423d451c7a467cff7a0bc7ba05e225ed2f48b0",
+      "reportSha256": "20cbd158b960ce5de258d9dcf6cb40a4512d6ad588838164da17d580d325f4c4"
+    }
+  },
+  "probe": {
+    "trustRegionRadii": [
+      0.004,
+      0.002,
+      0.001,
+      0.0005,
+      0.00025,
+      0.000125,
+      0.0000625,
+      0.00003125,
+      0.000015625,
+      0.0000078125
+    ],
+    "iterationBudget": 8,
+    "acceptedIterations": 8,
+    "attemptedIterations": 8,
+    "selectedRadii": [
+      0.00025,
+      0.0000625,
+      0.0000078125,
+      0.0000078125,
+      0.0000078125,
+      0.0000078125,
+      0.0000078125,
+      0.0000078125
+    ],
+    "terminalReason": null
+  },
+  "comparison": {
+    "compiledRowStart": 0.004815758612,
+    "admittedOneStep": 0.004745541883,
+    "refinedTrajectory": 0.004722809214,
+    "improvementVersusStart": 1.0196809555051403,
+    "improvementVersusAdmittedOneStep": 1.0048133786418079
+  },
+  "bindings": {
+    "resultJsonSha256": "bcb484441d981ff9f87bc08cfb3b7d1662466b8fff5db448368d674f8f515e1e",
+    "resultSha256": "ed4975f0c154116a5f9245553d7208778bf0749dfa3223b46d31ed59913bd2e5"
+  },
+  "claimCeiling": "bounded-severity-0.32-repeated-common-descent-trajectory-not-global-feasibility-or-carrier-impossibility",
+  "identity": {
+    "sha256": "91e6bf308728bec62117a96389703eb45febc1f087a72368878d744216c9aef7"
+  }
+}

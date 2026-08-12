@@ -578,6 +578,209 @@ test('common-descent assay rejects a canonically rehashed same-problem homotopy 
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
 });
 
+test('repeated row-authoritative common descent preserves every family or returns a local floor', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.createNBodyFamilyGradientCommonDescentTrajectoryConfig,
+    'function',
+    'common-descent trajectory config is not implemented',
+  );
+  assert.equal(
+    typeof restoration.solveNBodyFamilyGradientCommonDescentTrajectory,
+    'function',
+    'common-descent trajectory solver is not implemented',
+  );
+
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = restoration
+    .createNBodyFamilyGradientCommonDescentTrajectoryConfig({ iterationBudget:8 });
+  const canonical = restoration.solveNBodyFamilyGradientCommonDescentTrajectory({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig,
+  });
+  const reverse = restoration.solveNBodyFamilyGradientCommonDescentTrajectory({
+    problem,
+    startVector:COORDINATE_SEARCH_VECTOR,
+    requestedConfig:{ ...requestedConfig, candidateEnumeration:'reverse' },
+  });
+
+  assert.equal(canonical.route.fallbackUsed, false);
+  assert.equal(canonical.status, 'common-descent-trajectory-local-floor');
+  assert.equal(canonical.work.iterations, 2);
+  assert.equal(canonical.work.attempts, 3);
+  assert.equal(canonical.work.terminalReason, 'no-family-admissible-trust-region-candidate');
+  assert.equal(canonical.selected.maximumPhysicalResidual, 0.004727985458);
+  assert.deepEqual(
+    {
+      pairwisePenetration:canonical.selected.metrics.pairwisePenetration,
+      skeletalPenetration:canonical.selected.metrics.skeletalPenetration,
+      compartmentEscape:canonical.selected.metrics.compartmentEscape,
+    },
+    {
+      pairwisePenetration:0.001511058501,
+      skeletalPenetration:0.001527518628,
+      compartmentEscape:0.004727985458,
+    },
+  );
+  assert.deepEqual(
+    canonical.work.rows.map(row =>
+      row.candidateReceipts.find(candidate => candidate.selected)?.radius || null
+    ),
+    [0.00025, 0.0000625, null],
+  );
+  assert.equal(canonical.work.rows.at(-1).directionConstruction.predictedCommonDescent, true);
+  assert.equal(canonical.work.rows.length, canonical.work.attempts);
+  assert.ok(canonical.work.attempts >= 1);
+  assert.ok(canonical.work.iterations <= requestedConfig.iterationBudget);
+  assert.deepEqual(canonical.selected, reverse.selected);
+  const withoutStepResultHashes = work => ({
+    ...work,
+    rows:work.rows.map(({ stepResultSha256, ...row }) => row),
+  });
+  assert.deepEqual(
+    withoutStepResultHashes(canonical.work),
+    withoutStepResultHashes(reverse.work),
+  );
+  for (const row of [...canonical.work.rows, ...reverse.work.rows]) {
+    assert.match(row.stepResultSha256, /^[a-f0-9]{64}$/);
+  }
+  assert.notEqual(
+    canonical.work.rows[0].stepResultSha256,
+    reverse.work.rows[0].stepResultSha256,
+    'step receipts must retain the requested enumeration identity',
+  );
+  assert.equal(canonical.selected.metrics.endpointDrift, 0);
+  assert.equal(canonical.selected.metrics.maximumRelativeVolumeError, 0);
+  for (const row of canonical.work.rows) {
+    assert.equal(
+      row.candidateReceipts.length,
+      requestedConfig.trustRegionRadii.length,
+    );
+    if (!row.accepted) {
+      assert.equal(row.after.maximumPhysicalResidual, row.before.maximumPhysicalResidual);
+      assert.equal(row.candidateReceipts.filter(candidate => candidate.selected).length, 0);
+      continue;
+    }
+    assert.ok(row.after.maximumPhysicalResidual < row.before.maximumPhysicalResidual);
+    for (const family of [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ]) {
+      assert.ok(
+        row.after.metrics[family] <=
+          row.before.metrics[family] + requestedConfig.familyRegressionTolerance,
+        `${family} regressed at trajectory iteration ${row.iteration}`,
+      );
+    }
+  }
+  assert.ok([
+    'common-descent-trajectory-budget-exhausted',
+    'common-descent-trajectory-feasible',
+    'common-descent-trajectory-local-floor',
+  ].includes(canonical.status));
+  assert.equal(canonical.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(canonical.mechanism.contactGraphRowsConsumed, false);
+});
+
+test('common-descent trajectory accepts an explicit refined trust-radius ladder', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const trustRegionRadii = [
+    0.004,
+    0.002,
+    0.001,
+    0.0005,
+    0.00025,
+    0.000125,
+    0.0000625,
+    0.00003125,
+    0.000015625,
+    0.0000078125,
+  ];
+  const config = restoration.createNBodyFamilyGradientCommonDescentTrajectoryConfig({
+    iterationBudget:8,
+    trustRegionRadii,
+  });
+
+  assert.deepEqual(config.trustRegionRadii, trustRegionRadii);
+  assert.equal(config.iterationBudget, 8);
+});
+
+test('refined common-descent trajectory artifact preserves the disproved floor receipt', () => {
+  const result = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const report = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+    'utf8',
+  ));
+  const core = structuredClone(result);
+  delete core.identity;
+
+  assert.equal(result.identity.sha256, hashMusclePackingCanonicalJson(core));
+  assert.equal(result.status, 'common-descent-trajectory-budget-exhausted');
+  assert.equal(result.work.iterations, 8);
+  assert.equal(result.work.attempts, 8);
+  assert.deepEqual(
+    result.work.rows.map(row =>
+      row.candidateReceipts.find(candidate => candidate.selected)?.radius || null
+    ),
+    [0.00025, 0.0000625, ...Array(6).fill(0.0000078125)],
+  );
+  assert.ok(result.work.rows.every(row => row.accepted));
+  assert.ok(result.work.rows.every(row =>
+    row.candidateReceipts.find(candidate => candidate.selected)?.regressedFamilies.length === 0
+  ));
+  assert.equal(result.selected.maximumPhysicalResidual, 0.004722809214);
+  assert.equal(result.selected.metrics.pairwisePenetration, 0.001499698406);
+  assert.equal(result.selected.metrics.skeletalPenetration, 0.001517952708);
+  assert.equal(result.selected.metrics.compartmentEscape, 0.004722809214);
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.equal(report.status, 'complete-refined-trajectory-budget-exhausted');
+  assert.equal(report.bindings.resultSha256, result.identity.sha256);
+  assert.equal(report.probe.acceptedIterations, 8);
+  assert.equal(report.probe.terminalReason, null);
+});
+
+test('common-descent trajectory assay rejects a rehashed admitted-step substitution', async () => {
+  const assay = await import('../nbody-packing-restoration-assay.mjs');
+  assert.equal(
+    typeof assay.runNBodyPackingCommonDescentTrajectoryAssay,
+    'function',
+    'source-bound common-descent trajectory assay is not implemented',
+  );
+  const sourceRoot = path.resolve(
+    'artifacts/nbody-packing-family-gradient-common-descent-v0',
+  );
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-common-trajectory-pin-'));
+  const source = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'result.json'), 'utf8'));
+  source.start.vector[0] += 0.000001;
+  delete source.identity;
+  source.identity = { sha256:hashMusclePackingCanonicalJson(source) };
+  const substitutedPath = path.join(outDir, 'substituted-common-step.json');
+  fs.writeFileSync(substitutedPath, `${JSON.stringify(source, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'result.json'), '{"status":"stale-success"}\n');
+
+  await assert.rejects(
+    assay.runNBodyPackingCommonDescentTrajectoryAssay({
+      outDir,
+      commonDescentResultPath:substitutedPath,
+      commonDescentReportPath:path.join(sourceRoot, 'run-report.json'),
+    }),
+    /substituted admitted common-descent step/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.failurePhase, 'bind-admitted-common-descent-source');
+  assert.equal(report.route.effective, null);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
 test('restoration assay preserves an invalid requested acceptance policy in failure evidence', async () => {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-restoration-policy-failure-'));
   await assert.rejects(

@@ -26,6 +26,8 @@ export const NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE =
   'nbody-packing-all-neighbor-restoration-trajectory-v0';
 export const NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE =
   'nbody-packing-family-gradient-common-descent-v0';
+export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE =
+  'nbody-packing-family-gradient-common-descent-trajectory-v0';
 export const NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA =
   'kaminos.nbody-packing-localized-boundary-witness.v0';
 
@@ -282,6 +284,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
     NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
     NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
     NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
+    NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
   ].includes(report.route?.effective)
     ? RESTORATION_VISUAL_VERDICT_KEYS
     : report.route?.effective === NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE
@@ -303,6 +306,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
       NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
       NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
       NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
+      NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
     ].includes(report.route?.effective) ||
     report.route?.fallbackUsed !== false
   ) throw new Error('localized visual admission requires exact pending witness');

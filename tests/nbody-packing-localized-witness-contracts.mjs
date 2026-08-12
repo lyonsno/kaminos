@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,7 @@ import {
   NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
+  NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   admitNBodyPackingLocalizedVisualInspection,
   renderNBodyPackingLocalizedChallengeHtml,
@@ -21,6 +23,50 @@ import {
   writeNBodyPackingLocalizedHardBoundaryWitness,
 } from '../nbody-packing-localized-hard-witness.mjs';
 import { hashMusclePackingCanonicalJson } from '../muscle-compartment-packing-core.mjs';
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function rehashStoredCommonDescentStep({ result, row }) {
+  const trajectoryConfig = result.config.effective;
+  const config = {
+    algorithm:'family-gradient-minimum-norm-common-descent-v0',
+    candidateEnumeration:trajectoryConfig.candidateEnumeration,
+    directionalDerivativeTolerance:trajectoryConfig.directionalDerivativeTolerance,
+    familyRegressionTolerance:trajectoryConfig.familyRegressionTolerance,
+    finiteDifferenceStep:trajectoryConfig.finiteDifferenceStep,
+    translationBounds:[...trajectoryConfig.translationBounds],
+    trustRegionRadii:[...trajectoryConfig.trustRegionRadii],
+  };
+  const core = {
+    schema:'kaminos.nbody-packing-family-gradient-common-descent-result.v0',
+    status:'common-descent-step-accepted',
+    route:{ requested:config.algorithm, effective:config.algorithm, fallbackUsed:false },
+    source:{ problemSha256:result.source.problemSha256 },
+    config:{ requested:structuredClone(config), effective:structuredClone(config) },
+    start:structuredClone(row.before),
+    directionConstruction:structuredClone(row.directionConstruction),
+    selected:structuredClone(row.after),
+    work:{
+      iterations:1,
+      attempts:1,
+      evaluationCount:1 + (2 * row.before.vector.length * 3) + row.candidateReceipts.length,
+      terminalReason:null,
+      candidateReceipts:structuredClone(row.candidateReceipts),
+    },
+    mechanism:{
+      directionBasis:'minimum-norm-convex-combination-of-normalized-family-gradients',
+      nonlinearAcceptance:'no-family-regression-and-lower-maximum-physical-residual',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:result.mechanism.carrierDegreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility',
+  };
+  return hashMusclePackingCanonicalJson(core);
+}
 
 test('localized witness names the complete last-pass first-fail comparison without inversion', () => {
   const states = Object.fromEntries([
@@ -330,6 +376,142 @@ test('common-descent writer binds the source-bound result as a seventh compariso
     fs.readFileSync(path.join(outDir, 'index.html'), 'utf8'),
     /Family-gradient common descent · six-body hard boundary/,
   );
+});
+
+test('refined common-descent trajectory writer adds an eighth route-bound comparison state', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-trajectory-'));
+  const { report, states } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    commonDescentResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+    commonDescentTrajectoryResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    commonDescentTrajectoryReportPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+  });
+  assert.equal(report.route.effective,
+    NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(report.requiredStates.length, 8);
+  assert.equal(Object.keys(states).length, 8);
+  assert.deepEqual(
+    states['repeated-family-common-descent'].metrics,
+    JSON.parse(fs.readFileSync(
+      'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+      'utf8',
+    )).selected.metrics,
+  );
+  assert.match(report.claimCeiling.admittedClaim, /coarse radius-ladder artifact/);
+});
+
+test('trajectory viewer rejects a rehashed malformed intermediate ledger before publishing', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-malformed-trajectory-'));
+  const result = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  result.work.rows[2].after.metrics.compartmentEscape += 1;
+  delete result.identity;
+  result.identity = { sha256:hashMusclePackingCanonicalJson(result) };
+  const malformedPath = path.join(outDir, 'rehashed-malformed-result.json');
+  fs.writeFileSync(malformedPath, `${JSON.stringify(result, null, 2)}\n`);
+
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      commonDescentResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+      commonDescentTrajectoryResultPath:malformedPath,
+      commonDescentTrajectoryReportPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+    }),
+    /trajectory (?:report binding|semantic ledger)/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.requested, NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'bind-source-identities');
+  assert.equal(fs.existsSync(path.join(outDir, 'index.html')), false);
+});
+
+test('trajectory viewer rejects a rehashed stale assay report before publishing', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-stale-trajectory-report-'));
+  const sourceReport = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+    'utf8',
+  ));
+  sourceReport.bindings.resultJsonSha256 = 'a'.repeat(64);
+  delete sourceReport.identity;
+  sourceReport.identity = { sha256:hashMusclePackingCanonicalJson(sourceReport) };
+  const staleReportPath = path.join(outDir, 'rehashed-stale-report.json');
+  fs.writeFileSync(staleReportPath, `${JSON.stringify(sourceReport, null, 2)}\n`);
+
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      commonDescentResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+      commonDescentTrajectoryResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+      commonDescentTrajectoryReportPath:staleReportPath,
+    }),
+    /trajectory report binding/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.route.requested, NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(report.route.effective, null);
+  assert.equal(report.failurePhase, 'bind-source-identities');
+  assert.match(
+    report.lastTrustworthyEvidence.commonDescentTrajectoryReportSha256,
+    /^[a-f0-9]{64}$/,
+  );
+  assert.equal(fs.existsSync(path.join(outDir, 'index.html')), false);
+});
+
+test('trajectory viewer rejects a jointly rehashed forged direction ledger before publishing', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-forged-direction-'));
+  const result = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const report = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+    'utf8',
+  ));
+  const row = result.work.rows[2];
+  row.directionConstruction.gradients[0].vector[0] = 1;
+  row.stepResultSha256 = rehashStoredCommonDescentStep({ result, row });
+  delete result.identity;
+  result.identity = { sha256:hashMusclePackingCanonicalJson(result) };
+  const resultBytes = Buffer.from(`${JSON.stringify(result, null, 2)}\n`);
+  report.bindings.resultJsonSha256 = sha256(resultBytes);
+  report.bindings.resultSha256 = result.identity.sha256;
+  delete report.identity;
+  report.identity = { sha256:hashMusclePackingCanonicalJson(report) };
+  const resultPath = path.join(outDir, 'jointly-rehashed-result.json');
+  const reportPath = path.join(outDir, 'jointly-rehashed-report.json');
+  fs.writeFileSync(resultPath, resultBytes);
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      commonDescentResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+      commonDescentTrajectoryResultPath:resultPath,
+      commonDescentTrajectoryReportPath:reportPath,
+    }),
+    /trajectory report binding: admitted-source manifest mismatch/,
+  );
+  const failure = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(failure.status, 'failed');
+  assert.equal(failure.route.requested, NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(failure.route.effective, null);
+  assert.equal(failure.failurePhase, 'bind-source-identities');
+  assert.match(failure.lastTrustworthyEvidence.commonDescentTrajectoryReportSha256,
+    /^[a-f0-9]{64}$/);
+  assert.equal(fs.existsSync(path.join(outDir, 'index.html')), false);
 });
 
 test('common-descent witness rejects a canonically rehashed incomplete route config', async () => {

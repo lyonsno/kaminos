@@ -14,14 +14,38 @@ import {
 import {
   createNBodyAllNeighborRestorationConfig,
   createNBodyFamilyGradientCommonDescentConfig,
+  createNBodyFamilyGradientCommonDescentTrajectoryConfig,
   solveNBodyAllNeighborRestoration,
   solveNBodyFamilyGradientCommonDescent,
+  solveNBodyFamilyGradientCommonDescentTrajectory,
 } from './nbody-packing-restoration.mjs';
 
 export const NBODY_PACKING_RESTORATION_ASSAY_SCHEMA =
   'kaminos.nbody-packing-all-neighbor-restoration-assay.v0';
 export const NBODY_PACKING_COMMON_DESCENT_ASSAY_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-assay.v0';
+export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA =
+  'kaminos.nbody-packing-family-gradient-common-descent-trajectory-assay.v0';
+
+export const NBODY_PACKING_REFINED_COMMON_DESCENT_RADII = Object.freeze([
+  0.004,
+  0.002,
+  0.001,
+  0.0005,
+  0.00025,
+  0.000125,
+  0.0000625,
+  0.00003125,
+  0.000015625,
+  0.0000078125,
+]);
+
+const FROZEN_ADMITTED_COMMON_DESCENT = Object.freeze({
+  resultFileSha256:'dd236d22e8d7287a9739e7e237ab56926b5aa38c830d6416e2595df8b006872b',
+  resultSha256:'879cc405832bce8fb6e04ed2360b1a326614402432fe8dbe86da1d0b53a2dd19',
+  reportFileSha256:'6c0f07050febb3fbf78aab4b5f423d451c7a467cff7a0bc7ba05e225ed2f48b0',
+  reportSha256:'20cbd158b960ce5de258d9dcf6cb40a4512d6ad588838164da17d580d325f4c4',
+});
 
 const FROZEN_BASELINES = Object.freeze({
   pattern:Object.freeze({
@@ -456,16 +480,207 @@ export async function runNBodyPackingCommonDescentAssay({
   }
 }
 
+export async function runNBodyPackingCommonDescentTrajectoryAssay({
+  outDir = 'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0',
+  commonDescentResultPath =
+    'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+  commonDescentReportPath =
+    'artifacts/nbody-packing-family-gradient-common-descent-v0/run-report.json',
+  iterationBudget = 8,
+  trustRegionRadii = NBODY_PACKING_REFINED_COMMON_DESCENT_RADII,
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  const requestedRoute = 'family-gradient-minimum-norm-common-descent-trajectory-v0';
+  let phase = 'read-admitted-common-descent-source';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    phase = 'invalidate-prior-primary';
+    await invalidatePriorPrimary(outputRoot);
+    phase = 'read-admitted-common-descent-source';
+    const [sourceResultBytes, sourceReportBytes] = await Promise.all([
+      readFile(path.resolve(commonDescentResultPath)),
+      readFile(path.resolve(commonDescentReportPath)),
+    ]);
+    const sourceResult = JSON.parse(String(sourceResultBytes));
+    const sourceReport = JSON.parse(String(sourceReportBytes));
+    verifyCanonicalIdentity(sourceResult, 'admitted common-descent step');
+    verifyCanonicalIdentity(sourceReport, 'admitted common-descent report');
+    lastTrustworthyEvidence = {
+      phase:'admitted-common-descent-source-read',
+      resultFileSha256:sha256(sourceResultBytes),
+      resultSha256:sourceResult.identity?.sha256 || null,
+      reportFileSha256:sha256(sourceReportBytes),
+      reportSha256:sourceReport.identity?.sha256 || null,
+    };
+
+    phase = 'bind-admitted-common-descent-source';
+    if (
+      sha256(sourceResultBytes) !== FROZEN_ADMITTED_COMMON_DESCENT.resultFileSha256 ||
+      sourceResult.identity?.sha256 !== FROZEN_ADMITTED_COMMON_DESCENT.resultSha256 ||
+      sha256(sourceReportBytes) !== FROZEN_ADMITTED_COMMON_DESCENT.reportFileSha256 ||
+      sourceReport.identity?.sha256 !== FROZEN_ADMITTED_COMMON_DESCENT.reportSha256
+    ) throw new Error('trajectory assay rejects substituted admitted common-descent step');
+    if (
+      sourceReport.bindings?.resultJsonSha256 !== sha256(sourceResultBytes) ||
+      sourceReport.bindings?.resultSha256 !== sourceResult.identity.sha256
+    ) throw new Error('trajectory assay rejects broken admitted common-descent binding');
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      row => row.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    if (
+      sourceResult.schema !== 'kaminos.nbody-packing-family-gradient-common-descent-result.v0' ||
+      sourceResult.status !== 'common-descent-step-accepted' ||
+      sourceResult.route?.effective !== 'family-gradient-minimum-norm-common-descent-v0' ||
+      sourceResult.route?.fallbackUsed !== false ||
+      sourceResult.source?.problemSha256 !== problem.identity.sha256 ||
+      sourceResult.start?.maximumPhysicalResidual !== 0.004815758612 ||
+      sourceResult.selected?.maximumPhysicalResidual !== 0.004745541883 ||
+      sourceReport.schema !== NBODY_PACKING_COMMON_DESCENT_ASSAY_SCHEMA ||
+      sourceReport.status !== 'complete-common-descent-step-admitted' ||
+      sourceReport.source?.fixtureSha256 !== fixture.identity.sha256 ||
+      sourceReport.source?.problemSha256 !== problem.identity.sha256
+    ) throw new Error('trajectory assay rejects incompatible admitted common-descent source');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'admitted-common-descent-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+    };
+
+    phase = 'solve-refined-common-descent-trajectory';
+    const requestedConfig = createNBodyFamilyGradientCommonDescentTrajectoryConfig({
+      iterationBudget,
+      trustRegionRadii,
+    });
+    const result = solveNBodyFamilyGradientCommonDescentTrajectory({
+      problem,
+      startVector:sourceResult.start.vector,
+      requestedConfig,
+    });
+    phase = 'verify-refined-common-descent-trajectory';
+    const admittedRows = result.work?.rows?.filter(row => row.accepted) || [];
+    const allRows = result.work?.rows || [];
+    const familyKeys = [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ];
+    const everyAcceptedRowIsFamilyMonotone = admittedRows.every(row =>
+      familyKeys.every(key => row.after.metrics[key] <=
+        row.before.metrics[key] + requestedConfig.familyRegressionTolerance)
+    );
+    if (
+      ![
+        'common-descent-trajectory-feasible',
+        'common-descent-trajectory-local-floor',
+        'common-descent-trajectory-budget-exhausted',
+      ].includes(result.status) ||
+      result.route?.requested !== requestedRoute ||
+      result.route?.effective !== requestedRoute ||
+      result.route?.fallbackUsed !== false ||
+      result.source?.problemSha256 !== problem.identity.sha256 ||
+      result.start?.maximumPhysicalResidual !== sourceResult.start.maximumPhysicalResidual ||
+      allRows.length !== result.work?.attempts ||
+      result.work?.iterations !== admittedRows.length ||
+      allRows.some(row =>
+        row.candidateReceipts?.length !== requestedConfig.trustRegionRadii.length ||
+        row.candidateReceipts.some(candidate =>
+          !requestedConfig.trustRegionRadii.includes(candidate.radius)
+        )
+      ) ||
+      !everyAcceptedRowIsFamilyMonotone ||
+      result.selected?.metrics?.endpointDrift !== 0 ||
+      result.selected?.metrics?.maximumRelativeVolumeError !== 0 ||
+      result.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+      result.mechanism?.contactGraphRowsConsumed !== false
+    ) throw new Error('trajectory assay result did not clear its bounded probe contract');
+
+    phase = 'write-terminal-artifacts';
+    const resultBytes = jsonBytes(result);
+    const selectedRadii = allRows.map(row =>
+      row.candidateReceipts.find(candidate => candidate.selected)?.radius || null
+    );
+    const reportCore = {
+      schema:NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA,
+      status:result.status === 'common-descent-trajectory-feasible'
+        ? 'complete-refined-trajectory-feasible'
+        : result.status === 'common-descent-trajectory-local-floor'
+          ? 'complete-refined-trajectory-floor-exposed'
+          : 'complete-refined-trajectory-budget-exhausted',
+      route:structuredClone(result.route),
+      source:{
+        fixtureSha256:fixture.identity.sha256,
+        problemSha256:problem.identity.sha256,
+        admittedCommonDescent:{
+          resultPath:commonDescentResultPath,
+          resultFileSha256:sha256(sourceResultBytes),
+          resultSha256:sourceResult.identity.sha256,
+          reportPath:commonDescentReportPath,
+          reportFileSha256:sha256(sourceReportBytes),
+          reportSha256:sourceReport.identity.sha256,
+        },
+      },
+      probe:{
+        trustRegionRadii:[...requestedConfig.trustRegionRadii],
+        iterationBudget:requestedConfig.iterationBudget,
+        acceptedIterations:result.work.iterations,
+        attemptedIterations:result.work.attempts,
+        selectedRadii,
+        terminalReason:result.work.terminalReason,
+      },
+      comparison:{
+        compiledRowStart:result.start.maximumPhysicalResidual,
+        admittedOneStep:sourceResult.selected.maximumPhysicalResidual,
+        refinedTrajectory:result.selected.maximumPhysicalResidual,
+        improvementVersusStart:
+          result.start.maximumPhysicalResidual / result.selected.maximumPhysicalResidual,
+        improvementVersusAdmittedOneStep:
+          sourceResult.selected.maximumPhysicalResidual /
+            result.selected.maximumPhysicalResidual,
+      },
+      bindings:{
+        resultJsonSha256:sha256(resultBytes),
+        resultSha256:result.identity.sha256,
+      },
+      claimCeiling:result.claimCeiling,
+    };
+    const report = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    await Promise.all([
+      writeAtomically(path.join(outputRoot, 'result.json'), resultBytes),
+      writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(report)),
+    ]);
+    return { outputRoot, result, report };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA,
+      status:'failed',
+      route:{ requested:requestedRoute, effective:null, fallbackUsed:false },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(failure));
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-all-neighbor-restoration-v0';
   const iterationBudget = process.argv[3] === undefined ? 1 : Number(process.argv[3]);
   const acceptancePolicy = process.argv[4] || 'scalar-merit';
   const { outputRoot, report } = acceptancePolicy === 'family-gradient-common-descent'
     ? await runNBodyPackingCommonDescentAssay({ outDir })
-    : await runNBodyPackingRestorationAssay({
-        outDir,
-        iterationBudget,
-        acceptancePolicy,
-      });
+    : acceptancePolicy === 'family-gradient-common-descent-trajectory'
+      ? await runNBodyPackingCommonDescentTrajectoryAssay({ outDir, iterationBudget })
+      : await runNBodyPackingRestorationAssay({
+          outDir,
+          iterationBudget,
+          acceptancePolicy,
+        });
   process.stdout.write(`${JSON.stringify({ outputRoot, report }, null, 2)}\n`);
 }

@@ -5,10 +5,14 @@ export const NBODY_PACKING_RESTORATION_RESULT_SCHEMA =
   'kaminos.nbody-packing-all-neighbor-restoration-result.v0';
 export const NBODY_PACKING_COMMON_DESCENT_RESULT_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-result.v0';
+export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA =
+  'kaminos.nbody-packing-family-gradient-common-descent-trajectory-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
 const COMMON_DESCENT_ALGORITHM = 'family-gradient-minimum-norm-common-descent-v0';
+const COMMON_DESCENT_TRAJECTORY_ALGORITHM =
+  'family-gradient-minimum-norm-common-descent-trajectory-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -454,6 +458,151 @@ export function solveNBodyFamilyGradientCommonDescent({
     },
     claimCeiling:
       'bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyFamilyGradientCommonDescentTrajectoryConfig({
+  iterationBudget = 8,
+  trustRegionRadii = null,
+} = {}) {
+  const oneStep = createNBodyFamilyGradientCommonDescentConfig();
+  return {
+    algorithm:COMMON_DESCENT_TRAJECTORY_ALGORITHM,
+    candidateEnumeration:oneStep.candidateEnumeration,
+    convergenceTolerance:1e-7,
+    directionalDerivativeTolerance:oneStep.directionalDerivativeTolerance,
+    familyRegressionTolerance:oneStep.familyRegressionTolerance,
+    finiteDifferenceStep:oneStep.finiteDifferenceStep,
+    iterationBudget,
+    translationBounds:[...oneStep.translationBounds],
+    trustRegionRadii:trustRegionRadii
+      ? [...trustRegionRadii]
+      : [...oneStep.trustRegionRadii],
+  };
+}
+
+export function solveNBodyFamilyGradientCommonDescentTrajectory({
+  problem,
+  startVector,
+  requestedConfig = createNBodyFamilyGradientCommonDescentTrajectoryConfig(),
+} = {}) {
+  const expectedKeys = [
+    'algorithm',
+    'candidateEnumeration',
+    'convergenceTolerance',
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'iterationBudget',
+    'translationBounds',
+    'trustRegionRadii',
+  ];
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `common descent trajectory requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== COMMON_DESCENT_TRAJECTORY_ALGORITHM) {
+    throw new Error('common descent trajectory algorithm identity is unsupported');
+  }
+  if (!Number.isInteger(requestedConfig.iterationBudget) || requestedConfig.iterationBudget <= 0) {
+    throw new Error('common descent trajectory iterationBudget must be a positive integer');
+  }
+  if (
+    !Number.isFinite(requestedConfig.convergenceTolerance) ||
+    requestedConfig.convergenceTolerance <= 0
+  ) {
+    throw new Error('common descent trajectory convergenceTolerance must be positive and finite');
+  }
+  const oneStepConfig = {
+    algorithm:COMMON_DESCENT_ALGORITHM,
+    candidateEnumeration:requestedConfig.candidateEnumeration,
+    directionalDerivativeTolerance:requestedConfig.directionalDerivativeTolerance,
+    familyRegressionTolerance:requestedConfig.familyRegressionTolerance,
+    finiteDifferenceStep:requestedConfig.finiteDifferenceStep,
+    translationBounds:[...requestedConfig.translationBounds],
+    trustRegionRadii:[...requestedConfig.trustRegionRadii],
+  };
+  validateStart(problem, startVector, requestedConfig.translationBounds);
+
+  let currentVector = [...startVector];
+  let start = null;
+  let selected = null;
+  let evaluationCount = 0;
+  let acceptedIterations = 0;
+  let terminalReason = null;
+  const rows = [];
+
+  for (let iteration = 1; iteration <= requestedConfig.iterationBudget; iteration += 1) {
+    const step = solveNBodyFamilyGradientCommonDescent({
+      problem,
+      startVector:currentVector,
+      requestedConfig:oneStepConfig,
+    });
+    start ||= structuredClone(step.start);
+    selected = structuredClone(step.selected);
+    evaluationCount += step.work.evaluationCount;
+    const accepted = step.status === 'common-descent-step-accepted';
+    if (accepted) {
+      acceptedIterations += 1;
+      currentVector = [...step.selected.vector];
+    } else {
+      terminalReason = step.work.terminalReason;
+    }
+    rows.push({
+      iteration,
+      accepted,
+      before:structuredClone(step.start),
+      directionConstruction:structuredClone(step.directionConstruction),
+      candidateReceipts:structuredClone(step.work.candidateReceipts),
+      after:structuredClone(step.selected),
+      terminalReason:accepted ? null : step.work.terminalReason,
+      stepResultSha256:step.identity.sha256,
+    });
+    if (!accepted || step.selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance) {
+      if (accepted) terminalReason = 'convergence-tolerance-reached';
+      break;
+    }
+  }
+
+  const feasible = selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance;
+  const stalled = terminalReason !== null && terminalReason !== 'convergence-tolerance-reached';
+  const core = {
+    schema:NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA,
+    status:feasible
+      ? 'common-descent-trajectory-feasible'
+      : stalled
+        ? 'common-descent-trajectory-local-floor'
+        : 'common-descent-trajectory-budget-exhausted',
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{
+      requested:structuredClone(requestedConfig),
+      effective:structuredClone(requestedConfig),
+    },
+    start,
+    selected,
+    work:{
+      iterations:acceptedIterations,
+      attempts:rows.length,
+      evaluationCount,
+      terminalReason,
+      rows,
+    },
+    mechanism:{
+      directionBasis:'recomputed-minimum-norm-convex-combination-of-normalized-family-gradients',
+      nonlinearAcceptance:'no-family-regression-and-lower-maximum-physical-residual',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-repeated-common-descent-trajectory-not-global-feasibility-or-carrier-impossibility',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }
