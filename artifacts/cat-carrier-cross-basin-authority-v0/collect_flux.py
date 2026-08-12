@@ -7,6 +7,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -29,6 +30,10 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
 def png_dimensions(path: Path) -> tuple[int, int] | None:
     try:
         with path.open("rb") as stream:
@@ -40,7 +45,11 @@ def png_dimensions(path: Path) -> tuple[int, int] | None:
         return None
 
 
-def validate_output(path: Path, expected_size: tuple[int, int]) -> list[str]:
+def validate_output(
+    path: Path,
+    expected_size: tuple[int, int],
+    started_at: float | None = None,
+) -> list[str]:
     errors = []
     if not path.is_file():
         return [f"primary output is missing: {path}"]
@@ -49,6 +58,27 @@ def validate_output(path: Path, expected_size: tuple[int, int]) -> list[str]:
     dimensions = png_dimensions(path)
     if dimensions != expected_size:
         errors.append(f"primary output dimensions are {dimensions}, expected {expected_size}")
+    if started_at is not None and path.stat().st_mtime + 1 < started_at:
+        errors.append(f"primary output predates the authenticated job start: {path.stat().st_mtime} < {started_at}")
+    return errors
+
+
+def validate_prompt(
+    path: Path,
+    expected_text: str,
+    expected_sha256: str,
+    started_at: float | None = None,
+) -> list[str]:
+    if not path.is_file():
+        return [f"prompt file is missing: {path}"]
+    actual_text = path.read_text().strip()
+    errors = []
+    if actual_text != expected_text:
+        errors.append("prompt content does not match the frozen campaign text")
+    if sha256_bytes(actual_text.encode()) != expected_sha256:
+        errors.append("prompt content hash does not match the frozen campaign hash")
+    if started_at is not None and path.stat().st_mtime > started_at + 1:
+        errors.append("prompt file was modified after the authenticated job start")
     return errors
 
 
@@ -83,11 +113,15 @@ def validate_status(status: dict, expected: dict) -> list[str]:
         expected["output"],
         f"--seed {expected['seed']}",
         f"--model {expected['model']}",
+        f"--quantize {expected['quantize']}",
+        f"--height {expected['height']}",
+        f"--width {expected['width']}",
         f"--steps {expected['steps']}",
         f"--guidance {expected['guidance']}",
+        f"--mlx-cache-limit-gb {expected['mlxCacheLimitGb']}",
     ]
     if any(token not in route for token in route_tokens):
-        errors.append("effective route does not bind the expected executable, source, prompt, output, seed, model, steps, and guidance")
+        errors.append("effective route does not bind every expected executable, source, prompt, output, and setting token")
     return errors
 
 
@@ -107,6 +141,9 @@ def canonical_job_dir(job_id: str) -> Path:
 def main() -> int:
     campaign = json.loads(CAMPAIGN.read_text())
     submissions = json.loads(SUBMISSIONS.read_text())
+    campaign_sha256 = sha256(CAMPAIGN)
+    submissions_sha256 = sha256(SUBMISSIONS)
+    families = {family["id"]: family for family in campaign["promptFamilies"]}
     expected_ids = {cell["id"] for cell in campaign["cells"]}
     if set(submissions.get("cells", {})) != expected_ids:
         raise RuntimeError(f"submission ledger does not cover the frozen {len(expected_ids)}-cell campaign")
@@ -114,6 +151,7 @@ def main() -> int:
     statuses = {cell_id: greenroom_status(entry["jobId"]) for cell_id, entry in submissions["cells"].items()}
     incomplete = {cell_id: status.get("status") for cell_id, status in statuses.items() if status.get("status") not in {"done", "failed", "cancelled"}}
     if incomplete:
+        LEDGER.unlink(missing_ok=True)
         write_json(STATE_REPORT, {
             "schema": "kaminos.cat-carrier-cross-basin-authority.collection-state.v0",
             "phase": "awaiting-terminal-greenroom-jobs",
@@ -128,6 +166,10 @@ def main() -> int:
     ledger = {
         "schema": "kaminos.cat-carrier-cross-basin-authority.results.v0",
         "campaign": "campaign.json",
+        "campaignSha256": campaign_sha256,
+        "submissions": "submissions.json",
+        "submissionsSha256": submissions_sha256,
+        "collectedAt": time.time(),
         "cells": {},
     }
     for cell in campaign["cells"]:
@@ -136,6 +178,8 @@ def main() -> int:
         status = statuses[cell_id]
         source = str((ROOT / campaign["sources"][cell["sourceId"]]["plate"]).resolve())
         prompt_file = str((ROOT / cell["promptFile"]).resolve())
+        prompt_text = families[cell["family"]]["prompt"]
+        prompt_sha256 = sha256_bytes(prompt_text.encode())
         output = (ROOT / cell["outputDir"] / "output.png").resolve()
         expected = {
             "jobType": route["jobType"],
@@ -152,7 +196,13 @@ def main() -> int:
             "mlxCacheLimitGb": route["mlxCacheLimitGb"],
         }
         errors = validate_status(status, expected)
-        errors.extend(validate_output(output, (route["width"], route["height"])))
+        errors.extend(validate_prompt(Path(prompt_file), prompt_text, prompt_sha256, status.get("started_at")))
+        errors.extend(validate_output(output, (route["width"], route["height"]), status.get("started_at")))
+        source_record = campaign["sources"][cell["sourceId"]]
+        if sha256(Path(source)) != source_record["plateSha256"]:
+            errors.append("source plate content does not match the frozen campaign hash")
+        if status.get("started_at") is not None and Path(source).stat().st_mtime > status["started_at"] + 1:
+            errors.append("source plate was modified after the authenticated job start")
         if status.get("input_path") != source:
             errors.append(f"effective input is {status.get('input_path')}, expected {source}")
         evidence_dir = ROOT / "receipts" / cell_id
@@ -175,6 +225,9 @@ def main() -> int:
             "sourceId": cell["sourceId"],
             "family": cell["family"],
             "seed": cell["seed"],
+            "sourceSha256": source_record["plateSha256"],
+            "prompt": prompt_text,
+            "promptSha256": prompt_sha256,
             "output": output.relative_to(ROOT).as_posix(),
             "outputSha256": sha256(output),
             "effectiveRoute": status["effective_route"],
@@ -182,6 +235,7 @@ def main() -> int:
             "receipt": (evidence_dir / "receipt.json").relative_to(ROOT).as_posix(),
         }
     if failures:
+        LEDGER.unlink(missing_ok=True)
         write_json(STATE_REPORT, {
             "schema": "kaminos.cat-carrier-cross-basin-authority.collection-state.v0",
             "phase": "terminal-evidence-validation",

@@ -1,0 +1,214 @@
+{
+  "schema": "kaminos.cat-carrier-cross-basin-authority.precedent.v0",
+  "role": "fertile-basin-precedent-not-causal-control",
+  "source": "../authored-envelope-v0/plate3/plate.png",
+  "sourceSha256": "50bac29be1534e847a02013c8bd054cfd433d7d0335c536423f6a5e5cab36ed8",
+  "routeEvidence": "Copied historical metadata authenticates source path, prompt file, seed, job type, and job id where present. It does not preserve a canonical Greenroom receipt or independently authenticate all effective model defaults; the sheet must not imply otherwise.",
+  "cells": {
+    "dragon-seed80301": {
+      "family": "dragon",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-el-armature-dragon/output.png",
+      "outputSha256": "914414b1f81d0caa108b358e1cf490f7c657fac2675024532d775a35d9774809",
+      "metadata": "../authored-envelope-v0/gen-el-armature-dragon/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "0cc24453d286",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-dragon.txt",
+        "seed": "80301"
+      }
+    },
+    "dragon-seed80302": {
+      "family": "dragon",
+      "seed": 80302,
+      "output": "../authored-envelope-v0/gen-el-armature-dragon-s80302/output.png",
+      "outputSha256": "72e7c922bb0a0e7dfd92e70714432357a9090e422b6ef8cb4ae321ceb6f48e11",
+      "metadata": "../authored-envelope-v0/gen-el-armature-dragon-s80302/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "2739836ccbe0",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-dragon.txt",
+        "seed": "80302"
+      }
+    },
+    "dragon-seed80413": {
+      "family": "dragon",
+      "seed": 80413,
+      "output": "../authored-envelope-v0/gen-el-armature-dragon-s80413/output.png",
+      "outputSha256": "dda746620fdbcbf6e04256c3870d3e3f1056cf0e91a0fe5727beacb23c9e09e2",
+      "metadata": "../authored-envelope-v0/gen-el-armature-dragon-s80413/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "381d4c5d9f50",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-dragon.txt",
+        "seed": "80413"
+      }
+    },
+    "golem-seed80301": {
+      "family": "golem",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-el-armature-golem/output.png",
+      "outputSha256": "e3d573c84601933eb59066ffac7e87e82c18874c32931a11f9448a60ead4caba",
+      "metadata": "../authored-envelope-v0/gen-el-armature-golem/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "7d1140014bc4",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-golem.txt",
+        "seed": "80301"
+      }
+    },
+    "golem-seed80302": {
+      "family": "golem",
+      "seed": 80302,
+      "output": "../authored-envelope-v0/gen-el-armature-golem-s80302/output.png",
+      "outputSha256": "5f3286cbf3290ed8032715967cd4988f6d1268119b674cecc2f66607ca339288",
+      "metadata": "../authored-envelope-v0/gen-el-armature-golem-s80302/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "c4f9a9bb0df3",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-golem.txt",
+        "seed": "80302"
+      }
+    },
+    "golem-seed80413": {
+      "family": "golem",
+      "seed": 80413,
+      "output": "../authored-envelope-v0/gen-el-armature-golem-s80413/output.png",
+      "outputSha256": "cba1c1e66323d981560a741d7d9c0164195e33aa7d0744bc5ea789f169e48ab0",
+      "metadata": "../authored-envelope-v0/gen-el-armature-golem-s80413/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "1135a76512a0",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-golem.txt",
+        "seed": "80413"
+      }
+    },
+    "phantom-seed80301": {
+      "family": "phantom",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-el-armature-phantom/output.png",
+      "outputSha256": "45dffa0fcf86e16130a54df51e23c33caee267bbab2165798b0dccd2e2fb618b",
+      "metadata": "../authored-envelope-v0/gen-el-armature-phantom/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "df031da5b402",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-phantom.txt",
+        "seed": "80301"
+      }
+    },
+    "phantom-seed80302": {
+      "family": "phantom",
+      "seed": 80302,
+      "output": "../authored-envelope-v0/gen-el-armature-phantom-s80302/output.png",
+      "outputSha256": "96944d78353aeb8de880693c42d9f5bcfd48eaa72618ec9afe42f7165c577e93",
+      "metadata": "../authored-envelope-v0/gen-el-armature-phantom-s80302/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "7578673d33cc",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/el-armature-phantom.txt",
+        "seed": "80302"
+      }
+    },
+    "phantom-seed80413": {
+      "family": "phantom",
+      "seed": 80413,
+      "output": "../authored-envelope-v0/gen-el-armature-phantom-s80413/output.png",
+      "outputSha256": "74afcb6e54286550b1afa04c112ad6537fce7b88b5c1c5ea0769030949c3721e",
+      "metadata": null,
+      "recordedJobType": null,
+      "recordedJobId": null,
+      "recordedParams": null
+    },
+    "maquette-seed80301": {
+      "family": "maquette",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-fr-maquette/output.png",
+      "outputSha256": "c0375fbd85d6905a241a97a891b0fe14ff5f7240b29eafa5ea47c9a002d7e392",
+      "metadata": "../authored-envelope-v0/gen-fr-maquette/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "8665fa8c2f72",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-maquette.txt",
+        "seed": "80301"
+      }
+    },
+    "maquette-seed80302": {
+      "family": "maquette",
+      "seed": 80302,
+      "output": "../authored-envelope-v0/gen-fr-maquette-s80302/output.png",
+      "outputSha256": "dd4ae66588519c2391ac9d2c69c480ef59e280ebae70bb0ddae9a11941cdba9b",
+      "metadata": "../authored-envelope-v0/gen-fr-maquette-s80302/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "69699c07ed8f",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-maquette.txt",
+        "seed": "80302"
+      }
+    },
+    "maquette-seed80413": {
+      "family": "maquette",
+      "seed": 80413,
+      "output": "../authored-envelope-v0/gen-fr-maquette-s80413/output.png",
+      "outputSha256": "628c5c9a7829c8ffa684faace019c7cd70471f659db0b3d62d31f78a5664725f",
+      "metadata": "../authored-envelope-v0/gen-fr-maquette-s80413/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "6b4a4fde07b8",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/fr-maquette.txt",
+        "seed": "80413"
+      }
+    },
+    "skin-seed80301": {
+      "family": "skin",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-env-skin/output.png",
+      "outputSha256": "190160d0f33707a2c0417251ce50e6cca72d27e11f13aac6fb8e9d6a2a518392",
+      "metadata": "../authored-envelope-v0/gen-env-skin/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "03a802b2f4a1",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-skin.txt",
+        "seed": "80301"
+      }
+    },
+    "fur-seed80301": {
+      "family": "fur",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-env-fur/output.png",
+      "outputSha256": "81881b980f31f639a76d74e569d2bb748ba08d82c5a11b9362efae4984704510",
+      "metadata": "../authored-envelope-v0/gen-env-fur/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "c6775d07d9db",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/env-fur.txt",
+        "seed": "80301"
+      }
+    },
+    "cat-seed80301": {
+      "family": "cat",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-sp-cat/output.png",
+      "outputSha256": "56ea3103f3751b6e693e9fe4b85ee14d31cee9980c2ecde1560f0e4b729d344b",
+      "metadata": "../authored-envelope-v0/gen-sp-cat/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "87fa1543041b",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-cat.txt",
+        "seed": "80301"
+      }
+    },
+    "unknown-creature-seed80301": {
+      "family": "unknown-creature",
+      "seed": 80301,
+      "output": "../authored-envelope-v0/gen-sp-creature/output.png",
+      "outputSha256": "7b1ef9749bcab2debd22bb30f82b483560b4417f4700137a5d3fd415a7ebee58",
+      "metadata": "../authored-envelope-v0/gen-sp-creature/metadata.json",
+      "recordedJobType": "mflux_flux2_edit_promptfile",
+      "recordedJobId": "241a4b9f9a93",
+      "recordedParams": {
+        "prompt_file": "/private/tmp/kaminos-prometheus-envelope-relations-0805/artifacts/steerability-assay-v0/prompts/sp-creature.txt",
+        "seed": "80301"
+      }
+    }
+  }
+}
