@@ -1,0 +1,332 @@
+{
+  "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-12T23:58:00.000Z",
+  "summary": "All nine route-bound states were inspected directly in transparent volume and opaque slice views. Crowded debt, the clean last-pass state, the cold failure, warm same-basis correction, fixed-grid and repeated common-descent candidates, adaptive candidate, and manufactured reference remain visually distinct at one camera. The adaptive carrier remains true-scale; sparse rings and arrows make the small adaptive-versus-fixed-grid direction legible under an explicit x80 display-only banner without implying a large physical displacement. Residual pair, skeletal, and compartment debt remains visible, so this admits a narrow diagnostic comparison only—not feasibility, anatomy, optimality, or arbitrary-N closure.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "crowdedDebtLegible": true,
+    "lastPassClearanceLegible": true,
+    "coldFailureGrosslyWrong": true,
+    "warmStartResidualLegible": true,
+    "coordinateFloorResidualLegible": true,
+    "manufacturedWitnessAuthorityCeilingLegible": true,
+    "stableIdentityLegible": true,
+    "fixedAttachmentsLegible": true,
+    "individualVolumeLegible": true,
+    "packingSemanticsNotInverted": true,
+    "adaptiveVersusFixedGridDeltaLegible": true,
+    "adaptiveBoundarySemanticsLegible": true
+  },
+  "route": {
+    "requested": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+    "effective": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "pass-crowded",
+      "mode": "volume",
+      "png": "pass-crowded-volume.png",
+      "pngSha256": "eadd3d5b809eba0d8958dfe2fa52267848959777391b7decfdbf202df6987bf5",
+      "captureReport": "pass-crowded-volume-capture-report.json",
+      "captureReportSha256": "099198f234e7061b38cf33333de8169e5fd6d6b1807e5273076fd58179a48740",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "pass-crowded",
+      "mode": "slice",
+      "png": "pass-crowded-slice.png",
+      "pngSha256": "d277294dbeafa1676b22f7a75f06c0ddbb14b7d71234dd22feaf110e953a1312",
+      "captureReport": "pass-crowded-slice-capture-report.json",
+      "captureReportSha256": "1a46d902d8cba7100985bcafa51a407846d79eea01d82802fb5c7f9ef638f792",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "pass-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "volume",
+      "png": "last-pass-volume.png",
+      "pngSha256": "db88d57f2d18dc497924cc297626259de170aaa3a8e9a965dbe7afcd80a58484",
+      "captureReport": "last-pass-volume-capture-report.json",
+      "captureReportSha256": "958e0df4b7b8aeefac15547381dafd35668630647612c604bc6a6cf14bd79249",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "last-pass",
+      "mode": "slice",
+      "png": "last-pass-slice.png",
+      "pngSha256": "ad4bdf8f92c9e09387229324d0170390e23e5728da85feb961e3fa8efe42592c",
+      "captureReport": "last-pass-slice-capture-report.json",
+      "captureReportSha256": "dc7caf615b6732a67721608b0bf9d0e300dc4f9d70fab9383f8883d8e774a772",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "last-pass",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "volume",
+      "png": "fail-crowded-volume.png",
+      "pngSha256": "f39a9521be23919b878c6b953b039d3413e565ae8fe4742332ae856ce4baec86",
+      "captureReport": "fail-crowded-volume-capture-report.json",
+      "captureReportSha256": "23fc0bf27cf43794986858b36a4c269bdee4cbc5f567d73d8a3971c63260a550",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "fail-crowded",
+      "mode": "slice",
+      "png": "fail-crowded-slice.png",
+      "pngSha256": "2d1c2531b77c4576bca6c3d239bcddda739d50a749c8517942c3d1fce09f4531",
+      "captureReport": "fail-crowded-slice-capture-report.json",
+      "captureReportSha256": "136da78dacace06d3fc53e767d89ef491a6301e99645ecdc373676beb2800f11",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "fail-crowded",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "volume",
+      "png": "first-fail-volume.png",
+      "pngSha256": "07b451abff53a72552f32d980e18d52f84816a481e2a9e0e593c1d18c7111dfc",
+      "captureReport": "first-fail-volume-capture-report.json",
+      "captureReportSha256": "6d128ce5cd13f754e4f3341034543bae1df557d73720bd210f704e76f2660976",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "first-fail",
+      "mode": "slice",
+      "png": "first-fail-slice.png",
+      "pngSha256": "896659c0b406371d1e5b3f2342ed0d1ad1fda8029befa060fbbe665e17848573",
+      "captureReport": "first-fail-slice-capture-report.json",
+      "captureReportSha256": "a9969aad3f132a793f60a2621d484652253347861c689c4e969a7b8324b8db48",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "first-fail",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "volume",
+      "png": "same-basis-feasible-volume.png",
+      "pngSha256": "981000be9fb0cee1c39a7c33a6c3539a63dc7733b7c1933d77f74b7998dc3277",
+      "captureReport": "same-basis-feasible-volume-capture-report.json",
+      "captureReportSha256": "a7f83cd1fa3c35bcf1df52914396aba06f4267d285225a267cef4a906ed5bd88",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "same-basis-feasible",
+      "mode": "slice",
+      "png": "same-basis-feasible-slice.png",
+      "pngSha256": "ea2566302e52124d0e0013b2ff1801fc0ebbc47a171ccf3372542024c8fecb61",
+      "captureReport": "same-basis-feasible-slice-capture-report.json",
+      "captureReportSha256": "084c5b17ba65e9262299bbc8e0f1814bb2da1832c88da2276831ac54b37089c8",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "family-common-descent",
+      "mode": "volume",
+      "png": "family-common-descent-volume.png",
+      "pngSha256": "8581cc05136582e9adf152340efcb240ba2065f75047cdd249dda3b18e1c3eac",
+      "captureReport": "family-common-descent-volume-capture-report.json",
+      "captureReportSha256": "0849c153d1b53074b225c7c53a8ffca1854c8a8706a634bd837ccaf95d175dfc",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "family-common-descent",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "family-common-descent",
+      "mode": "slice",
+      "png": "family-common-descent-slice.png",
+      "pngSha256": "ecb401e9c740c8cc336628add86b7b144bc2c382442d58c28f1c7a25af89c395",
+      "captureReport": "family-common-descent-slice-capture-report.json",
+      "captureReportSha256": "38c318743ca4863028b3d5d8a80c7967ecbee8f568b23d135bc31208c7102893",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "family-common-descent",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "repeated-family-common-descent",
+      "mode": "volume",
+      "png": "repeated-family-common-descent-volume.png",
+      "pngSha256": "5dbd84f06f2da2845a953f33988770ff6aae8f53b9856ee84294c9f896e12d41",
+      "captureReport": "repeated-family-common-descent-volume-capture-report.json",
+      "captureReportSha256": "565fec9a2d32d6af3253376dd6133a25cbfc7dec7fbf487663cf0ac8a623d017",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "repeated-family-common-descent",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "repeated-family-common-descent",
+      "mode": "slice",
+      "png": "repeated-family-common-descent-slice.png",
+      "pngSha256": "5c7bfcb58b614a0343702ef766465253a236fbf99c50edd3ac8446fd728b593f",
+      "captureReport": "repeated-family-common-descent-slice-capture-report.json",
+      "captureReportSha256": "7bc03b85118c079c2e58f24b2801ba24e437cf600172d35b7b21ab1ebf790b92",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "repeated-family-common-descent",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "adaptive-family-common-descent",
+      "mode": "volume",
+      "png": "adaptive-family-common-descent-volume.png",
+      "pngSha256": "984656588344a45e8f26b59bd2a9ccc1c13d7182e95f2162d7b89d477022774e",
+      "captureReport": "adaptive-family-common-descent-volume-capture-report.json",
+      "captureReportSha256": "4a3faaea89aa0fb87249658e6cd01ea722320deb68559ecd4d0f10a3925495e1",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "adaptive-family-common-descent",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "adaptive-family-common-descent",
+      "mode": "slice",
+      "png": "adaptive-family-common-descent-slice.png",
+      "pngSha256": "117189bd4feca83a32cd221cc25cb9a13272ff8a273158c0ef3977de7cf0a1b3",
+      "captureReport": "adaptive-family-common-descent-slice-capture-report.json",
+      "captureReportSha256": "28eb7e2ef0f1db47c79f14025eb723f58a50d8badd523adc355342da0bc12d62",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "adaptive-family-common-descent",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "volume",
+      "png": "reference-volume.png",
+      "pngSha256": "862776f9ffd04cddd22af4362661a3f429013f0bc4aa8668ecc5aca374029296",
+      "captureReport": "reference-volume-capture-report.json",
+      "captureReportSha256": "e72fffd339a8a6085e199c9d1c199c94abb208e30c3011fa0f7df7be4f47f170",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    },
+    {
+      "state": "reference",
+      "mode": "slice",
+      "png": "reference-slice.png",
+      "pngSha256": "1995fccd6218c9688bfc7c2f5977d59b13c952844bd925e1387f17c89e1cc829",
+      "captureReport": "reference-slice-capture-report.json",
+      "captureReportSha256": "a6e1b4d812cdf6dff240f53f3892296137c3050ccfc1ceb63d28ec6366bad886",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      }
+    }
+  ],
+  "claimCeiling": {
+    "admittedClaim": "eight recomputed family-gradient common-descent steps with bidirectional radius search lower every compiled constraint family from the severity-0.32 start beyond the admitted fixed-grid trajectory while retaining exact attachment and volume invariants; seven selected radii are bounded by an explicitly evaluated larger trial rejected for named family regression, and one is a refined three-admissible-point interior bracket",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "same-basis-representation-impossibility",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "identity": {
+    "sha256": "fd67ca68ddc20c40d3723e3c30bffbf1d4443a6b319a29194d0d9f9179e4e8de"
+  }
+}

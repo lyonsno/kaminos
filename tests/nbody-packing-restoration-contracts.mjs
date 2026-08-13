@@ -20,6 +20,10 @@ import {
   runNBodyPackingCommonDescentAssay,
   runNBodyPackingRestorationAssay,
 } from '../nbody-packing-restoration-assay.mjs';
+import {
+  admitNBodyAdaptiveTrajectoryRaw,
+  validateNBodyAdaptiveTrajectoryRaw,
+} from '../nbody-packing-adaptive-trajectory-admission.mjs';
 
 const COMPILED_ROW_COORDINATE_SEARCH_FLOOR = 0.004815758612;
 const COORDINATE_SEARCH_VECTOR = Object.freeze([
@@ -708,6 +712,475 @@ test('common-descent trajectory accepts an explicit refined trust-radius ladder'
 
   assert.deepEqual(config.trustRegionRadii, trustRegionRadii);
   assert.equal(config.iterationBudget, 8);
+});
+
+test('adaptive common-descent config separates continuation seed from global radius ceiling', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const step = restoration.createNBodyFamilyGradientAdaptiveStepConfig({
+    initialRadius:0.0000625,
+    maximumRadius:0.004,
+  });
+  const trajectory = restoration.createNBodyFamilyGradientAdaptiveTrajectoryConfig({
+    iterationBudget:8,
+  });
+
+  assert.equal(step.initialRadius, 0.0000625);
+  assert.equal(step.maximumRadius, 0.004);
+  assert.ok(step.maximumRadius > step.initialRadius);
+  assert.equal(trajectory.initialRadius, 0.004);
+  assert.equal(trajectory.maximumRadius, 0.004);
+  assert.ok(trajectory.radiusContinuationExpansion > 1);
+  assert.throws(
+    () => restoration.solveNBodyFamilyGradientAdaptiveStep({
+      problem:null,
+      startVector:[],
+      requestedConfig:{ ...step, maximumRadius:step.initialRadius / 2 },
+    }),
+    /minimumRadius <= initialRadius <= maximumRadius/,
+  );
+  assert.throws(
+    () => restoration.solveNBodyFamilyGradientAdaptiveStep({
+      problem:null,
+      startVector:[],
+      requestedConfig:{ ...step, expansionFactor:1 },
+    }),
+    /expansionFactor must exceed one/,
+  );
+});
+
+test('adaptive boundary admission distinguishes a constrained acceptance cliff from an open search edge', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.adjudicateNBodyAdaptiveStepBoundary,
+    'function',
+    'adaptive boundary receipt adjudicator is not implemented',
+  );
+  const receipt = ({
+    radius,
+    residual,
+    admissible,
+    selected = false,
+    rejectionReason = null,
+    regressedFamilies = [],
+  }) => ({
+    radius,
+    vector:[radius],
+    maximumPhysicalResidual:residual,
+    admissible,
+    selected,
+    rejectionReason,
+    regressedFamilies,
+  });
+  const constrained = {
+    bracket:{
+      boundary:'admissibility-boundary',
+      lowerTrialRadius:0.125,
+      selectedRadius:0.25,
+      upperTrialRadius:0.5,
+      maximumRadius:4,
+      minimumRadius:1e-10,
+    },
+    trialReceipts:[
+      receipt({ radius:0.125, residual:0.48, admissible:true,
+        rejectionReason:'higher-ranked-admissible-candidate' }),
+      receipt({ radius:0.25, residual:0.45, admissible:true, selected:true }),
+      receipt({ radius:0.5, residual:0.44, admissible:false,
+        rejectionReason:'constraint-family-regression',
+        regressedFamilies:['pairwisePenetration'] }),
+    ],
+  };
+
+  assert.deepEqual(
+    restoration.adjudicateNBodyAdaptiveStepBoundary(constrained),
+    { admitted:true, classification:'constrained-admissibility-boundary', reason:null },
+  );
+  assert.deepEqual(
+    restoration.adjudicateNBodyAdaptiveStepBoundary({
+      ...constrained,
+      bracket:{ ...constrained.bracket, boundary:'unclosed-upper-boundary',
+        upperTrialRadius:null },
+      trialReceipts:constrained.trialReceipts.slice(0, 2),
+    }),
+    { admitted:false, classification:'unclosed-upper-boundary',
+      reason:'accepted step has no evaluated larger boundary trial' },
+  );
+  assert.equal(
+    restoration.adjudicateNBodyAdaptiveStepBoundary({
+      ...constrained,
+      trialReceipts:constrained.trialReceipts.map(row => row.radius === 0.5
+        ? { ...row, admissible:true, rejectionReason:'higher-ranked-admissible-candidate',
+          regressedFamilies:[] }
+        : row),
+    }).admitted,
+    false,
+    'an admissible upper neighbor cannot masquerade as a constrained boundary',
+  );
+  assert.equal(
+    restoration.adjudicateNBodyAdaptiveStepBoundary({
+      ...constrained,
+      trialReceipts:constrained.trialReceipts.map(row => row.radius === 0.5
+        ? { ...row, rejectionReason:'constraint-family-regression', regressedFamilies:[] }
+        : row),
+    }).admitted,
+    false,
+    'family-regression rejection requires a named regressed family',
+  );
+  assert.deepEqual(
+    restoration.adjudicateNBodyAdaptiveStepBoundary({
+      bracket:{
+        boundary:'minimum-radius', lowerTrialRadius:null, selectedRadius:0.125,
+        upperTrialRadius:0.25, minimumRadius:0.125, maximumRadius:4,
+      },
+      trialReceipts:[
+        receipt({ radius:0.125, residual:0.45, admissible:true, selected:true }),
+        receipt({ radius:0.25, residual:0.48, admissible:false,
+          rejectionReason:'insufficient-decrease' }),
+      ],
+    }),
+    { admitted:true, classification:'minimum-radius', reason:null },
+  );
+});
+
+test('adaptive raw-first trajectory admission binds route and writes failure before primary output', async () => {
+  const raw = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json',
+    'utf8',
+  ));
+  const validation = validateNBodyAdaptiveTrajectoryRaw({ raw });
+  assert.equal(validation.boundaryClassifications.length, 8);
+  assert.equal(validation.boundaryClassifications.filter(
+    row => row.classification === 'constrained-admissibility-boundary',
+  ).length, 7);
+  assert.equal(validation.boundaryClassifications.filter(
+    row => row.classification === 'interior-bracket',
+  ).length, 1);
+
+  const substituted = structuredClone(raw);
+  substituted.result.route.effective = 'substituted-fallback-route';
+  const core = structuredClone(substituted.result);
+  delete core.identity;
+  substituted.result.identity.sha256 = hashMusclePackingCanonicalJson(core);
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'adaptive-admission-'));
+  const rawPath = path.join(temporaryRoot, 'substituted.json');
+  const outDir = path.join(temporaryRoot, 'out');
+  fs.writeFileSync(rawPath, `${JSON.stringify(substituted, null, 2)}\n`);
+  await assert.rejects(
+    admitNBodyAdaptiveTrajectoryRaw({ rawPath, outDir }),
+    /substituted route, source, or config/,
+  );
+  const failure = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(failure.status, 'failed');
+  assert.equal(failure.failurePhase, 'validate-raw');
+  assert.match(failure.lastTrustworthyEvidence.rawFileSha256, /^[a-f0-9]{64}$/);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+});
+
+test('adaptive admission rejects canonically rehashed forged direction and trial physics', () => {
+  const raw = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json',
+    'utf8',
+  ));
+  const forged = structuredClone(raw);
+  const row = forged.result.work.rows.find(candidate =>
+    candidate.bracket.boundary === 'admissibility-boundary');
+  const rejected = row.trialReceipts.find(trial =>
+    trial.radius === row.bracket.upperTrialRadius);
+  row.directionConstruction.direction[0] = 0.123;
+  row.directionConstruction.predictedDirectionalDerivatives.pairwisePenetration = -0.456;
+  rejected.vector = rejected.vector.map(() => 0);
+  const core = structuredClone(forged.result);
+  delete core.identity;
+  forged.result.identity.sha256 = hashMusclePackingCanonicalJson(core);
+
+  assert.throws(
+    () => validateNBodyAdaptiveTrajectoryRaw({ raw:forged }),
+    /reconstructed adaptive trajectory authority|recomputed adaptive step|direction|trial physics|step identity/,
+  );
+});
+
+test('adaptive admission rejects a step-locally valid alternate continuation schedule and authority substitution', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const raw = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json',
+    'utf8',
+  ));
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const canonicalConfig = restoration.createNBodyFamilyGradientAdaptiveTrajectoryConfig({
+    iterationBudget:8,
+  });
+  const alternateConfig = {
+    ...canonicalConfig,
+    initialRadius:canonicalConfig.initialRadius / 2,
+  };
+  const alternate = restoration.solveNBodyFamilyGradientAdaptiveTrajectory({
+    problem,
+    startVector:raw.result.start.vector,
+    requestedConfig:alternateConfig,
+  });
+  assert.equal(alternate.work.rows.length, 8);
+  assert.notEqual(
+    alternate.work.rows[0].requestedInitialRadius,
+    canonicalConfig.initialRadius,
+  );
+
+  const forged = structuredClone(raw);
+  forged.result = structuredClone(alternate);
+  forged.result.config.requested = structuredClone(canonicalConfig);
+  forged.result.config.effective = structuredClone(canonicalConfig);
+  forged.result.mechanism.directionBasis = 'forged-trajectory-authority-basis';
+  forged.result.claimCeiling = 'forged-anatomical-production-closure';
+  const core = structuredClone(forged.result);
+  delete core.identity;
+  forged.result.identity.sha256 = hashMusclePackingCanonicalJson(core);
+
+  assert.throws(
+    () => validateNBodyAdaptiveTrajectoryRaw({ raw:forged }),
+    /continuation schedule|trajectory authority|reconstructed adaptive trajectory/,
+  );
+});
+
+test('adaptive admission rejects canonically rehashed mechanism and claim-ceiling substitutions independently', () => {
+  const raw = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json',
+    'utf8',
+  ));
+  const rehash = forged => {
+    const core = structuredClone(forged.result);
+    delete core.identity;
+    forged.result.identity.sha256 = hashMusclePackingCanonicalJson(core);
+    return forged;
+  };
+
+  const mechanismForgery = structuredClone(raw);
+  mechanismForgery.result.mechanism = {
+    ...mechanismForgery.result.mechanism,
+    directionBasis:'forged-but-canonically-rehashed-direction-basis',
+    stepControl:'forged-but-canonically-rehashed-step-control',
+    nonlinearAcceptance:'forged-but-canonically-rehashed-nonlinear-acceptance',
+    carrierDegreesOfFreedomPerMember:999,
+  };
+  assert.throws(
+    () => validateNBodyAdaptiveTrajectoryRaw({ raw:rehash(mechanismForgery) }),
+    /reconstructed adaptive trajectory authority/,
+  );
+
+  const claimForgery = structuredClone(raw);
+  claimForgery.result.claimCeiling = 'forged-anatomical-production-and-final-admission-proof';
+  assert.throws(
+    () => validateNBodyAdaptiveTrajectoryRaw({ raw:rehash(claimForgery) }),
+    /reconstructed adaptive trajectory authority/,
+  );
+});
+
+test('adaptive admission invalidates stale success primaries before a failed rerun', async () => {
+  const raw = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json',
+    'utf8',
+  ));
+  const invalid = structuredClone(raw);
+  invalid.result.route.effective = 'forged-rerun-route';
+  const core = structuredClone(invalid.result);
+  delete core.identity;
+  invalid.result.identity.sha256 = hashMusclePackingCanonicalJson(core);
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'adaptive-stale-rerun-'));
+  const rawPath = path.join(temporaryRoot, 'invalid.json');
+  const outDir = path.join(temporaryRoot, 'out');
+  fs.mkdirSync(outDir);
+  fs.writeFileSync(rawPath, `${JSON.stringify(invalid, null, 2)}\n`);
+  for (const name of ['raw-trajectory.json', 'result.json']) {
+    fs.writeFileSync(path.join(outDir, name), '{"status":"stale-success"}\n');
+  }
+  await assert.rejects(
+    admitNBodyAdaptiveTrajectoryRaw({ rawPath, outDir }),
+    /substituted route, source, or config/,
+  );
+  assert.equal(fs.existsSync(path.join(outDir, 'raw-trajectory.json')), false);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8')).status,
+    'failed',
+  );
+});
+
+test('adaptive admission removes a partially published generation after injected rename failure', async () => {
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'adaptive-partial-publish-'));
+  const rawPath =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/raw-trajectory.json';
+  const outDir = path.join(temporaryRoot, 'out');
+  const io = {
+    writeFile:fs.promises.writeFile,
+    rename:async (from, to) => {
+      if (to === path.join(outDir, 'result.json')) {
+        throw new Error('injected adaptive result promotion failure');
+      }
+      return fs.promises.rename(from, to);
+    },
+  };
+  await assert.rejects(
+    admitNBodyAdaptiveTrajectoryRaw({ rawPath, outDir, io }),
+    /injected adaptive result promotion failure/,
+  );
+  assert.equal(fs.existsSync(path.join(outDir, 'raw-trajectory.json')), false);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+  const failure = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(failure.status, 'failed');
+  assert.equal(failure.failurePhase, 'write-primary');
+});
+
+test('adaptive common-descent step brackets below the fixed-radius saturation without family regression', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.createNBodyFamilyGradientAdaptiveStepConfig,
+    'function',
+    'adaptive common-descent step config is not implemented',
+  );
+  assert.equal(
+    typeof restoration.solveNBodyFamilyGradientAdaptiveStep,
+    'function',
+    'adaptive common-descent step solver is not implemented',
+  );
+  const trajectory = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const start = trajectory.work.rows[2].before;
+  const fixedSelected = trajectory.work.rows[2].after;
+  const requestedConfig = restoration.createNBodyFamilyGradientAdaptiveStepConfig({
+    initialRadius:0.0000625,
+    minimumRadius:1e-10,
+    maximumTrials:24,
+  });
+  const canonical = restoration.solveNBodyFamilyGradientAdaptiveStep({
+    problem,
+    startVector:start.vector,
+    requestedConfig,
+  });
+
+  assert.equal(canonical.status, 'adaptive-common-descent-step-accepted');
+  assert.equal(canonical.route.fallbackUsed, false);
+  assert.ok(canonical.work.trialReceipts.length > 0);
+  assert.ok(canonical.work.trialReceipts.length <= requestedConfig.maximumTrials);
+  assert.equal(canonical.work.trialReceipts.filter(row => row.selected).length, 1);
+  assert.ok(canonical.selected.maximumPhysicalResidual < fixedSelected.maximumPhysicalResidual);
+  assert.ok(canonical.work.bracket.upperTrialRadius > canonical.work.bracket.selectedRadius);
+  assert.ok(canonical.work.bracket.lowerTrialRadius < canonical.work.bracket.selectedRadius);
+  assert.equal(canonical.work.bracket.boundary, 'interior-bracket');
+  assert.equal(canonical.work.bracket.maximumRadius, requestedConfig.maximumRadius);
+  assert.ok(canonical.work.bracket.refinementIterations > 0);
+  assert.ok(canonical.work.bracket.selectedRadius >= requestedConfig.minimumRadius);
+  assert.equal(
+    canonical.config.effective.candidateEnumeration,
+    'canonical',
+    'candidateEnumeration is receipt ordering, not an execution-order invariance witness',
+  );
+  assert.equal(canonical.selected.metrics.endpointDrift, 0);
+  assert.equal(canonical.selected.metrics.maximumRelativeVolumeError, 0);
+  for (const family of [
+    'pairwisePenetration',
+    'skeletalPenetration',
+    'compartmentEscape',
+  ]) {
+    assert.ok(
+      canonical.selected.metrics[family] <=
+        start.metrics[family] + requestedConfig.familyRegressionTolerance,
+      `${family} regressed under adaptive step control`,
+    );
+  }
+  assert.ok(canonical.work.trialReceipts.every(row =>
+    typeof row.actualDecrease === 'number' &&
+    typeof row.requiredDecrease === 'number' &&
+    Array.isArray(row.regressedFamilies) &&
+    (typeof row.rejectionReason === 'string' || row.selected)
+  ));
+  assert.equal(canonical.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(canonical.mechanism.contactGraphRowsConsumed, false);
+});
+
+test('adaptive common-descent trajectory beats the fixed-grid trajectory with radius continuation receipts', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.createNBodyFamilyGradientAdaptiveTrajectoryConfig,
+    'function',
+    'adaptive common-descent trajectory config is not implemented',
+  );
+  assert.equal(
+    typeof restoration.solveNBodyFamilyGradientAdaptiveTrajectory,
+    'function',
+    'adaptive common-descent trajectory solver is not implemented',
+  );
+  const fixed = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const requestedConfig = restoration.createNBodyFamilyGradientAdaptiveTrajectoryConfig({
+    iterationBudget:8,
+  });
+  const result = restoration.solveNBodyFamilyGradientAdaptiveTrajectory({
+    problem,
+    startVector:fixed.start.vector,
+    requestedConfig,
+  });
+
+  assert.equal(result.route.fallbackUsed, false);
+  assert.equal(result.status, 'adaptive-common-descent-trajectory-budget-exhausted');
+  assert.equal(result.work.iterations, 8);
+  assert.equal(result.work.rows.length, 8);
+  assert.ok(result.work.rows.every(row => row.accepted));
+  assert.ok(result.selected.maximumPhysicalResidual < fixed.selected.maximumPhysicalResidual);
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.equal(result.work.rows[0].requestedInitialRadius, requestedConfig.initialRadius);
+  for (const [index, row] of result.work.rows.entries()) {
+    assert.match(row.stepResultSha256, /^[a-f0-9]{64}$/);
+    assert.ok(row.bracket.selectedRadius > 0);
+    assert.ok(row.bracket.lowerTrialRadius < row.bracket.selectedRadius);
+    assert.equal(row.bracket.maximumRadius, requestedConfig.maximumRadius);
+    assert.ok(row.trialReceipts.length > 0);
+    assert.equal(row.trialReceipts.filter(trial => trial.selected).length, 1);
+    assert.deepEqual(
+      restoration.adjudicateNBodyAdaptiveStepBoundary(row),
+      {
+        admitted:true,
+        classification:row.bracket.boundary === 'admissibility-boundary'
+          ? 'constrained-admissibility-boundary'
+          : row.bracket.boundary,
+        reason:null,
+      },
+    );
+    assert.ok(row.after.maximumPhysicalResidual < row.before.maximumPhysicalResidual);
+    for (const family of [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ]) assert.ok(
+      row.after.metrics[family] <=
+        row.before.metrics[family] + requestedConfig.familyRegressionTolerance,
+      `${family} regressed at adaptive trajectory iteration ${index + 1}`,
+    );
+    if (index > 0) {
+      assert.equal(
+        row.requestedInitialRadius,
+        Math.min(
+          requestedConfig.maximumRadius,
+          result.work.rows[index - 1].bracket.selectedRadius *
+            requestedConfig.radiusContinuationExpansion,
+        ),
+      );
+    }
+  }
+  assert.equal(result.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(result.mechanism.contactGraphRowsConsumed, false);
 });
 
 test('refined common-descent trajectory artifact preserves the disproved floor receipt', () => {

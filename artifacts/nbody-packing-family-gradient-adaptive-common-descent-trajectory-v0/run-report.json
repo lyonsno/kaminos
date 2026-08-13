@@ -1,0 +1,94 @@
+{
+  "schema": "kaminos.nbody-packing-adaptive-common-descent-trajectory-admission.v0",
+  "status": "complete-admitted-canonical-trajectory",
+  "route": {
+    "requested": "family-gradient-minimum-norm-common-descent-adaptive-trajectory-v0",
+    "effective": "family-gradient-minimum-norm-common-descent-adaptive-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "authority": "registered-job-raw-first-solver-output",
+    "rawFileSha256": "9852515dd4eb11980679c1a9059ce1de4e9d6f297eca97c0bf030b47e607b15a",
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "fixedTrajectorySha256": "ed4975f0c154116a5f9245553d7208778bf0749dfa3223b46d31ed59913bd2e5"
+  },
+  "bindings": {
+    "resultFileSha256": "8f8764288d999c99ca574f89337f75c4bca4e2169f19bc85ba4ce2aa1c193d69",
+    "resultSha256": "2a060455affc56b4149461270e7eeb8f59bab24993e7b4f8a75afbf461931b1b"
+  },
+  "adjudication": {
+    "boundaryClassifications": [
+      {
+        "iteration": 1,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 2,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 3,
+        "admitted": true,
+        "classification": "interior-bracket",
+        "reason": null
+      },
+      {
+        "iteration": 4,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 5,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 6,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 7,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      },
+      {
+        "iteration": 8,
+        "admitted": true,
+        "classification": "constrained-admissibility-boundary",
+        "reason": null
+      }
+    ],
+    "acceptedIterations": 8,
+    "evaluationCount": 1236
+  },
+  "outcome": {
+    "startMaximumPhysicalResidual": 0.004815758612,
+    "finalMaximumPhysicalResidual": 0.004513829534,
+    "startFamilies": {
+      "pairwisePenetration": 0.001615321454,
+      "skeletalPenetration": 0.001615326586,
+      "compartmentEscape": 0.004815758612
+    },
+    "finalFamilies": {
+      "pairwisePenetration": 0.001120768543,
+      "skeletalPenetration": 0.001157613745,
+      "compartmentEscape": 0.004513829534
+    },
+    "endpointDrift": 0,
+    "maximumRelativeVolumeError": 0
+  },
+  "claimCeiling": "bounded-severity-0.32-adaptive-common-descent-trajectory-not-global-feasibility-or-line-search-optimality",
+  "identity": {
+    "sha256": "41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477"
+  }
+}

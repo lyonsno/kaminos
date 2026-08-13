@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -19,6 +19,10 @@ import {
   createNBodyFamilyGradientCommonDescentTrajectoryConfig,
 } from './nbody-packing-restoration.mjs';
 import {
+  NBODY_PACKING_ADAPTIVE_TRAJECTORY_ADMISSION_SCHEMA,
+  validateNBodyAdaptiveTrajectoryRaw,
+} from './nbody-packing-adaptive-trajectory-admission.mjs';
+import {
   NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA,
   NBODY_PACKING_REFINED_COMMON_DESCENT_RADII,
 } from './nbody-packing-restoration-assay.mjs';
@@ -32,6 +36,7 @@ import {
   NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
+  NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
@@ -53,10 +58,32 @@ function jsonBytes(value) {
   return Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function writeAtomically(targetPath, bytes) {
+async function writeAtomically(targetPath, bytes, io = { writeFile, rename }) {
   const temporaryPath = `${targetPath}.tmp`;
-  await writeFile(temporaryPath, bytes);
-  await rename(temporaryPath, targetPath);
+  await io.writeFile(temporaryPath, bytes);
+  await io.rename(temporaryPath, targetPath);
+}
+
+async function invalidateViewerPrimaries(outputRoot) {
+  let names = [];
+  try {
+    names = await readdir(outputRoot);
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  const exact = new Set([
+    'fixtures.json',
+    'comparison.json',
+    'index.html',
+    'report.json',
+    'visual-inspection.json',
+  ]);
+  await Promise.all(names.filter(name =>
+    exact.has(name) ||
+    name.endsWith('.png') ||
+    name.endsWith('-capture-report.json') ||
+    name.endsWith('.tmp')
+  ).map(name => rm(path.join(outputRoot, name), { force:true, recursive:true })));
 }
 
 function verifyCanonicalIdentity(value, label) {
@@ -185,6 +212,14 @@ const FROZEN_ADMITTED_COMMON_DESCENT_TRAJECTORY_SOURCE = Object.freeze({
   resultSha256:'ed4975f0c154116a5f9245553d7208778bf0749dfa3223b46d31ed59913bd2e5',
   reportFileSha256:'ec1781373a275bb81c55c970627f6c6f8a9d791692efe17caa474c79562645b8',
   reportSha256:'91e6bf308728bec62117a96389703eb45febc1f087a72368878d744216c9aef7',
+});
+
+const FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE = Object.freeze({
+  rawFileSha256:'9852515dd4eb11980679c1a9059ce1de4e9d6f297eca97c0bf030b47e607b15a',
+  resultFileSha256:'8f8764288d999c99ca574f89337f75c4bca4e2169f19bc85ba4ce2aa1c193d69',
+  resultSha256:'2a060455affc56b4149461270e7eeb8f59bab24993e7b4f8a75afbf461931b1b',
+  reportFileSha256:'1536165e5f7634a1e026e3eec281fa98e38c1628f73952d5bb3eb70d8be00f01',
+  reportSha256:'41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477',
 });
 
 function requireExactJson(actual, expected, message) {
@@ -402,6 +437,40 @@ function validateCommonDescentTrajectoryReport({
   return sha256(reportBytes);
 }
 
+function validateAdaptiveTrajectorySource({
+  raw,
+  rawBytes,
+  result,
+  resultBytes,
+  report,
+  reportBytes,
+}) {
+  verifyCanonicalIdentity(report, 'adaptive common descent trajectory admission report');
+  const validation = validateNBodyAdaptiveTrajectoryRaw({ raw });
+  if (
+    sha256(rawBytes) !== FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE.rawFileSha256 ||
+    sha256(resultBytes) !== FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE.resultFileSha256 ||
+    result.identity?.sha256 !== FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE.resultSha256 ||
+    sha256(reportBytes) !== FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE.reportFileSha256 ||
+    report.identity?.sha256 !== FROZEN_ADMITTED_ADAPTIVE_TRAJECTORY_SOURCE.reportSha256 ||
+    JSON.stringify(result) !== JSON.stringify(validation.result) ||
+    report.schema !== NBODY_PACKING_ADAPTIVE_TRAJECTORY_ADMISSION_SCHEMA ||
+    report.status !== 'complete-admitted-canonical-trajectory' ||
+    JSON.stringify(report.route) !== JSON.stringify(result.route) ||
+    report.route?.fallbackUsed !== false ||
+    report.source?.rawFileSha256 !== sha256(rawBytes) ||
+    report.source?.problemSha256 !== result.source?.problemSha256 ||
+    report.bindings?.resultFileSha256 !== sha256(resultBytes) ||
+    report.bindings?.resultSha256 !== result.identity?.sha256 ||
+    report.adjudication?.acceptedIterations !== result.work?.iterations ||
+    report.adjudication?.evaluationCount !== result.work?.evaluationCount ||
+    report.claimCeiling !== result.claimCeiling
+  ) throw new Error(
+    'localized hard witness rejects adaptive trajectory admitted-source manifest mismatch',
+  );
+  return validation;
+}
+
 export function createPairDebtEmphasisMarkers({ muscles, rows } = {}) {
   const byId = new Map((muscles || []).map(muscle => [muscle.id, muscle]));
   const markers = [];
@@ -432,6 +501,27 @@ export function createPairDebtEmphasisMarkers({ muscles, rows } = {}) {
     }
   }
   return markers;
+}
+
+function maximumCenterlineDisplacement(baselineMuscles, targetMuscles) {
+  if (baselineMuscles.length !== targetMuscles.length) {
+    throw new Error('localized hard witness rejects comparison muscle-count mismatch');
+  }
+  let maximum = 0;
+  for (let muscleIndex = 0; muscleIndex < targetMuscles.length; muscleIndex += 1) {
+    const baseline = baselineMuscles[muscleIndex];
+    const target = targetMuscles[muscleIndex];
+    if (
+      baseline.id !== target.id ||
+      baseline.centerline.length !== target.centerline.length
+    ) throw new Error('localized hard witness rejects comparison topology mismatch');
+    for (let knotIndex = 0; knotIndex < target.centerline.length; knotIndex += 1) {
+      maximum = Math.max(maximum, Math.hypot(...target.centerline[knotIndex].position.map(
+        (value, axis) => value - baseline.centerline[knotIndex].position[axis],
+      )));
+    }
+  }
+  return maximum;
 }
 
 function validateSources({ challenge, continuation, pattern, passFixture, failFixture }) {
@@ -510,12 +600,19 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
   commonDescentResultPath = null,
   commonDescentTrajectoryResultPath = null,
   commonDescentTrajectoryReportPath = null,
+  adaptiveTrajectoryRawPath = null,
+  adaptiveTrajectoryResultPath = null,
+  adaptiveTrajectoryReportPath = null,
+  io = { writeFile, rename },
 } = {}) {
   const outputRoot = path.resolve(outDir);
   let phase = 'read-source-results';
   let lastTrustworthyEvidence = { phase:'none' };
   await mkdir(outputRoot, { recursive:true });
   try {
+    phase = 'invalidate-prior-primary';
+    await invalidateViewerPrimaries(outputRoot);
+    phase = 'read-source-results';
     const [
       challengeBytes,
       continuationBytes,
@@ -525,6 +622,9 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       commonDescentBytes,
       commonDescentTrajectoryBytes,
       commonDescentTrajectoryReportBytes,
+      adaptiveTrajectoryRawBytes,
+      adaptiveTrajectoryResultBytes,
+      adaptiveTrajectoryReportBytes,
     ] = await Promise.all([
       readFile(path.resolve(challengeResultPath)),
       readFile(path.resolve(continuationResultPath)),
@@ -540,6 +640,15 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       commonDescentTrajectoryReportPath
         ? readFile(path.resolve(commonDescentTrajectoryReportPath))
         : Promise.resolve(null),
+      adaptiveTrajectoryRawPath
+        ? readFile(path.resolve(adaptiveTrajectoryRawPath))
+        : Promise.resolve(null),
+      adaptiveTrajectoryResultPath
+        ? readFile(path.resolve(adaptiveTrajectoryResultPath))
+        : Promise.resolve(null),
+      adaptiveTrajectoryReportPath
+        ? readFile(path.resolve(adaptiveTrajectoryReportPath))
+        : Promise.resolve(null),
     ]);
     const challenge = JSON.parse(String(challengeBytes));
     const continuation = JSON.parse(String(continuationBytes));
@@ -553,6 +662,15 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     const commonDescentTrajectoryReport = commonDescentTrajectoryReportBytes
       ? JSON.parse(String(commonDescentTrajectoryReportBytes))
       : null;
+    const adaptiveTrajectoryRaw = adaptiveTrajectoryRawBytes
+      ? JSON.parse(String(adaptiveTrajectoryRawBytes))
+      : null;
+    const adaptiveTrajectory = adaptiveTrajectoryResultBytes
+      ? JSON.parse(String(adaptiveTrajectoryResultBytes))
+      : null;
+    const adaptiveTrajectoryReport = adaptiveTrajectoryReportBytes
+      ? JSON.parse(String(adaptiveTrajectoryReportBytes))
+      : null;
     if (trajectory && !restoration) {
       throw new Error('localized hard witness trajectory requires the admitted one-step comparison');
     }
@@ -564,6 +682,19 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
     }
     if (commonDescentTrajectoryReport && !commonDescentTrajectory) {
       throw new Error('localized hard witness trajectory assay report requires its result');
+    }
+    if (
+      [adaptiveTrajectoryRaw, adaptiveTrajectory, adaptiveTrajectoryReport]
+        .filter(Boolean).length !== 0 &&
+      [adaptiveTrajectoryRaw, adaptiveTrajectory, adaptiveTrajectoryReport]
+        .filter(Boolean).length !== 3
+    ) throw new Error(
+      'localized hard witness adaptive trajectory requires raw, result, and admission report',
+    );
+    if (adaptiveTrajectory && !commonDescentTrajectory) {
+      throw new Error(
+        'localized hard witness adaptive trajectory requires the admitted fixed-grid trajectory comparison',
+      );
     }
     lastTrustworthyEvidence = {
       phase:'source-results-read',
@@ -578,6 +709,15 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         : null,
       commonDescentTrajectoryReportSha256:commonDescentTrajectoryReportBytes
         ? sha256(commonDescentTrajectoryReportBytes)
+        : null,
+      adaptiveTrajectoryRawSha256:adaptiveTrajectoryRawBytes
+        ? sha256(adaptiveTrajectoryRawBytes)
+        : null,
+      adaptiveTrajectoryResultSha256:adaptiveTrajectoryResultBytes
+        ? sha256(adaptiveTrajectoryResultBytes)
+        : null,
+      adaptiveTrajectoryReportSha256:adaptiveTrajectoryReportBytes
+        ? sha256(adaptiveTrajectoryReportBytes)
         : null,
     };
     phase = 'bind-source-identities';
@@ -691,6 +831,25 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       });
       validateCommonDescentTrajectorySemantics({ problem, result:commonDescentTrajectory });
     }
+    if (adaptiveTrajectory) {
+      validateAdaptiveTrajectorySource({
+        raw:adaptiveTrajectoryRaw,
+        rawBytes:adaptiveTrajectoryRawBytes,
+        result:adaptiveTrajectory,
+        resultBytes:adaptiveTrajectoryResultBytes,
+        report:adaptiveTrajectoryReport,
+        reportBytes:adaptiveTrajectoryReportBytes,
+      });
+      if (
+        adaptiveTrajectory.source?.problemSha256 !== problem.identity.sha256 ||
+        adaptiveTrajectory.start?.maximumPhysicalResidual !== 0.004815758612 ||
+        adaptiveTrajectory.selected?.maximumPhysicalResidual !== 0.004513829534 ||
+        adaptiveTrajectory.work?.iterations !== 8 ||
+        adaptiveTrajectory.work?.rows?.some(row => row.accepted !== true) ||
+        adaptiveTrajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+        adaptiveTrajectory.mechanism?.contactGraphRowsConsumed !== false
+      ) throw new Error('localized hard witness rejects substituted adaptive trajectory evidence');
+    }
     const passRow = challenge.rows.find(row => row.fixtureSha256 === passFixture.identity.sha256);
     const failRow = challenge.rows.find(row => row.fixtureSha256 === failFixture.identity.sha256);
     if (!passRow || !failRow) {
@@ -730,6 +889,12 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           vector:commonDescentTrajectory.selected.vector,
         })
       : null;
+    const adaptiveTrajectoryState = adaptiveTrajectory
+      ? evaluateNBodyUnifiedKktState({
+          problem,
+          vector:adaptiveTrajectory.selected.vector,
+        })
+      : null;
     if (
       restorationState &&
       restorationState.maximumPhysicalResidual !== restoration.selected.maximumPhysicalResidual
@@ -748,6 +913,11 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       commonDescentTrajectoryState.maximumPhysicalResidual !==
         commonDescentTrajectory.selected.maximumPhysicalResidual
     ) throw new Error('localized hard witness rejects stale common-descent trajectory metrics');
+    if (
+      adaptiveTrajectoryState &&
+      adaptiveTrajectoryState.maximumPhysicalResidual !==
+        adaptiveTrajectory.selected.maximumPhysicalResidual
+    ) throw new Error('localized hard witness rejects stale adaptive trajectory metrics');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       phase:'source-identities-bound',
@@ -763,6 +933,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       ...(trajectory ? { trajectory } : {}),
       ...(commonDescent ? { commonDescent } : {}),
       ...(commonDescentTrajectory ? { commonDescentTrajectory } : {}),
+      ...(adaptiveTrajectory ? { adaptiveTrajectory } : {}),
     };
     const fixtureBytes = jsonBytes(fixtures);
     const comparisonBytes = jsonBytes(comparison);
@@ -857,6 +1028,30 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           truth:'Eight recomputed common-descent steps lower every compiled constraint family. Refining the radius ladder admits the previously rejected third direction, disproving the coarse local-floor classification; the six later minimum-radius steps expose inefficient step control rather than carrier impossibility.',
         },
       } : {}),
+      ...(adaptiveTrajectory ? {
+        'adaptive-family-common-descent': {
+          label:'0.32 adaptive family-gradient common descent', severity:0.32,
+          status:adaptiveTrajectory.status, warning:true,
+          source:failFixture.crowded,
+          muscles:adaptiveTrajectoryState.muscles,
+          metrics:adaptiveTrajectoryState.metrics,
+          emphasisMarkers:createPairDebtEmphasisMarkers(adaptiveTrajectoryState),
+          comparisonOverlay:{
+            baselineState:'repeated-family-common-descent',
+            baselineLabel:'fixed-grid result',
+            baselineResultIdentitySha256:commonDescentTrajectory.identity.sha256,
+            targetResultIdentitySha256:adaptiveTrajectory.identity.sha256,
+            displayGain:80,
+            maximumWorldDisplacement:maximumCenterlineDisplacement(
+              commonDescentTrajectoryState.muscles,
+              adaptiveTrajectoryState.muscles,
+            ),
+            rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+          },
+          comparisonNote:'fixed-grid rings at true position · displacement vectors ×80 (display-only gain; carrier volumes remain true-scale)',
+          truth:'Eight recomputed common-descent steps use bidirectional radius search. Seven steps terminate at an explicitly measured constraint-family boundary and one at a refined interior bracket. The trajectory lowers every tracked family beyond the fixed-grid result while preserving attachment and volume invariants; it remains a bounded synthetic mechanism result, not feasibility or anatomy.',
+        },
+      } : {}),
       reference: {
         label:'Manufactured feasibility witness', severity:null,
         status:'existence witness outside candidate carrier', warning:false,
@@ -872,9 +1067,12 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       ...(trajectory ? ['repeated-all-neighbor-restoration'] : []),
       ...(commonDescent ? ['family-common-descent'] : []),
       ...(commonDescentTrajectory ? ['repeated-family-common-descent'] : []),
+      ...(adaptiveTrajectory ? ['adaptive-family-common-descent'] : []),
       'reference',
     ];
-    const witnessRoute = commonDescentTrajectory
+    const witnessRoute = adaptiveTrajectory
+      ? NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
+      : commonDescentTrajectory
       ? NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
       : commonDescent
         ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
@@ -884,7 +1082,9 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
         ? NBODY_PACKING_RESTORATION_WITNESS_ROUTE
         : NBODY_PACKING_LOCALIZED_HARD_WITNESS_ROUTE;
     const display = {
-      title:commonDescentTrajectory
+      title:adaptiveTrajectory
+        ? 'Adaptive family-gradient common descent · six-body hard boundary'
+        : commonDescentTrajectory
         ? 'Repeated family-gradient common descent · six-body hard boundary'
         : commonDescent
           ? 'Family-gradient common descent · six-body hard boundary'
@@ -894,7 +1094,9 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
             ? 'All-neighbor restoration · six-body hard boundary'
         : 'Localized hard boundary · six bodies',
       authority:'Synthetic two-obstacle mechanism falsifier · no anatomical admission',
-      explanation:commonDescentTrajectory
+      explanation:adaptiveTrajectory
+        ? 'Severity 0.32 creates a gross cold failure. The adaptive controller recomputes the <strong>minimum-norm family-gradient common direction</strong>, then searches both below and above the continuation seed. Seven accepted steps are pinned against explicit family-regression boundaries and one uses a refined interior bracket. Compare the fixed-grid and adaptive states directly: adaptive step control lowers every tracked family further without moving attachments or changing volume. This is a bounded mechanism result, not feasibility or anatomical admission.'
+        : commonDescentTrajectory
         ? 'Severity 0.32 creates a gross cold failure. Recomputing the <strong>minimum-norm family-gradient common direction</strong> and refining the trust-radius ladder admits eight family-monotone steps. The formerly reported third-step floor disappears, proving it was radius discretization; six subsequent minimum-radius steps make the remaining step-control inefficiency visible. This is a bounded mechanism result, not feasibility or anatomical admission.'
         : commonDescent
           ? 'Severity 0.32 creates a gross cold failure. The scalar direction can trade debt and the strict family filter stalls on that direction. A new <strong>minimum-norm combination of independent family gradients</strong> admits a small step that lowers all compiled constraint families; larger steps remain visibly rejected for compartment regression. This is a bounded mechanism advance, not feasibility or anatomical admission.'
@@ -981,6 +1183,23 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
             commonDescent.selected.maximumPhysicalResidual /
               commonDescentTrajectory.selected.maximumPhysicalResidual,
         } : {}),
+        ...(adaptiveTrajectory ? {
+          adaptiveCommonDescentTrajectoryMaximumPhysicalResidual:
+            adaptiveTrajectory.selected.maximumPhysicalResidual,
+          adaptiveCommonDescentTrajectoryAcceptedIterations:
+            adaptiveTrajectory.work.iterations,
+          adaptiveCommonDescentTrajectoryConstrainedBoundaryCount:
+            adaptiveTrajectoryReport.adjudication.boundaryClassifications.filter(
+              row => row.classification === 'constrained-admissibility-boundary',
+            ).length,
+          adaptiveCommonDescentTrajectoryInteriorBracketCount:
+            adaptiveTrajectoryReport.adjudication.boundaryClassifications.filter(
+              row => row.classification === 'interior-bracket',
+            ).length,
+          adaptiveVersusFixedGrid:
+            commonDescentTrajectory.selected.maximumPhysicalResidual /
+              adaptiveTrajectory.selected.maximumPhysicalResidual,
+        } : {}),
       },
       bindings:{
         ...bindings,
@@ -999,11 +1218,20 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
           commonDescentTrajectoryReportIdentitySha256:
             commonDescentTrajectoryReport.identity.sha256,
         } : {}),
+        ...(adaptiveTrajectoryResultBytes ? {
+          adaptiveTrajectoryRawSha256:sha256(adaptiveTrajectoryRawBytes),
+          adaptiveTrajectoryResultSha256:sha256(adaptiveTrajectoryResultBytes),
+          adaptiveTrajectoryReportSha256:sha256(adaptiveTrajectoryReportBytes),
+          adaptiveTrajectoryReportIdentitySha256:
+            adaptiveTrajectoryReport.identity.sha256,
+        } : {}),
       },
       requiredStates:orderedStates,
       requiredModes:['volume','slice'],
       claimCeiling: {
-        admittedClaim:commonDescentTrajectory
+        admittedClaim:adaptiveTrajectory
+          ? 'eight recomputed family-gradient common-descent steps with bidirectional radius search lower every compiled constraint family from the severity-0.32 start beyond the admitted fixed-grid trajectory while retaining exact attachment and volume invariants; seven selected radii are bounded by an explicitly evaluated larger trial rejected for named family regression, and one is a refined three-admissible-point interior bracket'
+          : commonDescentTrajectory
           ? 'eight recomputed family-gradient common-descent steps lower every compiled constraint family from the severity-0.32 start while retaining exact attachment and volume invariants; extending the trust-radius ladder admits the formerly rejected third direction and therefore proves the prior local-floor classification was a coarse radius-ladder artifact, while six subsequent minimum-radius selections expose unresolved step-control inefficiency'
           : commonDescent
             ? 'one deterministic minimum-norm combination of independent constraint-family gradients on severity 0.32 admits a radius-0.00025 step that lowers all compiled constraint-family maxima from 0.004815758612 to 0.004745541883 while retaining exact attachment and volume invariants; four larger tested radii are rejected for compiled compartment regression'
@@ -1026,15 +1254,17 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       ...reportCore,
       identity:{ sha256:sha256(jsonBytes(reportCore)) },
     };
-    await Promise.all([
-      writeAtomically(path.join(outputRoot, 'fixtures.json'), fixtureBytes),
-      writeAtomically(path.join(outputRoot, 'comparison.json'), comparisonBytes),
-      writeAtomically(path.join(outputRoot, 'index.html'), htmlBytes),
-      writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(report)),
-    ]);
+    for (const [name, bytes] of [
+      ['fixtures.json', fixtureBytes],
+      ['comparison.json', comparisonBytes],
+      ['index.html', htmlBytes],
+      ['report.json', jsonBytes(report)],
+    ]) await writeAtomically(path.join(outputRoot, name), bytes, io);
     return { outputRoot, report, states };
   } catch (error) {
-    const requestedRoute = commonDescentTrajectoryResultPath
+    const requestedRoute = adaptiveTrajectoryResultPath
+      ? NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
+      : commonDescentTrajectoryResultPath
       ? NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
       : commonDescentResultPath
         ? NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE
@@ -1055,7 +1285,8 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       lastTrustworthyEvidence,
       error:{ name:error.name, message:error.message },
     };
-    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure));
+    await invalidateViewerPrimaries(outputRoot);
+    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure), io);
     throw error;
   }
 }
@@ -1067,6 +1298,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const commonDescentResultPath = process.argv[5] || null;
   const commonDescentTrajectoryResultPath = process.argv[6] || null;
   const commonDescentTrajectoryReportPath = process.argv[7] || null;
+  const adaptiveTrajectoryRawPath = process.argv[8] || null;
+  const adaptiveTrajectoryResultPath = process.argv[9] || null;
+  const adaptiveTrajectoryReportPath = process.argv[10] || null;
   const result = await writeNBodyPackingLocalizedHardBoundaryWitness({
     outDir,
     restorationResultPath,
@@ -1074,6 +1308,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     commonDescentResultPath,
     commonDescentTrajectoryResultPath,
     commonDescentTrajectoryReportPath,
+    adaptiveTrajectoryRawPath,
+    adaptiveTrajectoryResultPath,
+    adaptiveTrajectoryReportPath,
   });
   process.stdout.write(`${JSON.stringify({
     outputRoot:result.outputRoot,

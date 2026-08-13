@@ -1,0 +1,334 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+    "effective": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "bracket": {
+    "lastPass": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.28-assay-v0",
+      "fixtureSha256": "aed0b56838f46525fb04e9f8fac486559d413ec7b006b70bcf7023d5deff30e3",
+      "severity": 0.28,
+      "resultSha256": "a3cb732629bdde25999a4ed333376118ab41988b2d79bb5bffd71781cc7031a5"
+    },
+    "firstFail": {
+      "fixtureId": "nbody-localized-two-obstacle-six-severity-0.32-assay-v0",
+      "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+      "severity": 0.32,
+      "resultSha256": "0a4699c7d8b017cc3e934760a8ffd18c3df2e062b74662a953e7e20456c2efc6",
+      "failure": {
+        "phase": "unified-kkt-globalization-line-search",
+        "lastTrustworthyEvidence": "selected",
+        "residual": 0.171504028818,
+        "violatedConstraints": [
+          {
+            "key": "pair:density-06-00:1|density-06-01:1",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.009302930286137
+          },
+          {
+            "key": "pair:density-06-00:1|density-06-01:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.002060345232162
+          },
+          {
+            "key": "pair:density-06-00:2|density-06-01:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.039090795893135
+          },
+          {
+            "key": "pair:density-06-02:2|density-06-03:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.018355860489719
+          },
+          {
+            "key": "pair:density-06-04:2|density-06-05:2",
+            "kind": "pairwise-clearance",
+            "signedGap": -0.018394045966458
+          },
+          {
+            "key": "bone:density-06-00:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.021341374986674
+          },
+          {
+            "key": "bone:density-06-00:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.0213413749908
+          },
+          {
+            "key": "bone:density-06-00:1|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.072844459433558
+          },
+          {
+            "key": "bone:density-06-00:2|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.138776722390867
+          },
+          {
+            "key": "bone:density-06-01:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.029322385799656
+          },
+          {
+            "key": "bone:density-06-01:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.029322385802673
+          },
+          {
+            "key": "bone:density-06-01:1|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.026649473120085
+          },
+          {
+            "key": "bone:density-06-01:2|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.171504028817599
+          },
+          {
+            "key": "bone:density-06-01:3|density-six-offset-short-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.12037883072749
+          },
+          {
+            "key": "compartment-upper:density-06-01:4:2",
+            "kind": "compartment-clearance",
+            "signedGap": -0.095426301722882
+          },
+          {
+            "key": "bone:density-06-02:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.126128904837188
+          },
+          {
+            "key": "bone:density-06-02:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.12612890484285
+          },
+          {
+            "key": "bone:density-06-03:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.110509249815333
+          },
+          {
+            "key": "bone:density-06-03:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.110509249809728
+          },
+          {
+            "key": "bone:density-06-04:1|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.024875829058782
+          },
+          {
+            "key": "bone:density-06-04:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.024875829065887
+          },
+          {
+            "key": "bone:density-06-05:2|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.006156407698262
+          },
+          {
+            "key": "bone:density-06-05:3|density-6-offset-bone",
+            "kind": "skeletal-clearance",
+            "signedGap": -0.006156407690945
+          }
+        ],
+        "linearizedConstraintKeys": [
+          "bone:density-06-00:1|density-6-offset-bone",
+          "bone:density-06-00:1|density-six-offset-short-bone",
+          "bone:density-06-00:2|density-6-offset-bone",
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-00:3|density-six-offset-short-bone",
+          "bone:density-06-01:1|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:2|density-six-offset-short-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-01:3|density-six-offset-short-bone",
+          "bone:density-06-02:1|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "bone:density-06-04:1|density-6-offset-bone",
+          "bone:density-06-04:2|density-6-offset-bone",
+          "bone:density-06-05:2|density-6-offset-bone",
+          "bone:density-06-05:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-00:1|density-06-01:0",
+          "pair:density-06-00:1|density-06-01:1",
+          "pair:density-06-00:1|density-06-01:2",
+          "pair:density-06-00:2|density-06-01:1",
+          "pair:density-06-00:2|density-06-01:2",
+          "pair:density-06-02:1|density-06-03:2",
+          "pair:density-06-02:2|density-06-03:2",
+          "pair:density-06-04:2|density-06-05:2"
+        ],
+        "projectedConstraintKeys": [
+          "bone:density-06-00:1|density-6-offset-bone",
+          "bone:density-06-00:1|density-six-offset-short-bone",
+          "bone:density-06-00:2|density-6-offset-bone",
+          "bone:density-06-00:2|density-six-offset-short-bone",
+          "bone:density-06-01:1|density-six-offset-short-bone",
+          "bone:density-06-01:2|density-6-offset-bone",
+          "bone:density-06-01:2|density-six-offset-short-bone",
+          "bone:density-06-01:3|density-6-offset-bone",
+          "bone:density-06-01:3|density-six-offset-short-bone",
+          "bone:density-06-02:1|density-6-offset-bone",
+          "bone:density-06-02:2|density-6-offset-bone",
+          "bone:density-06-03:2|density-6-offset-bone",
+          "bone:density-06-03:3|density-6-offset-bone",
+          "bone:density-06-04:1|density-6-offset-bone",
+          "bone:density-06-04:2|density-6-offset-bone",
+          "bone:density-06-05:2|density-6-offset-bone",
+          "bone:density-06-05:3|density-6-offset-bone",
+          "compartment-lower:density-06-03:2:0",
+          "compartment-upper:density-06-01:4:2",
+          "pair:density-06-00:1|density-06-01:0",
+          "pair:density-06-00:1|density-06-01:1",
+          "pair:density-06-00:1|density-06-01:2",
+          "pair:density-06-00:2|density-06-01:2",
+          "pair:density-06-02:1|density-06-03:2",
+          "pair:density-06-02:2|density-06-03:2",
+          "pair:density-06-04:2|density-06-05:2"
+        ],
+        "candidateResiduals": [
+          {
+            "lineScale": 1,
+            "maximumPhysicalResidual": 0.396861913563,
+            "pairwisePenetration": 0,
+            "skeletalPenetration": 0.073465639626,
+            "compartmentEscape": 0.396861913563
+          },
+          {
+            "lineScale": 0.5,
+            "maximumPhysicalResidual": 0.38242592425,
+            "pairwisePenetration": 0.01793690168,
+            "skeletalPenetration": 0.06996614241,
+            "compartmentEscape": 0.38242592425
+          },
+          {
+            "lineScale": 0.25,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.027454245116,
+            "skeletalPenetration": 0.112991061408,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.125,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.032129286741,
+            "skeletalPenetration": 0.125994368389,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.0625,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.0344463377,
+            "skeletalPenetration": 0.132596496447,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.03125,
+            "maximumPhysicalResidual": 0.37003201318,
+            "pairwisePenetration": 0.035599799588,
+            "skeletalPenetration": 0.135771667849,
+            "compartmentEscape": 0.37003201318
+          },
+          {
+            "lineScale": 0.015625,
+            "maximumPhysicalResidual": 0.375139744191,
+            "pairwisePenetration": 0.036175271422,
+            "skeletalPenetration": 0.137300165426,
+            "compartmentEscape": 0.375139744191
+          },
+          {
+            "lineScale": 0.0078125,
+            "maximumPhysicalResidual": 0.374553933619,
+            "pairwisePenetration": 0.036462693417,
+            "skeletalPenetration": 0.138045567169,
+            "compartmentEscape": 0.374553933619
+          }
+        ]
+      }
+    }
+  },
+  "classification": {
+    "coldMaximumPhysicalResidual": 0.171504028818,
+    "warmMaximumPhysicalResidual": 0.002679616613,
+    "patternMaximumPhysicalResidual": 0.004815758612,
+    "patternStatus": "same-basis-feasibility-unresolved",
+    "traversalInvariance": "passed",
+    "commonDescentMaximumPhysicalResidual": 0.004745541883,
+    "commonDescentVersusCompiledRowStart": 1.0147963563974722,
+    "commonDescentSelectedRadius": 0.00025,
+    "commonDescentRegressingCandidateCount": 4,
+    "commonDescentTrajectoryMaximumPhysicalResidual": 0.004722809214,
+    "commonDescentTrajectoryAcceptedIterations": 8,
+    "commonDescentTrajectoryMinimumRadiusSelections": 6,
+    "commonDescentTrajectoryVersusOneStep": 1.0048133786418079,
+    "adaptiveCommonDescentTrajectoryMaximumPhysicalResidual": 0.004513829534,
+    "adaptiveCommonDescentTrajectoryAcceptedIterations": 8,
+    "adaptiveCommonDescentTrajectoryConstrainedBoundaryCount": 7,
+    "adaptiveCommonDescentTrajectoryInteriorBracketCount": 1,
+    "adaptiveVersusFixedGrid": 1.0462976455858335
+  },
+  "bindings": {
+    "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+    "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161",
+    "indexHtmlSha256": "90576a40509d33a6806e18b485579190d1a5e70ebcd9c7800f6da843d6bd25cb",
+    "challengeResultSha256": "ee7fc0d1c84d9554e6247ffcc3859f8e2c0a3ca5da3e7e8f42456c3a4c8a2dc8",
+    "continuationResultSha256": "2b1fac7780f94d16aec89dd3dc20f3396a525f4d6087688ae83d431a0522f805",
+    "patternResultSha256": "56d597089c7dc3a96cd7a158717ee92072e5c3349e0a3c489a9f88fd9f15953b",
+    "commonDescentResultSha256": "dd236d22e8d7287a9739e7e237ab56926b5aa38c830d6416e2595df8b006872b",
+    "commonDescentTrajectoryResultSha256": "bcb484441d981ff9f87bc08cfb3b7d1662466b8fff5db448368d674f8f515e1e",
+    "commonDescentTrajectoryReportSha256": "ec1781373a275bb81c55c970627f6c6f8a9d791692efe17caa474c79562645b8",
+    "commonDescentTrajectoryReportIdentitySha256": "91e6bf308728bec62117a96389703eb45febc1f087a72368878d744216c9aef7",
+    "adaptiveTrajectoryRawSha256": "9852515dd4eb11980679c1a9059ce1de4e9d6f297eca97c0bf030b47e607b15a",
+    "adaptiveTrajectoryResultSha256": "8f8764288d999c99ca574f89337f75c4bca4e2169f19bc85ba4ce2aa1c193d69",
+    "adaptiveTrajectoryReportSha256": "1536165e5f7634a1e026e3eec281fa98e38c1628f73952d5bb3eb70d8be00f01",
+    "adaptiveTrajectoryReportIdentitySha256": "41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477",
+    "visualInspectionSha256": "708878fc64cdec100df544b037f942dc0991a1fe64ee972b23aaa54d9c7f5698",
+    "captureReceiptSetSha256": "f0d8c0ae9faa53f4163996424f879a67a41cd5bdcbbb307fddb28adcdb73ac97"
+  },
+  "requiredStates": [
+    "pass-crowded",
+    "last-pass",
+    "fail-crowded",
+    "first-fail",
+    "same-basis-feasible",
+    "family-common-descent",
+    "repeated-family-common-descent",
+    "adaptive-family-common-descent",
+    "reference"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "eight recomputed family-gradient common-descent steps with bidirectional radius search lower every compiled constraint family from the severity-0.32 start beyond the admitted fixed-grid trajectory while retaining exact attachment and volume invariants; seven selected radii are bounded by an explicitly evaluated larger trial rejected for named family regression, and one is a refined three-admissible-point interior bracket",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "same-basis-representation-impossibility",
+      "arbitrary-N-closure",
+      "anatomical-plausibility",
+      "performance",
+      "optimality"
+    ]
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "708878fc64cdec100df544b037f942dc0991a1fe64ee972b23aaa54d9c7f5698",
+    "captureCount": 18
+  },
+  "identity": {
+    "sha256": "b1c69230f2110c27021c6d9e4250c35e28c0b787a1ab2d473822e312de412468"
+  }
+}

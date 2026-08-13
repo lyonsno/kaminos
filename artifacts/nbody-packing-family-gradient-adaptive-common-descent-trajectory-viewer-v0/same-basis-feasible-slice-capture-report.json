@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice",
+    "outputPath": "repo://artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-viewer-v0/same-basis-feasible-slice.png",
+    "reportPath": "repo://artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-viewer-v0/same-basis-feasible-slice-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 46777,
+    "processGroupId": 46777,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 46777,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 46995,
+      "processGroupId": 46995,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 46995,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3386,
+    "retainedBytes": 3386,
+    "truncated": false,
+    "tail": "[0812/195114.697791:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/195114.878437:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/195120.650474:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n[0812/195120.650582:INFO:CONSOLE:0] \"[.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n[0812/195120.654698:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/195120.776412:INFO:CONSOLE:0] \"[.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n[0812/195120.779378:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/195120.894958:INFO:CONSOLE:0] \"[.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n[0812/195120.896234:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x12c00578400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n173922 bytes written to file repo://artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-viewer-v0/same-basis-feasible-slice.png\n[0812/195121.413630:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0812/195121.483295:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n[0812/195121.585258:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00557e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/195128.754402:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00557e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0812/195128.760733:INFO:CONSOLE:0] \"[.WebGL-0x11c00557e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-viewer-v0/same-basis-feasible-slice.png",
+    "sizeBytes": 173922,
+    "sha256": "ea2566302e52124d0e0013b2ff1801fc0ebbc47a171ccf3372542024c8fecb61",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 46,
+      "idatBytes": 173349
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "same-basis-feasible",
+      "witnessMode": "slice",
+      "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+      "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+      "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 192315,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-viewer-v0/same-basis-feasible-slice.png",
+      "sizeBytes": 173922,
+      "sha256": "ea2566302e52124d0e0013b2ff1801fc0ebbc47a171ccf3372542024c8fecb61",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 46,
+        "idatBytes": 173349
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "same-basis-feasible",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0",
+        "fixturesSha256": "65523e25baa49f8542d58008a78f3d24aaaca03b3b54729410cc420c77534677",
+        "resultsSha256": "34418db45ee3aed59d14f3a07adfc3616cdae9c7e87772a3aec9a0c803e24161"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 192315,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8814/index.html?state=same-basis-feasible&mode=slice",
+    "httpStatus": 200,
+    "sizeBytes": 191249,
+    "sha256": "90576a40509d33a6806e18b485579190d1a5e70ebcd9c7800f6da843d6bd25cb"
+  }
+}

@@ -7,12 +7,20 @@ export const NBODY_PACKING_COMMON_DESCENT_RESULT_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-result.v0';
 export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-trajectory-result.v0';
+export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_STEP_RESULT_SCHEMA =
+  'kaminos.nbody-packing-family-gradient-adaptive-common-descent-step-result.v0';
+export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA =
+  'kaminos.nbody-packing-family-gradient-adaptive-common-descent-trajectory-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
 const COMMON_DESCENT_ALGORITHM = 'family-gradient-minimum-norm-common-descent-v0';
 const COMMON_DESCENT_TRAJECTORY_ALGORITHM =
   'family-gradient-minimum-norm-common-descent-trajectory-v0';
+const ADAPTIVE_COMMON_DESCENT_STEP_ALGORITHM =
+  'family-gradient-minimum-norm-common-descent-adaptive-step-v0';
+const ADAPTIVE_COMMON_DESCENT_TRAJECTORY_ALGORITHM =
+  'family-gradient-minimum-norm-common-descent-adaptive-trajectory-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -458,6 +466,694 @@ export function solveNBodyFamilyGradientCommonDescent({
     },
     claimCeiling:
       'bounded-severity-0.32-local-family-gradient-direction-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyFamilyGradientAdaptiveStepConfig({
+  initialRadius = 0.004,
+  maximumRadius = 0.004,
+  minimumRadius = 1e-10,
+  maximumTrials = 24,
+  refinementIterations = 6,
+} = {}) {
+  const oneStep = createNBodyFamilyGradientCommonDescentConfig();
+  return {
+    algorithm:ADAPTIVE_COMMON_DESCENT_STEP_ALGORITHM,
+    candidateEnumeration:oneStep.candidateEnumeration,
+    contractionFactor:0.5,
+    directionalDerivativeTolerance:oneStep.directionalDerivativeTolerance,
+    expansionFactor:2,
+    familyRegressionTolerance:oneStep.familyRegressionTolerance,
+    finiteDifferenceStep:oneStep.finiteDifferenceStep,
+    improvementTolerance:1e-12,
+    initialRadius,
+    maximumRadius,
+    maximumTrials,
+    minimumRadius,
+    refinementIterations,
+    sufficientDecreaseFraction:0.01,
+    translationBounds:[...oneStep.translationBounds],
+  };
+}
+
+function rankAdaptiveTrial(left, right) {
+  if (left.maximumPhysicalResidual !== right.maximumPhysicalResidual) {
+    return left.maximumPhysicalResidual - right.maximumPhysicalResidual;
+  }
+  return hashMusclePackingCanonicalJson(left.vector)
+    .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+}
+
+function adaptiveAdmissibleBracket(trials) {
+  const admissible = trials.filter(row => row.admissible).sort((a, b) => a.radius - b.radius);
+  if (admissible.length < 3) return null;
+  const best = [...admissible].sort(rankAdaptiveTrial)[0];
+  const index = admissible.indexOf(best);
+  if (index === 0 || index === admissible.length - 1) return null;
+  return { lower:admissible[index - 1], best, upper:admissible[index + 1] };
+}
+
+function parabolicBracketMinimum({ lower, best, upper }) {
+  const numerator =
+    ((best.radius - lower.radius) ** 2) *
+      (best.maximumPhysicalResidual - upper.maximumPhysicalResidual) -
+    ((best.radius - upper.radius) ** 2) *
+      (best.maximumPhysicalResidual - lower.maximumPhysicalResidual);
+  const denominator =
+    (best.radius - lower.radius) *
+      (best.maximumPhysicalResidual - upper.maximumPhysicalResidual) -
+    (best.radius - upper.radius) *
+      (best.maximumPhysicalResidual - lower.maximumPhysicalResidual);
+  const interpolated = denominator === 0
+    ? Number.NaN
+    : best.radius - (0.5 * numerator / denominator);
+  const smallestGap = Math.min(
+    best.radius - lower.radius,
+    upper.radius - best.radius,
+  );
+  if (
+    Number.isFinite(interpolated) &&
+    interpolated > lower.radius + smallestGap * 1e-6 &&
+    interpolated < upper.radius - smallestGap * 1e-6
+  ) return interpolated;
+  return upper.radius - best.radius > best.radius - lower.radius
+    ? (best.radius + upper.radius) / 2
+    : (lower.radius + best.radius) / 2;
+}
+
+export function adjudicateNBodyAdaptiveStepBoundary({ bracket, trialReceipts } = {}) {
+  const reject = (classification, reason) => ({ admitted:false, classification, reason });
+  if (!bracket || !Array.isArray(trialReceipts)) {
+    return reject('malformed-boundary-receipt', 'bracket and trialReceipts are required');
+  }
+  if (bracket.boundary === 'unclosed-upper-boundary') {
+    return reject(
+      'unclosed-upper-boundary',
+      'accepted step has no evaluated larger boundary trial',
+    );
+  }
+  if (bracket.boundary === 'unclosed-lower-boundary') {
+    return reject(
+      'unclosed-lower-boundary',
+      'accepted step has no evaluated smaller boundary trial',
+    );
+  }
+  const sameRadius = (left, right) => Number.isFinite(left) && Number.isFinite(right) &&
+    Math.abs(left - right) <= Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right));
+  const atRadius = radius => trialReceipts.find(row => sameRadius(row.radius, radius)) || null;
+  const selectedRows = trialReceipts.filter(row => row.selected);
+  if (selectedRows.length !== 1) {
+    return reject('malformed-boundary-receipt', 'exactly one selected trial is required');
+  }
+  const selected = selectedRows[0];
+  if (!selected.admissible || !sameRadius(selected.radius, bracket.selectedRadius)) {
+    return reject(
+      'malformed-boundary-receipt',
+      'selected trial must be admissible and match selectedRadius',
+    );
+  }
+  const selectedVectorSha256 = hashMusclePackingCanonicalJson(selected.vector);
+  const betterAdmissible = trialReceipts.find(row => row.admissible && (
+    row.maximumPhysicalResidual < selected.maximumPhysicalResidual ||
+    (
+      row !== selected &&
+      row.maximumPhysicalResidual === selected.maximumPhysicalResidual &&
+      hashMusclePackingCanonicalJson(row.vector).localeCompare(selectedVectorSha256) < 0
+    )
+  ));
+  if (betterAdmissible) {
+    return reject('misranked-boundary-receipt', 'an admissible trial outranks the selected trial');
+  }
+  const lower = atRadius(bracket.lowerTrialRadius);
+  const upper = atRadius(bracket.upperTrialRadius);
+  if (bracket.boundary === 'global-maximum-radius') {
+    if (!sameRadius(selected.radius, bracket.maximumRadius) || upper !== null) {
+      return reject(
+        'malformed-global-maximum-boundary',
+        'global maximum selection must equal maximumRadius and have no upper trial',
+      );
+    }
+    if (!lower || !lower.admissible || !(lower.radius < selected.radius)) {
+      return reject(
+        'malformed-global-maximum-boundary',
+        'global maximum selection requires an admissible smaller trial',
+      );
+    }
+    return { admitted:true, classification:'global-maximum-radius', reason:null };
+  }
+  if (bracket.boundary === 'minimum-radius') {
+    if (!sameRadius(selected.radius, bracket.minimumRadius) || lower !== null) {
+      return reject(
+        'malformed-minimum-radius-boundary',
+        'minimum-radius selection must equal minimumRadius and have no lower trial',
+      );
+    }
+    if (!upper || !(selected.radius < upper.radius)) {
+      return reject(
+        'malformed-minimum-radius-boundary',
+        'minimum-radius selection requires an evaluated larger trial',
+      );
+    }
+    return { admitted:true, classification:'minimum-radius', reason:null };
+  }
+  if (!lower || !upper || !(lower.radius < selected.radius && selected.radius < upper.radius)) {
+    return reject(
+      'malformed-boundary-receipt',
+      'selected trial requires evaluated smaller and larger neighbors',
+    );
+  }
+  if (!lower.admissible || lower.maximumPhysicalResidual < selected.maximumPhysicalResidual) {
+    return reject(
+      'malformed-lower-boundary',
+      'smaller boundary trial must be admissible and no better than selected',
+    );
+  }
+  if (bracket.boundary === 'interior-bracket') {
+    if (!upper.admissible || upper.maximumPhysicalResidual < selected.maximumPhysicalResidual) {
+      return reject(
+        'malformed-interior-bracket',
+        'interior upper trial must be admissible and no better than selected',
+      );
+    }
+    return { admitted:true, classification:'interior-bracket', reason:null };
+  }
+  if (bracket.boundary !== 'admissibility-boundary') {
+    return reject('unsupported-boundary-classification', `unsupported boundary ${bracket.boundary}`);
+  }
+  if (upper.admissible) {
+    return reject(
+      'malformed-admissibility-boundary',
+      'larger constrained-boundary trial must be explicitly inadmissible',
+    );
+  }
+  if (!['constraint-family-regression', 'insufficient-decrease'].includes(
+    upper.rejectionReason,
+  )) {
+    return reject(
+      'malformed-admissibility-boundary',
+      'larger constrained-boundary trial requires an acceptance-policy rejection',
+    );
+  }
+  if (
+    upper.rejectionReason === 'constraint-family-regression' &&
+    (!Array.isArray(upper.regressedFamilies) || upper.regressedFamilies.length === 0)
+  ) {
+    return reject(
+      'malformed-admissibility-boundary',
+      'constraint-family-regression requires at least one named regressed family',
+    );
+  }
+  if (
+    upper.rejectionReason === 'insufficient-decrease' &&
+    Array.isArray(upper.regressedFamilies) && upper.regressedFamilies.length > 0
+  ) return reject(
+    'malformed-admissibility-boundary',
+    'insufficient-decrease boundary cannot conceal family regression',
+  );
+  return {
+    admitted:true,
+    classification:'constrained-admissibility-boundary',
+    reason:null,
+  };
+}
+
+export function solveNBodyFamilyGradientAdaptiveStep({
+  problem,
+  startVector,
+  requestedConfig = createNBodyFamilyGradientAdaptiveStepConfig(),
+} = {}) {
+  const expectedKeys = [
+    'algorithm',
+    'candidateEnumeration',
+    'contractionFactor',
+    'directionalDerivativeTolerance',
+    'expansionFactor',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'initialRadius',
+    'maximumRadius',
+    'maximumTrials',
+    'minimumRadius',
+    'refinementIterations',
+    'sufficientDecreaseFraction',
+    'translationBounds',
+  ];
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `adaptive common descent requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ADAPTIVE_COMMON_DESCENT_STEP_ALGORITHM) {
+    throw new Error('adaptive common descent algorithm identity is unsupported');
+  }
+  if (!['canonical', 'reverse'].includes(requestedConfig.candidateEnumeration)) {
+    throw new Error('adaptive common descent candidateEnumeration must be canonical or reverse');
+  }
+  for (const key of [
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'initialRadius',
+    'maximumRadius',
+    'minimumRadius',
+    'sufficientDecreaseFraction',
+  ]) {
+    if (!Number.isFinite(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`adaptive common descent ${key} must be positive and finite`);
+    }
+  }
+  if (
+    !(requestedConfig.contractionFactor > 0 && requestedConfig.contractionFactor < 1)
+  ) throw new Error('adaptive common descent contractionFactor must be between zero and one');
+  if (!(requestedConfig.expansionFactor > 1)) {
+    throw new Error('adaptive common descent expansionFactor must exceed one');
+  }
+  if (
+    requestedConfig.minimumRadius > requestedConfig.initialRadius ||
+    requestedConfig.initialRadius > requestedConfig.maximumRadius
+  ) {
+    throw new Error(
+      'adaptive common descent radii must satisfy minimumRadius <= initialRadius <= maximumRadius',
+    );
+  }
+  if (!Number.isInteger(requestedConfig.maximumTrials) || requestedConfig.maximumTrials <= 0) {
+    throw new Error('adaptive common descent maximumTrials must be a positive integer');
+  }
+  if (
+    !Number.isInteger(requestedConfig.refinementIterations) ||
+    requestedConfig.refinementIterations < 0 ||
+    requestedConfig.refinementIterations >= requestedConfig.maximumTrials
+  ) throw new Error(
+    'adaptive common descent refinementIterations must be a nonnegative integer below maximumTrials',
+  );
+  if (
+    !Array.isArray(requestedConfig.translationBounds) ||
+    requestedConfig.translationBounds.length !== 2 ||
+    !requestedConfig.translationBounds.every(Number.isFinite) ||
+    requestedConfig.translationBounds[0] >= requestedConfig.translationBounds[1]
+  ) throw new Error('adaptive common descent translationBounds must be an ordered finite pair');
+
+  const baseConfig = createNBodyFamilyGradientCommonDescentConfig();
+  baseConfig.candidateEnumeration = requestedConfig.candidateEnumeration;
+  baseConfig.directionalDerivativeTolerance = requestedConfig.directionalDerivativeTolerance;
+  baseConfig.familyRegressionTolerance = requestedConfig.familyRegressionTolerance;
+  baseConfig.finiteDifferenceStep = requestedConfig.finiteDifferenceStep;
+  baseConfig.translationBounds = [...requestedConfig.translationBounds];
+  baseConfig.trustRegionRadii = [requestedConfig.initialRadius];
+  const base = solveNBodyFamilyGradientCommonDescent({
+    problem,
+    startVector,
+    requestedConfig:baseConfig,
+  });
+  const predictedRates = Object.values(
+    base.directionConstruction.predictedDirectionalDerivatives,
+  ).filter(Number.isFinite).map(value => -value);
+  const minimumPredictedDecreaseRate = predictedRates.length > 0
+    ? Math.min(...predictedRates)
+    : 0;
+  const evaluateRadius = (radius, stage) => {
+    const vector = clampVector(
+      startVector.map((value, axis) =>
+        value + radius * base.directionConstruction.direction[axis]),
+      requestedConfig.translationBounds,
+    );
+    const state = evaluateNBodyUnifiedKktState({ problem, vector });
+    const families = Object.fromEntries(
+      CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, state.metrics[key]]),
+    );
+    const regressedFamilies = CONSTRAINT_FAMILY_METRIC_KEYS.filter(
+      key => families[key] >
+        base.start.metrics[key] + requestedConfig.familyRegressionTolerance,
+    );
+    const actualDecrease = rounded(
+      base.start.maximumPhysicalResidual - state.maximumPhysicalResidual,
+    );
+    const requiredDecrease = rounded(Math.max(
+      requestedConfig.improvementTolerance,
+      requestedConfig.sufficientDecreaseFraction * radius *
+        minimumPredictedDecreaseRate,
+    ));
+    const admissible = base.directionConstruction.predictedCommonDescent &&
+      regressedFamilies.length === 0 &&
+      actualDecrease >= requiredDecrease;
+    return {
+      stage,
+      radius,
+      vector,
+      maximumPhysicalResidual:state.maximumPhysicalResidual,
+      constraintFamilies:families,
+      regressedFamilies,
+      actualDecrease,
+      requiredDecrease,
+      admissible,
+    };
+  };
+  const trials = [];
+  let radius = requestedConfig.initialRadius;
+  let exhaustedMinimumRadius = false;
+  let exhaustedMaximumRadius = false;
+  const sameRadius = (left, right) => Math.abs(left - right) <=
+    Number.EPSILON * Math.max(1, left, right);
+  const nextUntriedRadius = candidate => trials.some(row => sameRadius(row.radius, candidate))
+    ? null
+    : candidate;
+  while (trials.length < requestedConfig.maximumTrials - requestedConfig.refinementIterations) {
+    const stage = trials.length === 0
+      ? 'continuation-seed'
+      : radius < Math.min(...trials.map(row => row.radius))
+        ? 'geometric-contraction'
+        : 'geometric-expansion';
+    trials.push(evaluateRadius(radius, stage));
+    if (adaptiveAdmissibleBracket(trials)) break;
+    const admissible = trials.filter(row => row.admissible).sort(rankAdaptiveTrial);
+    const best = admissible[0] || null;
+    const hasSmallerTrial = best
+      ? trials.some(row => row.radius < best.radius && !sameRadius(row.radius, best.radius))
+      : false;
+    const hasLargerTrial = best
+      ? trials.some(row => row.radius > best.radius && !sameRadius(row.radius, best.radius))
+      : false;
+    let nextRadius = null;
+
+    if (trials.length === 1 || !best || !hasSmallerTrial) {
+      const smallestTriedRadius = Math.min(...trials.map(row => row.radius));
+      const contracted = Math.max(
+        requestedConfig.minimumRadius,
+        smallestTriedRadius * requestedConfig.contractionFactor,
+      );
+      nextRadius = nextUntriedRadius(contracted);
+      exhaustedMinimumRadius = sameRadius(contracted, requestedConfig.minimumRadius);
+    } else if (!hasLargerTrial) {
+      const largestTriedRadius = Math.max(...trials.map(row => row.radius));
+      const expanded = Math.min(
+        requestedConfig.maximumRadius,
+        largestTriedRadius * requestedConfig.expansionFactor,
+      );
+      nextRadius = nextUntriedRadius(expanded);
+      exhaustedMaximumRadius = sameRadius(expanded, requestedConfig.maximumRadius);
+    }
+
+    if (nextRadius === null) break;
+    radius = nextRadius;
+  }
+  let refinementCount = 0;
+  while (
+    refinementCount < requestedConfig.refinementIterations &&
+    trials.length < requestedConfig.maximumTrials
+  ) {
+    const bracket = adaptiveAdmissibleBracket(trials);
+    if (!bracket) break;
+    const refinedRadius = parabolicBracketMinimum(bracket);
+    if (
+      trials.some(row => sameRadius(row.radius, refinedRadius))
+    ) break;
+    trials.push(evaluateRadius(refinedRadius, 'bracket-refinement'));
+    refinementCount += 1;
+  }
+  const rankedAdmissible = trials.filter(row => row.admissible).sort(rankAdaptiveTrial);
+  const accepted = rankedAdmissible[0] || null;
+  const selectedState = accepted
+    ? evaluateNBodyUnifiedKktState({ problem, vector:accepted.vector })
+    : evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  const trialReceipts = [...trials]
+    .sort((left, right) => requestedConfig.candidateEnumeration === 'canonical'
+      ? right.radius - left.radius
+      : left.radius - right.radius)
+    .map(row => ({
+      ...row,
+      selected:row === accepted,
+      rejectionReason:row === accepted
+        ? null
+        : !base.directionConstruction.predictedCommonDescent
+          ? 'no-predicted-common-descent-direction'
+          : row.regressedFamilies.length > 0
+            ? 'constraint-family-regression'
+            : row.actualDecrease < row.requiredDecrease
+              ? 'insufficient-decrease'
+              : 'higher-ranked-admissible-candidate',
+    }));
+  const finalBracket = adaptiveAdmissibleBracket(trials);
+  const largerTrials = accepted
+    ? trials.filter(row => row.radius > accepted.radius).sort((a, b) => a.radius - b.radius)
+    : [];
+  const smallerTrials = accepted
+    ? trials.filter(row => row.radius < accepted.radius).sort((a, b) => b.radius - a.radius)
+    : [];
+  const boundary = !accepted
+    ? null
+    : finalBracket
+      ? 'interior-bracket'
+      : sameRadius(accepted.radius, requestedConfig.maximumRadius)
+        ? 'global-maximum-radius'
+        : sameRadius(accepted.radius, requestedConfig.minimumRadius)
+          ? 'minimum-radius'
+          : largerTrials.length === 0
+            ? 'unclosed-upper-boundary'
+            : smallerTrials.length === 0
+              ? 'unclosed-lower-boundary'
+              : 'admissibility-boundary';
+  const core = {
+    schema:NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_STEP_RESULT_SCHEMA,
+    status:accepted
+      ? 'adaptive-common-descent-step-accepted'
+      : base.directionConstruction.predictedCommonDescent
+        ? 'adaptive-common-descent-radius-floor'
+        : 'local-family-gradient-cone-certificate',
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:structuredClone(base.start),
+    directionConstruction:structuredClone(base.directionConstruction),
+    selected:{
+      vector:[...(accepted?.vector || startVector)],
+      maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
+      metrics:structuredClone(selectedState.metrics),
+      muscles:structuredClone(selectedState.muscles),
+    },
+    work:{
+      attempts:trialReceipts.length,
+      evaluationCount:base.work.evaluationCount + trials.length + 1,
+      terminalReason:accepted
+        ? null
+        : base.directionConstruction.predictedCommonDescent
+          ? 'no-family-admissible-sufficient-decrease-radius'
+          : 'no-predicted-common-descent-direction',
+      bracket:{
+        initialRadius:requestedConfig.initialRadius,
+        maximumRadius:requestedConfig.maximumRadius,
+        minimumRadius:requestedConfig.minimumRadius,
+        lowerTrialRadius:finalBracket?.lower.radius || smallerTrials[0]?.radius || null,
+        selectedRadius:accepted?.radius || null,
+        upperTrialRadius:finalBracket?.upper.radius || largerTrials[0]?.radius || null,
+        refinementIterations:refinementCount,
+        boundary,
+        exhaustedMinimumRadius,
+        exhaustedMaximumRadius,
+      },
+      trialReceipts,
+    },
+    mechanism:{
+      directionBasis:'minimum-norm-convex-combination-of-normalized-family-gradients',
+      stepControl:
+        'bidirectional-geometric-bracket-search-plus-parabolic-refinement-with-family-filter-and-sufficient-decrease',
+      nonlinearAcceptance:'no-family-regression-and-sufficient-maximum-residual-decrease',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-adaptive-common-descent-step-not-global-feasibility-or-line-search-optimality',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyFamilyGradientAdaptiveTrajectoryConfig({
+  iterationBudget = 8,
+} = {}) {
+  const step = createNBodyFamilyGradientAdaptiveStepConfig();
+  return {
+    algorithm:ADAPTIVE_COMMON_DESCENT_TRAJECTORY_ALGORITHM,
+    candidateEnumeration:step.candidateEnumeration,
+    contractionFactor:step.contractionFactor,
+    convergenceTolerance:1e-7,
+    directionalDerivativeTolerance:step.directionalDerivativeTolerance,
+    expansionFactor:step.expansionFactor,
+    familyRegressionTolerance:step.familyRegressionTolerance,
+    finiteDifferenceStep:step.finiteDifferenceStep,
+    improvementTolerance:step.improvementTolerance,
+    initialRadius:step.initialRadius,
+    maximumRadius:step.maximumRadius,
+    iterationBudget,
+    maximumTrials:step.maximumTrials,
+    minimumRadius:step.minimumRadius,
+    radiusContinuationExpansion:2,
+    refinementIterations:step.refinementIterations,
+    sufficientDecreaseFraction:step.sufficientDecreaseFraction,
+    translationBounds:[...step.translationBounds],
+  };
+}
+
+export function solveNBodyFamilyGradientAdaptiveTrajectory({
+  problem,
+  startVector,
+  requestedConfig = createNBodyFamilyGradientAdaptiveTrajectoryConfig(),
+} = {}) {
+  const expectedKeys = [
+    'algorithm',
+    'candidateEnumeration',
+    'contractionFactor',
+    'convergenceTolerance',
+    'directionalDerivativeTolerance',
+    'expansionFactor',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'initialRadius',
+    'iterationBudget',
+    'maximumRadius',
+    'maximumTrials',
+    'minimumRadius',
+    'radiusContinuationExpansion',
+    'refinementIterations',
+    'sufficientDecreaseFraction',
+    'translationBounds',
+  ];
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `adaptive common descent trajectory requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ADAPTIVE_COMMON_DESCENT_TRAJECTORY_ALGORITHM) {
+    throw new Error('adaptive common descent trajectory algorithm identity is unsupported');
+  }
+  if (!Number.isInteger(requestedConfig.iterationBudget) || requestedConfig.iterationBudget <= 0) {
+    throw new Error('adaptive common descent trajectory iterationBudget must be a positive integer');
+  }
+  if (
+    !Number.isFinite(requestedConfig.convergenceTolerance) ||
+    requestedConfig.convergenceTolerance <= 0
+  ) throw new Error(
+    'adaptive common descent trajectory convergenceTolerance must be positive and finite',
+  );
+  if (
+    !Number.isFinite(requestedConfig.radiusContinuationExpansion) ||
+    requestedConfig.radiusContinuationExpansion < 1
+  ) throw new Error(
+    'adaptive common descent trajectory radiusContinuationExpansion must be finite and at least one',
+  );
+  if (
+    !Number.isFinite(requestedConfig.maximumRadius) ||
+    requestedConfig.maximumRadius < requestedConfig.initialRadius
+  ) throw new Error(
+    'adaptive common descent trajectory maximumRadius must be finite and at least initialRadius',
+  );
+  validateStart(problem, startVector, requestedConfig.translationBounds);
+
+  let currentVector = [...startVector];
+  let requestedInitialRadius = requestedConfig.initialRadius;
+  let start = null;
+  let selected = null;
+  let acceptedIterations = 0;
+  let evaluationCount = 0;
+  let terminalReason = null;
+  const rows = [];
+  for (let iteration = 1; iteration <= requestedConfig.iterationBudget; iteration += 1) {
+    const stepConfig = {
+      algorithm:ADAPTIVE_COMMON_DESCENT_STEP_ALGORITHM,
+      candidateEnumeration:requestedConfig.candidateEnumeration,
+      contractionFactor:requestedConfig.contractionFactor,
+      directionalDerivativeTolerance:requestedConfig.directionalDerivativeTolerance,
+      expansionFactor:requestedConfig.expansionFactor,
+      familyRegressionTolerance:requestedConfig.familyRegressionTolerance,
+      finiteDifferenceStep:requestedConfig.finiteDifferenceStep,
+      improvementTolerance:requestedConfig.improvementTolerance,
+      initialRadius:requestedInitialRadius,
+      maximumRadius:requestedConfig.maximumRadius,
+      maximumTrials:requestedConfig.maximumTrials,
+      minimumRadius:requestedConfig.minimumRadius,
+      refinementIterations:requestedConfig.refinementIterations,
+      sufficientDecreaseFraction:requestedConfig.sufficientDecreaseFraction,
+      translationBounds:[...requestedConfig.translationBounds],
+    };
+    const step = solveNBodyFamilyGradientAdaptiveStep({
+      problem,
+      startVector:currentVector,
+      requestedConfig:stepConfig,
+    });
+    start ||= structuredClone(step.start);
+    selected = structuredClone(step.selected);
+    evaluationCount += step.work.evaluationCount;
+    const accepted = step.status === 'adaptive-common-descent-step-accepted';
+    rows.push({
+      iteration,
+      accepted,
+      requestedInitialRadius,
+      before:structuredClone(step.start),
+      directionConstruction:structuredClone(step.directionConstruction),
+      bracket:structuredClone(step.work.bracket),
+      trialReceipts:structuredClone(step.work.trialReceipts),
+      after:structuredClone(step.selected),
+      terminalReason:accepted ? null : step.work.terminalReason,
+      stepResultSha256:step.identity.sha256,
+    });
+    if (!accepted) {
+      terminalReason = step.work.terminalReason;
+      break;
+    }
+    acceptedIterations += 1;
+    currentVector = [...step.selected.vector];
+    if (step.selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance) {
+      terminalReason = 'convergence-tolerance-reached';
+      break;
+    }
+    requestedInitialRadius = Math.min(
+      requestedConfig.maximumRadius,
+      step.work.bracket.selectedRadius * requestedConfig.radiusContinuationExpansion,
+    );
+  }
+  const feasible = selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance;
+  const stalled = terminalReason !== null && terminalReason !== 'convergence-tolerance-reached';
+  const core = {
+    schema:NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA,
+    status:feasible
+      ? 'adaptive-common-descent-trajectory-feasible'
+      : stalled
+        ? 'adaptive-common-descent-trajectory-local-floor'
+        : 'adaptive-common-descent-trajectory-budget-exhausted',
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start,
+    selected,
+    work:{
+      iterations:acceptedIterations,
+      attempts:rows.length,
+      evaluationCount,
+      terminalReason,
+      rows,
+    },
+    mechanism:{
+      directionBasis:'recomputed-minimum-norm-convex-combination-of-normalized-family-gradients',
+      stepControl:
+        'continued-seed-bidirectional-geometric-bracketing-plus-parabolic-refinement',
+      nonlinearAcceptance:'no-family-regression-and-sufficient-maximum-residual-decrease',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:false,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-adaptive-common-descent-trajectory-not-global-feasibility-or-line-search-optimality',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }

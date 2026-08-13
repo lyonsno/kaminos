@@ -10,6 +10,7 @@ import {
   NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
   NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
+  NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_RESTORATION_TRAJECTORY_WITNESS_ROUTE,
   admitNBodyPackingLocalizedVisualInspection,
   renderNBodyPackingLocalizedChallengeHtml,
@@ -26,6 +27,23 @@ import { hashMusclePackingCanonicalJson } from '../muscle-compartment-packing-co
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function copyInspectedViewerGenerationAsPending({ sourceDir, outDir }) {
+  fs.cpSync(sourceDir, outDir, { recursive:true });
+  fs.rmSync(path.join(outDir, 'visual-inspection.json'), { force:true });
+  const reportPath = path.join(outDir, 'report.json');
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  report.status = 'complete-pending-agent-visual-inspection';
+  delete report.visualInspection;
+  delete report.bindings.visualInspectionSha256;
+  delete report.bindings.captureReceiptSetSha256;
+  delete report.identity;
+  report.identity = {
+    sha256:sha256(Buffer.from(`${JSON.stringify(report, null, 2)}\n`)),
+  };
+  fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+  return report;
 }
 
 function rehashStoredCommonDescentStep({ result, row }) {
@@ -129,6 +147,48 @@ test('localized renderer can expose the gross hard boundary with truthful dynami
   assert.match(html, /pen>debtTolerance/);
   assert.match(html, /distanceTo\(q\)<[^;]+-debtTolerance/);
   assert.doesNotMatch(html, /0\.24 same-basis feasible/);
+});
+
+test('adaptive comparison renderer uses sparse true-position rings instead of a dense ghost cage', () => {
+  const muscle = {
+    id:'member-0',
+    centerline:[
+      { position:[0,-1,0], radius:0.1 },
+      { position:[0,0,0], radius:0.2 },
+      { position:[0,1,0], radius:0.1 },
+    ],
+  };
+  const states = {
+    baseline:{ label:'fixed grid', muscles:[muscle] },
+    adaptive:{
+      label:'adaptive',
+      muscles:[structuredClone(muscle)],
+      comparisonOverlay:{
+        baselineState:'baseline',
+        baselineLabel:'fixed-grid result',
+        baselineResultIdentitySha256:'a'.repeat(64),
+        targetResultIdentitySha256:'b'.repeat(64),
+        displayGain:80,
+        maximumWorldDisplacement:0.001,
+        rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+      },
+      comparisonNote:
+        'fixed-grid rings at true position · displacement vectors ×80 (display-only gain; carrier volumes remain true-scale)',
+    },
+  };
+  const html = renderNBodyPackingLocalizedChallengeHtml({
+    payload:{
+      states,
+      environment:{ compartment:{ minimum:[-1,-1,-1], maximum:[1,1,1] }, obstacles:[] },
+      display:{ orderedStates:['baseline','adaptive'], defaultState:'adaptive' },
+    },
+    bindings:{ fixturesSha256:'c'.repeat(64), resultsSha256:'d'.repeat(64) },
+    route:NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
+  });
+  assert.match(html, /function addComparisonRing/);
+  assert.match(html, /true-position-cross-section-rings-and-amplified-vectors-v0/);
+  assert.match(html, /fixed-grid rings at true position/);
+  assert.doesNotMatch(html, /wireframe:true/);
 });
 
 test('superseded pre-repair witness cannot present itself as current inspected evidence', () => {
@@ -403,6 +463,140 @@ test('refined common-descent trajectory writer adds an eighth route-bound compar
   assert.match(report.claimCeiling.admittedClaim, /coarse radius-ladder artifact/);
 });
 
+test('adaptive trajectory writer adds a ninth same-camera state with exact boundary custody', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-adaptive-trajectory-'));
+  const adaptiveRoot =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0';
+  const { report, states } = await writeNBodyPackingLocalizedHardBoundaryWitness({
+    outDir,
+    commonDescentResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+    commonDescentTrajectoryResultPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+    commonDescentTrajectoryReportPath:
+      'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+    adaptiveTrajectoryRawPath:`${adaptiveRoot}/raw-trajectory.json`,
+    adaptiveTrajectoryResultPath:`${adaptiveRoot}/result.json`,
+    adaptiveTrajectoryReportPath:`${adaptiveRoot}/run-report.json`,
+  });
+  assert.equal(report.route.effective,
+    NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE);
+  assert.equal(report.requiredStates.length, 9);
+  assert.equal(Object.keys(states).length, 9);
+  assert.deepEqual(
+    states['adaptive-family-common-descent'].metrics,
+    JSON.parse(fs.readFileSync(`${adaptiveRoot}/result.json`, 'utf8')).selected.metrics,
+  );
+  assert.equal(
+    report.classification.adaptiveCommonDescentTrajectoryConstrainedBoundaryCount,
+    7,
+  );
+  assert.equal(report.classification.adaptiveCommonDescentTrajectoryInteriorBracketCount, 1);
+  assert.match(report.claimCeiling.admittedClaim, /bidirectional radius search/);
+  assert.deepEqual(states['adaptive-family-common-descent'].comparisonOverlay, {
+    baselineState:'repeated-family-common-descent',
+    baselineLabel:'fixed-grid result',
+    baselineResultIdentitySha256:
+      JSON.parse(fs.readFileSync(
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+        'utf8',
+      )).identity.sha256,
+    targetResultIdentitySha256:
+      JSON.parse(fs.readFileSync(`${adaptiveRoot}/result.json`, 'utf8')).identity.sha256,
+    displayGain:80,
+    maximumWorldDisplacement:0.0016642118409631748,
+    rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+  });
+  const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
+  assert.match(html, /fixed-grid rings at true position/);
+  assert.doesNotMatch(html, /fixed-grid ghost at true position/);
+  assert.match(html, /displacement vectors ×80/);
+  assert.match(html, /function addComparisonOverlay/);
+});
+
+test('adaptive viewer invalidates stale generated and captured primaries before failed rebuild', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-adaptive-stale-rerun-'));
+  const adaptiveRoot =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0';
+  const malformed = JSON.parse(fs.readFileSync(`${adaptiveRoot}/result.json`, 'utf8'));
+  malformed.route.effective = 'forged-viewer-rerun-route';
+  const core = structuredClone(malformed);
+  delete core.identity;
+  malformed.identity.sha256 = hashMusclePackingCanonicalJson(core);
+  const malformedPath = path.join(outDir, 'malformed-adaptive-result.json');
+  fs.writeFileSync(malformedPath, `${JSON.stringify(malformed, null, 2)}\n`);
+  for (const name of [
+    'index.html',
+    'fixtures.json',
+    'comparison.json',
+    'visual-inspection.json',
+    'adaptive-family-common-descent-volume.png',
+    'adaptive-family-common-descent-volume-capture-report.json',
+  ]) fs.writeFileSync(path.join(outDir, name), 'stale-success\n');
+
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      commonDescentResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+      commonDescentTrajectoryResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+      commonDescentTrajectoryReportPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+      adaptiveTrajectoryRawPath:`${adaptiveRoot}/raw-trajectory.json`,
+      adaptiveTrajectoryResultPath:malformedPath,
+      adaptiveTrajectoryReportPath:`${adaptiveRoot}/run-report.json`,
+    }),
+    /adaptive trajectory (?:raw binding|report binding|admission semantics|admitted-source manifest mismatch)/,
+  );
+  for (const name of [
+    'index.html',
+    'fixtures.json',
+    'comparison.json',
+    'visual-inspection.json',
+    'adaptive-family-common-descent-volume.png',
+    'adaptive-family-common-descent-volume-capture-report.json',
+  ]) assert.equal(fs.existsSync(path.join(outDir, name)), false, `${name} survived failed rebuild`);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'))).status, 'failed');
+});
+
+test('adaptive viewer removes a partially promoted generation after injected rename failure', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-adaptive-partial-'));
+  const adaptiveRoot =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0';
+  const io = {
+    writeFile:fs.promises.writeFile,
+    rename:async (from, to) => {
+      if (to === path.join(outDir, 'comparison.json')) {
+        throw new Error('injected adaptive viewer promotion failure');
+      }
+      return fs.promises.rename(from, to);
+    },
+  };
+  await assert.rejects(
+    writeNBodyPackingLocalizedHardBoundaryWitness({
+      outDir,
+      commonDescentResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
+      commonDescentTrajectoryResultPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/result.json',
+      commonDescentTrajectoryReportPath:
+        'artifacts/nbody-packing-family-gradient-common-descent-trajectory-v0/run-report.json',
+      adaptiveTrajectoryRawPath:`${adaptiveRoot}/raw-trajectory.json`,
+      adaptiveTrajectoryResultPath:`${adaptiveRoot}/result.json`,
+      adaptiveTrajectoryReportPath:`${adaptiveRoot}/run-report.json`,
+      io,
+    }),
+    /injected adaptive viewer promotion failure/,
+  );
+  for (const name of ['fixtures.json', 'comparison.json', 'index.html']) {
+    assert.equal(fs.existsSync(path.join(outDir, name)), false, `${name} survived partial publish`);
+  }
+  const failure = JSON.parse(fs.readFileSync(path.join(outDir, 'report.json'), 'utf8'));
+  assert.equal(failure.status, 'failed');
+  assert.equal(failure.failurePhase, 'write-primary');
+});
+
 test('trajectory viewer rejects a rehashed malformed intermediate ledger before publishing', async () => {
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-malformed-trajectory-'));
   const result = JSON.parse(fs.readFileSync(
@@ -546,21 +740,7 @@ test('trajectory visual admission requires sixteen route-bound captures', async 
     'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0',
   );
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-trajectory-admission-'));
-  const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({
-    outDir,
-    restorationResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-v0/result.json',
-    trajectoryResultPath:
-      'artifacts/nbody-packing-all-neighbor-restoration-trajectory-v0/result.json',
-  });
-  for (const state of report.requiredStates) for (const mode of report.requiredModes) {
-    const stem = `${state}-${mode}`;
-    fs.copyFileSync(path.join(sourceDir, `${stem}.png`), path.join(outDir, `${stem}.png`));
-    fs.copyFileSync(
-      path.join(sourceDir, `${stem}-capture-report.json`),
-      path.join(outDir, `${stem}-capture-report.json`),
-    );
-  }
+  const report = copyInspectedViewerGenerationAsPending({ sourceDir, outDir });
   const inspection = {
     observedAt:'2026-08-12T00:00:00.000Z',
     summary:'Eight current-config states inspected in transparent volume and opaque slices.',
@@ -594,19 +774,7 @@ test('common-descent visual admission requires fourteen route-bound captures', a
     'artifacts/nbody-packing-family-gradient-common-descent-viewer-v0',
   );
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-common-admission-'));
-  const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({
-    outDir,
-    commonDescentResultPath:
-      'artifacts/nbody-packing-family-gradient-common-descent-v0/result.json',
-  });
-  for (const state of report.requiredStates) for (const mode of report.requiredModes) {
-    const stem = `${state}-${mode}`;
-    fs.copyFileSync(path.join(sourceDir, `${stem}.png`), path.join(outDir, `${stem}.png`));
-    fs.copyFileSync(
-      path.join(sourceDir, `${stem}-capture-report.json`),
-      path.join(outDir, `${stem}-capture-report.json`),
-    );
-  }
+  const report = copyInspectedViewerGenerationAsPending({ sourceDir, outDir });
   const inspection = {
     observedAt:'2026-08-12T00:00:00.000Z',
     summary:'Seven route-bound states inspected in transparent volume and opaque slices.',
