@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.4064909517765045,
+      0.18678200244903564,
+      0.4402801990509033
+    ],
+    "low": [
+      -0.46702051162719727,
+      -0.16870224475860596,
+      -0.3111233711242676
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/organic-skin/sf3d/output.glb",
+    "sha256": "f98190dba00fd1cbdddcf8cd3b1e5dc562dc234d93aef6f0cbe2d0d3cac38c55"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 532850,
+      "cameraLocation": [
+        2.0927786827087402,
+        0.009039878845214844,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.0082563161849976,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az000-el12.png",
+      "sha256": "db8f50bb346cf4398f21a719e324a487ca086d8a1ae6589ead8f99519325f1dc"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 557475,
+      "cameraLocation": [
+        1.0312570333480835,
+        1.8476494550704956,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.0276477336883545,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az060-el12.png",
+      "sha256": "a1069b257193ce1d07e57667a57971b63c481a8e4f745c9b13beae7e5ece4110"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 558271,
+      "cameraLocation": [
+        -1.091786503791809,
+        1.8476494550704956,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.027647614479065,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az120-el12.png",
+      "sha256": "8dee15e667493ac30ae912084f38e2a6ee7b33b02a8f31c9c6e5d94f9a2e50c9"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 522855,
+      "cameraLocation": [
+        -2.153308391571045,
+        0.009039878845214844,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.0082563161849976,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az180-el12.png",
+      "sha256": "f781c11d96c885a6586e369bd45a620e4d7d52c281b24bff50ff2a9978d7e2b0"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 549228,
+      "cameraLocation": [
+        -1.091786503791809,
+        -1.829569697380066,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.0276477336883545,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az240-el12.png",
+      "sha256": "5d7234e0db1cea3cd33bac72691048af3c5b91adba2a80158e029d780a0386fe"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 562623,
+      "cameraLocation": [
+        1.0312570333480835,
+        -1.829569697380066,
+        0.5158452391624451
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.027647852897644,
+      "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/renders/organic-skin/sf3d/orbit/az300-el12.png",
+      "sha256": "5314ce24a78d95cd7847282ccc6cf99d3877b76f81552ac51e668059ea0e3220"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 11388
+}

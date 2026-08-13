@@ -1,0 +1,74 @@
+{
+  "schema": "kaminos.representative-sf3d-comparison.submissions.v0",
+  "cells": {
+    "rigid-stone-slabs": {
+      "jobId": "0360328bf985",
+      "jobType": "sf3d",
+      "source": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+      "sourceSha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117",
+      "outputDir": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/rigid-stone-slabs/sf3d",
+      "requestedParams": {
+        "dtype": "float16",
+        "remesh": "none",
+        "texture_resolution": "1024"
+      },
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "sf3d",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/rigid-stone-slabs/sf3d",
+        "-p",
+        "dtype=float16",
+        "remesh=none",
+        "texture_resolution=1024"
+      ]
+    },
+    "ornate-dragon": {
+      "jobId": "86feea818453",
+      "jobType": "sf3d",
+      "source": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+      "sourceSha256": "7a4fc1c118e0ee65484b6235d5ff17cacea802c9e9588262f5eb2420d8c75bd8",
+      "outputDir": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/ornate-dragon/sf3d",
+      "requestedParams": {
+        "dtype": "float16",
+        "remesh": "none",
+        "texture_resolution": "1024"
+      },
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "sf3d",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/ornate-dragon/sf3d",
+        "-p",
+        "dtype=float16",
+        "remesh=none",
+        "texture_resolution=1024"
+      ]
+    },
+    "organic-skin": {
+      "jobId": "5ea77d5057a3",
+      "jobType": "sf3d",
+      "source": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+      "sourceSha256": "cf52bc34d676576d127de259b7f8b07a03e44f2a24e4b76cb1984dff3bc8f7e2",
+      "outputDir": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/organic-skin/sf3d",
+      "requestedParams": {
+        "dtype": "float16",
+        "remesh": "none",
+        "texture_resolution": "1024"
+      },
+      "requestedCommand": [
+        "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom",
+        "submit",
+        "sf3d",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/organic-skin/sf3d",
+        "-p",
+        "dtype=float16",
+        "remesh=none",
+        "texture_resolution=1024"
+      ]
+    }
+  }
+}

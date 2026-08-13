@@ -1,0 +1,34 @@
+{
+  "schema": "kaminos.representative-sf3d-comparison.visual-disposition.v0",
+  "inspectionBasis": "Manual inspection of the exact source and all six matched textured orbit views for both routes.",
+  "campaignVerdict": "Stable Fast 3D is a useful source-fidelity counter-route, especially for rigid or stylized component masses. Trellis remains the stronger whole-object coherence route for the ornate and organic cells in this assay.",
+  "cells": {
+    "rigid-stone-slabs": {
+      "preferredRoute": "sf3d",
+      "visibleReason": "SF3D preserves the source's stocky silhouette, broad torso, and thick overlapping stone masses. Trellis keeps a more explicitly separable armor grammar but normalizes the body toward a leaner articulated creature.",
+      "residualRisk": "SF3D softens some plate boundaries and fuses local structure; this is a source-fidelity preference, not mechanical or production admission.",
+      "inspectedSheets": {
+        "sf3d": {"path": "inspection/rigid-stone-slabs-sf3d.png", "sha256": "650bdcc5be0d33535aaa3ae4974e45961dbf55bfaf5ac3a9626eaa94ff07f388"},
+        "trellis": {"path": "inspection/rigid-stone-slabs-trellis.png", "sha256": "47b3a5746ef2b10d0ce317a7c1e47a454e982132dc7081e31b0709df429834e0"}
+      }
+    },
+    "ornate-dragon": {
+      "preferredRoute": "trellis",
+      "visibleReason": "Trellis produces a substantially more coherent all-around dragon with reliable limbs, horns, tail, and dorsal structure. SF3D remains attractive near the conditioned view but its far-side horn, feet, and body junctions are less trustworthy.",
+      "residualRisk": "Trellis changes source proportions and surface organization more strongly; preference is for whole-object coherence, not one-to-one source identity.",
+      "inspectedSheets": {
+        "sf3d": {"path": "inspection/ornate-dragon-sf3d.png", "sha256": "4c26c09ccc92baf9e771108bb55ffcf6d3ddf9b1c2d337e1fddce3a56b79dfb6"},
+        "trellis": {"path": "inspection/ornate-dragon-trellis.png", "sha256": "53868635b1abbcae8819c8af7e4ec93c32a0c52e8a101ae95d84d2716aa38acb"}
+      }
+    },
+    "organic-skin": {
+      "preferredRoute": "trellis",
+      "visibleReason": "Trellis completes a more coherent organism across hidden views. SF3D stays somewhat closer to the visible source proportions but loses authority around the hidden face, ears, distal limbs, and bilateral completion.",
+      "residualRisk": "Neither route is admitted for rigging or anatomical fidelity; Trellis wins only this source-specific usable-geometry comparison.",
+      "inspectedSheets": {
+        "sf3d": {"path": "inspection/organic-skin-sf3d.png", "sha256": "fce81f77bd9ec7fe99958f3e5834952fce1ad59495b426b8ae857b82f5969d82"},
+        "trellis": {"path": "inspection/organic-skin-trellis.png", "sha256": "37e09b32d609d844d69bd0a59494b6a39d37693850158f017e410fe3ee2a4138"}
+      }
+    }
+  }
+}

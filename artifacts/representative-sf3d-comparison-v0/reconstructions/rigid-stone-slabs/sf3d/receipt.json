@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "output.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 8.58,
+  "inference_time_s": 8.74,
+  "total_time_s": 24.17,
+  "output_glb": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/rigid-stone-slabs/sf3d/output.glb",
+  "output_size_mb": 0.97,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 31358.0
+}

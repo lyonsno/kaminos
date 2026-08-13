@@ -1,0 +1,124 @@
+{
+  "schema": "kaminos.representative-sf3d-comparison.ledger.v0",
+  "question": "Across rigid assemblies, ornate appendages, and continuous organic anatomy, where does Stable Fast 3D reconstruct the source more usefully than the matched Trellis cast?",
+  "claimCeiling": "Source-specific route comparison across three representative plates; not general reconstruction superiority or production admission.",
+  "cells": {
+    "rigid-stone-slabs": {
+      "class": "rigid-separable-assembly",
+      "question": "Does SF3D preserve independently legible overlapping slabs more faithfully than Trellis?",
+      "source": {
+        "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+        "sha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117"
+      },
+      "routes": {
+        "sf3d": {
+          "jobId": "0360328bf985",
+          "jobType": "sf3d",
+          "input": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+          "inputSha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/rigid-stone-slabs/sf3d/output.glb",
+          "outputSha256": "ec99d4545017d906d7fec8ebe059b671c43daa8dd3f026f70900c4bce8dd3d6a",
+          "outputBytes": 1019204,
+          "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/0360328bf985/receipt.json",
+          "effectiveRoute": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png --output-dir /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/rigid-stone-slabs/sf3d --texture-resolution 1024 --remesh none --dtype float16",
+          "effectiveCwd": "/Users/noahlyons/dev/sf3d",
+          "effectiveEnv": {
+            "PYTHONPATH": ".",
+            "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+          },
+          "effectiveDefaults": {
+            "dtype": "float16",
+            "remesh": "none",
+            "texture_resolution": "1024"
+          }
+        },
+        "trellis": {
+          "jobType": "trellis2mlx_fast",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/output.glb",
+          "outputSha256": "c1330fd20d151bb26d5dc64073ed88f6d147c694429346f5c14411ad6b9e261d",
+          "outputBytes": 8748420,
+          "ledger": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis-result-ledger.json",
+          "ledgerCell": "stone-thick-overlapping-slabs-seed80301"
+        }
+      }
+    },
+    "ornate-dragon": {
+      "class": "ornate-organic-appendages",
+      "question": "Does SF3D retain horns, dorsal spines, claws, and fine surface articulation more coherently than Trellis?",
+      "source": {
+        "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+        "sha256": "7a4fc1c118e0ee65484b6235d5ff17cacea802c9e9588262f5eb2420d8c75bd8"
+      },
+      "routes": {
+        "sf3d": {
+          "jobId": "86feea818453",
+          "jobType": "sf3d",
+          "input": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+          "inputSha256": "7a4fc1c118e0ee65484b6235d5ff17cacea802c9e9588262f5eb2420d8c75bd8",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/ornate-dragon/sf3d/output.glb",
+          "outputSha256": "a69c1a79bef01ac035ae08e2c0d1e63af9c1a0cb8b2191a3857f788993d77b9f",
+          "outputBytes": 1147176,
+          "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/86feea818453/receipt.json",
+          "effectiveRoute": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png --output-dir /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/ornate-dragon/sf3d --texture-resolution 1024 --remesh none --dtype float16",
+          "effectiveCwd": "/Users/noahlyons/dev/sf3d",
+          "effectiveEnv": {
+            "PYTHONPATH": ".",
+            "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+          },
+          "effectiveDefaults": {
+            "dtype": "float16",
+            "remesh": "none",
+            "texture_resolution": "1024"
+          }
+        },
+        "trellis": {
+          "jobType": "trellis2mlx_fast",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/dragon-lighting-01-seed80301/output.glb",
+          "outputSha256": "ed5b836890a8fb1372d0cf8c04cb9b4242e0c9a6c2ceb954a0c17f403b474cba",
+          "outputBytes": 10632800,
+          "ledger": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis-result-ledger.json",
+          "ledgerCell": "dragon-lighting-01-seed80301"
+        }
+      }
+    },
+    "organic-skin": {
+      "class": "continuous-organic-anatomy",
+      "question": "On a smooth anatomical surface, does SF3D preserve the authored silhouette and limb organization more usefully than Trellis?",
+      "source": {
+        "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+        "sha256": "cf52bc34d676576d127de259b7f8b07a03e44f2a24e4b76cb1984dff3bc8f7e2"
+      },
+      "routes": {
+        "sf3d": {
+          "jobId": "5ea77d5057a3",
+          "jobType": "sf3d",
+          "input": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+          "inputSha256": "cf52bc34d676576d127de259b7f8b07a03e44f2a24e4b76cb1984dff3bc8f7e2",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/organic-skin/sf3d/output.glb",
+          "outputSha256": "f98190dba00fd1cbdddcf8cd3b1e5dc562dc234d93aef6f0cbe2d0d3cac38c55",
+          "outputBytes": 762980,
+          "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5ea77d5057a3/receipt.json",
+          "effectiveRoute": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png --output-dir /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/representative-sf3d-comparison-v0/reconstructions/organic-skin/sf3d --texture-resolution 1024 --remesh none --dtype float16",
+          "effectiveCwd": "/Users/noahlyons/dev/sf3d",
+          "effectiveEnv": {
+            "PYTHONPATH": ".",
+            "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+          },
+          "effectiveDefaults": {
+            "dtype": "float16",
+            "remesh": "none",
+            "texture_resolution": "1024"
+          }
+        },
+        "trellis": {
+          "jobType": "trellis2mlx_fast",
+          "output": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+          "outputSha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a",
+          "outputBytes": 8984788,
+          "ledger": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/latest-envelope-basin-reconstruction-v0/trellis-ledger.json",
+          "ledgerCell": "skin-seed80413"
+        }
+      }
+    }
+  }
+}

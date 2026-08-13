@@ -7,6 +7,7 @@ from comparison_contract import (
     admit_sf3d_result,
     validate_campaign,
     validate_complete_orbits,
+    validate_visual_disposition,
 )
 
 
@@ -22,6 +23,15 @@ class CampaignTests(unittest.TestCase):
                 "ornate-organic-appendages",
                 "continuous-organic-anatomy",
             },
+        )
+
+    def test_visual_disposition_covers_every_campaign_cell(self):
+        root = Path(__file__).resolve().parent
+        campaign = validate_campaign(root, root.parents[1])
+        disposition = validate_visual_disposition(root, campaign)
+        self.assertEqual(
+            set(disposition["cells"]),
+            {cell["id"] for cell in campaign["cells"]},
         )
 
 

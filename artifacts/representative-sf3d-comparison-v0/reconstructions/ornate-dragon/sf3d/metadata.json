@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "sf3d",
+  "job_id": "86feea818453",
+  "input_path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+  "input_name": "output.png",
+  "params": {
+    "dtype": "float16",
+    "remesh": "none",
+    "texture_resolution": "1024"
+  },
+  "output_files": [
+    "input.png",
+    "output.glb",
+    "receipt.json"
+  ],
+  "created_at": 1786643596.27612,
+  "duration_s": 21.8
+}

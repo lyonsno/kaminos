@@ -115,3 +115,28 @@ def validate_complete_orbits(root: Path, ledger: dict) -> None:
                 output = Path(item["path"])
                 if not output.is_file() or output.stat().st_size == 0:
                     raise RuntimeError(f"blank six-view orbit output: {cell_id}/{route_id}")
+
+
+def validate_visual_disposition(root: Path, campaign: dict) -> dict:
+    disposition_path = root / "visual-disposition.json"
+    if not disposition_path.is_file():
+        raise RuntimeError("visual disposition is absent")
+    disposition = json.loads(disposition_path.read_text())
+    if disposition.get("schema") != "kaminos.representative-sf3d-comparison.visual-disposition.v0":
+        raise RuntimeError("unexpected visual disposition schema")
+    cells = disposition.get("cells") or {}
+    expected = {cell["id"] for cell in campaign["cells"]}
+    if set(cells) != expected:
+        raise RuntimeError("visual disposition does not cover every campaign cell")
+    for cell_id, cell in cells.items():
+        if cell.get("preferredRoute") not in {"sf3d", "trellis"}:
+            raise RuntimeError(f"invalid preferred route: {cell_id}")
+        if not cell.get("visibleReason") or not cell.get("residualRisk"):
+            raise RuntimeError(f"incomplete visual disposition: {cell_id}")
+        sheets = cell.get("inspectedSheets") or {}
+        for route_id in ("sf3d", "trellis"):
+            item = sheets.get(route_id) or {}
+            path = root / item.get("path", "")
+            if not path.is_file() or digest(path) != item.get("sha256"):
+                raise RuntimeError(f"visual inspection sheet drifted: {cell_id}/{route_id}")
+    return disposition
