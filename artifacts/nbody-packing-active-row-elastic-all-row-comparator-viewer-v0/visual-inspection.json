@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-13T18:01:22.113Z",
+  "summary": "All six exact-route frames were personally inspected at original resolution. The source and strict active-row control remain physically coincident; the elastic all-row arm makes a small distributed true-position movement, legible in opaque slices and distinguished from the x60 display-only rings and arrows, without endpoint drift, volume loss, gross folding, escape, or identity inversion.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "sharedSourceLegible": true,
+    "strictControlStasisLegible": true,
+    "elasticComparatorMotionLegible": true,
+    "truePositionAndAmplificationDistinct": true,
+    "endpointAndVolumePreservationLegible": true,
+    "residualDebtLegible": true,
+    "equalBudgetAuthorityLegible": true,
+    "syntheticAuthorityCeilingLegible": true,
+    "packingSemanticsNotInverted": true
+  },
+  "route": {
+    "requested": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+    "effective": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "step-16-source",
+      "mode": "volume",
+      "png": "step-16-source-volume.png",
+      "pngSha256": "c3940f92a05e7930688a77ca1727224127e2fe410b1556d44285c0512112b985",
+      "captureReport": "step-16-source-volume-capture-report.json",
+      "captureReportSha256": "3943ec0794ded3d7137650c295437e489f476ca60299fa642244780d4ea9485f",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "step-16-source",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    },
+    {
+      "state": "step-16-source",
+      "mode": "slice",
+      "png": "step-16-source-slice.png",
+      "pngSha256": "c76dd622c2a3b171771236be5afcadf86456f18a632ad2b236c265602da1e5e6",
+      "captureReport": "step-16-source-slice-capture-report.json",
+      "captureReportSha256": "f8d3962c3906ad4f4d2f1018eb0b17e6a831fb47d9a6f5813a8204ec08a82985",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "step-16-source",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    },
+    {
+      "state": "active-row-control",
+      "mode": "volume",
+      "png": "active-row-control-volume.png",
+      "pngSha256": "4d07d0b3485a135de927041788502ee82e7d0488bca2bd1487fc73dec82c0e2b",
+      "captureReport": "active-row-control-volume-capture-report.json",
+      "captureReportSha256": "3bc9134741c76e32953ccab30eb5ddc9b8047cc7829603a9d166988905441aef",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-control",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    },
+    {
+      "state": "active-row-control",
+      "mode": "slice",
+      "png": "active-row-control-slice.png",
+      "pngSha256": "7d4c826f78bb77a61b5b9d7405bfec2265ec51757841621671e644e604e55364",
+      "captureReport": "active-row-control-slice-capture-report.json",
+      "captureReportSha256": "8c2176640c80c77f95a0adb2d0a8409c8de9c6c354ab19d648cbd899fad05709",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-control",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    },
+    {
+      "state": "elastic-all-row-comparator",
+      "mode": "volume",
+      "png": "elastic-all-row-comparator-volume.png",
+      "pngSha256": "83009aa4d412be98acbc4c950313ae980e43dfce85d555528749ddfa56342fc2",
+      "captureReport": "elastic-all-row-comparator-volume-capture-report.json",
+      "captureReportSha256": "e93055f0e5802488709af8eade7b05fde306169e93f99f4bd8c78c5c72c40b8e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "elastic-all-row-comparator",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    },
+    {
+      "state": "elastic-all-row-comparator",
+      "mode": "slice",
+      "png": "elastic-all-row-comparator-slice.png",
+      "pngSha256": "18093245b24b89db300260efba37d082c5627aa722f1458106099ca0ca476070",
+      "captureReport": "elastic-all-row-comparator-slice-capture-report.json",
+      "captureReportSha256": "9eead329cae7742ef31936f33dcc3d3aaa982a29b79a3f1c1f7063fd24ad6348",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "elastic-all-row-comparator",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335"
+      }
+    }
+  ],
+  "claimCeiling": {
+    "admittedClaim": "same-camera true-position visual comparison of one equal-budget source-bound control/comparator step",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "production-architecture-selection",
+      "global-convergence",
+      "carrier-sufficiency",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition"
+    ]
+  },
+  "identity": {
+    "sha256": "71f89cee02ee1d756c9466873af12b2112918791009804c763378f1d2716dddd"
+  }
+}

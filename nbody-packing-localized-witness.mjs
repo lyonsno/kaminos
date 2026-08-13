@@ -32,6 +32,8 @@ export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE =
   'nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0';
 export const NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE =
   'nbody-packing-active-row-trust-region-trajectory-v0';
+export const NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE =
+  'nbody-packing-elastic-all-row-comparator-viewer-v0';
 export const NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA =
   'kaminos.nbody-packing-localized-boundary-witness.v0';
 
@@ -71,6 +73,14 @@ const ACTIVE_ROW_TRAJECTORY_VISUAL_VERDICT_KEYS = Object.freeze([
   'authenticatedAdaptiveBaselineLegible', 'activeTrajectoryMotionLegible',
   'largeRadiusStepsLegible', 'endpointAndVolumePreservationLegible',
   'residualDebtLegible', 'manufacturedWitnessAuthorityCeilingLegible',
+  'packingSemanticsNotInverted',
+]);
+const ELASTIC_ALL_ROW_COMPARATOR_VISUAL_VERDICT_KEYS = Object.freeze([
+  'nonblank', 'orbitable', 'sameCameraComparison',
+  'sharedSourceLegible', 'strictControlStasisLegible',
+  'elasticComparatorMotionLegible', 'truePositionAndAmplificationDistinct',
+  'endpointAndVolumePreservationLegible', 'residualDebtLegible',
+  'equalBudgetAuthorityLegible', 'syntheticAuthorityCeilingLegible',
   'packingSemanticsNotInverted',
 ]);
 
@@ -344,7 +354,9 @@ export async function admitNBodyPackingLocalizedVisualInspection({
   const reportPath = path.join(outputRoot, 'report.json');
   const report = JSON.parse(String(await readFile(reportPath)));
   const verdictKeys = report.route?.effective ===
-    NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE
+    NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE
+    ? ELASTIC_ALL_ROW_COMPARATOR_VISUAL_VERDICT_KEYS
+    : report.route?.effective === NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE
     ? ACTIVE_ROW_TRAJECTORY_VISUAL_VERDICT_KEYS
     : report.route?.effective === NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
     ? ADAPTIVE_TRAJECTORY_VISUAL_VERDICT_KEYS
@@ -377,6 +389,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
       NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
       NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
       NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+      NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
     ].includes(report.route?.effective) ||
     report.route?.fallbackUsed !== false
   ) throw new Error('localized visual admission requires exact pending witness');

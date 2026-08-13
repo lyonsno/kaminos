@@ -15,6 +15,8 @@ export const NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_RESULT_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-result.v0';
 export const NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-trajectory-result.v0';
+export const NBODY_PACKING_ELASTIC_ALL_ROW_RESULT_SCHEMA =
+  'kaminos.nbody-packing-elastic-all-row-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
@@ -29,6 +31,8 @@ const ACTIVE_ROW_TRUST_REGION_ALGORITHM =
   'active-row-minimum-norm-common-descent-trust-region-v0';
 const ACTIVE_ROW_TRUST_REGION_TRAJECTORY_ALGORITHM =
   'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
+const ELASTIC_ALL_ROW_ALGORITHM =
+  'elastic-all-row-linearized-least-squares-trust-region-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -196,6 +200,113 @@ function normalized(vector) {
   const norm = Math.hypot(...vector);
   if (!(norm > 0) || !Number.isFinite(norm)) return { norm, vector:null };
   return { norm, vector:vector.map(value => value / norm) };
+}
+
+function allRowSquaredViolationEnergy(state) {
+  return state.rows.reduce(
+    (sum, row) => sum + Math.max(0, -row.signedGap) ** 2,
+    0,
+  );
+}
+
+function solvePivotedLinearSystem(matrix, rightHandSide, pivotTolerance) {
+  const size = rightHandSide.length;
+  if (
+    matrix.length !== size ||
+    matrix.some(row => row.length !== size || row.some(value => !Number.isFinite(value))) ||
+    rightHandSide.some(value => !Number.isFinite(value))
+  ) throw new Error('elastic all-row normal equations must be square and finite');
+  const augmented = matrix.map((row, index) => [...row, rightHandSide[index]]);
+  for (let column = 0; column < size; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivot][column])) pivot = row;
+    }
+    if (Math.abs(augmented[pivot][column]) <= pivotTolerance) {
+      throw new Error(`elastic all-row normal-equation pivot collapsed at ${column}`);
+    }
+    [augmented[column], augmented[pivot]] = [augmented[pivot], augmented[column]];
+    const divisor = augmented[column][column];
+    for (let index = column; index <= size; index += 1) {
+      augmented[column][index] /= divisor;
+    }
+    for (let row = 0; row < size; row += 1) {
+      if (row === column) continue;
+      const factor = augmented[row][column];
+      if (factor === 0) continue;
+      for (let index = column; index <= size; index += 1) {
+        augmented[row][index] -= factor * augmented[column][index];
+      }
+    }
+  }
+  return augmented.map(row => row[size]);
+}
+
+function solveBoundedNormalEquations({
+  matrix,
+  rightHandSide,
+  radius,
+  pivotTolerance,
+  convergenceTolerance,
+  iterationBudget,
+}) {
+  const shifted = shift => matrix.map((row, rowIndex) => row.map(
+    (value, columnIndex) => value + (rowIndex === columnIndex ? shift : 0),
+  ));
+  const unconstrained = solvePivotedLinearSystem(matrix, rightHandSide, pivotTolerance);
+  const unconstrainedNorm = Math.hypot(...unconstrained);
+  if (unconstrainedNorm <= radius + convergenceTolerance) {
+    return { vector:unconstrained, multiplier:0, iterations:0, converged:true };
+  }
+  let lower = 0;
+  let upper = 1;
+  let upperVector = solvePivotedLinearSystem(
+    shifted(upper),
+    rightHandSide,
+    pivotTolerance,
+  );
+  let expansionIterations = 0;
+  while (Math.hypot(...upperVector) > radius && expansionIterations < iterationBudget) {
+    lower = upper;
+    upper *= 2;
+    upperVector = solvePivotedLinearSystem(
+      shifted(upper),
+      rightHandSide,
+      pivotTolerance,
+    );
+    expansionIterations += 1;
+  }
+  if (Math.hypot(...upperVector) > radius) {
+    return {
+      vector:upperVector,
+      multiplier:upper,
+      iterations:expansionIterations,
+      converged:false,
+    };
+  }
+  let vector = upperVector;
+  let multiplier = upper;
+  let iterations = expansionIterations;
+  for (; iterations < iterationBudget; iterations += 1) {
+    multiplier = (lower + upper) / 2;
+    vector = solvePivotedLinearSystem(
+      shifted(multiplier),
+      rightHandSide,
+      pivotTolerance,
+    );
+    const norm = Math.hypot(...vector);
+    if (Math.abs(norm - radius) <= convergenceTolerance) {
+      return { vector, multiplier, iterations:iterations + 1, converged:true };
+    }
+    if (norm > radius) lower = multiplier;
+    else upper = multiplier;
+  }
+  return {
+    vector,
+    multiplier,
+    iterations,
+    converged:Math.hypot(...vector) <= radius + convergenceTolerance,
+  };
 }
 
 function minimumNormConvexCombination(vectors) {
@@ -667,6 +778,410 @@ export function solveNBodyActiveRowTrustRegionStep({
     },
     claimCeiling:
       'bounded-severity-0.32-active-row-step-or-local-floor-certificate-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyElasticAllRowComparatorConfig() {
+  return {
+    algorithm:ELASTIC_ALL_ROW_ALGORITHM,
+    candidateEnumeration:'canonical',
+    convergenceTolerance:1e-12,
+    familyTradeoffAllowance:0.00004249551501,
+    finiteDifferenceStep:1e-5,
+    improvementTolerance:1e-12,
+    internalIterationBudget:64,
+    pivotTolerance:1e-14,
+    slackPenalty:1,
+    stepRegularization:1e-4,
+    translationBounds:[-0.3, 0.3],
+    trustRegionRadii:[
+      0.001,
+      0.0005,
+      0.00025,
+      0.000125,
+      0.0000625,
+      0.00003125,
+      0.000015625,
+      0.0000078125,
+      0.00000390625,
+      0.000001953125,
+      0.0000009765625,
+      0.00000048828125,
+      0.000000244140625,
+      0.0000001220703125,
+      0.00000006103515625,
+      0.000000030517578125,
+      0.0000000152587890625,
+      0.00000000762939453125,
+      0.000000003814697265625,
+      0.0000000019073486328125,
+    ],
+  };
+}
+
+export function solveNBodyElasticAllRowComparatorStep({
+  problem,
+  startVector,
+  requestedConfig = createNBodyElasticAllRowComparatorConfig(),
+} = {}) {
+  const expectedKeys = [
+    'algorithm',
+    'candidateEnumeration',
+    'convergenceTolerance',
+    'familyTradeoffAllowance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'internalIterationBudget',
+    'pivotTolerance',
+    'slackPenalty',
+    'stepRegularization',
+    'translationBounds',
+    'trustRegionRadii',
+  ].sort();
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `elastic all-row requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ELASTIC_ALL_ROW_ALGORITHM) {
+    throw new Error('elastic all-row algorithm identity is unsupported');
+  }
+  if (!['canonical', 'reverse'].includes(requestedConfig.candidateEnumeration)) {
+    throw new Error('elastic all-row candidateEnumeration must be canonical or reverse');
+  }
+  for (const key of [
+    'convergenceTolerance',
+    'familyTradeoffAllowance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'pivotTolerance',
+    'slackPenalty',
+    'stepRegularization',
+  ]) {
+    if (!Number.isFinite(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`elastic all-row ${key} must be positive and finite`);
+    }
+  }
+  if (
+    !Number.isInteger(requestedConfig.internalIterationBudget) ||
+    requestedConfig.internalIterationBudget <= 0
+  ) throw new Error('elastic all-row internalIterationBudget must be a positive integer');
+  if (
+    !Array.isArray(requestedConfig.translationBounds) ||
+    requestedConfig.translationBounds.length !== 2 ||
+    !requestedConfig.translationBounds.every(Number.isFinite) ||
+    requestedConfig.translationBounds[0] >= requestedConfig.translationBounds[1]
+  ) throw new Error('elastic all-row translationBounds must be an ordered finite pair');
+  if (
+    !Array.isArray(requestedConfig.trustRegionRadii) ||
+    requestedConfig.trustRegionRadii.length === 0 ||
+    requestedConfig.trustRegionRadii.some(value => !Number.isFinite(value) || value <= 0) ||
+    requestedConfig.trustRegionRadii.some(
+      (value, index) => index > 0 && value >= requestedConfig.trustRegionRadii[index - 1],
+    )
+  ) throw new Error('elastic all-row radii must be strictly decreasing');
+  validateStart(problem, startVector, requestedConfig.translationBounds);
+
+  const startState = evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  let evaluationCount = 1;
+  const sourceRows = [...startState.rows].sort((left, right) => left.key.localeCompare(right.key));
+  const sourceKeys = sourceRows.map(row => row.key);
+  if (new Set(sourceKeys).size !== sourceKeys.length) {
+    throw new Error('elastic all-row source row keys must be unique');
+  }
+  const gradients = sourceRows.map(() => Array(startVector.length).fill(0));
+  for (let axis = 0; axis < startVector.length; axis += 1) {
+    const positive = clampVector(startVector.map((value, index) =>
+      index === axis ? value + requestedConfig.finiteDifferenceStep : value
+    ), requestedConfig.translationBounds);
+    const negative = clampVector(startVector.map((value, index) =>
+      index === axis ? value - requestedConfig.finiteDifferenceStep : value
+    ), requestedConfig.translationBounds);
+    const span = positive[axis] - negative[axis];
+    if (!(span > 0)) {
+      throw new Error(`elastic all-row finite-difference span collapsed at ${axis}`);
+    }
+    const positiveState = evaluateNBodyUnifiedKktState({ problem, vector:positive });
+    const negativeState = evaluateNBodyUnifiedKktState({ problem, vector:negative });
+    evaluationCount += 2;
+    const positiveRows = [...positiveState.rows]
+      .sort((left, right) => left.key.localeCompare(right.key));
+    const negativeRows = [...negativeState.rows]
+      .sort((left, right) => left.key.localeCompare(right.key));
+    if (
+      JSON.stringify(positiveRows.map(row => row.key)) !== JSON.stringify(sourceKeys) ||
+      JSON.stringify(negativeRows.map(row => row.key)) !== JSON.stringify(sourceKeys)
+    ) throw new Error(`elastic all-row row keys changed at finite-difference axis ${axis}`);
+    for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
+      gradients[rowIndex][axis] = (
+        positiveRows[rowIndex].signedGap - negativeRows[rowIndex].signedGap
+      ) / span;
+    }
+  }
+
+  let activeIndices = sourceRows
+    .map((row, index) => row.signedGap < 0 ? index : null)
+    .filter(index => index !== null);
+  let displacement = Array(startVector.length).fill(0);
+  let multiplier = 0;
+  let internalIterations = 0;
+  let trustRegionIterations = 0;
+  let converged = false;
+  for (; internalIterations < requestedConfig.internalIterationBudget; internalIterations += 1) {
+    const matrix = Array.from({ length:startVector.length }, (_, row) =>
+      Array.from({ length:startVector.length }, (_, column) =>
+        row === column ? requestedConfig.stepRegularization : 0
+      )
+    );
+    const rightHandSide = Array(startVector.length).fill(0);
+    for (const rowIndex of activeIndices) {
+      const gradient = gradients[rowIndex];
+      const gap = sourceRows[rowIndex].signedGap;
+      for (let row = 0; row < startVector.length; row += 1) {
+        rightHandSide[row] -= requestedConfig.slackPenalty * gradient[row] * gap;
+        for (let column = 0; column < startVector.length; column += 1) {
+          matrix[row][column] += requestedConfig.slackPenalty *
+            gradient[row] * gradient[column];
+        }
+      }
+    }
+    const bounded = solveBoundedNormalEquations({
+      matrix,
+      rightHandSide,
+      radius:requestedConfig.trustRegionRadii[0],
+      pivotTolerance:requestedConfig.pivotTolerance,
+      convergenceTolerance:requestedConfig.convergenceTolerance,
+      iterationBudget:requestedConfig.internalIterationBudget,
+    });
+    displacement = bounded.vector;
+    multiplier = bounded.multiplier;
+    trustRegionIterations += bounded.iterations;
+    if (!bounded.converged) break;
+    const nextActiveIndices = sourceRows
+      .map((row, index) => row.signedGap + dot(gradients[index], displacement) < 0
+        ? index
+        : null)
+      .filter(index => index !== null);
+    if (JSON.stringify(nextActiveIndices) === JSON.stringify(activeIndices)) {
+      activeIndices = nextActiveIndices;
+      converged = true;
+      internalIterations += 1;
+      break;
+    }
+    activeIndices = nextActiveIndices;
+  }
+
+  const predictedGaps = sourceRows.map(
+    (row, index) => row.signedGap + dot(gradients[index], displacement),
+  );
+  const predictedSlacks = predictedGaps.map(gap => Math.max(0, -gap));
+  const finalActiveSet = predictedSlacks
+    .map((slack, index) => slack > 0 ? index : null)
+    .filter(index => index !== null);
+  const normalGradient = displacement.map(value => requestedConfig.stepRegularization * value);
+  for (const rowIndex of finalActiveSet) {
+    const residual = sourceRows[rowIndex].signedGap + dot(gradients[rowIndex], displacement);
+    for (let axis = 0; axis < normalGradient.length; axis += 1) {
+      normalGradient[axis] += requestedConfig.slackPenalty *
+        gradients[rowIndex][axis] * residual;
+    }
+  }
+  if (multiplier > 0) {
+    for (let axis = 0; axis < normalGradient.length; axis += 1) {
+      normalGradient[axis] += multiplier * displacement[axis];
+    }
+  }
+  const normalEquationResidual = Math.max(...normalGradient.map(Math.abs));
+  const normalizedDisplacement = normalized(displacement);
+  const direction = normalizedDisplacement.vector;
+  const beforeFamilies = constraintFamilyMetrics(startState);
+  const sourceEnergy = allRowSquaredViolationEnergy(startState);
+  const candidateDirection = direction || Array(startVector.length).fill(0);
+  const enumeratedRadii = requestedConfig.candidateEnumeration === 'canonical'
+    ? [...requestedConfig.trustRegionRadii]
+    : [...requestedConfig.trustRegionRadii].reverse();
+  const evaluatedCandidates = enumeratedRadii.map(radius => {
+    const vector = clampVector(
+      startVector.map((value, axis) => value + radius * candidateDirection[axis]),
+      requestedConfig.translationBounds,
+    );
+    const actualDisplacement = vector.map(
+      (value, axis) => value - startVector[axis],
+    );
+    const candidatePredictedGaps = sourceRows.map(
+      (row, index) => row.signedGap + dot(gradients[index], actualDisplacement),
+    );
+    const candidatePredictedSlacks = candidatePredictedGaps.map(
+      gap => Math.max(0, -gap),
+    );
+    const state = evaluateNBodyUnifiedKktState({ problem, vector });
+    evaluationCount += 1;
+    const rows = [...state.rows].sort((left, right) => left.key.localeCompare(right.key));
+    if (JSON.stringify(rows.map(row => row.key)) !== JSON.stringify(sourceKeys)) {
+      throw new Error(`elastic all-row row keys changed at nonlinear radius ${radius}`);
+    }
+    const energy = allRowSquaredViolationEnergy(state);
+    const families = constraintFamilyMetrics(state);
+    const rejectionReasons = [];
+    if (!converged) rejectionReasons.push('linearized-subproblem-not-converged');
+    if (!direction) rejectionReasons.push('linearized-subproblem-zero-displacement');
+    if (!(energy < sourceEnergy - requestedConfig.improvementTolerance)) {
+      rejectionReasons.push('non-improving-all-row-squared-violation-energy');
+    }
+    for (const key of CONSTRAINT_FAMILY_METRIC_KEYS) {
+      if (families[key] > beforeFamilies[key] + requestedConfig.familyTradeoffAllowance) {
+        rejectionReasons.push(`${key}-tradeoff-envelope-exceeded`);
+      }
+    }
+    if (
+      state.maximumPhysicalResidual >
+        startState.maximumPhysicalResidual + requestedConfig.familyTradeoffAllowance
+    ) rejectionReasons.push('maximum-physical-residual-envelope-exceeded');
+    if (state.metrics.endpointDrift !== 0) rejectionReasons.push('endpoint-drift');
+    if (state.metrics.maximumRelativeVolumeError !== 0) rejectionReasons.push('volume-error');
+    if (state.metrics.nonFiniteValueCount !== 0) rejectionReasons.push('nonfinite-value');
+    if (state.metrics.nonPositiveRadiusCount !== 0) rejectionReasons.push('nonpositive-radius');
+    if (
+      state.metrics.sourceCurvatureReversalCount >
+        startState.metrics.sourceCurvatureReversalCount
+    ) rejectionReasons.push('source-curvature-reversal');
+    if (
+      state.metrics.sourceTangentReversalCount > startState.metrics.sourceTangentReversalCount
+    ) rejectionReasons.push('source-tangent-reversal');
+    return {
+      radius,
+      vector,
+      actualDisplacement,
+      candidatePredictedGaps,
+      candidatePredictedSlacks,
+      state,
+      rows,
+      energy,
+      families,
+      rejectionReasons,
+    };
+  });
+  const admissible = evaluatedCandidates.filter(
+    candidate => candidate.rejectionReasons.length === 0,
+  );
+  admissible.sort((left, right) => {
+    if (left.energy !== right.energy) return left.energy - right.energy;
+    if (left.state.maximumPhysicalResidual !== right.state.maximumPhysicalResidual) {
+      return left.state.maximumPhysicalResidual - right.state.maximumPhysicalResidual;
+    }
+    return hashMusclePackingCanonicalJson(left.vector)
+      .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+  });
+  const accepted = admissible[0] || null;
+  const byRadius = new Map(evaluatedCandidates.map(candidate => [candidate.radius, candidate]));
+  const candidateReceipts = requestedConfig.trustRegionRadii.map(radius => {
+    const candidate = byRadius.get(radius);
+    return {
+      radius,
+      vector:[...candidate.vector],
+      allRowSquaredViolationEnergy:candidate.energy,
+      maximumPhysicalResidual:candidate.state.maximumPhysicalResidual,
+      constraintFamilies:structuredClone(candidate.families),
+      endpointDrift:candidate.state.metrics.endpointDrift,
+      maximumRelativeVolumeError:candidate.state.metrics.maximumRelativeVolumeError,
+      predictionBasis:'candidate-actual-clamped-displacement',
+      admissible:candidate.rejectionReasons.length === 0,
+      selected:candidate === accepted,
+      rejectionReasons:candidate === accepted
+        ? []
+        : candidate.rejectionReasons.length > 0
+          ? [...candidate.rejectionReasons]
+          : ['higher-ranked-admissible-candidate'],
+      rowLedger:candidate.rows.map((row, index) => ({
+        key:row.key,
+        kind:row.kind,
+        beforeSignedGap:sourceRows[index].signedGap,
+        predictedSignedGap:candidate.candidatePredictedGaps[index],
+        predictedSlack:candidate.candidatePredictedSlacks[index],
+        afterSignedGap:row.signedGap,
+      })),
+    };
+  });
+  const selectedState = accepted?.state || startState;
+  const selectedVector = accepted?.vector || startVector;
+  const core = {
+    schema:NBODY_PACKING_ELASTIC_ALL_ROW_RESULT_SCHEMA,
+    status:accepted
+      ? 'elastic-all-row-trust-region-step-accepted'
+      : converged
+        ? 'elastic-all-row-nonlinear-admission-floor'
+        : 'elastic-all-row-linearized-subproblem-failed',
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:{
+      vector:[...startVector],
+      rowCount:sourceRows.length,
+      violatedRowCount:sourceRows.filter(row => row.signedGap < 0).length,
+      allRowSquaredViolationEnergy:sourceEnergy,
+      maximumPhysicalResidual:startState.maximumPhysicalResidual,
+      constraintFamilies:structuredClone(beforeFamilies),
+      metrics:structuredClone(startState.metrics),
+    },
+    linearization:{
+      rowCount:sourceRows.length,
+      finiteDifferenceEvaluationCount:startVector.length * 2,
+      predictionBasis:'full-radius-linearized-subproblem-displacement',
+      rows:sourceRows.map((row, index) => ({
+        key:row.key,
+        kind:row.kind,
+        beforeSignedGap:row.signedGap,
+        gradient:gradients[index].map(value => rounded(value)),
+        predictedSignedGap:predictedGaps[index],
+        predictedSlack:predictedSlacks[index],
+        activeAtSolution:predictedSlacks[index] > 0,
+      })),
+      subproblem:{
+        algorithm:'deterministic-active-set-explicit-slack-normal-equations',
+        displacement:displacement.map(value => rounded(value)),
+        displacementNorm:rounded(normalizedDisplacement.norm),
+        trustRegionMultiplier:rounded(multiplier),
+        activeConstraintKeys:finalActiveSet.map(index => sourceRows[index].key),
+        internalIterations,
+        trustRegionIterations,
+        normalEquationResidual:rounded(normalEquationResidual),
+        converged,
+        failureReason:converged ? null : 'active-set-or-trust-region-iteration-budget-exhausted',
+      },
+      direction:direction?.map(value => rounded(value)) || null,
+    },
+    selected:{
+      vector:[...selectedVector],
+      radius:accepted?.radius || 0,
+      allRowSquaredViolationEnergy:accepted?.energy ?? sourceEnergy,
+      maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
+      constraintFamilies:constraintFamilyMetrics(selectedState),
+      metrics:structuredClone(selectedState.metrics),
+      muscles:structuredClone(selectedState.muscles),
+    },
+    work:{
+      evaluationCount,
+      candidateReceipts,
+      terminalReason:accepted
+        ? null
+        : converged
+          ? 'no-candidate-satisfies-frozen-nonlinear-admission-envelope'
+          : 'linearized-subproblem-did-not-converge',
+    },
+    mechanism:{
+      directionBasis:'all-compiled-row-explicit-slack-linearized-least-squares',
+      nonlinearAcceptance:'lower-all-row-energy-with-bounded-family-tradeoff-envelope',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:true,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'one-step-source-bound-elastic-all-row-architecture-comparator-not-production-solver-or-global-convergence',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }

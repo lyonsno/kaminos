@@ -1,0 +1,51 @@
+{
+  "schema": "kaminos.nbody-packing-active-row-elastic-all-row-comparator-assay.v0",
+  "status": "complete-equal-budget-pair-admitted",
+  "route": {
+    "requested": "active-row-versus-elastic-all-row-equal-budget-comparator-v0",
+    "effective": "active-row-versus-elastic-all-row-equal-budget-comparator-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "path": "artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/raw-trajectory.json",
+    "fileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "trajectorySha256": "71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5",
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c"
+  },
+  "budget": {
+    "controlPhysicalEvaluations": 69,
+    "comparatorPhysicalEvaluations": 69,
+    "equal": true,
+    "admissionReconstructionEvaluationsPerArm": 69,
+    "selectedVerificationEvaluationsPerArm": 1
+  },
+  "decision": {
+    "classification": "evidence-for-exchange-capable-globalization",
+    "sourceAllRowSquaredViolationEnergy": 0.0001108291310809188,
+    "controlAllRowSquaredViolationEnergy": 0.0001108291310809188,
+    "comparatorAllRowSquaredViolationEnergy": 0.00010939018697005254,
+    "controlEnergyReduction": 0,
+    "comparatorEnergyReduction": 0.0000014389441108662632,
+    "lowerWallKey": "compartment-lower:density-06-02:1:0",
+    "sourceLowerWallViolation": 0.004243507635228738,
+    "controlLowerWallViolation": 0.004243507635228738,
+    "comparatorLowerWallViolation": 0.004212317421835365,
+    "controlAccepted": false,
+    "comparatorAccepted": true,
+    "controlLowerWallImproved": false,
+    "comparatorLowerWallImproved": true
+  },
+  "bindings": {
+    "rawPairFileSha256": "623fdbc17f77dd89223722ceef55c07f4336643fa07ed50a1d46fa4dcae66001",
+    "rawPairSha256": "cc7756cf3914b75a18cc7aa58436b2ed96a4af68ba36beda0de6fc44b3875567",
+    "resultFileSha256": "6433cfdeaed99e4b5e8984327f049659de406f66c00c5f343697a52134f3937a",
+    "resultSha256": "1d3784f17c0123cfb7210891803f834c4fa5f071e1104cb1c374418ac23438a9",
+    "reconstructionControlSha256": "0d453c9dca56360606fa698ab0755c54c8eb14183361fc5d1b995dfad237038f",
+    "reconstructionComparatorSha256": "052d6970cba817b940595dd1917c52375f9559fe240425f3414d40ac538356c5"
+  },
+  "claimCeiling": "one-source-bound-equal-budget-step-comparison-not-production-architecture-or-global-convergence",
+  "identity": {
+    "sha256": "94038f93a77fdf2a074c8b0a6e4c909525734715d360bd02ec7fd778fc8b0cc9"
+  }
+}

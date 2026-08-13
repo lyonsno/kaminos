@@ -1,0 +1,76 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+    "effective": "nbody-packing-elastic-all-row-comparator-viewer-v0",
+    "fallbackUsed": false
+  },
+  "classification": {
+    "decision": {
+      "classification": "evidence-for-exchange-capable-globalization",
+      "sourceAllRowSquaredViolationEnergy": 0.0001108291310809188,
+      "controlAllRowSquaredViolationEnergy": 0.0001108291310809188,
+      "comparatorAllRowSquaredViolationEnergy": 0.00010939018697005254,
+      "controlEnergyReduction": 0,
+      "comparatorEnergyReduction": 0.0000014389441108662632,
+      "lowerWallKey": "compartment-lower:density-06-02:1:0",
+      "sourceLowerWallViolation": 0.004243507635228738,
+      "controlLowerWallViolation": 0.004243507635228738,
+      "comparatorLowerWallViolation": 0.004212317421835365,
+      "controlAccepted": false,
+      "comparatorAccepted": true,
+      "controlLowerWallImproved": false,
+      "comparatorLowerWallImproved": true
+    },
+    "solverReplayedForPresentation": false,
+    "physicalProjectionCount": 3,
+    "mechanismInputs": {
+      "oracleTargetCoordinatesConsumed": false,
+      "contactGraphRowsConsumed": true
+    }
+  },
+  "bindings": {
+    "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+    "resultsSha256": "265d2e1eb1dfccb4b5c57936bc72c0c2fbea1d2a656d5ef3fad00a8e918f7335",
+    "indexHtmlSha256": "ef1c5c1f676e6605028b87bb36513e8956ce3b8ab16893a5039448d22358ff3f",
+    "sourceFileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "sourceIdentitySha256": "71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5",
+    "resultFileSha256": "6433cfdeaed99e4b5e8984327f049659de406f66c00c5f343697a52134f3937a",
+    "resultIdentitySha256": "1d3784f17c0123cfb7210891803f834c4fa5f071e1104cb1c374418ac23438a9",
+    "reportFileSha256": "d5ad4e7b6ff69e90e28740b8b54f91cd3f7bb5124d19bdfd9e746568d5ba0b55",
+    "reportIdentitySha256": "94038f93a77fdf2a074c8b0a6e4c909525734715d360bd02ec7fd778fc8b0cc9",
+    "visualInspectionSha256": "b1977013aac6558ebac1ca06e741af3f1c5127d9823660f3056ffc554038c3be",
+    "captureReceiptSetSha256": "a3c6c06b3281e81a01bbab482760e7dd36a24cf1bacaf36deb081cb6a60eb88c"
+  },
+  "requiredStates": [
+    "step-16-source",
+    "active-row-control",
+    "elastic-all-row-comparator"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "same-camera true-position visual comparison of one equal-budget source-bound control/comparator step",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "production-architecture-selection",
+      "global-convergence",
+      "carrier-sufficiency",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition"
+    ]
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "b1977013aac6558ebac1ca06e741af3f1c5127d9823660f3056ffc554038c3be",
+    "captureCount": 6
+  },
+  "identity": {
+    "sha256": "89f553879b01f1d9b08358f61d3ecb1ae72f1ca2bbf842896944e32b714cf5ad"
+  }
+}

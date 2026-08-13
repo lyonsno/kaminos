@@ -1,0 +1,57 @@
+{
+  "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+  "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+  "environment": {
+    "compartment": {
+      "id": "density-six-tight-asymmetric-two-obstacle-compartment",
+      "kind": "box",
+      "minimum": [
+        -0.751711701965,
+        -1.3,
+        -0.760088846894
+      ],
+      "maximum": [
+        0.765711701965,
+        1.3,
+        0.752088846894
+      ],
+      "clearance": 0.02
+    },
+    "obstacles": [
+      {
+        "id": "density-6-offset-bone",
+        "kind": "capsule",
+        "start": [
+          -0.07,
+          -1.1,
+          0.045
+        ],
+        "end": [
+          -0.07,
+          1.1,
+          0.045
+        ],
+        "radius": 0.14,
+        "clearance": 0.02,
+        "authority": "synthetic-manufactured-feasible"
+      },
+      {
+        "id": "density-six-offset-short-bone",
+        "kind": "capsule",
+        "start": [
+          0.22,
+          -0.1,
+          0.22
+        ],
+        "end": [
+          0.22,
+          0.75,
+          0.22
+        ],
+        "radius": 0.12,
+        "clearance": 0.02,
+        "authority": "synthetic-manufactured-feasible"
+      }
+    ]
+  }
+}

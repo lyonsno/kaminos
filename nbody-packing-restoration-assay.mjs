@@ -13,11 +13,15 @@ import {
 } from './nbody-packing-unified-kkt.mjs';
 import {
   createNBodyAllNeighborRestorationConfig,
+  createNBodyActiveRowTrustRegionConfig,
   createNBodyActiveRowTrustRegionTrajectoryConfig,
+  createNBodyElasticAllRowComparatorConfig,
   createNBodyFamilyGradientCommonDescentConfig,
   createNBodyFamilyGradientCommonDescentTrajectoryConfig,
   solveNBodyAllNeighborRestoration,
+  solveNBodyActiveRowTrustRegionStep,
   solveNBodyActiveRowTrustRegionTrajectory,
+  solveNBodyElasticAllRowComparatorStep,
   solveNBodyFamilyGradientCommonDescent,
   solveNBodyFamilyGradientCommonDescentTrajectory,
 } from './nbody-packing-restoration.mjs';
@@ -32,6 +36,10 @@ export const NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-trajectory-assay.v0';
 export const NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-trajectory-continuation-assay.v0';
+export const NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_ASSAY_SCHEMA =
+  'kaminos.nbody-packing-active-row-elastic-all-row-comparator-assay.v0';
+export const NBODY_PACKING_ELASTIC_ALL_ROW_RAW_PAIR_SCHEMA =
+  'kaminos.nbody-packing-active-row-elastic-all-row-raw-pair.v0';
 
 export const NBODY_PACKING_REFINED_COMMON_DESCENT_RADII = Object.freeze([
   0.004,
@@ -67,6 +75,15 @@ const FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY = Object.freeze({
   resultSha256:'d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2',
   reportFileSha256:'c0132bdaa0bb7d8b306c8f6374692eaa183cd48c98f3b4f59fd06e6eaa9cb21a',
   reportSha256:'c51fc8d8fad0e692f9795510e6596266cd8a25f9b3af91a435f199d6ce7582d6',
+});
+
+const FROZEN_ELASTIC_COMPARATOR_SOURCE = Object.freeze({
+  rawPath:
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/raw-trajectory.json',
+  rawFileSha256:'7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07',
+  rawSha256:'71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5',
+  problemSha256:'cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c',
+  lowerWallKey:'compartment-lower:density-06-02:1:0',
 });
 
 const FROZEN_BASELINES = Object.freeze({
@@ -1233,6 +1250,325 @@ export async function runNBodyPackingActiveRowTrajectoryContinuationAssay({
   }
 }
 
+function allRowSquaredViolationEnergy(state) {
+  return state.rows.reduce(
+    (sum, row) => sum + Math.max(0, -row.signedGap) ** 2,
+    0,
+  );
+}
+
+const elasticAllRowRawPairReconstructionCache = new Map();
+
+export function validateNBodyPackingElasticAllRowRawPair({
+  pair,
+  problem,
+  sourceVector,
+} = {}) {
+  verifyCanonicalIdentity(pair, 'elastic comparator raw pair');
+  if (
+    pair.schema !== NBODY_PACKING_ELASTIC_ALL_ROW_RAW_PAIR_SCHEMA ||
+    pair.status !== 'raw-equal-budget-pair' ||
+    pair.route?.requested !== 'active-row-versus-elastic-all-row-equal-budget-comparator-v0' ||
+    pair.route?.effective !== pair.route.requested ||
+    pair.route?.fallbackUsed !== false ||
+    pair.source?.problemSha256 !== problem?.identity?.sha256 ||
+    JSON.stringify(pair.control?.start?.vector) !== JSON.stringify(sourceVector) ||
+    JSON.stringify(pair.comparator?.start?.vector) !== JSON.stringify(sourceVector)
+  ) throw new Error('elastic comparator raw pair source or route binding mismatch');
+  const expectedControlConfig = createNBodyActiveRowTrustRegionConfig({
+    activeSetPolicy:'family-maximum-relative-band',
+    relativeActivationBand:0.01,
+  });
+  const expectedComparatorConfig = createNBodyElasticAllRowComparatorConfig();
+  if (
+    JSON.stringify(pair.control?.config?.requested) !== JSON.stringify(expectedControlConfig) ||
+    JSON.stringify(pair.control?.config?.effective) !== JSON.stringify(expectedControlConfig) ||
+    JSON.stringify(pair.comparator?.config?.requested) !== JSON.stringify(expectedComparatorConfig) ||
+    JSON.stringify(pair.comparator?.config?.effective) !== JSON.stringify(expectedComparatorConfig) ||
+    pair.budget?.controlPhysicalEvaluations !== 69 ||
+    pair.budget?.comparatorPhysicalEvaluations !== 69 ||
+    pair.budget?.equal !== true ||
+    pair.budget?.admissionReconstructionEvaluationsPerArm !== 69 ||
+    pair.budget?.selectedVerificationEvaluationsPerArm !== 1
+  ) throw new Error('elastic comparator raw pair config or evaluation budget mismatch');
+  const cacheKey = hashMusclePackingCanonicalJson({
+    problemSha256:problem.identity.sha256,
+    sourceVector,
+    controlConfig:expectedControlConfig,
+    comparatorConfig:expectedComparatorConfig,
+  });
+  let reconstructed = elasticAllRowRawPairReconstructionCache.get(cacheKey);
+  if (!reconstructed) {
+    reconstructed = {
+      control:solveNBodyActiveRowTrustRegionStep({
+        problem,
+        startVector:sourceVector,
+        requestedConfig:expectedControlConfig,
+      }),
+      comparator:solveNBodyElasticAllRowComparatorStep({
+        problem,
+        startVector:sourceVector,
+        requestedConfig:expectedComparatorConfig,
+      }),
+    };
+    elasticAllRowRawPairReconstructionCache.set(cacheKey, reconstructed);
+  }
+  if (JSON.stringify(pair.control) !== JSON.stringify(reconstructed.control)) {
+    throw new Error('elastic comparator rejects forged control result or ledger');
+  }
+  if (JSON.stringify(pair.comparator) !== JSON.stringify(reconstructed.comparator)) {
+    throw new Error('elastic comparator rejects forged comparator result or ledger');
+  }
+  return {
+    reconstructionControlSha256:reconstructed.control.identity.sha256,
+    reconstructionComparatorSha256:reconstructed.comparator.identity.sha256,
+  };
+}
+
+export async function runNBodyPackingElasticAllRowComparatorAssay({
+  outDir = 'artifacts/nbody-packing-active-row-elastic-all-row-comparator-v0',
+  sourceRawPath = FROZEN_ELASTIC_COMPARATOR_SOURCE.rawPath,
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  const requestedRoute = 'active-row-versus-elastic-all-row-equal-budget-comparator-v0';
+  let phase = 'initialize';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    phase = 'invalidate-prior-primary';
+    await Promise.all(['result.json', 'raw-pair.json'].map(async fileName => {
+      try {
+        await unlink(path.join(outputRoot, fileName));
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }));
+
+    phase = 'read-frozen-step-sixteen-source';
+    const sourceBytes = await readFile(path.resolve(sourceRawPath));
+    const source = JSON.parse(String(sourceBytes));
+    verifyCanonicalIdentity(source, 'elastic comparator step-sixteen source');
+    lastTrustworthyEvidence = {
+      phase:'step-sixteen-source-read',
+      sourcePath:sourceRawPath,
+      sourceFileSha256:sha256(sourceBytes),
+      sourceSha256:source.identity?.sha256 || null,
+    };
+
+    phase = 'bind-frozen-step-sixteen-source';
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      row => row.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    if (
+      sha256(sourceBytes) !== FROZEN_ELASTIC_COMPARATOR_SOURCE.rawFileSha256 ||
+      source.identity?.sha256 !== FROZEN_ELASTIC_COMPARATOR_SOURCE.rawSha256 ||
+      problem.identity.sha256 !== FROZEN_ELASTIC_COMPARATOR_SOURCE.problemSha256 ||
+      source.source?.problemSha256 !== problem.identity.sha256 ||
+      source.route?.fallbackUsed !== false ||
+      !Array.isArray(source.selected?.vector) ||
+      source.selected.vector.length !== problem.variables.length
+    ) throw new Error('elastic comparator rejects substituted step-sixteen source');
+    const physicalSource = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:source.selected.vector,
+    });
+    const sourceRowsByKey = Object.fromEntries(physicalSource.rows.map(row => [row.key, row]));
+    const sourceLowerWall = sourceRowsByKey[FROZEN_ELASTIC_COMPARATOR_SOURCE.lowerWallKey];
+    if (
+      !sourceLowerWall ||
+      physicalSource.rows.length !== 531 ||
+      physicalSource.rows.filter(row => row.signedGap < 0).length !== 12 ||
+      physicalSource.maximumPhysicalResidual !== source.selected.maximumPhysicalResidual ||
+      JSON.stringify(physicalSource.metrics) !== JSON.stringify(source.selected.metrics)
+    ) throw new Error('elastic comparator rejects physically stale step-sixteen source');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'step-sixteen-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      sourceRowCount:physicalSource.rows.length,
+      sourceViolatedRowCount:physicalSource.rows.filter(row => row.signedGap < 0).length,
+      sourceMaximumPhysicalResidual:physicalSource.maximumPhysicalResidual,
+    };
+
+    phase = 'solve-equal-budget-control';
+    const controlConfig = createNBodyActiveRowTrustRegionConfig({
+      activeSetPolicy:'family-maximum-relative-band',
+      relativeActivationBand:0.01,
+    });
+    const control = solveNBodyActiveRowTrustRegionStep({
+      problem,
+      startVector:source.selected.vector,
+      requestedConfig:controlConfig,
+    });
+
+    phase = 'solve-equal-budget-comparator';
+    const comparatorConfig = createNBodyElasticAllRowComparatorConfig();
+    const comparator = solveNBodyElasticAllRowComparatorStep({
+      problem,
+      startVector:source.selected.vector,
+      requestedConfig:comparatorConfig,
+    });
+
+    phase = 'persist-raw-pair';
+    const rawCore = {
+      schema:NBODY_PACKING_ELASTIC_ALL_ROW_RAW_PAIR_SCHEMA,
+      status:'raw-equal-budget-pair',
+      route:{ requested:requestedRoute, effective:requestedRoute, fallbackUsed:false },
+      source:{
+        path:sourceRawPath,
+        fileSha256:sha256(sourceBytes),
+        trajectorySha256:source.identity.sha256,
+        fixtureSha256:fixture.identity.sha256,
+        problemSha256:problem.identity.sha256,
+      },
+      budget:{
+        controlPhysicalEvaluations:control.work.evaluationCount,
+        comparatorPhysicalEvaluations:comparator.work.evaluationCount,
+        equal:control.work.evaluationCount === comparator.work.evaluationCount,
+        admissionReconstructionEvaluationsPerArm:69,
+        selectedVerificationEvaluationsPerArm:1,
+      },
+      control,
+      comparator,
+    };
+    const rawPair = {
+      ...rawCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(rawCore) },
+    };
+    const rawBytes = jsonBytes(rawPair);
+    await writeAtomically(path.join(outputRoot, 'raw-pair.json'), rawBytes);
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'raw-pair-persisted',
+      rawPairFileSha256:sha256(rawBytes),
+      rawPairSha256:rawPair.identity.sha256,
+    };
+
+    phase = 'verify-raw-pair-physics';
+    const admission = validateNBodyPackingElasticAllRowRawPair({
+      pair:rawPair,
+      problem,
+      sourceVector:source.selected.vector,
+    });
+    const controlVerification = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:control.selected.vector,
+    });
+    const comparatorVerification = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:comparator.selected.vector,
+    });
+    const controlRowsByKey = Object.fromEntries(
+      controlVerification.rows.map(row => [row.key, row]),
+    );
+    const comparatorRowsByKey = Object.fromEntries(
+      comparatorVerification.rows.map(row => [row.key, row]),
+    );
+    const controlLowerWall = controlRowsByKey[FROZEN_ELASTIC_COMPARATOR_SOURCE.lowerWallKey];
+    const comparatorLowerWall =
+      comparatorRowsByKey[FROZEN_ELASTIC_COMPARATOR_SOURCE.lowerWallKey];
+    if (
+      rawPair.route.fallbackUsed !== false ||
+      control.work.evaluationCount !== 69 ||
+      comparator.work.evaluationCount !== 69 ||
+      rawPair.budget.equal !== true ||
+      control.directionConstruction.activeRows.length !== 10 ||
+      comparator.start.rowCount !== 531 ||
+      comparator.start.violatedRowCount !== 12 ||
+      comparator.linearization.rows.length !== 531 ||
+      comparator.mechanism.oracleTargetCoordinatesConsumed !== false ||
+      comparator.mechanism.contactGraphRowsConsumed !== true ||
+      !controlLowerWall ||
+      !comparatorLowerWall ||
+      JSON.stringify(controlVerification.metrics) !== JSON.stringify(control.selected.metrics) ||
+      JSON.stringify(comparatorVerification.metrics) !== JSON.stringify(comparator.selected.metrics)
+    ) throw new Error('elastic comparator raw pair fails equal-budget physical admission');
+
+    const sourceEnergy = allRowSquaredViolationEnergy(physicalSource);
+    const controlEnergy = allRowSquaredViolationEnergy(controlVerification);
+    const comparatorEnergy = allRowSquaredViolationEnergy(comparatorVerification);
+    const controlAccepted = control.status === 'active-row-trust-region-step-accepted';
+    const comparatorAccepted = comparator.status === 'elastic-all-row-trust-region-step-accepted';
+    const controlLowerWallImproved = controlLowerWall.signedGap > sourceLowerWall.signedGap;
+    const comparatorLowerWallImproved = comparatorLowerWall.signedGap > sourceLowerWall.signedGap;
+    const classification = comparator.status === 'elastic-all-row-linearized-subproblem-failed'
+      ? 'comparator-failure'
+      : !controlAccepted && comparatorAccepted && comparatorLowerWallImproved
+        ? 'evidence-for-exchange-capable-globalization'
+        : controlAccepted && !comparatorAccepted && controlLowerWallImproved
+          ? 'keep-current-controller-in-contention'
+          : 'inconclusive-both-progress-or-both-stall';
+
+    phase = 'write-admitted-pair';
+    const resultCore = {
+      ...rawCore,
+      status:'complete-equal-budget-pair-admitted',
+      decision:{
+        classification,
+        sourceAllRowSquaredViolationEnergy:sourceEnergy,
+        controlAllRowSquaredViolationEnergy:controlEnergy,
+        comparatorAllRowSquaredViolationEnergy:comparatorEnergy,
+        controlEnergyReduction:sourceEnergy - controlEnergy,
+        comparatorEnergyReduction:sourceEnergy - comparatorEnergy,
+        lowerWallKey:FROZEN_ELASTIC_COMPARATOR_SOURCE.lowerWallKey,
+        sourceLowerWallViolation:Math.max(0, -sourceLowerWall.signedGap),
+        controlLowerWallViolation:Math.max(0, -controlLowerWall.signedGap),
+        comparatorLowerWallViolation:Math.max(0, -comparatorLowerWall.signedGap),
+        controlAccepted,
+        comparatorAccepted,
+        controlLowerWallImproved,
+        comparatorLowerWallImproved,
+      },
+      claimCeiling:
+        'one-source-bound-equal-budget-step-comparison-not-production-architecture-or-global-convergence',
+    };
+    const result = {
+      ...resultCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(resultCore) },
+    };
+    const resultBytes = jsonBytes(result);
+    const reportCore = {
+      schema:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_ASSAY_SCHEMA,
+      status:'complete-equal-budget-pair-admitted',
+      route:structuredClone(rawPair.route),
+      source:structuredClone(rawPair.source),
+      budget:structuredClone(rawPair.budget),
+      decision:structuredClone(result.decision),
+      bindings:{
+        rawPairFileSha256:sha256(rawBytes),
+        rawPairSha256:rawPair.identity.sha256,
+        resultFileSha256:sha256(resultBytes),
+        resultSha256:result.identity.sha256,
+        reconstructionControlSha256:admission.reconstructionControlSha256,
+        reconstructionComparatorSha256:admission.reconstructionComparatorSha256,
+      },
+      claimCeiling:result.claimCeiling,
+    };
+    const report = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    await Promise.all([
+      writeAtomically(path.join(outputRoot, 'result.json'), resultBytes),
+      writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(report)),
+    ]);
+    return { outputRoot, rawPair, result, report };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_ASSAY_SCHEMA,
+      status:'failed',
+      route:{ requested:requestedRoute, effective:null, fallbackUsed:false },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(failure));
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-all-neighbor-restoration-v0';
   const iterationBudget = process.argv[3] === undefined ? 1 : Number(process.argv[3]);
@@ -1245,6 +1581,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
         ? await runNBodyPackingActiveRowTrajectoryAssay({ outDir, iterationBudget })
       : acceptancePolicy === 'active-row-trust-region-trajectory-continuation'
         ? await runNBodyPackingActiveRowTrajectoryContinuationAssay({ outDir, iterationBudget })
+      : acceptancePolicy === 'elastic-all-row-comparator'
+        ? await runNBodyPackingElasticAllRowComparatorAssay({ outDir })
       : await runNBodyPackingRestorationAssay({
           outDir,
           iterationBudget,

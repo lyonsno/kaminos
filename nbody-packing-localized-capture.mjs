@@ -16,6 +16,7 @@ const STATES = Object.freeze([
   'active-row-step-7', 'active-row-step-8', 'manufactured-reference',
   'active-row-step-9', 'active-row-step-11', 'active-row-step-12',
   'active-row-step-16',
+  'step-16-source', 'active-row-control', 'elastic-all-row-comparator',
 ]);
 export const NBODY_PACKING_LOCALIZED_CAPTURE_VIEWPORT = Object.freeze({
   width:1400,

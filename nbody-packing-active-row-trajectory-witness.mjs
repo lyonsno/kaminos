@@ -18,14 +18,18 @@ import {
 import {
   NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA,
   NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA,
+  NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_ASSAY_SCHEMA,
+  NBODY_PACKING_ELASTIC_ALL_ROW_RAW_PAIR_SCHEMA,
 } from './nbody-packing-restoration-assay.mjs';
 import {
   NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+  NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
 
 export { NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE };
+export { NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE };
 const ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE =
   'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
 
@@ -960,6 +964,241 @@ export async function writeNBodyPackingActiveRowContinuationWitness({
       status:'failed',
       route:{
         requested:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+        effective:null,
+        fallbackUsed:false,
+      },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure), io);
+    throw error;
+  }
+}
+
+export async function writeNBodyPackingElasticAllRowComparatorWitness({
+  outDir = 'artifacts/nbody-packing-active-row-elastic-all-row-comparator-viewer-v0',
+  sourceRawPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/raw-trajectory.json',
+  comparatorResultPath =
+    'artifacts/nbody-packing-active-row-elastic-all-row-comparator-v0/result.json',
+  comparatorReportPath =
+    'artifacts/nbody-packing-active-row-elastic-all-row-comparator-v0/run-report.json',
+  io = { writeFile, rename },
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  let phase = 'invalidate-prior-primary';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    await invalidatePrimaries(outputRoot);
+    phase = 'read-elastic-comparator-source';
+    const [sourceBytes, resultBytes, reportBytes] = await Promise.all([
+      readFile(path.resolve(sourceRawPath)),
+      readFile(path.resolve(comparatorResultPath)),
+      readFile(path.resolve(comparatorReportPath)),
+    ]);
+    const sourceTrajectory = JSON.parse(String(sourceBytes));
+    const result = JSON.parse(String(resultBytes));
+    const sourceReport = JSON.parse(String(reportBytes));
+    verifyCanonicalIdentity(sourceTrajectory, 'elastic comparator trajectory source');
+    verifyCanonicalIdentity(result, 'elastic comparator result');
+    verifyCanonicalIdentity(sourceReport, 'elastic comparator report');
+    lastTrustworthyEvidence = {
+      phase:'elastic-comparator-source-read',
+      sourceFileSha256:sha256(sourceBytes),
+      sourceSha256:sourceTrajectory.identity?.sha256 || null,
+      resultFileSha256:sha256(resultBytes),
+      resultSha256:result.identity?.sha256 || null,
+      reportFileSha256:sha256(reportBytes),
+      reportSha256:sourceReport.identity?.sha256 || null,
+    };
+
+    phase = 'bind-elastic-comparator-source';
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      candidate => candidate.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    if (
+      sha256(sourceBytes) !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.rawFileSha256 ||
+      sourceTrajectory.identity.sha256 !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.resultSha256 ||
+      result.schema !== NBODY_PACKING_ELASTIC_ALL_ROW_RAW_PAIR_SCHEMA ||
+      result.status !== 'complete-equal-budget-pair-admitted' ||
+      result.route?.fallbackUsed !== false ||
+      result.source?.problemSha256 !== problem.identity.sha256 ||
+      result.source?.trajectorySha256 !== sourceTrajectory.identity.sha256 ||
+      sourceReport.schema !== NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_ASSAY_SCHEMA ||
+      sourceReport.status !== 'complete-equal-budget-pair-admitted' ||
+      sourceReport.bindings?.resultFileSha256 !== sha256(resultBytes) ||
+      sourceReport.bindings?.resultSha256 !== result.identity.sha256
+    ) throw new Error('elastic comparator witness rejects substituted result or source binding');
+    const sourceState = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:sourceTrajectory.selected.vector,
+    });
+    const controlState = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:result.control.selected.vector,
+    });
+    const comparatorState = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:result.comparator.selected.vector,
+    });
+    requireExact(controlState.metrics, result.control.selected.metrics,
+      'elastic comparator witness rejects stale control physics');
+    requireExact(comparatorState.metrics, result.comparator.selected.metrics,
+      'elastic comparator witness rejects stale comparator physics');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'elastic-comparator-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+    };
+
+    phase = 'construct-elastic-comparator-projection';
+    const source = fixture.knownFeasible;
+    const decision = result.decision;
+    const stateRows = [
+      ['step-16-source', 'step 16 · shared source', sourceState,
+        decision.sourceAllRowSquaredViolationEnergy,
+        decision.sourceLowerWallViolation,
+        'Exact shared crowded state. Both arms begin here with the same 24-coordinate carrier and source identity.'],
+      ['active-row-control', 'active-row · one more step', controlState,
+        decision.controlAllRowSquaredViolationEnergy,
+        decision.controlLowerWallViolation,
+        'Strict common descent recomputed ten eligible rows and spent 69 physical evaluations.'],
+      ['elastic-all-row-comparator', 'elastic all-row · one step', comparatorState,
+        decision.comparatorAllRowSquaredViolationEnergy,
+        decision.comparatorLowerWallViolation,
+        'Explicit-slack all-row linearization consumed all 531 rows and spent the same 69 physical evaluations.'],
+    ];
+    const states = Object.fromEntries(stateRows.map(([
+      key, label, state, energy, lowerWallViolation, truth,
+    ]) => [key, {
+      label,
+      severity:0.32,
+      status:key === 'step-16-source'
+        ? 'shared architecture-assay source'
+        : key === 'active-row-control'
+          ? result.control.status
+          : result.comparator.status,
+      warning:true,
+      source,
+      muscles:state.muscles,
+      metrics:state.metrics,
+      ...(key === 'step-16-source' ? {} : {
+        comparisonOverlay:{
+          baselineState:'step-16-source',
+          baselineLabel:'step 16 source',
+          baselineResultIdentitySha256:sourceTrajectory.identity.sha256,
+          targetStepIdentitySha256:key === 'active-row-control'
+            ? result.control.identity.sha256
+            : result.comparator.identity.sha256,
+          displayGain:60,
+          maximumWorldDisplacement:maximumCenterlineDisplacement(
+            sourceState.muscles,
+            state.muscles,
+          ),
+          rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+        },
+      }),
+      comparisonNote:`all-row energy ${energy} · lower-wall violation ${lowerWallViolation} · true surface position · arrows ×60 display-only`,
+      truth:`${truth} Surfaces remain at true coordinates; use volume and slice modes plus orbit before judging formation.`,
+    }]));
+    const orderedStates = stateRows.map(([key]) => key);
+    const fixtures = {
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const comparison = {
+      result,
+      report:sourceReport,
+      presentation:{ solverReplayed:false, physicalStatesReevaluated:true },
+    };
+    const fixtureBytes = jsonBytes(fixtures);
+    const comparisonBytes = jsonBytes(comparison);
+    const bindings = {
+      fixturesSha256:sha256(fixtureBytes),
+      resultsSha256:sha256(comparisonBytes),
+    };
+    const payload = {
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:true,
+      },
+      display:{
+        title:'Step 16 · strict active set versus elastic all-row',
+        authority:'Equal-budget synthetic architecture falsifier · 69 evaluations per arm · no anatomical admission',
+        explanation:'One shared crowded state, one strict ten-row common-descent control, and one explicit-slack 531-row comparator. Geometry is rendered at true position with stable colors. Cross-section rings and arrows reveal subtle displacement but are display-only; the translucent surface is the physical output.',
+        orderedStates,
+        defaultState:'elastic-all-row-comparator',
+      },
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({
+      payload,
+      bindings,
+      route:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
+    }));
+    const reportCore = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'complete-pending-agent-visual-inspection',
+      route:{
+        requested:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
+        effective:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
+        fallbackUsed:false,
+      },
+      classification:{
+        decision:structuredClone(decision),
+        solverReplayedForPresentation:false,
+        physicalProjectionCount:3,
+        mechanismInputs:structuredClone(payload.mechanism),
+      },
+      bindings:{
+        ...bindings,
+        indexHtmlSha256:sha256(htmlBytes),
+        sourceFileSha256:sha256(sourceBytes),
+        sourceIdentitySha256:sourceTrajectory.identity.sha256,
+        resultFileSha256:sha256(resultBytes),
+        resultIdentitySha256:result.identity.sha256,
+        reportFileSha256:sha256(reportBytes),
+        reportIdentitySha256:sourceReport.identity.sha256,
+      },
+      requiredStates:orderedStates,
+      requiredModes:['volume','slice'],
+      claimCeiling:{
+        admittedClaim:'same-camera true-position visual comparison of one equal-budget source-bound control/comparator step',
+        anatomicalAdmission:'none',
+        nonGoals:[
+          'production-architecture-selection',
+          'global-convergence',
+          'carrier-sufficiency',
+          'anatomical-plausibility',
+          'arbitrary-N-closure',
+          'fascia-composition',
+        ],
+      },
+    };
+    const witnessReport = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    phase = 'write-primary';
+    for (const [name, bytes] of [
+      ['fixtures.json', fixtureBytes],
+      ['comparison.json', comparisonBytes],
+      ['index.html', htmlBytes],
+      ['report.json', jsonBytes(witnessReport)],
+    ]) await writeAtomically(path.join(outputRoot, name), bytes, io);
+    return { outputRoot, report:witnessReport, states };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'failed',
+      route:{
+        requested:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
         effective:null,
         fallbackUsed:false,
       },
