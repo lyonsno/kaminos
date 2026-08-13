@@ -1,0 +1,52 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.cycle-2.v0",
+  "question": "Does a matched second reconstruction stabilize the polygonal-cat round trip, sharpen it toward a feline basin, or accumulate learned-basin drift?",
+  "source": {
+    "path": "source/second-flux.png",
+    "sha256": "d811a766317a6d0ae2e13eb041e2043ef966dec22b920d5d65c8202860de62d9",
+    "prompt": "This shape as a cat.",
+    "seed": 80301,
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0
+  },
+  "referenceCast": {
+    "path": "../reconstructions/trellis/output.glb",
+    "sha256": "3b048af71064beb0a8051e711bb53830f557ab0ec602e7483fc7f63cb09c1df4",
+    "route": "trellis2mlx_fast",
+    "generation": 1
+  },
+  "routes": [
+    {
+      "id": "sf3d",
+      "jobType": "sf3d",
+      "params": {}
+    },
+    {
+      "id": "trellis",
+      "jobType": "trellis2mlx_fast",
+      "params": {
+        "seed": 42,
+        "steps": 6,
+        "target_faces": 200000,
+        "texture_size": 1024
+      }
+    }
+  ],
+  "registration": {
+    "fixed": "cycle-1-trellis",
+    "moving": "cycle-2-trellis",
+    "transformClass": "global_similarity",
+    "uniformScaleOnly": true,
+    "allowsLocalDeformation": false,
+    "allowsAnisotropicScale": false,
+    "requiredWitnesses": [
+      "raw-side-by-side",
+      "registered-overlay"
+    ]
+  },
+  "claimCeiling": "Exact second-FLUX source, matched effective reconstruction routes, complete orbit appearance, and diagnostic global-similarity registration only; no arbitrary-source convergence, anatomical fidelity, topology, or production claim."
+}

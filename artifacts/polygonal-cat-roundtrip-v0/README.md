@@ -33,3 +33,12 @@ python3 -m unittest test_roundtrip_contract.py -v
 
 The reconstruction Greenroom identities are recorded in `submissions.json`;
 the causal-return identity is recorded in `second-pass-submission.json`.
+
+`cycle-2/` closes the next causal link. It freezes the exact second FLUX output,
+submits that image through the same SF3D and Trellis routes, renders complete
+matched orbits, and compares cycle-1 and cycle-2 Trellis geometry in Blender.
+The registration is diagnostic and shape preserving: cycle 2 may receive only
+translation, rotation, and one uniform scale. Raw side-by-side views remain
+adjacent to registered overlays so pose correction cannot impersonate
+morphological stability. The complete operator-facing record is
+`cycle-2/cycle-2-sheet.html`.
