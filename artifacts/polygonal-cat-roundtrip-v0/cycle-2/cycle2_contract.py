@@ -108,7 +108,10 @@ def validate_registration_result(result: dict, root: Path | None = None) -> None
         raise RuntimeError("unexpected registration schema")
     for role in ("fixed", "moving"):
         record = result.get(role) or {}
-        path = _resolve(root, record.get("path", ""))
+        locator = record.get("path", "")
+        if Path(locator).is_absolute():
+            raise RuntimeError(f"{role} cast locator is not portable")
+        path = _resolve(root, locator)
         if not path.is_file() or digest(path) != record.get("sha256"):
             raise RuntimeError(f"{role} cast is missing or drifted")
     method = result.get("method") or {}
@@ -118,6 +121,8 @@ def validate_registration_result(result: dict, root: Path | None = None) -> None
         raise RuntimeError("registration result does not bind uniform scale")
     if method.get("allowsLocalDeformation") or method.get("allowsAnisotropicScale"):
         raise RuntimeError("registration result admits shape-changing fit")
+    if method.get("residualMetric") != "bidirectional_nearest_vertex_distance":
+        raise RuntimeError("registration result does not bind the nearest-vertex residual")
     fit = result.get("fit") or {}
     if fit.get("uniformScale", 0) <= 0:
         raise RuntimeError("registration result has invalid uniform scale")

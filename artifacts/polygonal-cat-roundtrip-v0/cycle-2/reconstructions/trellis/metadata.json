@@ -1,0 +1,18 @@
+{
+  "name": "second-flux",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "ad289a989903",
+  "input_path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/source/second-flux.png",
+  "input_name": "second-flux.png",
+  "params": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1786629324.101472,
+  "duration_s": 52.3
+}

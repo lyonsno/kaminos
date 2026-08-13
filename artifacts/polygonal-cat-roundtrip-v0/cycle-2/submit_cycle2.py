@@ -2,6 +2,7 @@
 """Submit matched second-cycle SF3D and Trellis reconstructions idempotently."""
 
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -13,6 +14,10 @@ from cycle2_contract import digest, validate_campaign
 ROOT = Path(__file__).resolve().parent
 SUBMISSIONS = ROOT / "submissions.json"
 GREENROOM = Path("/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom")
+
+
+def portable(path: Path) -> str:
+    return Path(os.path.relpath(path.resolve(), ROOT)).as_posix()
 
 
 def atomic_json(path: Path, payload: dict) -> None:
@@ -32,13 +37,17 @@ def main() -> int:
         if SUBMISSIONS.is_file()
         else {
             "schema": "kaminos.polygonal-cat-roundtrip.cycle-2.submissions.v0",
-            "source": str(source),
+            "source": portable(source),
             "sourceSha256": digest(source),
             "routes": {},
         }
     )
-    if Path(state["source"]).resolve() != source or state["sourceSha256"] != digest(source):
+    if (ROOT / state["source"]).resolve() != source or state["sourceSha256"] != digest(source):
         raise RuntimeError("existing cycle-2 submissions bind another source")
+    state["source"] = portable(source)
+    for record in state["routes"].values():
+        record["outputDir"] = portable(ROOT / record["outputDir"])
+    atomic_json(SUBMISSIONS, state)
     for route in campaign["routes"]:
         route_id = route["id"]
         if route_id in state["routes"]:
@@ -60,7 +69,7 @@ def main() -> int:
         state["routes"][route_id] = {
             "jobId": match.group(1),
             "jobType": route["jobType"],
-            "outputDir": str(output_dir),
+            "outputDir": portable(output_dir),
             "requestedParams": params,
             "requestedCommand": command,
         }

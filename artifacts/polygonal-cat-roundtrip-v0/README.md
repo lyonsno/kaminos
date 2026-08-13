@@ -40,5 +40,8 @@ matched orbits, and compares cycle-1 and cycle-2 Trellis geometry in Blender.
 The registration is diagnostic and shape preserving: cycle 2 may receive only
 translation, rotation, and one uniform scale. Raw side-by-side views remain
 adjacent to registered overlays so pose correction cannot impersonate
-morphological stability. The complete operator-facing record is
+morphological stability. Reported residuals are bidirectional nearest-vertex
+distances normalized by the cycle-1 cast diagonal; they diagnose gross shape
+agreement but do not establish continuous surface or anatomical correspondence.
+The complete operator-facing record is
 `cycle-2/cycle-2-sheet.html`.

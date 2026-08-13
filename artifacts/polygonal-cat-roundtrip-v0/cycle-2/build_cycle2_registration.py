@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -43,6 +44,10 @@ def sha256(path: Path) -> str:
 def atomic_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def portable_path(root: Path, path: Path) -> str:
+    return Path(os.path.relpath(path.resolve(), root.resolve())).as_posix()
 
 
 def evaluated_world_mesh(obj: bpy.types.Object) -> tuple[np.ndarray, list[tuple[int, ...]]]:
@@ -355,14 +360,14 @@ def run(args: argparse.Namespace) -> None:
         "schema": SCHEMA,
         "fixed": {
             "role": "cycle-1-trellis",
-            "path": str(fixed_path),
+            "path": portable_path(root, fixed_path),
             "sha256": args.fixed_sha256,
             "meshCount": fixed_meshes,
             "vertexCount": len(fixed_vertices),
         },
         "moving": {
             "role": "cycle-2-trellis",
-            "path": str(moving_path),
+            "path": portable_path(root, moving_path),
             "sha256": args.moving_sha256,
             "meshCount": moving_meshes,
             "vertexCount": len(moving_vertices),
@@ -373,7 +378,8 @@ def run(args: argparse.Namespace) -> None:
             "allowsLocalDeformation": False,
             "allowsAnisotropicScale": False,
             "initialization": "principal-axis right-handed sign candidates",
-            "refinement": "trimmed bidirectional-nearest-surface ICP pose fit",
+            "refinement": "trimmed bidirectional-nearest-vertex ICP pose fit",
+            "residualMetric": "bidirectional_nearest_vertex_distance",
             "poseFitSamplePolicy": {
                 "kind": "deterministic evenly spaced vertex indices",
                 "target": POSE_FIT_SAMPLE_TARGET,
@@ -409,7 +415,8 @@ def run(args: argparse.Namespace) -> None:
         },
         "claimCeiling": (
             "Diagnostic global pose/scale registration and complete rendered geometry only; "
-            "surface-distance residuals are not anatomical correspondence or topology evidence."
+            "nearest-vertex residuals are not surface distance, anatomical correspondence, or "
+            "topology evidence."
         ),
     }
     atomic_json(args.output, result)

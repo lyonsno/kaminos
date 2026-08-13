@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "second-flux.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 5.23,
+  "inference_time_s": 7.71,
+  "total_time_s": 19.48,
+  "output_glb": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/sf3d/output.glb",
+  "output_size_mb": 0.67,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 31349.0
+}

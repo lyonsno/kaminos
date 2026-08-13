@@ -1,0 +1,87 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.cycle-2.reconstruction-ledger.v0",
+  "source": "source/second-flux.png",
+  "sourceSha256": "d811a766317a6d0ae2e13eb041e2043ef966dec22b920d5d65c8202860de62d9",
+  "routes": {
+    "sf3d": {
+      "jobId": "c4b5f47eff9e",
+      "jobType": "sf3d",
+      "input": "source/second-flux.png",
+      "inputSha256": "d811a766317a6d0ae2e13eb041e2043ef966dec22b920d5d65c8202860de62d9",
+      "output": "reconstructions/sf3d/output.glb",
+      "outputSha256": "da9b82daf1990ecc9543e0841a30256e3284ea499e1693ebc13ae420fcd29cf9",
+      "outputBytes": 701028,
+      "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/c4b5f47eff9e/receipt.json",
+      "effectiveRoute": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/source/second-flux.png --output-dir /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/sf3d --texture-resolution 1024 --remesh none --dtype float16",
+      "effectiveArgv": [
+        "/Users/noahlyons/dev/sf3d/.venv/bin/python",
+        "-u",
+        "run_greenroom.py",
+        "--image",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/source/second-flux.png",
+        "--output-dir",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/sf3d",
+        "--texture-resolution",
+        "1024",
+        "--remesh",
+        "none",
+        "--dtype",
+        "float16"
+      ],
+      "effectiveOutputDir": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/sf3d",
+      "effectiveCwd": "/Users/noahlyons/dev/sf3d",
+      "effectiveEnv": {
+        "PYTHONPATH": ".",
+        "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+      },
+      "effectiveDefaults": {
+        "dtype": "float16",
+        "remesh": "none",
+        "texture_resolution": "1024"
+      }
+    },
+    "trellis": {
+      "jobId": "ad289a989903",
+      "jobType": "trellis2mlx_fast",
+      "input": "source/second-flux.png",
+      "inputSha256": "d811a766317a6d0ae2e13eb041e2043ef966dec22b920d5d65c8202860de62d9",
+      "output": "reconstructions/trellis/output.glb",
+      "outputSha256": "1057fcf61ecf4c610779a9eab6c52aa3550cdee529fca46306010a9b65f2b8e1",
+      "outputBytes": 8101292,
+      "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/ad289a989903/receipt.json",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/source/second-flux.png --output /private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/trellis/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveArgv": [
+        "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+        "-u",
+        "generate.py",
+        "--image",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/source/second-flux.png",
+        "--output",
+        "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/trellis/output.glb",
+        "--seed",
+        "42",
+        "--resolution",
+        "512",
+        "--steps",
+        "6",
+        "--no-cascade",
+        "--target-faces",
+        "200000",
+        "--texture-size",
+        "1024",
+        "--simplify-first"
+      ],
+      "effectiveOutputDir": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/polygonal-cat-roundtrip-v0/cycle-2/reconstructions/trellis",
+      "effectiveCwd": "/Users/noahlyons/dev/trellis2mlx",
+      "effectiveEnv": {
+        "PYTHONPATH": "."
+      },
+      "effectiveDefaults": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      }
+    }
+  }
+}

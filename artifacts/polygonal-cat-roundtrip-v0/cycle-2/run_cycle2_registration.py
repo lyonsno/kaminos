@@ -15,7 +15,7 @@ BLENDER = Path("/Applications/Blender.app/Contents/MacOS/Blender")
 def main() -> int:
     campaign = validate_campaign(ROOT)
     ledger = json.loads((ROOT / "reconstruction-ledger.json").read_text())
-    moving = Path(ledger["routes"]["trellis"]["output"])
+    moving = (ROOT / ledger["routes"]["trellis"]["output"]).resolve()
     moving_sha = ledger["routes"]["trellis"]["outputSha256"]
     if digest(moving) != moving_sha:
         raise RuntimeError("cycle-2 Trellis GLB drifted before registration")

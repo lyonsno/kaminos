@@ -112,44 +112,83 @@ class ReconstructionAdmissionTests(unittest.TestCase):
                 output_dir=output_dir,
             )
 
+    def test_generated_evidence_uses_portable_artifact_locators(self):
+        submissions = json.loads((ROOT / "submissions.json").read_text())
+        self.assertFalse(Path(submissions["source"]).is_absolute())
+        for route_id in ("sf3d", "trellis"):
+            self.assertFalse(Path(submissions["routes"][route_id]["outputDir"]).is_absolute())
+        ledger = json.loads((ROOT / "reconstruction-ledger.json").read_text())
+        self.assertFalse(Path(ledger["source"]).is_absolute())
+        for route_id in ("sf3d", "trellis"):
+            route = ledger["routes"][route_id]
+            self.assertFalse(Path(route["input"]).is_absolute())
+            self.assertFalse(Path(route["output"]).is_absolute())
+            manifest = json.loads(
+                (ROOT / "reconstructions" / route_id / "orbit-manifest.json").read_text()
+            )
+            self.assertFalse(Path(manifest["glb"]["path"]).is_absolute())
+            self.assertTrue(
+                all(not Path(row["path"]).is_absolute() for row in manifest["outputs"])
+            )
+
 
 class RegistrationResultTests(unittest.TestCase):
+    def make_result(self, root: Path) -> dict:
+        fixed = root / "fixed.glb"
+        moving = root / "moving.glb"
+        fixed.write_bytes(b"fixed")
+        moving.write_bytes(b"moving")
+        raw = root / "raw.png"
+        overlay = root / "overlay.png"
+        raw.write_bytes(b"raw-view")
+        overlay.write_bytes(b"registered-view")
+        return {
+            "schema": "kaminos.polygonal-cat-cycle2.registration.v0",
+            "fixed": {"path": "fixed.glb", "sha256": hashlib.sha256(b"fixed").hexdigest()},
+            "moving": {"path": "moving.glb", "sha256": hashlib.sha256(b"moving").hexdigest()},
+            "method": {
+                "transformClass": "global_similarity",
+                "uniformScaleOnly": True,
+                "allowsLocalDeformation": False,
+                "allowsAnisotropicScale": False,
+                "residualMetric": "bidirectional_nearest_vertex_distance",
+            },
+            "fit": {
+                "uniformScale": 1.0,
+                "matrix": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+                "normalizedMedianDistance": 0.01,
+                "normalizedP90Distance": 0.03,
+            },
+            "witnesses": {
+                "raw-side-by-side": ["raw.png"],
+                "registered-overlay": ["overlay.png"],
+            },
+        }
+
     def test_registration_result_requires_raw_and_registered_views(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            fixed = root / "fixed.glb"
-            moving = root / "moving.glb"
-            fixed.write_bytes(b"fixed")
-            moving.write_bytes(b"moving")
-            raw = root / "raw.png"
-            overlay = root / "overlay.png"
-            raw.write_bytes(b"raw-view")
-            overlay.write_bytes(b"registered-view")
-            result = {
-                "schema": "kaminos.polygonal-cat-cycle2.registration.v0",
-                "fixed": {"path": str(fixed), "sha256": hashlib.sha256(b"fixed").hexdigest()},
-                "moving": {"path": str(moving), "sha256": hashlib.sha256(b"moving").hexdigest()},
-                "method": {
-                    "transformClass": "global_similarity",
-                    "uniformScaleOnly": True,
-                    "allowsLocalDeformation": False,
-                    "allowsAnisotropicScale": False,
-                },
-                "fit": {
-                    "uniformScale": 1.0,
-                    "matrix": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
-                    "normalizedMedianDistance": 0.01,
-                    "normalizedP90Distance": 0.03,
-                },
-                "witnesses": {
-                    "raw-side-by-side": [str(raw)],
-                    "registered-overlay": [str(overlay)],
-                },
-            }
-            validate_registration_result(result)
+            result = self.make_result(root)
+            validate_registration_result(result, root)
             result["witnesses"].pop("raw-side-by-side")
             with self.assertRaisesRegex(RuntimeError, "raw-side-by-side"):
-                validate_registration_result(result)
+                validate_registration_result(result, root)
+
+    def test_registration_result_names_nearest_vertex_residual(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = self.make_result(root)
+            result["method"].pop("residualMetric")
+            with self.assertRaisesRegex(RuntimeError, "nearest-vertex"):
+                validate_registration_result(result, root)
+
+    def test_registration_result_rejects_nonportable_cast_locator(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = self.make_result(root)
+            result["fixed"]["path"] = str((root / "fixed.glb").resolve())
+            with self.assertRaisesRegex(RuntimeError, "portable"):
+                validate_registration_result(result, root)
 
 
 if __name__ == "__main__":

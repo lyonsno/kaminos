@@ -1,0 +1,8 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.cycle-2.collection-state.v0",
+  "state": "completed",
+  "routes": [
+    "sf3d",
+    "trellis"
+  ]
+}

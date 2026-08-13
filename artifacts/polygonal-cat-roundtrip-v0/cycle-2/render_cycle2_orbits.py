@@ -2,6 +2,7 @@
 """Render both admitted second-cycle casts through one matched orbit."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -14,10 +15,14 @@ BLENDER = Path("/Applications/Blender.app/Contents/MacOS/Blender")
 RENDERER = REPO / "artifacts/triradial-skeleton-proposal-fan-v0/trellis/render-glb-orbit.py"
 
 
+def portable(path: Path) -> str:
+    return Path(os.path.relpath(path.resolve(), ROOT)).as_posix()
+
+
 def main() -> int:
     ledger = json.loads((ROOT / "reconstruction-ledger.json").read_text())
     for route_id, row in ledger["routes"].items():
-        glb = Path(row["output"])
+        glb = (ROOT / row["output"]).resolve()
         if digest(glb) != row["outputSha256"]:
             raise RuntimeError(f"admitted GLB drifted before orbit render: {route_id}")
         route_root = ROOT / "reconstructions" / route_id
@@ -48,6 +53,10 @@ def main() -> int:
         rendered = json.loads(manifest.read_text())
         if rendered.get("status") != "completed" or len(rendered.get("outputs", [])) != 6:
             raise RuntimeError(f"incomplete orbit: {route_id}")
+        rendered["glb"]["path"] = portable(Path(rendered["glb"]["path"]))
+        for output in rendered["outputs"]:
+            output["path"] = portable(Path(output["path"]))
+        manifest.write_text(json.dumps(rendered, indent=2) + "\n")
         print(f"rendered {route_id}")
     return 0
 

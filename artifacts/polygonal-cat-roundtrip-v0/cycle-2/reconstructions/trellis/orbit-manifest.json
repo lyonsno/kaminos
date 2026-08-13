@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.191594660282135,
+      0.5004280209541321,
+      0.3172585964202881
+    ],
+    "low": [
+      -0.18852269649505615,
+      -0.49998709559440613,
+      -0.324637234210968
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "reconstructions/trellis/output.glb",
+    "sha256": "1057fcf61ecf4c610779a9eab6c52aa3550cdee529fca46306010a9b65f2b8e1"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 583187,
+      "cameraLocation": [
+        2.198737859725952,
+        0.00022046267986297607,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.1004565954208374,
+      "path": "reconstructions/trellis/orbit/az000-el12.png",
+      "sha256": "41caf0fe2cde2de29f7900892fd4819b6d3936a09c0a4a8e00f3f922ba8e6274"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 580660,
+      "cameraLocation": [
+        1.1001369953155518,
+        1.9030531644821167,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 0.932267427444458,
+      "path": "reconstructions/trellis/orbit/az060-el12.png",
+      "sha256": "d7c32606db36c25498c1e1799ba9d4ca7ce051592e71aad113af9262d2c0728b"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 579566,
+      "cameraLocation": [
+        -1.0970649719238281,
+        1.9030531644821167,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 0.932267427444458,
+      "path": "reconstructions/trellis/orbit/az120-el12.png",
+      "sha256": "f2741056eeef789fb7eeb8a7bf09e943fc22dc7768692a669e08a07eb048de3c"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 566578,
+      "cameraLocation": [
+        -2.1956660747528076,
+        0.00022046267986297607,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.1004565954208374,
+      "path": "reconstructions/trellis/orbit/az180-el12.png",
+      "sha256": "6f9cb793f484a1d36f0edf574f6e22302729177fb23244f68671dea716c3347e"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 565042,
+      "cameraLocation": [
+        -1.0970649719238281,
+        -1.902612328529358,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 0.932267427444458,
+      "path": "reconstructions/trellis/orbit/az240-el12.png",
+      "sha256": "bd757064526ad9d65f952a7eaef5036af13cf48d15378e64287b4ea3aa62c9af"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 576072,
+      "cameraLocation": [
+        1.1001369953155518,
+        -1.902612328529358,
+        0.4633403718471527
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 0.932267427444458,
+      "path": "reconstructions/trellis/orbit/az300-el12.png",
+      "sha256": "ba3b9b6a8af487349015d772c1b9ae032da633279597287df5e3d783a506411a"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 139651
+}

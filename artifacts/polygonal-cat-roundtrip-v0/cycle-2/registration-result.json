@@ -1,0 +1,103 @@
+{
+  "claimCeiling": "Diagnostic global pose/scale registration and complete rendered geometry only; nearest-vertex residuals are not surface distance, anatomical correspondence, or topology evidence.",
+  "fit": {
+    "fixedPoseFitSamples": 24000,
+    "fixedToMoving": {
+      "medianDistance": 0.008142980746924877,
+      "normalizedMedianDistance": 0.0065029500795762704,
+      "normalizedP90Distance": 0.01731129203010978,
+      "normalizedP95Distance": 0.02245548249187025,
+      "p90Distance": 0.021677164360880852,
+      "p95Distance": 0.028118709102272987,
+      "sampleCount": 152205
+    },
+    "matrix": [
+      [
+        1.0318633852195187,
+        -0.016355354585657882,
+        0.007143922142975361,
+        0.007528016437806174
+      ],
+      [
+        0.016174048994308382,
+        1.0315751600585819,
+        0.02552779452136364,
+        0.010187443827347955
+      ],
+      [
+        -0.00754542154801359,
+        -0.02541201547246118,
+        1.0316772145817603,
+        -0.004820845414848654
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "movingPoseFitSamples": 24000,
+    "movingToFixed": {
+      "medianDistance": 0.00554724270477891,
+      "normalizedMedianDistance": 0.004430004627248284,
+      "normalizedP90Distance": 0.015589246844268888,
+      "normalizedP95Distance": 0.021025454490972283,
+      "p90Distance": 0.019520822912454605,
+      "p95Distance": 0.026328030973672867,
+      "sampleCount": 139651
+    },
+    "normalizedMedianDistance": 0.004430004627248284,
+    "normalizedP90Distance": 0.015589246844268888,
+    "poseScore": 0.012726491643115886,
+    "uniformScale": 1.0320177222334368
+  },
+  "fixed": {
+    "meshCount": 1,
+    "path": "../reconstructions/trellis/output.glb",
+    "role": "cycle-1-trellis",
+    "sha256": "3b048af71064beb0a8051e711bb53830f557ab0ec602e7483fc7f63cb09c1df4",
+    "vertexCount": 152205
+  },
+  "method": {
+    "allowsAnisotropicScale": false,
+    "allowsLocalDeformation": false,
+    "icpIterations": 12,
+    "initialization": "principal-axis right-handed sign candidates",
+    "inlierQuantile": 0.82,
+    "poseFitSamplePolicy": {
+      "kind": "deterministic evenly spaced vertex indices",
+      "reason": "Cycle-1 contains 152,205 vertices; four candidates times twelve full Python KDTree sweeps would add 7.3 million pose queries. Sampling is used only to estimate the seven global parameters; every vertex is retained in witnesses and final bidirectional residuals.",
+      "target": 24000
+    },
+    "rawWitnessLayout": "translation-only centering and side-by-side display; no rescale",
+    "refinement": "trimmed bidirectional-nearest-vertex ICP pose fit",
+    "residualMetric": "bidirectional_nearest_vertex_distance",
+    "transformClass": "global_similarity",
+    "uniformScaleOnly": true
+  },
+  "moving": {
+    "meshCount": 1,
+    "path": "reconstructions/trellis/output.glb",
+    "role": "cycle-2-trellis",
+    "sha256": "1057fcf61ecf4c610779a9eab6c52aa3550cdee529fca46306010a9b65f2b8e1",
+    "vertexCount": 139651
+  },
+  "schema": "kaminos.polygonal-cat-cycle2.registration.v0",
+  "witnesses": {
+    "legend": {
+      "cyan": "cycle-1 Trellis",
+      "orange": "cycle-2 Trellis"
+    },
+    "raw-side-by-side": [
+      "registration/raw-side-by-side/az000-el10.png",
+      "registration/raw-side-by-side/az045-el10.png",
+      "registration/raw-side-by-side/az135-el10.png"
+    ],
+    "registered-overlay": [
+      "registration/registered-overlay/az000-el10.png",
+      "registration/registered-overlay/az045-el10.png",
+      "registration/registered-overlay/az135-el10.png"
+    ]
+  }
+}

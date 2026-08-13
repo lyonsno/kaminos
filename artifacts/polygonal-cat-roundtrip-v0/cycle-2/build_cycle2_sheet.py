@@ -26,7 +26,7 @@ def image(path: Path, label: str) -> str:
 
 def orbit(route_id: str, manifest: dict) -> str:
     figures = "".join(
-        image(Path(row["path"]), f'{route_id.upper()} · {row["label"]}')
+        image(ROOT / row["path"], f'{route_id.upper()} · {row["label"]}')
         for row in manifest["outputs"]
     )
     return f'<div class="orbit">{figures}</div>'
@@ -110,9 +110,9 @@ figcaption {{ color:#aeb8b3; margin-top:7px; }}
 <p class="legend"><b style="color:#35b7ca">Cyan:</b> cycle 1. <b style="color:#f3692d">Orange:</b> cycle 2. Raw views retain each cast’s native scale and orientation, with translation only for side-by-side display. Registered views apply the one fitted global similarity transform to cycle 2.</p>
 <div class="metrics">
   <div class="metric">Uniform scale<b>{fit['uniformScale']:.4f}</b></div>
-  <div class="metric">Cycle 2 → 1 median / diagonal<b>{moving_to_fixed['normalizedMedianDistance']:.4f}</b></div>
-  <div class="metric">Cycle 2 → 1 p90 / diagonal<b>{moving_to_fixed['normalizedP90Distance']:.4f}</b></div>
-  <div class="metric">Cycle 1 → 2 p90 / diagonal<b>{fixed_to_moving['normalizedP90Distance']:.4f}</b></div>
+  <div class="metric">Cycle 2 → 1 nearest-vertex median / diagonal<b>{moving_to_fixed['normalizedMedianDistance']:.4f}</b></div>
+  <div class="metric">Cycle 2 → 1 nearest-vertex p90 / diagonal<b>{moving_to_fixed['normalizedP90Distance']:.4f}</b></div>
+  <div class="metric">Cycle 1 → 2 nearest-vertex p90 / diagonal<b>{fixed_to_moving['normalizedP90Distance']:.4f}</b></div>
 </div>
 <h2>Unregistered side-by-side</h2><div class="registration">{registration_raw}</div>
 <h2>Registered overlay</h2><div class="registration">{registration_overlay}</div>

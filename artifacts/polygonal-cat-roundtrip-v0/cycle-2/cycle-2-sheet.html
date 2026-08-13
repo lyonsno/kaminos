@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Polygonal cat cycle 2</title>
+<style>
+:root { color-scheme: dark; }
+body { margin:0; padding:28px; background:#0d1011; color:#edf2ef; font:15px/1.45 system-ui,sans-serif; }
+h1 { margin:0 0 6px; font-size:30px; } h2 { margin:32px 0 10px; font-size:21px; }
+p { color:#b7c0bb; max-width:1100px; } code { color:#d7dfdb; font-family:ui-monospace,monospace; }
+.contract,.metric { border:1px solid #38413d; background:#161a18; padding:15px 17px; }
+.contract { margin:20px 0; } .prompt { font-size:19px; font-weight:700; color:#fff; }
+.sequence,.registration { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.orbit { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+figure { margin:0; border:1px solid #303834; background:#171b19; padding:9px; min-width:0; }
+img { width:100%; aspect-ratio:1; object-fit:contain; background:#222725; display:block; }
+figcaption { color:#aeb8b3; margin-top:7px; }
+.metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0; }
+.metric b { display:block; font-size:21px; color:#fff; } .legend { color:#b5c1bb; }
+@media(max-width:900px) { .sequence,.registration,.orbit,.metrics { grid-template-columns:1fr 1fr; } }
+</style></head><body>
+<h1>Polygonal cat: matched second reconstruction cycle</h1>
+<p>Does a matched second reconstruction stabilize the polygonal-cat round trip, sharpen it toward a feline basin, or accumulate learned-basin drift?</p>
+<div class="contract"><div class="prompt">“This shape as a cat.”</div>
+<div><code>seed 80301 · flux2-klein-9b q4 · 512×512 · 8 steps · guidance 1.0</code></div>
+<p>Second-cycle reconstruction routes are matched to cycle 1. The Blender fit permits only translation, rotation, and one uniform scale. It cannot bend limbs, resize one axis independently, or locally deform either cast.</p></div>
+
+<h2>Causal sequence</h2><div class="sequence"><figure><img src="../../authored-envelope-v0/gen-sp-cat/output.png"><figcaption>Cycle 0 · authored-envelope FLUX cat</figcaption></figure><figure><img src="../reconstructions/trellis/orbit/az180-el12.png"><figcaption>Cycle 1 · selected Trellis reconstruction view</figcaption></figure><figure><img src="source/second-flux.png"><figcaption>Cycle 1.5 · second FLUX cat, exact cycle-2 input</figcaption></figure></div>
+
+<h2>Cycle-2 Trellis complete orbit</h2>
+<p><code>1057fcf61ecf4c610779a9eab6c52aa3550cdee529fca46306010a9b65f2b8e1</code> · 8,101,292 bytes · 139,651 rendered vertices</p>
+<div class="orbit"><figure><img src="reconstructions/trellis/orbit/az000-el12.png"><figcaption>TRELLIS · az000-el12</figcaption></figure><figure><img src="reconstructions/trellis/orbit/az060-el12.png"><figcaption>TRELLIS · az060-el12</figcaption></figure><figure><img src="reconstructions/trellis/orbit/az120-el12.png"><figcaption>TRELLIS · az120-el12</figcaption></figure><figure><img src="reconstructions/trellis/orbit/az180-el12.png"><figcaption>TRELLIS · az180-el12</figcaption></figure><figure><img src="reconstructions/trellis/orbit/az240-el12.png"><figcaption>TRELLIS · az240-el12</figcaption></figure><figure><img src="reconstructions/trellis/orbit/az300-el12.png"><figcaption>TRELLIS · az300-el12</figcaption></figure></div>
+
+<h2>Cycle-2 SF3D complete orbit</h2>
+<p><code>da9b82daf1990ecc9543e0841a30256e3284ea499e1693ebc13ae420fcd29cf9</code> · 701,028 bytes · 10,094 rendered vertices</p>
+<div class="orbit"><figure><img src="reconstructions/sf3d/orbit/az000-el12.png"><figcaption>SF3D · az000-el12</figcaption></figure><figure><img src="reconstructions/sf3d/orbit/az060-el12.png"><figcaption>SF3D · az060-el12</figcaption></figure><figure><img src="reconstructions/sf3d/orbit/az120-el12.png"><figcaption>SF3D · az120-el12</figcaption></figure><figure><img src="reconstructions/sf3d/orbit/az180-el12.png"><figcaption>SF3D · az180-el12</figcaption></figure><figure><img src="reconstructions/sf3d/orbit/az240-el12.png"><figcaption>SF3D · az240-el12</figcaption></figure><figure><img src="reconstructions/sf3d/orbit/az300-el12.png"><figcaption>SF3D · az300-el12</figcaption></figure></div>
+
+<h2>Cycle-1 versus cycle-2 Trellis</h2>
+<p class="legend"><b style="color:#35b7ca">Cyan:</b> cycle 1. <b style="color:#f3692d">Orange:</b> cycle 2. Raw views retain each cast’s native scale and orientation, with translation only for side-by-side display. Registered views apply the one fitted global similarity transform to cycle 2.</p>
+<div class="metrics">
+  <div class="metric">Uniform scale<b>1.0320</b></div>
+  <div class="metric">Cycle 2 → 1 nearest-vertex median / diagonal<b>0.0044</b></div>
+  <div class="metric">Cycle 2 → 1 nearest-vertex p90 / diagonal<b>0.0156</b></div>
+  <div class="metric">Cycle 1 → 2 nearest-vertex p90 / diagonal<b>0.0173</b></div>
+</div>
+<h2>Unregistered side-by-side</h2><div class="registration"><figure><img src="registration/raw-side-by-side/az000-el10.png"><figcaption>Unregistered side-by-side · az000-el10</figcaption></figure><figure><img src="registration/raw-side-by-side/az045-el10.png"><figcaption>Unregistered side-by-side · az045-el10</figcaption></figure><figure><img src="registration/raw-side-by-side/az135-el10.png"><figcaption>Unregistered side-by-side · az135-el10</figcaption></figure></div>
+<h2>Registered overlay</h2><div class="registration"><figure><img src="registration/registered-overlay/az000-el10.png"><figcaption>Registered overlay · az000-el10</figcaption></figure><figure><img src="registration/registered-overlay/az045-el10.png"><figcaption>Registered overlay · az045-el10</figcaption></figure><figure><img src="registration/registered-overlay/az135-el10.png"><figcaption>Registered overlay · az135-el10</figcaption></figure></div>
+
+<h2>Claim ceiling</h2><p>Exact second-FLUX source, matched effective reconstruction routes, complete orbit appearance, and diagnostic global-similarity registration only; no arbitrary-source convergence, anatomical fidelity, topology, or production claim.</p>
+</body></html>

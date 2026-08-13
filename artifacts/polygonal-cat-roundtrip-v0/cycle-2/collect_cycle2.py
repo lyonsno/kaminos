@@ -2,6 +2,7 @@
 """Collect exact terminal receipts for both second-cycle reconstructions."""
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -20,10 +21,14 @@ def atomic_json(path: Path, payload: dict) -> None:
     temporary.replace(path)
 
 
+def portable(path: Path) -> str:
+    return Path(os.path.relpath(path.resolve(), ROOT)).as_posix()
+
+
 def main() -> int:
     campaign = validate_campaign(ROOT)
     submissions = json.loads((ROOT / "submissions.json").read_text())
-    source = Path(submissions["source"])
+    source = (ROOT / submissions["source"]).resolve()
     if digest(source) != submissions["sourceSha256"]:
         raise RuntimeError("submitted cycle-2 source drifted")
     rows = {}
@@ -32,13 +37,16 @@ def main() -> int:
         route_id = route["id"]
         submission = submissions["routes"][route_id]
         try:
-            rows[route_id] = admit_reconstruction(
+            row = admit_reconstruction(
                 queue_root=QUEUE,
                 job_id=submission["jobId"],
                 expected_job_type=route["jobType"],
                 expected_input=source,
-                output_dir=Path(submission["outputDir"]),
+                output_dir=(ROOT / submission["outputDir"]).resolve(),
             )
+            row["input"] = portable(Path(row["input"]))
+            row["output"] = portable(Path(row["output"]))
+            rows[route_id] = row
         except RuntimeError as error:
             if "not terminal" in str(error):
                 pending[route_id] = str(error)
@@ -68,7 +76,7 @@ def main() -> int:
         ROOT / "reconstruction-ledger.json",
         {
             "schema": "kaminos.polygonal-cat-roundtrip.cycle-2.reconstruction-ledger.v0",
-            "source": str(source.resolve()),
+            "source": portable(source),
             "sourceSha256": digest(source),
             "routes": rows,
         },
