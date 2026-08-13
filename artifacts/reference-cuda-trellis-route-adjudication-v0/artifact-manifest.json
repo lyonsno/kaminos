@@ -1,0 +1,205 @@
+{
+  "files": [
+    {
+      "bytes": 3251,
+      "path": "README.md",
+      "sha256": "b1160ef80fd4912e3f9e49fbad770aed56ed14379663d1f0b82caed7be602f4a"
+    },
+    {
+      "bytes": 11601,
+      "path": "build_evidence_sheet.py",
+      "sha256": "f3d2c4d6cd7b7959810bc4c46ed16f0c72406011a8e070ba7cc2f52bbfc4eb35"
+    },
+    {
+      "bytes": 1249,
+      "path": "build_manifest.py",
+      "sha256": "9c924dc05f14fdf4dcbcb9e5c99acc55551c892f738363663e3c0cac9d7b6eed"
+    },
+    {
+      "bytes": 587426,
+      "path": "comparison/sf3d/az000-el12.png",
+      "sha256": "ee0019abada6a90f216f2fbb430d3f282c05770b69e1293911d715171edf05dc"
+    },
+    {
+      "bytes": 593326,
+      "path": "comparison/sf3d/az060-el12.png",
+      "sha256": "5e9b7ecb8f3a693e0e4c931a5c40117c9f854aee5f184d8f48f80bc58c312763"
+    },
+    {
+      "bytes": 592318,
+      "path": "comparison/sf3d/az120-el12.png",
+      "sha256": "b081337b2edf2ca24b62c9b065371f3dd21313d2dc8610f4e7733dfbe911ab14"
+    },
+    {
+      "bytes": 565247,
+      "path": "comparison/sf3d/az180-el12.png",
+      "sha256": "784f27961705726c51e80c6afc0cbb769758830c8fcb81b4ff561d4096b6192a"
+    },
+    {
+      "bytes": 574687,
+      "path": "comparison/sf3d/az240-el12.png",
+      "sha256": "af4dc748179654ce257179db6fa9c54958fffd43ab8fc7bdc1a4287d7ed285b0"
+    },
+    {
+      "bytes": 587231,
+      "path": "comparison/sf3d/az300-el12.png",
+      "sha256": "76bfaa0e871b230ece74c167eb167282b00b8fb14164621b60418cdae383ec3b"
+    },
+    {
+      "bytes": 567337,
+      "path": "comparison/trellis2mlx_fast/az000-el12.png",
+      "sha256": "ee614e7665644963a49b0150225a32a71dc105411924c3608bc0323ee3308528"
+    },
+    {
+      "bytes": 558552,
+      "path": "comparison/trellis2mlx_fast/az060-el12.png",
+      "sha256": "714562018f900200ebca83e95bab17cee5b91f61bc4cc1bb9fd785389678ee9c"
+    },
+    {
+      "bytes": 552597,
+      "path": "comparison/trellis2mlx_fast/az120-el12.png",
+      "sha256": "7809a72964b20127eb36de2e99b7ad8e45d17415639727915f5e999cf7cf51c4"
+    },
+    {
+      "bytes": 551688,
+      "path": "comparison/trellis2mlx_fast/az180-el12.png",
+      "sha256": "1f3c32f2d44e7a6530a2ce8197d414f03af692503d44549392343614c22135ce"
+    },
+    {
+      "bytes": 547126,
+      "path": "comparison/trellis2mlx_fast/az240-el12.png",
+      "sha256": "8c7c06ec7edcfe294c04b3754a9135a0a678a64e3cf554471ffc7b233bac482a"
+    },
+    {
+      "bytes": 557142,
+      "path": "comparison/trellis2mlx_fast/az300-el12.png",
+      "sha256": "b49baf7b2f2f0dfe6b25eb02d07c81d4ec685a8bdb2515ba73c48f07b885e043"
+    },
+    {
+      "bytes": 2728,
+      "path": "comparison-sources.json",
+      "sha256": "6d0d6bc8f35d883d14dfbb4f78903774e3b5a494f4f7ff029dcab6a41115c076"
+    },
+    {
+      "bytes": 6829,
+      "path": "evidence-sheet.html",
+      "sha256": "b8decfe671c2d538a6ff51292ffa1c6a6ce34371ee60ae05ee9e10f9dee88090"
+    },
+    {
+      "bytes": 939703,
+      "path": "evidence-sheet.png",
+      "sha256": "4005885e09a264ecde0ead37085d85b800851fd1edae353f3db1fdd3ec1a0d01"
+    },
+    {
+      "bytes": 1718470,
+      "path": "inputs/official-T.png",
+      "sha256": "db468bad8a04f1474a8d68140c07501b013b3ec6124b911fb7852675d64c05ee"
+    },
+    {
+      "bytes": 232918,
+      "path": "inputs/stone-thick-overlapping-slabs-seed80301.png",
+      "sha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117"
+    },
+    {
+      "bytes": 978,
+      "path": "launch-attempts.json",
+      "sha256": "153a8b861edbc0cd744f55cf74d9d9d5bd17e26ed77500515d443aa3a0dfc8e1"
+    },
+    {
+      "bytes": 11369,
+      "path": "reference_cuda_job.py",
+      "sha256": "3e7828ca353da811407c097ffb801f22bc2de8aadbbfa9b1e95a58cf02842317"
+    },
+    {
+      "bytes": 9606,
+      "path": "run_official_space.py",
+      "sha256": "06368bad6ab23f741b66500339e712a1f4d1388066e2ebc0d68e9a480d304a57"
+    },
+    {
+      "bytes": 571898,
+      "path": "runs/official-T-seed0-res1024/orbit/az000-el12.png",
+      "sha256": "d928c4b030a1b9b0901cda5f03adafab4b6b2dde7a5a10fb981b61c052c6d758"
+    },
+    {
+      "bytes": 610679,
+      "path": "runs/official-T-seed0-res1024/orbit/az060-el12.png",
+      "sha256": "4b15db47c5ef0934368f717ab4d4d5c78406ebf83796e854960d4a237808cfc0"
+    },
+    {
+      "bytes": 616270,
+      "path": "runs/official-T-seed0-res1024/orbit/az120-el12.png",
+      "sha256": "98de9123967246561b22982501e368821966546daafc17fba42f48e722d4f284"
+    },
+    {
+      "bytes": 561889,
+      "path": "runs/official-T-seed0-res1024/orbit/az180-el12.png",
+      "sha256": "f2177f550e84152e39e2daac01a40dc49297ee91052c779e75e205dd3c464161"
+    },
+    {
+      "bytes": 616189,
+      "path": "runs/official-T-seed0-res1024/orbit/az240-el12.png",
+      "sha256": "26913f26bcaae697153f41890e86d9e89c48889b8d220afea7068016c84805fa"
+    },
+    {
+      "bytes": 633847,
+      "path": "runs/official-T-seed0-res1024/orbit/az300-el12.png",
+      "sha256": "8e5224004c5a89cc67e0654fd4bf2131241a873cd47fe7c2a670708c8b167cb7"
+    },
+    {
+      "bytes": 3777,
+      "path": "runs/official-T-seed0-res1024/orbit-manifest.json",
+      "sha256": "fab0ead691cf6762fe5069b37a9a60c0f2f9ffedd905a10b27006b1e5665ec2e"
+    },
+    {
+      "bytes": 14271372,
+      "path": "runs/official-T-seed0-res1024/output.glb",
+      "sha256": "66d299a9954306abc1e4042305f6c63d8babae0f0d73a3312e8880212f263929"
+    },
+    {
+      "bytes": 917170,
+      "path": "runs/official-T-seed0-res1024/preprocessed.png",
+      "sha256": "f1efbe2b6f60cd8a10576f30691aec4e7f4d5f2fba0908bd2ddb6782d4f59c56"
+    },
+    {
+      "bytes": 2686,
+      "path": "runs/official-T-seed0-res1024/run-report.json",
+      "sha256": "3020327a3347ebf3044d101fffc4d9301bba03764c6ce07a87fe20eda0cf9ec6"
+    },
+    {
+      "bytes": 137303,
+      "path": "runs/stone-seed80301-res1024/preprocessed.png",
+      "sha256": "b1d13ee8169c6310d783b5a9395a2f43ebc010d6c3d711712c29e9080cac24e7"
+    },
+    {
+      "bytes": 4356,
+      "path": "runs/stone-seed80301-res1024/run-report.json",
+      "sha256": "d2dbe7263ab4238d31ec9cd0328a03494be876d44a25293c56e68aaab9922b5b"
+    },
+    {
+      "bytes": 137303,
+      "path": "runs/stone-seed80301-res1024-authenticated/preprocessed.png",
+      "sha256": "b1d13ee8169c6310d783b5a9395a2f43ebc010d6c3d711712c29e9080cac24e7"
+    },
+    {
+      "bytes": 4381,
+      "path": "runs/stone-seed80301-res1024-authenticated/run-report.json",
+      "sha256": "2ab52b492428906dbab87738f1ad6e9a361abd7492d20388557091d67d4d55ac"
+    },
+    {
+      "bytes": 2245,
+      "path": "test_evidence_sheet.py",
+      "sha256": "9dd5f33c2803e585974d904512fa74582cb60b98eae271ad7a122ec16d4bcf2d"
+    },
+    {
+      "bytes": 902,
+      "path": "test_official_space_runner.py",
+      "sha256": "a796a4396b3cb79e5af07e45e20b570bc79af7b6f717b32144b0af5f71ebd6d6"
+    },
+    {
+      "bytes": 1559,
+      "path": "test_reference_cuda_job.py",
+      "sha256": "860cd5c9d32ee471a5c8591146b864df8be8575616ca9f9633319d04f3826c0f"
+    }
+  ],
+  "schema": "kaminos.reference_cuda_trellis_artifact_manifest.v1"
+}

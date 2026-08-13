@@ -1,0 +1,114 @@
+{
+  "bounds": {
+    "high": [
+      0.5009778141975403,
+      0.21474139392375946,
+      0.46098247170448303
+    ],
+    "low": [
+      -0.5009443759918213,
+      -0.21472802758216858,
+      -0.4441680610179901
+    ]
+  },
+  "effectiveRoute": {
+    "blenderVersion": "5.1.2",
+    "colorType": "TEXTURE",
+    "projection": "orthographic",
+    "renderEngine": "BLENDER_WORKBENCH"
+  },
+  "glb": {
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/output.glb",
+    "sha256": "66d299a9954306abc1e4042305f6c63d8babae0f0d73a3312e8880212f263929"
+  },
+  "meshCount": 1,
+  "outputs": [
+    {
+      "azimuthDegrees": 0.0,
+      "byteLength": 571898,
+      "cameraLocation": [
+        2.4946937561035156,
+        6.683170795440674e-06,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az000-el12",
+      "orthoScale": 1.203050136566162,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az000-el12.png",
+      "sha256": "d928c4b030a1b9b0901cda5f03adafab4b6b2dde7a5a10fb981b61c052c6d758"
+    },
+    {
+      "azimuthDegrees": 60.0,
+      "byteLength": 610679,
+      "cameraLocation": [
+        1.2473552227020264,
+        2.1604604721069336,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az060-el12",
+      "orthoScale": 1.1906671524047852,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az060-el12.png",
+      "sha256": "4b15db47c5ef0934368f717ab4d4d5c78406ebf83796e854960d4a237808cfc0"
+    },
+    {
+      "azimuthDegrees": 120.0,
+      "byteLength": 616270,
+      "cameraLocation": [
+        -1.2473218441009521,
+        2.1604604721069336,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az120-el12",
+      "orthoScale": 1.1906671524047852,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az120-el12.png",
+      "sha256": "98de9123967246561b22982501e368821966546daafc17fba42f48e722d4f284"
+    },
+    {
+      "azimuthDegrees": 180.0,
+      "byteLength": 561889,
+      "cameraLocation": [
+        -2.4946603775024414,
+        6.683170795440674e-06,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az180-el12",
+      "orthoScale": 1.203050136566162,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az180-el12.png",
+      "sha256": "f2177f550e84152e39e2daac01a40dc49297ee91052c779e75e205dd3c464161"
+    },
+    {
+      "azimuthDegrees": 240.0,
+      "byteLength": 616189,
+      "cameraLocation": [
+        -1.2473218441009521,
+        -2.160447120666504,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az240-el12",
+      "orthoScale": 1.1906673908233643,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az240-el12.png",
+      "sha256": "26913f26bcaae697153f41890e86d9e89c48889b8d220afea7068016c84805fa"
+    },
+    {
+      "azimuthDegrees": 300.0,
+      "byteLength": 633847,
+      "cameraLocation": [
+        1.2473552227020264,
+        -2.160447120666504,
+        0.5386672019958496
+      ],
+      "elevationDegrees": 12.0,
+      "label": "az300-el12",
+      "orthoScale": 1.1906673908233643,
+      "path": "artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/orbit/az300-el12.png",
+      "sha256": "8e5224004c5a89cc67e0654fd4bf2131241a873cd47fe7c2a670708c8b167cb7"
+    }
+  ],
+  "schema": "kaminos.triradial-glb-orbit.v0",
+  "status": "completed",
+  "totalVertexCount": 275204
+}

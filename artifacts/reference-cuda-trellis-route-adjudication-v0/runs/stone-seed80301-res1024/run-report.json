@@ -1,0 +1,62 @@
+{
+  "effectiveRoute": {
+    "decimationTarget": 300000,
+    "modelIdDeclaredBySpaceSource": "microsoft/TRELLIS.2-4B",
+    "preprocessing": "public-/preprocess_image endpoint",
+    "resolution": "1024",
+    "sampler": {
+      "shapeSlatGuidanceRescale": 0.5,
+      "shapeSlatGuidanceStrength": 7.5,
+      "shapeSlatRescaleT": 3.0,
+      "shapeSlatSamplingSteps": 12,
+      "ssGuidanceRescale": 0.7,
+      "ssGuidanceStrength": 7.5,
+      "ssRescaleT": 5.0,
+      "ssSamplingSteps": 12,
+      "texSlatGuidanceRescale": 0.0,
+      "texSlatGuidanceStrength": 1.0,
+      "texSlatRescaleT": 3.0,
+      "texSlatSamplingSteps": 12
+    },
+    "seed": 80301,
+    "space": "microsoft/TRELLIS.2",
+    "spaceIdentityBefore": {
+      "hardware": {
+        "current": "zero-a10g",
+        "requested": "zero-a10g"
+      },
+      "id": "microsoft/TRELLIS.2",
+      "lastModified": "2026-05-20T07:56:11.000Z",
+      "requestedHardware": null,
+      "sha": "ebf60b20fc5a4607f90a1c11c0aab0ceeda5429d",
+      "stage": "RUNNING"
+    },
+    "textureSize": 2048
+  },
+  "error": {
+    "message": "You have exceeded your free ZeroGPU quota (120s requested vs. 173s left). Try again in 23:55:18. Subscribe to Hugging Face PRO to get 25 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU",
+    "traceback": "Traceback (most recent call last):\n  File \"/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/run_official_space.py\", line 187, in main\n    extracted = client.predict(\n                ^^^^^^^^^^^^^^^\n  File \"/Users/noahlyons/.cache/uv/archive-v0/52VJnPIgGCxRALhX/lib/python3.12/site-packages/gradio_client/client.py\", line 502, in predict\n    ).result()\n      ^^^^^^^^\n  File \"/Users/noahlyons/.cache/uv/archive-v0/52VJnPIgGCxRALhX/lib/python3.12/site-packages/gradio_client/client.py\", line 1509, in result\n    return super().result(timeout=timeout)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/noahlyons/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py\", line 456, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/noahlyons/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/Users/noahlyons/.local/share/uv/python/cpython-3.12.12-macos-aarch64-none/lib/python3.12/concurrent/futures/thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/noahlyons/.cache/uv/archive-v0/52VJnPIgGCxRALhX/lib/python3.12/site-packages/gradio_client/client.py\", line 1103, in _inner\n    predictions = _predict(*data, **kwargs)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/noahlyons/.cache/uv/archive-v0/52VJnPIgGCxRALhX/lib/python3.12/site-packages/gradio_client/client.py\", line 1225, in _predict\n    raise AppError(message=message, **result)\ngradio_client.exceptions.AppError: You have exceeded your free ZeroGPU quota (120s requested vs. 173s left). Try again in 23:55:18. Subscribe to Hugging Face PRO to get 25 min of ZeroGPU quota a day - https://huggingface.co/subscribe/pro?from=ZeroGPU\n",
+    "type": "AppError"
+  },
+  "failurePhase": "space-glb-extraction",
+  "lastTrustworthyEvidence": "official-space-preview-returned",
+  "output": null,
+  "preprocessed": {
+    "bytes": 137303,
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/runs/stone-seed80301-res1024/preprocessed.png",
+    "sha256": "b1d13ee8169c6310d783b5a9395a2f43ebc010d6c3d711712c29e9080cac24e7"
+  },
+  "previewReturned": true,
+  "schema": "kaminos.reference_cuda_trellis_space_run.v1",
+  "source": {
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/inputs/stone-thick-overlapping-slabs-seed80301.png",
+    "sha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117"
+  },
+  "status": "failed",
+  "timingsSeconds": {
+    "space-client-connect": 1.0602850830182433,
+    "space-inference": 30.754596709040925,
+    "space-preprocessing": 5.546195541974157,
+    "total": 37.842294416972436
+  }
+}

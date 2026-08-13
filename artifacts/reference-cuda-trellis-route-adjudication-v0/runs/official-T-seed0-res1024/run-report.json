@@ -1,0 +1,73 @@
+{
+  "effectiveRoute": {
+    "decimationTarget": 300000,
+    "modelIdDeclaredBySpaceSource": "microsoft/TRELLIS.2-4B",
+    "preprocessing": "public-/preprocess_image endpoint",
+    "resolution": "1024",
+    "sampler": {
+      "shapeSlatGuidanceRescale": 0.5,
+      "shapeSlatGuidanceStrength": 7.5,
+      "shapeSlatRescaleT": 3.0,
+      "shapeSlatSamplingSteps": 12,
+      "ssGuidanceRescale": 0.7,
+      "ssGuidanceStrength": 7.5,
+      "ssRescaleT": 5.0,
+      "ssSamplingSteps": 12,
+      "texSlatGuidanceRescale": 0.0,
+      "texSlatGuidanceStrength": 1.0,
+      "texSlatRescaleT": 3.0,
+      "texSlatSamplingSteps": 12
+    },
+    "seed": 0,
+    "space": "microsoft/TRELLIS.2",
+    "spaceIdentityAfter": {
+      "hardware": {
+        "current": "zero-a10g",
+        "requested": "zero-a10g"
+      },
+      "id": "microsoft/TRELLIS.2",
+      "lastModified": "2026-05-20T07:56:11.000Z",
+      "requestedHardware": null,
+      "sha": "ebf60b20fc5a4607f90a1c11c0aab0ceeda5429d",
+      "stage": "RUNNING"
+    },
+    "spaceIdentityBefore": {
+      "hardware": {
+        "current": "zero-a10g",
+        "requested": "zero-a10g"
+      },
+      "id": "microsoft/TRELLIS.2",
+      "lastModified": "2026-05-20T07:56:11.000Z",
+      "requestedHardware": null,
+      "sha": "ebf60b20fc5a4607f90a1c11c0aab0ceeda5429d",
+      "stage": "RUNNING"
+    },
+    "textureSize": 2048
+  },
+  "failurePhase": null,
+  "lastTrustworthyEvidence": "revision-stable-official-space-glb-downloaded",
+  "output": {
+    "bytes": 14271372,
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/output.glb",
+    "sha256": "66d299a9954306abc1e4042305f6c63d8babae0f0d73a3312e8880212f263929"
+  },
+  "preprocessed": {
+    "bytes": 917170,
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/runs/official-T-seed0-res1024/preprocessed.png",
+    "sha256": "f1efbe2b6f60cd8a10576f30691aec4e7f4d5f2fba0908bd2ddb6782d4f59c56"
+  },
+  "previewReturned": true,
+  "schema": "kaminos.reference_cuda_trellis_space_run.v1",
+  "source": {
+    "path": "/private/tmp/kaminos-molten-roundtrip-cycle2-registration-0813/artifacts/reference-cuda-trellis-route-adjudication-v0/inputs/official-T.png",
+    "sha256": "db468bad8a04f1474a8d68140c07501b013b3ec6124b911fb7852675d64c05ee"
+  },
+  "status": "completed",
+  "timingsSeconds": {
+    "space-client-connect": 1.1172107919119298,
+    "space-glb-extraction": 45.398272791993804,
+    "space-inference": 57.25970583304297,
+    "space-preprocessing": 1.2146747499937192,
+    "total": 105.22843124996871
+  }
+}

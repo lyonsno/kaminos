@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.reference_cuda_trellis_launch_attempts.v1",
+  "attempts": [
+    {
+      "route": "hugging-face-mcp",
+      "status": "rejected-pre-submission",
+      "failurePhase": "connector-authentication",
+      "jobId": null,
+      "charged": false,
+      "message": "The Hugging Face MCP connection requires reauthentication before job submission."
+    },
+    {
+      "route": "huggingface-jobs-cli",
+      "status": "rejected-pre-provisioning",
+      "failurePhase": "account-billing-preflight",
+      "jobId": null,
+      "charged": false,
+      "requestedHardware": "a10g-small",
+      "requestedTimeoutMinutes": 15,
+      "maximumComputeCostUsd": 0.2505,
+      "containerImage": "hf.co/spaces/microsoft/TRELLIS.2",
+      "runner": "hf://datasets/lyonsno/kaminos-private-cuda-receipts/reference-cuda-trellis/stone-seed80301-res1024/reference_cuda_job.py",
+      "message": "HTTP 402: Pre-paid credit balance is insufficient; no job was provisioned."
+    }
+  ]
+}

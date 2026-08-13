@@ -1,0 +1,75 @@
+{
+  "routes": {
+    "sf3d": {
+      "frames": [
+        {
+          "bytes": 587426,
+          "path": "comparison/sf3d/az000-el12.png",
+          "sha256": "ee0019abada6a90f216f2fbb430d3f282c05770b69e1293911d715171edf05dc"
+        },
+        {
+          "bytes": 593326,
+          "path": "comparison/sf3d/az060-el12.png",
+          "sha256": "5e9b7ecb8f3a693e0e4c931a5c40117c9f854aee5f184d8f48f80bc58c312763"
+        },
+        {
+          "bytes": 592318,
+          "path": "comparison/sf3d/az120-el12.png",
+          "sha256": "b081337b2edf2ca24b62c9b065371f3dd21313d2dc8610f4e7733dfbe911ab14"
+        },
+        {
+          "bytes": 565247,
+          "path": "comparison/sf3d/az180-el12.png",
+          "sha256": "784f27961705726c51e80c6afc0cbb769758830c8fcb81b4ff561d4096b6192a"
+        },
+        {
+          "bytes": 574687,
+          "path": "comparison/sf3d/az240-el12.png",
+          "sha256": "af4dc748179654ce257179db6fa9c54958fffd43ab8fc7bdc1a4287d7ed285b0"
+        },
+        {
+          "bytes": 587231,
+          "path": "comparison/sf3d/az300-el12.png",
+          "sha256": "76bfaa0e871b230ece74c167eb167282b00b8fb14164621b60418cdae383ec3b"
+        }
+      ],
+      "sourceArtifact": "artifacts/representative-sf3d-comparison-v0/renders/rigid-stone-slabs/sf3d/orbit"
+    },
+    "trellis2mlx_fast": {
+      "frames": [
+        {
+          "bytes": 567337,
+          "path": "comparison/trellis2mlx_fast/az000-el12.png",
+          "sha256": "ee614e7665644963a49b0150225a32a71dc105411924c3608bc0323ee3308528"
+        },
+        {
+          "bytes": 558552,
+          "path": "comparison/trellis2mlx_fast/az060-el12.png",
+          "sha256": "714562018f900200ebca83e95bab17cee5b91f61bc4cc1bb9fd785389678ee9c"
+        },
+        {
+          "bytes": 552597,
+          "path": "comparison/trellis2mlx_fast/az120-el12.png",
+          "sha256": "7809a72964b20127eb36de2e99b7ad8e45d17415639727915f5e999cf7cf51c4"
+        },
+        {
+          "bytes": 551688,
+          "path": "comparison/trellis2mlx_fast/az180-el12.png",
+          "sha256": "1f3c32f2d44e7a6530a2ce8197d414f03af692503d44549392343614c22135ce"
+        },
+        {
+          "bytes": 547126,
+          "path": "comparison/trellis2mlx_fast/az240-el12.png",
+          "sha256": "8c7c06ec7edcfe294c04b3754a9135a0a678a64e3cf554471ffc7b233bac482a"
+        },
+        {
+          "bytes": 557142,
+          "path": "comparison/trellis2mlx_fast/az300-el12.png",
+          "sha256": "b49baf7b2f2f0dfe6b25eb02d07c81d4ec685a8bdb2515ba73c48f07b885e043"
+        }
+      ],
+      "sourceArtifact": "artifacts/representative-sf3d-comparison-v0/renders/rigid-stone-slabs/trellis/orbit"
+    }
+  },
+  "schema": "kaminos.reference_cuda_trellis_comparison_sources.v1"
+}
