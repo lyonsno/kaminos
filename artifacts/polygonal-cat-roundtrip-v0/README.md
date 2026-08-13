@@ -17,11 +17,19 @@ scale as the secondary comparison. The second FLUX matrix is frozen only after
 that visual selection, because morphology fidelity is the load-bearing
 variable and raw face count is not a useful substitute for it.
 
+The admitted selection is Trellis view `az180-el12`. `selection.json` binds the
+selected plate and GLB by digest. `second-pass.json` freezes the first causal
+return as one matched cell: the selected Trellis plate under the original
+`This shape as a cat.` prompt, seed 80301, and original FLUX settings. Run
+`submit_second_pass.py` idempotently, then `await_second_pass.py` to admit the
+effective receipt and build `roundtrip-second-pass-sheet.html` with input,
+prompt/settings, and output adjacent.
+
 Run the local contract with:
 
 ```sh
 python3 -m unittest test_roundtrip_contract.py -v
 ```
 
-The submitted Greenroom job identities and requested routes are recorded in
-`submissions.json`.
+The reconstruction Greenroom identities are recorded in `submissions.json`;
+the causal-return identity is recorded in `second-pass-submission.json`.

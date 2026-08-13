@@ -1,0 +1,14 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.selection.v0",
+  "route": "trellis",
+  "glb": "reconstructions/trellis/output.glb",
+  "glbSha256": "3b048af71064beb0a8051e711bb53830f557ab0ec602e7483fc7f63cb09c1df4",
+  "view": "az180-el12",
+  "plate": "reconstructions/trellis/orbit/az180-el12.png",
+  "plateSha256": "7e6b5042280cfe574e0575224f95fea41e3b140282298434a705bb5d3a26bcb0",
+  "selectionPriority": [
+    "cross-view naturalistic feline coherence",
+    "visible tessellation character comparable to the exact FLUX source"
+  ],
+  "rationale": "Trellis preserves a coherent feline body and four-limb organization across all six views. SF3D preserves the privileged-view face and pale palette more closely but swells the hidden-view body and partially fuses or loses rear limbs."
+}

@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "output.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 5.59,
+  "inference_time_s": 10.49,
+  "total_time_s": 22.97,
+  "output_glb": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d/output.glb",
+  "output_size_mb": 0.78,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 20713.0
+}

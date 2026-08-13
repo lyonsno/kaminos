@@ -1,0 +1,22 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.second-pass.v0",
+  "selection": "selection.json",
+  "cell": {
+    "id": "trellis-az180-cat-seed80301",
+    "jobType": "mflux_flux2_edit_promptfile",
+    "input": "reconstructions/trellis/orbit/az180-el12.png",
+    "promptFile": "prompts/second-pass-cat.txt",
+    "prompt": "This shape as a cat.",
+    "seed": 80301,
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlxCacheLimitGb": 48,
+    "outputDir": "second-pass/trellis-az180-cat-seed80301"
+  },
+  "causalQuestion": "With prompt, seed, model, quantization, resolution, steps, and guidance matched to the original cat cell, does replacing the authored carrier plate with its Trellis reconstruction render preserve the same naturalistic polygonal-cat basin?",
+  "claimCeiling": "Exact selected render, exact prompt, seed, effective FLUX route, and visually inspected output only."
+}

@@ -1,0 +1,11 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.second-pass-submission.v0",
+  "cellId": "trellis-az180-cat-seed80301",
+  "jobId": "d38ca88273ac",
+  "jobType": "mflux_flux2_edit_promptfile",
+  "input": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis/orbit/az180-el12.png",
+  "promptFile": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/prompts/second-pass-cat.txt",
+  "seed": 80301,
+  "outputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/second-pass/trellis-az180-cat-seed80301",
+  "queueRoot": "/Users/noahlyons/.local/state/gpu-greenroom"
+}

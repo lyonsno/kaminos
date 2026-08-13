@@ -1,0 +1,15 @@
+{
+  "name": "output",
+  "job_type": "sf3d",
+  "job_id": "9122cbcba82c",
+  "input_path": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+  "input_name": "output.png",
+  "params": {},
+  "output_files": [
+    "input.png",
+    "output.glb",
+    "receipt.json"
+  ],
+  "created_at": 1786577314.198792,
+  "duration_s": 33.3
+}

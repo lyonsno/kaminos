@@ -1,0 +1,49 @@
+{
+  "schema": "kaminos.polygonal-cat-roundtrip.reconstruction-ledger.v0",
+  "source": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+  "sourceSha256": "56ea3103f3751b6e693e9fe4b85ee14d31cee9980c2ecde1560f0e4b729d344b",
+  "routes": {
+    "sf3d": {
+      "jobId": "9122cbcba82c",
+      "jobType": "sf3d",
+      "input": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+      "output": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d/output.glb",
+      "outputSha256": "08e63e1904fa3c348159cc351b1f24a21d61127ac5683b14644a8f8799c60fc7",
+      "outputBytes": 815776,
+      "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/9122cbcba82c/receipt.json",
+      "effectiveRoute": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png --output-dir /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d --texture-resolution 1024 --remesh none --dtype float16",
+      "effectiveOutputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/sf3d",
+      "effectiveCwd": "/Users/noahlyons/dev/sf3d",
+      "effectiveEnv": {
+        "PYTHONPATH": ".",
+        "PYTORCH_ENABLE_MPS_FALLBACK": "1"
+      },
+      "effectiveDefaults": {
+        "dtype": "float16",
+        "remesh": "none",
+        "texture_resolution": "1024"
+      }
+    },
+    "trellis": {
+      "jobId": "934f19823531",
+      "jobType": "trellis2mlx_fast",
+      "input": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png",
+      "output": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis/output.glb",
+      "outputSha256": "3b048af71064beb0a8051e711bb53830f557ab0ec602e7483fc7f63cb09c1df4",
+      "outputBytes": 8611560,
+      "receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/934f19823531/receipt.json",
+      "effectiveRoute": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/authored-envelope-v0/gen-sp-cat/output.png --output /private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+      "effectiveOutputDir": "/private/tmp/kaminos-molten-triradial-proposals-0808/artifacts/polygonal-cat-roundtrip-v0/reconstructions/trellis",
+      "effectiveCwd": "/Users/noahlyons/dev/trellis2mlx",
+      "effectiveEnv": {
+        "PYTHONPATH": "."
+      },
+      "effectiveDefaults": {
+        "seed": "42",
+        "steps": "6",
+        "target_faces": "200000",
+        "texture_size": "1024"
+      }
+    }
+  }
+}
