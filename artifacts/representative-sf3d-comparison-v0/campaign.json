@@ -1,0 +1,60 @@
+{
+  "schema": "kaminos.representative-sf3d-comparison.campaign.v0",
+  "question": "Across rigid assemblies, ornate appendages, and continuous organic anatomy, where does Stable Fast 3D reconstruct the source more usefully than the matched Trellis cast?",
+  "claimCeiling": "Source-specific route comparison across three representative plates; not general reconstruction superiority or production admission.",
+  "sf3d": {
+    "jobType": "sf3d",
+    "params": {
+      "dtype": "float16",
+      "remesh": "none",
+      "texture_resolution": "1024"
+    }
+  },
+  "cells": [
+    {
+      "id": "rigid-stone-slabs",
+      "class": "rigid-separable-assembly",
+      "question": "Does SF3D preserve independently legible overlapping slabs more faithfully than Trellis?",
+      "source": {
+        "path": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/stone-thick-overlapping-slabs-seed80301/output.png",
+        "sha256": "55888db84f34312476c642805a1d0798cde3404ebe661f94c689cc49217b3117"
+      },
+      "trellis": {
+        "path": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/stone-thick-overlapping-slabs-seed80301/output.glb",
+        "sha256": "c1330fd20d151bb26d5dc64073ed88f6d147c694429346f5c14411ad6b9e261d",
+        "ledger": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis-result-ledger.json",
+        "cell": "stone-thick-overlapping-slabs-seed80301"
+      }
+    },
+    {
+      "id": "ornate-dragon",
+      "class": "ornate-organic-appendages",
+      "question": "Does SF3D retain horns, dorsal spines, claws, and fine surface articulation more coherently than Trellis?",
+      "source": {
+        "path": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/runs/dragon-lighting-01-seed80301/output.png",
+        "sha256": "7a4fc1c118e0ee65484b6235d5ff17cacea802c9e9588262f5eb2420d8c75bd8"
+      },
+      "trellis": {
+        "path": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis/dragon-lighting-01-seed80301/output.glb",
+        "sha256": "ed5b836890a8fb1372d0cf8c04cb9b4242e0c9a6c2ceb954a0c17f403b474cba",
+        "ledger": "artifacts/cat-carrier-revision-050-prompt-lighting-v0/trellis-result-ledger.json",
+        "cell": "dragon-lighting-01-seed80301"
+      }
+    },
+    {
+      "id": "organic-skin",
+      "class": "continuous-organic-anatomy",
+      "question": "On a smooth anatomical surface, does SF3D preserve the authored silhouette and limb organization more usefully than Trellis?",
+      "source": {
+        "path": "artifacts/latest-envelope-basin-reconstruction-v0/flux/skin-seed80413/output.png",
+        "sha256": "cf52bc34d676576d127de259b7f8b07a03e44f2a24e4b76cb1984dff3bc8f7e2"
+      },
+      "trellis": {
+        "path": "artifacts/latest-envelope-basin-reconstruction-v0/trellis/skin-seed80413/output.glb",
+        "sha256": "d44193ff5301be1569cb5b3f2aaa5b07580e04442e04dcdb276e6817c54bae0a",
+        "ledger": "artifacts/latest-envelope-basin-reconstruction-v0/trellis-ledger.json",
+        "cell": "skin-seed80413"
+      }
+    }
+  ]
+}
