@@ -1,0 +1,66 @@
+{
+  "schema": "kaminos.nbody-packing-active-row-trust-region-trajectory-continuation-assay.v0",
+  "status": "complete-active-row-continuation-budget-exhausted",
+  "route": {
+    "requested": "active-row-minimum-norm-common-descent-trust-region-trajectory-v0",
+    "effective": "active-row-minimum-norm-common-descent-trust-region-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "source": {
+    "fixtureSha256": "9498cc0ead3a390ee7854456f3afbe427f75453537dc10e0471c42553677f6dd",
+    "problemSha256": "cca9f08a740141647f085ac280d9e4fae006274c5e8e98c60ea66ebd68a0ab9c",
+    "admittedActiveRowTrajectory": {
+      "rawPath": "artifacts/nbody-packing-active-row-trust-region-trajectory-v0/raw-trajectory.json",
+      "rawFileSha256": "ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264",
+      "rawSha256": "d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2",
+      "resultPath": "artifacts/nbody-packing-active-row-trust-region-trajectory-v0/result.json",
+      "resultFileSha256": "ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264",
+      "resultSha256": "d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2",
+      "reportPath": "artifacts/nbody-packing-active-row-trust-region-trajectory-v0/run-report.json",
+      "reportFileSha256": "c0132bdaa0bb7d8b306c8f6374692eaa183cd48c98f3b4f59fd06e6eaa9cb21a",
+      "reportSha256": "c51fc8d8fad0e692f9795510e6596266cd8a25f9b3af91a435f199d6ce7582d6"
+    }
+  },
+  "probe": {
+    "continuationStartIteration": 8,
+    "iterationBudget": 8,
+    "acceptedIterations": 8,
+    "attemptedIterations": 8,
+    "terminalReason": null,
+    "selectedRadii": [
+      0.00025,
+      0.000125,
+      0.00025,
+      0.001,
+      0.001,
+      0.0005,
+      0.00025,
+      0.000125
+    ]
+  },
+  "comparison": {
+    "admittedStepEight": 0.004280587745,
+    "continuationSelected": 0.004249551501,
+    "improvementRatio": 1.0073034163705739,
+    "familyStart": {
+      "pairwisePenetration": 0.000855696135,
+      "skeletalPenetration": 0.000924043077,
+      "compartmentEscape": 0.004280587745
+    },
+    "familySelected": {
+      "pairwisePenetration": 0.000819301291,
+      "skeletalPenetration": 0.000892965938,
+      "compartmentEscape": 0.004249551501
+    }
+  },
+  "bindings": {
+    "rawTrajectoryFileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "rawTrajectorySha256": "71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5",
+    "resultFileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "resultSha256": "71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5"
+  },
+  "claimCeiling": "bounded-severity-0.32-exact-step-eight-continuation-progress-or-local-floor-not-global-feasibility-or-carrier-impossibility",
+  "identity": {
+    "sha256": "d08e44e6f95d17f8e86e9b11f55c76a83d5d69aa3a45a30ccd0aca7f9204ea1a"
+  }
+}

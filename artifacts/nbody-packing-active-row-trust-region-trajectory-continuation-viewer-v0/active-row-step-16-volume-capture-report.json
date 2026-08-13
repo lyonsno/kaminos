@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777232,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume",
+    "outputPath": "repo://artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0/active-row-step-16-volume.png",
+    "reportPath": "repo://artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0/active-row-step-16-volume-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 67621,
+    "processGroupId": 67621,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 67621,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 67882,
+      "processGroupId": 67882,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 67882,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 3656,
+    "retainedBytes": 3656,
+    "truncated": false,
+    "tail": "[0813/041530.381303:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0813/041530.452655:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0813/041531.017229:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n[0813/041531.017266:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n[0813/041531.019296:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0813/041531.042500:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n[0813/041531.044174:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0813/041531.060046:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n[0813/041531.061531:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0813/041531.077184:INFO:CONSOLE:0] \"[.WebGL-0x11c00508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n295639 bytes written to file repo://artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0/active-row-step-16-volume.png\n[0813/041531.297458:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0813/041531.320874:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n[0813/041531.365613:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0813/041531.925991:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0813/041531.926598:INFO:CONSOLE:0] \"[.WebGL-0x13400558400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0/active-row-step-16-volume.png",
+    "sizeBytes": 295639,
+    "sha256": "0d95ddafece1dc427268c94c7b137d2f5810080c8c86e907b0dfe0fe93e44580",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 75,
+      "idatBytes": 294718
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "active-row-step-16",
+      "witnessMode": "volume",
+      "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+      "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+      "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 122914,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777232,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0/active-row-step-16-volume.png",
+      "sizeBytes": 295639,
+      "sha256": "0d95ddafece1dc427268c94c7b137d2f5810080c8c86e907b0dfe0fe93e44580",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 75,
+        "idatBytes": 294718
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-16",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 122914,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8817/index.html?state=active-row-step-16&mode=volume",
+    "httpStatus": 200,
+    "sizeBytes": 121778,
+    "sha256": "ca0f9b9588af8f8631986c3d7fd21bf43839f6a733b65cf1407217a80191febe"
+  }
+}

@@ -15,7 +15,10 @@ import {
   createNBodyActiveRowTrustRegionTrajectoryConfig,
   NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA,
 } from './nbody-packing-restoration.mjs';
-import { NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA } from './nbody-packing-restoration-assay.mjs';
+import {
+  NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA,
+  NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA,
+} from './nbody-packing-restoration-assay.mjs';
 import {
   NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
@@ -41,7 +44,21 @@ const FROZEN_ADAPTIVE_SOURCE = Object.freeze({
   reportSha256:'41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477',
 });
 
+const FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE = Object.freeze({
+  rawFileSha256:'7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07',
+  resultFileSha256:'7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07',
+  resultSha256:'71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5',
+  reportFileSha256:'0c5b5a1625d5a2bebf15710a890d96c1d14c09e36865f677401e18e71258fc7d',
+  reportSha256:'d08e44e6f95d17f8e86e9b11f55c76a83d5d69aa3a45a30ccd0aca7f9204ea1a',
+});
+
 const SELECTED_ITERATIONS = Object.freeze([1, 3, 7, 8]);
+const SELECTED_CONTINUATION_ITERATIONS = Object.freeze([
+  Object.freeze({ local:1, global:9 }),
+  Object.freeze({ local:3, global:11 }),
+  Object.freeze({ local:4, global:12 }),
+  Object.freeze({ local:8, global:16 }),
+]);
 const FAMILY_KEYS = Object.freeze([
   'pairwisePenetration',
   'skeletalPenetration',
@@ -243,6 +260,163 @@ function validateActiveRowSource({
   requireExact(result.selected.vector, rows.at(-1).after.vector,
     'active-row witness rejects final trajectory continuity');
   return { startState, evaluatedRows, selectedState };
+}
+
+function validateActiveRowContinuationSource({
+  raw,
+  rawBytes,
+  result,
+  resultBytes,
+  report,
+  reportBytes,
+  priorResult,
+  priorReport,
+  fixture,
+  problem,
+}) {
+  for (const [value, label] of [
+    [raw, 'raw active-row continuation'],
+    [result, 'active-row continuation'],
+    [report, 'active-row continuation assay report'],
+  ]) verifyCanonicalIdentity(value, label);
+  const source = report.source?.admittedActiveRowTrajectory;
+  if (
+    sha256(rawBytes) !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.rawFileSha256 ||
+    sha256(resultBytes) !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.resultFileSha256 ||
+    result.identity?.sha256 !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.resultSha256 ||
+    sha256(reportBytes) !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.reportFileSha256 ||
+    report.identity?.sha256 !== FROZEN_ACTIVE_ROW_CONTINUATION_SOURCE.reportSha256 ||
+    !rawBytes.equals(resultBytes) ||
+    JSON.stringify(raw) !== JSON.stringify(result) ||
+    report.schema !== NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA ||
+    report.status !== 'complete-active-row-continuation-budget-exhausted' ||
+    report.route?.requested !== ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE ||
+    report.route?.effective !== ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE ||
+    report.route?.fallbackUsed !== false ||
+    report.source?.fixtureSha256 !== fixture.identity.sha256 ||
+    report.source?.problemSha256 !== problem.identity.sha256 ||
+    source?.rawFileSha256 !== FROZEN_ACTIVE_ROW_SOURCE.rawFileSha256 ||
+    source?.rawSha256 !== FROZEN_ACTIVE_ROW_SOURCE.resultSha256 ||
+    source?.resultFileSha256 !== FROZEN_ACTIVE_ROW_SOURCE.resultFileSha256 ||
+    source?.resultSha256 !== FROZEN_ACTIVE_ROW_SOURCE.resultSha256 ||
+    source?.reportFileSha256 !== FROZEN_ACTIVE_ROW_SOURCE.reportFileSha256 ||
+    source?.reportSha256 !== FROZEN_ACTIVE_ROW_SOURCE.reportSha256 ||
+    report.bindings?.rawTrajectoryFileSha256 !== sha256(rawBytes) ||
+    report.bindings?.rawTrajectorySha256 !== result.identity.sha256 ||
+    report.bindings?.resultFileSha256 !== sha256(resultBytes) ||
+    report.bindings?.resultSha256 !== result.identity.sha256
+  ) throw new Error('active-row witness rejects substituted continuation source');
+
+  const expectedConfig = createNBodyActiveRowTrustRegionTrajectoryConfig({ iterationBudget:8 });
+  const rows = result.work?.rows || [];
+  if (
+    result.schema !== NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA ||
+    result.status !== 'active-row-trust-region-trajectory-budget-exhausted' ||
+    result.route?.requested !== ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE ||
+    result.route?.effective !== ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE ||
+    result.route?.fallbackUsed !== false ||
+    result.source?.problemSha256 !== problem.identity.sha256 ||
+    JSON.stringify(result.config?.requested) !== JSON.stringify(expectedConfig) ||
+    JSON.stringify(result.config?.effective) !== JSON.stringify(expectedConfig) ||
+    JSON.stringify(result.start?.vector) !== JSON.stringify(priorResult.selected.vector) ||
+    result.start?.maximumPhysicalResidual !== priorResult.selected.maximumPhysicalResidual ||
+    JSON.stringify(result.start?.metrics) !== JSON.stringify(priorResult.selected.metrics) ||
+    rows.length !== 8 ||
+    result.work?.iterations !== 8 ||
+    result.work?.attempts !== 8 ||
+    result.work?.terminalReason !== null ||
+    rows.some(row => !row.accepted || row.certificate !== null ||
+      row.directionConstruction?.activeSetPolicy !== 'family-maximum-relative-band' ||
+      row.directionConstruction?.predictedCommonDescent !== true ||
+      row.candidateReceipts?.filter(candidate => candidate.selected).length !== 1 ||
+      !/^[a-f0-9]{64}$/.test(row.stepResultSha256)) ||
+    report.probe?.continuationStartIteration !== priorResult.work.iterations ||
+    report.probe?.acceptedIterations !== 8 ||
+    report.probe?.attemptedIterations !== 8 ||
+    report.probe?.terminalReason !== null ||
+    result.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+    result.mechanism?.contactGraphRowsConsumed !== true ||
+    priorReport.bindings?.resultSha256 !== priorResult.identity.sha256
+  ) throw new Error('active-row witness rejects incompatible continuation contract');
+
+  let previous = result.start;
+  const evaluatedRows = [];
+  for (const row of rows) {
+    requireExact(row.before, previous,
+      `active-row witness rejects continuation row continuity at ${row.iteration}`);
+    const afterState = evaluateNBodyUnifiedKktState({ problem, vector:row.after.vector });
+    requireExact(row.after, {
+      vector:[...afterState.vector],
+      maximumActiveRowViolation:row.after.maximumActiveRowViolation,
+      maximumPhysicalResidual:afterState.maximumPhysicalResidual,
+      metrics:structuredClone(afterState.metrics),
+    }, `active-row witness rejects physical continuation row ${row.iteration}`);
+    const selected = row.candidateReceipts.find(candidate => candidate.selected);
+    requireExact(selected?.vector, row.after.vector,
+      `active-row witness rejects continuation selected candidate ${row.iteration}`);
+    if (
+      row.after.maximumPhysicalResidual >= row.before.maximumPhysicalResidual ||
+      row.after.maximumActiveRowViolation >= row.before.maximumActiveRowViolation ||
+      FAMILY_KEYS.some(key => row.after.metrics[key] >
+        row.before.metrics[key] + expectedConfig.step.familyRegressionTolerance) ||
+      row.after.metrics.endpointDrift !== 0 ||
+      row.after.metrics.maximumRelativeVolumeError !== 0
+    ) throw new Error(`active-row witness rejects continuation progress at ${row.iteration}`);
+    evaluatedRows.push({ row, state:afterState });
+    previous = row.after;
+  }
+  const selectedState = evaluateNBodyUnifiedKktState({ problem, vector:result.selected.vector });
+  requireExact(result.selected, {
+    vector:[...selectedState.vector],
+    maximumActiveRowViolation:result.selected.maximumActiveRowViolation,
+    maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
+    metrics:structuredClone(selectedState.metrics),
+    muscles:selectedState.muscles,
+  }, 'active-row witness rejects physically stale continuation selected state');
+  requireExact(result.selected.vector, rows.at(-1).after.vector,
+    'active-row witness rejects continuation final continuity');
+  return { evaluatedRows, selectedState };
+}
+
+function continuationState({
+  globalIteration,
+  label,
+  row,
+  state,
+  baselineState,
+  baselineIdentity,
+  source,
+  previousActiveKeys,
+}) {
+  const selectedRadius = row.candidateReceipts.find(candidate => candidate.selected)?.radius;
+  const activeKeys = row.directionConstruction.activeRows.map(activeRow => activeRow.key);
+  const addedKeys = activeKeys.filter(key => !previousActiveKeys.has(key));
+  const admission = addedKeys.length > 0
+    ? ` ${addedKeys.length} newly binding row${addedKeys.length === 1 ? '' : 's'} enter the active set.`
+    : '';
+  return [`active-row-step-${globalIteration}`, {
+    label,
+    severity:0.32,
+    status:'accepted active-row continuation step',
+    warning:true,
+    source,
+    muscles:state.muscles,
+    metrics:state.metrics,
+    comparisonOverlay:{
+      baselineState:'active-row-step-8',
+      baselineLabel:'admitted step 8',
+      baselineResultIdentitySha256:baselineIdentity,
+      targetStepIdentitySha256:row.stepResultSha256,
+      displayGain:35,
+      maximumWorldDisplacement:maximumCenterlineDisplacement(
+        baselineState.muscles,
+        state.muscles,
+      ),
+      rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+    },
+    comparisonNote:`step-8 rings at true position · displacement vectors ×35 display-only · ${activeKeys.length} active rows · selected radius ${selectedRadius}`,
+    truth:`Global step ${globalIteration} accepts common descent over ${activeKeys.length} active rows at radius ${selectedRadius}.${admission} Endpoints and volumes remain exact; residual debt remains visible.`,
+  }];
 }
 
 function trajectoryState({
@@ -452,6 +626,311 @@ export async function writeNBodyPackingActiveRowTrajectoryWitness({
       requiredModes:['volume', 'slice'],
       claimCeiling:{
         admittedClaim:'eight accepted trust-region steps recompute simultaneous common descent over family-maximum active rows and reduce every tracked residual family from the authenticated adaptive endpoint while preserving exact endpoints and volume; the run is budget exhausted without a terminal certificate, so this is progress evidence rather than convergence, feasibility, or carrier-limit evidence',
+        anatomicalAdmission:'none',
+        nonGoals:[
+          'global-feasibility',
+          'carrier-representation-impossibility',
+          'anatomical-plausibility',
+          'arbitrary-N-closure',
+          'fascia-composition',
+          'production-admission',
+        ],
+      },
+    };
+    const witnessReport = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    phase = 'write-primary';
+    for (const [name, bytes] of [
+      ['fixtures.json', fixtureBytes],
+      ['comparison.json', comparisonBytes],
+      ['index.html', htmlBytes],
+      ['report.json', jsonBytes(witnessReport)],
+    ]) await writeAtomically(path.join(outputRoot, name), bytes, io);
+    return { outputRoot, report:witnessReport, states };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'failed',
+      route:{
+        requested:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+        effective:null,
+        fallbackUsed:false,
+      },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure), io);
+    throw error;
+  }
+}
+
+export async function writeNBodyPackingActiveRowContinuationWitness({
+  outDir = 'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-viewer-v0',
+  activeRowRawPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/raw-trajectory.json',
+  activeRowResultPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/result.json',
+  activeRowReportPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/run-report.json',
+  continuationRawPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/raw-trajectory.json',
+  continuationResultPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/result.json',
+  continuationReportPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0/run-report.json',
+  io = { writeFile, rename },
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  let phase = 'invalidate-prior-primary';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    await invalidatePrimaries(outputRoot);
+    phase = 'read-active-row-continuation-source';
+    const [
+      priorRawBytes, priorResultBytes, priorReportBytes,
+      continuationRawBytes, continuationResultBytes, continuationReportBytes,
+    ] = await Promise.all([
+      readFile(path.resolve(activeRowRawPath)),
+      readFile(path.resolve(activeRowResultPath)),
+      readFile(path.resolve(activeRowReportPath)),
+      readFile(path.resolve(continuationRawPath)),
+      readFile(path.resolve(continuationResultPath)),
+      readFile(path.resolve(continuationReportPath)),
+    ]);
+    const priorRaw = JSON.parse(String(priorRawBytes));
+    const priorResult = JSON.parse(String(priorResultBytes));
+    const priorReport = JSON.parse(String(priorReportBytes));
+    const continuationRaw = JSON.parse(String(continuationRawBytes));
+    const continuationResult = JSON.parse(String(continuationResultBytes));
+    const continuationReport = JSON.parse(String(continuationReportBytes));
+    lastTrustworthyEvidence = {
+      phase:'active-row-continuation-source-read',
+      priorResultFileSha256:sha256(priorResultBytes),
+      priorResultSha256:priorResult.identity?.sha256 || null,
+      continuationResultFileSha256:sha256(continuationResultBytes),
+      continuationResultSha256:continuationResult.identity?.sha256 || null,
+      continuationReportFileSha256:sha256(continuationReportBytes),
+      continuationReportSha256:continuationReport.identity?.sha256 || null,
+    };
+
+    phase = 'bind-active-row-continuation-source';
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      candidate => candidate.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    const priorValidation = validateActiveRowSource({
+      raw:priorRaw,
+      rawBytes:priorRawBytes,
+      result:priorResult,
+      resultBytes:priorResultBytes,
+      report:priorReport,
+      reportBytes:priorReportBytes,
+      fixture,
+      problem,
+    });
+    const continuationValidation = validateActiveRowContinuationSource({
+      raw:continuationRaw,
+      rawBytes:continuationRawBytes,
+      result:continuationResult,
+      resultBytes:continuationResultBytes,
+      report:continuationReport,
+      reportBytes:continuationReportBytes,
+      priorResult,
+      priorReport,
+      fixture,
+      problem,
+    });
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'active-row-continuation-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+    };
+
+    phase = 'construct-continuation-projection';
+    const source = fixture.knownFeasible;
+    const rowByIteration = new Map(continuationValidation.evaluatedRows.map(
+      entry => [entry.row.iteration, entry],
+    ));
+    const priorActiveKeys = new Set(
+      priorResult.work.rows.at(-1).directionConstruction.activeRows.map(row => row.key),
+    );
+    const states = {
+      'active-row-step-8':{
+        label:'step 8 · admitted continuation start',
+        severity:0.32,
+        status:'admitted active-row budget endpoint',
+        warning:true,
+        source,
+        muscles:priorValidation.selectedState.muscles,
+        metrics:priorValidation.selectedState.metrics,
+        truth:'This is the exact admitted step-eight endpoint consumed by the continuation. It is the physical baseline, not a replayed solve.',
+      },
+    };
+    for (const { local, global } of SELECTED_CONTINUATION_ITERATIONS) {
+      const entry = rowByIteration.get(local);
+      const previousActive = local === 1
+        ? priorActiveKeys
+        : new Set(continuationResult.work.rows[local - 2]
+          .directionConstruction.activeRows.map(row => row.key));
+      const label = global === 11
+        ? 'step 11 · eighth row admitted'
+        : global === 12
+          ? 'step 12 · ninth row admitted'
+          : global === 16
+            ? 'step 16 · continuation endpoint'
+            : 'step 9 · continuation begins';
+      const [key, value] = continuationState({
+        globalIteration:global,
+        label,
+        row:entry.row,
+        state:entry.state,
+        baselineState:priorValidation.selectedState,
+        baselineIdentity:priorResult.identity.sha256,
+        source,
+        previousActiveKeys:previousActive,
+      });
+      states[key] = value;
+    }
+    states['manufactured-reference'] = {
+      label:'manufactured feasibility witness',
+      severity:null,
+      status:'existence witness outside candidate carrier',
+      warning:false,
+      source,
+      muscles:fixture.knownFeasible.muscles,
+      metrics:fixture.metrics.knownFeasible,
+      truth:'This withheld manufactured state proves fixture feasibility only. It is not an anatomical target and is not consumed by the candidate solver.',
+    };
+    const orderedStates = Object.keys(states);
+    const finalActiveKeys = new Set(continuationResult.work.rows.at(-1)
+      .directionConstruction.activeRows.map(row => row.key));
+    const finalPhysical = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:continuationResult.selected.vector,
+    });
+    const finalViolatedRows = finalPhysical.rows.filter(row => row.signedGap <= 0);
+    const finalFamilyMaxima = Object.fromEntries(
+      [...new Set(finalViolatedRows.map(row => row.kind))].sort().map(kind => [
+        kind,
+        Math.max(...finalViolatedRows
+          .filter(row => row.kind === kind)
+          .map(row => Math.max(0, -row.signedGap))),
+      ]),
+    );
+    const relativeActivationBand =
+      continuationResult.config.effective.step.relativeActivationBand;
+    const postStepEligibleRows = finalViolatedRows.filter(row =>
+      Math.max(0, -row.signedGap) >=
+        finalFamilyMaxima[row.kind] * (1 - relativeActivationBand),
+    );
+    const postStepNewlyEligibleRows = postStepEligibleRows
+      .filter(row => !finalActiveKeys.has(row.key))
+      .map(row => {
+        const violation = Math.max(0, -row.signedGap);
+        const familyMaximum = finalFamilyMaxima[row.kind];
+        return {
+          key:row.key,
+          kind:row.kind,
+          violation,
+          familyMaximum,
+          activationThreshold:familyMaximum * (1 - relativeActivationBand),
+          relativeToFamilyMaximum:violation / familyMaximum,
+        };
+      })
+      .sort((left, right) => left.key.localeCompare(right.key));
+    const fixtures = {
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+      manufacturedReference:fixture.knownFeasible,
+    };
+    const comparison = {
+      admittedStepEightTrajectory:priorResult,
+      admittedStepEightReport:priorReport,
+      continuationTrajectory:continuationResult,
+      continuationReport,
+      projectedGlobalIterations:SELECTED_CONTINUATION_ITERATIONS.map(row => row.global),
+      presentation:{ solverReplayed:false, physicalStatesReevaluated:true },
+    };
+    const fixtureBytes = jsonBytes(fixtures);
+    const comparisonBytes = jsonBytes(comparison);
+    const bindings = {
+      fixturesSha256:sha256(fixtureBytes),
+      resultsSha256:sha256(comparisonBytes),
+    };
+    const payload = {
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:
+          continuationResult.mechanism.oracleTargetCoordinatesConsumed,
+        contactGraphRowsConsumed:
+          continuationResult.mechanism.contactGraphRowsConsumed,
+      },
+      display:{
+        title:'Step-eight continuation · active-set accretion',
+        authority:'Synthetic severity-0.32 continuation witness · admitted source projection · no anatomical admission',
+        explanation:'The exact admitted step-eight endpoint is compared with four physically reevaluated continuation states. Step 11 admits an eighth active row; step 12 admits a ninth. Rings stay at step-eight position and arrows use display-only amplification. Step 16 is another budget endpoint, not convergence or a floor certificate.',
+        orderedStates,
+        defaultState:'active-row-step-16',
+      },
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({
+      payload,
+      bindings,
+      route:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+    }));
+    const activeRowCounts = [
+      priorResult.work.rows.at(-1).directionConstruction.activeRows.length,
+      ...SELECTED_CONTINUATION_ITERATIONS.map(({ local }) =>
+        continuationResult.work.rows[local - 1].directionConstruction.activeRows.length),
+    ];
+    const reportCore = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'complete-pending-agent-visual-inspection',
+      route:{
+        requested:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+        effective:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
+        fallbackUsed:false,
+      },
+      classification:{
+        continuationStartIteration:priorResult.work.iterations,
+        continuationAcceptedIterations:continuationResult.work.iterations,
+        terminalReason:continuationResult.work.terminalReason,
+        solverReplayedForPresentation:false,
+        physicalProjectionCount:SELECTED_CONTINUATION_ITERATIONS.length + 1,
+        activeRowCounts,
+        minimumNormStart:
+          continuationResult.work.rows[0].directionConstruction.minimumNorm,
+        minimumNormSelected:
+          continuationResult.work.rows.at(-1).directionConstruction.minimumNorm,
+        lastStepActiveRowCount:finalActiveKeys.size,
+        postStepEligibleActiveRowCount:postStepEligibleRows.length,
+        postStepNewlyEligibleRows,
+        mechanismInputs:structuredClone(payload.mechanism),
+      },
+      bindings:{
+        ...bindings,
+        indexHtmlSha256:sha256(htmlBytes),
+        priorResultFileSha256:sha256(priorResultBytes),
+        priorResultIdentitySha256:priorResult.identity.sha256,
+        priorReportFileSha256:sha256(priorReportBytes),
+        priorReportIdentitySha256:priorReport.identity.sha256,
+        continuationRawFileSha256:sha256(continuationRawBytes),
+        continuationResultFileSha256:sha256(continuationResultBytes),
+        continuationResultIdentitySha256:continuationResult.identity.sha256,
+        continuationReportFileSha256:sha256(continuationReportBytes),
+        continuationReportIdentitySha256:continuationReport.identity.sha256,
+      },
+      requiredStates:orderedStates,
+      requiredModes:['volume','slice'],
+      claimCeiling:{
+        admittedClaim:'eight exact-source continuation steps remain family-monotone while the active set grows from six rows at the admitted step-eight boundary to nine rows and the common-descent minimum norm weakens; this is bounded progress and constraint-cone-tightening evidence, not convergence, cycling, feasibility, or a local-floor certificate',
         anatomicalAdmission:'none',
         nonGoals:[
           'global-feasibility',

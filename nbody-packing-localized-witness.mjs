@@ -314,6 +314,28 @@ export function validateNBodyPackingLocalizedCaptureBinding({
   return expectedDataset;
 }
 
+export function isValidNBodyPackingRfc3339Timestamp(value) {
+  if (typeof value !== 'string') return false;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!match) return false;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, zone] = match;
+  const [year, month, day, hour, minute, second] = [
+    yearText, monthText, dayText, hourText, minuteText, secondText,
+  ].map(Number);
+  const maximumDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (
+    month < 1 || month > 12 || day < 1 || day > maximumDay ||
+    hour > 23 || minute > 59 || second > 59
+  ) return false;
+  if (zone !== 'Z') {
+    const [zoneHour, zoneMinute] = zone.slice(1).split(':').map(Number);
+    if (zoneHour > 23 || zoneMinute > 59) return false;
+  }
+  return Number.isFinite(Date.parse(value));
+}
+
 export async function admitNBodyPackingLocalizedVisualInspection({
   outDir = 'artifacts/nbody-packing-localized-challenge-v0',
   inspection,
@@ -337,7 +359,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
       ? HARD_BOUNDARY_VISUAL_VERDICT_KEYS
       : VISUAL_VERDICT_KEYS;
   if (
-    typeof inspection?.observedAt !== 'string' || !inspection.observedAt ||
+    !isValidNBodyPackingRfc3339Timestamp(inspection?.observedAt) ||
     typeof inspection?.summary !== 'string' || !inspection.summary ||
     JSON.stringify(Object.keys(inspection.verdict || {}).sort()) !==
       JSON.stringify([...verdictKeys].sort()) ||

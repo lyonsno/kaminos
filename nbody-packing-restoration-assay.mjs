@@ -30,6 +30,8 @@ export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-trajectory-assay.v0';
 export const NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-trajectory-assay.v0';
+export const NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA =
+  'kaminos.nbody-packing-active-row-trust-region-trajectory-continuation-assay.v0';
 
 export const NBODY_PACKING_REFINED_COMMON_DESCENT_RADII = Object.freeze([
   0.004,
@@ -56,6 +58,15 @@ const FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY = Object.freeze({
   resultSha256:'2a060455affc56b4149461270e7eeb8f59bab24993e7b4f8a75afbf461931b1b',
   reportFileSha256:'1536165e5f7634a1e026e3eec281fa98e38c1628f73952d5bb3eb70d8be00f01',
   reportSha256:'41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477',
+});
+
+const FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY = Object.freeze({
+  rawFileSha256:'ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264',
+  rawSha256:'d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2',
+  resultFileSha256:'ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264',
+  resultSha256:'d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2',
+  reportFileSha256:'c0132bdaa0bb7d8b306c8f6374692eaa183cd48c98f3b4f59fd06e6eaa9cb21a',
+  reportSha256:'c51fc8d8fad0e692f9795510e6596266cd8a25f9b3af91a435f199d6ce7582d6',
 });
 
 const FROZEN_BASELINES = Object.freeze({
@@ -915,6 +926,313 @@ export async function runNBodyPackingActiveRowTrajectoryAssay({
   }
 }
 
+// Cache only solver-derived truth, keyed by a canonically verified problem and exact
+// invocation inputs. Presented trajectory fields never populate this cache.
+const activeRowContinuationReconstructionCache = new Map();
+
+export function validateNBodyPackingActiveRowContinuationResult({
+  trajectory,
+  problem,
+  sourceVector,
+  requestedConfig,
+} = {}) {
+  if (
+    !trajectory || typeof trajectory !== 'object' ||
+    !Array.isArray(sourceVector) ||
+    JSON.stringify(trajectory.start?.vector) !== JSON.stringify(sourceVector) ||
+    JSON.stringify(trajectory.config?.requested) !== JSON.stringify(requestedConfig) ||
+    JSON.stringify(trajectory.config?.effective) !== JSON.stringify(requestedConfig)
+  ) throw new Error('active-row continuation rejects result admission envelope');
+  verifyCanonicalIdentity(problem, 'active-row continuation problem');
+  const reconstructionKey = hashMusclePackingCanonicalJson({
+    problemSha256:problem.identity.sha256,
+    sourceVector,
+    requestedConfig,
+  });
+  let reconstructed = activeRowContinuationReconstructionCache.get(reconstructionKey);
+  if (!reconstructed) {
+    reconstructed = solveNBodyActiveRowTrustRegionTrajectory({
+      problem,
+      startVector:sourceVector,
+      requestedConfig,
+    });
+    activeRowContinuationReconstructionCache.set(reconstructionKey, reconstructed);
+  }
+  const trajectoryCore = structuredClone(trajectory);
+  delete trajectoryCore.identity;
+  const receivedIdentity = hashMusclePackingCanonicalJson(trajectoryCore);
+  if (
+    trajectory.identity?.sha256 !== receivedIdentity ||
+    receivedIdentity !== reconstructed.identity.sha256
+  ) throw new Error(
+    'active-row continuation rejects result outside deterministic step reconstruction',
+  );
+
+  const terminalClasses = {
+    'active-row-trust-region-trajectory-budget-exhausted':'budget-exhausted',
+    'active-row-trust-region-trajectory-feasible':'feasible',
+    'active-row-trust-region-trajectory-local-floor':'local-floor',
+  };
+  const terminalClass = terminalClasses[reconstructed.status];
+  if (!terminalClass) {
+    throw new Error('active-row continuation rejects unsupported reconstructed terminal status');
+  }
+  const rows = trajectory.work.rows;
+  const acceptedRows = rows.filter(row => row.accepted);
+  const selectedState = evaluateNBodyUnifiedKktState({
+    problem,
+    vector:trajectory.selected.vector,
+  });
+  return {
+    terminalClass,
+    rows,
+    acceptedRows,
+    selectedState,
+    reconstructionIdentitySha256:reconstructed.identity.sha256,
+  };
+}
+
+export async function runNBodyPackingActiveRowTrajectoryContinuationAssay({
+  outDir = 'artifacts/nbody-packing-active-row-trust-region-trajectory-continuation-v0',
+  activeRowRawPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/raw-trajectory.json',
+  activeRowResultPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/result.json',
+  activeRowReportPath =
+    'artifacts/nbody-packing-active-row-trust-region-trajectory-v0/run-report.json',
+  iterationBudget = 8,
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  const requestedRoute =
+    'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
+  let phase = 'read-admitted-active-row-source';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    phase = 'invalidate-prior-primary';
+    await invalidatePriorActiveTrajectory(outputRoot);
+    phase = 'read-admitted-active-row-source';
+    const [sourceRawBytes, sourceResultBytes, sourceReportBytes] = await Promise.all([
+      readFile(path.resolve(activeRowRawPath)),
+      readFile(path.resolve(activeRowResultPath)),
+      readFile(path.resolve(activeRowReportPath)),
+    ]);
+    const sourceRaw = JSON.parse(String(sourceRawBytes));
+    const sourceResult = JSON.parse(String(sourceResultBytes));
+    const sourceReport = JSON.parse(String(sourceReportBytes));
+    verifyCanonicalIdentity(sourceRaw, 'admitted active-row raw trajectory');
+    verifyCanonicalIdentity(sourceResult, 'admitted active-row trajectory');
+    verifyCanonicalIdentity(sourceReport, 'admitted active-row trajectory report');
+    lastTrustworthyEvidence = {
+      phase:'admitted-active-row-source-read',
+      rawFileSha256:sha256(sourceRawBytes),
+      rawSha256:sourceRaw.identity?.sha256 || null,
+      resultFileSha256:sha256(sourceResultBytes),
+      resultSha256:sourceResult.identity?.sha256 || null,
+      reportFileSha256:sha256(sourceReportBytes),
+      reportSha256:sourceReport.identity?.sha256 || null,
+    };
+
+    phase = 'bind-admitted-active-row-source';
+    if (
+      sha256(sourceRawBytes) !== FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.rawFileSha256 ||
+      sourceRaw.identity?.sha256 !== FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.rawSha256 ||
+      sha256(sourceResultBytes) !==
+        FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.resultFileSha256 ||
+      sourceResult.identity?.sha256 !==
+        FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.resultSha256 ||
+      sha256(sourceReportBytes) !==
+        FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.reportFileSha256 ||
+      sourceReport.identity?.sha256 !== FROZEN_ADMITTED_ACTIVE_ROW_TRAJECTORY.reportSha256
+    ) throw new Error('active-row continuation rejects substituted admitted active-row trajectory');
+    if (!sourceRawBytes.equals(sourceResultBytes)) {
+      throw new Error('active-row continuation rejects divergent admitted raw/result bytes');
+    }
+    if (
+      sourceReport.bindings?.rawTrajectoryFileSha256 !== sha256(sourceRawBytes) ||
+      sourceReport.bindings?.rawTrajectorySha256 !== sourceRaw.identity.sha256 ||
+      sourceReport.bindings?.resultFileSha256 !== sha256(sourceResultBytes) ||
+      sourceReport.bindings?.resultSha256 !== sourceResult.identity.sha256
+    ) throw new Error('active-row continuation rejects broken admitted source binding');
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      row => row.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    const sourceConfig = createNBodyActiveRowTrustRegionTrajectoryConfig({
+      iterationBudget:8,
+    });
+    if (
+      sourceRaw.schema !==
+        'kaminos.nbody-packing-active-row-trust-region-trajectory-result.v0' ||
+      sourceRaw.status !== 'active-row-trust-region-trajectory-budget-exhausted' ||
+      sourceRaw.route?.requested !== requestedRoute ||
+      sourceRaw.route?.effective !== requestedRoute ||
+      sourceRaw.route?.fallbackUsed !== false ||
+      sourceRaw.source?.problemSha256 !== problem.identity.sha256 ||
+      JSON.stringify(sourceRaw.config?.requested) !== JSON.stringify(sourceConfig) ||
+      JSON.stringify(sourceRaw.config?.effective) !== JSON.stringify(sourceConfig) ||
+      sourceRaw.work?.iterations !== 8 ||
+      sourceRaw.work?.attempts !== 8 ||
+      sourceRaw.work?.terminalReason !== null ||
+      sourceRaw.work?.rows?.some(row => row.accepted !== true) ||
+      sourceRaw.selected?.maximumPhysicalResidual !== 0.004280587745 ||
+      sourceRaw.selected?.metrics?.endpointDrift !== 0 ||
+      sourceRaw.selected?.metrics?.maximumRelativeVolumeError !== 0 ||
+      sourceRaw.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+      sourceRaw.mechanism?.contactGraphRowsConsumed !== true ||
+      sourceReport.schema !== NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA ||
+      sourceReport.status !== 'complete-active-row-trajectory-budget-exhausted' ||
+      sourceReport.route?.effective !== requestedRoute ||
+      sourceReport.route?.fallbackUsed !== false ||
+      sourceReport.source?.fixtureSha256 !== fixture.identity.sha256 ||
+      sourceReport.source?.problemSha256 !== problem.identity.sha256
+    ) throw new Error('active-row continuation rejects incompatible admitted source');
+    const sourceRows = sourceRaw.work.rows;
+    if (
+      JSON.stringify(sourceRaw.selected.vector) !==
+        JSON.stringify(sourceRows.at(-1)?.after?.vector)
+    ) throw new Error('active-row continuation rejects broken source trajectory continuity');
+    const effectiveStart = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:sourceRaw.selected.vector,
+    });
+    if (
+      effectiveStart.maximumPhysicalResidual !== sourceRaw.selected.maximumPhysicalResidual ||
+      JSON.stringify(effectiveStart.metrics) !== JSON.stringify(sourceRaw.selected.metrics)
+    ) throw new Error('active-row continuation rejects physically stale admitted endpoint');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'admitted-active-row-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      effectiveStartMaximumPhysicalResidual:effectiveStart.maximumPhysicalResidual,
+    };
+
+    phase = 'solve-active-row-continuation';
+    const requestedConfig = createNBodyActiveRowTrustRegionTrajectoryConfig({
+      iterationBudget,
+    });
+    if (
+      JSON.stringify({ ...requestedConfig, iterationBudget:8 }) !==
+        JSON.stringify(sourceConfig)
+    ) throw new Error('active-row continuation rejects controller configuration drift');
+    const rawTrajectory = solveNBodyActiveRowTrustRegionTrajectory({
+      problem,
+      startVector:sourceRaw.selected.vector,
+      requestedConfig,
+    });
+    const rawBytes = jsonBytes(rawTrajectory);
+    await writeAtomically(path.join(outputRoot, 'raw-trajectory.json'), rawBytes);
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'raw-active-row-continuation-persisted',
+      rawFileSha256:sha256(rawBytes),
+      rawResultSha256:rawTrajectory.identity?.sha256 || null,
+    };
+
+    phase = 'verify-active-row-continuation';
+    verifyCanonicalIdentity(rawTrajectory, 'raw active-row continuation');
+    if (
+      rawTrajectory.route?.requested !== requestedRoute ||
+      rawTrajectory.route?.effective !== requestedRoute ||
+      rawTrajectory.route?.fallbackUsed !== false ||
+      rawTrajectory.source?.problemSha256 !== problem.identity.sha256 ||
+      rawTrajectory.start?.maximumPhysicalResidual !==
+        sourceRaw.selected.maximumPhysicalResidual ||
+      rawTrajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+      rawTrajectory.mechanism?.contactGraphRowsConsumed !== true
+    ) throw new Error('active-row continuation did not clear its bounded admission contract');
+    const admission = validateNBodyPackingActiveRowContinuationResult({
+      trajectory:rawTrajectory,
+      problem,
+      sourceVector:sourceRaw.selected.vector,
+      requestedConfig,
+    });
+    const terminalFloor = admission.terminalClass === 'local-floor';
+    const rows = admission.rows;
+    const acceptedRows = admission.acceptedRows;
+    const effectiveSelected = admission.selectedState;
+
+    phase = 'write-terminal-artifacts';
+    const resultBytes = jsonBytes(rawTrajectory);
+    const reportCore = {
+      schema:NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA,
+      status:rawTrajectory.status === 'active-row-trust-region-trajectory-feasible'
+        ? 'complete-active-row-continuation-feasible'
+        : terminalFloor
+          ? 'complete-active-row-continuation-floor-exposed'
+          : 'complete-active-row-continuation-budget-exhausted',
+      route:structuredClone(rawTrajectory.route),
+      source:{
+        fixtureSha256:fixture.identity.sha256,
+        problemSha256:problem.identity.sha256,
+        admittedActiveRowTrajectory:{
+          rawPath:activeRowRawPath,
+          rawFileSha256:sha256(sourceRawBytes),
+          rawSha256:sourceRaw.identity.sha256,
+          resultPath:activeRowResultPath,
+          resultFileSha256:sha256(sourceResultBytes),
+          resultSha256:sourceResult.identity.sha256,
+          reportPath:activeRowReportPath,
+          reportFileSha256:sha256(sourceReportBytes),
+          reportSha256:sourceReport.identity.sha256,
+        },
+      },
+      probe:{
+        continuationStartIteration:sourceRaw.work.iterations,
+        iterationBudget:requestedConfig.iterationBudget,
+        acceptedIterations:rawTrajectory.work.iterations,
+        attemptedIterations:rawTrajectory.work.attempts,
+        terminalReason:rawTrajectory.work.terminalReason,
+        selectedRadii:rows.map(row =>
+          row.candidateReceipts.find(candidate => candidate.selected)?.radius || null
+        ),
+      },
+      comparison:{
+        admittedStepEight:rawTrajectory.start.maximumPhysicalResidual,
+        continuationSelected:rawTrajectory.selected.maximumPhysicalResidual,
+        improvementRatio:rawTrajectory.start.maximumPhysicalResidual /
+          rawTrajectory.selected.maximumPhysicalResidual,
+        familyStart:Object.fromEntries(familyKeys.map(
+          key => [key, rawTrajectory.start.metrics[key]],
+        )),
+        familySelected:Object.fromEntries(familyKeys.map(
+          key => [key, rawTrajectory.selected.metrics[key]],
+        )),
+      },
+      bindings:{
+        rawTrajectoryFileSha256:sha256(rawBytes),
+        rawTrajectorySha256:rawTrajectory.identity.sha256,
+        resultFileSha256:sha256(resultBytes),
+        resultSha256:rawTrajectory.identity.sha256,
+        admissionReconstructionSha256:admission.reconstructionIdentitySha256,
+      },
+      claimCeiling:
+        'bounded-severity-0.32-exact-step-eight-continuation-progress-or-local-floor-not-global-feasibility-or-carrier-impossibility',
+    };
+    const report = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    await Promise.all([
+      writeAtomically(path.join(outputRoot, 'result.json'), resultBytes),
+      writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(report)),
+    ]);
+    return { outputRoot, rawTrajectory, result:rawTrajectory, report };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_ACTIVE_ROW_CONTINUATION_ASSAY_SCHEMA,
+      status:'failed',
+      route:{ requested:requestedRoute, effective:null, fallbackUsed:false },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(failure));
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-all-neighbor-restoration-v0';
   const iterationBudget = process.argv[3] === undefined ? 1 : Number(process.argv[3]);
@@ -925,6 +1243,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       ? await runNBodyPackingCommonDescentTrajectoryAssay({ outDir, iterationBudget })
       : acceptancePolicy === 'active-row-trust-region-trajectory'
         ? await runNBodyPackingActiveRowTrajectoryAssay({ outDir, iterationBudget })
+      : acceptancePolicy === 'active-row-trust-region-trajectory-continuation'
+        ? await runNBodyPackingActiveRowTrajectoryContinuationAssay({ outDir, iterationBudget })
       : await runNBodyPackingRestorationAssay({
           outDir,
           iterationBudget,

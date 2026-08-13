@@ -1,0 +1,232 @@
+{
+  "schema": "kaminos.nbody-packing-localized-visual-inspection.v0",
+  "status": "passed-agent-inspection",
+  "observedAt": "2026-08-13T08:17:08Z",
+  "summary": "All twelve source-bound continuation frames were inspected at original resolution. Steps 8 through 16 remain coherent and same-camera: true-scale change is extremely subtle, while the explicitly x35 display-only rings and vectors make bounded coordinated relocation legible without implying convergence. No new fold, centerline crossing, member collapse, attachment migration, or skeletal intrusion appears; endpoint and volume custody remain legible, residual pair, skeletal, and compartment debt remains visible, and the manufactured feasibility witness remains dramatically cleaner and explicitly outside candidate authority.",
+  "verdict": {
+    "nonblank": true,
+    "orbitable": true,
+    "sameCameraComparison": true,
+    "authenticatedAdaptiveBaselineLegible": true,
+    "activeTrajectoryMotionLegible": true,
+    "largeRadiusStepsLegible": true,
+    "endpointAndVolumePreservationLegible": true,
+    "residualDebtLegible": true,
+    "manufacturedWitnessAuthorityCeilingLegible": true,
+    "packingSemanticsNotInverted": true
+  },
+  "route": {
+    "requested": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "effective": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "captures": [
+    {
+      "state": "active-row-step-8",
+      "mode": "volume",
+      "png": "active-row-step-8-volume.png",
+      "pngSha256": "1825ff9bab125b93491f445baeb1875bcbfba7ebbc1ba475ec7415674e5e44a9",
+      "captureReport": "active-row-step-8-volume-capture-report.json",
+      "captureReportSha256": "54b52abb1a6aa29847a6e873e40add963eae84cd20c47c50372f98ccffbd2721",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-8",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-8",
+      "mode": "slice",
+      "png": "active-row-step-8-slice.png",
+      "pngSha256": "87f9b69120425639c1a98ea5b6e7cea8906cdbc991626e69d1593cf0672d81e9",
+      "captureReport": "active-row-step-8-slice-capture-report.json",
+      "captureReportSha256": "21dcdbe11b9f180add591894cacd0c1890579771843a7f9ac5a59e947782d914",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-8",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-9",
+      "mode": "volume",
+      "png": "active-row-step-9-volume.png",
+      "pngSha256": "8a8204a0d3dfd8d4800348f6d6f29f5514c58fbcb47573d850e3b66002edace0",
+      "captureReport": "active-row-step-9-volume-capture-report.json",
+      "captureReportSha256": "e5466fd01995367d524c2993e30fd8669a6c825aed494620106d814c25985323",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-9",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-9",
+      "mode": "slice",
+      "png": "active-row-step-9-slice.png",
+      "pngSha256": "89d72ed4bf0a2d2491552cc3fadd08555f5c3485a3f3115e9a0fc593f70f0c3a",
+      "captureReport": "active-row-step-9-slice-capture-report.json",
+      "captureReportSha256": "286836eab6cc48b8709fbf2ab8e580604ada43dd35b0d06a1d253f878488e3fb",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-9",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-11",
+      "mode": "volume",
+      "png": "active-row-step-11-volume.png",
+      "pngSha256": "e5d442354ad5d1a0c2fa8be2d1ad0e7e8f2070013c74035d09d269759e755cff",
+      "captureReport": "active-row-step-11-volume-capture-report.json",
+      "captureReportSha256": "3317a293a369fe3d03cb662a19d4be6a37831eb71207e7a500554bbda3268436",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-11",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-11",
+      "mode": "slice",
+      "png": "active-row-step-11-slice.png",
+      "pngSha256": "d970eea94d149828abc9850f6bc7caafc8d72fd74a8e215f5aeaa265bf4d8bd6",
+      "captureReport": "active-row-step-11-slice-capture-report.json",
+      "captureReportSha256": "0bcb9a968c063e40ef8631f747504d1d7903cb78613e3b83e903e8f286a7aacf",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-11",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-12",
+      "mode": "volume",
+      "png": "active-row-step-12-volume.png",
+      "pngSha256": "8f82f92d9f6e75d0579aae8648d19031523aa936051667d1813c02aa764e4bf8",
+      "captureReport": "active-row-step-12-volume-capture-report.json",
+      "captureReportSha256": "5e38d55d66888af305720a445a46a5ab3e6fd1c24950bbff8007b710562b5e7f",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-12",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-12",
+      "mode": "slice",
+      "png": "active-row-step-12-slice.png",
+      "pngSha256": "1522b1af143c218eed8c08907087d31726b4f56c8daa5ea08ddb9c8b380486bf",
+      "captureReport": "active-row-step-12-slice-capture-report.json",
+      "captureReportSha256": "349b72a77dc7c73fc0c5738a2e44191577b722d65128b9d269f3e4387fc0bd0e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-12",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-16",
+      "mode": "volume",
+      "png": "active-row-step-16-volume.png",
+      "pngSha256": "0d95ddafece1dc427268c94c7b137d2f5810080c8c86e907b0dfe0fe93e44580",
+      "captureReport": "active-row-step-16-volume-capture-report.json",
+      "captureReportSha256": "4360bbf4ce5eee7b03b9e49647ef198c69ccffdb54f17c9f7b08dc7134cf8bbf",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-16",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "active-row-step-16",
+      "mode": "slice",
+      "png": "active-row-step-16-slice.png",
+      "pngSha256": "4deff0e33c963e927c6ae2dff824df900c2eebffcf165d665611d887d8b9bc1e",
+      "captureReport": "active-row-step-16-slice-capture-report.json",
+      "captureReportSha256": "df2326b2b54c008d6c32ff3782a5b803e34fe9fac1c59e676d140bd967203f05",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "active-row-step-16",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "manufactured-reference",
+      "mode": "volume",
+      "png": "manufactured-reference-volume.png",
+      "pngSha256": "e8de14e1a785405d3c1c15b090b487d2560658b5c6a58d00647c409dbd1d6de2",
+      "captureReport": "manufactured-reference-volume-capture-report.json",
+      "captureReportSha256": "7b0896d3e126d1047ffc7dc36e51ce6f699ddffee6deb67941637650f7db4b3e",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "manufactured-reference",
+        "witnessMode": "volume",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    },
+    {
+      "state": "manufactured-reference",
+      "mode": "slice",
+      "png": "manufactured-reference-slice.png",
+      "pngSha256": "e3da1f16389908ff27560bebcaf6214c51e549d62384a2431bafec876fecdb82",
+      "captureReport": "manufactured-reference-slice-capture-report.json",
+      "captureReportSha256": "102940cf40b70f1b530ce12cc47b009505098250e332a61b18d032cfbd555262",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "manufactured-reference",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-active-row-trust-region-trajectory-v0",
+        "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+        "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d"
+      }
+    }
+  ],
+  "claimCeiling": {
+    "admittedClaim": "eight exact-source continuation steps remain family-monotone while the active set grows from six rows at the admitted step-eight boundary to nine rows and the common-descent minimum norm weakens; this is bounded progress and constraint-cone-tightening evidence, not convergence, cycling, feasibility, or a local-floor certificate",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "global-feasibility",
+      "carrier-representation-impossibility",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition",
+      "production-admission"
+    ]
+  },
+  "identity": {
+    "sha256": "1224742a207a1672fb5af85b84ebf997775cb610b8062d799d626b528192786b"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "effective": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "classification": {
+    "continuationStartIteration": 8,
+    "continuationAcceptedIterations": 8,
+    "terminalReason": null,
+    "solverReplayedForPresentation": false,
+    "physicalProjectionCount": 5,
+    "activeRowCounts": [
+      6,
+      7,
+      8,
+      9,
+      9
+    ],
+    "minimumNormStart": 0.038223228840549,
+    "minimumNormSelected": 0.003917721647415,
+    "lastStepActiveRowCount": 9,
+    "postStepEligibleActiveRowCount": 10,
+    "postStepNewlyEligibleRows": [
+      {
+        "key": "compartment-lower:density-06-02:1:0",
+        "kind": "compartment-clearance",
+        "violation": 0.004243507635228738,
+        "familyMaximum": 0.004249551501073201,
+        "activationThreshold": 0.004207055986062469,
+        "relativeToFamilyMaximum": 0.9985777638315628
+      }
+    ],
+    "mechanismInputs": {
+      "oracleTargetCoordinatesConsumed": false,
+      "contactGraphRowsConsumed": true
+    }
+  },
+  "bindings": {
+    "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+    "resultsSha256": "6479ddfe6f5ed7d1c6db962d369f598f829d791edc4f6e6ce13c3b4124e0a26d",
+    "indexHtmlSha256": "ca0f9b9588af8f8631986c3d7fd21bf43839f6a733b65cf1407217a80191febe",
+    "priorResultFileSha256": "ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264",
+    "priorResultIdentitySha256": "d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2",
+    "priorReportFileSha256": "c0132bdaa0bb7d8b306c8f6374692eaa183cd48c98f3b4f59fd06e6eaa9cb21a",
+    "priorReportIdentitySha256": "c51fc8d8fad0e692f9795510e6596266cd8a25f9b3af91a435f199d6ce7582d6",
+    "continuationRawFileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "continuationResultFileSha256": "7804914bbe8f7e7ee69fa3d2a896d90fd35d038c1ed9eadbb30c5f953281ee07",
+    "continuationResultIdentitySha256": "71070911e5bff2d8f51460ea77ef2116abcc335fb2c73da8fa64036eabc288f5",
+    "continuationReportFileSha256": "0c5b5a1625d5a2bebf15710a890d96c1d14c09e36865f677401e18e71258fc7d",
+    "continuationReportIdentitySha256": "d08e44e6f95d17f8e86e9b11f55c76a83d5d69aa3a45a30ccd0aca7f9204ea1a",
+    "visualInspectionSha256": "5b1b8e60ef10a338605cb63dbedc3f6076fd4e223ff146f0a4f0219b6506ca08",
+    "captureReceiptSetSha256": "c62317ef918c4c9db15c34c5984ff9350a4722ee32e33713e6e34be3c2c034c5"
+  },
+  "requiredStates": [
+    "active-row-step-8",
+    "active-row-step-9",
+    "active-row-step-11",
+    "active-row-step-12",
+    "active-row-step-16",
+    "manufactured-reference"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "eight exact-source continuation steps remain family-monotone while the active set grows from six rows at the admitted step-eight boundary to nine rows and the common-descent minimum norm weakens; this is bounded progress and constraint-cone-tightening evidence, not convergence, cycling, feasibility, or a local-floor certificate",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "global-feasibility",
+      "carrier-representation-impossibility",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition",
+      "production-admission"
+    ]
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "5b1b8e60ef10a338605cb63dbedc3f6076fd4e223ff146f0a4f0219b6506ca08",
+    "captureCount": 12
+  },
+  "identity": {
+    "sha256": "710e5145800ad0246cdacb5ac97f2662de6e455341a361957bc0a36ecbeb6860"
+  }
+}
