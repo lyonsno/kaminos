@@ -12,6 +12,8 @@ const STATES = Object.freeze([
   'same-basis-feasible', 'all-neighbor-restoration',
   'repeated-all-neighbor-restoration', 'family-common-descent',
   'repeated-family-common-descent', 'adaptive-family-common-descent', 'reference',
+  'authenticated-adaptive-start', 'active-row-step-1', 'active-row-step-3',
+  'active-row-step-7', 'active-row-step-8', 'manufactured-reference',
 ]);
 export const NBODY_PACKING_LOCALIZED_CAPTURE_VIEWPORT = Object.freeze({
   width:1400,

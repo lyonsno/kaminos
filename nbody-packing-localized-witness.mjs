@@ -30,6 +30,8 @@ export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE =
   'nbody-packing-family-gradient-common-descent-trajectory-v0';
 export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE =
   'nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0';
+export const NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE =
+  'nbody-packing-active-row-trust-region-trajectory-v0';
 export const NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA =
   'kaminos.nbody-packing-localized-boundary-witness.v0';
 
@@ -63,6 +65,13 @@ const RESTORATION_VISUAL_VERDICT_KEYS = Object.freeze([
 const ADAPTIVE_TRAJECTORY_VISUAL_VERDICT_KEYS = Object.freeze([
   ...HARD_BOUNDARY_VISUAL_VERDICT_KEYS,
   'adaptiveVersusFixedGridDeltaLegible', 'adaptiveBoundarySemanticsLegible',
+]);
+const ACTIVE_ROW_TRAJECTORY_VISUAL_VERDICT_KEYS = Object.freeze([
+  'nonblank', 'orbitable', 'sameCameraComparison',
+  'authenticatedAdaptiveBaselineLegible', 'activeTrajectoryMotionLegible',
+  'largeRadiusStepsLegible', 'endpointAndVolumePreservationLegible',
+  'residualDebtLegible', 'manufacturedWitnessAuthorityCeilingLegible',
+  'packingSemanticsNotInverted',
 ]);
 
 function sha256(bytes) {
@@ -105,6 +114,19 @@ export function renderNBodyPackingLocalizedChallengeHtml({
   bindings,
   route = NBODY_PACKING_LOCALIZED_WITNESS_ROUTE,
 }) {
+  const mechanism = payload.mechanism;
+  if (
+    typeof mechanism?.oracleTargetCoordinatesConsumed !== 'boolean' ||
+    typeof mechanism?.contactGraphRowsConsumed !== 'boolean'
+  ) {
+    throw new Error(
+      'localized witness requires authenticated oracle and contact-graph mechanism flags',
+    );
+  }
+  const mechanismLedger = [
+    mechanism.oracleTargetCoordinatesConsumed,
+    mechanism.contactGraphRowsConsumed,
+  ].map(value => value ? 'yes' : 'no').join(' / ');
   const defaultDisplay = {
     title:'Localized packing boundary · six bodies',
     authority:'Synthetic two-obstacle falsifier · no anatomical admission',
@@ -139,7 +161,7 @@ export function renderNBodyPackingLocalizedChallengeHtml({
   <p class="comparison-note" id="comparison-note"></p>
   <div class="button-row states">${stateButtons}</div>
   <div class="button-row modes"><button data-mode="volume">transparent volume</button><button data-mode="slice">opaque slices</button></div>
-  <div class="ledger"><span class="head">active state</span><span class="head value" id="active-label"></span><span>status</span><span class="value" id="status"></span><span>severity</span><span class="value" id="severity"></span><span>pairwise penetration</span><span class="value" id="pairwise"></span><span>skeletal penetration</span><span class="value" id="skeletal"></span><span>compartment escape</span><span class="value" id="compartment"></span><span>endpoint drift</span><span class="value" id="endpoint"></span><span>maximum volume error</span><span class="value" id="volume"></span><span>carrier DOF / member</span><span class="value">4 · frozen</span><span>oracle / graph in candidate</span><span class="value good">no / no</span></div>
+  <div class="ledger"><span class="head">active state</span><span class="head value" id="active-label"></span><span>status</span><span class="value" id="status"></span><span>severity</span><span class="value" id="severity"></span><span>pairwise penetration</span><span class="value" id="pairwise"></span><span>skeletal penetration</span><span class="value" id="skeletal"></span><span>compartment escape</span><span class="value" id="compartment"></span><span>endpoint drift</span><span class="value" id="endpoint"></span><span>maximum volume error</span><span class="value" id="volume"></span><span>carrier DOF / member</span><span class="value">4 · frozen</span><span>solver inputs · oracle / contact graph</span><span class="value good">${mechanismLedger}</span></div>
   <p class="truth" id="truth"></p><div class="legend" id="legend"></div>
 </section><div class="hint">drag to orbit · wheel to zoom · red = pair debt · magenta = bone or wall debt</div>
 <script type="module">
@@ -222,7 +244,17 @@ export async function writeNBodyPackingLocalizedChallengeWitness({
       'same-basis-feasible':{ label:'0.24 same-basis feasible', severity:0.24, status:oracle.status, warning:false, source:failFixture.crowded, muscles:oracle.selected.muscles, metrics:oracle.selected.metrics, truth:'A −0.01 change at coordinate 20 clears all debt in the same carrier. This proves globalization failure, not representation failure.' },
       reference:{ label:'Manufactured reference', severity:null, status:'existence witness', warning:false, source:failFixture.knownFeasible, muscles:failFixture.knownFeasible.muscles, metrics:failFixture.metrics.knownFeasible, truth:'Manufactured reference establishes fixture feasibility but is not candidate or oracle input.' },
     };
-    const payload = { states, environment:{ compartment:failFixture.knownFeasible.compartment, obstacles:failFixture.knownFeasible.obstacles } };
+    const payload = {
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:challenge.solver?.oracleTargetCoordinatesConsumed,
+        contactGraphRowsConsumed:challenge.solver?.contactGraphRowsConsumed,
+      },
+      environment:{
+        compartment:failFixture.knownFeasible.compartment,
+        obstacles:failFixture.knownFeasible.obstacles,
+      },
+    };
     const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({ payload, bindings }));
     const reportCore = {
       schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
@@ -290,7 +322,9 @@ export async function admitNBodyPackingLocalizedVisualInspection({
   const reportPath = path.join(outputRoot, 'report.json');
   const report = JSON.parse(String(await readFile(reportPath)));
   const verdictKeys = report.route?.effective ===
-    NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
+    NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE
+    ? ACTIVE_ROW_TRAJECTORY_VISUAL_VERDICT_KEYS
+    : report.route?.effective === NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE
     ? ADAPTIVE_TRAJECTORY_VISUAL_VERDICT_KEYS
     : [
     NBODY_PACKING_RESTORATION_WITNESS_ROUTE,
@@ -320,6 +354,7 @@ export async function admitNBodyPackingLocalizedVisualInspection({
       NBODY_PACKING_COMMON_DESCENT_WITNESS_ROUTE,
       NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
       NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_WITNESS_ROUTE,
+      NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
     ].includes(report.route?.effective) ||
     report.route?.fallbackUsed !== false
   ) throw new Error('localized visual admission requires exact pending witness');

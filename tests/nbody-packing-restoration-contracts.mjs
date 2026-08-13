@@ -1323,3 +1323,309 @@ test('source-bound family-filter assay preserves the exact zero-step plateau', a
   assert.equal(fs.existsSync(path.join(outDir, 'result.json')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'run-report.json')), true);
 });
+
+test('active-row trust-region either advances all binding families or certifies the exact local floor', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.createNBodyActiveRowTrustRegionConfig,
+    'function',
+    'active-row trust-region config is not implemented',
+  );
+  assert.equal(
+    typeof restoration.solveNBodyActiveRowTrustRegionStep,
+    'function',
+    'active-row trust-region step is not implemented',
+  );
+
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const adaptive = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const requestedConfig = restoration.createNBodyActiveRowTrustRegionConfig();
+  const result = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:adaptive.selected.vector,
+    requestedConfig,
+  });
+
+  assert.equal(result.route.fallbackUsed, false);
+  assert.equal(result.status, 'local-active-row-cone-certificate');
+  assert.equal(result.directionConstruction.predictedCommonDescent, false);
+  assert.equal(result.directionConstruction.activeRows.length, 12);
+  assert.equal(result.source.problemSha256, problem.identity.sha256);
+  assert.deepEqual(result.config.requested, requestedConfig);
+  assert.deepEqual(result.config.effective, requestedConfig);
+  assert.match(result.identity.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(
+    result.identity.sha256,
+    hashMusclePackingCanonicalJson(Object.fromEntries(
+      Object.entries(result).filter(([key]) => key !== 'identity'),
+    )),
+  );
+
+  const activeRows = result.directionConstruction.activeRows;
+  assert.ok(activeRows.length > 0);
+  assert.ok(activeRows.every(row => row.signedGap <= requestedConfig.activationMargin));
+  assert.deepEqual(
+    [...new Set(activeRows.map(row => row.kind))].sort(),
+    ['compartment-clearance', 'pairwise-clearance', 'skeletal-clearance'],
+  );
+  assert.ok(activeRows.every(row => row.gradient.length === problem.variables.length));
+  assert.equal(
+    result.directionConstruction.convexWeights.length,
+    activeRows.length,
+  );
+  assert.ok(
+    Math.abs(result.directionConstruction.convexWeights.reduce(
+      (sum, value) => sum + value,
+      0,
+    ) - 1) <= 1e-10,
+  );
+  assert.ok(result.directionConstruction.convexWeights.every(value => value >= 0));
+  assert.ok(
+    result.directionConstruction.optimizer.dualityGap <=
+      requestedConfig.convexSolverTolerance,
+  );
+
+  if (result.status === 'active-row-trust-region-step-accepted') {
+    assert.ok(
+      result.selected.maximumActiveRowViolation <
+        result.start.maximumActiveRowViolation - requestedConfig.improvementTolerance,
+    );
+    for (const family of [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ]) {
+      assert.ok(
+        result.selected.metrics[family] <=
+          result.start.metrics[family] + requestedConfig.familyRegressionTolerance,
+        `${family} regressed under the active-row step`,
+      );
+    }
+    assert.equal(result.certificate, null);
+    assert.equal(result.work.iterations, 1);
+  } else {
+    assert.ok([
+      'local-active-row-cone-certificate',
+      'nonlinear-active-row-trust-region-floor',
+    ].includes(result.status));
+    assert.deepEqual(result.selected.vector, result.start.vector);
+    assert.equal(result.work.iterations, 0);
+    assert.ok(result.certificate);
+    assert.deepEqual(
+      result.certificate.activeConstraintKeys,
+      activeRows.map(row => row.key),
+    );
+    assert.equal(
+      result.certificate.carrierDegreesOfFreedomPerMember,
+      problem.carrier.degreesOfFreedomPerMember,
+    );
+    if (result.status === 'local-active-row-cone-certificate') {
+      assert.equal(result.directionConstruction.predictedCommonDescent, false);
+      assert.equal(result.certificate.kind, 'linearized-active-row-cone-floor');
+    } else {
+      assert.equal(result.directionConstruction.predictedCommonDescent, true);
+      assert.equal(result.certificate.kind, 'nonlinear-active-row-radius-floor');
+      assert.equal(
+        result.work.candidateReceipts.length,
+        requestedConfig.trustRegionRadii.length,
+      );
+    }
+  }
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.equal(result.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(result.mechanism.contactGraphRowsConsumed, true);
+  assert.equal(
+    result.claimCeiling,
+    'bounded-severity-0.32-active-row-step-or-local-floor-certificate-not-global-feasibility-or-carrier-impossibility',
+  );
+});
+
+test('family-maximum active bands do not let shallow satisfied-neighbor pressure manufacture a cone floor', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const adaptive = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const requestedConfig = restoration.createNBodyActiveRowTrustRegionConfig({
+    activeSetPolicy:'family-maximum-relative-band',
+    relativeActivationBand:0.01,
+  });
+  assert.equal(requestedConfig.activeSetPolicy, 'family-maximum-relative-band');
+  assert.equal(requestedConfig.relativeActivationBand, 0.01);
+
+  const result = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:adaptive.selected.vector,
+    requestedConfig,
+  });
+  const reverse = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:adaptive.selected.vector,
+    requestedConfig:{ ...requestedConfig, candidateEnumeration:'reverse' },
+  });
+  assert.equal(result.status, 'active-row-trust-region-step-accepted');
+  assert.equal(result.directionConstruction.predictedCommonDescent, true);
+  assert.equal(result.directionConstruction.activeSetPolicy, 'family-maximum-relative-band');
+  assert.ok(result.directionConstruction.activeRows.length < 12);
+  assert.deepEqual(
+    [...new Set(result.directionConstruction.activeRows.map(row => row.kind))].sort(),
+    ['compartment-clearance', 'pairwise-clearance', 'skeletal-clearance'],
+  );
+  for (const row of result.directionConstruction.activeRows) {
+    const familyMaximum = result.start.rowFamilyMaxima[row.kind];
+    assert.ok(
+      row.violation >= familyMaximum * (1 - requestedConfig.relativeActivationBand) - 1e-12,
+      `${row.key} is outside its requested family-maximum band`,
+    );
+  }
+  assert.ok(
+    result.selected.maximumActiveRowViolation < result.start.maximumActiveRowViolation,
+  );
+  for (const family of [
+    'pairwisePenetration',
+    'skeletalPenetration',
+    'compartmentEscape',
+  ]) {
+    assert.ok(
+      result.selected.metrics[family] <=
+        result.start.metrics[family] + requestedConfig.familyRegressionTolerance,
+    );
+  }
+  assert.equal(result.certificate, null);
+  assert.deepEqual(reverse.selected, result.selected);
+  assert.deepEqual(reverse.directionConstruction.activeRows, result.directionConstruction.activeRows);
+  assert.deepEqual(
+    reverse.directionConstruction.predictedDirectionalDerivatives,
+    result.directionConstruction.predictedDirectionalDerivatives,
+  );
+  assert.deepEqual(reverse.work.candidateReceipts, result.work.candidateReceipts);
+});
+
+test('repeated family-maximum active-set steps preserve global family custody until progress or certificate', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  assert.equal(
+    typeof restoration.createNBodyActiveRowTrustRegionTrajectoryConfig,
+    'function',
+    'active-row trust-region trajectory config is not implemented',
+  );
+  assert.equal(
+    typeof restoration.solveNBodyActiveRowTrustRegionTrajectory,
+    'function',
+    'active-row trust-region trajectory is not implemented',
+  );
+  const fixture = createNBodyLocalizedChallengeSuite().find(
+    row => row.assayProfile.severity === 0.32,
+  );
+  const problem = compileNBodyAdaptiveKktProblem(fixture);
+  const adaptive = JSON.parse(fs.readFileSync(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/result.json',
+    'utf8',
+  ));
+  const requestedConfig = restoration.createNBodyActiveRowTrustRegionTrajectoryConfig({
+    iterationBudget:8,
+  });
+  const result = restoration.solveNBodyActiveRowTrustRegionTrajectory({
+    problem,
+    startVector:adaptive.selected.vector,
+    requestedConfig,
+  });
+
+  assert.ok([
+    'active-row-trust-region-trajectory-budget-exhausted',
+    'active-row-trust-region-trajectory-feasible',
+    'active-row-trust-region-trajectory-local-floor',
+  ].includes(result.status));
+  assert.equal(result.route.fallbackUsed, false);
+  assert.equal(result.work.rows.length, result.work.attempts);
+  assert.ok(result.work.iterations >= 2);
+  assert.ok(result.work.iterations <= requestedConfig.iterationBudget);
+  assert.ok(result.work.attempts <= requestedConfig.iterationBudget);
+  assert.equal(
+    result.selected.maximumPhysicalResidual,
+    result.work.rows.filter(row => row.accepted).at(-1).after.maximumPhysicalResidual,
+  );
+  for (const row of result.work.rows) {
+    assert.match(row.stepResultSha256, /^[a-f0-9]{64}$/);
+    assert.equal(row.directionConstruction.activeSetPolicy, 'family-maximum-relative-band');
+    if (!row.accepted) {
+      assert.ok(row.certificate);
+      assert.deepEqual(row.after, row.before);
+      continue;
+    }
+    assert.equal(row.certificate, null);
+    assert.ok(row.after.maximumPhysicalResidual < row.before.maximumPhysicalResidual);
+    assert.ok(row.after.maximumActiveRowViolation < row.before.maximumActiveRowViolation);
+    for (const family of [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ]) {
+      assert.ok(
+        row.after.metrics[family] <=
+          row.before.metrics[family] + requestedConfig.step.familyRegressionTolerance,
+        `${family} regressed at active-set iteration ${row.iteration}`,
+      );
+    }
+  }
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.equal(result.mechanism.oracleTargetCoordinatesConsumed, false);
+  assert.equal(result.mechanism.contactGraphRowsConsumed, true);
+  assert.equal(
+    result.claimCeiling,
+    'bounded-severity-0.32-repeated-family-maximum-active-row-progress-or-local-floor-not-global-feasibility-or-carrier-impossibility',
+  );
+  assert.equal(
+    result.identity.sha256,
+    hashMusclePackingCanonicalJson(Object.fromEntries(
+      Object.entries(result).filter(([key]) => key !== 'identity'),
+    )),
+  );
+});
+
+test('active-row trajectory assay invalidates stale success before rejecting a substituted adaptive source', async () => {
+  const assay = await import('../nbody-packing-restoration-assay.mjs');
+  assert.equal(
+    typeof assay.runNBodyPackingActiveRowTrajectoryAssay,
+    'function',
+    'active-row trajectory assay is not implemented',
+  );
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nbody-active-row-assay-source-'));
+  const sourceRoot = path.resolve(
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0',
+  );
+  const sourceResult = JSON.parse(fs.readFileSync(path.join(sourceRoot, 'result.json'), 'utf8'));
+  sourceResult.selected.vector[0] += 0.000001;
+  delete sourceResult.identity;
+  sourceResult.identity = { sha256:hashMusclePackingCanonicalJson(sourceResult) };
+  const substitutedPath = path.join(outDir, 'substituted-adaptive-result.json');
+  fs.writeFileSync(substitutedPath, `${JSON.stringify(sourceResult, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'result.json'), '{"status":"stale-success"}\n');
+  fs.writeFileSync(path.join(outDir, 'raw-trajectory.json'), '{"status":"stale-raw"}\n');
+
+  await assert.rejects(
+    assay.runNBodyPackingActiveRowTrajectoryAssay({
+      outDir,
+      adaptiveResultPath:substitutedPath,
+      adaptiveReportPath:path.join(sourceRoot, 'run-report.json'),
+    }),
+    /substituted authenticated adaptive trajectory/,
+  );
+  const report = JSON.parse(fs.readFileSync(path.join(outDir, 'run-report.json'), 'utf8'));
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'bind-authenticated-adaptive-source');
+  assert.equal(report.route.effective, null);
+  assert.equal(fs.existsSync(path.join(outDir, 'result.json')), false);
+  assert.equal(fs.existsSync(path.join(outDir, 'raw-trajectory.json')), false);
+});

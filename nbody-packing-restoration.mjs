@@ -11,6 +11,10 @@ export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_STEP_RESULT_SCHEMA =
   'kaminos.nbody-packing-family-gradient-adaptive-common-descent-step-result.v0';
 export const NBODY_PACKING_ADAPTIVE_COMMON_DESCENT_TRAJECTORY_RESULT_SCHEMA =
   'kaminos.nbody-packing-family-gradient-adaptive-common-descent-trajectory-result.v0';
+export const NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_RESULT_SCHEMA =
+  'kaminos.nbody-packing-active-row-trust-region-result.v0';
+export const NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA =
+  'kaminos.nbody-packing-active-row-trust-region-trajectory-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
@@ -21,6 +25,10 @@ const ADAPTIVE_COMMON_DESCENT_STEP_ALGORITHM =
   'family-gradient-minimum-norm-common-descent-adaptive-step-v0';
 const ADAPTIVE_COMMON_DESCENT_TRAJECTORY_ALGORITHM =
   'family-gradient-minimum-norm-common-descent-adaptive-trajectory-v0';
+const ACTIVE_ROW_TRUST_REGION_ALGORITHM =
+  'active-row-minimum-norm-common-descent-trust-region-v0';
+const ACTIVE_ROW_TRUST_REGION_TRAJECTORY_ALGORITHM =
+  'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -245,6 +253,573 @@ function minimumNormConvexCombination(vectors) {
     return JSON.stringify(left.weights).localeCompare(JSON.stringify(right.weights));
   });
   return candidates[0];
+}
+
+function minimumNormConvexCombinationFrankWolfe(vectors, {
+  iterationBudget,
+  tolerance,
+}) {
+  if (!Array.isArray(vectors) || vectors.length === 0) {
+    throw new Error('active-row convex solver requires at least one vector');
+  }
+  const dimension = vectors[0].length;
+  if (vectors.some(vector => vector.length !== dimension || vector.some(value => !Number.isFinite(value)))) {
+    throw new Error('active-row convex solver vectors must share one finite dimension');
+  }
+  let weights = vectors.map(() => 1 / vectors.length);
+  let combined = vectors[0].map((_, axis) => vectors.reduce(
+    (sum, vector, index) => sum + weights[index] * vector[axis],
+    0,
+  ));
+  let dualityGap = Infinity;
+  let iterations = 0;
+  for (; iterations < iterationBudget; iterations += 1) {
+    const gradient = vectors.map(vector => dot(vector, combined));
+    let toward = 0;
+    for (let index = 1; index < gradient.length; index += 1) {
+      if (gradient[index] < gradient[toward] - 1e-18) toward = index;
+    }
+    dualityGap = dot(combined, combined) - gradient[toward];
+    if (dualityGap <= tolerance) break;
+    let away = weights.findIndex(value => value > 1e-15);
+    for (let index = away + 1; index < gradient.length; index += 1) {
+      if (weights[index] > 1e-15 && gradient[index] > gradient[away] + 1e-18) away = index;
+    }
+    if (away < 0 || away === toward) break;
+    const delta = vectors[toward].map((value, axis) => value - vectors[away][axis]);
+    const denominator = dot(delta, delta);
+    if (!(denominator > 0)) break;
+    const step = Math.max(0, Math.min(weights[away], -dot(combined, delta) / denominator));
+    if (!(step > 0)) break;
+    weights[toward] += step;
+    weights[away] -= step;
+    if (weights[away] < 1e-15) weights[away] = 0;
+    combined = combined.map((value, axis) => value + step * delta[axis]);
+  }
+  const finalGradient = vectors.map(vector => dot(vector, combined));
+  dualityGap = dot(combined, combined) - Math.min(...finalGradient);
+  return {
+    weights,
+    vector:combined,
+    norm:Math.hypot(...combined),
+    iterations,
+    dualityGap:Math.max(0, dualityGap),
+    converged:dualityGap <= tolerance,
+  };
+}
+
+export function createNBodyActiveRowTrustRegionConfig({
+  activeSetPolicy = 'all-violated',
+  relativeActivationBand = 0.01,
+} = {}) {
+  return {
+    activeSetPolicy,
+    activationMargin:0,
+    algorithm:ACTIVE_ROW_TRUST_REGION_ALGORITHM,
+    candidateEnumeration:'canonical',
+    convexSolverIterationBudget:10000,
+    convexSolverTolerance:1e-12,
+    directionalDerivativeTolerance:1e-10,
+    familyRegressionTolerance:1e-12,
+    finiteDifferenceStep:1e-5,
+    improvementTolerance:1e-12,
+    relativeActivationBand,
+    translationBounds:[-0.3, 0.3],
+    trustRegionRadii:[
+      0.001,
+      0.0005,
+      0.00025,
+      0.000125,
+      0.0000625,
+      0.00003125,
+      0.000015625,
+      0.0000078125,
+      0.00000390625,
+      0.000001953125,
+      0.0000009765625,
+      0.00000048828125,
+      0.000000244140625,
+      0.0000001220703125,
+      0.00000006103515625,
+      0.000000030517578125,
+      0.0000000152587890625,
+      0.00000000762939453125,
+      0.000000003814697265625,
+      0.0000000019073486328125,
+    ],
+  };
+}
+
+export function solveNBodyActiveRowTrustRegionStep({
+  problem,
+  startVector,
+  requestedConfig = createNBodyActiveRowTrustRegionConfig(),
+} = {}) {
+  const expectedKeys = [
+    'activeSetPolicy',
+    'activationMargin',
+    'algorithm',
+    'candidateEnumeration',
+    'convexSolverIterationBudget',
+    'convexSolverTolerance',
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+    'relativeActivationBand',
+    'translationBounds',
+    'trustRegionRadii',
+  ].sort();
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `active-row trust-region requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ACTIVE_ROW_TRUST_REGION_ALGORITHM) {
+    throw new Error('active-row trust-region algorithm identity is unsupported');
+  }
+  if (!['all-violated', 'family-maximum-relative-band'].includes(
+    requestedConfig.activeSetPolicy,
+  )) {
+    throw new Error('active-row trust-region activeSetPolicy is unsupported');
+  }
+  if (!['canonical', 'reverse'].includes(requestedConfig.candidateEnumeration)) {
+    throw new Error('active-row trust-region candidateEnumeration must be canonical or reverse');
+  }
+  if (!Number.isFinite(requestedConfig.activationMargin) || requestedConfig.activationMargin < 0) {
+    throw new Error('active-row trust-region activationMargin must be finite and nonnegative');
+  }
+  if (
+    !Number.isFinite(requestedConfig.relativeActivationBand) ||
+    requestedConfig.relativeActivationBand <= 0 ||
+    requestedConfig.relativeActivationBand >= 1
+  ) {
+    throw new Error('active-row trust-region relativeActivationBand must be between zero and one');
+  }
+  for (const key of [
+    'convexSolverTolerance',
+    'directionalDerivativeTolerance',
+    'familyRegressionTolerance',
+    'finiteDifferenceStep',
+    'improvementTolerance',
+  ]) {
+    if (!Number.isFinite(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`active-row trust-region ${key} must be positive and finite`);
+    }
+  }
+  if (
+    !Number.isInteger(requestedConfig.convexSolverIterationBudget) ||
+    requestedConfig.convexSolverIterationBudget <= 0
+  ) {
+    throw new Error('active-row trust-region convexSolverIterationBudget must be positive');
+  }
+  if (
+    !Array.isArray(requestedConfig.translationBounds) ||
+    requestedConfig.translationBounds.length !== 2 ||
+    !requestedConfig.translationBounds.every(Number.isFinite) ||
+    requestedConfig.translationBounds[0] >= requestedConfig.translationBounds[1]
+  ) throw new Error('active-row trust-region translationBounds must be an ordered finite pair');
+  if (
+    !Array.isArray(requestedConfig.trustRegionRadii) ||
+    requestedConfig.trustRegionRadii.length === 0 ||
+    requestedConfig.trustRegionRadii.some(value => !Number.isFinite(value) || value <= 0) ||
+    requestedConfig.trustRegionRadii.some(
+      (value, index) => index > 0 && value >= requestedConfig.trustRegionRadii[index - 1],
+    )
+  ) throw new Error('active-row trust-region radii must be strictly decreasing');
+  validateStart(problem, startVector, requestedConfig.translationBounds);
+
+  const startState = evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  let evaluationCount = 1;
+  const violatedSourceRows = startState.rows.filter(row => row.signedGap <= 0);
+  const rowFamilyMaxima = Object.fromEntries(
+    [...new Set(violatedSourceRows.map(row => row.kind))].sort().map(kind => [
+      kind,
+      Math.max(...violatedSourceRows
+        .filter(row => row.kind === kind)
+        .map(row => Math.max(0, -row.signedGap))),
+    ]),
+  );
+  const activeCandidates = requestedConfig.activeSetPolicy === 'all-violated'
+    ? startState.rows.filter(row => row.signedGap <= requestedConfig.activationMargin)
+    : violatedSourceRows;
+  const activeSourceRows = activeCandidates
+    .filter(row => requestedConfig.activeSetPolicy === 'all-violated'
+      ? row.signedGap <= requestedConfig.activationMargin
+      : Math.max(0, -row.signedGap) >=
+        rowFamilyMaxima[row.kind] * (1 - requestedConfig.relativeActivationBand)
+    )
+    .sort((left, right) => left.key.localeCompare(right.key));
+  if (activeSourceRows.length === 0) {
+    throw new Error('active-row trust-region start has no active constraint rows');
+  }
+  const gradientByKey = Object.fromEntries(activeSourceRows.map(row => [
+    row.key,
+    Array(startVector.length).fill(0),
+  ]));
+  for (let axis = 0; axis < startVector.length; axis += 1) {
+    const positive = clampVector(startVector.map((value, index) =>
+      index === axis ? value + requestedConfig.finiteDifferenceStep : value
+    ), requestedConfig.translationBounds);
+    const negative = clampVector(startVector.map((value, index) =>
+      index === axis ? value - requestedConfig.finiteDifferenceStep : value
+    ), requestedConfig.translationBounds);
+    const span = positive[axis] - negative[axis];
+    if (!(span > 0)) {
+      throw new Error(`active-row trust-region finite-difference span collapsed at ${axis}`);
+    }
+    const positiveState = evaluateNBodyUnifiedKktState({ problem, vector:positive });
+    const negativeState = evaluateNBodyUnifiedKktState({ problem, vector:negative });
+    evaluationCount += 2;
+    const positiveByKey = Object.fromEntries(positiveState.rows.map(row => [row.key, row]));
+    const negativeByKey = Object.fromEntries(negativeState.rows.map(row => [row.key, row]));
+    for (const row of activeSourceRows) {
+      gradientByKey[row.key][axis] = -(
+        positiveByKey[row.key].signedGap - negativeByKey[row.key].signedGap
+      ) / span;
+    }
+  }
+  const activeRows = activeSourceRows.map(row => {
+    const gradient = gradientByKey[row.key];
+    const unit = normalized(gradient);
+    return {
+      key:row.key,
+      kind:row.kind,
+      signedGap:rounded(row.signedGap),
+      violation:rounded(Math.max(0, -row.signedGap)),
+      gradient:gradient.map(value => rounded(value)),
+      gradientNorm:rounded(unit.norm),
+      normalizedGradient:unit.vector?.map(value => rounded(value)) || null,
+    };
+  });
+  const degenerateConstraintKeys = activeRows
+    .filter(row => !row.normalizedGradient)
+    .map(row => row.key);
+  const optimizer = degenerateConstraintKeys.length === 0
+    ? minimumNormConvexCombinationFrankWolfe(
+      activeRows.map(row => row.normalizedGradient),
+      {
+        iterationBudget:requestedConfig.convexSolverIterationBudget,
+        tolerance:requestedConfig.convexSolverTolerance,
+      },
+    )
+    : null;
+  if (optimizer && !optimizer.converged) {
+    throw new Error('active-row convex solver did not converge within its requested budget');
+  }
+  const combined = optimizer ? normalized(optimizer.vector) : { norm:0, vector:null };
+  const direction = combined.vector?.map(value => -value) || null;
+  const predictedDirectionalDerivatives = direction
+    ? activeRows.map(row => rounded(dot(row.normalizedGradient, direction)))
+    : activeRows.map(() => null);
+  const predictedCommonDescent = direction !== null &&
+    predictedDirectionalDerivatives.every(
+      value => value < -requestedConfig.directionalDerivativeTolerance,
+    );
+  const startMaximumActiveRowViolation = Math.max(
+    ...activeRows.map(row => row.violation),
+  );
+  const beforeFamilies = constraintFamilyMetrics(startState);
+  const enumeratedRadii = requestedConfig.candidateEnumeration === 'canonical'
+    ? [...requestedConfig.trustRegionRadii]
+    : [...requestedConfig.trustRegionRadii].reverse();
+  const candidates = direction ? enumeratedRadii.map(radius => {
+    const vector = clampVector(
+      startVector.map((value, axis) => value + radius * direction[axis]),
+      requestedConfig.translationBounds,
+    );
+    const state = evaluateNBodyUnifiedKktState({ problem, vector });
+    evaluationCount += 1;
+    const stateByKey = Object.fromEntries(state.rows.map(row => [row.key, row]));
+    const maximumActiveRowViolation = Math.max(
+      ...activeRows.map(row => Math.max(0, -stateByKey[row.key].signedGap)),
+    );
+    const families = constraintFamilyMetrics(state);
+    const regressedFamilies = CONSTRAINT_FAMILY_METRIC_KEYS.filter(
+      key => families[key] > beforeFamilies[key] + requestedConfig.familyRegressionTolerance,
+    );
+    return { radius, vector, state, maximumActiveRowViolation, families, regressedFamilies };
+  }) : [];
+  candidates.sort((left, right) => {
+    if (left.maximumActiveRowViolation !== right.maximumActiveRowViolation) {
+      return left.maximumActiveRowViolation - right.maximumActiveRowViolation;
+    }
+    if (left.state.maximumPhysicalResidual !== right.state.maximumPhysicalResidual) {
+      return left.state.maximumPhysicalResidual - right.state.maximumPhysicalResidual;
+    }
+    return hashMusclePackingCanonicalJson(left.vector)
+      .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+  });
+  const accepted = predictedCommonDescent ? candidates.find(candidate =>
+    candidate.maximumActiveRowViolation <
+      startMaximumActiveRowViolation - requestedConfig.improvementTolerance &&
+    candidate.regressedFamilies.length === 0
+  ) : null;
+  const candidateReceipts = [...candidates]
+    .sort((left, right) => right.radius - left.radius)
+    .map(candidate => ({
+      radius:candidate.radius,
+      vector:[...candidate.vector],
+      maximumActiveRowViolation:rounded(candidate.maximumActiveRowViolation),
+      maximumPhysicalResidual:candidate.state.maximumPhysicalResidual,
+      constraintFamilies:structuredClone(candidate.families),
+      regressedFamilies:[...candidate.regressedFamilies],
+      selected:candidate === accepted,
+      rejectionReason:candidate === accepted
+        ? null
+        : !predictedCommonDescent
+          ? 'no-predicted-active-row-common-descent'
+          : candidate.regressedFamilies.length > 0
+            ? 'constraint-family-regression'
+            : !(candidate.maximumActiveRowViolation <
+                startMaximumActiveRowViolation - requestedConfig.improvementTolerance)
+              ? 'non-improving-active-row-violation'
+              : 'higher-ranked-admissible-candidate',
+    }));
+  const selectedState = accepted?.state || startState;
+  const selectedVector = accepted?.vector || startVector;
+  const status = accepted
+    ? 'active-row-trust-region-step-accepted'
+    : predictedCommonDescent
+      ? 'nonlinear-active-row-trust-region-floor'
+      : 'local-active-row-cone-certificate';
+  const certificate = accepted ? null : {
+    kind:predictedCommonDescent
+      ? 'nonlinear-active-row-radius-floor'
+      : 'linearized-active-row-cone-floor',
+    activeConstraintKeys:activeRows.map(row => row.key),
+    activeConstraintKinds:[...new Set(activeRows.map(row => row.kind))].sort(),
+    minimumNorm:optimizer ? rounded(optimizer.norm) : null,
+    predictedDirectionalDerivatives:[...predictedDirectionalDerivatives],
+    trustRegionRadii:[...requestedConfig.trustRegionRadii],
+    availableDegreesOfFreedom:problem.variables.length,
+    carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    reason:predictedCommonDescent
+      ? 'all-requested-radii-fail-nonlinear-progress-or-family-admission'
+      : degenerateConstraintKeys.length > 0
+        ? 'one-or-more-active-row-gradients-are-degenerate'
+        : 'origin-reaches-the-active-violation-gradient-convex-hull-within-tolerance',
+  };
+  const core = {
+    schema:NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_RESULT_SCHEMA,
+    status,
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:{
+      vector:[...startVector],
+      maximumActiveRowViolation:rounded(startMaximumActiveRowViolation),
+      maximumPhysicalResidual:startState.maximumPhysicalResidual,
+      metrics:structuredClone(startState.metrics),
+      rowFamilyMaxima:Object.fromEntries(Object.entries(rowFamilyMaxima).map(
+        ([kind, value]) => [kind, rounded(value)],
+      )),
+    },
+    directionConstruction:{
+      activeRows,
+      activationMargin:requestedConfig.activationMargin,
+      degenerateConstraintKeys,
+      convexWeights:optimizer?.weights.map(value => rounded(value)) || activeRows.map(() => 0),
+      minimumNorm:optimizer ? rounded(optimizer.norm) : null,
+      optimizer:{
+        algorithm:'deterministic-pairwise-simplex-minimum-norm',
+        iterations:optimizer?.iterations || 0,
+        dualityGap:optimizer ? rounded(optimizer.dualityGap) : null,
+        converged:optimizer?.converged || false,
+      },
+      direction:direction?.map(value => rounded(value)) || null,
+      predictedDirectionalDerivatives,
+      predictedCommonDescent,
+      activeSetPolicy:requestedConfig.activeSetPolicy,
+      relativeActivationBand:requestedConfig.relativeActivationBand,
+    },
+    selected:{
+      vector:[...selectedVector],
+      maximumActiveRowViolation:accepted
+        ? rounded(accepted.maximumActiveRowViolation)
+        : rounded(startMaximumActiveRowViolation),
+      maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
+      metrics:structuredClone(selectedState.metrics),
+      muscles:structuredClone(selectedState.muscles),
+    },
+    work:{
+      iterations:accepted ? 1 : 0,
+      attempts:direction ? 1 : 0,
+      evaluationCount,
+      terminalReason:accepted
+        ? null
+        : predictedCommonDescent
+          ? 'no-active-row-admissible-trust-region-candidate'
+          : 'no-predicted-active-row-common-descent-direction',
+      candidateReceipts,
+    },
+    certificate,
+    mechanism:{
+      directionBasis:'minimum-norm-convex-combination-of-normalized-active-row-violation-gradients',
+      nonlinearAcceptance:'lower-active-row-maximum-and-no-family-regression',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:true,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-active-row-step-or-local-floor-certificate-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyActiveRowTrustRegionTrajectoryConfig({
+  iterationBudget = 8,
+  convergenceTolerance = 1e-7,
+  step = createNBodyActiveRowTrustRegionConfig({
+    activeSetPolicy:'family-maximum-relative-band',
+    relativeActivationBand:0.01,
+  }),
+} = {}) {
+  return {
+    algorithm:ACTIVE_ROW_TRUST_REGION_TRAJECTORY_ALGORITHM,
+    convergenceTolerance,
+    iterationBudget,
+    step:structuredClone(step),
+  };
+}
+
+export function solveNBodyActiveRowTrustRegionTrajectory({
+  problem,
+  startVector,
+  requestedConfig = createNBodyActiveRowTrustRegionTrajectoryConfig(),
+} = {}) {
+  const expectedKeys = ['algorithm', 'convergenceTolerance', 'iterationBudget', 'step'];
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `active-row trajectory requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ACTIVE_ROW_TRUST_REGION_TRAJECTORY_ALGORITHM) {
+    throw new Error('active-row trajectory algorithm identity is unsupported');
+  }
+  if (!Number.isInteger(requestedConfig.iterationBudget) || requestedConfig.iterationBudget <= 0) {
+    throw new Error('active-row trajectory iterationBudget must be a positive integer');
+  }
+  if (
+    !Number.isFinite(requestedConfig.convergenceTolerance) ||
+    requestedConfig.convergenceTolerance <= 0
+  ) {
+    throw new Error('active-row trajectory convergenceTolerance must be positive and finite');
+  }
+  if (requestedConfig.step?.activeSetPolicy !== 'family-maximum-relative-band') {
+    throw new Error('active-row trajectory requires family-maximum-relative-band step policy');
+  }
+
+  let currentVector = [...startVector];
+  let firstStep = null;
+  let finalStep = null;
+  let terminalReason = null;
+  let evaluationCount = 0;
+  const rows = [];
+  for (let iteration = 1; iteration <= requestedConfig.iterationBudget; iteration += 1) {
+    const stepResult = solveNBodyActiveRowTrustRegionStep({
+      problem,
+      startVector:currentVector,
+      requestedConfig:requestedConfig.step,
+    });
+    firstStep ||= stepResult;
+    finalStep = stepResult;
+    evaluationCount += stepResult.work.evaluationCount;
+    const accepted = stepResult.status === 'active-row-trust-region-step-accepted';
+    const before = {
+      vector:[...stepResult.start.vector],
+      maximumActiveRowViolation:stepResult.start.maximumActiveRowViolation,
+      maximumPhysicalResidual:stepResult.start.maximumPhysicalResidual,
+      metrics:structuredClone(stepResult.start.metrics),
+    };
+    const after = accepted ? {
+      vector:[...stepResult.selected.vector],
+      maximumActiveRowViolation:stepResult.selected.maximumActiveRowViolation,
+      maximumPhysicalResidual:stepResult.selected.maximumPhysicalResidual,
+      metrics:structuredClone(stepResult.selected.metrics),
+    } : structuredClone(before);
+    rows.push({
+      iteration,
+      accepted,
+      before,
+      after,
+      directionConstruction:structuredClone(stepResult.directionConstruction),
+      candidateReceipts:structuredClone(stepResult.work.candidateReceipts),
+      certificate:structuredClone(stepResult.certificate),
+      stepResultSha256:stepResult.identity.sha256,
+    });
+    if (!accepted) {
+      terminalReason = stepResult.status;
+      break;
+    }
+    currentVector = [...stepResult.selected.vector];
+    if (stepResult.selected.maximumPhysicalResidual <= requestedConfig.convergenceTolerance) {
+      terminalReason = 'convergence-tolerance-satisfied';
+      break;
+    }
+  }
+  if (!firstStep || !finalStep) {
+    throw new Error('active-row trajectory produced no step receipt');
+  }
+  const iterations = rows.filter(row => row.accepted).length;
+  const selected = iterations > 0
+    ? structuredClone(rows.filter(row => row.accepted).at(-1).after)
+    : {
+      vector:[...firstStep.start.vector],
+      maximumActiveRowViolation:firstStep.start.maximumActiveRowViolation,
+      maximumPhysicalResidual:firstStep.start.maximumPhysicalResidual,
+      metrics:structuredClone(firstStep.start.metrics),
+    };
+  const selectedState = evaluateNBodyUnifiedKktState({ problem, vector:selected.vector });
+  evaluationCount += 1;
+  const status = terminalReason === 'convergence-tolerance-satisfied'
+    ? 'active-row-trust-region-trajectory-feasible'
+    : terminalReason
+      ? 'active-row-trust-region-trajectory-local-floor'
+      : 'active-row-trust-region-trajectory-budget-exhausted';
+  const core = {
+    schema:NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA,
+    status,
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:{
+      vector:[...firstStep.start.vector],
+      maximumActiveRowViolation:firstStep.start.maximumActiveRowViolation,
+      maximumPhysicalResidual:firstStep.start.maximumPhysicalResidual,
+      metrics:structuredClone(firstStep.start.metrics),
+    },
+    selected:{
+      ...selected,
+      muscles:structuredClone(selectedState.muscles),
+    },
+    work:{
+      iterations,
+      attempts:rows.length,
+      evaluationCount,
+      terminalReason,
+      rows,
+    },
+    mechanism:{
+      activeSetPolicy:'family-maximum-relative-band',
+      directionBasis:'recomputed-minimum-norm-convex-combination-of-normalized-active-row-violation-gradients',
+      nonlinearAcceptance:'lower-active-row-maximum-and-no-family-regression',
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:true,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'bounded-severity-0.32-repeated-family-maximum-active-row-progress-or-local-floor-not-global-feasibility-or-carrier-impossibility',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }
 
 export function createNBodyFamilyGradientCommonDescentConfig() {

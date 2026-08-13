@@ -1108,9 +1108,22 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       orderedStates,
       defaultState:'fail-crowded',
     };
+    const effectiveEvidence = adaptiveTrajectory ||
+      commonDescentTrajectory ||
+      commonDescent ||
+      trajectory ||
+      restoration ||
+      pattern;
+    const mechanism = {
+      oracleTargetCoordinatesConsumed:
+        effectiveEvidence.mechanism.oracleTargetCoordinatesConsumed,
+      contactGraphRowsConsumed:
+        effectiveEvidence.mechanism.contactGraphRowsConsumed,
+    };
     const payload = {
       states,
       display,
+      mechanism,
       environment:{
         compartment:failFixture.knownFeasible.compartment,
         obstacles:failFixture.knownFeasible.obstacles,
@@ -1131,6 +1144,7 @@ export async function writeNBodyPackingLocalizedHardBoundaryWitness({
       },
       bracket:structuredClone(challenge.bracket),
       classification: {
+        mechanismInputs:structuredClone(mechanism),
         coldMaximumPhysicalResidual:failRow.result.selected.maximumPhysicalResidual,
         warmMaximumPhysicalResidual:
           continuation.solverResult.selected.maximumPhysicalResidual,

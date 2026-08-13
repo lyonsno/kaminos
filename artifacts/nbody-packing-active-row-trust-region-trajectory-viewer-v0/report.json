@@ -1,0 +1,76 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-agent-visual-inspected",
+  "route": {
+    "requested": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "effective": "nbody-packing-active-row-trust-region-trajectory-v0",
+    "fallbackUsed": false
+  },
+  "classification": {
+    "acceptedIterations": 8,
+    "attemptedIterations": 8,
+    "terminalReason": null,
+    "solverReplayedForPresentation": false,
+    "physicalProjectionCount": 5,
+    "selectedRadii": [
+      0.0000625,
+      0.00003125,
+      0.001,
+      0.00003125,
+      0.0000625,
+      0.001,
+      0.001,
+      0.000015625
+    ],
+    "mechanismInputs": {
+      "oracleTargetCoordinatesConsumed": false,
+      "contactGraphRowsConsumed": true
+    }
+  },
+  "bindings": {
+    "fixturesSha256": "d03e274f73a210f626bc75d2434bf8819812ec552ec7e523d4733a72e5b1fa4f",
+    "resultsSha256": "526595e6aedcf88ec5883fa3b63d22a933e1962e35f6ea79a99a00527560bcb5",
+    "indexHtmlSha256": "876dc956353b8c97874ecdb1e5b5609b9ce3f1242e9b81029a304b176310bdc3",
+    "activeRowRawFileSha256": "ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264",
+    "activeRowResultFileSha256": "ed32c03ef9e98e64699886ba7b115c713b6c055828d1f0ad118ae5546c0ed264",
+    "activeRowResultIdentitySha256": "d1ba2a571dfc30f90098c26cf00d45224bb84cc3209440b85452693498229bc2",
+    "activeRowReportFileSha256": "c0132bdaa0bb7d8b306c8f6374692eaa183cd48c98f3b4f59fd06e6eaa9cb21a",
+    "activeRowReportIdentitySha256": "c51fc8d8fad0e692f9795510e6596266cd8a25f9b3af91a435f199d6ce7582d6",
+    "authenticatedAdaptiveResultIdentitySha256": "2a060455affc56b4149461270e7eeb8f59bab24993e7b4f8a75afbf461931b1b",
+    "visualInspectionSha256": "dfd3079176740b191d983f9c02ac1f7be53318a98e7d1ead330b264e6fb46a11",
+    "captureReceiptSetSha256": "2c8af43b406d056e7afa161dc6706bb4df6e5efb053670462b795e23a963fd4e"
+  },
+  "requiredStates": [
+    "authenticated-adaptive-start",
+    "active-row-step-1",
+    "active-row-step-3",
+    "active-row-step-7",
+    "active-row-step-8",
+    "manufactured-reference"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "eight accepted trust-region steps recompute simultaneous common descent over family-maximum active rows and reduce every tracked residual family from the authenticated adaptive endpoint while preserving exact endpoints and volume; the run is budget exhausted without a terminal certificate, so this is progress evidence rather than convergence, feasibility, or carrier-limit evidence",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "global-feasibility",
+      "carrier-representation-impossibility",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition",
+      "production-admission"
+    ]
+  },
+  "visualInspection": {
+    "status": "passed-agent-inspection",
+    "artifact": "visual-inspection.json",
+    "receiptSha256": "dfd3079176740b191d983f9c02ac1f7be53318a98e7d1ead330b264e6fb46a11",
+    "captureCount": 12
+  },
+  "identity": {
+    "sha256": "b2ea1e3d9a5b2c62a70b03f26eb10208415c8cdb00502068c1610cbb7376e08f"
+  }
+}

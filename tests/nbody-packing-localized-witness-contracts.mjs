@@ -96,7 +96,14 @@ test('localized witness names the complete last-pass first-fail comparison witho
     ['reference', 'Manufactured reference'],
   ].map(([key, label]) => [key, { label }]));
   const html = renderNBodyPackingLocalizedChallengeHtml({
-    payload:{ states, environment:{ compartment:{ minimum:[-1,-1,-1], maximum:[1,1,1] }, obstacles:[] } },
+    payload:{
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:false,
+      },
+      environment:{ compartment:{ minimum:[-1,-1,-1], maximum:[1,1,1] }, obstacles:[] },
+    },
     bindings:{ fixturesSha256:'a'.repeat(64), resultsSha256:'b'.repeat(64) },
   });
   assert.equal(NBODY_PACKING_LOCALIZED_WITNESS_ROUTE, 'nbody-packing-localized-boundary-v0');
@@ -126,6 +133,10 @@ test('localized renderer can expose the gross hard boundary with truthful dynami
   const html = renderNBodyPackingLocalizedChallengeHtml({
     payload:{
       states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:false,
+      },
       environment:{ compartment:{ minimum:[-1,-1,-1], maximum:[1,1,1] }, obstacles:[] },
       display: {
         title:'Localized hard boundary · six bodies',
@@ -179,6 +190,10 @@ test('adaptive comparison renderer uses sparse true-position rings instead of a 
   const html = renderNBodyPackingLocalizedChallengeHtml({
     payload:{
       states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:false,
+      },
       environment:{ compartment:{ minimum:[-1,-1,-1], maximum:[1,1,1] }, obstacles:[] },
       display:{ orderedStates:['baseline','adaptive'], defaultState:'adaptive' },
     },
@@ -314,6 +329,18 @@ test('hard-boundary writer preserves a durable failure report before primary out
   assert.equal(report.route.effective, null);
   assert.equal(report.failurePhase, 'read-source-results');
   assert.equal(report.lastTrustworthyEvidence.phase, 'none');
+});
+
+test('hard-boundary writer forwards authenticated false/false mechanism authority', async () => {
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'localized-hard-mechanism-'));
+  const { report } = await writeNBodyPackingLocalizedHardBoundaryWitness({ outDir });
+  assert.deepEqual(report.classification.mechanismInputs, {
+    oracleTargetCoordinatesConsumed:false,
+    contactGraphRowsConsumed:false,
+  });
+  const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
+  assert.match(html, /solver inputs · oracle \/ contact graph/);
+  assert.match(html, />no \/ no<\/span>/);
 });
 
 test('hard-boundary writer rejects a pattern search from a substituted continuation seed', async () => {

@@ -13,9 +13,11 @@ import {
 } from './nbody-packing-unified-kkt.mjs';
 import {
   createNBodyAllNeighborRestorationConfig,
+  createNBodyActiveRowTrustRegionTrajectoryConfig,
   createNBodyFamilyGradientCommonDescentConfig,
   createNBodyFamilyGradientCommonDescentTrajectoryConfig,
   solveNBodyAllNeighborRestoration,
+  solveNBodyActiveRowTrustRegionTrajectory,
   solveNBodyFamilyGradientCommonDescent,
   solveNBodyFamilyGradientCommonDescentTrajectory,
 } from './nbody-packing-restoration.mjs';
@@ -26,6 +28,8 @@ export const NBODY_PACKING_COMMON_DESCENT_ASSAY_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-assay.v0';
 export const NBODY_PACKING_COMMON_DESCENT_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.nbody-packing-family-gradient-common-descent-trajectory-assay.v0';
+export const NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA =
+  'kaminos.nbody-packing-active-row-trust-region-trajectory-assay.v0';
 
 export const NBODY_PACKING_REFINED_COMMON_DESCENT_RADII = Object.freeze([
   0.004,
@@ -45,6 +49,13 @@ const FROZEN_ADMITTED_COMMON_DESCENT = Object.freeze({
   resultSha256:'879cc405832bce8fb6e04ed2360b1a326614402432fe8dbe86da1d0b53a2dd19',
   reportFileSha256:'6c0f07050febb3fbf78aab4b5f423d451c7a467cff7a0bc7ba05e225ed2f48b0',
   reportSha256:'20cbd158b960ce5de258d9dcf6cb40a4512d6ad588838164da17d580d325f4c4',
+});
+
+const FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY = Object.freeze({
+  resultFileSha256:'8f8764288d999c99ca574f89337f75c4bca4e2169f19bc85ba4ce2aa1c193d69',
+  resultSha256:'2a060455affc56b4149461270e7eeb8f59bab24993e7b4f8a75afbf461931b1b',
+  reportFileSha256:'1536165e5f7634a1e026e3eec281fa98e38c1628f73952d5bb3eb70d8be00f01',
+  reportSha256:'41a1c5897e6b559b07c04bb83c17fbab75048aa71b46b6337fc59e39d66f6477',
 });
 
 const FROZEN_BASELINES = Object.freeze({
@@ -78,6 +89,16 @@ async function invalidatePriorPrimary(outputRoot) {
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
+}
+
+async function invalidatePriorActiveTrajectory(outputRoot) {
+  await Promise.all(['result.json', 'raw-trajectory.json'].map(async fileName => {
+    try {
+      await unlink(path.join(outputRoot, fileName));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  }));
 }
 
 function verifyCanonicalIdentity(value, label) {
@@ -669,6 +690,231 @@ export async function runNBodyPackingCommonDescentTrajectoryAssay({
   }
 }
 
+export async function runNBodyPackingActiveRowTrajectoryAssay({
+  outDir = 'artifacts/nbody-packing-active-row-trust-region-trajectory-v0',
+  adaptiveResultPath =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/result.json',
+  adaptiveReportPath =
+    'artifacts/nbody-packing-family-gradient-adaptive-common-descent-trajectory-v0/run-report.json',
+  iterationBudget = 8,
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  const requestedRoute =
+    'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
+  let phase = 'read-authenticated-adaptive-source';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    phase = 'invalidate-prior-primary';
+    await invalidatePriorActiveTrajectory(outputRoot);
+    phase = 'read-authenticated-adaptive-source';
+    const [sourceResultBytes, sourceReportBytes] = await Promise.all([
+      readFile(path.resolve(adaptiveResultPath)),
+      readFile(path.resolve(adaptiveReportPath)),
+    ]);
+    const sourceResult = JSON.parse(String(sourceResultBytes));
+    const sourceReport = JSON.parse(String(sourceReportBytes));
+    verifyCanonicalIdentity(sourceResult, 'authenticated adaptive trajectory');
+    verifyCanonicalIdentity(sourceReport, 'authenticated adaptive trajectory report');
+    lastTrustworthyEvidence = {
+      phase:'authenticated-adaptive-source-read',
+      resultFileSha256:sha256(sourceResultBytes),
+      resultSha256:sourceResult.identity?.sha256 || null,
+      reportFileSha256:sha256(sourceReportBytes),
+      reportSha256:sourceReport.identity?.sha256 || null,
+    };
+
+    phase = 'bind-authenticated-adaptive-source';
+    if (
+      sha256(sourceResultBytes) !==
+        FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY.resultFileSha256 ||
+      sourceResult.identity?.sha256 !==
+        FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY.resultSha256 ||
+      sha256(sourceReportBytes) !==
+        FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY.reportFileSha256 ||
+      sourceReport.identity?.sha256 !==
+        FROZEN_AUTHENTICATED_ADAPTIVE_TRAJECTORY.reportSha256
+    ) throw new Error('active-row assay rejects substituted authenticated adaptive trajectory');
+    if (
+      sourceReport.bindings?.resultFileSha256 !== sha256(sourceResultBytes) ||
+      sourceReport.bindings?.resultSha256 !== sourceResult.identity.sha256
+    ) throw new Error('active-row assay rejects broken authenticated adaptive binding');
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      row => row.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    if (
+      sourceResult.schema !==
+        'kaminos.nbody-packing-family-gradient-adaptive-common-descent-trajectory-result.v0' ||
+      sourceResult.status !== 'adaptive-common-descent-trajectory-budget-exhausted' ||
+      sourceResult.route?.effective !==
+        'family-gradient-minimum-norm-common-descent-adaptive-trajectory-v0' ||
+      sourceResult.route?.fallbackUsed !== false ||
+      sourceResult.source?.problemSha256 !== problem.identity.sha256 ||
+      sourceResult.selected?.maximumPhysicalResidual !== 0.004513829534 ||
+      sourceResult.selected?.metrics?.endpointDrift !== 0 ||
+      sourceResult.selected?.metrics?.maximumRelativeVolumeError !== 0 ||
+      sourceReport.schema !==
+        'kaminos.nbody-packing-adaptive-common-descent-trajectory-admission.v0' ||
+      sourceReport.status !== 'complete-admitted-canonical-trajectory' ||
+      sourceReport.source?.fixtureSha256 !== fixture.identity.sha256 ||
+      sourceReport.source?.problemSha256 !== problem.identity.sha256
+    ) throw new Error('active-row assay rejects incompatible authenticated adaptive source');
+    const effectiveStart = evaluateNBodyUnifiedKktState({
+      problem,
+      vector:sourceResult.selected.vector,
+    });
+    if (
+      effectiveStart.maximumPhysicalResidual !== sourceResult.selected.maximumPhysicalResidual ||
+      JSON.stringify(effectiveStart.metrics) !== JSON.stringify(sourceResult.selected.metrics)
+    ) throw new Error('active-row assay rejects physically stale adaptive selected state');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'authenticated-adaptive-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      effectiveStartMaximumPhysicalResidual:effectiveStart.maximumPhysicalResidual,
+    };
+
+    phase = 'solve-active-row-trajectory';
+    const requestedConfig = createNBodyActiveRowTrustRegionTrajectoryConfig({
+      iterationBudget,
+    });
+    const rawTrajectory = solveNBodyActiveRowTrustRegionTrajectory({
+      problem,
+      startVector:sourceResult.selected.vector,
+      requestedConfig,
+    });
+    const rawBytes = jsonBytes(rawTrajectory);
+    await writeAtomically(path.join(outputRoot, 'raw-trajectory.json'), rawBytes);
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'raw-active-row-trajectory-persisted',
+      rawFileSha256:sha256(rawBytes),
+      rawResultSha256:rawTrajectory.identity?.sha256 || null,
+    };
+
+    phase = 'verify-active-row-trajectory';
+    verifyCanonicalIdentity(rawTrajectory, 'raw active-row trajectory');
+    const rows = rawTrajectory.work?.rows || [];
+    const acceptedRows = rows.filter(row => row.accepted);
+    const familyKeys = [
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+    ];
+    if (
+      ![
+        'active-row-trust-region-trajectory-budget-exhausted',
+        'active-row-trust-region-trajectory-feasible',
+        'active-row-trust-region-trajectory-local-floor',
+      ].includes(rawTrajectory.status) ||
+      rawTrajectory.route?.requested !== requestedRoute ||
+      rawTrajectory.route?.effective !== requestedRoute ||
+      rawTrajectory.route?.fallbackUsed !== false ||
+      rawTrajectory.source?.problemSha256 !== problem.identity.sha256 ||
+      rawTrajectory.start?.maximumPhysicalResidual !==
+        sourceResult.selected.maximumPhysicalResidual ||
+      rows.length !== rawTrajectory.work?.attempts ||
+      acceptedRows.length !== rawTrajectory.work?.iterations ||
+      acceptedRows.length < 2 ||
+      acceptedRows.some(row =>
+        row.after.maximumPhysicalResidual >= row.before.maximumPhysicalResidual ||
+        row.after.maximumActiveRowViolation >= row.before.maximumActiveRowViolation ||
+        familyKeys.some(key => row.after.metrics[key] >
+          row.before.metrics[key] + requestedConfig.step.familyRegressionTolerance)
+      ) ||
+      rows.some(row =>
+        !/^[a-f0-9]{64}$/.test(row.stepResultSha256) ||
+        row.directionConstruction?.activeSetPolicy !== 'family-maximum-relative-band'
+      ) ||
+      rawTrajectory.selected?.metrics?.endpointDrift !== 0 ||
+      rawTrajectory.selected?.metrics?.maximumRelativeVolumeError !== 0 ||
+      rawTrajectory.mechanism?.oracleTargetCoordinatesConsumed !== false ||
+      rawTrajectory.mechanism?.contactGraphRowsConsumed !== true
+    ) throw new Error('active-row trajectory did not clear its bounded admission contract');
+    if (
+      rawTrajectory.status === 'active-row-trust-region-trajectory-local-floor' &&
+      (!rows.at(-1)?.certificate || rows.at(-1).accepted)
+    ) throw new Error('active-row trajectory local floor lacks its terminal certificate');
+
+    phase = 'write-terminal-artifacts';
+    const resultBytes = jsonBytes(rawTrajectory);
+    const reportCore = {
+      schema:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA,
+      status:rawTrajectory.status === 'active-row-trust-region-trajectory-feasible'
+        ? 'complete-active-row-trajectory-feasible'
+        : rawTrajectory.status === 'active-row-trust-region-trajectory-local-floor'
+          ? 'complete-active-row-trajectory-floor-exposed'
+          : 'complete-active-row-trajectory-budget-exhausted',
+      route:structuredClone(rawTrajectory.route),
+      source:{
+        fixtureSha256:fixture.identity.sha256,
+        problemSha256:problem.identity.sha256,
+        authenticatedAdaptiveTrajectory:{
+          resultPath:adaptiveResultPath,
+          resultFileSha256:sha256(sourceResultBytes),
+          resultSha256:sourceResult.identity.sha256,
+          reportPath:adaptiveReportPath,
+          reportFileSha256:sha256(sourceReportBytes),
+          reportSha256:sourceReport.identity.sha256,
+        },
+      },
+      probe:{
+        activeSetPolicy:requestedConfig.step.activeSetPolicy,
+        relativeActivationBand:requestedConfig.step.relativeActivationBand,
+        iterationBudget:requestedConfig.iterationBudget,
+        acceptedIterations:rawTrajectory.work.iterations,
+        attemptedIterations:rawTrajectory.work.attempts,
+        terminalReason:rawTrajectory.work.terminalReason,
+        selectedRadii:rows.map(row =>
+          row.candidateReceipts.find(candidate => candidate.selected)?.radius || null
+        ),
+      },
+      comparison:{
+        authenticatedAdaptiveStart:rawTrajectory.start.maximumPhysicalResidual,
+        activeRowTrajectory:rawTrajectory.selected.maximumPhysicalResidual,
+        improvementRatio:
+          rawTrajectory.start.maximumPhysicalResidual /
+            rawTrajectory.selected.maximumPhysicalResidual,
+        familyStart:Object.fromEntries(familyKeys.map(
+          key => [key, rawTrajectory.start.metrics[key]],
+        )),
+        familySelected:Object.fromEntries(familyKeys.map(
+          key => [key, rawTrajectory.selected.metrics[key]],
+        )),
+      },
+      bindings:{
+        rawTrajectoryFileSha256:sha256(rawBytes),
+        rawTrajectorySha256:rawTrajectory.identity.sha256,
+        resultFileSha256:sha256(resultBytes),
+        resultSha256:rawTrajectory.identity.sha256,
+      },
+      claimCeiling:rawTrajectory.claimCeiling,
+    };
+    const report = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    await Promise.all([
+      writeAtomically(path.join(outputRoot, 'result.json'), resultBytes),
+      writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(report)),
+    ]);
+    return { outputRoot, rawTrajectory, result:rawTrajectory, report };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_ASSAY_SCHEMA,
+      status:'failed',
+      route:{ requested:requestedRoute, effective:null, fallbackUsed:false },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'run-report.json'), jsonBytes(failure));
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const outDir = process.argv[2] || 'artifacts/nbody-packing-all-neighbor-restoration-v0';
   const iterationBudget = process.argv[3] === undefined ? 1 : Number(process.argv[3]);
@@ -677,6 +923,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     ? await runNBodyPackingCommonDescentAssay({ outDir })
     : acceptancePolicy === 'family-gradient-common-descent-trajectory'
       ? await runNBodyPackingCommonDescentTrajectoryAssay({ outDir, iterationBudget })
+      : acceptancePolicy === 'active-row-trust-region-trajectory'
+        ? await runNBodyPackingActiveRowTrajectoryAssay({ outDir, iterationBudget })
       : await runNBodyPackingRestorationAssay({
           outDir,
           iterationBudget,
