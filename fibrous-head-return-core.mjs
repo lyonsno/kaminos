@@ -96,6 +96,30 @@ function requiredProductIds(manifest) {
     manifest.observationContract.requiredKinds.map(kind => `${kind}@${viewId}`));
 }
 
+function normalizeGreenroomStatus(status) {
+  if (status && typeof status.schema === 'string' && status.schema.endsWith('.greenroom_job_watch.v1')) {
+    return status;
+  }
+  if (status && !status.schema && status.job_id && status.job_type
+      && ['done', 'succeeded', 'failed'].includes(status.status)) {
+    const succeeded = ['done', 'succeeded'].includes(status.status);
+    return {
+      job_id: status.job_id,
+      state: status.status,
+      bucket: status.status,
+      terminal: true,
+      succeeded,
+      effective_route: status.job_type,
+      error_message: status.error_message ?? null,
+      exit_code: status.exit_code ?? null,
+      failure_phase: status.failure_phase ?? null,
+      finished_at: status.finished_at ?? null,
+      source_format: 'native_terminal_receipt',
+    };
+  }
+  return null;
+}
+
 export function evaluateFibrousHeadReturn({ manifest, status, sourceEvidence, completionReceipt, productEvidence = {} }) {
   const manifestError = validateManifest(manifest);
   if (manifestError) return failure(manifest, 'invalid_manifest', 'manifest-validation', manifestError);
@@ -104,11 +128,15 @@ export function evaluateFibrousHeadReturn({ manifest, status, sourceEvidence, co
   if (sourceError) return failure(manifest, 'invalid_source', 'source-binding', sourceError);
 
   const sourceBound = { lastTrustworthyEvidence: 'source_and_generated_image_identity' };
-  if (!status || typeof status.schema !== 'string' || !status.schema.endsWith('.greenroom_job_watch.v1')) {
+  status = normalizeGreenroomStatus(status);
+  if (!status) {
     return failure(manifest, 'invalid_status', 'route-status', 'unrecognized Greenroom status schema', sourceBound);
   }
   if (status.job_id !== manifest.reconstruction.jobId) {
     return failure(manifest, 'invalid_identity', 'route-status', 'Greenroom job identity mismatch', sourceBound);
+  }
+  if (status.effective_route && status.effective_route !== manifest.reconstruction.requestedRouteId) {
+    return failure(manifest, 'invalid_route', 'route-binding', 'effective route mismatch', sourceBound);
   }
   if (!status.terminal) {
     if (status.succeeded || !['pending', 'running'].includes(status.state)) {
@@ -130,17 +158,19 @@ export function evaluateFibrousHeadReturn({ manifest, status, sourceEvidence, co
 
   if (!status.succeeded) {
     return failure(manifest, 'route_failed', 'reconstruction', status.error_message ?? 'reconstruction route failed', {
-      ...sourceBound,
+      lastTrustworthyEvidence: 'route_bound_terminal_failure_without_cast',
+      missing: requiredProductIds(manifest),
       routeObservation: {
         state: status.state,
         bucket: status.bucket,
         terminal: true,
+        effectiveRoute: status.effective_route,
         exitCode: status.exit_code ?? null,
         failurePhase: status.failure_phase ?? null,
       },
     });
   }
-  if (status.effective_route !== manifest.reconstruction.requestedRouteId) {
+  if (!status.effective_route) {
     return failure(manifest, 'invalid_route', 'route-binding', 'effective route mismatch', sourceBound);
   }
   if (!completionReceipt) {

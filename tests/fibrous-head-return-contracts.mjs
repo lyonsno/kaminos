@@ -97,6 +97,38 @@ test('pending Greenroom input cannot become cast or scientific admission', () =>
   assert.deepEqual(report.missing, ['terminal_reconstruction_receipt']);
 });
 
+test('native terminal Greenroom failure receipt supersedes a stale pending watcher projection', () => {
+  const report = evaluateFibrousHeadReturn({
+    manifest: manifest(),
+    status: {
+      job_id: 'cf9d1c7f96be',
+      job_type: 'trellis2mlx_fast',
+      status: 'failed',
+      failure_phase: 'stale_recovery',
+      error_message: 'Process 66037 no longer alive; recovered by stale detection',
+      started_at: 1786766594.048939,
+      finished_at: 1786766747.021109,
+    },
+    sourceEvidence: sourceEvidence(),
+    completionReceipt: null,
+  });
+  assert.equal(report.state, 'route_failed');
+  assert.equal(report.failure.phase, 'reconstruction');
+  assert.match(report.failure.message, /no longer alive/);
+  assert.equal(report.routeObservation.effectiveRoute, 'trellis2mlx_fast');
+  assert.equal(report.routeObservation.failurePhase, 'stale_recovery');
+  assert.equal(report.lastTrustworthyEvidence, 'route_bound_terminal_failure_without_cast');
+  assert.deepEqual(report.missing, [
+    'textured@source-camera',
+    'clay@source-camera',
+    'normal@source-camera',
+    'depth@source-camera',
+    'silhouette@source-camera',
+  ]);
+  assert.equal(report.scientificAdmission, false);
+  assert.equal(report.products.length, 0);
+});
+
 test('source digest mismatch fails before route interpretation', () => {
   const report = evaluateFibrousHeadReturn({
     manifest: manifest(),

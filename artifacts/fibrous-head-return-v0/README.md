@@ -10,23 +10,30 @@ silhouette set are digest-bound. It never means the science or visual result is
 admitted. A missing cast, pending job, fallback route, mismatched source,
 partial view set, blank product, or stale digest stays loud in the report.
 
-Run the current pending receipt:
+Run the current terminal receipt:
 
 ```sh
 node tools/fibrous-head-return-preflight.mjs \
   --manifest artifacts/fibrous-head-return-v0/manifest.json \
-  --status /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-head-0814/neutral-lion-head-trellis-terminal.json \
+  --status /Users/noahlyons/.local/state/gpu-greenroom/failed/cf9d1c7f96be/receipt.json \
   --report artifacts/fibrous-head-return-v0/evidence/neutral-head-preflight.json
 ```
 
-The current lawful result is `pending_input` with exit code `2`: source and
-generated-image identities exist, while terminal cast and observation evidence
-do not. Do not resubmit the Greenroom job from this harness. After the owning
-route produces a terminal cast, supply a
+The current lawful result is `route_failed` with exit code `1`: the native
+terminal receipt supersedes the earlier stale pending watcher projection. The
+route reached high-resolution mesh extraction and disappeared before
+simplification or serialization; no GLB or required observation exists. The
+preflight reports all five source-camera products missing and does not begin
+regional triage. Do not resubmit the Greenroom job from this harness. If a later
+campaign reason produces a terminal cast, supply a
 `kaminos.fibrous-head-return-completion-receipt.v0` with `--completion-receipt`.
 The receipt must echo the exact job, generated-image digest, requested and
 effective route, complete reconstruction config, and digest-bound observation
 products.
+
+A genuinely pending watcher receipt remains `pending_input` with exit code `2`.
+This distinction keeps queue/process terminality, cast availability, and
+scientific admission separate.
 
 Initial region labels are image-grounded hypotheses only. In particular, the
 rear-jaw/neck ruff is a HYBRID candidate, not an admitted groom or recovered

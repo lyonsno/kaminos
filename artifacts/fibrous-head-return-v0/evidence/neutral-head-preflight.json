@@ -1,11 +1,11 @@
 {
   "schema": "kaminos.fibrous-head-return-preflight-report.v0",
   "receiptId": "neutral-skull-head-fibrous-return-v0",
-  "state": "pending_input",
+  "state": "route_failed",
   "scientificAdmission": false,
   "visualAdmission": "unreviewed",
   "claimCeiling": "Source-specific regional representation triage and compiler input only; no hidden anatomy, universal fur semantics, production groom, deformation, route parity, or final visual admission.",
-  "lastTrustworthyEvidence": "source_and_generated_image_identity",
+  "lastTrustworthyEvidence": "route_bound_terminal_failure_without_cast",
   "source": {
     "skull": {
       "path": "/Users/noahlyons/dev/operator-scratch/images/Screenshot 2026-08-14 at 11.49.04 AM.png",
@@ -68,21 +68,30 @@
   ],
   "products": [],
   "missing": [
-    "terminal_reconstruction_receipt"
+    "textured@source-camera",
+    "clay@source-camera",
+    "normal@source-camera",
+    "depth@source-camera",
+    "silhouette@source-camera"
   ],
   "blank": [],
   "mismatched": [],
-  "failure": null,
-  "routeObservation": {
-    "state": "pending",
-    "bucket": "pending",
-    "terminal": false,
-    "timedOut": true
+  "failure": {
+    "phase": "reconstruction",
+    "message": "Process 66037 no longer alive; recovered by stale detection"
   },
-  "evaluatedAt": "2026-08-15T04:04:38.348Z",
+  "routeObservation": {
+    "state": "failed",
+    "bucket": "failed",
+    "terminal": true,
+    "effectiveRoute": "trellis2mlx_fast",
+    "exitCode": null,
+    "failurePhase": "stale_recovery"
+  },
+  "evaluatedAt": "2026-08-15T05:00:25.940Z",
   "inputs": {
     "manifestPath": "artifacts/fibrous-head-return-v0/manifest.json",
-    "statusPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-head-0814/neutral-lion-head-trellis-terminal.json",
+    "statusPath": "/Users/noahlyons/.local/state/gpu-greenroom/failed/cf9d1c7f96be/receipt.json",
     "completionReceiptPath": null
   }
 }
