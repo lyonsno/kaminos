@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.fibrous-head-return-manifest.v0",
+  "receiptId": "neutral-skull-head-fibrous-return-v0",
+  "source": {
+    "skull": {
+      "path": "/Users/noahlyons/dev/operator-scratch/images/Screenshot 2026-08-14 at 11.49.04 AM.png",
+      "sha256": "72c6892cdf9db186880802927c1a07c462261e4737a0655e2911cbb333fc6d08"
+    },
+    "generatedImage": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-head-0814/runs/skull-living-animal-head-seed81401/output.png",
+      "sha256": "a1994dc3d841e106e78bd72345d17287cd7bdb63dea14d8b05330e7557bc32cb",
+      "prompt": "Complete this skull into a living animal head.",
+      "generation": {
+        "routeId": "flux2-klein-9b-q4",
+        "seed": 81401,
+        "width": 512,
+        "height": 512,
+        "steps": 8,
+        "guidance": 1.0
+      },
+      "safety": {
+        "classification": "agent-inspected-safe",
+        "description": "Coherent naturalistic large-felid head on an isolated ordinary background; no infestation, corruption, repeated-orifice, or misplaced-growth imagery."
+      }
+    },
+    "camera": {
+      "id": "source-image-camera-v0",
+      "authority": "source-image"
+    }
+  },
+  "reconstruction": {
+    "jobId": "cf9d1c7f96be",
+    "requestedRouteId": "trellis2mlx_fast",
+    "config": {
+      "seed": 42,
+      "steps": 6,
+      "targetFaces": 200000,
+      "textureSize": 1024
+    },
+    "outputDir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-head-0814/reconstructions/neutral-lion-head-trellis"
+  },
+  "observationContract": {
+    "requiredKinds": [
+      "textured",
+      "clay",
+      "normal",
+      "depth",
+      "silhouette"
+    ],
+    "requiredViewIds": [
+      "source-camera"
+    ]
+  },
+  "regions": [
+    {
+      "id": "rear-jaw-neck-ruff",
+      "sourceEvidence": "visible organized outer mass with fine fibrous boundary",
+      "candidateDisposition": "HYBRID"
+    },
+    {
+      "id": "ear-shell-rim-fur",
+      "sourceEvidence": "visible rigid shell and fibrous rim transition",
+      "candidateDisposition": "UNRESOLVED"
+    },
+    {
+      "id": "brow-muzzle-short-coat",
+      "sourceEvidence": "visible short-coat transition over facial mass",
+      "candidateDisposition": "UNRESOLVED"
+    },
+    {
+      "id": "whiskers",
+      "sourceEvidence": "visible fine strands",
+      "candidateDisposition": "REPLACE"
+    }
+  ],
+  "claimCeiling": "Source-specific regional representation triage and compiler input only; no hidden anatomy, universal fur semantics, production groom, deformation, route parity, or final visual admission."
+}
