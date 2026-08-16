@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.procedural-groom-execution-receipt.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "jobId": "b1bda09dcb2b",
+  "jobType": "kaminos_blender_cast_cleanup",
+  "status": "done",
+  "inputPath": "<worktree>/artifacts/procedural-groom-truth-v0/request.json",
+  "outputDirectory": "<worktree>/artifacts/procedural-groom-truth-v0/generated",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/generate-procedural-groom-truth.py -- <worktree>/artifacts/procedural-groom-truth-v0/request.json <worktree>/artifacts/procedural-groom-truth-v0/generated",
+  "effectiveWorkingDirectory": "/Users/noahlyons/dev/gpu-greenroom",
+  "effectiveTimeoutSeconds": 600,
+  "startedAt": 1786893646.122581,
+  "finishedAt": 1786893646.94748,
+  "exitCode": 0,
+  "failurePhase": null,
+  "errorMessage": null,
+  "nativeTerminalReceipt": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/b1bda09dcb2b/receipt.json",
+    "sha256": "abbda61cd74206f81a4a3548700f1d88d42f5439a84c7dc15e6879de1cdef95b"
+  },
+  "warningDisposition": {
+    "warning": "volatile_output",
+    "meaning": "The Greenroom output target is a /private/tmp worktree path.",
+    "continuation": "Generated evidence is committed and pushed on the Kaminos feature branch before it is treated as durable branch evidence."
+  },
+  "processTerminality": "succeeded",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

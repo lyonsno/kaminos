@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.asset-smoke-link-public-receipt.v0",
+  "scenario": "mesh-asset-link",
+  "ok": true,
+  "requestedUrl": "http://localhost:8767/index.html?mesh_root=scratch&mesh_path=procedural-groom-truth-v0.glb",
+  "requestedRoot": "scratch",
+  "requestedPath": "procedural-groom-truth-v0.glb",
+  "effectiveResource": "/api/read?root=scratch&path=procedural-groom-truth-v0.glb",
+  "assetType": "mesh",
+  "loadStatus": "loaded",
+  "registeredObjectType": "glb",
+  "registeredObjectActive": true,
+  "registeredObjectReloadable": true,
+  "visibleSceneRow": true,
+  "error": null,
+  "screenshot": "viewer-smoke.png",
+  "screenshotSha256": "b254cf2cf68f0a6cd1e4e85d16bc12f8154c898f61076accac72e6aec054fece",
+  "screenshotBytes": 470217,
+  "rawWitness": {
+    "path": "/private/tmp/procedural-groom-truth-v0-viewer-smoke-raw.json",
+    "sha256": "8695392ce3cf3031403e986c884f021fd6da90fbad3d575e10ce64a1398408e5"
+  },
+  "visualInspection": {
+    "classification": "agent-inspected-safe",
+    "description": "The live Kaminos mesh route shows the abstract carrier, dense groom curves, ruff, and bilateral whiskers as ordinary safe geometry."
+  }
+}

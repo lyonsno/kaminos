@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.procedural-groom-request.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "systems": [
+    "short-coat-low-puff",
+    "short-coat-high-puff",
+    "ruff",
+    "mystacial-whiskers"
+  ],
+  "claimCeiling": "Procedural representation and carrier-bound deformation truth only."
+}

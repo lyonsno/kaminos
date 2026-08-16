@@ -1,0 +1,43 @@
+{
+  "schema": "kaminos.procedural-groom-visual-inspection.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "inspector": "producing-agent",
+  "inspectedProducts": [
+    {
+      "kind": "sparse-truth-render",
+      "path": "sparse-truth.png",
+      "sha256": "d99b3a9b6b3562cd792ac1d01188ea7418a6431a4ef4bde640ecb7df23a2969e"
+    },
+    {
+      "kind": "neutral-dense-render",
+      "path": "neutral-dense.png",
+      "sha256": "f74568e0d9e9e8edfd83342643ff5841cc7a2c345372b34254faa5072292270b"
+    },
+    {
+      "kind": "deformed-dense-render",
+      "path": "deformed-dense.png",
+      "sha256": "9368246eca528e98a7fd49bd136f6a2ce5e088cd7adbf6020512315648554de7"
+    }
+  ],
+  "safety": {
+    "classification": "agent-inspected-safe",
+    "description": "Isolated abstract carrier and ordinary colored groom curves. No infestation, corruption, repeated-orifice, or misplaced-growth imagery."
+  },
+  "visibleFindings": [
+    "The teal half reads as a shorter, lower-lift directional coat field.",
+    "The orange half reads as a longer, higher-lift directional coat field.",
+    "The purple lower/rear band reads as a distinct longer ruff guide family.",
+    "The cream curves read as sparse bilateral whiskers rather than a segmented strand mask.",
+    "The loud nonlinear carrier bend visibly transports coat, ruff, and whisker roots with the surface."
+  ],
+  "limitations": [
+    "The carrier is an abstract head envelope, not an authored animal or recovered hidden surface.",
+    "The groom is intentionally diagrammatic and does not establish production appearance quality.",
+    "The deformation witnesses attachment transport, not acceptable skinning or motion quality.",
+    "No VLM, SAM, multiview, image-recovery, or source-identity claim is exercised."
+  ],
+  "representationVerdict": "supports-first-procedural-truth-fixture",
+  "visualAdmission": false,
+  "scientificAdmission": false,
+  "operatorAdmission": "not-requested-yet"
+}

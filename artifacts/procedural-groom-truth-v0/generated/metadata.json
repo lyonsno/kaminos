@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.procedural-groom-public-metadata.v0",
+  "name": "request",
+  "jobType": "kaminos_blender_cast_cleanup",
+  "jobId": "b1bda09dcb2b",
+  "inputPath": "artifacts/procedural-groom-truth-v0/request.json",
+  "worker": "tools/generate-procedural-groom-truth.py",
+  "outputFiles": [
+    "deformed-dense.png",
+    "manifest.json",
+    "neutral-dense.png",
+    "procedural-groom-truth.blend",
+    "procedural-groom-truth.glb",
+    "sparse-truth.png"
+  ],
+  "durationSeconds": 0.8,
+  "rawTerminalReceipt": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/b1bda09dcb2b/receipt.json",
+    "sha256": "abbda61cd74206f81a4a3548700f1d88d42f5439a84c7dc15e6879de1cdef95b"
+  }
+}
