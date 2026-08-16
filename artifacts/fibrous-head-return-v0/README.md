@@ -19,10 +19,14 @@ node tools/fibrous-head-return-preflight.mjs \
   --report artifacts/fibrous-head-return-v0/evidence/neutral-head-preflight.json
 ```
 
-The current lawful result is `route_failed` with exit code `1`: the native
+The current lawful result is `terminal_without_cast` with exit code `1`: the native
 terminal receipt supersedes the earlier stale pending watcher projection. The
-route reached high-resolution mesh extraction and disappeared before
+process reached high-resolution mesh extraction and disappeared before
 simplification or serialization; no GLB or required observation exists. The
+native receipt does not identify whether reconstruction, orchestration, or an
+external process owner caused that disappearance, so the public preflight keeps
+`causalAttribution: unresolved_by_terminal_receipt`. Separate process-lifecycle
+evidence may classify the cause without weakening this wire-level boundary. The
 preflight reports all five source-camera products missing and does not begin
 regional triage. Do not resubmit the Greenroom job from this harness. If a later
 campaign reason produces a terminal cast, supply a

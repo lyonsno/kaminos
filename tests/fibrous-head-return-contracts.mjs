@@ -97,7 +97,7 @@ test('pending Greenroom input cannot become cast or scientific admission', () =>
   assert.deepEqual(report.missing, ['terminal_reconstruction_receipt']);
 });
 
-test('native terminal Greenroom failure receipt supersedes a stale pending watcher projection', () => {
+test('native terminal Greenroom receipt proves no cast without inventing failure causality', () => {
   const report = evaluateFibrousHeadReturn({
     manifest: manifest(),
     status: {
@@ -112,12 +112,13 @@ test('native terminal Greenroom failure receipt supersedes a stale pending watch
     sourceEvidence: sourceEvidence(),
     completionReceipt: null,
   });
-  assert.equal(report.state, 'route_failed');
-  assert.equal(report.failure.phase, 'reconstruction');
+  assert.equal(report.state, 'terminal_without_cast');
+  assert.equal(report.failure.phase, 'reconstruction-orchestration');
   assert.match(report.failure.message, /no longer alive/);
+  assert.equal(report.causalAttribution, 'unresolved_by_terminal_receipt');
   assert.equal(report.routeObservation.effectiveRoute, 'trellis2mlx_fast');
   assert.equal(report.routeObservation.failurePhase, 'stale_recovery');
-  assert.equal(report.lastTrustworthyEvidence, 'route_bound_terminal_failure_without_cast');
+  assert.equal(report.lastTrustworthyEvidence, 'terminal_receipt_without_cast');
   assert.deepEqual(report.missing, [
     'textured@source-camera',
     'clay@source-camera',

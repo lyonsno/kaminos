@@ -157,8 +157,9 @@ export function evaluateFibrousHeadReturn({ manifest, status, sourceEvidence, co
   }
 
   if (!status.succeeded) {
-    return failure(manifest, 'route_failed', 'reconstruction', status.error_message ?? 'reconstruction route failed', {
-      lastTrustworthyEvidence: 'route_bound_terminal_failure_without_cast',
+    return failure(manifest, 'terminal_without_cast', 'reconstruction-orchestration', status.error_message ?? 'reconstruction produced no cast', {
+      causalAttribution: 'unresolved_by_terminal_receipt',
+      lastTrustworthyEvidence: 'terminal_receipt_without_cast',
       missing: requiredProductIds(manifest),
       routeObservation: {
         state: status.state,

@@ -1,11 +1,11 @@
 {
   "schema": "kaminos.fibrous-head-return-preflight-report.v0",
   "receiptId": "neutral-skull-head-fibrous-return-v0",
-  "state": "route_failed",
+  "state": "terminal_without_cast",
   "scientificAdmission": false,
   "visualAdmission": "unreviewed",
   "claimCeiling": "Source-specific regional representation triage and compiler input only; no hidden anatomy, universal fur semantics, production groom, deformation, route parity, or final visual admission.",
-  "lastTrustworthyEvidence": "route_bound_terminal_failure_without_cast",
+  "lastTrustworthyEvidence": "terminal_receipt_without_cast",
   "source": {
     "skull": {
       "path": "/Users/noahlyons/dev/operator-scratch/images/Screenshot 2026-08-14 at 11.49.04 AM.png",
@@ -77,9 +77,10 @@
   "blank": [],
   "mismatched": [],
   "failure": {
-    "phase": "reconstruction",
+    "phase": "reconstruction-orchestration",
     "message": "Process 66037 no longer alive; recovered by stale detection"
   },
+  "causalAttribution": "unresolved_by_terminal_receipt",
   "routeObservation": {
     "state": "failed",
     "bucket": "failed",
@@ -88,7 +89,7 @@
     "exitCode": null,
     "failurePhase": "stale_recovery"
   },
-  "evaluatedAt": "2026-08-15T05:00:25.940Z",
+  "evaluatedAt": "2026-08-16T00:57:32.226Z",
   "inputs": {
     "manifestPath": "artifacts/fibrous-head-return-v0/manifest.json",
     "statusPath": "/Users/noahlyons/.local/state/gpu-greenroom/failed/cf9d1c7f96be/receipt.json",
