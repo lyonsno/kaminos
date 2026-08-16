@@ -14,11 +14,11 @@
   "visibleSceneRow": true,
   "error": null,
   "screenshot": "viewer-smoke.png",
-  "screenshotSha256": "b254cf2cf68f0a6cd1e4e85d16bc12f8154c898f61076accac72e6aec054fece",
-  "screenshotBytes": 470217,
+  "screenshotSha256": "fb807cab6eab718991f435b7f28b6f910aa37bc7eba4ee22a82aef85b5f1eb35",
+  "screenshotBytes": 469120,
   "rawWitness": {
-    "path": "/private/tmp/procedural-groom-truth-v0-viewer-smoke-raw.json",
-    "sha256": "8695392ce3cf3031403e986c884f021fd6da90fbad3d575e10ce64a1398408e5"
+    "path": "/private/tmp/procedural-groom-truth-v0-viewer-smoke-colored-raw.json",
+    "sha256": "6c846ffd8c827780b61f5f642cae125d2eb63dec34160bda4af1a7a9d2ff15fa"
   },
   "visualInspection": {
     "classification": "agent-inspected-safe",

@@ -1,0 +1,22 @@
+{
+  "schema": "kaminos.procedural-groom-review-page-smoke.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "requestedUrl": "http://localhost:8767/artifacts/procedural-groom-truth-v0/review.html",
+  "status": "loaded-and-agent-inspected",
+  "screenshot": "review-page-smoke.png",
+  "screenshotSha256": "3a69344c008c53733ef5c18a7124af3e4f26c0273fd4ad5a7fde0258be298c49",
+  "screenshotBytes": 1976007,
+  "visibleEvidence": {
+    "membershipLegend": true,
+    "sparseTruth": true,
+    "neutralDense": true,
+    "deformedDense": true,
+    "interactiveGlb": "loaded"
+  },
+  "inspection": {
+    "layout": "single continuous page; no occlusion or clipping observed",
+    "membershipColors": "distinct in sparse truth view",
+    "interactiveRoute": "/index.html?mesh_root=scratch&mesh_path=procedural-groom-truth-v0.glb",
+    "limitations": "neutral viewer lighting is not authoritative for membership color"
+  }
+}

@@ -15,10 +15,10 @@ VLM, SAM, TRELLIS, and hidden-carrier recovery.
 | --- | --- |
 | Authored input | [`request.json`](request.json) |
 | Generator | [`tools/generate-procedural-groom-truth.py`](../../tools/generate-procedural-groom-truth.py) |
-| Generator SHA-256 | `95d3a1ee86485c7aaadccb08d2fac8b541dba008e7e04b06179da70d2de48133` |
+| Generator SHA-256 | `5c266bac7e7ccc42e5305d4c81dd3a9aef366daa826c8a1062985437017ebd91` |
 | Requested route | `gpu-greenroom:kaminos_blender_cast_cleanup` |
 | Effective route | Blender 5.1.2 background execution of the exact generator and request |
-| Greenroom job | `b1bda09dcb2b`, terminal `done`, exit `0` |
+| Greenroom job | `6d9544e5779b`, terminal `done`, exit `0` |
 | Terminal receipt | [`generated/execution-receipt.json`](generated/execution-receipt.json) |
 | Representation manifest | [`generated/manifest.json`](generated/manifest.json) |
 | Byte-backed preflight | [`generated/preflight.json`](generated/preflight.json), `representation_ready_for_visual_review` |
@@ -57,10 +57,14 @@ elevation, sag, taper, stiffness, sparseness, and confidence.
 
 ![Dense deformed groom render](generated/deformed-dense.png)
 
-Agent safety inspection classifies all three images as safe: isolated abstract
-carrier and ordinary colored curve geometry, with none of the campaign's
-hostile-image hazards. Full findings and limitations are in
+Full agent findings and limitations are in
 [`generated/visual-inspection.json`](generated/visual-inspection.json).
+
+The consolidated operator surface is [`review.html`](review.html). Its
+membership legend, all three fixed views, and embedded interactive GLB were
+captured and inspected together; the receipt and capture are
+[`generated/review-page-smoke.json`](generated/review-page-smoke.json) and
+[`generated/review-page-smoke.png`](generated/review-page-smoke.png).
 
 ## Interactive geometry
 

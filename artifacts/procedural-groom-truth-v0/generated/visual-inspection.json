@@ -6,17 +6,17 @@
     {
       "kind": "sparse-truth-render",
       "path": "sparse-truth.png",
-      "sha256": "d99b3a9b6b3562cd792ac1d01188ea7418a6431a4ef4bde640ecb7df23a2969e"
+      "sha256": "6b7406d243b63622ab1e75eb078c6ef7f57fdfbb537ec8e4ed7cde8d22f6a253"
     },
     {
       "kind": "neutral-dense-render",
       "path": "neutral-dense.png",
-      "sha256": "f74568e0d9e9e8edfd83342643ff5841cc7a2c345372b34254faa5072292270b"
+      "sha256": "e4345852dc5067b572cefe8b2e97e2b4e57a0e78942ac2e565fb1d0543983460"
     },
     {
       "kind": "deformed-dense-render",
       "path": "deformed-dense.png",
-      "sha256": "9368246eca528e98a7fd49bd136f6a2ce5e088cd7adbf6020512315648554de7"
+      "sha256": "8bf34e1395dab5c47071c517bb9546e826bffde03932afa54517ca7389896092"
     }
   ],
   "safety": {
@@ -39,5 +39,5 @@
   "representationVerdict": "supports-first-procedural-truth-fixture",
   "visualAdmission": false,
   "scientificAdmission": false,
-  "operatorAdmission": "not-requested-yet"
+  "operatorAdmission": "whisker-legibility-admitted; low-versus-high-puff and ruff distinction pending consolidated-page review"
 }

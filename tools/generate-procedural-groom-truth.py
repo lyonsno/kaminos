@@ -350,7 +350,6 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         "high": material("ShortCoatHighPuff", (0.94, 0.42, 0.12, 1.0)),
         "ruff": material("Ruff", (0.58, 0.24, 0.82, 1.0)),
         "whisker": material("MystacialWhiskers", (0.95, 0.87, 0.62, 1.0)),
-        "sparse": material("CanonicalGuides", (0.92, 0.98, 1.0, 1.0)),
     }
 
     neutral_carrier = create_carrier("CarrierNeutral", collections["NeutralCarrier"], materials["carrier"])
@@ -385,7 +384,7 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     ]
 
     guides: list[dict[str, Any]] = []
-    sparse_curves: list[list[Vector]] = []
+    sparse_by_system: dict[str, list[list[Vector]]] = {spec[0]: [] for spec in system_specs}
     dense_by_system: dict[str, list[list[Vector]]] = {spec[0]: [] for spec in system_specs}
     guide_ids_by_system: dict[str, list[str]] = {spec[0]: [] for spec in system_specs}
 
@@ -399,7 +398,7 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
                 points, length, density, lift, puff, stiffness,
             ))
             guide_ids_by_system[system_id].append(guide_id)
-            sparse_curves.append(points)
+            sparse_by_system[system_id].append(points)
 
         dense_source = coat_left if system_id == "short-coat-low-puff" else coat_right if system_id == "short-coat-high-puff" else ruff_faces
         dense_count = 175 if system_id.startswith("short-coat") else 110
@@ -429,8 +428,20 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
             whisker_curves.append(points)
 
     add_curve_bundle(
-        "CanonicalSparseGuides", sparse_curves + whisker_curves,
-        collections["NeutralSparseGuides"], materials["sparse"], 0.012, "canonical-guides",
+        "CanonicalLowPuffGuides", sparse_by_system["short-coat-low-puff"],
+        collections["NeutralSparseGuides"], materials["low"], 0.014, "short-coat-low-puff-guides",
+    )
+    add_curve_bundle(
+        "CanonicalHighPuffGuides", sparse_by_system["short-coat-high-puff"],
+        collections["NeutralSparseGuides"], materials["high"], 0.014, "short-coat-high-puff-guides",
+    )
+    add_curve_bundle(
+        "CanonicalRuffGuides", sparse_by_system["ruff"],
+        collections["NeutralSparseGuides"], materials["ruff"], 0.014, "ruff-guides",
+    )
+    add_curve_bundle(
+        "CanonicalWhiskerGuides", whisker_curves,
+        collections["NeutralSparseGuides"], materials["whisker"], 0.010, "mystacial-whisker-guides",
     )
     dense_objects = [
         add_curve_bundle("ShortCoatLowPuff", dense_by_system["short-coat-low-puff"], collections["NeutralDenseGroom"], materials["low"], 0.010, "short-coat-low-puff"),
@@ -502,10 +513,10 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         },
         "groom": {
             "systems": [
-                {"id": "short-coat-low-puff", "representation": "guide-field", "guideIds": guide_ids_by_system["short-coat-low-puff"]},
-                {"id": "short-coat-high-puff", "representation": "guide-field", "guideIds": guide_ids_by_system["short-coat-high-puff"]},
-                {"id": "ruff", "representation": "explicit-guides", "guideIds": guide_ids_by_system["ruff"]},
-                {"id": "mystacial-whiskers", "representation": "sparse-preset-curves", "guideIds": whisker_ids},
+                {"id": "short-coat-low-puff", "representation": "guide-field", "displayColor": "#1fa0a1", "guideIds": guide_ids_by_system["short-coat-low-puff"]},
+                {"id": "short-coat-high-puff", "representation": "guide-field", "displayColor": "#ef6b1f", "guideIds": guide_ids_by_system["short-coat-high-puff"]},
+                {"id": "ruff", "representation": "explicit-guides", "displayColor": "#943dd1", "guideIds": guide_ids_by_system["ruff"]},
+                {"id": "mystacial-whiskers", "representation": "sparse-preset-curves", "displayColor": "#f2dea0", "guideIds": whisker_ids},
             ],
             "guides": guides,
             "whiskerPreset": {

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Procedural Groom Truth v0 — Operator Review</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101216;
+      --panel: #191d23;
+      --panel-2: #222832;
+      --ink: #f4f1e9;
+      --muted: #aeb6c3;
+      --line: #343b48;
+      --low: #1fa0a1;
+      --high: #ef6b1f;
+      --ruff: #943dd1;
+      --whisker: #f2dea0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font: 16px/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1500px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 48px); line-height: 1.08; }
+    h2 { margin: 0 0 14px; font-size: 23px; }
+    p { margin: 0 0 12px; }
+    .lede { color: var(--muted); max-width: 1000px; font-size: 18px; }
+    .panel {
+      margin-top: 24px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+    }
+    .questions { display: grid; gap: 8px; padding-left: 24px; margin: 12px 0 0; }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .legend article { padding: 16px; border-radius: 10px; background: var(--panel-2); border-top: 6px solid; }
+    .legend h3 { margin: 0 0 7px; font-size: 17px; }
+    .legend p { margin: 0; color: var(--muted); font-size: 14px; }
+    .low { border-color: var(--low) !important; }
+    .high { border-color: var(--high) !important; }
+    .ruff { border-color: var(--ruff) !important; }
+    .whisker { border-color: var(--whisker) !important; }
+    .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 7px; vertical-align: -1px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    figure { margin: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #0c0e12; }
+    figure.wide { grid-column: 1 / -1; }
+    figure a { display: block; }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption { padding: 14px 16px 16px; color: var(--muted); background: var(--panel-2); }
+    figcaption strong { color: var(--ink); }
+    iframe { display: block; width: 100%; height: 760px; border: 1px solid var(--line); border-radius: 12px; background: #000; }
+    .note { color: var(--muted); font-size: 14px; }
+    code { color: #d7e8ff; }
+    @media (max-width: 900px) {
+      .legend, .grid { grid-template-columns: 1fr; }
+      figure.wide { grid-column: auto; }
+      iframe { height: 620px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Procedural Groom Truth v0</h1>
+      <p class="lede">One page for judging the representation—not its recovery. The carrier and groom are authored truth. Nothing on this page is a VLM, SAM, TRELLIS, hidden-carrier, or production-groom result.</p>
+    </header>
+
+    <section class="panel">
+      <h2>What the four memberships mean</h2>
+      <p>“Puff” is a parameter bundle inside the same short-coat mechanism. “Ruff” is a different, explicitly guided fibrous system. These names are local to this fixture; they are not universal biological categories.</p>
+      <div class="legend">
+        <article class="low">
+          <h3><span class="swatch" style="background:#1fa0a1"></span>Short coat — low puff</h3>
+          <p>Teal half. Guide length 0.17; lift 0.16. Short fibers remain relatively close to the carrier.</p>
+        </article>
+        <article class="high">
+          <h3><span class="swatch" style="background:#ef6b1f"></span>Short coat — high puff</h3>
+          <p>Orange half. Guide length 0.29; lift 0.64. Same field representation, deliberately longer and farther from the carrier.</p>
+        </article>
+        <article class="ruff">
+          <h3><span class="swatch" style="background:#943dd1"></span>Ruff</h3>
+          <p>Purple lower/rear band. Explicit guides, length 0.48 and lift 0.72; intended to carry silhouette rather than behave as ordinary short coat.</p>
+        </article>
+        <article class="whisker">
+          <h3><span class="swatch" style="background:#f2dea0"></span>Whiskers</h3>
+          <p>Cream bilateral sparse curves. Seven per side, instantiated from mystacial-pad location and coarse preset parameters—not strand segmentation.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>What to judge</h2>
+      <ol class="questions">
+        <li>Do the cream preset curves legibly read as whiskers?</li>
+        <li>Is teal low puff versus orange high puff categorical enough to test recognition from an image?</li>
+        <li>Does the purple ruff read as a distinct representation rather than merely “more coat”?</li>
+        <li>Does the deformed view preserve believable attachment, or do any systems appear detached from the carrier?</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2>All required fixed views</h2>
+      <div class="grid">
+        <figure>
+          <a href="generated/sparse-truth.png"><img src="generated/sparse-truth.png" alt="Sparse canonical groom guides colored by system membership"></a>
+          <figcaption><strong>1. Canonical sparse truth.</strong> Membership colors are the point of this view. Each visible curve belongs to the system named in the legend.</figcaption>
+        </figure>
+        <figure>
+          <a href="generated/neutral-dense.png"><img src="generated/neutral-dense.png" alt="Dense neutral groom with low puff, high puff, ruff, and whiskers"></a>
+          <figcaption><strong>2. Dense neutral groom.</strong> This is the best image for comparing the realized visual mass of the four systems.</figcaption>
+        </figure>
+        <figure class="wide">
+          <a href="generated/deformed-dense.png"><img src="generated/deformed-dense.png" alt="Dense groom transported through a nonlinear carrier deformation"></a>
+          <figcaption><strong>3. Carrier-bound deformation.</strong> The bend is intentionally loud so detached or lagging roots are difficult to hide. It is not an aesthetic motion target.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Interactive neutral geometry</h2>
+      <p class="note">The Kaminos viewer uses neutral lighting and may wash out membership colors. Rotate this view to inspect physical curve geometry; use the fixed colored views above for membership comparison.</p>
+      <iframe title="Interactive procedural groom geometry" src="/index.html?mesh_root=scratch&amp;mesh_path=procedural-groom-truth-v0.glb"></iframe>
+    </section>
+  </main>
+</body>
+</html>

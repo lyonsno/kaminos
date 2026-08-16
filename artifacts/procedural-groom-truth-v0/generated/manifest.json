@@ -4,7 +4,7 @@
   "source": {
     "kind": "procedural-authored-truth",
     "generatorPath": "tools/generate-procedural-groom-truth.py",
-    "generatorSha256": "95d3a1ee86485c7aaadccb08d2fac8b541dba008e7e04b06179da70d2de48133",
+    "generatorSha256": "5c266bac7e7ccc42e5305d4c81dd3a9aef366daa826c8a1062985437017ebd91",
     "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
     "effectiveRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
     "blenderVersion": "5.1.2"
@@ -12,7 +12,7 @@
   "carrier": {
     "mesh": {
       "path": "procedural-groom-truth.glb",
-      "sha256": "f8deb60775b7f21c7970ab5272d3871e83b3e3303bba1920ba21da5472ddea09",
+      "sha256": "f6d449b1e6ba7d6dfe5739c6d669fe9f079f1e8b4b76e5dcb1161010ce344904",
       "byteLength": 948824,
       "vertices": 830,
       "triangles": 1656,
@@ -47,6 +47,7 @@
       {
         "id": "short-coat-low-puff",
         "representation": "guide-field",
+        "displayColor": "#1fa0a1",
         "guideIds": [
           "short-coat-low-puff-00",
           "short-coat-low-puff-01",
@@ -67,6 +68,7 @@
       {
         "id": "short-coat-high-puff",
         "representation": "guide-field",
+        "displayColor": "#ef6b1f",
         "guideIds": [
           "short-coat-high-puff-00",
           "short-coat-high-puff-01",
@@ -87,6 +89,7 @@
       {
         "id": "ruff",
         "representation": "explicit-guides",
+        "displayColor": "#943dd1",
         "guideIds": [
           "ruff-00",
           "ruff-01",
@@ -109,6 +112,7 @@
       {
         "id": "mystacial-whiskers",
         "representation": "sparse-preset-curves",
+        "displayColor": "#f2dea0",
         "guideIds": [
           "mystacial-whiskers-left-00",
           "mystacial-whiskers-left-01",
@@ -132,7 +136,7 @@
         "id": "short-coat-low-puff-00",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 1294,
+          "triangleIndex": 1300,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -210,7 +214,7 @@
         "id": "short-coat-low-puff-01",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 549,
+          "triangleIndex": 532,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -288,7 +292,7 @@
         "id": "short-coat-low-puff-02",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 1358,
+          "triangleIndex": 1364,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -366,7 +370,7 @@
         "id": "short-coat-low-puff-03",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 1385,
+          "triangleIndex": 1391,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -444,7 +448,7 @@
         "id": "short-coat-low-puff-04",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 439,
+          "triangleIndex": 445,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -522,7 +526,7 @@
         "id": "short-coat-low-puff-05",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 1379,
+          "triangleIndex": 1385,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -600,7 +604,7 @@
         "id": "short-coat-low-puff-06",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 831,
+          "triangleIndex": 821,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -678,7 +682,7 @@
         "id": "short-coat-low-puff-07",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 746,
+          "triangleIndex": 752,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -756,7 +760,7 @@
         "id": "short-coat-low-puff-08",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 714,
+          "triangleIndex": 696,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -834,7 +838,7 @@
         "id": "short-coat-low-puff-09",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 711,
+          "triangleIndex": 717,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -912,7 +916,7 @@
         "id": "short-coat-low-puff-10",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 721,
+          "triangleIndex": 728,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -990,7 +994,7 @@
         "id": "short-coat-low-puff-11",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 705,
+          "triangleIndex": 711,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1068,7 +1072,7 @@
         "id": "short-coat-low-puff-12",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 702,
+          "triangleIndex": 708,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1146,7 +1150,7 @@
         "id": "short-coat-low-puff-13",
         "systemId": "short-coat-low-puff",
         "root": {
-          "triangleIndex": 790,
+          "triangleIndex": 773,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1224,7 +1228,7 @@
         "id": "short-coat-high-puff-00",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 1231,
+          "triangleIndex": 1237,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1302,7 +1306,7 @@
         "id": "short-coat-high-puff-01",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 320,
+          "triangleIndex": 326,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1380,7 +1384,7 @@
         "id": "short-coat-high-puff-02",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 1169,
+          "triangleIndex": 1153,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1458,7 +1462,7 @@
         "id": "short-coat-high-puff-03",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 1146,
+          "triangleIndex": 1130,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1536,7 +1540,7 @@
         "id": "short-coat-high-puff-04",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 424,
+          "triangleIndex": 430,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1614,7 +1618,7 @@
         "id": "short-coat-high-puff-05",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 1140,
+          "triangleIndex": 1146,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1692,7 +1696,7 @@
         "id": "short-coat-high-puff-06",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 37,
+          "triangleIndex": 44,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1770,7 +1774,7 @@
         "id": "short-coat-high-puff-07",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 103,
+          "triangleIndex": 109,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1848,7 +1852,7 @@
         "id": "short-coat-high-puff-08",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 153,
+          "triangleIndex": 161,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -1926,7 +1930,7 @@
         "id": "short-coat-high-puff-09",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 150,
+          "triangleIndex": 158,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2004,7 +2008,7 @@
         "id": "short-coat-high-puff-10",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 133,
+          "triangleIndex": 139,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2082,7 +2086,7 @@
         "id": "short-coat-high-puff-11",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 144,
+          "triangleIndex": 152,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2160,7 +2164,7 @@
         "id": "short-coat-high-puff-12",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 165,
+          "triangleIndex": 149,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2238,7 +2242,7 @@
         "id": "short-coat-high-puff-13",
         "systemId": "short-coat-high-puff",
         "root": {
-          "triangleIndex": 93,
+          "triangleIndex": 76,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2316,7 +2320,7 @@
         "id": "ruff-00",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 644,
+          "triangleIndex": 626,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2394,7 +2398,7 @@
         "id": "ruff-01",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 595,
+          "triangleIndex": 578,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2472,7 +2476,7 @@
         "id": "ruff-02",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 763,
+          "triangleIndex": 745,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2550,7 +2554,7 @@
         "id": "ruff-03",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 791,
+          "triangleIndex": 774,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2628,7 +2632,7 @@
         "id": "ruff-04",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 1599,
+          "triangleIndex": 1605,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2706,7 +2710,7 @@
         "id": "ruff-05",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 1360,
+          "triangleIndex": 1366,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2784,7 +2788,7 @@
         "id": "ruff-06",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 800,
+          "triangleIndex": 806,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2862,7 +2866,7 @@
         "id": "ruff-07",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 474,
+          "triangleIndex": 458,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -2940,7 +2944,7 @@
         "id": "ruff-08",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 38,
+          "triangleIndex": 45,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3018,7 +3022,7 @@
         "id": "ruff-09",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 50,
+          "triangleIndex": 56,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3096,7 +3100,7 @@
         "id": "ruff-10",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 960,
+          "triangleIndex": 966,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3174,7 +3178,7 @@
         "id": "ruff-11",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 911,
+          "triangleIndex": 917,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3252,7 +3256,7 @@
         "id": "ruff-12",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 94,
+          "triangleIndex": 77,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3330,7 +3334,7 @@
         "id": "ruff-13",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 955,
+          "triangleIndex": 961,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3408,7 +3412,7 @@
         "id": "ruff-14",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 281,
+          "triangleIndex": 264,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3486,7 +3490,7 @@
         "id": "ruff-15",
         "systemId": "ruff",
         "root": {
-          "triangleIndex": 1064,
+          "triangleIndex": 1070,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3564,7 +3568,7 @@
         "id": "mystacial-whiskers-left-00",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1309,
+          "triangleIndex": 1315,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3652,7 +3656,7 @@
         "id": "mystacial-whiskers-left-01",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1306,
+          "triangleIndex": 1312,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3740,7 +3744,7 @@
         "id": "mystacial-whiskers-left-02",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 503,
+          "triangleIndex": 485,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3828,7 +3832,7 @@
         "id": "mystacial-whiskers-left-03",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1325,
+          "triangleIndex": 1309,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -3916,7 +3920,7 @@
         "id": "mystacial-whiskers-left-04",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1325,
+          "triangleIndex": 1309,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4004,7 +4008,7 @@
         "id": "mystacial-whiskers-left-05",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1322,
+          "triangleIndex": 1306,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4092,7 +4096,7 @@
         "id": "mystacial-whiskers-left-06",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1322,
+          "triangleIndex": 1306,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4180,7 +4184,7 @@
         "id": "mystacial-whiskers-right-00",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1196,
+          "triangleIndex": 1202,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4268,7 +4272,7 @@
         "id": "mystacial-whiskers-right-01",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1215,
+          "triangleIndex": 1199,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4356,7 +4360,7 @@
         "id": "mystacial-whiskers-right-02",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 380,
+          "triangleIndex": 362,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4444,7 +4448,7 @@
         "id": "mystacial-whiskers-right-03",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1212,
+          "triangleIndex": 1196,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4532,7 +4536,7 @@
         "id": "mystacial-whiskers-right-04",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1212,
+          "triangleIndex": 1196,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4620,7 +4624,7 @@
         "id": "mystacial-whiskers-right-05",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1209,
+          "triangleIndex": 1215,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4708,7 +4712,7 @@
         "id": "mystacial-whiskers-right-06",
         "systemId": "mystacial-whiskers",
         "root": {
-          "triangleIndex": 1209,
+          "triangleIndex": 1215,
           "barycentric": [
             0.3333333333333333,
             0.3333333333333333,
@@ -4818,31 +4822,31 @@
     {
       "kind": "blend",
       "path": "procedural-groom-truth.blend",
-      "sha256": "d09002e8eaa586d29432cf6e9c497ce627bad061ded07331a54174426005b096",
-      "byteLength": 641579
+      "sha256": "49ad24599aa4df3f509e108419259b544bc95148470351eea194b7f46e4d2826",
+      "byteLength": 640442
     },
     {
       "kind": "glb",
       "path": "procedural-groom-truth.glb",
-      "sha256": "f8deb60775b7f21c7970ab5272d3871e83b3e3303bba1920ba21da5472ddea09",
+      "sha256": "f6d449b1e6ba7d6dfe5739c6d669fe9f079f1e8b4b76e5dcb1161010ce344904",
       "byteLength": 948824
     },
     {
       "kind": "sparse-truth-render",
       "path": "sparse-truth.png",
-      "sha256": "d99b3a9b6b3562cd792ac1d01188ea7418a6431a4ef4bde640ecb7df23a2969e",
-      "byteLength": 437977
+      "sha256": "6b7406d243b63622ab1e75eb078c6ef7f57fdfbb537ec8e4ed7cde8d22f6a253",
+      "byteLength": 444158
     },
     {
       "kind": "neutral-dense-render",
       "path": "neutral-dense.png",
-      "sha256": "f74568e0d9e9e8edfd83342643ff5841cc7a2c345372b34254faa5072292270b",
+      "sha256": "e4345852dc5067b572cefe8b2e97e2b4e57a0e78942ac2e565fb1d0543983460",
       "byteLength": 532541
     },
     {
       "kind": "deformed-dense-render",
       "path": "deformed-dense.png",
-      "sha256": "9368246eca528e98a7fd49bd136f6a2ce5e088cd7adbf6020512315648554de7",
+      "sha256": "8bf34e1395dab5c47071c517bb9546e826bffde03932afa54517ca7389896092",
       "byteLength": 527956
     }
   ],

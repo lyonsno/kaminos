@@ -29,7 +29,9 @@ or deformation quality.
 Run the contract tests:
 
 ```sh
-node --test tests/procedural-groom-truth-contracts.mjs
+node --test \
+  tests/procedural-groom-truth-contracts.mjs \
+  tests/procedural-groom-review-page-contracts.mjs
 ```
 
 After Greenroom generation, bind the manifest to the actual generator and
@@ -44,6 +46,11 @@ node tools/procedural-groom-truth-preflight.mjs \
 
 The current run, direct visual comparison, interactive-geometry witness, and
 claim ceiling are collected in [`evidence-sheet.md`](evidence-sheet.md).
+
+For operator review, serve Kaminos and open
+[`review.html`](review.html). It places the membership legend, sparse guide
+truth, dense neutral groom, deformation witness, and interactive neutral GLB on
+one page; no local filesystem-link traversal is required.
 
 Generation is a protected Blender route in this shop and must run through GPU
 Greenroom. The request records the requested route; the generated manifest

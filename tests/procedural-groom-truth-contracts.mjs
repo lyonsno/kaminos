@@ -75,10 +75,10 @@ function manifest(overrides = {}) {
     },
     groom: {
       systems: [
-        { id: 'short-coat-low-puff', representation: 'guide-field', guideIds: ['coat-low-0'] },
-        { id: 'short-coat-high-puff', representation: 'guide-field', guideIds: ['coat-high-0'] },
-        { id: 'ruff', representation: 'explicit-guides', guideIds: ['ruff-0'] },
-        { id: 'mystacial-whiskers', representation: 'sparse-preset-curves', guideIds: ['whisker-left-0', 'whisker-right-0'] },
+        { id: 'short-coat-low-puff', representation: 'guide-field', displayColor: '#1fa0a1', guideIds: ['coat-low-0'] },
+        { id: 'short-coat-high-puff', representation: 'guide-field', displayColor: '#ef6b1f', guideIds: ['coat-high-0'] },
+        { id: 'ruff', representation: 'explicit-guides', displayColor: '#943dd1', guideIds: ['ruff-0'] },
+        { id: 'mystacial-whiskers', representation: 'sparse-preset-curves', displayColor: '#f2dea0', guideIds: ['whisker-left-0', 'whisker-right-0'] },
       ],
       guides,
       whiskerPreset: {
@@ -178,6 +178,18 @@ test('low puff, high puff, ruff, and bilateral whiskers are all load-bearing', (
   const unilateral = manifest();
   unilateral.groom.whiskerPreset.bilateral = false;
   assert.equal(evaluateProceduralGroomTruth(unilateral).state, 'invalid_semantic_contract');
+});
+
+test('canonical guide families require distinct declared membership colors', () => {
+  const duplicate = manifest();
+  duplicate.groom.systems.find(system => system.id === 'ruff').displayColor = '#ef6b1f';
+  const duplicateReport = evaluateProceduralGroomTruth(duplicate);
+  assert.equal(duplicateReport.state, 'invalid_groom_presentation');
+  assert.match(duplicateReport.failures.join('\n'), /distinct membership color/);
+
+  const missing = manifest();
+  delete missing.groom.systems[0].displayColor;
+  assert.equal(evaluateProceduralGroomTruth(missing).state, 'invalid_groom_presentation');
 });
 
 test('blank, missing, or undigested products fail loud', () => {

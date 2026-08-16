@@ -28,6 +28,7 @@ const REQUIRED_PRODUCTS = [
 ];
 
 const SHA256 = /^[0-9a-f]{64}$/;
+const DISPLAY_COLOR = /^#[0-9a-f]{6}$/i;
 
 function report(state, failures, lastTrustworthyEvidence = null) {
   return {
@@ -169,6 +170,20 @@ export function evaluateProceduralGroomTruth(manifest) {
   const missingSystems = REQUIRED_SYSTEMS.filter(id => !systemIds.has(id));
   if (missingSystems.length) {
     return report('incomplete_groom_systems', missingSystems.map(id => `missing groom system ${id}`));
+  }
+
+  const presentationFailures = [];
+  const displayColors = new Set();
+  for (const system of systems) {
+    if (!DISPLAY_COLOR.test(system.displayColor ?? '')) {
+      presentationFailures.push(`${system.id}: membership displayColor must be a six-digit hex color`);
+    } else if (displayColors.has(system.displayColor.toLowerCase())) {
+      presentationFailures.push(`${system.id}: every canonical guide family requires a distinct membership color`);
+    }
+    displayColors.add(system.displayColor?.toLowerCase());
+  }
+  if (presentationFailures.length) {
+    return report('invalid_groom_presentation', presentationFailures);
   }
 
   const whiskers = manifest.groom.whiskerPreset;
