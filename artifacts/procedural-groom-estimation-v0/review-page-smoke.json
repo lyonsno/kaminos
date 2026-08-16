@@ -1,0 +1,29 @@
+{
+  "schema": "kaminos.procedural-groom-estimation-review-smoke.v0",
+  "requestedUrl": "http://127.0.0.1:8767/artifacts/procedural-groom-estimation-v0/review.html",
+  "effectiveUrl": "http://127.0.0.1:8767/artifacts/procedural-groom-estimation-v0/review.html",
+  "httpPreflight": "200-success",
+  "browser": "Google Chrome headless",
+  "viewport": [1600, 16000],
+  "screenshot": {
+    "path": "review-page-full-smoke.png",
+    "sha256": "2d690e14827841144d92bb9ea6b615b916ad093f281af42205fc765df026abc9",
+    "byteLength": 5952524
+  },
+  "page": {
+    "path": "review.html",
+    "sha256": "5c7cb83a5b98b1d676233d236906dcab6da6e1a9373dc58eaea070a993170af9",
+    "byteLength": 27842,
+    "imageCount": 42
+  },
+  "inspection": {
+    "completePageVisible": true,
+    "threeObservationSectionsVisible": true,
+    "twelveComparisonRowsVisible": true,
+    "fifteenTruthMasksVisible": true,
+    "blankOrBrokenImagesObserved": false,
+    "verdictVisibleAtTop": true
+  },
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

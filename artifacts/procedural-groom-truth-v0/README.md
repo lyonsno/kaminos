@@ -15,8 +15,10 @@ parameters that a later VLM-backed assay may estimate coarsely.
 
 The Blender generator writes one coherent triangulated carrier, canonical guide
 roots expressed as carrier triangle plus barycentrics, local frames and flow,
-dense derived curves, neutral/deformed root positions, a portable GLB, and three
-render witnesses. The neutral and deformed geometry use the same analytic
+dense derived curves, neutral/deformed root positions, a membership-colored
+truth GLB, a distinct membership-neutral observation GLB, and three render
+witnesses. The observation GLB cannot alias the colored truth product. The
+neutral and deformed geometry use the same analytic
 carrier map; the deformation render therefore tests attachment transport rather
 than a detached display transform.
 
@@ -49,8 +51,10 @@ claim ceiling are collected in [`evidence-sheet.md`](evidence-sheet.md).
 
 For operator review, serve Kaminos and open
 [`review.html`](review.html). It places the membership legend, sparse guide
-truth, dense neutral groom, deformation witness, and interactive neutral GLB on
-one page; no local filesystem-link traversal is required.
+truth, dense neutral-pose groom, deformation witness, and interactive
+membership-colored truth GLB on one page; no local filesystem-link traversal
+is required. The separate `procedural-groom-observation.glb` is reserved for
+blind VLM/SAM input and does not appear on the answer-key page.
 
 Generation is a protected Blender route in this shop and must run through GPU
 Greenroom. The request records the requested route; the generated manifest

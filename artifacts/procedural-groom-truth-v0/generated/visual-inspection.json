@@ -6,38 +6,35 @@
     {
       "kind": "sparse-truth-render",
       "path": "sparse-truth.png",
-      "sha256": "6b7406d243b63622ab1e75eb078c6ef7f57fdfbb537ec8e4ed7cde8d22f6a253"
+      "sha256": "b425e8edcd971249b965cc5c27093576a7226378ed76edbcd78fbbd3812a6a1f"
     },
     {
       "kind": "neutral-dense-render",
       "path": "neutral-dense.png",
-      "sha256": "e4345852dc5067b572cefe8b2e97e2b4e57a0e78942ac2e565fb1d0543983460"
+      "sha256": "152b4dc7ce1a39777bc02691da7ef06c86eb0e3fa6280ca259010d93489ff055"
     },
     {
       "kind": "deformed-dense-render",
       "path": "deformed-dense.png",
-      "sha256": "8bf34e1395dab5c47071c517bb9546e826bffde03932afa54517ca7389896092"
+      "sha256": "ccc3e833d780426cb85da15baa146ce5e82548f8fc5505a6b328a53534deadc0"
     }
   ],
-  "safety": {
-    "classification": "agent-inspected-safe",
-    "description": "Isolated abstract carrier and ordinary colored groom curves. No infestation, corruption, repeated-orifice, or misplaced-growth imagery."
-  },
   "visibleFindings": [
-    "The teal half reads as a shorter, lower-lift directional coat field.",
-    "The orange half reads as a longer, higher-lift directional coat field.",
-    "The purple lower/rear band reads as a distinct longer ruff guide family.",
-    "The cream curves read as sparse bilateral whiskers rather than a segmented strand mask.",
+    "The cyan short-coat half remains tight to the carrier with a quiet directional read.",
+    "The orange puffy half now has materially stronger outward arch and lift than the short coat.",
+    "The purple lower and rear band is longer, sparser, directional, and silhouette-bearing relative to the puffy coat.",
+    "The cream bilateral whiskers retain the legibility admitted by the operator.",
     "The loud nonlinear carrier bend visibly transports coat, ruff, and whisker roots with the surface."
   ],
+  "visibleDeltaAgainstOperatorDirection": "The regenerated geometry enforces and visibly expresses approximately doubled regime separation: puffy length is 2.86x short with a 0.87 lift gap; ruff length is 1.95x puffy and its density is 0.56x puffy.",
   "limitations": [
     "The carrier is an abstract head envelope, not an authored animal or recovered hidden surface.",
     "The groom is intentionally diagrammatic and does not establish production appearance quality.",
     "The deformation witnesses attachment transport, not acceptable skinning or motion quality.",
     "No VLM, SAM, multiview, image-recovery, or source-identity claim is exercised."
   ],
-  "representationVerdict": "supports-first-procedural-truth-fixture",
+  "representationVerdict": "supports-revised-procedural-truth-fixture-pending-operator-view",
   "visualAdmission": false,
   "scientificAdmission": false,
-  "operatorAdmission": "whisker-legibility-admitted; low-versus-high-puff and ruff distinction pending consolidated-page review"
+  "operatorAdmission": "Baseline fixture and whisker legibility admitted; operator requested approximately doubled short/puffy/ruff separation. Revised render awaits operator visual disposition."
 }

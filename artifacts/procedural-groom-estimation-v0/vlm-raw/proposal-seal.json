@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.procedural-groom-raw-proposal-seal.v0",
+  "proposalId": "gemma-3-4b-procedural-groom-raw-v0",
+  "sealed": true,
+  "truthExposure": "withheld",
+  "observationId": "procedural-groom-neutral-observation-v0",
+  "observationDigest": "87febf53f13d679d229aba2c865bdf3655a7174492e958a7f0b2947e21c780d8",
+  "observationFileSha256": "2e91cfd90f7369c633232fa8c2e267ffe3ca8637dec9c26d75b8484ad067935b",
+  "promptSha256": "725c5f121d35763fde4640d295c89fcdefc7b739512ef675c5ecf56c0da9264b",
+  "requestedRoute": "mlx-vlm:mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveRoute": "mlx-vlm:mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveBackend": "mlx-metal",
+  "effectiveDevice": "Device(gpu, 0)",
+  "rawStdoutSha256": "7e11c456fa73338f6a8df2b80cc3428b07b98c683da7bfca4db86d55d53bb35b",
+  "rawStderrSha256": "81affb6922bd065a895428780a31f298938ffb4d509f6342f646110d0ac71cb7",
+  "generationReportSha256": "f8f49bcaf22a40036dab01974901e01dccfb3fe7c705c57b1cc9c7162b2a3b75",
+  "parseRecoveryReportSha256": "e267385f1a7de2c3efa46b60693c451303ebe9496623d1e2fb861114901c8444",
+  "inventorySha256": "15e9728e6589d4ced72159d7827bf6503624e29fc5e3a64423ce7da8b3c041c0",
+  "inventorySystems": [
+    "main_fiber_layer_1",
+    "inner_fiber_layer_1",
+    "whisker_pad_left",
+    "whisker_pad_right"
+  ],
+  "normalizationStatus": "not_started",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

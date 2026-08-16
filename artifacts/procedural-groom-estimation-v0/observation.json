@@ -1,0 +1,56 @@
+{
+  "schema": "kaminos.procedural-groom-observation.v0",
+  "observationId": "procedural-groom-neutral-observation-v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "digest": "87febf53f13d679d229aba2c865bdf3655a7174492e958a7f0b2947e21c780d8",
+  "digestBasis": "sha256 of observations/witness.json",
+  "truthExposure": "withheld",
+  "requestedRoute": "kaminos:groom-neutral-observation-witness.v0",
+  "effectiveRoute": "kaminos:groom-neutral-observation-witness.v0",
+  "assetRoute": {
+    "requested": {
+      "root": "scratch",
+      "path": "procedural-groom-observation-v0.glb"
+    },
+    "effective": "/api/read?root=scratch&path=procedural-groom-observation-v0.glb",
+    "meshSha256": "54f2d1ea3028b3e15f533430ac7e16ace8a4504b6ebaf91c552d9714d7ea3eb1"
+  },
+  "sourceWitness": {
+    "path": "observations/witness.json",
+    "sha256": "87febf53f13d679d229aba2c865bdf3655a7174492e958a7f0b2947e21c780d8"
+  },
+  "views": [
+    {
+      "id": "front",
+      "path": "observations/debug-page-front.png",
+      "sha256": "c506ac773e3346b1fd69c51208da2fe628bd69dbf38c12159aab6a74dc2144a3",
+      "byteLength": 364366,
+      "requestedPose": { "position": [0, 0.6, 3], "target": [0, 0, 0] },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "left-three-quarter",
+      "path": "observations/debug-page-left-three-quarter.png",
+      "sha256": "7a144063e044a2d886f50e7d3b1ec018f0983d4d880964b1ed21031b6649be3f",
+      "byteLength": 374281,
+      "requestedPose": { "position": [-2.1, 0.6, 2.1], "target": [0, 0, 0] },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "right-three-quarter",
+      "path": "observations/debug-page-right-three-quarter.png",
+      "sha256": "570bab9f537286add21c3ee4f69cef6fe5330181e8d102e6eabd822bdfc6910c",
+      "byteLength": 396815,
+      "requestedPose": { "position": [2.1, 0.6, 2.1], "target": [0, 0, 0] },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    }
+  ],
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

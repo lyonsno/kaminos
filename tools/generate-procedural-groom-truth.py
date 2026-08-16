@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import struct
 import sys
 import traceback
 from pathlib import Path
@@ -22,6 +23,16 @@ from mathutils import Vector
 SCHEMA = "kaminos.procedural-groom-truth.v0"
 FIXTURE_ID = "procedural-groom-truth-v0"
 REQUIRED_ROUTE = "gpu-greenroom:kaminos_blender_cast_cleanup"
+OBSERVATION_OBJECT_SCALE = 0.40197228574259536
+OBSERVATION_OBJECT_POSITION = (0.0, 0.09772014617919922, -0.1836080551147461)
+DISPLAY_COLORS = {
+    "carrier": "#383f4a",
+    "low": "#1fa0a1",
+    "high": "#ef6b1f",
+    "ruff": "#943dd1",
+    "whisker": "#f2dea0",
+    "observation_fiber": "#b8bfc7",
+}
 
 
 def sha256(path: Path) -> str:
@@ -58,12 +69,48 @@ def collection(name: str) -> bpy.types.Collection:
     return result
 
 
-def material(name: str, color: tuple[float, float, float, float]) -> bpy.types.Material:
+def rgba(hex_color: str) -> tuple[float, float, float, float]:
+    return tuple(int(hex_color[index:index + 2], 16) / 255.0 for index in (1, 3, 5)) + (1.0,)
+
+
+def material(name: str, hex_color: str) -> bpy.types.Material:
     result = bpy.data.materials.new(name)
+    color = rgba(hex_color)
     result.diffuse_color = color
     result.metallic = 0.0
     result.roughness = 0.72
     return result
+
+
+def patch_glb_material_colors(path: Path, colors: dict[str, str]) -> None:
+    """Encode portable PBR colors without Blender 5.1's node teardown crash."""
+    payload = path.read_bytes()
+    if payload[:4] != b"glTF" or len(payload) < 20:
+        raise RuntimeError(f"{path.name}: invalid GLB header")
+    json_length, json_type = struct.unpack_from("<I4s", payload, 12)
+    if json_type != b"JSON":
+        raise RuntimeError(f"{path.name}: first GLB chunk is not JSON")
+    json_end = 20 + json_length
+    document = json.loads(payload[20:json_end].decode("utf-8").rstrip(" \t\r\n\0"))
+    encoded = set()
+    for entry in document.get("materials") or []:
+        hex_color = colors.get(entry.get("name"))
+        if not hex_color:
+            continue
+        entry.setdefault("pbrMetallicRoughness", {})["baseColorFactor"] = list(rgba(hex_color))
+        encoded.add(entry["name"])
+    missing = set(colors) - encoded
+    if missing:
+        raise RuntimeError(f"{path.name}: missing exported materials {sorted(missing)}")
+    json_bytes = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    json_bytes += b" " * ((4 - len(json_bytes) % 4) % 4)
+    tail = payload[json_end:]
+    rebuilt = bytearray(payload[:12])
+    rebuilt.extend(struct.pack("<I4s", len(json_bytes), b"JSON"))
+    rebuilt.extend(json_bytes)
+    rebuilt.extend(tail)
+    struct.pack_into("<I", rebuilt, 8, len(rebuilt))
+    path.write_bytes(rebuilt)
 
 
 def move_to_collection(obj: bpy.types.Object, target: bpy.types.Collection) -> None:
@@ -289,6 +336,116 @@ def render(path: Path) -> None:
         raise RuntimeError(f"render did not produce a nonblank artifact: {path}")
 
 
+def render_truth_masks(
+    output_dir: Path,
+    collections: dict[str, bpy.types.Collection],
+    carrier: bpy.types.Object,
+    dense_objects: list[bpy.types.Object],
+    domains: dict[str, list[bpy.types.MeshPolygon]],
+) -> list[dict[str, Any]]:
+    """Render truth-only visible-region masks from the observation camera poses."""
+    # MeshPolygon RNA wrappers can be invalidated by material-slot mutation and
+    # render/depsgraph evaluation. Freeze plain integer indices before either.
+    domain_indices = {
+        region_id: [polygon.index for polygon in polygons]
+        for region_id, polygons in domains.items()
+    }
+    scene = bpy.context.scene
+    scene.display.shading.light = "FLAT"
+    scene.display.shading.color_type = "MATERIAL"
+    scene.display.shading.show_shadows = False
+    scene.display.shading.show_cavity = False
+    scene.display.shading.background_type = "VIEWPORT"
+    scene.display.shading.background_color = (0.0, 0.0, 0.0)
+    scene.render.resolution_x = 1088
+    scene.render.resolution_y = 817
+    scene.render.resolution_percentage = 100
+    scene.render.film_transparent = False
+    scene.camera.data.sensor_fit = "VERTICAL"
+    scene.camera.data.angle = 2.0 * math.atan(1.0 / 2.7474774194546225)
+
+    black = material("TruthMaskBlack", "#000000")
+    white = material("TruthMaskWhite", "#ffffff")
+    original_carrier_materials = list(carrier.data.materials)
+    original_dense_materials = [list(obj.data.materials) for obj in dense_objects]
+    carrier.data.materials.clear()
+    carrier.data.materials.append(black)
+    carrier.data.materials.append(white)
+    for polygon in carrier.data.polygons:
+        polygon.material_index = 0
+    for obj in dense_objects:
+        obj.data.materials.clear()
+        obj.data.materials.append(black)
+
+    set_visibility(collections, {"NeutralCarrier", "NeutralDenseGroom"})
+    mask_dir = output_dir / "truth-masks"
+    target_objects = {
+        "short-coat": dense_objects[0],
+        "puffy-coat": dense_objects[1],
+        "ruff": dense_objects[2],
+    }
+    def observation_point_to_blender_source(point: tuple[float, float, float]) -> tuple[float, float, float]:
+        source = tuple(
+            (point[axis] - OBSERVATION_OBJECT_POSITION[axis]) / OBSERVATION_OBJECT_SCALE
+            for axis in range(3)
+        )
+        return (source[0], -source[2], source[1])
+
+    observation_target = (0.0, 0.0, 0.0)
+    blender_target = observation_point_to_blender_source(observation_target)
+    view_specs = [
+        ("front", (0.0, 0.6, 3.0)),
+        ("left-three-quarter", (-2.1, 0.6, 2.1)),
+        ("right-three-quarter", (2.1, 0.6, 2.1)),
+    ]
+    results: list[dict[str, Any]] = []
+    for view_id, observation_position in view_specs:
+        blender_position = observation_point_to_blender_source(observation_position)
+        scene.camera.location = blender_position
+        look_at(scene.camera, Vector(blender_target))
+        for region_id in [
+            "short-coat", "puffy-coat", "ruff",
+            "mystacial-pad-left", "mystacial-pad-right",
+        ]:
+            for obj in dense_objects:
+                obj.data.materials[0] = black
+            for polygon in carrier.data.polygons:
+                polygon.material_index = 0
+            if region_id in target_objects:
+                target_objects[region_id].data.materials[0] = white
+            else:
+                for polygon_index in domain_indices[region_id]:
+                    carrier.data.polygons[polygon_index].material_index = 1
+            path = mask_dir / view_id / f"{region_id}.png"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            render(path)
+            results.append({
+                **product("projected-truth-mask", path, output_dir),
+                "viewId": view_id,
+                "regionId": region_id,
+                "cameraPosition": list(observation_position),
+                "cameraTarget": list(observation_target),
+                "blenderCameraPosition": list(blender_position),
+                "blenderCameraTarget": list(blender_target),
+                "observationObjectScale": OBSERVATION_OBJECT_SCALE,
+                "observationObjectPosition": list(OBSERVATION_OBJECT_POSITION),
+                "coordinateConversion": "undo-observation-object-transform-then-browser-y-up-to-blender-z-up",
+                "resolution": [1088, 817],
+                "projectionMatrixYScale": 2.7474774194546225,
+            })
+    carrier.data.materials.clear()
+    for source_material in original_carrier_materials:
+        carrier.data.materials.append(source_material)
+    for polygon in carrier.data.polygons:
+        polygon.material_index = 0
+    for obj, source_materials in zip(dense_objects, original_dense_materials):
+        obj.data.materials.clear()
+        for source_material in source_materials:
+            obj.data.materials.append(source_material)
+    bpy.context.view_layer.update()
+    return results
+
+
 def mesh_copy_for_export(source: bpy.types.Object, name: str, target: bpy.types.Collection) -> bpy.types.Object:
     depsgraph = bpy.context.evaluated_depsgraph_get()
     evaluated = source.evaluated_get(depsgraph)
@@ -299,16 +456,22 @@ def mesh_copy_for_export(source: bpy.types.Object, name: str, target: bpy.types.
     return obj
 
 
-def export_neutral_glb(
+def export_groom_glb(
     path: Path,
     carrier: bpy.types.Object,
     dense_objects: list[bpy.types.Object],
+    fiber_material: bpy.types.Material | None = None,
 ) -> None:
-    export_collection = collection("PortableNeutralExport")
+    export_collection = collection(f"PortableExport-{path.stem}")
     export_objects = [mesh_copy_for_export(carrier, "Carrier", export_collection)]
-    export_objects.extend(
+    groom_export_objects = [
         mesh_copy_for_export(obj, f"{obj.name}Mesh", export_collection) for obj in dense_objects
-    )
+    ]
+    if fiber_material is not None:
+        for obj in groom_export_objects:
+            obj.data.materials.clear()
+            obj.data.materials.append(fiber_material)
+    export_objects.extend(groom_export_objects)
     bpy.ops.object.select_all(action="DESELECT")
     for obj in export_objects:
         obj.select_set(True)
@@ -345,11 +508,12 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         ]
     }
     materials = {
-        "carrier": material("CarrierAsh", (0.22, 0.25, 0.29, 1.0)),
-        "low": material("ShortCoatLowPuff", (0.10, 0.62, 0.63, 1.0)),
-        "high": material("ShortCoatHighPuff", (0.94, 0.42, 0.12, 1.0)),
-        "ruff": material("Ruff", (0.58, 0.24, 0.82, 1.0)),
-        "whisker": material("MystacialWhiskers", (0.95, 0.87, 0.62, 1.0)),
+        "carrier": material("CarrierAsh", DISPLAY_COLORS["carrier"]),
+        "low": material("ShortCoatLowPuff", DISPLAY_COLORS["low"]),
+        "high": material("ShortCoatHighPuff", DISPLAY_COLORS["high"]),
+        "ruff": material("Ruff", DISPLAY_COLORS["ruff"]),
+        "whisker": material("MystacialWhiskers", DISPLAY_COLORS["whisker"]),
+        "observation_fiber": material("ObservationFiberNeutral", DISPLAY_COLORS["observation_fiber"]),
     }
 
     neutral_carrier = create_carrier("CarrierNeutral", collections["NeutralCarrier"], materials["carrier"])
@@ -378,9 +542,9 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     ruff_faces = sorted(domains["ruff"], key=lambda polygon: (face_center(mesh, polygon).x, polygon.index))
 
     system_specs = [
-        ("short-coat-low-puff", sample_evenly(coat_left, 14), Vector((0, 0, -1)), 0.17, 0.16, 26.0, "low", 0.82),
-        ("short-coat-high-puff", sample_evenly(coat_right, 14), Vector((0, 0, -1)), 0.29, 0.64, 22.0, "high", 0.68),
-        ("ruff", sample_evenly(ruff_faces, 16), Vector((0, 0, -1)), 0.48, 0.72, 12.0, "high", 0.46),
+        ("short-coat-low-puff", sample_evenly(coat_left, 14), Vector((0, 0, -1)), 0.14, 0.08, 28.0, "low", 0.86),
+        ("short-coat-high-puff", sample_evenly(coat_right, 14), Vector((0, 0, -1)), 0.40, 0.95, 18.0, "high", 0.58),
+        ("ruff", sample_evenly(ruff_faces, 16), Vector((0, 0, -1)), 0.78, 0.58, 10.0, "high", 0.34),
     ]
 
     guides: list[dict[str, Any]] = []
@@ -470,7 +634,25 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     render(deformed_render)
 
     glb_path = output_dir / "procedural-groom-truth.glb"
-    export_neutral_glb(glb_path, neutral_carrier, dense_objects)
+    export_groom_glb(glb_path, neutral_carrier, dense_objects)
+    patch_glb_material_colors(glb_path, {
+        "CarrierAsh": DISPLAY_COLORS["carrier"],
+        "ShortCoatLowPuff": DISPLAY_COLORS["low"],
+        "ShortCoatHighPuff": DISPLAY_COLORS["high"],
+        "Ruff": DISPLAY_COLORS["ruff"],
+        "MystacialWhiskers": DISPLAY_COLORS["whisker"],
+    })
+    observation_glb_path = output_dir / "procedural-groom-observation.glb"
+    export_groom_glb(
+        observation_glb_path,
+        neutral_carrier,
+        dense_objects,
+        fiber_material=materials["observation_fiber"],
+    )
+    patch_glb_material_colors(observation_glb_path, {
+        "CarrierAsh": DISPLAY_COLORS["carrier"],
+        "ObservationFiberNeutral": DISPLAY_COLORS["observation_fiber"],
+    })
 
     set_visibility(collections, {"NeutralCarrier", "NeutralDenseGroom"})
     blend_path = output_dir / "procedural-groom-truth.blend"
@@ -478,14 +660,23 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     if not blend_path.exists() or blend_path.stat().st_size == 0:
         raise RuntimeError("Blender source scene is blank")
 
+    truth_mask_products = render_truth_masks(
+        output_dir, collections, neutral_carrier, dense_objects, domains,
+    )
+
     products = [
         product("blend", blend_path, output_dir),
         product("glb", glb_path, output_dir),
+        product("neutral-observation-glb", observation_glb_path, output_dir),
         product("sparse-truth-render", sparse_render, output_dir),
         product("neutral-dense-render", neutral_render, output_dir),
         product("deformed-dense-render", deformed_render, output_dir),
+        *truth_mask_products,
     ]
     glb_product = next(item for item in products if item["kind"] == "glb")
+    observation_glb_product = next(
+        item for item in products if item["kind"] == "neutral-observation-glb"
+    )
     manifest = {
         "schema": SCHEMA,
         "fixtureId": FIXTURE_ID,
@@ -511,12 +702,26 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
                 {"id": name, "triangleCount": len(faces)} for name, faces in domains.items()
             ],
         },
+        "observation": {
+            "mesh": {
+                "path": observation_glb_product["path"],
+                "sha256": observation_glb_product["sha256"],
+                "byteLength": observation_glb_product["byteLength"],
+                "membershipColorsVisible": False,
+            },
+        },
         "groom": {
+            "contrastContract": {
+                "source": "operator-visual-disposition",
+                "target": "approximately-twofold-perceptual-separation",
+                "shortToPuffy": {"minimumLengthRatio": 2.5, "minimumLiftDelta": 0.70},
+                "puffyToRuff": {"minimumLengthRatio": 1.75, "maximumDensityRatio": 0.75},
+            },
             "systems": [
-                {"id": "short-coat-low-puff", "representation": "guide-field", "displayColor": "#1fa0a1", "guideIds": guide_ids_by_system["short-coat-low-puff"]},
-                {"id": "short-coat-high-puff", "representation": "guide-field", "displayColor": "#ef6b1f", "guideIds": guide_ids_by_system["short-coat-high-puff"]},
-                {"id": "ruff", "representation": "explicit-guides", "displayColor": "#943dd1", "guideIds": guide_ids_by_system["ruff"]},
-                {"id": "mystacial-whiskers", "representation": "sparse-preset-curves", "displayColor": "#f2dea0", "guideIds": whisker_ids},
+                {"id": "short-coat-low-puff", "representation": "guide-field", "displayColor": DISPLAY_COLORS["low"], "guideIds": guide_ids_by_system["short-coat-low-puff"]},
+                {"id": "short-coat-high-puff", "representation": "guide-field", "displayColor": DISPLAY_COLORS["high"], "guideIds": guide_ids_by_system["short-coat-high-puff"]},
+                {"id": "ruff", "representation": "explicit-guides", "displayColor": DISPLAY_COLORS["ruff"], "guideIds": guide_ids_by_system["ruff"]},
+                {"id": "mystacial-whiskers", "representation": "sparse-preset-curves", "displayColor": DISPLAY_COLORS["whisker"], "guideIds": whisker_ids},
             ],
             "guides": guides,
             "whiskerPreset": {

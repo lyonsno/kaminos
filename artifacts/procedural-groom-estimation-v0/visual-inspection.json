@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.procedural-groom-estimation-visual-inspection.v0",
+  "inspector": "procedural-groom-assay-author",
+  "inspectedArtifact": "review-page-full-smoke.png",
+  "safetyCharacterization": "deterministic authored primitive geometry plus neutral masks; no generator or TRELLIS imagery",
+  "visibleResult": "The VLM separates two broad fiber-layer concepts and proposes bilateral whisker-origin pads, but omits a distinct ruff. SAM unions visibly spill into floor/background or broad head regions. The proposed whisker-pad masks do not isolate the authored mystacial pads; one right-pad proposal instead best overlaps the authored ruff.",
+  "visibleDeltaAgainstAssayTarget": "Negative first pass. Short, puffy, and ruff are visibly distinct in authored truth, but the estimator does not recover those three categories and the literal segmenter prompts do not yield useful masks.",
+  "strongestSupportingObservation": "Many masks have near-complete recall only because their predicted area is several times larger than the authored region; corresponding precision is commonly 5–25 percent.",
+  "claimCeiling": "Source-specific negative evidence for this free-inventory and literal low-threshold SAM route only. It does not establish that VLM-guided semantic proposal or prompted segmentation is generally unusable.",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

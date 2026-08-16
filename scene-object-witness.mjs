@@ -70,6 +70,22 @@ async function capturePngScreenshot(ws, screenshotPath) {
   return { path: screenshotPath, bytes: png.length };
 }
 
+async function capturePngClipScreenshot(ws, screenshotPath, clip) {
+  assert.ok(Number.isFinite(clip?.x) && Number.isFinite(clip?.y), 'screenshot clip must have a finite origin');
+  assert.ok(Number.isFinite(clip?.width) && clip.width > 0, 'screenshot clip must have a positive width');
+  assert.ok(Number.isFinite(clip?.height) && clip.height > 0, 'screenshot clip must have a positive height');
+  const shot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: { x: clip.x, y: clip.y, width: clip.width, height: clip.height, scale: 1 },
+  });
+  const png = Buffer.from(shot.data, 'base64');
+  assertPngScreenshot(png);
+  mkdirSync(dirname(screenshotPath), { recursive: true });
+  writeFileSync(screenshotPath, png);
+  return { path: screenshotPath, bytes: png.length, clip };
+}
+
 async function cdpFetch(path, options) {
   const { timeoutMs = 5000, ...fetchOptions } = options || {};
   if (!fetchOptions.signal) fetchOptions.signal = AbortSignal.timeout(timeoutMs);
@@ -220,6 +236,102 @@ async function runMeshAssetLinkScenario(ws) {
       };
     })()
   `, { timeoutMs: 45000 });
+}
+
+async function runGroomNeutralObservationScenario(ws) {
+  phase = 'scenario-groom-neutral-observation-load';
+  await runMeshAssetLinkScenario(ws);
+
+  phase = 'scenario-groom-neutral-observation-prepare';
+  const prepared = await evaluate(ws, `
+    (() => {
+      window.setGizmoMode?.(null);
+      for (const selector of ['#info-bar', '#viewport-drop-overlay', '#hybrid-splat-viewport-controls', '#transform-bar', '#fps-counter']) {
+        const element = document.querySelector(selector);
+        if (element) element.style.visibility = 'hidden';
+      }
+      const exposure = document.getElementById('exposure-slider');
+      if (exposure) {
+        exposure.value = '0.75';
+        exposure.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const environmentIntensity = document.getElementById('env-intensity-slider');
+      if (environmentIntensity) {
+        environmentIntensity.value = '0.70';
+        environmentIntensity.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      window._kaminosDirty?.();
+      const canvases = [...document.querySelectorAll('#viewport canvas')];
+      const canvas = canvases
+        .map(element => ({ element, rect: element.getBoundingClientRect() }))
+        .sort((a, b) => (b.rect.width * b.rect.height) - (a.rect.width * a.rect.height))[0] || null;
+      const rect = canvas?.rect;
+      if (!canvas || !rect || rect.width < 320 || rect.height < 240) {
+        throw new Error('groom neutral observation has no credible renderer canvas: ' + JSON.stringify({
+          selected: rect || null,
+          canvases: canvases.map(element => element.getBoundingClientRect()),
+        }));
+      }
+      const asset = window.kaminosAssetSmokeLinkDebugState?.() || null;
+      const objects = window.kaminosSceneObjectDebugState?.() || [];
+      const object = objects.find(record => record.id === asset?.registeredObjectId) || null;
+      if (!asset || asset.status !== 'loaded' || !object || object.type !== 'glb') {
+        throw new Error('groom neutral observation lost registered GLB route identity: ' + JSON.stringify({ asset, object }));
+      }
+      return {
+        clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        asset,
+        object,
+        membershipColorsVisible: false,
+        membershipColorBasis: 'kaminos:membership-neutral-canvas',
+        labelsVisible: false,
+        gizmoVisible: false,
+        presentation: {
+          background: 'studio-floor',
+          exposure: Number(exposure?.value || 0.75),
+          environmentIntensity: Number(environmentIntensity?.value || 0.70),
+        },
+      };
+    })()
+  `);
+
+  const viewSpecs = [
+    { id: 'front', suffix: '-front', position: [0, 0.6, 3], target: [0, 0, 0] },
+    { id: 'left-three-quarter', suffix: '-left-three-quarter', position: [-2.1, 0.6, 2.1], target: [0, 0, 0] },
+    { id: 'right-three-quarter', suffix: '-right-three-quarter', position: [2.1, 0.6, 2.1], target: [0, 0, 0] },
+  ];
+  const views = [];
+  for (const spec of viewSpecs) {
+    phase = `scenario-groom-neutral-observation-${spec.id}`;
+    const pose = await evaluate(ws, `
+      (() => {
+        const pose = window.kaminosSetCameraDebugPose?.(${JSON.stringify({ position: spec.position, target: spec.target })});
+        if (!pose?.position || !pose?.target) throw new Error('groom neutral observation camera debug pose unavailable');
+        window._kaminosDirty?.();
+        return pose;
+      })()
+    `);
+    await delay(700);
+    const shot = await capturePngClipScreenshot(ws, siblingPngPath(spec.suffix), prepared.clip);
+    views.push({ id: spec.id, requestedPose: { position: spec.position, target: spec.target }, effectivePose: pose, ...shot });
+  }
+
+  lastEvidence.groomNeutralObservation = {
+    schema: 'kaminos.groom-neutral-observation-witness.v0',
+    requestedRoute: {
+      root: prepared.asset.requestedRoot,
+      path: prepared.asset.requestedPath,
+    },
+    effectiveRoute: prepared.asset.effectiveUrl,
+    registeredObjectId: prepared.asset.registeredObjectId,
+    registeredObjectSource: prepared.object.source,
+    membershipColorsVisible: false,
+    membershipColorBasis: prepared.membershipColorBasis,
+    labelsVisible: false,
+    gizmoVisible: false,
+    presentation: prepared.presentation,
+    views,
+  };
 }
 
 const DIRECT_ASSET_LINK_SCENARIOS = {
@@ -4923,6 +5035,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'groom-neutral-observation') {
+    await runGroomNeutralObservationScenario(ws);
   } else if (scenario === 'splat-asset-link') {
     await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
   } else if (scenario === 'image-asset-link') {

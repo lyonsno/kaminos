@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.procedural-groom-vlm-inventory-report.v0",
+  "requestedRoute": "mlx-vlm:mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveRunner": "/Users/noahlyons/.local/bin/python3",
+  "effectiveModule": "mlx_vlm generate",
+  "requestedModel": "mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveModel": "mlx-community/gemma-3-4b-it-qat-4bit",
+  "requestedBackend": "mlx-metal",
+  "effectiveBackend": null,
+  "observationPath": "<worktree>/artifacts/procedural-groom-estimation-v0/observation.json",
+  "promptPath": "<worktree>/artifacts/procedural-groom-estimation-v0/vlm-inventory-prompt.txt",
+  "publicEvidencePathNormalization": "repo-root-replaced-with-<worktree>",
+  "visualAdmission": false,
+  "scientificAdmission": false,
+  "state": "raw_inventory_recovered",
+  "phase": "complete",
+  "observationDigest": "87febf53f13d679d229aba2c865bdf3655a7174492e958a7f0b2947e21c780d8",
+  "promptSha256": "725c5f121d35763fde4640d295c89fcdefc7b739512ef675c5ecf56c0da9264b",
+  "rawStdoutSha256": "7e11c456fa73338f6a8df2b80cc3428b07b98c683da7bfca4db86d55d53bb35b",
+  "sourceReportSha256": "f8f49bcaf22a40036dab01974901e01dccfb3fe7c705c57b1cc9c7162b2a3b75",
+  "inventorySha256": "15e9728e6589d4ced72159d7827bf6503624e29fc5e3a64423ce7da8b3c041c0",
+  "lastTrustworthyEvidence": "parsed-frozen-raw-inventory"
+}

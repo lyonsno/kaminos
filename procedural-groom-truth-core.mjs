@@ -22,10 +22,37 @@ const REQUIRED_DOMAINS = [
 const REQUIRED_PRODUCTS = [
   'blend',
   'glb',
+  'neutral-observation-glb',
   'sparse-truth-render',
   'neutral-dense-render',
   'deformed-dense-render',
 ];
+
+const REQUIRED_MASK_VIEWS = ['front', 'left-three-quarter', 'right-three-quarter'];
+const REQUIRED_MASK_REGIONS = [
+  'short-coat',
+  'puffy-coat',
+  'ruff',
+  'mystacial-pad-left',
+  'mystacial-pad-right',
+];
+const OBSERVATION_OBJECT_SCALE = 0.40197228574259536;
+const OBSERVATION_OBJECT_POSITION = [0, 0.09772014617919922, -0.1836080551147461];
+function observationPointToBlenderSource(point) {
+  const source = point.map((component, axis) => (
+    (component - OBSERVATION_OBJECT_POSITION[axis]) / OBSERVATION_OBJECT_SCALE
+  ));
+  return [source[0], -source[2], source[1]];
+}
+const MASK_CAMERAS = {
+  front: { observation: [0, 0.6, 3] },
+  'left-three-quarter': { observation: [-2.1, 0.6, 2.1] },
+  'right-three-quarter': { observation: [2.1, 0.6, 2.1] },
+};
+for (const camera of Object.values(MASK_CAMERAS)) {
+  camera.blender = observationPointToBlenderSource(camera.observation);
+  camera.blenderTarget = observationPointToBlenderSource([0, 0, 0]);
+}
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const DISPLAY_COLOR = /^#[0-9a-f]{6}$/i;
@@ -51,6 +78,11 @@ function finiteUnitInterval(value) {
 
 function finiteVector(value, size) {
   return Array.isArray(value) && value.length === size && value.every(Number.isFinite);
+}
+
+function vectorsClose(left, right, tolerance = 1e-9) {
+  return finiteVector(left, right.length)
+    && left.every((component, index) => Math.abs(component - right[index]) <= tolerance);
 }
 
 function vectorLength(value) {
@@ -208,6 +240,33 @@ export function evaluateProceduralGroomTruth(manifest) {
   const guideFailures = invalidGuideReasons(manifest);
   if (guideFailures.length) return report('invalid_guide_geometry', guideFailures);
 
+  const guidesFor = systemId => guides.filter(guide => guide.systemId === systemId);
+  const extrema = (systemId, key) => {
+    const values = guidesFor(systemId).map(guide => guide[key]);
+    return { min: Math.min(...values), max: Math.max(...values) };
+  };
+  const lowLength = extrema('short-coat-low-puff', 'length');
+  const highLength = extrema('short-coat-high-puff', 'length');
+  const ruffLength = extrema('ruff', 'length');
+  const lowLift = extrema('short-coat-low-puff', 'lift');
+  const highLift = extrema('short-coat-high-puff', 'lift');
+  const highDensity = extrema('short-coat-high-puff', 'density');
+  const ruffDensity = extrema('ruff', 'density');
+  const contrastFailures = [];
+  if (highLength.min < lowLength.max * 2.5) {
+    contrastFailures.push('puffy short-coat length must be at least 2.5x the short coat');
+  }
+  if (highLift.min < lowLift.max + 0.70) {
+    contrastFailures.push('puffy short-coat lift must exceed short-coat lift by at least 0.70');
+  }
+  if (ruffLength.min < highLength.max * 1.75) {
+    contrastFailures.push('ruff length must be at least 1.75x the puffy coat');
+  }
+  if (ruffDensity.max > highDensity.min * 0.75) {
+    contrastFailures.push('ruff density must be at most 0.75x the puffy coat to preserve explicit-guide character');
+  }
+  if (contrastFailures.length) return report('insufficient_regime_contrast', contrastFailures);
+
   const deformation = manifest.deformation;
   const deformationFailures = [];
   if (deformation?.method !== 'carrier-bound-bend-v0') deformationFailures.push('unsupported deformation method');
@@ -240,7 +299,60 @@ export function evaluateProceduralGroomTruth(manifest) {
     if (!SHA256.test(product.sha256 ?? '')) productFailures.push(`${product.kind}: missing sha256`);
     if (!finitePositive(product.byteLength)) productFailures.push(`${product.kind}: product is blank`);
   }
+  const projectedMasks = products.filter(product => product.kind === 'projected-truth-mask');
+  const projectedMaskKeys = new Set();
+  for (const mask of projectedMasks) {
+    const key = `${mask.viewId}:${mask.regionId}`;
+    if (projectedMaskKeys.has(key)) productFailures.push(`duplicate projected truth mask ${key}`);
+    projectedMaskKeys.add(key);
+    if (!REQUIRED_MASK_VIEWS.includes(mask.viewId)) productFailures.push(`${key}: unsupported truth-mask view`);
+    if (!REQUIRED_MASK_REGIONS.includes(mask.regionId)) productFailures.push(`${key}: unsupported truth-mask region`);
+    if (mask.resolution?.[0] !== 1088 || mask.resolution?.[1] !== 817) {
+      productFailures.push(`${key}: truth-mask resolution must match the blind observation canvas`);
+    }
+    if (!finiteVector(mask.cameraPosition, 3) || !finiteVector(mask.cameraTarget, 3)) {
+      productFailures.push(`${key}: truth-mask camera identity is missing`);
+    }
+    const expectedCamera = MASK_CAMERAS[mask.viewId];
+    if (expectedCamera && !vectorsClose(mask.cameraPosition, expectedCamera.observation)) {
+      productFailures.push(`${key}: truth-mask camera does not match the sealed browser observation pose`);
+    }
+    if (expectedCamera && !vectorsClose(mask.blenderCameraPosition, expectedCamera.blender)) {
+      productFailures.push(`${key}: truth-mask camera does not undo the observation transform before axis conversion`);
+    }
+    if (expectedCamera && !vectorsClose(mask.blenderCameraTarget, expectedCamera.blenderTarget)) {
+      productFailures.push(`${key}: truth-mask target does not undo the observation transform before axis conversion`);
+    }
+    if (mask.observationObjectScale !== OBSERVATION_OBJECT_SCALE
+      || !vectorsClose(mask.observationObjectPosition, OBSERVATION_OBJECT_POSITION)) {
+      productFailures.push(`${key}: truth-mask camera is not bound to the sealed observation object transform`);
+    }
+  }
+  for (const viewId of REQUIRED_MASK_VIEWS) {
+    for (const regionId of REQUIRED_MASK_REGIONS) {
+      const key = `${viewId}:${regionId}`;
+      if (!projectedMaskKeys.has(key)) productFailures.push(`missing projected truth mask ${key}`);
+    }
+  }
   if (productFailures.length) return report('invalid_products', productFailures);
+
+  const truthGlb = products.find(product => product.kind === 'glb');
+  const observationGlb = products.find(product => product.kind === 'neutral-observation-glb');
+  const observationMesh = manifest.observation?.mesh;
+  const observationFailures = [];
+  if (!observationMesh
+    || observationMesh.path !== observationGlb?.path
+    || observationMesh.sha256 !== observationGlb?.sha256
+    || observationMesh.byteLength !== observationGlb?.byteLength) {
+    observationFailures.push('blind observation mesh must bind the neutral-observation-glb product');
+  }
+  if (observationMesh?.membershipColorsVisible !== false) {
+    observationFailures.push('blind observation mesh must explicitly withhold membership colors');
+  }
+  if (observationMesh?.sha256 === truthGlb?.sha256) {
+    observationFailures.push('blind observation mesh must be distinct from the membership-colored truth GLB');
+  }
+  if (observationFailures.length) return report('invalid_observation_product', observationFailures);
 
   return report(
     'representation_ready_for_visual_review',

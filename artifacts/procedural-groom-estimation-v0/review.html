@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Procedural Groom Estimation v0 — Blind Assay Review</title>
+  <style>
+    :root { color-scheme: dark; --page:#0e1014; --panel:#181c22; --panel2:#222832; --line:#343c49; --ink:#f5f1e8; --muted:#aeb7c5; --bad:#ff745f; --okay:#e9b949; }
+    * { box-sizing:border-box } body { margin:0; background:var(--page); color:var(--ink); font:15px/1.48 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+    main { width:min(1580px,calc(100% - 28px)); margin:auto; padding:30px 0 72px } h1 { margin:0 0 8px; font-size:clamp(30px,4vw,50px); line-height:1.06 } h2 { margin:0 0 16px; font-size:25px } h3 { margin:0 0 5px; font-size:17px } p { margin:0 0 10px }
+    .lede { max-width:1100px; color:var(--muted); font-size:18px } .verdict { margin-top:22px; border:1px solid #7a332d; border-left:8px solid var(--bad); background:#271917; padding:18px 20px; border-radius:12px } .verdict strong { color:#ff9d8f }
+    .panel { margin-top:24px; border:1px solid var(--line); border-radius:14px; background:var(--panel); padding:20px } .method { display:grid; grid-template-columns:repeat(3,1fr); gap:12px } .method div,.proposal { background:var(--panel2); padding:15px; border-radius:10px }
+    .proposals { display:grid; grid-template-columns:repeat(4,1fr); gap:12px } .phrase { color:#dce8ff } dl { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; margin:10px 0 } dt { color:var(--muted) } dd { margin:0 }
+    figure { margin:0; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:#090b0e } figure img { display:block; width:100%; height:auto } figcaption { padding:10px 12px; background:var(--panel2); color:var(--muted) } .observation { max-width:1088px; margin:0 auto 18px }
+    .comparison-row { border-top:1px solid var(--line); padding:18px 0 } .row-head { display:flex; justify-content:space-between; align-items:start; gap:18px } .row-head p { color:var(--muted) } .state { border:1px solid var(--line); border-radius:999px; padding:4px 9px; font-size:12px } .state.nodetect { color:var(--bad); border-color:#7a332d }
+    .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px } .metrics { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px } .metrics span { background:var(--panel2); border-radius:999px; padding:5px 10px; color:var(--muted) } .metrics strong { color:var(--ink) }
+    .truth-atlas { display:grid; grid-template-columns:repeat(5,1fr); gap:10px } .audit { color:var(--muted); font-size:13px; overflow-wrap:anywhere } code { color:#dce8ff }
+    @media(max-width:1000px) { .proposals,.truth-atlas { grid-template-columns:repeat(2,1fr) } .method { grid-template-columns:1fr } } @media(max-width:700px) { .pair,.proposals,.truth-atlas { grid-template-columns:1fr } }
+  </style>
+</head>
+<body><main>
+  <header><h1>Procedural Groom Estimation v0</h1><p class="lede">The real blind assay: three membership-neutral observations → one free VLM inventory → literal SAM3 prompts → authored truth revealed only after proposal sealing.</p></header>
+  <section class="verdict"><strong>First-pass result: negative.</strong> The VLM noticed broad fiber layering and whisker-origin concepts, but did not isolate the ruff. The literal SAM unions are mostly overbroad, background-contaminated, or semantically misregistered. High recall is frequently caused by engulfing the target, not locating it.</section>
+  <section class="panel"><h2>How to read this page</h2><div class="method"><div><strong>1 · Blind input</strong><p>The gray renders are exactly what the VLM received. Membership colors and canonical labels are absent.</p></div><div><strong>2 · Frozen proposal</strong><p>The VLM’s own phrases and parameters were sealed before truth release. Nothing below was renamed to fit the answer.</p></div><div><strong>3 · No hand-map comparison</strong><p>Each SAM mask is compared with every authored region. The shown truth mask is simply maximum IoU, even when that exposes a semantic mismatch.</p></div></section>
+  <section class="panel"><h2>Raw VLM inventory</h2><div class="proposals">
+          <article class="proposal">
+            <h3>main_fiber_layer_1</h3>
+            <p class="phrase">“Dense fiber mesh - primary layer”</p>
+            <dl><dt>Length</dt><dd>0.80</dd><dt>Density</dt><dd>0.90</dd><dt>Puff</dt><dd>0.70</dd><dt>Confidence</dt><dd>0.90</dd></dl>
+            <p>The most extensive and densely packed region of fibers, forming a continuous outer layer.  The fibers are oriented in a generally radial pattern.</p>
+          </article>
+          <article class="proposal">
+            <h3>inner_fiber_layer_1</h3>
+            <p class="phrase">“Inner fiber mesh - supporting layer”</p>
+            <dl><dt>Length</dt><dd>0.60</dd><dt>Density</dt><dd>0.70</dd><dt>Puff</dt><dd>0.50</dd><dt>Confidence</dt><dd>0.80</dd></dl>
+            <p>A less dense layer of fibers, positioned beneath the primary layer.  The fibers are more loosely arranged and exhibit a slight inward curvature.</p>
+          </article>
+          <article class="proposal">
+            <h3>whisker_pad_left</h3>
+            <p class="phrase">“Left muzzle pad - whisker origin”</p>
+            <dl><dt>Length</dt><dd>0.20</dd><dt>Density</dt><dd>0.30</dd><dt>Puff</dt><dd>0.10</dd><dt>Confidence</dt><dd>0.70</dd></dl>
+            <p>A slightly raised area on the left side of the creature&#x27;s face, from which a few fibers extend.  The fibers are sparse and oriented outwards.</p>
+          </article>
+          <article class="proposal">
+            <h3>whisker_pad_right</h3>
+            <p class="phrase">“Right muzzle pad - whisker origin”</p>
+            <dl><dt>Length</dt><dd>0.20</dd><dt>Density</dt><dd>0.30</dd><dt>Puff</dt><dd>0.10</dd><dt>Confidence</dt><dd>0.70</dd></dl>
+            <p>A similar raised area on the right side of the creature&#x27;s face, from which a few fibers extend. The fibers are sparse and oriented outwards.</p>
+          </article></div></section>
+
+          <section class="panel view">
+            <h2>Front</h2>
+            <figure class="observation"><a href="observations/debug-page-front.png"><img src="observations/debug-page-front.png" alt="Sealed neutral front observation"></a><figcaption>Sealed blind observation · membership colors, labels, and gizmos withheld</figcaption></figure>
+
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>main_fiber_layer_1</h3><p>“Dense fiber mesh - primary layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/front/main_fiber_layer_1.png"><img src="sam3-raw/overlays/front/main_fiber_layer_1.png" alt="SAM overlay for main_fiber_layer_1 in front"></a><figcaption>SAM union · 21 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>5.0%</strong></span><span>precision <strong>5.0%</strong></span><span>recall <strong>98.6%</strong></span><span>predicted pixels <strong>353,417</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>inner_fiber_layer_1</h3><p>“Inner fiber mesh - supporting layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/front/inner_fiber_layer_1.png"><img src="sam3-raw/overlays/front/inner_fiber_layer_1.png" alt="SAM overlay for inner_fiber_layer_1 in front"></a><figcaption>SAM union · 18 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>15.9%</strong></span><span>precision <strong>16.0%</strong></span><span>recall <strong>97.4%</strong></span><span>predicted pixels <strong>108,435</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_left</h3><p>“Left muzzle pad - whisker origin”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/front/whisker_pad_left.png"><img src="sam3-raw/overlays/front/whisker_pad_left.png" alt="SAM overlay for whisker_pad_left in front"></a><figcaption>SAM union · 3 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>20.5%</strong></span><span>precision <strong>20.6%</strong></span><span>recall <strong>98.9%</strong></span><span>predicted pixels <strong>85,601</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_right</h3><p>“Right muzzle pad - whisker origin”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/front/whisker_pad_right.png"><img src="sam3-raw/overlays/front/whisker_pad_right.png" alt="SAM overlay for whisker_pad_right in front"></a><figcaption>SAM union · 1 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/ruff.png" alt="Automatically selected authored truth match ruff"></a><figcaption>Best of all authored regions: <strong>ruff</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>12.1%</strong></span><span>precision <strong>21.0%</strong></span><span>recall <strong>22.3%</strong></span><span>predicted pixels <strong>11,423</strong></span></div>
+              </article>
+          </section>
+          <section class="panel view">
+            <h2>Left three-quarter</h2>
+            <figure class="observation"><a href="observations/debug-page-left-three-quarter.png"><img src="observations/debug-page-left-three-quarter.png" alt="Sealed neutral left-three-quarter observation"></a><figcaption>Sealed blind observation · membership colors, labels, and gizmos withheld</figcaption></figure>
+
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>main_fiber_layer_1</h3><p>“Dense fiber mesh - primary layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/left-three-quarter/main_fiber_layer_1.png"><img src="sam3-raw/overlays/left-three-quarter/main_fiber_layer_1.png" alt="SAM overlay for main_fiber_layer_1 in left-three-quarter"></a><figcaption>SAM union · 7 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png" alt="Automatically selected authored truth match ruff"></a><figcaption>Best of all authored regions: <strong>ruff</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>16.7%</strong></span><span>precision <strong>16.9%</strong></span><span>recall <strong>94.6%</strong></span><span>predicted pixels <strong>76,715</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>inner_fiber_layer_1</h3><p>“Inner fiber mesh - supporting layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/left-three-quarter/inner_fiber_layer_1.png"><img src="sam3-raw/overlays/left-three-quarter/inner_fiber_layer_1.png" alt="SAM overlay for inner_fiber_layer_1 in left-three-quarter"></a><figcaption>SAM union · 21 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png" alt="Automatically selected authored truth match ruff"></a><figcaption>Best of all authored regions: <strong>ruff</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>13.0%</strong></span><span>precision <strong>13.1%</strong></span><span>recall <strong>97.7%</strong></span><span>predicted pixels <strong>102,379</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_left</h3><p>“Left muzzle pad - whisker origin”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/left-three-quarter/whisker_pad_left.png"><img src="sam3-raw/overlays/left-three-quarter/whisker_pad_left.png" alt="SAM overlay for whisker_pad_left in left-three-quarter"></a><figcaption>SAM union · 11 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png" alt="Automatically selected authored truth match ruff"></a><figcaption>Best of all authored regions: <strong>ruff</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>11.8%</strong></span><span>precision <strong>11.8%</strong></span><span>recall <strong>99.3%</strong></span><span>predicted pixels <strong>115,035</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_right</h3><p>“Right muzzle pad - whisker origin”</p></div>
+                  <span class="state nodetect">no_detection</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/left-three-quarter/whisker_pad_right.png"><img src="sam3-raw/overlays/left-three-quarter/whisker_pad_right.png" alt="SAM overlay for whisker_pad_right in left-three-quarter"></a><figcaption>SAM union · 0 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/short-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/short-coat.png" alt="Automatically selected authored truth match short-coat"></a><figcaption>Best of all authored regions: <strong>short-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>0.0%</strong></span><span>precision <strong>0.0%</strong></span><span>recall <strong>0.0%</strong></span><span>predicted pixels <strong>0</strong></span></div>
+              </article>
+          </section>
+          <section class="panel view">
+            <h2>Right three-quarter</h2>
+            <figure class="observation"><a href="observations/debug-page-right-three-quarter.png"><img src="observations/debug-page-right-three-quarter.png" alt="Sealed neutral right-three-quarter observation"></a><figcaption>Sealed blind observation · membership colors, labels, and gizmos withheld</figcaption></figure>
+
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>main_fiber_layer_1</h3><p>“Dense fiber mesh - primary layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/right-three-quarter/main_fiber_layer_1.png"><img src="sam3-raw/overlays/right-three-quarter/main_fiber_layer_1.png" alt="SAM overlay for main_fiber_layer_1 in right-three-quarter"></a><figcaption>SAM union · 15 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>8.9%</strong></span><span>precision <strong>9.0%</strong></span><span>recall <strong>95.0%</strong></span><span>predicted pixels <strong>300,940</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>inner_fiber_layer_1</h3><p>“Inner fiber mesh - supporting layer”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/right-three-quarter/inner_fiber_layer_1.png"><img src="sam3-raw/overlays/right-three-quarter/inner_fiber_layer_1.png" alt="SAM overlay for inner_fiber_layer_1 in right-three-quarter"></a><figcaption>SAM union · 25 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>10.6%</strong></span><span>precision <strong>10.7%</strong></span><span>recall <strong>94.0%</strong></span><span>predicted pixels <strong>249,968</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_left</h3><p>“Left muzzle pad - whisker origin”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/right-three-quarter/whisker_pad_left.png"><img src="sam3-raw/overlays/right-three-quarter/whisker_pad_left.png" alt="SAM overlay for whisker_pad_left in right-three-quarter"></a><figcaption>SAM union · 4 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png" alt="Automatically selected authored truth match puffy-coat"></a><figcaption>Best of all authored regions: <strong>puffy-coat</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>25.1%</strong></span><span>precision <strong>25.2%</strong></span><span>recall <strong>98.9%</strong></span><span>predicted pixels <strong>111,909</strong></span></div>
+              </article>
+              <article class="comparison-row">
+                <div class="row-head">
+                  <div><h3>whisker_pad_right</h3><p>“Right muzzle pad - whisker origin”</p></div>
+                  <span class="state captured">mask_captured</span>
+                </div>
+                <div class="pair">
+                  <figure><a href="sam3-raw/overlays/right-three-quarter/whisker_pad_right.png"><img src="sam3-raw/overlays/right-three-quarter/whisker_pad_right.png" alt="SAM overlay for whisker_pad_right in right-three-quarter"></a><figcaption>SAM union · 2 detections</figcaption></figure>
+                  <figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/ruff.png" alt="Automatically selected authored truth match ruff"></a><figcaption>Best of all authored regions: <strong>ruff</strong></figcaption></figure>
+                </div>
+                <div class="metrics"><span>IoU <strong>51.8%</strong></span><span>precision <strong>58.7%</strong></span><span>recall <strong>81.5%</strong></span><span>predicted pixels <strong>18,643</strong></span></div>
+              </article>
+          </section>
+  <section class="panel"><h2>Complete authored truth atlas</h2><p class="lede">All fifteen visible-region masks. These are supporting comparison truth, not recovered semantics and not visual admission.</p><div class="truth-atlas"><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/short-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/short-coat.png" alt="front short-coat authored truth mask"></a><figcaption>Front · <strong>short-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/puffy-coat.png" alt="front puffy-coat authored truth mask"></a><figcaption>Front · <strong>puffy-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/ruff.png" alt="front ruff authored truth mask"></a><figcaption>Front · <strong>ruff</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/mystacial-pad-left.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/mystacial-pad-left.png" alt="front mystacial-pad-left authored truth mask"></a><figcaption>Front · <strong>mystacial-pad-left</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/front/mystacial-pad-right.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/front/mystacial-pad-right.png" alt="front mystacial-pad-right authored truth mask"></a><figcaption>Front · <strong>mystacial-pad-right</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/short-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/short-coat.png" alt="left-three-quarter short-coat authored truth mask"></a><figcaption>Left three-quarter · <strong>short-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/puffy-coat.png" alt="left-three-quarter puffy-coat authored truth mask"></a><figcaption>Left three-quarter · <strong>puffy-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/ruff.png" alt="left-three-quarter ruff authored truth mask"></a><figcaption>Left three-quarter · <strong>ruff</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/mystacial-pad-left.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/mystacial-pad-left.png" alt="left-three-quarter mystacial-pad-left authored truth mask"></a><figcaption>Left three-quarter · <strong>mystacial-pad-left</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/mystacial-pad-right.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/left-three-quarter/mystacial-pad-right.png" alt="left-three-quarter mystacial-pad-right authored truth mask"></a><figcaption>Left three-quarter · <strong>mystacial-pad-right</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/short-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/short-coat.png" alt="right-three-quarter short-coat authored truth mask"></a><figcaption>Right three-quarter · <strong>short-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/puffy-coat.png" alt="right-three-quarter puffy-coat authored truth mask"></a><figcaption>Right three-quarter · <strong>puffy-coat</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/ruff.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/ruff.png" alt="right-three-quarter ruff authored truth mask"></a><figcaption>Right three-quarter · <strong>ruff</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/mystacial-pad-left.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/mystacial-pad-left.png" alt="right-three-quarter mystacial-pad-left authored truth mask"></a><figcaption>Right three-quarter · <strong>mystacial-pad-left</strong></figcaption></figure><figure><a href="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/mystacial-pad-right.png"><img src="../procedural-groom-truth-v0/generated/truth-masks/right-three-quarter/mystacial-pad-right.png" alt="right-three-quarter mystacial-pad-right authored truth mask"></a><figcaption>Right three-quarter · <strong>mystacial-pad-right</strong></figcaption></figure></div></section>
+  <section class="panel audit"><h2>Audit identity</h2><p>Observation digest: <code>87febf53f13d679d229aba2c865bdf3655a7174492e958a7f0b2947e21c780d8</code></p><p>SAM route: <code>mlx-vlm:sam3:mlx-community/sam3-bf16</code> · model config <code>6cee26705ae0aadce09406d375053603279d9b0d25c3de0c0cfe943a371bdd18</code> · threshold <code>0.1</code></p><p>Comparison report: <code>comparison.json</code> · policy: per-view maximum IoU across authored regions; no semantic hand-map</p><p>Visual admission: false · scientific admission: false.</p></section>
+</main></body></html>

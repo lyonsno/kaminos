@@ -1,27 +1,116 @@
 {
-  "schema": "kaminos.asset-smoke-link-public-receipt.v0",
-  "scenario": "mesh-asset-link",
-  "ok": true,
-  "requestedUrl": "http://localhost:8767/index.html?mesh_root=scratch&mesh_path=procedural-groom-truth-v0.glb",
-  "requestedRoot": "scratch",
-  "requestedPath": "procedural-groom-truth-v0.glb",
-  "effectiveResource": "/api/read?root=scratch&path=procedural-groom-truth-v0.glb",
-  "assetType": "mesh",
-  "loadStatus": "loaded",
-  "registeredObjectType": "glb",
-  "registeredObjectActive": true,
-  "registeredObjectReloadable": true,
-  "visibleSceneRow": true,
-  "error": null,
-  "screenshot": "viewer-smoke.png",
-  "screenshotSha256": "fb807cab6eab718991f435b7f28b6f910aa37bc7eba4ee22a82aef85b5f1eb35",
-  "screenshotBytes": 469120,
-  "rawWitness": {
-    "path": "/private/tmp/procedural-groom-truth-v0-viewer-smoke-colored-raw.json",
-    "sha256": "6c846ffd8c827780b61f5f642cae125d2eb63dec34160bda4af1a7a9d2ff15fa"
+  "requestedUrl": "http://127.0.0.1:8767/index.html?mesh_root=scratch&mesh_path=procedural-groom-truth-v0.glb",
+  "effectiveUrl": "http://127.0.0.1:8767/index.html?mesh_root=scratch&mesh_path=procedural-groom-truth-v0.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "<worktree>/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "<worktree>/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
   },
-  "visualInspection": {
-    "classification": "agent-inspected-safe",
-    "description": "The live Kaminos mesh route shows the abstract carrier, dense groom curves, ruff, and bilateral whiskers as ordinary safe geometry."
+  "expectedServerRoot": "<worktree>",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9445,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9445-92808",
+  "settleMs": 4000,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9445/devtools/browser/011d90c8-ed08-4bb8-8534-ff7c55239dc1"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9445/devtools/browser/011d90c8-ed08-4bb8-8534-ff7c55239dc1\nTrying to load the allocator multiple times. This is *not* supported.\n",
+  "ok": true,
+  "screenshot": "<worktree>/artifacts/procedural-groom-truth-v0/generated/viewer-smoke.png",
+  "screenshotBytes": 488594,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "scratch",
+        "requestedPath": "procedural-groom-truth-v0.glb",
+        "effectiveUrl": "/api/read?root=scratch&path=procedural-groom-truth-v0.glb",
+        "fileName": "procedural-groom-truth-v0.glb",
+        "label": "Procedural Groom Truth V0",
+        "registeredObjectId": "glb-1e13ee4f-c78a-4aad-80bf-5289eb3ec962",
+        "registeredAt": "2026-08-16T21:34:28.769Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-1e13ee4f-c78a-4aad-80bf-5289eb3ec962",
+        "label": "Procedural Groom Truth V0",
+        "source": "/api/read?root=scratch&path=procedural-groom-truth-v0.glb",
+        "type": "glb",
+        "groupId": "group-bea4f5d4-b917-4da9-b981-402938c00be5",
+        "active": true,
+        "transform": {
+          "position": [
+            0,
+            0.09772014617919922,
+            -0.1836080551147461
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            0.40197228574259536,
+            0.40197228574259536,
+            0.40197228574259536
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8767/api/read?root=scratch&path=procedural-groom-truth-v0.glb",
+      "rowText": "glb / /api/read?root=scratch&path=procedural-groom-truth-v0.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Procedural Groom Truth V0"
+    }
   }
 }
