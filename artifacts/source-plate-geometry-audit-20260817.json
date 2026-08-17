@@ -1,0 +1,446 @@
+{
+  "matrices": [
+    {
+      "absoluteConditioningGeometry": "anisotropically-resampled",
+      "captureEvidenceClass": "legacy-unbound",
+      "cellCount": 3,
+      "cells": [
+        {
+          "actualSourceSha256": "9627a4bb63ea7b3a511344103d608d00f1db852c49f5a0dd9695b1f6dc21483f",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.033292231812577,
+            "geometryPreserved": false,
+            "scaleX": 0.3156596794081381,
+            "scaleY": 0.3054892601431981,
+            "sourceAspectRatio": 0.9677804295942721,
+            "sourceHeight": 1676,
+            "sourceWidth": 1622,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 0,
+          "sourceAspectRatio": 0.9677804295942721,
+          "sourceHeight": 1676,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/muzzle-length/short.png",
+          "sourceSha256": "9627a4bb63ea7b3a511344103d608d00f1db852c49f5a0dd9695b1f6dc21483f",
+          "sourceWidth": 1622,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "da0498d02d9032b202fa894083b0ebe7e102265350d9927880f087b8c03e5c8b",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 0.9489559164733178,
+            "geometryPreserved": false,
+            "scaleX": 0.29698375870069604,
+            "scaleY": 0.31295843520782396,
+            "sourceAspectRatio": 1.0537897310513447,
+            "sourceHeight": 1636,
+            "sourceWidth": 1724,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 1,
+          "sourceAspectRatio": 1.0537897310513447,
+          "sourceHeight": 1636,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/muzzle-length/long.png",
+          "sourceSha256": "da0498d02d9032b202fa894083b0ebe7e102265350d9927880f087b8c03e5c8b",
+          "sourceWidth": 1724,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "0950058e270daea8824b667a6f7ff6bf242f22c0540af9293b3906492d84e193",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 0.878665318503539,
+            "geometryPreserved": false,
+            "scaleX": 0.25884732052578363,
+            "scaleY": 0.2945914844649022,
+            "sourceAspectRatio": 1.1380897583429228,
+            "sourceHeight": 1738,
+            "sourceWidth": 1978,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 2,
+          "sourceAspectRatio": 1.1380897583429228,
+          "sourceHeight": 1738,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/muzzle-length/longest.png",
+          "sourceSha256": "0950058e270daea8824b667a6f7ff6bf242f22c0540af9293b3906492d84e193",
+          "sourceWidth": 1978,
+          "status": "inspected"
+        }
+      ],
+      "claimCeiling": {
+        "absoluteSourceGeometry": "lowered",
+        "promptOrSeedComparison": "not-the-primary-comparison",
+        "sourceMorphologyComparison": "not-admissible"
+      },
+      "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-length-0816/manifest.json",
+      "sourceComparisonClass": "differential-source-geometry-confounded",
+      "targetRaster": {
+        "height": 512,
+        "width": 512
+      }
+    },
+    {
+      "absoluteConditioningGeometry": "anisotropically-resampled",
+      "captureEvidenceClass": "legacy-unbound",
+      "cellCount": 8,
+      "cells": [
+        {
+          "actualSourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0196629213483146,
+            "geometryPreserved": false,
+            "scaleX": 0.3595505617977528,
+            "scaleY": 0.3526170798898072,
+            "sourceAspectRatio": 0.9807162534435262,
+            "sourceHeight": 1452,
+            "sourceWidth": 1424,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 0,
+          "sourceAspectRatio": 0.9807162534435262,
+          "sourceHeight": 1452,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.06.23\u202fPM.png",
+          "sourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "sourceWidth": 1424,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0196629213483146,
+            "geometryPreserved": false,
+            "scaleX": 0.3595505617977528,
+            "scaleY": 0.3526170798898072,
+            "sourceAspectRatio": 0.9807162534435262,
+            "sourceHeight": 1452,
+            "sourceWidth": 1424,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 1,
+          "sourceAspectRatio": 0.9807162534435262,
+          "sourceHeight": 1452,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.06.23\u202fPM.png",
+          "sourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "sourceWidth": 1424,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 0.9619181946403385,
+            "geometryPreserved": false,
+            "scaleX": 0.3610719322990127,
+            "scaleY": 0.375366568914956,
+            "sourceAspectRatio": 1.0395894428152492,
+            "sourceHeight": 1364,
+            "sourceWidth": 1418,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 2,
+          "sourceAspectRatio": 1.0395894428152492,
+          "sourceHeight": 1364,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.14\u202fPM.png",
+          "sourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "sourceWidth": 1418,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 0.9619181946403385,
+            "geometryPreserved": false,
+            "scaleX": 0.3610719322990127,
+            "scaleY": 0.375366568914956,
+            "sourceAspectRatio": 1.0395894428152492,
+            "sourceHeight": 1364,
+            "sourceWidth": 1418,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 3,
+          "sourceAspectRatio": 1.0395894428152492,
+          "sourceHeight": 1364,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.14\u202fPM.png",
+          "sourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "sourceWidth": 1418,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0220588235294117,
+            "geometryPreserved": false,
+            "scaleX": 0.3764705882352941,
+            "scaleY": 0.3683453237410072,
+            "sourceAspectRatio": 0.9784172661870504,
+            "sourceHeight": 1390,
+            "sourceWidth": 1360,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 4,
+          "sourceAspectRatio": 0.9784172661870504,
+          "sourceHeight": 1390,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.40\u202fPM.png",
+          "sourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "sourceWidth": 1360,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0220588235294117,
+            "geometryPreserved": false,
+            "scaleX": 0.3764705882352941,
+            "scaleY": 0.3683453237410072,
+            "sourceAspectRatio": 0.9784172661870504,
+            "sourceHeight": 1390,
+            "sourceWidth": 1360,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 5,
+          "sourceAspectRatio": 0.9784172661870504,
+          "sourceHeight": 1390,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.40\u202fPM.png",
+          "sourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "sourceWidth": 1360,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.019277108433735,
+            "geometryPreserved": false,
+            "scaleX": 0.30843373493975906,
+            "scaleY": 0.30260047281323876,
+            "sourceAspectRatio": 0.9810874704491725,
+            "sourceHeight": 1692,
+            "sourceWidth": 1660,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 6,
+          "sourceAspectRatio": 0.9810874704491725,
+          "sourceHeight": 1692,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.10.47\u202fPM.png",
+          "sourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "sourceWidth": 1660,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.019277108433735,
+            "geometryPreserved": false,
+            "scaleX": 0.30843373493975906,
+            "scaleY": 0.30260047281323876,
+            "sourceAspectRatio": 0.9810874704491725,
+            "sourceHeight": 1692,
+            "sourceWidth": 1660,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 7,
+          "sourceAspectRatio": 0.9810874704491725,
+          "sourceHeight": 1692,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.10.47\u202fPM.png",
+          "sourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "sourceWidth": 1660,
+          "status": "inspected"
+        }
+      ],
+      "claimCeiling": {
+        "absoluteSourceGeometry": "lowered",
+        "promptOrSeedComparison": "not-the-primary-comparison",
+        "sourceMorphologyComparison": "not-admissible"
+      },
+      "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-neutral-multiseed-0816/manifest.json",
+      "sourceComparisonClass": "differential-source-geometry-confounded",
+      "targetRaster": {
+        "height": 512,
+        "width": 512
+      }
+    },
+    {
+      "absoluteConditioningGeometry": "anisotropically-resampled",
+      "captureEvidenceClass": "legacy-unbound",
+      "cellCount": 4,
+      "cells": [
+        {
+          "actualSourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0196629213483146,
+            "geometryPreserved": false,
+            "scaleX": 0.3595505617977528,
+            "scaleY": 0.3526170798898072,
+            "sourceAspectRatio": 0.9807162534435262,
+            "sourceHeight": 1452,
+            "sourceWidth": 1424,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 0,
+          "sourceAspectRatio": 0.9807162534435262,
+          "sourceHeight": 1452,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.06.23\u202fPM.png",
+          "sourceSha256": "d62c08dd86a925d8a21af0182fe45a60c59774a6ade5aa9be919a9ea1caa450f",
+          "sourceWidth": 1424,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 0.9619181946403385,
+            "geometryPreserved": false,
+            "scaleX": 0.3610719322990127,
+            "scaleY": 0.375366568914956,
+            "sourceAspectRatio": 1.0395894428152492,
+            "sourceHeight": 1364,
+            "sourceWidth": 1418,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 1,
+          "sourceAspectRatio": 1.0395894428152492,
+          "sourceHeight": 1364,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.14\u202fPM.png",
+          "sourceSha256": "70d661b305f0d96a8abce7035a14da9f617291f427c939963c1ece29e3f8a43d",
+          "sourceWidth": 1418,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.0220588235294117,
+            "geometryPreserved": false,
+            "scaleX": 0.3764705882352941,
+            "scaleY": 0.3683453237410072,
+            "sourceAspectRatio": 0.9784172661870504,
+            "sourceHeight": 1390,
+            "sourceWidth": 1360,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 2,
+          "sourceAspectRatio": 0.9784172661870504,
+          "sourceHeight": 1390,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.07.40\u202fPM.png",
+          "sourceSha256": "92b9b953f9bb77601f4cac122b1c292a7e2ba00a31f66436c9a1d2849aa353ee",
+          "sourceWidth": 1360,
+          "status": "inspected"
+        },
+        {
+          "actualSourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "captureEvidence": {
+            "status": "missing"
+          },
+          "geometry": {
+            "anisotropyRatio": 1.019277108433735,
+            "geometryPreserved": false,
+            "scaleX": 0.30843373493975906,
+            "scaleY": 0.30260047281323876,
+            "sourceAspectRatio": 0.9810874704491725,
+            "sourceHeight": 1692,
+            "sourceWidth": 1660,
+            "targetAspectRatio": 1.0,
+            "targetHeight": 512,
+            "targetWidth": 512
+          },
+          "index": 3,
+          "sourceAspectRatio": 0.9810874704491725,
+          "sourceHeight": 1692,
+          "sourcePath": "/Users/noahlyons/dev/operator-scratch/images/cat-skull-variants/Screenshot 2026-08-14 at 11.10.47\u202fPM.png",
+          "sourceSha256": "bbcf8d1b6bb1b0ac36422b719a3429240144d6f7dc9bebf5b221d7c195f03d2c",
+          "sourceWidth": 1660,
+          "status": "inspected"
+        }
+      ],
+      "claimCeiling": {
+        "absoluteSourceGeometry": "lowered",
+        "promptOrSeedComparison": "not-the-primary-comparison",
+        "sourceMorphologyComparison": "not-admissible"
+      },
+      "manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-variant-neutral-head-0816/manifest.json",
+      "sourceComparisonClass": "differential-source-geometry-confounded",
+      "targetRaster": {
+        "height": 512,
+        "width": 512
+      }
+    }
+  ],
+  "root": "/Users/noahlyons/.local/state/gpu-greenroom/outputs",
+  "schema": "kaminos.source-plate-geometry-audit.v0",
+  "summary": {
+    "absoluteConditioningGeometry": {
+      "anisotropically-resampled": 3
+    },
+    "comparisonClasses": {
+      "differential-source-geometry-confounded": 3
+    },
+    "differentialSourceGeometryConfounds": 3,
+    "matricesWithMissingSources": 0,
+    "matrixCount": 3
+  }
+}
