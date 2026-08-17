@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-render-report.v0",
+  "state": "source_like_views_rendered",
+  "phase": "complete",
+  "fixtureId": "procedural-groom-truth-v0",
+  "observationSha256": "ef7b5fd8159e850ffb1941302d3040e390c69ffea02384308f2ea4b8ca5da901",
+  "sourceManifestSha256": "f3ee4b11426aa1b11f99c35de8dba52f37b9534aef3bc3a2037457d402e57fe4",
+  "sourceBlendSha256": "c73dfbf343b0e77033ce299b3083d71078c2d06ff03f2dfb16ebc096a1a891e0",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRenderer": "BLENDER_EEVEE",
+  "effectiveBlenderVersion": "5.1.2",
+  "fiberCurveCount": 4374,
+  "lastTrustworthyEvidence": "three-digest-bound-source-like-renders",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-visual-inspection.v0",
+  "attempt": "source-like-pass-01",
+  "state": "rejected",
+  "inspectedViews": [
+    "source-like-front.png",
+    "source-like-left-three-quarter.png",
+    "source-like-right-three-quarter.png"
+  ],
+  "predicate": "The source-like arm must read as an ordinary groomed creature rather than a line-covered debugging sculpture.",
+  "visibleDelta": "Facial landmarks, natural lighting, a shared palette, and thinner denser fibers make the carrier recognizable as a cat.",
+  "failure": "The coat remains a cage of pale explicit curves over a smooth carrier rather than a perceptually integrated fibrous material. Separate inner-ear cones create four horn-like silhouettes in oblique views.",
+  "redirect": "Use a spatially varying displaced coat shell for mass and silhouette, retain fewer tapered curves only for flow cues, darken the shared coat palette, and remove protruding inner-ear geometry.",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

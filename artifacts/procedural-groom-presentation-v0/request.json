@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-request.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "sourceManifestPath": "artifacts/procedural-groom-truth-v0/generated/manifest.json",
+  "sourceManifestSha256": "f3ee4b11426aa1b11f99c35de8dba52f37b9534aef3bc3a2037457d402e57fe4",
+  "sourceBlendPath": "artifacts/procedural-groom-truth-v0/generated/procedural-groom-truth.blend",
+  "sourceBlendSha256": "c73dfbf343b0e77033ce299b3083d71078c2d06ff03f2dfb16ebc096a1a891e0",
+  "diagnosticObservationPath": "artifacts/procedural-groom-estimation-v0/observation.json",
+  "diagnosticObservationSha256": "2e91cfd90f7369c633232fa8c2e267ffe3ca8637dec9c26d75b8484ad067935b",
+  "claimCeiling": "Observation-domain friendliness under one procedural truth fixture only."
+}

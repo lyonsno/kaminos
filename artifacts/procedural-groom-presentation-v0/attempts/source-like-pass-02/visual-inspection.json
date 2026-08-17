@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-visual-inspection.v0",
+  "attempt": "source-like-pass-02",
+  "state": "rejected",
+  "inspectedViews": [
+    "source-like-front.png",
+    "source-like-left-three-quarter.png",
+    "source-like-right-three-quarter.png"
+  ],
+  "predicate": "The source-like arm must read as an ordinary groomed creature with perceptually distinct short, puffy, ruff, and whisker systems.",
+  "visibleDelta": "The displaced shell produces coherent material mass and silhouette; only two ear tips remain and the carrier reads immediately as a cat.",
+  "failure": "The shell dominates the sparse remaining curves, erasing most short-versus-puffy-versus-ruff microstructure. The result reads as a smooth low-poly cat with fringe, not a groom whose spatial regimes can be inferred.",
+  "redirect": "Retain a thinner smooth undercoat shell, seed tapered microfibers across carrier triangles from the authored region partition and flow rule, and reduce washout in studio lighting.",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

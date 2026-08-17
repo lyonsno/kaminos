@@ -1,0 +1,43 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-execution-receipts.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "attempts": [
+    {
+      "id": "source-like-pass-01",
+      "jobId": "e5f40313e0f7",
+      "status": "done",
+      "exitCode": 0,
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/render-procedural-groom-source-like.py -- <worktree>/artifacts/procedural-groom-presentation-v0/request.json <worktree>/artifacts/procedural-groom-presentation-v0/generated",
+      "nativeReceiptSha256": "dbebe4b5a683cf27d14d7325e5bb1bcc5d5c0fcff6e361e91e7f433cf7daa924",
+      "visualDisposition": "rejected-explicit-wire-cage"
+    },
+    {
+      "id": "source-like-pass-02",
+      "jobId": "a39d746ec668",
+      "status": "done",
+      "exitCode": 0,
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/render-procedural-groom-source-like.py -- <worktree>/artifacts/procedural-groom-presentation-v0/request.json <worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-02",
+      "nativeReceiptSha256": "450244c0d8e27899c34e984236acc89b1f58098acf8ca7b16486cb9e25f1936c",
+      "visualDisposition": "rejected-shell-erased-regime-microstructure"
+    },
+    {
+      "id": "source-like-pass-03",
+      "jobId": "349ac4dfe01a",
+      "status": "done",
+      "exitCode": 0,
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/render-procedural-groom-source-like.py -- <worktree>/artifacts/procedural-groom-presentation-v0/request.json <worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-03",
+      "nativeReceiptSha256": "4c80473440b9cb8c1d4d2c45d2ff27d98207db249ce40c08b99cab711e15236d",
+      "visualDisposition": "admitted-for-blind-estimator-input"
+    }
+  ],
+  "processTerminality": "three-succeeded",
+  "selectedAttempt": "source-like-pass-03",
+  "warningDisposition": {
+    "warning": "volatile_output",
+    "meaning": "Greenroom wrote into a volatile feature-worktree output directory.",
+    "continuation": "The complete paired evidence is committed and pushed before being treated as durable."
+  },
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

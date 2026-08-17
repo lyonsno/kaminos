@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-visual-inspection.v0",
+  "attempt": "source-like-pass-03",
+  "state": "admitted_for_blind_estimator_input",
+  "inspectedViews": [
+    "source-like-front.png",
+    "source-like-left-three-quarter.png",
+    "source-like-right-three-quarter.png"
+  ],
+  "predicate": "The source-like arm must read as an ordinary groomed creature rather than a line-covered debugging sculpture, while retaining perceptible short, puffy, ruff, and whisker structure.",
+  "visibleDelta": "The smoothed displaced undercoat supplies coherent mass; dense carrier-triangle microfibers supply directional texture; the short side remains close, the puffy side has longer stand-off, the lower ruff forms a heavier band, and whiskers remain legible. The image reads as a shaded cat coat rather than exposed curve construction.",
+  "limitations": "The carrier and ears remain deliberately simple and the groom is not production-realistic. This is sufficient only to remove the gross diagnostic-render distribution shift for a paired estimator assay.",
+  "visualAdmission": false,
+  "scientificAdmission": false,
+  "estimatorInputAdmission": true
+}

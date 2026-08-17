@@ -1,0 +1,23 @@
+{
+  "name": "request",
+  "job_type": "kaminos_blender_cast_cleanup",
+  "job_id": "a39d746ec668",
+  "input_path": "<worktree>/artifacts/procedural-groom-presentation-v0/request.json",
+  "input_name": "request.json",
+  "params": {
+    "worker": "<worktree>/tools/render-procedural-groom-source-like.py"
+  },
+  "output_files": [
+    "diagnostic-front.png",
+    "diagnostic-left-three-quarter.png",
+    "diagnostic-right-three-quarter.png",
+    "observation.json",
+    "procedural-groom-source-like.blend",
+    "render-report.json",
+    "source-like-front.png",
+    "source-like-left-three-quarter.png",
+    "source-like-right-three-quarter.png"
+  ],
+  "created_at": 1786932473.8423722,
+  "duration_s": 2.2
+}

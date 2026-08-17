@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.procedural-groom-observation.v0",
+  "observationId": "procedural-groom-source-like-v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "digest": "0d15b68b5254c92d9a20a75ed6c28a2160e89a457df510a3618503e257a3ff9b",
+  "digestBasis": "sha256 of generated/observation.json",
+  "truthExposure": "withheld",
+  "requestedRoute": "kaminos:groom-source-like-observation.v0",
+  "effectiveRoute": "kaminos:groom-source-like-observation.v0",
+  "sourceWitness": {
+    "path": "attempts/source-like-pass-03/observation.json",
+    "sha256": "0d15b68b5254c92d9a20a75ed6c28a2160e89a457df510a3618503e257a3ff9b",
+    "byteLength": 5227
+  },
+  "views": [
+    {
+      "id": "front",
+      "path": "attempts/source-like-pass-03/source-like-front.png",
+      "sha256": "71494134e5a0a66f9da79c1466da72110036eae0572efb3d49c910c6c6372aff",
+      "byteLength": 910785,
+      "requestedPose": {
+        "position": [
+          0.0,
+          0.6,
+          3.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "left-three-quarter",
+      "path": "attempts/source-like-pass-03/source-like-left-three-quarter.png",
+      "sha256": "3182d28240206ec3979e49f6347d7cec53da52815c5f1daa9b9e5c557eb7432c",
+      "byteLength": 912918,
+      "requestedPose": {
+        "position": [
+          -2.1,
+          0.6,
+          2.1
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "right-three-quarter",
+      "path": "attempts/source-like-pass-03/source-like-right-three-quarter.png",
+      "sha256": "e08834ac020c3fd97c835be2cd4a8e9d67cc14310997f90296a10c7df896b2fe",
+      "byteLength": 932908,
+      "requestedPose": {
+        "position": [
+          2.1,
+          0.6,
+          2.1
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    }
+  ],
+  "visualAdmission": false,
+  "scientificAdmission": false
+}
