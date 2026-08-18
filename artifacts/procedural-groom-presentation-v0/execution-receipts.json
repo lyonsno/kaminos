@@ -28,11 +28,20 @@
       "exitCode": 0,
       "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/render-procedural-groom-source-like.py -- <worktree>/artifacts/procedural-groom-presentation-v0/request.json <worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-03",
       "nativeReceiptSha256": "4c80473440b9cb8c1d4d2c45d2ff27d98207db249ce40c08b99cab711e15236d",
-      "visualDisposition": "admitted-for-blind-estimator-input"
+      "visualDisposition": "superseded-after-operator-rejected-density-as-roughly-an-order-of-magnitude-too-sparse"
+    },
+    {
+      "id": "source-like-pass-04-density12x",
+      "jobId": "61ed974a32a2",
+      "status": "done",
+      "exitCode": 0,
+      "effectiveRoute": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <worktree>/tools/render-procedural-groom-source-like.py -- <worktree>/artifacts/procedural-groom-presentation-v0/request-density12x.json <worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-04-density12x",
+      "nativeReceiptSha256": "4acdd5d185a86a052f1c0df52b3fa38bb7a2286cb9c31128ca1976cbf15c7ea8",
+      "visualDisposition": "agent-inspected-awaiting-operator-density-admission"
     }
   ],
-  "processTerminality": "three-succeeded",
-  "selectedAttempt": "source-like-pass-03",
+  "processTerminality": "four-succeeded",
+  "selectedAttempt": "source-like-pass-04-density12x-pending-operator-admission",
   "warningDisposition": {
     "warning": "volatile_output",
     "meaning": "Greenroom wrote into a volatile feature-worktree output directory.",

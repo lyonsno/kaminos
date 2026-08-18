@@ -60,6 +60,13 @@ def build(observation_path: Path, repo_root: Path, output_path: Path) -> dict:
         </section>""")
 
     approximation = observation["targetDistributionApproximation"]
+    density_audit = ""
+    if "effectiveDensityMultiplier" in approximation:
+        density_audit = (
+            f'<p>Density pressure: <code>{e(approximation["effectiveDensityMultiplier"])}×</code> · '
+            f'baseline coat fibers <code>{e(approximation["baselineCoatFiberCurveCount"])}</code> · '
+            f'effective coat fibers <code>{e(approximation["coatFiberCurveCount"])}</code></p>'
+        )
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Procedural Groom Presentation Pair v0</title>
@@ -76,7 +83,7 @@ def build(observation_path: Path, repo_root: Path, output_path: Path) -> dict:
 </div></section>
 {''.join(view_rows)}
 <section class="panel truth"><a href="../procedural-groom-truth-v0/generated/neutral-dense.png"><img src="../procedural-groom-truth-v0/generated/neutral-dense.png" alt="Membership-colored procedural groom truth"></a><div><h2>Hidden membership reference</h2><p>This color-coded plate remains truth-only and is never sent to the estimator. Cyan is short coat, orange is puffy coat, purple is ruff, and cream is whiskers.</p><p>The source-like arm deliberately uses one randomized tawny palette across all coat systems so color cannot carry membership.</p></div></section>
-<section class="panel audit"><h2>Audit</h2><p class="pass">Preflight: {e(report['state'])}</p><p>Observation: <code>{e(observation['observationId'])}</code> · route <code>{e(observation['effectiveRoute'])}</code></p><p>Renderer: <code>{e(approximation['renderer'])}</code> · Blender <code>{e(approximation['blenderVersion'])}</code> · rendered fiber curves <code>{e(approximation['fiberCurveCount'])}</code></p><p>Claim ceiling: {e(observation['claimCeiling'])}</p><p>Visual admission: false · scientific admission: false.</p></section>
+<section class="panel audit"><h2>Audit</h2><p class="pass">Preflight: {e(report['state'])}</p><p>Observation: <code>{e(observation['observationId'])}</code> · route <code>{e(observation['effectiveRoute'])}</code></p><p>Renderer: <code>{e(approximation['renderer'])}</code> · Blender <code>{e(approximation['blenderVersion'])}</code> · rendered fiber curves <code>{e(approximation['fiberCurveCount'])}</code></p>{density_audit}<p>Claim ceiling: {e(observation['claimCeiling'])}</p><p>Visual admission: false · scientific admission: false.</p></section>
 </main></body></html>"""
     output_path.write_text("\n".join(line.rstrip() for line in page.splitlines()) + "\n")
     return report

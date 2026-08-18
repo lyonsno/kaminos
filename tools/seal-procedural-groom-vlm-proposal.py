@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +88,18 @@ def build_proposal_seal(
         boxes = system.get("bounding_boxes")
         if not isinstance(boxes, list) or len(boxes) != len(views):
             raise ValueError(f"{system_id}: inventory must provide one box per view")
+        for view_index, box in enumerate(boxes):
+            if not isinstance(box, dict):
+                raise ValueError(f"{system_id} view {view_index}: box must be an object")
+            coordinates = []
+            for field in ("x_min", "y_min", "x_max", "y_max"):
+                value = box.get(field)
+                if not isinstance(value, (int, float)) or not math.isfinite(value) or not 0.0 <= float(value) <= 1.0:
+                    raise ValueError(f"{system_id} view {view_index}: box coordinates must be normalized to [0,1]")
+                coordinates.append(float(value))
+            x_min, y_min, x_max, y_max = coordinates
+            if x_max <= x_min or y_max <= y_min:
+                raise ValueError(f"{system_id} view {view_index}: box must have positive area")
         system_ids.append(system_id)
 
     effective_model = report.get("effectiveModel")

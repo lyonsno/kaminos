@@ -16,6 +16,11 @@ BUILDER_SPEC = importlib.util.spec_from_file_location("procedural_groom_presenta
 BUILDER = importlib.util.module_from_spec(BUILDER_SPEC)
 assert BUILDER_SPEC.loader is not None
 BUILDER_SPEC.loader.exec_module(BUILDER)
+PREPARER_PATH = Path(__file__).parents[1] / "tools" / "prepare-procedural-groom-source-like-vlm-observation.py"
+PREPARER_SPEC = importlib.util.spec_from_file_location("procedural_groom_source_like_vlm_preparer", PREPARER_PATH)
+PREPARER = importlib.util.module_from_spec(PREPARER_SPEC)
+assert PREPARER_SPEC.loader is not None
+PREPARER_SPEC.loader.exec_module(PREPARER)
 
 
 def digest(path: Path) -> str:
@@ -86,6 +91,10 @@ class SourceLikeObservationContractTest(unittest.TestCase):
                 "renderer": "BLENDER_EEVEE",
                 "blenderVersion": "5.1.2",
                 "fiberCurveCount": 2048,
+                "baselineCoatFiberCurveCount": 2000,
+                "coatFiberCurveCount": 24000,
+                "requestedDensityMultiplier": 12,
+                "effectiveDensityMultiplier": 12,
             },
             "views": self.views,
             "claimCeiling": "Observation-domain friendliness under one authored fixture only.",
@@ -133,6 +142,20 @@ class SourceLikeObservationContractTest(unittest.TestCase):
         self.assertRegex(joined, "membership")
         self.assertRegex(joined, "camera")
 
+    def test_declared_density_pressure_must_match_effective_coat_sampling(self):
+        approximation = self.candidate["targetDistributionApproximation"]
+        approximation["effectiveDensityMultiplier"] = 10
+        approximation["coatFiberCurveCount"] = 20000
+        report = self.evaluate()
+        self.assertEqual(report["state"], "invalid_presentation_pair")
+        self.assertRegex("\n".join(report["failures"]), "density multiplier")
+
+        approximation["effectiveDensityMultiplier"] = 12
+        approximation["coatFiberCurveCount"] = 23000
+        report = self.evaluate()
+        self.assertEqual(report["state"], "invalid_presentation_pair")
+        self.assertRegex("\n".join(report["failures"]), "coat fiber count")
+
     def test_review_page_collects_every_pair_without_private_paths(self):
         observation_path = self.observation_dir / "observation.json"
         observation_path.write_text(json.dumps(self.candidate))
@@ -145,7 +168,19 @@ class SourceLikeObservationContractTest(unittest.TestCase):
             self.assertIn(f"source-like-{view_id}.png", page)
         self.assertIn("Same hair truth, friendlier eyes", page)
         self.assertIn("Only variable", page)
+        self.assertIn("Density pressure", page)
+        self.assertIn("12×", page)
         self.assertNotIn(str(self.root), page)
+
+    def test_vlm_projection_preserves_the_exact_dense_observation_identity(self):
+        self.candidate["observationId"] = "procedural-groom-source-like-v0-density-12x"
+        source_path = self.observation_dir / "dense-observation.json"
+        source_path.write_text(json.dumps(self.candidate))
+        output_path = self.observation_dir / "vlm-observation.json"
+        projected = PREPARER.project_source_like_observation(source_path, output_path)
+        self.assertEqual(projected["observationId"], self.candidate["observationId"])
+        self.assertEqual(projected["sourceObservationId"], self.candidate["observationId"])
+        self.assertEqual(projected["sourceWitness"]["sha256"], digest(source_path))
 
 
 if __name__ == "__main__":

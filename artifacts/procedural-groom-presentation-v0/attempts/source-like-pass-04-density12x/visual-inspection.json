@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-visual-inspection.v0",
+  "attemptId": "source-like-pass-04-density12x",
+  "jobId": "61ed974a32a2",
+  "inspectedViews": [
+    {
+      "id": "front",
+      "sha256": "b697431f47e63fd7c272d2351969021ae663474b46c889084fce0a504061505b"
+    },
+    {
+      "id": "left-three-quarter",
+      "sha256": "3cde18912defd55b3301f1b1ea4cdc26c0d1dcf5d7281e3605f42e5529b695c2"
+    },
+    {
+      "id": "right-three-quarter",
+      "sha256": "e0586e9950ffd24c7844d90240c0bc4ea8d8beb7cafa687484dd6b311df3ce8a"
+    }
+  ],
+  "safetyCharacterization": "Deterministic authored cat geometry with ordinary coat fibers and whiskers; no generator or TRELLIS corruption, infestation, repeated-orifice, or misplaced-growth imagery.",
+  "densityFinding": "The 12x arm materially replaces sparse isolated bristles with a continuous sampled coat field. The short side remains surface-integrated, the puffy side has dense visible stand-off, and the lower ruff reads as a heavier directional curtain.",
+  "residualVisualFinding": "The puffy side remains deliberately brush-like and straight rather than a production groom; the bilateral regime boundary is conspicuous because the authored fixture is designed to make the categories falsifiable.",
+  "agentDisposition": "clears-bounded-density-predicate-for-operator-review",
+  "operatorAdmission": null,
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

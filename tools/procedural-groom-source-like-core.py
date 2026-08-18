@@ -107,6 +107,38 @@ def evaluate_source_like_observation(
         approximation_failures.append("target-distribution approximation must identify the Blender version")
     if not isinstance(approximation.get("fiberCurveCount"), int) or approximation.get("fiberCurveCount", 0) <= 0:
         approximation_failures.append("target-distribution approximation must report a positive fiber curve count")
+    density_fields = {
+        "baselineCoatFiberCurveCount",
+        "coatFiberCurveCount",
+        "requestedDensityMultiplier",
+        "effectiveDensityMultiplier",
+    }
+    if density_fields & set(approximation):
+        baseline_count = approximation.get("baselineCoatFiberCurveCount")
+        coat_count = approximation.get("coatFiberCurveCount")
+        requested_multiplier = approximation.get("requestedDensityMultiplier")
+        effective_multiplier = approximation.get("effectiveDensityMultiplier")
+        if (
+            not isinstance(requested_multiplier, int)
+            or requested_multiplier < 1
+            or not isinstance(effective_multiplier, int)
+            or effective_multiplier < 1
+            or requested_multiplier != effective_multiplier
+        ):
+            approximation_failures.append("requested and effective density multiplier must match as positive integers")
+        if not isinstance(baseline_count, int) or baseline_count <= 0:
+            approximation_failures.append("baseline coat fiber count must be positive")
+        if not isinstance(coat_count, int) or coat_count <= 0:
+            approximation_failures.append("effective coat fiber count must be positive")
+        if (
+            isinstance(baseline_count, int)
+            and isinstance(coat_count, int)
+            and isinstance(effective_multiplier, int)
+            and baseline_count > 0
+            and effective_multiplier > 0
+            and coat_count != baseline_count * effective_multiplier
+        ):
+            approximation_failures.append("effective coat fiber count does not equal baseline times density multiplier")
     if not isinstance(observation.get("claimCeiling"), str) or not observation.get("claimCeiling"):
         approximation_failures.append("source-like observation requires an explicit claim ceiling")
     if approximation_failures:

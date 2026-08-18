@@ -1,0 +1,116 @@
+==========
+Files: ['<worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-03/source-like-front.png', '<worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-03/source-like-left-three-quarter.png', '<worktree>/artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-03/source-like-right-three-quarter.png']
+
+Prompt: <bos><start_of_turn>user
+You are observing three unlabeled, membership-neutral renders of the same procedural creature-head carrier from different viewpoints.
+
+Inventory every visibly distinct fibrous system you can justify from the images. Do not assume that supplied categories exist, and do not merge regions merely because they share color. For each proposed system, return:
+
+- a short locally descriptive id;
+- which views support it;
+- one concise literal phrase suitable for prompting an image segmenter;
+- a normalized bounding box [x_min, y_min, x_max, y_max] for every supporting view;
+- dominant 2D flow direction [x, y] for every supporting view;
+- relative length, density, outward puff, and confidence in [0, 1];
+- the visual evidence that makes it distinct from its nearest neighboring system.
+
+Separately inspect for whiskers. If whiskers are present, do not propose segmenting individual strands. Locate the left and right muzzle pads from which they emerge, provide one literal segmenter phrase for each pad, and estimate whisker presence probability, length relative to muzzle width, sparseness, fan angle, sag, and confidence. If they are absent or ambiguous, say so explicitly.
+
+Return JSON only. Preserve uncertainty. Do not invent hidden 3D structure, anatomy, material identity, or production suitability.
+<start_of_image><start_of_image><start_of_image><end_of_turn>
+<start_of_turn>model
+
+```json
+{
+  "systems": [
+    {
+      "id": "main_fur",
+      "views": ["view1", "view2", "view3"],
+      "segmenter_phrase": "Diffuse head fur",
+      "bounding_boxes": [
+        {"x_min": 0, "y_min": 0, "x_max": 100, "y_max": 100},
+        {"x_min": 0, "y_min": 0, "x_max": 100, "y_max": 100},
+        {"x_min": 0, "y_min": 0, "x_max": 100, "y_max": 100}
+      ],
+      "flow_directions": [
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0}
+      ],
+      "relative_length": 0.7,
+      "density": 0.8,
+      "outward_puff": 0.6,
+      "confidence": 0.9,
+      "visual_evidence": "The overall texture and distribution of the fur across the head and upper body.  The slight variation in shading suggests a complex surface."
+    },
+    {
+      "id": "cheek_fur",
+      "views": ["view1", "view2", "view3"],
+      "segmenter_phrase": "Dense cheek fur",
+      "bounding_boxes": [
+        {"x_min": 20, "y_min": 20, "x_max": 60, "y_max": 40},
+        {"x_min": 20, "y_min": 20, "x_max": 60, "y_max": 40},
+        {"x_min": 20, "y_min": 20, "x_max": 60, "y_max": 40}
+      ],
+      "flow_directions": [
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0}
+      ],
+      "relative_length": 0.3,
+      "density": 0.9,
+      "outward_puff": 0.7,
+      "confidence": 0.8,
+      "visual_evidence": "Concentrated fur on the cheeks, exhibiting a slightly denser texture and a more localized distribution compared to the main fur."
+    },
+    {
+      "id": "nose_fur",
+      "views": ["view1", "view2", "view3"],
+      "segmenter_phrase": "Nasal fur patch",
+      "bounding_boxes": [
+        {"x_min": 70, "y_min": 50, "x_max": 90, "y_max": 70},
+        {"x_min": 70, "y_min": 50, "x_max": 90, "y_max": 70},
+        {"x_min": 70, "y_min": 50, "x_max": 90, "y_max": 70}
+      ],
+      "flow_directions": [
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0},
+        {"x": 0, "y": 0}
+      ],
+      "relative_length": 0.2,
+      "density": 0.8,
+      "outward_puff": 0.6,
+      "confidence": 0.7,
+      "visual_evidence": "A small, localized patch of fur directly below the nose, exhibiting a slightly different texture and color compared to the surrounding fur."
+    }
+  ],
+  "whiskers": [
+    {
+      "pad_side": "left",
+      "segmenter_phrase": "Left muzzle pad",
+      "whisker_presence_probability": 0.9,
+      "length_relative_to_width": 0.6,
+      "sparseness": 0.7,
+      "fan_angle": 30,
+      "sag": 0.2,
+      "confidence": 0.8,
+      "visual_evidence": "A small, fleshy pad on the left side of the muzzle, with a few short whiskers emerging from it."
+    },
+    {
+      "pad_side": "right",
+      "segmenter_phrase": "Right muzzle pad",
+      "whisker_presence_probability": 0.8,
+      "length_relative_to_width": 0.5,
+      "sparseness": 0.6,
+      "fan_angle": 25,
+      "sag": 0.1,
+      "confidence": 0.7,
+      "visual_evidence": "A similar fleshy pad on the right side of the muzzle, with a few whiskers extending from it. Slightly less dense than the left pad."
+    }
+  ]
+}
+```
+==========
+Prompt: 1062 tokens, 438.837 tokens-per-sec
+Generation: 1205 tokens, 138.896 tokens-per-sec
+Peak memory: 6.836 GB

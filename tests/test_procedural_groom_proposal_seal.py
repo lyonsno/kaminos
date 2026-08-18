@@ -28,7 +28,11 @@ class ProposalSealContractTest(unittest.TestCase):
                 {
                     "id": "short-coat",
                     "segmenter_phrase": "short fur on the cat torso",
-                    "bounding_boxes": [{}, {}, {}],
+                    "bounding_boxes": [
+                        {"x_min": 0.1, "y_min": 0.2, "x_max": 0.8, "y_max": 0.9},
+                        {"x_min": 0.1, "y_min": 0.2, "x_max": 0.8, "y_max": 0.9},
+                        {"x_min": 0.1, "y_min": 0.2, "x_max": 0.8, "y_max": 0.9},
+                    ],
                 }
             ]
         }
@@ -96,6 +100,22 @@ class ProposalSealContractTest(unittest.TestCase):
             ({"systems": [{"id": "coat", "segmenter_phrase": "", "bounding_boxes": [{}, {}, {}]}]}, "segmenter phrase"),
             ({"systems": [{"id": "coat", "segmenter_phrase": "fur", "bounding_boxes": [{}]}]}, "box per view"),
         ):
+            with self.assertRaisesRegex(ValueError, message):
+                MODULE.build_proposal_seal(
+                    observation=self.observation,
+                    inventory=inventory,
+                    report=self.report,
+                    observation_file_sha256=digest("f"),
+                    inventory_sha256=digest("c"),
+                    report_sha256=digest("0"),
+                )
+
+    def test_rejects_percent_or_degenerate_boxes_before_sealing(self):
+        for box, message in (
+            ({"x_min": 20, "y_min": 20, "x_max": 60, "y_max": 40}, "normalized"),
+            ({"x_min": 0.5, "y_min": 0.2, "x_max": 0.5, "y_max": 0.9}, "positive area"),
+        ):
+            inventory = {"systems": [dict(self.inventory["systems"][0], bounding_boxes=[box, box, box])]}
             with self.assertRaisesRegex(ValueError, message):
                 MODULE.build_proposal_seal(
                     observation=self.observation,

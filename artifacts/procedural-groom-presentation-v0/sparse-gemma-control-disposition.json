@@ -1,0 +1,20 @@
+{
+  "schema": "kaminos.procedural-groom-sparse-vlm-control-disposition.v0",
+  "jobId": "ee7b4f881275",
+  "nativeReceiptSha256": "e50c2a4ed9acde1120130f2897f2a6f56ecd9152eb43935a37d77d71f49bffeb",
+  "observationId": "procedural-groom-source-like-v0",
+  "observationDigest": "0d15b68b5254c92d9a20a75ed6c28a2160e89a457df510a3618503e257a3ff9b",
+  "effectiveModel": "mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveBackend": "mlx-metal",
+  "effectiveDevice": "Device(gpu, 0)",
+  "terminalState": "raw_inventory_captured",
+  "inventorySha256": "7f6d3936313ed74e65859cf20a75ee926ad925ac621b3852f9b25cd009dcf674",
+  "disposition": "superseded-sparse-observation-control-do-not-seal-or-segment",
+  "findings": [
+    "The inventory collapsed authored short, puffy, and ruff regimes into generic main_fur, cheek_fur, and nose_fur systems.",
+    "The inventory returned purported normalized boxes in 0..100 units despite the prompt requiring [0,1].",
+    "The normalized-box proposal seal rejects this inventory before SAM or truth release."
+  ],
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

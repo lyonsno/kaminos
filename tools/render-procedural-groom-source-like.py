@@ -184,10 +184,16 @@ def sample_triangle_point(mesh: bpy.types.Mesh, polygon: bpy.types.MeshPolygon, 
     return point, normal
 
 
-def build_microfur(carrier: bpy.types.Object, *, seed: int = 8103) -> tuple[list[list[Vector]], dict[str, int]]:
+def build_microfur(
+    carrier: bpy.types.Object,
+    *,
+    density_multiplier: int,
+    seed: int = 8103,
+) -> tuple[list[list[Vector]], dict[str, int], dict[str, int]]:
     rng = random.Random(seed)
     curves: list[list[Vector]] = []
     counts = {"short": 0, "puffy": 0, "ruff": 0}
+    baseline_counts = {"short": 0, "puffy": 0, "ruff": 0}
     specs = {
         "short": {"length": 0.065, "lift": 0.24, "flow": 0.82, "samples": 2},
         "puffy": {"length": 0.19, "lift": 0.86, "flow": 0.34, "samples": 3},
@@ -200,7 +206,8 @@ def build_microfur(carrier: bpy.types.Object, *, seed: int = 8103) -> tuple[list
         if regime == "pad":
             continue
         spec = specs[regime]
-        for _ in range(spec["samples"]):
+        baseline_counts[regime] += spec["samples"]
+        for _ in range(spec["samples"] * density_multiplier):
             root, normal = sample_triangle_point(mesh, polygon, rng)
             flow = projected_flow(normal)
             bitangent = normal.cross(flow).normalized()
@@ -217,7 +224,7 @@ def build_microfur(carrier: bpy.types.Object, *, seed: int = 8103) -> tuple[list
                 points.append(point)
             curves.append(points)
             counts[regime] += 1
-    return curves, counts
+    return curves, counts, baseline_counts
 
 
 def curve_points(source: bpy.types.Object) -> Iterable[list[Vector]]:
@@ -421,6 +428,9 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         raise ValueError("fixture identity mismatch")
     if request.get("requestedRoute") != REQUIRED_ROUTE:
         raise ValueError("request does not name the protected Blender route")
+    density_multiplier = request.get("densityMultiplier")
+    if not isinstance(density_multiplier, int) or density_multiplier < 1:
+        raise ValueError("densityMultiplier must be a positive integer")
 
     source_manifest_path = (repo_root / request["sourceManifestPath"]).resolve()
     source_blend_path = (repo_root / request["sourceBlendPath"]).resolve()
@@ -467,8 +477,13 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     coat_shell = create_coat_shell(carrier, coat_surface)
 
     generated_objects = []
-    microfur_curves, microfur_counts = build_microfur(carrier)
-    fiber_count = len(microfur_curves)
+    microfur_curves, microfur_counts, baseline_microfur_counts = build_microfur(
+        carrier,
+        density_multiplier=density_multiplier,
+    )
+    coat_fiber_count = len(microfur_curves)
+    baseline_coat_fiber_count = sum(baseline_microfur_counts.values())
+    fiber_count = coat_fiber_count
     generated_objects.append(add_curve_object(
         "SourceLikeCarrierMicrofur", microfur_curves, coat_materials, bevel_depth=0.0022, seed=8103,
     ))
@@ -533,7 +548,7 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     observation = {
         "schema": SCHEMA,
         "fixtureId": FIXTURE_ID,
-        "observationId": OBSERVATION_ID,
+        "observationId": f"{OBSERVATION_ID}-density-{density_multiplier}x",
         "requestedRoute": request["requestedRoute"],
         "effectiveRoute": REQUIRED_ROUTE,
         "presentationVariable": "diagnostic-viewer-vs-source-like-groom",
@@ -558,6 +573,11 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
             "blenderVersion": bpy.app.version_string,
             "fiberCurveCount": fiber_count,
             "fiberCountsByRegime": microfur_counts,
+            "baselineFiberCountsByRegime": baseline_microfur_counts,
+            "baselineCoatFiberCurveCount": baseline_coat_fiber_count,
+            "coatFiberCurveCount": coat_fiber_count,
+            "requestedDensityMultiplier": density_multiplier,
+            "effectiveDensityMultiplier": density_multiplier,
             "coatSurfaceModel": "spatially-varying-displaced-shell-from-authored-regime-partition",
             "fiberConstruction": "carrier-triangle-microfur-following-authored-region-and-flow-rule",
             "coatShellObject": coat_shell.name,
@@ -587,6 +607,10 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         "effectiveRenderer": bpy.context.scene.render.engine,
         "effectiveBlenderVersion": bpy.app.version_string,
         "fiberCurveCount": fiber_count,
+        "baselineCoatFiberCurveCount": baseline_coat_fiber_count,
+        "coatFiberCurveCount": coat_fiber_count,
+        "requestedDensityMultiplier": density_multiplier,
+        "effectiveDensityMultiplier": density_multiplier,
         "lastTrustworthyEvidence": "three-digest-bound-source-like-renders",
         "visualAdmission": False,
         "scientificAdmission": False,
