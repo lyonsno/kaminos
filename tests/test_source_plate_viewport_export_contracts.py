@@ -178,3 +178,16 @@ def test_addon_sidecar_names_effective_view_shading_visibility_and_source_state(
         '"output"',
     ):
         assert contract_key in source
+
+
+def test_addon_keeps_the_repeated_export_loop_legible_in_a_narrow_sidebar():
+    assert ADDON_PATH.is_file(), "Blender add-on entrypoint is missing"
+    source = ADDON_PATH.read_text()
+
+    assert 'layout.label(text="Plate Label")' in source
+    assert 'layout.prop(scene, "kaminos_source_plate_label", text="")' in source
+    assert 'bl_idname = "KAMINOS_PT_source_plate_settings"' in source
+    assert 'bl_parent_id = "KAMINOS_PT_source_plate"' in source
+    assert 'bl_options = {"DEFAULT_CLOSED"}' in source
+    assert 'layout.label(text="Output Folder")' in source
+    assert 'layout.prop(scene, "kaminos_source_plate_output_root", text="")' in source

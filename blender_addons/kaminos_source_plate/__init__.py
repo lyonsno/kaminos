@@ -20,7 +20,7 @@ from .capture_core import (
 bl_info = {
     "name": "Kaminos Source Plate",
     "author": "Kaminos",
-    "version": (0, 1, 0),
+    "version": (0, 1, 1),
     "blender": (4, 3, 0),
     "location": "View3D > Sidebar > Kaminos",
     "description": "Export the current viewport as a fixed-raster assay conditioning plate",
@@ -293,13 +293,33 @@ class KAMINOS_PT_source_plate(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+        layout.label(text="Plate Label")
+        layout.prop(scene, "kaminos_source_plate_label", text="")
         layout.operator(KAMINOS_OT_export_assay_plate.bl_idname, icon="RENDER_STILL")
-        layout.prop(scene, "kaminos_source_plate_label", text="Label")
+
+
+class KAMINOS_PT_source_plate_settings(bpy.types.Panel):
+    bl_label = "Capture Settings"
+    bl_idname = "KAMINOS_PT_source_plate_settings"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Kaminos"
+    bl_parent_id = "KAMINOS_PT_source_plate"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
         layout.prop(scene, "kaminos_source_plate_resolution", text="Raster")
-        layout.prop(scene, "kaminos_source_plate_output_root", text="Output")
+        layout.label(text="Output Folder")
+        layout.prop(scene, "kaminos_source_plate_output_root", text="")
 
 
-CLASSES = (KAMINOS_OT_export_assay_plate, KAMINOS_PT_source_plate)
+CLASSES = (
+    KAMINOS_OT_export_assay_plate,
+    KAMINOS_PT_source_plate,
+    KAMINOS_PT_source_plate_settings,
+)
 
 
 def register():
