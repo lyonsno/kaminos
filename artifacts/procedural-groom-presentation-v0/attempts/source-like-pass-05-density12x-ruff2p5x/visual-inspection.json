@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-visual-inspection.v0",
+  "attemptId": "source-like-pass-05-density12x-ruff2p5x",
+  "jobId": "75d5638fde63",
+  "inspectedViews": [
+    {
+      "id": "front",
+      "sha256": "5a7fc0e64d20ed2c55ceddd6417af98641121eaa3cd8e8b9ae78973490117f2d"
+    },
+    {
+      "id": "left-three-quarter",
+      "sha256": "a55b794bb1e76abcbd214a88fe9215edb4f0b43b5645c8e82bc3b9540a52e973"
+    },
+    {
+      "id": "right-three-quarter",
+      "sha256": "ad40ffd83a81e805392b9d90595c43267fca50d799fa155cad070630121e0516"
+    }
+  ],
+  "safetyCharacterization": "Deterministic authored cat geometry with ordinary coat fibers and whiskers; no generator or TRELLIS corruption, infestation, repeated-orifice, or misplaced-growth imagery.",
+  "controlledVisualFinding": "The lower ruff is now constitutive at first glance in all three views: it forms a long directional collar whose omission or collapse into the puffy field would be an obvious residual. The top, face, whiskers, cameras, lighting, density, and non-ruff regimes remain visually stable.",
+  "residualVisualFinding": "The ruff is intentionally straight and highly regular, reading closer to a coarse mane or skirted collar than production groomed fur. That is the same accepted bristle-family residual amplified by length, not a new corruption or route failure.",
+  "agentDisposition": "clears-controlled-constitutive-ruff-predicate-for-identical-estimator-route",
+  "operatorAdmission": null,
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

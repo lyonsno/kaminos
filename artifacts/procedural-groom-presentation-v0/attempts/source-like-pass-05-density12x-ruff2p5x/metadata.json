@@ -1,0 +1,24 @@
+{
+  "name": "request-density12x-ruff2p5x",
+  "job_type": "kaminos_blender_cast_cleanup",
+  "job_id": "75d5638fde63",
+  "input_path": "{repoRoot}/artifacts/procedural-groom-presentation-v0/request-density12x-ruff2p5x.json",
+  "input_name": "request-density12x-ruff2p5x.json",
+  "params": {
+    "worker": "{repoRoot}/tools/render-procedural-groom-source-like.py",
+    "cwd": "{repoRoot}"
+  },
+  "output_files": [
+    "diagnostic-front.png",
+    "diagnostic-left-three-quarter.png",
+    "diagnostic-right-three-quarter.png",
+    "observation.json",
+    "procedural-groom-source-like.blend",
+    "render-report.json",
+    "source-like-front.png",
+    "source-like-left-three-quarter.png",
+    "source-like-right-three-quarter.png"
+  ],
+  "created_at": 1787083326.12658,
+  "duration_s": 3.0
+}

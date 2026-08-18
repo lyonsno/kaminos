@@ -1,0 +1,19 @@
+{
+  "name": "observation",
+  "job_type": "kaminos_procedural_groom_source_like_vlm",
+  "job_id": "19468c5f4d0e",
+  "input_path": "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+  "input_name": "observation.json",
+  "params": {
+    "cwd": "{repoRoot}"
+  },
+  "output_files": [
+    "inventory.json",
+    "raw-stderr.txt",
+    "raw-stdout.txt",
+    "report.json",
+    "start.json"
+  ],
+  "created_at": 1787083646.979924,
+  "duration_s": 14.5
+}

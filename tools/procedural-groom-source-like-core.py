@@ -139,6 +139,55 @@ def evaluate_source_like_observation(
             and coat_count != baseline_count * effective_multiplier
         ):
             approximation_failures.append("effective coat fiber count does not equal baseline times density multiplier")
+    ruff_length_fields = {
+        "baselineFiberLengths",
+        "effectiveFiberLengths",
+        "requestedRuffLengthMultiplier",
+        "effectiveRuffLengthMultiplier",
+    }
+    if ruff_length_fields & set(approximation):
+        baseline_lengths = approximation.get("baselineFiberLengths")
+        effective_lengths = approximation.get("effectiveFiberLengths")
+        requested_ruff = approximation.get("requestedRuffLengthMultiplier")
+        effective_ruff = approximation.get("effectiveRuffLengthMultiplier")
+        valid_multiplier = (
+            not isinstance(requested_ruff, bool)
+            and isinstance(requested_ruff, (int, float))
+            and math.isfinite(float(requested_ruff))
+            and float(requested_ruff) > 0
+            and not isinstance(effective_ruff, bool)
+            and isinstance(effective_ruff, (int, float))
+            and math.isfinite(float(effective_ruff))
+            and math.isclose(float(requested_ruff), float(effective_ruff))
+        )
+        if not valid_multiplier:
+            approximation_failures.append("requested and effective ruff length multiplier must match as positive finite numbers")
+        required_regimes = {"short", "puffy", "ruff"}
+        valid_maps = all(
+            isinstance(lengths, dict)
+            and set(lengths) == required_regimes
+            and all(
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and math.isfinite(float(value))
+                and float(value) > 0
+                for value in lengths.values()
+            )
+            for lengths in (baseline_lengths, effective_lengths)
+        )
+        if not valid_maps:
+            approximation_failures.append("baseline and effective fiber lengths must cover short, puffy, and ruff")
+        else:
+            if any(
+                not math.isclose(float(baseline_lengths[regime]), float(effective_lengths[regime]))
+                for regime in ("short", "puffy")
+            ):
+                approximation_failures.append("only ruff length may change in the paired threshold arm")
+            if valid_multiplier and not math.isclose(
+                float(effective_lengths["ruff"]),
+                float(baseline_lengths["ruff"]) * float(effective_ruff),
+            ):
+                approximation_failures.append("effective ruff length does not equal baseline ruff length times multiplier")
     if not isinstance(observation.get("claimCeiling"), str) or not observation.get("claimCeiling"):
         approximation_failures.append("source-like observation requires an explicit claim ceiling")
     if approximation_failures:

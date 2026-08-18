@@ -1,0 +1,193 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-observation.v0",
+  "fixtureId": "procedural-groom-truth-v0",
+  "observationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "presentationVariable": "diagnostic-viewer-vs-source-like-groom",
+  "heldConstant": [
+    "authored-carrier",
+    "groom-system-membership",
+    "guide-field",
+    "camera-poses",
+    "vlm-prompt",
+    "vlm-model",
+    "sam-model",
+    "truth-scoring"
+  ],
+  "source": {
+    "manifestPath": "artifacts/procedural-groom-truth-v0/generated/manifest.json",
+    "manifestSha256": "f3ee4b11426aa1b11f99c35de8dba52f37b9534aef3bc3a2037457d402e57fe4",
+    "blendPath": "artifacts/procedural-groom-truth-v0/generated/procedural-groom-truth.blend",
+    "blendSha256": "c73dfbf343b0e77033ce299b3083d71078c2d06ff03f2dfb16ebc096a1a891e0",
+    "diagnosticObservationPath": "artifacts/procedural-groom-estimation-v0/observation.json",
+    "diagnosticObservationSha256": "2e91cfd90f7369c633232fa8c2e267ffe3ca8637dec9c26d75b8484ad067935b"
+  },
+  "targetDistributionApproximation": {
+    "integratedFiberField": true,
+    "naturalShading": true,
+    "recognizableCarrierLandmarks": true,
+    "membershipColorEncoding": false,
+    "renderer": "BLENDER_EEVEE",
+    "blenderVersion": "5.1.2",
+    "fiberCurveCount": 43574,
+    "fiberCountsByRegime": {
+      "short": 11280,
+      "puffy": 15624,
+      "ruff": 16656
+    },
+    "baselineFiberCountsByRegime": {
+      "short": 940,
+      "puffy": 1302,
+      "ruff": 1388
+    },
+    "baselineCoatFiberCurveCount": 3630,
+    "coatFiberCurveCount": 43560,
+    "requestedDensityMultiplier": 12,
+    "effectiveDensityMultiplier": 12,
+    "baselineFiberLengths": {
+      "short": 0.065,
+      "puffy": 0.19,
+      "ruff": 0.34
+    },
+    "effectiveFiberLengths": {
+      "short": 0.065,
+      "puffy": 0.19,
+      "ruff": 0.8500000000000001
+    },
+    "requestedRuffLengthMultiplier": 2.5,
+    "effectiveRuffLengthMultiplier": 2.5,
+    "coatSurfaceModel": "spatially-varying-displaced-shell-from-authored-regime-partition",
+    "fiberConstruction": "carrier-triangle-microfur-following-authored-region-and-flow-rule",
+    "coatShellObject": "SourceLikeCoatShell",
+    "auxiliaryLandmarkGeometry": [
+      "SourceLikeEarLeft",
+      "SourceLikeEarRight",
+      "SourceLikeEyeLeft",
+      "SourceLikeEyeRight",
+      "SourceLikeNose"
+    ],
+    "coatPalettePolicy": "shared-randomized-palette-across-all-coat-regions"
+  },
+  "views": [
+    {
+      "id": "front",
+      "diagnostic": {
+        "path": "diagnostic-front.png",
+        "sha256": "c506ac773e3346b1fd69c51208da2fe628bd69dbf38c12159aab6a74dc2144a3",
+        "byteLength": 364366
+      },
+      "sourceLike": {
+        "path": "source-like-front.png",
+        "sha256": "5a7fc0e64d20ed2c55ceddd6417af98641121eaa3cd8e8b9ae78973490117f2d",
+        "byteLength": 968774
+      },
+      "cameraPosition": [
+        0.0,
+        0.6,
+        3.0
+      ],
+      "cameraTarget": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "blenderCameraPosition": [
+        0.0,
+        -7.919969032774023,
+        1.249538517047013
+      ],
+      "blenderCameraTarget": [
+        0.0,
+        -0.4567679455203046,
+        -0.24310170040373064
+      ],
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "left-three-quarter",
+      "diagnostic": {
+        "path": "diagnostic-left-three-quarter.png",
+        "sha256": "7a144063e044a2d886f50e7d3b1ec018f0983d4d880964b1ed21031b6649be3f",
+        "byteLength": 374281
+      },
+      "sourceLike": {
+        "path": "source-like-left-three-quarter.png",
+        "sha256": "a55b794bb1e76abcbd214a88fe9215edb4f0b43b5645c8e82bc3b9540a52e973",
+        "byteLength": 957326
+      },
+      "cameraPosition": [
+        -2.1,
+        0.6,
+        2.1
+      ],
+      "cameraTarget": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "blenderCameraPosition": [
+        -5.224240761077603,
+        -5.681008706597908,
+        1.249538517047013
+      ],
+      "blenderCameraTarget": [
+        0.0,
+        -0.4567679455203046,
+        -0.24310170040373064
+      ],
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "right-three-quarter",
+      "diagnostic": {
+        "path": "diagnostic-right-three-quarter.png",
+        "sha256": "570bab9f537286add21c3ee4f69cef6fe5330181e8d102e6eabd822bdfc6910c",
+        "byteLength": 396815
+      },
+      "sourceLike": {
+        "path": "source-like-right-three-quarter.png",
+        "sha256": "ad40ffd83a81e805392b9d90595c43267fca50d799fa155cad070630121e0516",
+        "byteLength": 995906
+      },
+      "cameraPosition": [
+        2.1,
+        0.6,
+        2.1
+      ],
+      "cameraTarget": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "blenderCameraPosition": [
+        5.224240761077603,
+        -5.681008706597908,
+        1.249538517047013
+      ],
+      "blenderCameraTarget": [
+        0.0,
+        -0.4567679455203046,
+        -0.24310170040373064
+      ],
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    }
+  ],
+  "products": [
+    {
+      "kind": "source-like-blend",
+      "path": "procedural-groom-source-like.blend",
+      "sha256": "4424cc2f7d72baddd5e8f5b03e372068326fba535f8cc2c2406ba8837f4eefa3",
+      "byteLength": 3147901
+    }
+  ],
+  "claimCeiling": "Observation-domain friendliness under one procedural truth fixture only; no estimator correctness, target-distribution equivalence, anatomical truth, production grooming, or visual admission.",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

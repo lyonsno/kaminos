@@ -1,6 +1,8 @@
 import hashlib
 import importlib.util
+import copy
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +23,9 @@ PREPARER_SPEC = importlib.util.spec_from_file_location("procedural_groom_source_
 PREPARER = importlib.util.module_from_spec(PREPARER_SPEC)
 assert PREPARER_SPEC.loader is not None
 PREPARER_SPEC.loader.exec_module(PREPARER)
+PAIR_BUILDER_PATH = Path(__file__).parents[1] / "tools" / "build-procedural-groom-threshold-review.py"
+PAIR_BUILDER_SPEC = importlib.util.spec_from_file_location("procedural_groom_threshold_review", PAIR_BUILDER_PATH)
+PAIR_BUILDER = importlib.util.module_from_spec(PAIR_BUILDER_SPEC)
 
 
 def digest(path: Path) -> str:
@@ -156,6 +161,27 @@ class SourceLikeObservationContractTest(unittest.TestCase):
         self.assertEqual(report["state"], "invalid_presentation_pair")
         self.assertRegex("\n".join(report["failures"]), "coat fiber count")
 
+    def test_declared_ruff_length_pressure_must_change_only_ruff_by_the_requested_factor(self):
+        approximation = self.candidate["targetDistributionApproximation"]
+        approximation.update({
+            "baselineFiberLengths": {"short": 0.065, "puffy": 0.19, "ruff": 0.34},
+            "effectiveFiberLengths": {"short": 0.065, "puffy": 0.19, "ruff": 0.85},
+            "requestedRuffLengthMultiplier": 2.5,
+            "effectiveRuffLengthMultiplier": 2.5,
+        })
+        self.assertEqual(self.evaluate()["state"], "presentation_pair_bound_for_visual_inspection")
+
+        approximation["effectiveFiberLengths"]["puffy"] = 0.21
+        report = self.evaluate()
+        self.assertEqual(report["state"], "invalid_presentation_pair")
+        self.assertRegex("\n".join(report["failures"]), "only ruff")
+
+        approximation["effectiveFiberLengths"]["puffy"] = 0.19
+        approximation["effectiveFiberLengths"]["ruff"] = 0.84
+        report = self.evaluate()
+        self.assertEqual(report["state"], "invalid_presentation_pair")
+        self.assertRegex("\n".join(report["failures"]), "ruff length")
+
     def test_review_page_collects_every_pair_without_private_paths(self):
         observation_path = self.observation_dir / "observation.json"
         observation_path.write_text(json.dumps(self.candidate))
@@ -181,6 +207,127 @@ class SourceLikeObservationContractTest(unittest.TestCase):
         self.assertEqual(projected["observationId"], self.candidate["observationId"])
         self.assertEqual(projected["sourceObservationId"], self.candidate["observationId"])
         self.assertEqual(projected["sourceWitness"]["sha256"], digest(source_path))
+
+    def test_vlm_projection_supports_an_independent_sibling_run_directory(self):
+        source_path = self.observation_dir / "dense-observation.json"
+        source_path.write_text(json.dumps(self.candidate))
+        output_path = self.root / "artifacts" / "estimation-runs" / "subtle-arm" / "observation.json"
+
+        projected = PREPARER.project_source_like_observation(source_path, output_path)
+
+        witness_path = (output_path.parent / projected["sourceWitness"]["path"]).resolve()
+        self.assertEqual(witness_path, source_path.resolve())
+        for source_view, projected_view in zip(self.candidate["views"], projected["views"]):
+            expected = (source_path.parent / source_view["sourceLike"]["path"]).resolve()
+            actual = (output_path.parent / projected_view["path"]).resolve()
+            self.assertEqual(actual, expected)
+
+    def test_threshold_review_collects_matched_subtle_and_constitutive_ruff_views(self):
+        assert PAIR_BUILDER_SPEC.loader is not None
+        PAIR_BUILDER_SPEC.loader.exec_module(PAIR_BUILDER)
+        baseline = copy.deepcopy(self.candidate)
+        baseline["observationId"] = "subtle-density12x"
+        baseline["targetDistributionApproximation"].update({
+            "baselineFiberLengths": {"short": 0.065, "puffy": 0.19, "ruff": 0.34},
+            "effectiveFiberLengths": {"short": 0.065, "puffy": 0.19, "ruff": 0.34},
+            "requestedRuffLengthMultiplier": 1.0,
+            "effectiveRuffLengthMultiplier": 1.0,
+        })
+        baseline_path = self.observation_dir / "baseline.json"
+        baseline_path.write_text(json.dumps(baseline))
+
+        successor_dir = self.root / "artifacts" / "constitutive"
+        successor_dir.mkdir()
+        successor = copy.deepcopy(baseline)
+        successor["observationId"] = "constitutive-ruff2p5x"
+        successor["targetDistributionApproximation"]["effectiveFiberLengths"]["ruff"] = 0.85
+        successor["targetDistributionApproximation"]["requestedRuffLengthMultiplier"] = 2.5
+        successor["targetDistributionApproximation"]["effectiveRuffLengthMultiplier"] = 2.5
+        for view in successor["views"]:
+            for arm in ("diagnostic", "sourceLike"):
+                original = self.observation_dir / view[arm]["path"]
+                target = successor_dir / view[arm]["path"]
+                shutil.copyfile(original, target)
+                if arm == "sourceLike":
+                    target.write_bytes(target.read_bytes() + b"-constitutive")
+                view[arm]["sha256"] = digest(target)
+                view[arm]["byteLength"] = target.stat().st_size
+        successor_path = successor_dir / "observation.json"
+        successor_path.write_text(json.dumps(successor))
+        output_path = self.root / "artifacts" / "threshold-review.html"
+
+        report = PAIR_BUILDER.build(baseline_path, successor_path, self.root, output_path)
+
+        self.assertEqual(report["state"], "threshold_pair_bound_for_visual_inspection")
+        page = output_path.read_text()
+        self.assertIn("Subtle ruff", page)
+        self.assertIn("Constitutive ruff", page)
+        self.assertIn("2.5×", page)
+        self.assertEqual(page.count("source-like-"), 6)
+        self.assertNotIn(str(self.root), page)
+
+    def test_threshold_review_binds_estimator_routes_and_overlay_bytes(self):
+        assert PAIR_BUILDER_SPEC.loader is not None
+        PAIR_BUILDER_SPEC.loader.exec_module(PAIR_BUILDER)
+        run_root = self.root / "artifacts" / "runs" / "subtle"
+        vlm_root = run_root / "vlm-raw"
+        sam_root = run_root / "sam3-raw"
+        overlay = sam_root / "overlays" / "front" / "main_fur.png"
+        mask = sam_root / "masks" / "front" / "main_fur.png"
+        overlay.parent.mkdir(parents=True)
+        mask.parent.mkdir(parents=True)
+        overlay.write_bytes(b"overlay")
+        mask.write_bytes(b"mask")
+        (run_root / "run-manifest.json").write_text(json.dumps({
+            "schema": "kaminos.procedural-groom-estimation-assay-run.v0",
+            "armId": "subtle",
+            "requestedVlm": {"model": "gemma", "backend": "mlx-metal"},
+            "requestedSam": {"model": "sam3", "backend": "mlx-metal", "threshold": 0.1},
+        }))
+        (vlm_root / "inventory.json").parent.mkdir(parents=True)
+        (vlm_root / "inventory.json").write_text(json.dumps({"systems": [{"id": "main_fur"}]}))
+        (vlm_root / "report.json").write_text(json.dumps({
+            "state": "raw_inventory_captured",
+            "phase": "complete",
+            "requestedModel": "gemma",
+            "effectiveModel": "gemma",
+            "requestedBackend": "mlx-metal",
+            "effectiveBackend": "mlx-metal",
+        }))
+        (sam_root / "report.json").write_text(json.dumps({
+            "state": "segmentation_captured",
+            "phase": "complete",
+            "requestedModel": "sam3",
+            "effectiveModel": "sam3",
+            "requestedBackend": "mlx-metal",
+            "effectiveBackend": "mlx-metal",
+            "threshold": 0.1,
+            "masks": [{
+                "viewId": "front",
+                "proposalSystemId": "main_fur",
+                "state": "mask_captured",
+                "positivePixels": 42,
+                "mask": {"path": "masks/front/main_fur.png", "sha256": digest(mask), "byteLength": mask.stat().st_size},
+                "overlay": {"path": "overlays/front/main_fur.png", "sha256": digest(overlay), "byteLength": overlay.stat().st_size},
+            }],
+        }))
+        (run_root / "comparison.json").write_text(json.dumps({
+            "schema": "kaminos.procedural-groom-mask-comparison.v0",
+            "rows": [{
+                "viewId": "front",
+                "proposalSystemId": "main_fur",
+                "bestTruthMatch": "puffy-coat",
+                "bestMetrics": {"iou": 0.1, "precision": 0.2, "recall": 0.3},
+            }],
+        }))
+
+        loaded = PAIR_BUILDER.load_estimator_run(run_root)
+        self.assertEqual(loaded["armId"], "subtle")
+        self.assertEqual(loaded["rows"][0]["bestTruthMatch"], "puffy-coat")
+
+        overlay.write_bytes(b"tampered")
+        with self.assertRaisesRegex(ValueError, "overlay.*digest|overlay.*byte length"):
+            PAIR_BUILDER.load_estimator_run(run_root)
 
 
 if __name__ == "__main__":

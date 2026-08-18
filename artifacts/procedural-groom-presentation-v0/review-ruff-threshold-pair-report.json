@@ -1,0 +1,10 @@
+{
+  "schema": "kaminos.procedural-groom-threshold-review.v0",
+  "state": "threshold_pair_bound_for_visual_inspection",
+  "failures": [],
+  "baselinePreflight": "presentation_pair_bound_for_visual_inspection",
+  "successorPreflight": "presentation_pair_bound_for_visual_inspection",
+  "baselineLengthAuthority": "legacy-density12x-identity-plus-successor-bound-baseline-lengths",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

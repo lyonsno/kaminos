@@ -22,6 +22,9 @@ from typing import Any, Iterable
 import bpy
 from mathutils import Vector
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from procedural_groom_source_like_request import resolve_groom_request
+
 
 SCHEMA = "kaminos.procedural-groom-source-like-observation.v0"
 FIXTURE_ID = "procedural-groom-truth-v0"
@@ -188,6 +191,7 @@ def build_microfur(
     carrier: bpy.types.Object,
     *,
     density_multiplier: int,
+    lengths: dict[str, float],
     seed: int = 8103,
 ) -> tuple[list[list[Vector]], dict[str, int], dict[str, int]]:
     rng = random.Random(seed)
@@ -195,9 +199,9 @@ def build_microfur(
     counts = {"short": 0, "puffy": 0, "ruff": 0}
     baseline_counts = {"short": 0, "puffy": 0, "ruff": 0}
     specs = {
-        "short": {"length": 0.065, "lift": 0.24, "flow": 0.82, "samples": 2},
-        "puffy": {"length": 0.19, "lift": 0.86, "flow": 0.34, "samples": 3},
-        "ruff": {"length": 0.34, "lift": 0.55, "flow": 0.72, "samples": 2},
+        "short": {"length": lengths["short"], "lift": 0.24, "flow": 0.82, "samples": 2},
+        "puffy": {"length": lengths["puffy"], "lift": 0.86, "flow": 0.34, "samples": 3},
+        "ruff": {"length": lengths["ruff"], "lift": 0.55, "flow": 0.72, "samples": 2},
     }
     mesh = carrier.data
     for polygon in mesh.polygons:
@@ -428,9 +432,8 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         raise ValueError("fixture identity mismatch")
     if request.get("requestedRoute") != REQUIRED_ROUTE:
         raise ValueError("request does not name the protected Blender route")
-    density_multiplier = request.get("densityMultiplier")
-    if not isinstance(density_multiplier, int) or density_multiplier < 1:
-        raise ValueError("densityMultiplier must be a positive integer")
+    groom_request = resolve_groom_request(request)
+    density_multiplier = groom_request["densityMultiplier"]
 
     source_manifest_path = (repo_root / request["sourceManifestPath"]).resolve()
     source_blend_path = (repo_root / request["sourceBlendPath"]).resolve()
@@ -480,6 +483,7 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     microfur_curves, microfur_counts, baseline_microfur_counts = build_microfur(
         carrier,
         density_multiplier=density_multiplier,
+        lengths=groom_request["effectiveLengths"],
     )
     coat_fiber_count = len(microfur_curves)
     baseline_coat_fiber_count = sum(baseline_microfur_counts.values())
@@ -548,7 +552,7 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
     observation = {
         "schema": SCHEMA,
         "fixtureId": FIXTURE_ID,
-        "observationId": f"{OBSERVATION_ID}-density-{density_multiplier}x",
+        "observationId": f"{OBSERVATION_ID}-{groom_request['observationSuffix']}",
         "requestedRoute": request["requestedRoute"],
         "effectiveRoute": REQUIRED_ROUTE,
         "presentationVariable": "diagnostic-viewer-vs-source-like-groom",
@@ -578,6 +582,10 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
             "coatFiberCurveCount": coat_fiber_count,
             "requestedDensityMultiplier": density_multiplier,
             "effectiveDensityMultiplier": density_multiplier,
+            "baselineFiberLengths": groom_request["baselineLengths"],
+            "effectiveFiberLengths": groom_request["effectiveLengths"],
+            "requestedRuffLengthMultiplier": groom_request["ruffLengthMultiplier"],
+            "effectiveRuffLengthMultiplier": groom_request["ruffLengthMultiplier"],
             "coatSurfaceModel": "spatially-varying-displaced-shell-from-authored-regime-partition",
             "fiberConstruction": "carrier-triangle-microfur-following-authored-region-and-flow-rule",
             "coatShellObject": coat_shell.name,
@@ -611,6 +619,10 @@ def build(request_path: Path, output_dir: Path) -> dict[str, Any]:
         "coatFiberCurveCount": coat_fiber_count,
         "requestedDensityMultiplier": density_multiplier,
         "effectiveDensityMultiplier": density_multiplier,
+        "baselineFiberLengths": groom_request["baselineLengths"],
+        "effectiveFiberLengths": groom_request["effectiveLengths"],
+        "requestedRuffLengthMultiplier": groom_request["ruffLengthMultiplier"],
+        "effectiveRuffLengthMultiplier": groom_request["ruffLengthMultiplier"],
         "lastTrustworthyEvidence": "three-digest-bound-source-like-renders",
         "visualAdmission": False,
         "scientificAdmission": False,

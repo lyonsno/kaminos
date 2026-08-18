@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.procedural-groom-estimation-assay-run.v0",
+  "state": "prepared_for_vlm_submission",
+  "armId": "constitutive-ruff2p5x",
+  "controlledDifference": "Ruff length alone is multiplied by 2.5 from 0.34 to 0.85; puffy remains 0.19 and every estimator input and scoring rule is fixed.",
+  "observationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "sourceLikeObservation": "artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/observation.json",
+  "sourceLikeObservationSha256": "ac719c70445abc8879203acade8f8a1c121fd03a4b934d07d8ae7d76f3aa39c0",
+  "projectedObservation": "artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+  "projectedObservationSha256": "513ea691a2cd0c928bdce47a71c002e64fe951efe2d844e773e99332b78978de",
+  "configPath": "artifacts/procedural-groom-estimation-harness-v0/assay-config.json",
+  "configSha256": "2ec0c6b693d6b003d1c113db8f2740fc0f7695ed756a508030345cb08a4da6ca",
+  "promptSha256": "725c5f121d35763fde4640d295c89fcdefc7b739512ef675c5ecf56c0da9264b",
+  "requestedVlm": {
+    "jobType": "kaminos_procedural_groom_source_like_vlm",
+    "model": "mlx-community/gemma-3-4b-it-qat-4bit",
+    "backend": "mlx-metal"
+  },
+  "requestedSam": {
+    "jobType": "kaminos_procedural_groom_sam3",
+    "model": "mlx-community/sam3-bf16",
+    "backend": "mlx-metal",
+    "threshold": 0.1,
+    "unionPolicy": "union every raw detection returned for one sealed system/view prompt"
+  },
+  "truthRoot": "artifacts/procedural-groom-truth-v0/generated/truth-masks",
+  "claimCeiling": "This pair may establish Gemma 3 4B proposal sensitivity and downstream SAM mask utility for a subtle versus constitutive ruff-length difference on one authored procedural cat fixture. It cannot establish that the technique fails when Gemma misses, nor general semantic correctness, production grooming, arbitrary-source reconstruction, or visual admission.",
+  "modelFailureInterpretation": "A Gemma 3 4B failure is a model-specific cheap-arm result only. Do not narrow the campaign hypothesis space or change technique until several more capable models are tested.",
+  "commandTemplates": {
+    "vlmSubmit": [
+      "{greenroom}",
+      "submit",
+      "kaminos_procedural_groom_source_like_vlm",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw",
+      "--cwd",
+      "{repoRoot}"
+    ],
+    "sealProposal": [
+      "{python}",
+      "{repoRoot}/tools/seal-procedural-groom-vlm-proposal.py",
+      "--observation",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+      "--inventory",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw/inventory.json",
+      "--report",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw/report.json",
+      "--output",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw/proposal-seal.json"
+    ],
+    "samSubmit": [
+      "{greenroom}",
+      "submit",
+      "kaminos_procedural_groom_sam3",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/sam3-raw",
+      "--cwd",
+      "{repoRoot}",
+      "-p",
+      "observation={repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/observation.json",
+      "inventory={repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw/normalized-inventory.json",
+      "seal={repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/vlm-raw/proposal-seal.json"
+    ],
+    "compare": [
+      "{python}",
+      "{repoRoot}/tools/compare-procedural-groom-estimation.py",
+      "--sam-report",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/sam3-raw/report.json",
+      "--truth-root",
+      "{repoRoot}/artifacts/procedural-groom-truth-v0/generated/truth-masks",
+      "--output",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/constitutive-ruff2p5x-gemma3-4b-v0/comparison.json"
+    ],
+    "directVlmEvidenceCommand": [
+      "{repoRoot}/artifacts/procedural-groom-estimation-v0/vlm-inventory-prompt.txt",
+      "mlx-community/gemma-3-4b-it-qat-4bit",
+      "mlx-metal"
+    ]
+  },
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

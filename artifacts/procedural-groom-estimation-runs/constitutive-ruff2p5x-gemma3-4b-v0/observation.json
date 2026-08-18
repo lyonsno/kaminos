@@ -1,0 +1,83 @@
+{
+  "schema": "kaminos.procedural-groom-observation.v0",
+  "observationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "sourceObservationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "fixtureId": "procedural-groom-truth-v0",
+  "digest": "ac719c70445abc8879203acade8f8a1c121fd03a4b934d07d8ae7d76f3aa39c0",
+  "digestBasis": "sha256 of generated/observation.json",
+  "truthExposure": "withheld",
+  "requestedRoute": "kaminos:groom-source-like-observation.v0",
+  "effectiveRoute": "kaminos:groom-source-like-observation.v0",
+  "sourceWitness": {
+    "path": "../../procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/observation.json",
+    "sha256": "ac719c70445abc8879203acade8f8a1c121fd03a4b934d07d8ae7d76f3aa39c0",
+    "byteLength": 5814
+  },
+  "views": [
+    {
+      "id": "front",
+      "path": "../../procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/source-like-front.png",
+      "sha256": "5a7fc0e64d20ed2c55ceddd6417af98641121eaa3cd8e8b9ae78973490117f2d",
+      "byteLength": 968774,
+      "requestedPose": {
+        "position": [
+          0.0,
+          0.6,
+          3.0
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "left-three-quarter",
+      "path": "../../procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/source-like-left-three-quarter.png",
+      "sha256": "a55b794bb1e76abcbd214a88fe9215edb4f0b43b5645c8e82bc3b9540a52e973",
+      "byteLength": 957326,
+      "requestedPose": {
+        "position": [
+          -2.1,
+          0.6,
+          2.1
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    },
+    {
+      "id": "right-three-quarter",
+      "path": "../../procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/source-like-right-three-quarter.png",
+      "sha256": "ad40ffd83a81e805392b9d90595c43267fca50d799fa155cad070630121e0516",
+      "byteLength": 995906,
+      "requestedPose": {
+        "position": [
+          2.1,
+          0.6,
+          2.1
+        ],
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "membershipColorsVisible": false,
+      "labelsVisible": false,
+      "gizmoVisible": false
+    }
+  ],
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

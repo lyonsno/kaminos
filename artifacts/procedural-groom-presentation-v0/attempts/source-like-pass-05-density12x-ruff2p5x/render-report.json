@@ -1,0 +1,33 @@
+{
+  "schema": "kaminos.procedural-groom-source-like-render-report.v0",
+  "state": "source_like_views_rendered",
+  "phase": "complete",
+  "fixtureId": "procedural-groom-truth-v0",
+  "observationSha256": "ac719c70445abc8879203acade8f8a1c121fd03a4b934d07d8ae7d76f3aa39c0",
+  "sourceManifestSha256": "f3ee4b11426aa1b11f99c35de8dba52f37b9534aef3bc3a2037457d402e57fe4",
+  "sourceBlendSha256": "c73dfbf343b0e77033ce299b3083d71078c2d06ff03f2dfb16ebc096a1a891e0",
+  "requestedRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRoute": "gpu-greenroom:kaminos_blender_cast_cleanup",
+  "effectiveRenderer": "BLENDER_EEVEE",
+  "effectiveBlenderVersion": "5.1.2",
+  "fiberCurveCount": 43574,
+  "baselineCoatFiberCurveCount": 3630,
+  "coatFiberCurveCount": 43560,
+  "requestedDensityMultiplier": 12,
+  "effectiveDensityMultiplier": 12,
+  "baselineFiberLengths": {
+    "short": 0.065,
+    "puffy": 0.19,
+    "ruff": 0.34
+  },
+  "effectiveFiberLengths": {
+    "short": 0.065,
+    "puffy": 0.19,
+    "ruff": 0.8500000000000001
+  },
+  "requestedRuffLengthMultiplier": 2.5,
+  "effectiveRuffLengthMultiplier": 2.5,
+  "lastTrustworthyEvidence": "three-digest-bound-source-like-renders",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

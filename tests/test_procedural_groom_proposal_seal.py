@@ -126,6 +126,42 @@ class ProposalSealContractTest(unittest.TestCase):
                     report_sha256=digest("0"),
                 )
 
+    def test_prompt_declared_array_boxes_are_preserved_raw_and_normalized_for_sam(self):
+        raw = {
+            "systems": [dict(
+                self.inventory["systems"][0],
+                bounding_boxes=[
+                    [0.1, 0.2, 0.8, 0.9],
+                    [0.15, 0.25, 0.75, 0.85],
+                    [0.2, 0.3, 0.7, 0.8],
+                ],
+            )],
+            "whiskers": {"left_whisker_probability": 0.8},
+        }
+        normalized, status = MODULE.normalize_inventory_boxes(raw, view_count=3)
+        self.assertEqual(status, "prompt-array-boxes-normalized-to-named-fields")
+        self.assertEqual(raw["systems"][0]["bounding_boxes"][0], [0.1, 0.2, 0.8, 0.9])
+        self.assertEqual(normalized["systems"][0]["bounding_boxes"][0], {
+            "x_min": 0.1,
+            "y_min": 0.2,
+            "x_max": 0.8,
+            "y_max": 0.9,
+        })
+        self.assertEqual(normalized["whiskers"], raw["whiskers"])
+
+        seal = MODULE.build_proposal_seal(
+            observation=self.observation,
+            inventory=raw,
+            report=self.report,
+            observation_file_sha256=digest("f"),
+            inventory_sha256=digest("c"),
+            report_sha256=digest("0"),
+            normalized_inventory_sha256=digest("8"),
+        )
+        self.assertEqual(seal["inventorySha256"], digest("c"))
+        self.assertEqual(seal["normalizedInventorySha256"], digest("8"))
+        self.assertEqual(seal["normalizationStatus"], status)
+
 
 if __name__ == "__main__":
     unittest.main()

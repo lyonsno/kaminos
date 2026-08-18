@@ -108,8 +108,9 @@ def main() -> int:
             raise ValueError("raw VLM proposal must be sealed before segmentation")
         if seal.get("truthExposure") != "withheld":
             raise ValueError("proposal seal is contaminated by truth exposure")
-        if seal.get("inventorySha256") != sha256(inventory_path):
-            raise ValueError("inventory digest does not match proposal seal")
+        expected_inventory_sha256 = seal.get("normalizedInventorySha256") or seal.get("inventorySha256")
+        if expected_inventory_sha256 != sha256(inventory_path):
+            raise ValueError("normalized inventory digest does not match proposal seal")
         if seal.get("observationDigest") != observation.get("digest"):
             raise ValueError("proposal seal observation identity mismatch")
         systems = inventory.get("systems")

@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.procedural-groom-sam3-report.v0",
+  "requestedRoute": "mlx-vlm:sam3:mlx-community/sam3-bf16",
+  "effectiveRoute": null,
+  "requestedModel": "mlx-community/sam3-bf16",
+  "effectiveModel": null,
+  "requestedBackend": "mlx-metal",
+  "effectiveBackend": null,
+  "threshold": 0.1,
+  "visualAdmission": false,
+  "scientificAdmission": false,
+  "state": "started",
+  "phase": "model-load",
+  "observationDigest": "f4fd4820707506fae7733facfeb3893dd3fd7cadbf7d46e0e8ed257026fb7d4f",
+  "inventorySha256": "98e98659e2e8b0baa5652e06d68386d7b9f6dfc13cb3e1ff184578ef50af889a",
+  "proposalSealSha256": "ee5e09dbbac83ccb61b7ea99a26cb1f245adf39578ec14c0cabac5fec3582a9e",
+  "imageSha256": [
+    "b697431f47e63fd7c272d2351969021ae663474b46c889084fce0a504061505b",
+    "3cde18912defd55b3301f1b1ea4cdc26c0d1dcf5d7281e3605f42e5529b695c2",
+    "e0586e9950ffd24c7844d90240c0bc4ea8d8beb7cafa687484dd6b311df3ce8a"
+  ],
+  "lastTrustworthyEvidence": "digest-bound-sealed-vlm-proposal"
+}

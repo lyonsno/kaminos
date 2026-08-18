@@ -1,0 +1,132 @@
+{
+  "systems": [
+    {
+      "id": "main_fur",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "brown_fur_head",
+      "bounding_boxes": [
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.9
+        ],
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.9
+        ],
+        [
+          0.1,
+          0.2,
+          0.8,
+          0.9
+        ]
+      ],
+      "flow_direction": [
+        0,
+        1
+      ],
+      "relative_length": 0.7,
+      "density": 0.8,
+      "outward_puff": 0.6,
+      "confidence": 0.9,
+      "visual_evidence": "The dominant color is brown, and the texture appears to be a dense, slightly uneven surface.  The overall shape suggests a head covering."
+    },
+    {
+      "id": "left_muffler",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "left_muffler_pad",
+      "bounding_boxes": [
+        [
+          0.2,
+          0.2,
+          0.3,
+          0.3
+        ],
+        [
+          0.2,
+          0.2,
+          0.3,
+          0.3
+        ],
+        [
+          0.2,
+          0.2,
+          0.3,
+          0.3
+        ]
+      ],
+      "flow_direction": [
+        0,
+        0
+      ],
+      "relative_length": 0.2,
+      "density": 0.3,
+      "outward_puff": 0.1,
+      "confidence": 0.6,
+      "visual_evidence": "A small, rounded area of darker brown on the left side of the head.  The texture is smoother than the main fur."
+    },
+    {
+      "id": "right_muffler",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "right_muffler_pad",
+      "bounding_boxes": [
+        [
+          0.6,
+          0.2,
+          0.7,
+          0.3
+        ],
+        [
+          0.6,
+          0.2,
+          0.7,
+          0.3
+        ],
+        [
+          0.6,
+          0.2,
+          0.7,
+          0.3
+        ]
+      ],
+      "flow_direction": [
+        0,
+        0
+      ],
+      "relative_length": 0.2,
+      "density": 0.3,
+      "outward_puff": 0.1,
+      "confidence": 0.6,
+      "visual_evidence": "A small, rounded area of darker brown on the right side of the head.  The texture is smoother than the main fur."
+    }
+  ],
+  "whiskers": {
+    "left_whisker_probability": 0.8,
+    "left_whisker_length_relative_to_width": 0.4,
+    "left_whisker_sparseness": 0.6,
+    "left_whisker_fan_angle": 120,
+    "left_whisker_sag": 0.2,
+    "left_whisker_confidence": 0.7,
+    "right_whisker_probability": 0.8,
+    "right_whisker_length_relative_to_width": 0.4,
+    "right_whisker_sparseness": 0.6,
+    "right_whisker_fan_angle": 120,
+    "right_whisker_sag": 0.2,
+    "right_whisker_confidence": 0.7
+  }
+}

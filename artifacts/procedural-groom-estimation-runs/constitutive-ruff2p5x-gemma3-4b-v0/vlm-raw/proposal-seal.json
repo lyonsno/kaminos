@@ -1,0 +1,29 @@
+{
+  "schema": "kaminos.procedural-groom-raw-proposal-seal.v0",
+  "proposalId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x-raw-vlm-proposal",
+  "sealed": true,
+  "truthExposure": "withheld",
+  "observationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "observationDigest": "ac719c70445abc8879203acade8f8a1c121fd03a4b934d07d8ae7d76f3aa39c0",
+  "observationFileSha256": "513ea691a2cd0c928bdce47a71c002e64fe951efe2d844e773e99332b78978de",
+  "promptSha256": "725c5f121d35763fde4640d295c89fcdefc7b739512ef675c5ecf56c0da9264b",
+  "requestedRoute": "mlx-vlm:mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveRoute": "mlx-vlm:mlx-community/gemma-3-4b-it-qat-4bit",
+  "effectiveBackend": "mlx-metal",
+  "effectiveDevice": "Device(gpu, 0)",
+  "rawStdoutSha256": "80e86d320e41a556c926d4f5db8ce7c3710eac86b69f89bf9737e2f27e06bee2",
+  "rawStderrSha256": "a36124888f674f32ed11fb8e16378ce5635a102a32c36a450bb47cea95779994",
+  "generationReportSha256": "d66fef1efeffe19b3c30d022dcaff1da0df1061e8e29fc72f7fc5eed20bb5db3",
+  "parseRecoveryReportSha256": null,
+  "inventorySha256": "a9bc0ce4a229a69ed8891ce864df7a11fb329ead582b385066167a8a4fcb87da",
+  "normalizedInventorySha256": "353ec5e992d7140da511096a676d44375720dff404f1909bf689320490d31293",
+  "inventorySystems": [
+    "main_fur",
+    "cheek_fur",
+    "whisker_left",
+    "whisker_right"
+  ],
+  "normalizationStatus": "prompt-array-boxes-normalized-to-named-fields",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

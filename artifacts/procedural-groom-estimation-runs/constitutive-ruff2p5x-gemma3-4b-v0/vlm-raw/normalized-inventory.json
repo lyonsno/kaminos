@@ -1,0 +1,156 @@
+{
+  "systems": [
+    {
+      "id": "main_fur",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "Dense, rounded fur",
+      "bounding_boxes": [
+        {
+          "x_min": 0.1,
+          "y_min": 0.2,
+          "x_max": 0.8,
+          "y_max": 0.9
+        },
+        {
+          "x_min": 0.1,
+          "y_min": 0.2,
+          "x_max": 0.8,
+          "y_max": 0.9
+        },
+        {
+          "x_min": 0.1,
+          "y_min": 0.2,
+          "x_max": 0.8,
+          "y_max": 0.9
+        }
+      ],
+      "flow_direction": [
+        0,
+        1
+      ],
+      "relative_length": 0.8,
+      "density": 0.9,
+      "outward_puff": 0.7,
+      "confidence": 0.9,
+      "visual_evidence": "The dominant feature is a dense, rounded fur covering most of the head.  The texture is consistent across all views."
+    },
+    {
+      "id": "cheek_fur",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "Sparse, short fur on cheeks",
+      "bounding_boxes": [
+        {
+          "x_min": 0.2,
+          "y_min": 0.3,
+          "x_max": 0.4,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.2,
+          "y_min": 0.3,
+          "x_max": 0.4,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.2,
+          "y_min": 0.3,
+          "x_max": 0.4,
+          "y_max": 0.5
+        }
+      ],
+      "flow_direction": [
+        0,
+        -1
+      ],
+      "relative_length": 0.2,
+      "density": 0.3,
+      "outward_puff": 0.1,
+      "confidence": 0.6,
+      "visual_evidence": "A smaller area of sparse, shorter fur is visible on the cheeks, particularly noticeable in the side view."
+    },
+    {
+      "id": "whisker_left",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "Left muzzle pad - whisker emergence",
+      "bounding_boxes": [
+        {
+          "x_min": 0.3,
+          "y_min": 0.4,
+          "x_max": 0.45,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.3,
+          "y_min": 0.4,
+          "x_max": 0.45,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.3,
+          "y_min": 0.4,
+          "x_max": 0.45,
+          "y_max": 0.5
+        }
+      ],
+      "flow_direction": [
+        0,
+        -1
+      ],
+      "relative_length": 0.5,
+      "density": 0.2,
+      "outward_puff": 0.3,
+      "confidence": 0.7,
+      "visual_evidence": "A distinct area where whiskers emerge from the left muzzle pad. The fur is shorter and more sparse in this region."
+    },
+    {
+      "id": "whisker_right",
+      "views": [
+        "view1",
+        "view2",
+        "view3"
+      ],
+      "segmenter_phrase": "Right muzzle pad - whisker emergence",
+      "bounding_boxes": [
+        {
+          "x_min": 0.5,
+          "y_min": 0.4,
+          "x_max": 0.55,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.5,
+          "y_min": 0.4,
+          "x_max": 0.55,
+          "y_max": 0.5
+        },
+        {
+          "x_min": 0.5,
+          "y_min": 0.4,
+          "x_max": 0.55,
+          "y_max": 0.5
+        }
+      ],
+      "flow_direction": [
+        0,
+        -1
+      ],
+      "relative_length": 0.6,
+      "density": 0.2,
+      "outward_puff": 0.4,
+      "confidence": 0.8,
+      "visual_evidence": "A distinct area where whiskers emerge from the right muzzle pad. The fur is shorter and more sparse in this region."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "observation",
+  "job_type": "kaminos_procedural_groom_sam3",
+  "job_id": "daa331ee6d16",
+  "input_path": "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+  "input_name": "observation.json",
+  "params": {
+    "observation": "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+    "inventory": "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/normalized-inventory.json",
+    "seal": "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/proposal-seal.json",
+    "cwd": "{repoRoot}"
+  },
+  "output_files": [
+    "report.json",
+    "start.json"
+  ],
+  "created_at": 1787083588.3014662,
+  "duration_s": 13.0
+}

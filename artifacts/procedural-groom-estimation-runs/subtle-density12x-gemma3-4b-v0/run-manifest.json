@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.procedural-groom-estimation-assay-run.v0",
+  "state": "prepared_for_vlm_submission",
+  "armId": "subtle-density12x",
+  "controlledDifference": "Ruff baseline length 0.34 versus puffy length 0.19; region difference is visible but not constitutive at first glance.",
+  "observationId": "procedural-groom-source-like-v0-density-12x",
+  "sourceLikeObservation": "artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-04-density12x/observation.json",
+  "sourceLikeObservationSha256": "f4fd4820707506fae7733facfeb3893dd3fd7cadbf7d46e0e8ed257026fb7d4f",
+  "projectedObservation": "artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+  "projectedObservationSha256": "fff5954469ef9f49db0aba196cf6cf3b797850f925ede7d61b5043bf3226046a",
+  "configPath": "artifacts/procedural-groom-estimation-harness-v0/assay-config.json",
+  "configSha256": "2ec0c6b693d6b003d1c113db8f2740fc0f7695ed756a508030345cb08a4da6ca",
+  "promptSha256": "725c5f121d35763fde4640d295c89fcdefc7b739512ef675c5ecf56c0da9264b",
+  "requestedVlm": {
+    "jobType": "kaminos_procedural_groom_source_like_vlm",
+    "model": "mlx-community/gemma-3-4b-it-qat-4bit",
+    "backend": "mlx-metal"
+  },
+  "requestedSam": {
+    "jobType": "kaminos_procedural_groom_sam3",
+    "model": "mlx-community/sam3-bf16",
+    "backend": "mlx-metal",
+    "threshold": 0.1,
+    "unionPolicy": "union every raw detection returned for one sealed system/view prompt"
+  },
+  "truthRoot": "artifacts/procedural-groom-truth-v0/generated/truth-masks",
+  "claimCeiling": "This pair may establish Gemma 3 4B proposal sensitivity and downstream SAM mask utility for a subtle versus constitutive ruff-length difference on one authored procedural cat fixture. It cannot establish that the technique fails when Gemma misses, nor general semantic correctness, production grooming, arbitrary-source reconstruction, or visual admission.",
+  "modelFailureInterpretation": "A Gemma 3 4B failure is a model-specific cheap-arm result only. Do not narrow the campaign hypothesis space or change technique until several more capable models are tested.",
+  "commandTemplates": {
+    "vlmSubmit": [
+      "{greenroom}",
+      "submit",
+      "kaminos_procedural_groom_source_like_vlm",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw",
+      "--cwd",
+      "{repoRoot}"
+    ],
+    "sealProposal": [
+      "{python}",
+      "{repoRoot}/tools/seal-procedural-groom-vlm-proposal.py",
+      "--observation",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+      "--inventory",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/inventory.json",
+      "--report",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/report.json",
+      "--output",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/proposal-seal.json"
+    ],
+    "samSubmit": [
+      "{greenroom}",
+      "submit",
+      "kaminos_procedural_groom_sam3",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/sam3-raw",
+      "--cwd",
+      "{repoRoot}",
+      "-p",
+      "observation={repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/observation.json",
+      "inventory={repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/normalized-inventory.json",
+      "seal={repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/vlm-raw/proposal-seal.json"
+    ],
+    "compare": [
+      "{python}",
+      "{repoRoot}/tools/compare-procedural-groom-estimation.py",
+      "--sam-report",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/sam3-raw/report.json",
+      "--truth-root",
+      "{repoRoot}/artifacts/procedural-groom-truth-v0/generated/truth-masks",
+      "--output",
+      "{repoRoot}/artifacts/procedural-groom-estimation-runs/subtle-density12x-gemma3-4b-v0/comparison.json"
+    ],
+    "directVlmEvidenceCommand": [
+      "{repoRoot}/artifacts/procedural-groom-estimation-v0/vlm-inventory-prompt.txt",
+      "mlx-community/gemma-3-4b-it-qat-4bit",
+      "mlx-metal"
+    ]
+  },
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

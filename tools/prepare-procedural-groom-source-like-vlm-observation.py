@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 
@@ -23,13 +24,13 @@ def project_source_like_observation(source_path: Path, output_path: Path) -> dic
         raise ValueError("source-like observation cannot self-admit")
     output_dir = output_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    source_relative = source_path.relative_to(output_dir).as_posix()
+    source_relative = Path(os.path.relpath(source_path, output_dir)).as_posix()
     views = []
     for view in source["views"]:
         source_image = source_path.parent / view["sourceLike"]["path"]
         views.append({
             "id": view["id"],
-            "path": source_image.relative_to(output_dir).as_posix(),
+            "path": Path(os.path.relpath(source_image, output_dir)).as_posix(),
             "sha256": view["sourceLike"]["sha256"],
             "byteLength": view["sourceLike"]["byteLength"],
             "requestedPose": {
