@@ -17,6 +17,8 @@ export const NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA =
   'kaminos.nbody-packing-active-row-trust-region-trajectory-result.v0';
 export const NBODY_PACKING_ELASTIC_ALL_ROW_RESULT_SCHEMA =
   'kaminos.nbody-packing-elastic-all-row-result.v0';
+export const NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA =
+  'kaminos.nbody-packing-elastic-exchange-debt-trajectory-result.v0';
 
 const ALGORITHM = 'all-neighbor-p8-merit-trust-region-restoration-v0';
 const FAMILY_FILTER_ALGORITHM = 'all-neighbor-p8-family-filter-restoration-v0';
@@ -33,6 +35,8 @@ const ACTIVE_ROW_TRUST_REGION_TRAJECTORY_ALGORITHM =
   'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
 const ELASTIC_ALL_ROW_ALGORITHM =
   'elastic-all-row-linearized-least-squares-trust-region-v0';
+const ELASTIC_EXCHANGE_TRAJECTORY_ALGORITHM =
+  'strict-active-row-then-elastic-all-row-debt-trajectory-v0';
 const CONFIG_KEYS = Object.freeze([
   'acceptancePolicy',
   'algorithm',
@@ -661,20 +665,22 @@ export function solveNBodyActiveRowTrustRegionStep({
     return hashMusclePackingCanonicalJson(left.vector)
       .localeCompare(hashMusclePackingCanonicalJson(right.vector));
   });
-  const accepted = predictedCommonDescent ? candidates.find(candidate =>
+  const familyAdmissible = candidate => predictedCommonDescent &&
     candidate.maximumActiveRowViolation <
       startMaximumActiveRowViolation - requestedConfig.improvementTolerance &&
-    candidate.regressedFamilies.length === 0
-  ) : null;
+    candidate.regressedFamilies.length === 0;
+  const accepted = candidates.find(familyAdmissible) || null;
   const candidateReceipts = [...candidates]
     .sort((left, right) => right.radius - left.radius)
     .map(candidate => ({
       radius:candidate.radius,
       vector:[...candidate.vector],
+      allRowSquaredViolationEnergy:allRowSquaredViolationEnergy(candidate.state),
       maximumActiveRowViolation:rounded(candidate.maximumActiveRowViolation),
       maximumPhysicalResidual:candidate.state.maximumPhysicalResidual,
       constraintFamilies:structuredClone(candidate.families),
       regressedFamilies:[...candidate.regressedFamilies],
+      familyAdmissible:familyAdmissible(candidate),
       selected:candidate === accepted,
       rejectionReason:candidate === accepted
         ? null
@@ -1182,6 +1188,706 @@ export function solveNBodyElasticAllRowComparatorStep({
     },
     claimCeiling:
       'one-step-source-bound-elastic-all-row-architecture-comparator-not-production-solver-or-global-convergence',
+  };
+  return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function createNBodyElasticExchangeTrajectoryConfig({
+  accumulationWindow = 3,
+  contactCycleEnergyTolerance = 1e-12,
+  convergenceTolerance = 1e-7,
+  debtTolerance = 1e-12,
+  iterationBudget = 8,
+  radiusFloorProgressTolerance = 1e-12,
+  stateIdentityPrecision = 15,
+  strictGlobalMeritTolerance = 1e-12,
+  strictStep = createNBodyActiveRowTrustRegionConfig({
+    activeSetPolicy:'family-maximum-relative-band',
+    relativeActivationBand:0.01,
+  }),
+  elasticStep = createNBodyElasticAllRowComparatorConfig(),
+} = {}) {
+  return {
+    algorithm:ELASTIC_EXCHANGE_TRAJECTORY_ALGORITHM,
+    accumulationWindow,
+    contactCycleEnergyTolerance,
+    convergenceTolerance,
+    debtTolerance,
+    iterationBudget,
+    radiusFloorProgressTolerance,
+    stateIdentityPrecision,
+    strictGlobalMeritTolerance,
+    strictStep:structuredClone(strictStep),
+    elasticStep:structuredClone(elasticStep),
+  };
+}
+
+function elasticExchangeOrderedRows(state) {
+  return [...state.rows]
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map(row => ({
+      key:row.key,
+      kind:row.kind,
+      signedGap:row.signedGap,
+      violation:Math.max(0, -row.signedGap),
+    }));
+}
+
+function elasticExchangeStateIdentity(vector, precision) {
+  return hashMusclePackingCanonicalJson({
+    vector:vector.map(value => Number(value.toFixed(precision))),
+  });
+}
+
+function elasticExchangeContactIdentity(rows) {
+  return hashMusclePackingCanonicalJson({
+    violated:rows.filter(row => row.violation > 0).map(row => [row.key, row.kind]),
+  });
+}
+
+function elasticExchangeDebtDelta(before, after, outstandingBefore) {
+  const borrowed = Math.max(0, after - before);
+  const repaid = Math.min(outstandingBefore, Math.max(0, before - after));
+  return {
+    before,
+    after,
+    delta:after - before,
+    borrowed,
+    repaid,
+    outstandingBefore,
+    outstandingAfter:outstandingBefore + borrowed - repaid,
+  };
+}
+
+function elasticExchangeHardInvariantFailures(beforeState, afterState) {
+  const failures = [];
+  if (afterState.metrics.endpointDrift !== 0) failures.push('endpoint-drift');
+  if (afterState.metrics.maximumRelativeVolumeError !== 0) failures.push('volume-error');
+  if (afterState.metrics.nonFiniteValueCount !== 0) failures.push('nonfinite-value');
+  if (afterState.metrics.nonPositiveRadiusCount !== 0) failures.push('nonpositive-radius');
+  if (
+    afterState.metrics.sourceCurvatureReversalCount >
+      beforeState.metrics.sourceCurvatureReversalCount
+  ) failures.push('source-curvature-reversal');
+  if (
+    afterState.metrics.sourceTangentReversalCount >
+      beforeState.metrics.sourceTangentReversalCount
+  ) failures.push('source-tangent-reversal');
+  if (
+    afterState.metrics.pairwiseRelationReversalCount >
+      beforeState.metrics.pairwiseRelationReversalCount
+  ) failures.push('pairwise-relation-reversal');
+  return failures;
+}
+
+export function classifyNBodyElasticExchangeUnacceptedTerminal({
+  iteration,
+  strictResult,
+  strictGlobalMerit,
+  elasticResult,
+  elasticDebtFilter,
+  familyOutstanding,
+}) {
+  if (strictResult.status === 'nonlinear-active-row-trust-region-floor') {
+    return {
+      terminalClass:'radius-floor',
+      terminalEvidence:{
+        iteration,
+        regime:'strict-active-row',
+        strictStatus:strictResult.status,
+        strictCertificate:structuredClone(strictResult.certificate),
+        elasticAttempted:false,
+      },
+    };
+  }
+  if (
+    strictGlobalMerit?.status === 'strict-global-merit-floor' &&
+    elasticDebtFilter?.status === 'cumulative-family-debt-floor'
+  ) {
+    return {
+      terminalClass:'strict-global-merit-floor-cumulative-family-debt-floor',
+      terminalEvidence:{
+        iteration,
+        strictStatus:strictResult.status,
+        strictGlobalMeritStatus:strictGlobalMerit.status,
+        strictFamilyAdmissibleCandidateCount:
+          strictGlobalMerit.familyAdmissibleCandidateCount,
+        strictGlobalAdmissibleCandidateCount:
+          strictGlobalMerit.globalAdmissibleCandidateCount,
+        elasticStatus:elasticResult?.status || null,
+        elasticTerminalReason:elasticResult?.work?.terminalReason || null,
+        elasticDebtFilterStatus:elasticDebtFilter.status,
+        elasticRawAdmissibleCandidateCount:
+          elasticDebtFilter.rawAdmissibleCandidateCount,
+        elasticCumulativeAdmissibleCandidateCount:
+          elasticDebtFilter.admissibleCandidateCount,
+        familyOutstanding:structuredClone(familyOutstanding),
+        familyTradeoffAllowance:elasticDebtFilter.allowance,
+      },
+    };
+  }
+  return {
+    terminalClass:'strict-cone-floor-elastic-floor',
+    terminalEvidence:{
+      iteration,
+      strictStatus:strictResult.status,
+      strictCertificate:structuredClone(strictResult.certificate),
+      elasticStatus:elasticResult?.status || null,
+      elasticTerminalReason:elasticResult?.work?.terminalReason || null,
+      elasticDebtFilterStatus:elasticDebtFilter?.status || null,
+    },
+  };
+}
+
+export function solveNBodyElasticExchangeTrajectory({
+  problem,
+  startVector,
+  requestedConfig = createNBodyElasticExchangeTrajectoryConfig(),
+} = {}) {
+  const expectedKeys = [
+    'accumulationWindow',
+    'algorithm',
+    'contactCycleEnergyTolerance',
+    'convergenceTolerance',
+    'debtTolerance',
+    'elasticStep',
+    'iterationBudget',
+    'radiusFloorProgressTolerance',
+    'stateIdentityPrecision',
+    'strictGlobalMeritTolerance',
+    'strictStep',
+  ].sort();
+  if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
+    throw new Error(
+      `elastic exchange trajectory requestedConfig requires exact keys: ${expectedKeys.join(', ')}`,
+    );
+  }
+  if (requestedConfig.algorithm !== ELASTIC_EXCHANGE_TRAJECTORY_ALGORITHM) {
+    throw new Error('elastic exchange trajectory algorithm identity is unsupported');
+  }
+  for (const key of ['accumulationWindow', 'iterationBudget', 'stateIdentityPrecision']) {
+    if (!Number.isInteger(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`elastic exchange trajectory ${key} must be a positive integer`);
+    }
+  }
+  for (const key of [
+    'contactCycleEnergyTolerance',
+    'convergenceTolerance',
+    'debtTolerance',
+    'radiusFloorProgressTolerance',
+    'strictGlobalMeritTolerance',
+  ]) {
+    if (!Number.isFinite(requestedConfig[key]) || requestedConfig[key] <= 0) {
+      throw new Error(`elastic exchange trajectory ${key} must be positive and finite`);
+    }
+  }
+  if (requestedConfig.stateIdentityPrecision > 15) {
+    throw new Error('elastic exchange trajectory stateIdentityPrecision cannot exceed 15');
+  }
+  if (requestedConfig.strictStep?.activeSetPolicy !== 'family-maximum-relative-band') {
+    throw new Error('elastic exchange trajectory requires family-maximum strict-step policy');
+  }
+  if (requestedConfig.elasticStep?.algorithm !== ELASTIC_ALL_ROW_ALGORITHM) {
+    throw new Error('elastic exchange trajectory requires the explicit elastic all-row step');
+  }
+  validateStart(problem, startVector, requestedConfig.strictStep.translationBounds);
+  if (
+    JSON.stringify(requestedConfig.strictStep.translationBounds) !==
+      JSON.stringify(requestedConfig.elasticStep.translationBounds)
+  ) throw new Error('elastic exchange trajectory step translation bounds must match');
+
+  const initialState = evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  const initialRows = elasticExchangeOrderedRows(initialState);
+  const sourceEnergy = allRowSquaredViolationEnergy(initialState);
+  let cumulativeAttemptEvaluations = 0;
+  let cumulativePhysicalReevaluations = 1;
+  let currentVector = [...startVector];
+  let currentState = initialState;
+  let currentRows = initialRows;
+  let terminalClass = null;
+  let terminalEvidence = null;
+  const rows = [];
+  const familyOutstanding = Object.fromEntries(
+    CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, 0]),
+  );
+  const familyCumulativeBorrowed = structuredClone(familyOutstanding);
+  const familyCumulativeRepaid = structuredClone(familyOutstanding);
+  const familyFirstBorrowingIteration = Object.fromEntries(
+    CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, null]),
+  );
+  const familyMostRecentRepaymentIteration = structuredClone(
+    familyFirstBorrowingIteration,
+  );
+  const rowOutstanding = Object.fromEntries(initialRows.map(row => [row.key, 0]));
+  const rowCumulativeBorrowed = structuredClone(rowOutstanding);
+  const rowCumulativeRepaid = structuredClone(rowOutstanding);
+  const rowFirstBorrowingIteration = Object.fromEntries(
+    initialRows.map(row => [row.key, null]),
+  );
+  const rowMostRecentRepaymentIteration = structuredClone(
+    rowFirstBorrowingIteration,
+  );
+  const seenStates = new Map([[
+    elasticExchangeStateIdentity(startVector, requestedConfig.stateIdentityPrecision),
+    0,
+  ]]);
+  const seenContacts = new Map([[
+    elasticExchangeContactIdentity(initialRows),
+    { iteration:0, energy:sourceEnergy },
+  ]]);
+
+  for (let iteration = 1; iteration <= requestedConfig.iterationBudget; iteration += 1) {
+    const beforeState = currentState;
+    const beforeRows = currentRows;
+    const beforeEnergy = allRowSquaredViolationEnergy(beforeState);
+    const strictResult = solveNBodyActiveRowTrustRegionStep({
+      problem,
+      startVector:currentVector,
+      requestedConfig:requestedConfig.strictStep,
+    });
+    cumulativeAttemptEvaluations += strictResult.work.evaluationCount;
+    const strictFamilyCandidates = strictResult.work.candidateReceipts
+      .filter(candidate => candidate.familyAdmissible)
+      .sort((left, right) => {
+        if (left.maximumActiveRowViolation !== right.maximumActiveRowViolation) {
+          return left.maximumActiveRowViolation - right.maximumActiveRowViolation;
+        }
+        if (left.maximumPhysicalResidual !== right.maximumPhysicalResidual) {
+          return left.maximumPhysicalResidual - right.maximumPhysicalResidual;
+        }
+        return hashMusclePackingCanonicalJson(left.vector)
+          .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+      });
+    const strictGlobalCandidates = strictFamilyCandidates.filter(candidate =>
+      candidate.allRowSquaredViolationEnergy <
+        beforeEnergy - requestedConfig.strictGlobalMeritTolerance
+    );
+    const strictGlobalSelected = strictGlobalCandidates[0] || null;
+    const strictGlobalMerit = {
+      status:strictResult.status !== 'active-row-trust-region-step-accepted'
+        ? 'not-applicable-strict-step-unaccepted'
+        : strictGlobalSelected
+          ? 'strict-global-merit-candidate-selected'
+          : 'strict-global-merit-floor',
+      sourceEnergy:beforeEnergy,
+      tolerance:requestedConfig.strictGlobalMeritTolerance,
+      familyAdmissibleCandidateCount:strictFamilyCandidates.length,
+      globalAdmissibleCandidateCount:strictGlobalCandidates.length,
+      selectedRadius:strictGlobalSelected?.radius || null,
+      candidates:strictFamilyCandidates.map(candidate => ({
+        radius:candidate.radius,
+        vector:[...candidate.vector],
+        allRowSquaredViolationEnergy:candidate.allRowSquaredViolationEnergy,
+        maximumActiveRowViolation:candidate.maximumActiveRowViolation,
+        maximumPhysicalResidual:candidate.maximumPhysicalResidual,
+        selected:candidate === strictGlobalSelected,
+      })),
+    };
+    let regime = 'strict-active-row';
+    let elasticResult = null;
+    let elasticDebtFilter = null;
+    let accepted = strictGlobalSelected !== null;
+    let selectedVector = accepted ? [...strictGlobalSelected.vector] : [...currentVector];
+    const elasticReentry = strictResult.status === 'local-active-row-cone-certificate' ||
+      (
+        strictResult.status === 'active-row-trust-region-step-accepted' &&
+        strictGlobalMerit.status === 'strict-global-merit-floor'
+      );
+    if (!accepted && elasticReentry) {
+      regime = 'elastic-all-row';
+      elasticResult = solveNBodyElasticAllRowComparatorStep({
+        problem,
+        startVector:currentVector,
+        requestedConfig:requestedConfig.elasticStep,
+      });
+      cumulativeAttemptEvaluations += elasticResult.work.evaluationCount;
+      const debtCandidates = elasticResult.work.candidateReceipts.map(candidate => {
+        const projectedFamilyDebt = Object.fromEntries(
+          CONSTRAINT_FAMILY_METRIC_KEYS.map(key => [key, elasticExchangeDebtDelta(
+            beforeState.metrics[key],
+            candidate.constraintFamilies[key],
+            familyOutstanding[key],
+          )]),
+        );
+        const rejectionReasons = [...candidate.rejectionReasons.filter(
+          reason => reason !== 'higher-ranked-admissible-candidate',
+        )];
+        for (const key of CONSTRAINT_FAMILY_METRIC_KEYS) {
+          if (
+            projectedFamilyDebt[key].outstandingAfter >
+              requestedConfig.elasticStep.familyTradeoffAllowance +
+                requestedConfig.debtTolerance
+          ) rejectionReasons.push(`${key}-cumulative-debt-budget-exceeded`);
+        }
+        return {
+          radius:candidate.radius,
+          vector:[...candidate.vector],
+          allRowSquaredViolationEnergy:candidate.allRowSquaredViolationEnergy,
+          maximumPhysicalResidual:candidate.maximumPhysicalResidual,
+          constraintFamilies:structuredClone(candidate.constraintFamilies),
+          rawAdmissible:candidate.admissible,
+          projectedFamilyDebt,
+          cumulativeDebtAdmissible:rejectionReasons.length === 0,
+          selected:false,
+          rejectionReasons,
+        };
+      });
+      const debtAdmissible = debtCandidates.filter(
+        candidate => candidate.cumulativeDebtAdmissible,
+      );
+      debtAdmissible.sort((left, right) => {
+        if (
+          left.allRowSquaredViolationEnergy !== right.allRowSquaredViolationEnergy
+        ) return left.allRowSquaredViolationEnergy - right.allRowSquaredViolationEnergy;
+        if (left.maximumPhysicalResidual !== right.maximumPhysicalResidual) {
+          return left.maximumPhysicalResidual - right.maximumPhysicalResidual;
+        }
+        return hashMusclePackingCanonicalJson(left.vector)
+          .localeCompare(hashMusclePackingCanonicalJson(right.vector));
+      });
+      const debtSelected = debtAdmissible[0] || null;
+      for (const candidate of debtCandidates) {
+        candidate.selected = candidate === debtSelected;
+        if (
+          candidate.cumulativeDebtAdmissible &&
+          candidate !== debtSelected
+        ) candidate.rejectionReasons.push('higher-ranked-cumulative-debt-candidate');
+      }
+      elasticDebtFilter = {
+        status:debtSelected
+          ? 'cumulative-family-debt-candidate-selected'
+          : 'cumulative-family-debt-floor',
+        allowance:requestedConfig.elasticStep.familyTradeoffAllowance,
+        tolerance:requestedConfig.debtTolerance,
+        outstandingBefore:structuredClone(familyOutstanding),
+        rawAdmissibleCandidateCount:debtCandidates.filter(
+          candidate => candidate.rawAdmissible,
+        ).length,
+        admissibleCandidateCount:debtAdmissible.length,
+        selectedRadius:debtSelected?.radius || null,
+        candidates:debtCandidates,
+      };
+      accepted = debtSelected !== null;
+      selectedVector = accepted ? [...debtSelected.vector] : [...currentVector];
+    }
+    const afterState = evaluateNBodyUnifiedKktState({ problem, vector:selectedVector });
+    cumulativePhysicalReevaluations += 1;
+    const afterRows = elasticExchangeOrderedRows(afterState);
+    const rowShapeValid = !(
+      beforeRows.length !== afterRows.length ||
+      JSON.stringify(beforeRows.map(row => [row.key, row.kind])) !==
+        JSON.stringify(afterRows.map(row => [row.key, row.kind]))
+    );
+    if (!rowShapeValid) {
+      terminalClass = 'budget-or-route-invalid';
+      terminalEvidence = { iteration, reason:'physical-row-shape-changed' };
+    }
+    const afterEnergy = allRowSquaredViolationEnergy(afterState);
+    const familyDebt = Object.fromEntries(CONSTRAINT_FAMILY_METRIC_KEYS.map(key => {
+      const debt = elasticExchangeDebtDelta(
+        beforeState.metrics[key],
+        afterState.metrics[key],
+        familyOutstanding[key],
+      );
+      familyOutstanding[key] = debt.outstandingAfter;
+      familyCumulativeBorrowed[key] += debt.borrowed;
+      familyCumulativeRepaid[key] += debt.repaid;
+      if (debt.borrowed > 0 && familyFirstBorrowingIteration[key] === null) {
+        familyFirstBorrowingIteration[key] = iteration;
+      }
+      if (debt.repaid > 0) familyMostRecentRepaymentIteration[key] = iteration;
+      return [key, {
+        ...debt,
+        cumulativeBorrowed:familyCumulativeBorrowed[key],
+        cumulativeRepaid:familyCumulativeRepaid[key],
+        firstBorrowingIteration:familyFirstBorrowingIteration[key],
+        mostRecentRepaymentIteration:familyMostRecentRepaymentIteration[key],
+      }];
+    }));
+    const rowDebt = rowShapeValid ? beforeRows.map((beforeRow, index) => {
+      const afterRow = afterRows[index];
+      const debt = elasticExchangeDebtDelta(
+        beforeRow.violation,
+        afterRow.violation,
+        rowOutstanding[beforeRow.key],
+      );
+      rowOutstanding[beforeRow.key] = debt.outstandingAfter;
+      rowCumulativeBorrowed[beforeRow.key] += debt.borrowed;
+      rowCumulativeRepaid[beforeRow.key] += debt.repaid;
+      if (debt.borrowed > 0 && rowFirstBorrowingIteration[beforeRow.key] === null) {
+        rowFirstBorrowingIteration[beforeRow.key] = iteration;
+      }
+      if (debt.repaid > 0) rowMostRecentRepaymentIteration[beforeRow.key] = iteration;
+      return {
+        key:beforeRow.key,
+        kind:beforeRow.kind,
+        ...debt,
+        cumulativeBorrowed:rowCumulativeBorrowed[beforeRow.key],
+        cumulativeRepaid:rowCumulativeRepaid[beforeRow.key],
+        firstBorrowingIteration:rowFirstBorrowingIteration[beforeRow.key],
+        mostRecentRepaymentIteration:rowMostRecentRepaymentIteration[beforeRow.key],
+      };
+    }) : [];
+    const stateIdentity = elasticExchangeStateIdentity(
+      selectedVector,
+      requestedConfig.stateIdentityPrecision,
+    );
+    const contactIdentity = elasticExchangeContactIdentity(afterRows);
+    const hardInvariantFailures = elasticExchangeHardInvariantFailures(beforeState, afterState);
+    const accumulationWindow = [...rows, {
+      iteration,
+      familyDebt,
+      before:{ allRowSquaredViolationEnergy:beforeEnergy },
+      after:{ allRowSquaredViolationEnergy:afterEnergy },
+    }].slice(-requestedConfig.accumulationWindow);
+    let debtAccumulation = {
+      status:'insufficient-history',
+      windowStart:null,
+      families:[],
+    };
+    if (accumulationWindow.length === requestedConfig.accumulationWindow) {
+      const accumulatingFamilies = CONSTRAINT_FAMILY_METRIC_KEYS.filter(key =>
+        accumulationWindow.every(step =>
+          step.familyDebt[key].outstandingAfter >
+            step.familyDebt[key].outstandingBefore + requestedConfig.debtTolerance
+        ) && accumulationWindow.every(step =>
+          step.after.allRowSquaredViolationEnergy <
+            step.before.allRowSquaredViolationEnergy -
+              requestedConfig.contactCycleEnergyTolerance
+        )
+      );
+      const exceededFamilies = accumulatingFamilies.filter(key =>
+        familyDebt[key].outstandingAfter >
+          requestedConfig.elasticStep.familyTradeoffAllowance + requestedConfig.debtTolerance
+      );
+      debtAccumulation = {
+        status:accumulatingFamilies.length === 0
+          ? 'none'
+          : exceededFamilies.length > 0
+            ? 'cumulative-family-debt-budget-exceeded'
+            : 'bounded-cumulative-family-debt-accumulation',
+        windowStart:accumulationWindow[0].iteration,
+        families:accumulatingFamilies,
+      };
+    }
+    const rowCore = {
+      iteration,
+      regime,
+      accepted,
+      sourceStateIdentity:elasticExchangeStateIdentity(
+        currentVector,
+        requestedConfig.stateIdentityPrecision,
+      ),
+      selectedStateIdentity:stateIdentity,
+      contactGraphIdentity:contactIdentity,
+      before:{
+        vector:[...currentVector],
+        rows:beforeRows,
+        allRowSquaredViolationEnergy:beforeEnergy,
+        maximumPhysicalResidual:beforeState.maximumPhysicalResidual,
+        metrics:structuredClone(beforeState.metrics),
+      },
+      after:{
+        vector:selectedVector,
+        rows:afterRows,
+        allRowSquaredViolationEnergy:afterEnergy,
+        maximumPhysicalResidual:afterState.maximumPhysicalResidual,
+        metrics:structuredClone(afterState.metrics),
+      },
+      attempts:{
+        strict:structuredClone(strictResult),
+        elastic:structuredClone(elasticResult),
+      },
+      strictGlobalMerit,
+      elasticDebtFilter,
+      debtAccumulation,
+      familyDebt,
+      rowDebt,
+      hardInvariantFailures,
+      cumulativeWork:{
+        attemptPhysicalEvaluations:cumulativeAttemptEvaluations,
+        trajectoryPhysicalReevaluations:cumulativePhysicalReevaluations,
+        totalPhysicalEvaluations:
+          cumulativeAttemptEvaluations + cumulativePhysicalReevaluations,
+      },
+    };
+    const stepIdentity = hashMusclePackingCanonicalJson(rowCore);
+    const prefixCore = [...rows.map(row => row.stepIdentity), stepIdentity];
+    const row = {
+      ...rowCore,
+      stepIdentity,
+      trajectoryPrefixIdentity:hashMusclePackingCanonicalJson(prefixCore),
+    };
+    rows.push(row);
+
+    if (!terminalClass && hardInvariantFailures.length > 0) {
+      terminalClass = 'hard-invariant-failure';
+      terminalEvidence = { iteration, failures:hardInvariantFailures };
+    }
+    if (!terminalClass && !accepted) {
+      const unacceptedTerminal = classifyNBodyElasticExchangeUnacceptedTerminal({
+        iteration,
+        strictResult,
+        strictGlobalMerit,
+        elasticResult,
+        elasticDebtFilter,
+        familyOutstanding,
+      });
+      terminalClass = unacceptedTerminal.terminalClass;
+      terminalEvidence = unacceptedTerminal.terminalEvidence;
+    }
+    if (!terminalClass && seenStates.has(stateIdentity)) {
+      terminalClass = 'state-cycle';
+      terminalEvidence = {
+        iteration,
+        priorIteration:seenStates.get(stateIdentity),
+        stateIdentity,
+      };
+    }
+    const priorContact = seenContacts.get(contactIdentity);
+    if (
+      !terminalClass && priorContact &&
+      !(afterEnergy < priorContact.energy - requestedConfig.contactCycleEnergyTolerance)
+    ) {
+      terminalClass = 'contact-cycle';
+      terminalEvidence = {
+        iteration,
+        priorIteration:priorContact.iteration,
+        contactGraphIdentity:contactIdentity,
+        priorEnergy:priorContact.energy,
+        afterEnergy,
+      };
+    }
+    if (
+      !terminalClass && regime === 'elastic-all-row' &&
+      elasticDebtFilter.selectedRadius === requestedConfig.elasticStep.trustRegionRadii.at(-1) &&
+      !(afterEnergy < beforeEnergy - requestedConfig.radiusFloorProgressTolerance)
+    ) {
+      terminalClass = 'radius-floor';
+      terminalEvidence = {
+        iteration,
+        radius:elasticDebtFilter.selectedRadius,
+        beforeEnergy,
+        afterEnergy,
+      };
+    }
+    if (
+      !terminalClass &&
+      debtAccumulation.status === 'cumulative-family-debt-budget-exceeded'
+    ) {
+      terminalClass = 'accumulating-family-debt';
+      terminalEvidence = {
+        iteration,
+        windowStart:debtAccumulation.windowStart,
+        families:debtAccumulation.families,
+      };
+    }
+    if (
+      !terminalClass &&
+      afterState.maximumPhysicalResidual <= requestedConfig.convergenceTolerance
+    ) {
+      terminalClass = 'feasible';
+      terminalEvidence = { iteration, maximumPhysicalResidual:afterState.maximumPhysicalResidual };
+    }
+
+    if (accepted) {
+      currentVector = selectedVector;
+      currentState = afterState;
+      currentRows = afterRows;
+      seenStates.set(stateIdentity, iteration);
+      seenContacts.set(contactIdentity, { iteration, energy:afterEnergy });
+    }
+    if (terminalClass) break;
+  }
+  if (!terminalClass) {
+    const selectedEnergy = allRowSquaredViolationEnergy(currentState);
+    const progressing = selectedEnergy <
+      sourceEnergy - requestedConfig.contactCycleEnergyTolerance;
+    terminalClass = progressing
+      ? 'budget-exhausted-progressing'
+      : 'budget-or-route-invalid';
+    terminalEvidence = progressing ? {
+      acceptedTransitions:rows.filter(row => row.accepted).length,
+      sourceEnergy,
+      selectedEnergy,
+    } : {
+      reason:'budget-exhausted-without-material-energy-progress',
+      acceptedTransitions:rows.filter(row => row.accepted).length,
+      sourceEnergy,
+      selectedEnergy,
+    };
+  }
+  const finalRows = elasticExchangeOrderedRows(currentState);
+  const core = {
+    schema:NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA,
+    status:`elastic-exchange-trajectory-${terminalClass}`,
+    route:{
+      requested:requestedConfig.algorithm,
+      effective:requestedConfig.algorithm,
+      fallbackUsed:false,
+    },
+    source:{ problemSha256:problem.identity.sha256 },
+    config:{ requested:structuredClone(requestedConfig), effective:structuredClone(requestedConfig) },
+    start:{
+      vector:[...startVector],
+      stateIdentity:elasticExchangeStateIdentity(
+        startVector,
+        requestedConfig.stateIdentityPrecision,
+      ),
+      rows:initialRows,
+      allRowSquaredViolationEnergy:sourceEnergy,
+      maximumPhysicalResidual:initialState.maximumPhysicalResidual,
+      metrics:structuredClone(initialState.metrics),
+    },
+    selected:{
+      vector:[...currentVector],
+      stateIdentity:elasticExchangeStateIdentity(
+        currentVector,
+        requestedConfig.stateIdentityPrecision,
+      ),
+      rows:finalRows,
+      allRowSquaredViolationEnergy:allRowSquaredViolationEnergy(currentState),
+      maximumPhysicalResidual:currentState.maximumPhysicalResidual,
+      metrics:structuredClone(currentState.metrics),
+      muscles:structuredClone(currentState.muscles),
+    },
+    debt:{
+      familyOutstanding,
+      familyCumulativeBorrowed,
+      familyCumulativeRepaid,
+      familyFirstBorrowingIteration,
+      familyMostRecentRepaymentIteration,
+      rowOutstanding,
+      rowCumulativeBorrowed,
+      rowCumulativeRepaid,
+      rowFirstBorrowingIteration,
+      rowMostRecentRepaymentIteration,
+    },
+    work:{
+      attempts:rows.length,
+      acceptedTransitions:rows.filter(row => row.accepted).length,
+      strictAccepted:rows.filter(row => row.accepted && row.regime === 'strict-active-row').length,
+      elasticAccepted:rows.filter(row => row.accepted && row.regime === 'elastic-all-row').length,
+      attemptPhysicalEvaluations:cumulativeAttemptEvaluations,
+      trajectoryPhysicalReevaluations:cumulativePhysicalReevaluations,
+      totalPhysicalEvaluations:cumulativeAttemptEvaluations + cumulativePhysicalReevaluations,
+      terminalClass,
+      terminalEvidence,
+      rows,
+    },
+    mechanism:{
+      regimes:['strict-active-row', 'elastic-all-row'],
+      elasticActivation:
+        'after-linearized-active-row-cone-floor-or-strict-global-merit-floor',
+      debtAuthority:'descriptive-physical-family-and-row-recurrence',
+      elasticAdmission:'global-all-row-descent-with-trajectory-wide-family-debt-budget',
+      physicalRowsReevaluated:true,
+      oracleTargetCoordinatesConsumed:false,
+      contactGraphRowsConsumed:true,
+      carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+    },
+    claimCeiling:
+      'one-frozen-source-eight-transition-debt-aware-two-regime-falsifier-not-global-convergence-or-production',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
 }

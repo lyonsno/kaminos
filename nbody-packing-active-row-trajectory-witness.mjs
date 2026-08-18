@@ -13,6 +13,7 @@ import {
 } from './nbody-packing-unified-kkt.mjs';
 import {
   createNBodyActiveRowTrustRegionTrajectoryConfig,
+  NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA,
   NBODY_PACKING_ACTIVE_ROW_TRUST_REGION_TRAJECTORY_RESULT_SCHEMA,
 } from './nbody-packing-restoration.mjs';
 import {
@@ -24,12 +25,16 @@ import {
 import {
   NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE,
   NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
+  NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE,
+  NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE,
   NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
   renderNBodyPackingLocalizedChallengeHtml,
 } from './nbody-packing-localized-witness.mjs';
 
 export { NBODY_PACKING_ACTIVE_ROW_TRAJECTORY_WITNESS_ROUTE };
 export { NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE };
+export { NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE };
+export { NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE };
 const ACTIVE_ROW_TRAJECTORY_SOLVER_ROUTE =
   'active-row-minimum-norm-common-descent-trust-region-trajectory-v0';
 
@@ -1199,6 +1204,654 @@ export async function writeNBodyPackingElasticAllRowComparatorWitness({
       status:'failed',
       route:{
         requested:NBODY_PACKING_ELASTIC_ALL_ROW_COMPARATOR_WITNESS_ROUTE,
+        effective:null,
+        fallbackUsed:false,
+      },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure), io);
+    throw error;
+  }
+}
+
+function elasticExchangeSelectedRadius(row) {
+  const attempt = row.regime === 'elastic-all-row'
+    ? row.attempts?.elastic
+    : row.attempts?.strict;
+  return attempt?.selected?.radius ??
+    attempt?.work?.candidateReceipts?.find(candidate => candidate.selected)?.radius ??
+    attempt?.candidateReceipts?.find(candidate => candidate.selected)?.radius ?? null;
+}
+
+function elasticExchangeOrderedRows(state) {
+  return [...state.rows]
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map(row => ({
+      key:row.key,
+      kind:row.kind,
+      signedGap:row.signedGap,
+      violation:Math.max(0, -row.signedGap),
+    }));
+}
+
+function elasticExchangeDebtSummary(row) {
+  const families = Object.fromEntries(Object.entries(row.familyDebt || {}).map(
+    ([key, value]) => [key, {
+      borrowed:value.borrowed,
+      repaid:value.repaid,
+      outstandingAfter:value.outstandingAfter,
+    }],
+  ));
+  const changedRows = (row.rowDebt || [])
+    .filter(value => value.borrowed > 0 || value.repaid > 0)
+    .sort((left, right) =>
+      Math.max(right.borrowed, right.repaid) - Math.max(left.borrowed, left.repaid))
+    .slice(0, 8)
+    .map(value => ({
+      key:value.key,
+      kind:value.kind,
+      borrowed:value.borrowed,
+      repaid:value.repaid,
+      outstandingAfter:value.outstandingAfter,
+    }));
+  return { families, changedRows };
+}
+
+export async function writeNBodyPackingElasticExchangeTrajectoryWitness({
+  outDir = 'artifacts/nbody-packing-elastic-exchange-trajectory-viewer-v0',
+  canonicalRawPath =
+    'artifacts/nbody-packing-elastic-exchange-trajectory-v0/canonical-raw.json',
+  reverseRawPath =
+    'artifacts/nbody-packing-elastic-exchange-trajectory-v0/reverse-raw.json',
+  runReportPath =
+    'artifacts/nbody-packing-elastic-exchange-trajectory-v0/run-report.json',
+  io = { writeFile, rename },
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  let phase = 'invalidate-prior-primary';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    await invalidatePrimaries(outputRoot);
+    phase = 'read-elastic-exchange-trajectory-source';
+    const [canonicalBytes, reverseBytes, reportBytes] = await Promise.all([
+      readFile(path.resolve(canonicalRawPath)),
+      readFile(path.resolve(reverseRawPath)),
+      readFile(path.resolve(runReportPath)),
+    ]);
+    const canonical = JSON.parse(String(canonicalBytes));
+    const reverse = JSON.parse(String(reverseBytes));
+    const sourceReport = JSON.parse(String(reportBytes));
+    verifyCanonicalIdentity(canonical, 'elastic-exchange canonical trajectory');
+    verifyCanonicalIdentity(reverse, 'elastic-exchange reverse trajectory');
+    lastTrustworthyEvidence = {
+      phase:'elastic-exchange-trajectory-source-read',
+      canonicalFileSha256:sha256(canonicalBytes),
+      canonicalSha256:canonical.identity.sha256,
+      reverseFileSha256:sha256(reverseBytes),
+      reverseSha256:reverse.identity.sha256,
+      reportFileSha256:sha256(reportBytes),
+    };
+
+    phase = 'bind-elastic-exchange-trajectory-source';
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      candidate => candidate.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    const expectedAlgorithm = 'strict-active-row-then-elastic-all-row-debt-trajectory-v0';
+    if (
+      canonical.schema !== NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA ||
+      reverse.schema !== NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA ||
+      canonical.route?.requested !== expectedAlgorithm ||
+      canonical.route?.effective !== expectedAlgorithm ||
+      canonical.route?.fallbackUsed !== false ||
+      reverse.route?.requested !== expectedAlgorithm ||
+      reverse.route?.effective !== expectedAlgorithm ||
+      reverse.route?.fallbackUsed !== false ||
+      canonical.source?.problemSha256 !== problem.identity.sha256 ||
+      reverse.source?.problemSha256 !== problem.identity.sha256 ||
+      canonical.config?.effective?.strictStep?.candidateEnumeration !== 'canonical' ||
+      canonical.config?.effective?.elasticStep?.candidateEnumeration !== 'canonical' ||
+      reverse.config?.effective?.strictStep?.candidateEnumeration !== 'reverse' ||
+      reverse.config?.effective?.elasticStep?.candidateEnumeration !== 'reverse' ||
+      sourceReport.schema !== 'kaminos.elastic-exchange-canonical-trajectory-run.v0' ||
+      sourceReport.status !== 'complete-canonical-reverse-physical-parity' ||
+      sourceReport.route?.fallbackUsed !== false ||
+      sourceReport.bindings?.canonicalSha256 !== canonical.identity.sha256 ||
+      sourceReport.bindings?.reverseSha256 !== reverse.identity.sha256 ||
+      sourceReport.bindings?.selectedVectorSha256 !==
+        hashMusclePackingCanonicalJson(canonical.selected.vector) ||
+      sourceReport.bindings?.selectedMetricsSha256 !==
+        hashMusclePackingCanonicalJson(canonical.selected.metrics) ||
+      JSON.stringify(canonical.selected.vector) !== JSON.stringify(reverse.selected.vector) ||
+      JSON.stringify(canonical.selected.metrics) !== JSON.stringify(reverse.selected.metrics) ||
+      canonical.work?.terminalClass !== reverse.work?.terminalClass ||
+      canonical.work?.acceptedTransitions !== reverse.work?.acceptedTransitions ||
+      canonical.work?.rows?.length !== canonical.work?.acceptedTransitions ||
+      sourceReport.decision?.terminalClass !== canonical.work?.terminalClass
+    ) throw new Error('elastic-exchange trajectory witness rejects substituted or non-parity source');
+
+    const reevaluate = (stored, label) => {
+      const state = evaluateNBodyUnifiedKktState({ problem, vector:stored.vector });
+      requireExact(state.metrics, stored.metrics,
+        `elastic-exchange trajectory witness rejects stale ${label} metrics`);
+      if (stored.muscles) requireExact(state.muscles, stored.muscles,
+        `elastic-exchange trajectory witness rejects stale ${label} geometry`);
+      requireExact(elasticExchangeOrderedRows(state), stored.rows,
+        `elastic-exchange trajectory witness rejects stale ${label} row ledger`);
+      return state;
+    };
+    const startState = reevaluate(canonical.start, 'start');
+    const evaluatedRows = canonical.work.rows.map(row => ({
+      row,
+      state:reevaluate(row.after, `step ${row.iteration}`),
+    }));
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'elastic-exchange-trajectory-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      acceptedTransitions:evaluatedRows.length,
+      terminalClass:canonical.work.terminalClass,
+    };
+
+    phase = 'construct-elastic-exchange-trajectory-projection';
+    const source = fixture.knownFeasible;
+    const orderedStates = [
+      'step-16-source',
+      ...evaluatedRows.map(({ row }) => `elastic-exchange-step-${row.iteration}`),
+    ];
+    const states = {
+      'step-16-source':{
+        label:'step 16 · crowded source',
+        severity:0.32,
+        status:'shared elastic-exchange trajectory source',
+        warning:true,
+        source,
+        muscles:startState.muscles,
+        metrics:startState.metrics,
+        comparisonNote:`all-row energy ${canonical.start.allRowSquaredViolationEnergy} · maximum residual ${canonical.start.maximumPhysicalResidual} · exact trajectory source`,
+        truth:'This is the exact crowded state consumed by both enumeration arms. It is rendered at true physical position and contains no display displacement.',
+      },
+      ...Object.fromEntries(evaluatedRows.map(({ row, state }) => {
+        const key = `elastic-exchange-step-${row.iteration}`;
+        const debt = elasticExchangeDebtSummary(row);
+        const radius = elasticExchangeSelectedRadius(row);
+        const terminal = row.iteration === canonical.work.terminalEvidence?.iteration
+          ? ` This accepted state triggers ${canonical.work.terminalClass}: the contact graph repeats while all-row energy rises versus iteration ${canonical.work.terminalEvidence.priorIteration}.`
+          : '';
+        return [key, {
+          label:`step ${row.iteration} · ${row.regime === 'elastic-all-row' ? 'elastic escape' : 'strict repayment'}`,
+          severity:0.32,
+          status:row.iteration === canonical.work.terminalEvidence?.iteration
+            ? canonical.work.terminalClass
+            : `accepted ${row.regime}`,
+          warning:true,
+          source,
+          muscles:state.muscles,
+          metrics:state.metrics,
+          comparisonOverlay:{
+            baselineState:'step-16-source',
+            baselineLabel:'step 16 source',
+            baselineResultIdentitySha256:canonical.start.stateIdentity,
+            targetStepIdentitySha256:row.stepIdentity,
+            displayGain:60,
+            maximumWorldDisplacement:maximumCenterlineDisplacement(
+              startState.muscles,
+              state.muscles,
+            ),
+            rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+          },
+          comparisonNote:`${row.regime} · radius ${radius} · all-row energy ${row.after.allRowSquaredViolationEnergy} · maximum residual ${row.after.maximumPhysicalResidual} · family and changed-row debt in comparison ledger · arrows ×60 display-only`,
+          truth:`Iteration ${row.iteration} accepts one ${row.regime} transition. Endpoint identity and per-muscle volume remain exact. Family and row borrowing are preserved independently; the surface stays at true coordinates.${terminal}`,
+          debt,
+        }];
+      })),
+    };
+    const comparison = {
+      canonical:{
+        identity:structuredClone(canonical.identity),
+        source:structuredClone(canonical.source),
+        config:structuredClone(canonical.config),
+        start:{
+          stateIdentity:canonical.start.stateIdentity,
+          allRowSquaredViolationEnergy:canonical.start.allRowSquaredViolationEnergy,
+          maximumPhysicalResidual:canonical.start.maximumPhysicalResidual,
+        },
+        work:{
+          attempts:canonical.work.attempts,
+          acceptedTransitions:canonical.work.acceptedTransitions,
+          strictAccepted:canonical.work.strictAccepted,
+          elasticAccepted:canonical.work.elasticAccepted,
+          terminalClass:canonical.work.terminalClass,
+          terminalEvidence:structuredClone(canonical.work.terminalEvidence),
+          totalPhysicalEvaluations:canonical.work.totalPhysicalEvaluations,
+          rows:canonical.work.rows.map(row => ({
+            iteration:row.iteration,
+            regime:row.regime,
+            accepted:row.accepted,
+            sourceStateIdentity:row.sourceStateIdentity,
+            selectedStateIdentity:row.selectedStateIdentity,
+            contactGraphIdentity:row.contactGraphIdentity,
+            stepIdentity:row.stepIdentity,
+            trajectoryPrefixIdentity:row.trajectoryPrefixIdentity,
+            before:{
+              allRowSquaredViolationEnergy:row.before.allRowSquaredViolationEnergy,
+              maximumPhysicalResidual:row.before.maximumPhysicalResidual,
+            },
+            after:{
+              allRowSquaredViolationEnergy:row.after.allRowSquaredViolationEnergy,
+              maximumPhysicalResidual:row.after.maximumPhysicalResidual,
+            },
+            debt:elasticExchangeDebtSummary(row),
+          })),
+        },
+      },
+      reverse:{
+        identity:structuredClone(reverse.identity),
+        config:structuredClone(reverse.config),
+        selectedStateIdentity:reverse.selected.stateIdentity,
+        terminalClass:reverse.work.terminalClass,
+      },
+      runReport:structuredClone(sourceReport),
+      presentation:{ solverReplayed:false, physicalStatesReevaluated:true },
+    };
+    const fixtures = {
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const fixtureBytes = jsonBytes(fixtures);
+    const comparisonBytes = jsonBytes(comparison);
+    const bindings = {
+      fixturesSha256:sha256(fixtureBytes),
+      resultsSha256:sha256(comparisonBytes),
+    };
+    const payload = {
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:true,
+      },
+      display:{
+        title:'Elastic exchange trajectory · borrowing, repayment, cycle',
+        authority:'Canonical/reverse parity-bound synthetic trajectory · complete physical row custody · no anatomical admission',
+        explanation:'One exact crowded source, one elastic escape, and every accepted strict repayment state. Surfaces are rendered at true position with stable colors. Cross-section rings and arrows expose subtle motion at ×60 display gain only. The final state is shown because the repeated contact graph and worsening all-row energy are the mechanism failure, not because it is a preferred packing result.',
+        orderedStates,
+        defaultState:orderedStates.at(-1),
+      },
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({
+      payload,
+      bindings,
+      route:NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE,
+    }));
+    const reportCore = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'complete-pending-agent-visual-inspection',
+      route:{
+        requested:NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE,
+        effective:NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE,
+        fallbackUsed:false,
+      },
+      classification:{
+        terminalClass:canonical.work.terminalClass,
+        terminalEvidence:structuredClone(canonical.work.terminalEvidence),
+        acceptedTransitions:canonical.work.acceptedTransitions,
+        strictAccepted:canonical.work.strictAccepted,
+        elasticAccepted:canonical.work.elasticAccepted,
+        canonicalReversePhysicalParity:true,
+        solverReplayedForPresentation:false,
+        physicalProjectionCount:orderedStates.length,
+        mechanismInputs:structuredClone(payload.mechanism),
+      },
+      bindings:{
+        ...bindings,
+        indexHtmlSha256:sha256(htmlBytes),
+        canonicalFileSha256:sha256(canonicalBytes),
+        canonicalIdentitySha256:canonical.identity.sha256,
+        reverseFileSha256:sha256(reverseBytes),
+        reverseIdentitySha256:reverse.identity.sha256,
+        reportFileSha256:sha256(reportBytes),
+      },
+      requiredStates:orderedStates,
+      requiredModes:['volume','slice'],
+      claimCeiling:{
+        admittedClaim:'same-camera true-position visual comparison of one parity-bound elastic escape, subsequent strict repayment, and the exact terminal contact-cycle state',
+        anatomicalAdmission:'none',
+        nonGoals:[
+          'production-architecture-selection',
+          'global-convergence',
+          'carrier-sufficiency',
+          'anatomical-plausibility',
+          'arbitrary-N-closure',
+          'fascia-composition',
+        ],
+      },
+    };
+    const witnessReport = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    phase = 'write-primary';
+    for (const [name, bytes] of [
+      ['fixtures.json', fixtureBytes],
+      ['comparison.json', comparisonBytes],
+      ['index.html', htmlBytes],
+      ['report.json', jsonBytes(witnessReport)],
+    ]) await writeAtomically(path.join(outputRoot, name), bytes, io);
+    return { outputRoot, report:witnessReport, states };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'failed',
+      route:{
+        requested:NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_WITNESS_ROUTE,
+        effective:null,
+        fallbackUsed:false,
+      },
+      failurePhase:phase,
+      lastTrustworthyEvidence,
+      error:{ name:error.name, message:error.message },
+    };
+    await writeAtomically(path.join(outputRoot, 'report.json'), jsonBytes(failure), io);
+    throw error;
+  }
+}
+
+export async function writeNBodyPackingCumulativeDebtBoundaryWitness({
+  outDir = 'artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0',
+  canonicalRawPath =
+    'artifacts/nbody-packing-cumulative-debt-filter-classified-boundary-trajectory-v0/canonical-raw.json',
+  io = { writeFile, rename },
+} = {}) {
+  const outputRoot = path.resolve(outDir);
+  let phase = 'invalidate-prior-primary';
+  let lastTrustworthyEvidence = { phase:'none' };
+  await mkdir(outputRoot, { recursive:true });
+  try {
+    await invalidatePrimaries(outputRoot);
+    phase = 'read-cumulative-debt-boundary-source';
+    const canonicalBytes = await readFile(path.resolve(canonicalRawPath));
+    const canonical = JSON.parse(String(canonicalBytes));
+    verifyCanonicalIdentity(canonical, 'cumulative-debt boundary trajectory');
+    lastTrustworthyEvidence = {
+      phase:'cumulative-debt-boundary-source-read',
+      canonicalFileSha256:sha256(canonicalBytes),
+      canonicalSha256:canonical.identity.sha256,
+    };
+
+    phase = 'bind-cumulative-debt-boundary-source';
+    const fixture = createNBodyLocalizedChallengeSuite().find(
+      candidate => candidate.assayProfile.severity === 0.32,
+    );
+    const problem = compileNBodyAdaptiveKktProblem(fixture);
+    const expectedAlgorithm = 'strict-active-row-then-elastic-all-row-debt-trajectory-v0';
+    const rows = canonical.work?.rows || [];
+    const floor = rows.at(-1);
+    if (
+      canonical.schema !== NBODY_PACKING_ELASTIC_EXCHANGE_TRAJECTORY_RESULT_SCHEMA ||
+      canonical.status !==
+        'elastic-exchange-trajectory-strict-global-merit-floor-cumulative-family-debt-floor' ||
+      canonical.route?.requested !== expectedAlgorithm ||
+      canonical.route?.effective !== expectedAlgorithm ||
+      canonical.route?.fallbackUsed !== false ||
+      canonical.source?.problemSha256 !== problem.identity.sha256 ||
+      canonical.config?.effective?.iterationBudget !== 20 ||
+      canonical.work?.terminalClass !==
+        'strict-global-merit-floor-cumulative-family-debt-floor' ||
+      canonical.work?.terminalEvidence?.iteration !== 12 ||
+      canonical.work?.acceptedTransitions !== 11 ||
+      rows.length !== 12 ||
+      rows.slice(0, -1).some(row => !row.accepted) ||
+      floor?.accepted !== false ||
+      floor?.strictGlobalMerit?.status !== 'strict-global-merit-floor' ||
+      floor?.strictGlobalMerit?.familyAdmissibleCandidateCount !== 15 ||
+      floor?.strictGlobalMerit?.globalAdmissibleCandidateCount !== 0 ||
+      floor?.elasticDebtFilter?.status !== 'cumulative-family-debt-floor' ||
+      floor?.elasticDebtFilter?.rawAdmissibleCandidateCount !== 16 ||
+      floor?.elasticDebtFilter?.admissibleCandidateCount !== 0 ||
+      rows.some(row => row.hardInvariantFailures?.length !== 0)
+    ) throw new Error('cumulative-debt boundary witness rejects incompatible source');
+
+    const reevaluate = (stored, label) => {
+      const state = evaluateNBodyUnifiedKktState({ problem, vector:stored.vector });
+      requireExact(state.metrics, stored.metrics,
+        `cumulative-debt boundary witness rejects stale ${label} metrics`);
+      if (stored.muscles) requireExact(state.muscles, stored.muscles,
+        `cumulative-debt boundary witness rejects stale ${label} geometry`);
+      requireExact(elasticExchangeOrderedRows(state), stored.rows,
+        `cumulative-debt boundary witness rejects stale ${label} row ledger`);
+      return state;
+    };
+    const startState = reevaluate(canonical.start, 'start');
+    let priorVector = canonical.start.vector;
+    const evaluatedRows = rows.map(row => {
+      requireExact(row.before.vector, priorVector,
+        `cumulative-debt boundary witness rejects continuity at step ${row.iteration}`);
+      const state = reevaluate(row.after, `step ${row.iteration}`);
+      if (!row.accepted) {
+        requireExact(row.after.vector, row.before.vector,
+          `cumulative-debt boundary witness rejects rejected-state mutation at step ${row.iteration}`);
+      } else {
+        priorVector = row.after.vector;
+      }
+      return { row, state };
+    });
+    requireExact(canonical.selected.vector, rows.at(-2).after.vector,
+      'cumulative-debt boundary witness rejects final accepted state binding');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      phase:'cumulative-debt-boundary-source-bound',
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      attemptedTransitions:rows.length,
+      acceptedTransitions:canonical.work.acceptedTransitions,
+      terminalClass:canonical.work.terminalClass,
+    };
+
+    phase = 'construct-cumulative-debt-boundary-projection';
+    const source = fixture.knownFeasible;
+    const selectedIterations = [1, 4, 11, 12];
+    const stateKey = iteration => iteration === 12
+      ? 'priced-debt-floor-12'
+      : `priced-debt-step-${iteration}`;
+    const orderedStates = [
+      'step-16-source',
+      ...selectedIterations.map(stateKey),
+    ];
+    const states = {
+      'step-16-source':{
+        label:'step 16 · crowded source',
+        severity:0.32,
+        status:'shared cumulative-debt trajectory source',
+        warning:true,
+        source,
+        muscles:startState.muscles,
+        metrics:startState.metrics,
+        comparisonNote:`all-row energy ${canonical.start.allRowSquaredViolationEnergy} · maximum residual ${canonical.start.maximumPhysicalResidual} · exact trajectory source`,
+        truth:'Exact crowded source at true physical position. No target geometry, source mutation, or display displacement is consumed by the solver.',
+      },
+      ...Object.fromEntries(selectedIterations.map(iteration => {
+        const { row, state } = evaluatedRows[iteration - 1];
+        const floorState = !row.accepted;
+        const key = stateKey(iteration);
+        const effectiveRadius = row.elasticDebtFilter?.selectedRadius ??
+          row.strictGlobalMerit?.selectedRadius ?? null;
+        const rawRadius = row.attempts?.elastic?.selected?.radius ?? null;
+        const debt = elasticExchangeDebtSummary(row);
+        const status = floorState ? canonical.work.terminalClass : `accepted ${row.regime}`;
+        const label = floorState
+          ? 'attempt 12 · joint direction-set floor'
+          : iteration === 1
+            ? 'step 1 · initial elastic escape'
+            : iteration === 4
+              ? 'step 4 · cumulative pricing begins'
+              : 'step 11 · final accepted state';
+        const truth = floorState
+          ? 'No geometry moves at this rejected floor. Fifteen strict candidates remain family-admissible but all are globally uphill; sixteen raw elastic candidates descend globally but all exceed the remaining cumulative skeletal-debt budget.'
+          : `Iteration ${iteration} accepts one ${row.regime} transition at the filtered radius. Endpoint identity and individual volume remain exact; all surfaces remain at true physical position.`;
+        return [key, {
+          label,
+          severity:0.32,
+          status,
+          warning:true,
+          source,
+          muscles:state.muscles,
+          metrics:state.metrics,
+          comparisonOverlay:{
+            baselineState:'step-16-source',
+            baselineLabel:'step 16 source',
+            baselineResultIdentitySha256:canonical.start.stateIdentity,
+            targetStepIdentitySha256:row.stepIdentity,
+            displayGain:80,
+            maximumWorldDisplacement:maximumCenterlineDisplacement(
+              startState.muscles,
+              state.muscles,
+            ),
+            rendering:'true-position-cross-section-rings-and-amplified-vectors-v0',
+          },
+          comparisonNote:`${row.regime} · raw elastic radius ${rawRadius} · effective radius ${effectiveRadius} · cumulative candidates ${row.elasticDebtFilter?.admissibleCandidateCount ?? 'n/a'} · all-row energy ${row.after.allRowSquaredViolationEnergy} · arrows ×80 display-only`,
+          truth,
+          debt,
+        }];
+      })),
+    };
+    const comparison = {
+      canonical:{
+        identity:structuredClone(canonical.identity),
+        source:structuredClone(canonical.source),
+        config:structuredClone(canonical.config),
+        start:{
+          stateIdentity:canonical.start.stateIdentity,
+          allRowSquaredViolationEnergy:canonical.start.allRowSquaredViolationEnergy,
+          maximumPhysicalResidual:canonical.start.maximumPhysicalResidual,
+        },
+        work:{
+          attempts:canonical.work.attempts,
+          acceptedTransitions:canonical.work.acceptedTransitions,
+          strictAccepted:canonical.work.strictAccepted,
+          elasticAccepted:canonical.work.elasticAccepted,
+          terminalClass:canonical.work.terminalClass,
+          terminalEvidence:structuredClone(canonical.work.terminalEvidence),
+          totalPhysicalEvaluations:canonical.work.totalPhysicalEvaluations,
+          rows:canonical.work.rows.map(row => ({
+            iteration:row.iteration,
+            regime:row.regime,
+            accepted:row.accepted,
+            sourceStateIdentity:row.sourceStateIdentity,
+            selectedStateIdentity:row.selectedStateIdentity,
+            stepIdentity:row.stepIdentity,
+            trajectoryPrefixIdentity:row.trajectoryPrefixIdentity,
+            before:{
+              allRowSquaredViolationEnergy:row.before.allRowSquaredViolationEnergy,
+              maximumPhysicalResidual:row.before.maximumPhysicalResidual,
+            },
+            after:{
+              allRowSquaredViolationEnergy:row.after.allRowSquaredViolationEnergy,
+              maximumPhysicalResidual:row.after.maximumPhysicalResidual,
+            },
+            strictGlobalMerit:structuredClone(row.strictGlobalMerit),
+            elasticDebtFilter:structuredClone(row.elasticDebtFilter),
+            debtAccumulation:structuredClone(row.debtAccumulation),
+            debt:elasticExchangeDebtSummary(row),
+          })),
+        },
+      },
+      presentation:{ solverReplayed:false, physicalStatesReevaluated:true },
+    };
+    const fixtures = {
+      fixtureSha256:fixture.identity.sha256,
+      problemSha256:problem.identity.sha256,
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const fixtureBytes = jsonBytes(fixtures);
+    const comparisonBytes = jsonBytes(comparison);
+    const bindings = {
+      fixturesSha256:sha256(fixtureBytes),
+      resultsSha256:sha256(comparisonBytes),
+    };
+    const payload = {
+      states,
+      mechanism:{
+        oracleTargetCoordinatesConsumed:false,
+        contactGraphRowsConsumed:true,
+      },
+      display:{
+        title:'Cumulative-priced packing · natural direction-set floor',
+        authority:'Canonical synthetic trajectory · complete physical row custody · no anatomical admission',
+        explanation:'Sparse decision-bearing states from one exact crowded source. Surfaces remain at true position. Cross-section rings and arrows expose subtle cumulative motion at ×80 display gain only. The final floor intentionally has the same geometry as step 11 because no candidate is admitted: strict moves are globally uphill, while elastic moves overdraw the fixed cumulative skeletal-debt budget.',
+        orderedStates,
+        defaultState:'priced-debt-floor-12',
+      },
+      environment:{ compartment:source.compartment, obstacles:source.obstacles },
+    };
+    const htmlBytes = Buffer.from(renderNBodyPackingLocalizedChallengeHtml({
+      payload,
+      bindings,
+      route:NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE,
+    }));
+    const reportCore = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'complete-pending-agent-visual-inspection',
+      route:{
+        requested:NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE,
+        effective:NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE,
+        fallbackUsed:false,
+      },
+      classification:{
+        terminalClass:canonical.work.terminalClass,
+        terminalEvidence:structuredClone(canonical.work.terminalEvidence),
+        attemptedTransitions:canonical.work.attempts,
+        acceptedTransitions:canonical.work.acceptedTransitions,
+        strictAccepted:canonical.work.strictAccepted,
+        elasticAccepted:canonical.work.elasticAccepted,
+        solverReplayedForPresentation:false,
+        physicalProjectionCount:orderedStates.length,
+        mechanismInputs:structuredClone(payload.mechanism),
+      },
+      bindings:{
+        ...bindings,
+        indexHtmlSha256:sha256(htmlBytes),
+        canonicalFileSha256:sha256(canonicalBytes),
+        canonicalIdentitySha256:canonical.identity.sha256,
+      },
+      requiredStates:orderedStates,
+      requiredModes:['volume','slice'],
+      claimCeiling:{
+        admittedClaim:'same-camera true-position visual comparison of one cumulative-priced synthetic trajectory from source through the exact strict-global-merit plus cumulative-family-debt floor',
+        anatomicalAdmission:'none',
+        nonGoals:[
+          'production-architecture-selection',
+          'global-convergence',
+          'carrier-sufficiency',
+          'anatomical-plausibility',
+          'arbitrary-N-closure',
+          'fascia-composition',
+        ],
+      },
+    };
+    const witnessReport = {
+      ...reportCore,
+      identity:{ sha256:hashMusclePackingCanonicalJson(reportCore) },
+    };
+    phase = 'write-primary';
+    for (const [name, bytes] of [
+      ['fixtures.json', fixtureBytes],
+      ['comparison.json', comparisonBytes],
+      ['index.html', htmlBytes],
+      ['report.json', jsonBytes(witnessReport)],
+    ]) await writeAtomically(path.join(outputRoot, name), bytes, io);
+    return { outputRoot, report:witnessReport, states };
+  } catch (error) {
+    const failure = {
+      schema:NBODY_PACKING_LOCALIZED_WITNESS_SCHEMA,
+      status:'failed',
+      route:{
+        requested:NBODY_PACKING_CUMULATIVE_DEBT_BOUNDARY_WITNESS_ROUTE,
         effective:null,
         fallbackUsed:false,
       },

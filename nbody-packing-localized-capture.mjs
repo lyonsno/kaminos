@@ -17,6 +17,12 @@ const STATES = Object.freeze([
   'active-row-step-9', 'active-row-step-11', 'active-row-step-12',
   'active-row-step-16',
   'step-16-source', 'active-row-control', 'elastic-all-row-comparator',
+  'elastic-exchange-step-1', 'elastic-exchange-step-2',
+  'elastic-exchange-step-3', 'elastic-exchange-step-4',
+  'elastic-exchange-step-5', 'elastic-exchange-step-6',
+  'elastic-exchange-step-7', 'elastic-exchange-step-8',
+  'priced-debt-step-1', 'priced-debt-step-4',
+  'priced-debt-step-11', 'priced-debt-floor-12',
 ]);
 export const NBODY_PACKING_LOCALIZED_CAPTURE_VIEWPORT = Object.freeze({
   width:1400,
