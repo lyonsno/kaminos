@@ -1,0 +1,31 @@
+{
+  "schema": "kaminos.procedural-groom-sam3-sanity-visual-inspection.v0",
+  "state": "decisive-selection-views-inspected",
+  "jobId": "05e5e9ccd831",
+  "sourceObservationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+  "sourceViewId": "front",
+  "inspected": [
+    "whole-cat/default-0p3-nms-0p5",
+    "cat-nose/default-0p3-nms-0p5",
+    "cat-eye/raw-0p1",
+    "cat-eye/default-0p3-nms-0p5",
+    "gemma-main-fur-text-only/raw-0p1",
+    "gemma-main-fur-text-only/default-0p3-nms-0p5",
+    "gemma-main-fur-box-guided/raw-0p1",
+    "gemma-main-fur-box-guided/default-0p3-nms-0p5",
+    "negative-car/default-0p3-nms-0p5",
+    "lower-long-fur/default-0p3-nms-0p5",
+    "cat-fur/top-1"
+  ],
+  "safetyCharacterization": "Deterministic authored cat render with colored segmentation overlays; benign and free of generator-corruption or hostile biological imagery.",
+  "visualVerdict": {
+    "textOnlyDefault": "Polite, legible object and part masks consistent with normal SAM behavior.",
+    "rawLowThreshold": "Admits weak scattered queries and can flood most of the object or image when unioned.",
+    "boxGuided": "The broad positive box materially multiplies candidates and introduces exterior halo spill; it does not behave as the intended post-hoc locality filter.",
+    "lowerLongFur": "One documented-default mask visibly localizes the longer lower coat/ruff field on the front view.",
+    "negativeControl": "The car prompt returns no mask at every reported threshold."
+  },
+  "causalDisposition": "The prior SAM weirdness is attributable to the wrapper contract: threshold 0.1, no NMS, and treating a VLM locality box as a positive SAM geometry prompt. Do not attribute it to ordinary SAM behavior.",
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

@@ -1,0 +1,7 @@
+{
+  "schema": "kaminos.procedural-groom-sam3-sanity-review.v0",
+  "state": "sanity_review_bound_for_visual_inspection",
+  "promptCount": 10,
+  "visualAdmission": false,
+  "scientificAdmission": false
+}

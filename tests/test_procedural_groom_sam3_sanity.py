@@ -10,6 +10,8 @@ import numpy as np
 
 TOOL = Path(__file__).parents[1] / "tools" / "run-procedural-groom-sam3-sanity.py"
 SPEC = importlib.util.spec_from_file_location("procedural_groom_sam3_sanity", TOOL)
+REVIEW_TOOL = Path(__file__).parents[1] / "tools" / "build-procedural-groom-sam3-sanity-review.py"
+REVIEW_SPEC = importlib.util.spec_from_file_location("procedural_groom_sam3_sanity_review", REVIEW_TOOL)
 
 
 def digest(path: Path) -> str:
@@ -82,6 +84,88 @@ class ProceduralGroomSam3SanityTest(unittest.TestCase):
         self.assertEqual(report["candidateCustody"], "individual-raw-candidates-preserved")
         self.assertFalse(report["visualAdmission"])
         self.assertFalse(report["scientificAdmission"])
+
+    def test_review_page_binds_every_candidate_and_selection_view_digest(self):
+        module = self.load_module()
+        review = importlib.util.module_from_spec(REVIEW_SPEC)
+        assert REVIEW_SPEC.loader is not None
+        REVIEW_SPEC.loader.exec_module(review)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.png"
+            source.write_bytes(b"source")
+            run = root / "run"
+            candidate_mask = run / "candidates" / "cat" / "candidate-000-mask.png"
+            candidate_overlay = run / "candidates" / "cat" / "candidate-000-overlay.png"
+            selection_mask = run / "selection-views" / "cat" / "default-mask.png"
+            selection_overlay = run / "selection-views" / "cat" / "default-overlay.png"
+            for path, content in (
+                (candidate_mask, b"candidate-mask"),
+                (candidate_overlay, b"candidate-overlay"),
+                (selection_mask, b"selection-mask"),
+                (selection_overlay, b"selection-overlay"),
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content)
+
+            def product(path):
+                return {
+                    "path": str(path.relative_to(run)),
+                    "sha256": digest(path),
+                    "byteLength": path.stat().st_size,
+                }
+
+            report_path = run / "report.json"
+            report_path.write_text(json.dumps({
+                "schema": module.REPORT_SCHEMA,
+                "state": "sanity_matrix_captured",
+                "phase": "complete",
+                "requestedModel": "sam3",
+                "effectiveModel": "sam3",
+                "requestedBackend": "mlx-metal",
+                "effectiveBackend": "mlx-metal",
+                "rawThreshold": 0.1,
+                "reportThresholds": [0.1, 0.3, 0.5],
+                "nmsIouThreshold": 0.5,
+                "candidateCustody": "individual-raw-candidates-preserved",
+                "source": {"path": "source.png", "sha256": digest(source)},
+                "prompts": [{
+                    "id": "cat",
+                    "text": "a cat",
+                    "mode": "text-only",
+                    "rawCandidateCount": 1,
+                    "candidates": [{
+                        "index": 0,
+                        "score": 0.9,
+                        "boxPixels": [0, 0, 10, 10],
+                        "positivePixels": 10,
+                        "mask": product(candidate_mask),
+                        "overlay": product(candidate_overlay),
+                    }],
+                    "selectionViews": [{
+                        "id": "default-0p3-nms-0p5",
+                        "candidateIndices": [0],
+                        "candidateCount": 1,
+                        "positivePixels": 10,
+                        "mask": product(selection_mask),
+                        "overlay": product(selection_overlay),
+                    }],
+                }],
+                "claimCeiling": "One route only.",
+                "visualAdmission": False,
+                "scientificAdmission": False,
+            }))
+            output = root / "review.html"
+            result = review.build(report_path, root, output)
+            self.assertEqual(result["state"], "sanity_review_bound_for_visual_inspection")
+            page = output.read_text()
+            self.assertIn("a cat", page)
+            self.assertIn("default-0p3-nms-0p5", page)
+            self.assertNotIn(str(root), page)
+
+            selection_overlay.write_bytes(b"tampered")
+            with self.assertRaisesRegex(ValueError, "digest|byte length"):
+                review.build(report_path, root, output)
 
 
 if __name__ == "__main__":

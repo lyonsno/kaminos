@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.procedural-groom-sam3-sanity-report.v0",
+  "requestedModel": "mlx-community/sam3-bf16",
+  "effectiveModel": null,
+  "requestedBackend": "mlx-metal",
+  "effectiveBackend": null,
+  "requestSha256": "d5ccbcc9a0c6c9f9c15d32fe714053af135877524c187b14287950c8a084434d",
+  "sourceSha256": "5a7fc0e64d20ed2c55ceddd6417af98641121eaa3cd8e8b9ae78973490117f2d",
+  "rawThreshold": 0.1,
+  "reportThresholds": [
+    0.1,
+    0.3,
+    0.5
+  ],
+  "nmsIouThreshold": 0.5,
+  "candidateCustody": "individual-raw-candidates-preserved",
+  "visualAdmission": false,
+  "scientificAdmission": false,
+  "state": "started",
+  "phase": "model-load",
+  "promptCount": 10,
+  "lastTrustworthyEvidence": "digest-bound-literal-prompt-request"
+}
