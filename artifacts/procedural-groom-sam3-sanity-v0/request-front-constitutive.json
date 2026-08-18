@@ -1,0 +1,32 @@
+{
+  "schema": "kaminos.procedural-groom-sam3-sanity-request.v0",
+  "source": {
+    "path": "artifacts/procedural-groom-presentation-v0/attempts/source-like-pass-05-density12x-ruff2p5x/source-like-front.png",
+    "sha256": "5a7fc0e64d20ed2c55ceddd6417af98641121eaa3cd8e8b9ae78973490117f2d",
+    "observationId": "procedural-groom-source-like-v0-density-12x-ruff-length-2p5x",
+    "viewId": "front"
+  },
+  "model": "mlx-community/sam3-bf16",
+  "backend": "mlx-metal",
+  "rawThreshold": 0.1,
+  "reportThresholds": [0.1, 0.3, 0.5],
+  "nmsIouThreshold": 0.5,
+  "prompts": [
+    {"id": "whole-cat", "text": "a cat", "mode": "text-only"},
+    {"id": "cat-head", "text": "cat head", "mode": "text-only"},
+    {"id": "cat-nose", "text": "cat nose", "mode": "text-only"},
+    {"id": "cat-eye", "text": "cat eye", "mode": "text-only"},
+    {"id": "cat-ear", "text": "cat ear", "mode": "text-only"},
+    {"id": "cat-fur", "text": "fur on the cat", "mode": "text-only"},
+    {"id": "lower-long-fur", "text": "long fur on the lower half of the cat head", "mode": "text-only"},
+    {"id": "gemma-main-fur-text-only", "text": "Dense, rounded fur", "mode": "text-only"},
+    {
+      "id": "gemma-main-fur-box-guided",
+      "text": "Dense, rounded fur",
+      "mode": "box-guided",
+      "boxNormalized": [0.1, 0.2, 0.8, 0.9]
+    },
+    {"id": "negative-car", "text": "a car", "mode": "text-only"}
+  ],
+  "claimCeiling": "This sanity matrix may localize abnormal candidate multiplicity to literal prompt behavior, thresholding, box guidance, or missing NMS on one authored cat image and one MLX SAM3 route. It cannot establish arbitrary-image SAM quality, production segmentation, stronger VLM behavior, or semantic admission."
+}
