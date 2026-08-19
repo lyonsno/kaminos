@@ -30,6 +30,12 @@ def main() -> int:
         addon.register()
         scene = bpy.context.scene
         mesh = bpy.data.meshes.new("MorphSmokeMesh")
+        mesh.from_pydata(
+            ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+            ((0, 1), (1, 2), (2, 0)),
+            ((0, 1, 2),),
+        )
+        mesh.update()
         target = bpy.data.objects.new("MorphSmokeTarget", mesh)
         scene.collection.objects.link(target)
         bpy.context.view_layer.objects.active = target
@@ -51,6 +57,31 @@ def main() -> int:
             if str(error) != "intentional restoration witness":
                 raise
         restored = addon.discover_morph_properties(target)
+        bpy.context.view_layer.update()
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        baseline_geometry = addon._evaluated_mesh_geometry(target, depsgraph)
+        mesh.vertices[1].co.x = 1.125
+        mesh.update()
+        bpy.context.view_layer.update()
+        altered_geometry = addon._evaluated_mesh_geometry(target, depsgraph)
+        mesh.vertices[1].co.x = 1.0
+        mesh.update()
+        basis = target.shape_key_add(name="Basis")
+        shape_key = target.shape_key_add(name="EvaluatedMorph")
+        shape_key.data[1].co.x = 1.25
+        shape_key.value = 0.0
+        bpy.context.view_layer.update()
+        shape_key_baseline = addon._evaluated_mesh_geometry(target, depsgraph)
+        source_vertex_before = tuple(mesh.vertices[1].co)
+        shape_key.value = 1.0
+        bpy.context.view_layer.update()
+        shape_key_altered = addon._evaluated_mesh_geometry(target, depsgraph)
+        source_vertex_after = tuple(mesh.vertices[1].co)
+        visible_target = next(
+            record
+            for record in addon._visible_object_records(bpy.context)
+            if record["name"] == target.name
+        )
         report["effective"] = {
             "operatorRegistered": hasattr(bpy.types, "KAMINOS_OT_export_assay_plate"),
             "panelRegistered": hasattr(bpy.types, "KAMINOS_PT_source_plate"),
@@ -67,6 +98,29 @@ def main() -> int:
             "expectedAppliedMorphs": expected_applied_morphs,
             "discoveredMorphs": discovered,
             "restoredMorphs": restored,
+            "oneVertexPositionChanged": (
+                baseline_geometry["positionSha256"]
+                != altered_geometry["positionSha256"]
+            ),
+            "oneVertexTopologyUnchanged": (
+                baseline_geometry["topologySha256"]
+                == altered_geometry["topologySha256"]
+            ),
+            "oneVertexGeometryChanged": (
+                baseline_geometry["geometrySha256"]
+                != altered_geometry["geometrySha256"]
+            ),
+            "shapeKeySourceMeshUnchanged": (
+                source_vertex_before == source_vertex_after == (1.0, 0.0, 0.0)
+            ),
+            "shapeKeyEvaluatedGeometryChanged": (
+                shape_key_baseline["geometrySha256"]
+                != shape_key_altered["geometrySha256"]
+            ),
+            "visibleRecordCarriesEvaluatedGeometry": (
+                visible_target["evaluatedLocalMeshGeometry"]["geometrySha256"]
+                == shape_key_altered["geometrySha256"]
+            ),
         }
         if not all(
             (
@@ -79,6 +133,12 @@ def main() -> int:
                 discovered == expected_morphs,
                 report["appliedMorphs"] == expected_applied_morphs,
                 restored == expected_morphs,
+                report["effective"]["oneVertexPositionChanged"],
+                report["effective"]["oneVertexTopologyUnchanged"],
+                report["effective"]["oneVertexGeometryChanged"],
+                report["effective"]["shapeKeySourceMeshUnchanged"],
+                report["effective"]["shapeKeyEvaluatedGeometryChanged"],
+                report["effective"]["visibleRecordCarriesEvaluatedGeometry"],
             )
         ):
             raise RuntimeError("registered add-on does not expose its complete runtime contract")

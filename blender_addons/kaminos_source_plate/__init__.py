@@ -15,6 +15,8 @@ from .capture_core import (
     build_morph_sample_plan,
     capture_paths,
     discover_morph_properties,
+    evaluated_mesh_geometry_record,
+    evaluated_visible_object_mesh_geometry_record,
     inspect_png,
     parse_morph_sample_values,
     validate_fixed_raster,
@@ -71,17 +73,46 @@ def _source_record():
     }
 
 
+def _evaluated_mesh_geometry(obj, depsgraph):
+    evaluated = obj.evaluated_get(depsgraph)
+    return _evaluated_mesh_geometry_from_evaluated(evaluated, depsgraph)
+
+
+def _evaluated_mesh_geometry_from_evaluated(evaluated, depsgraph):
+    mesh = evaluated.to_mesh(
+        preserve_all_data_layers=False,
+        depsgraph=depsgraph,
+    )
+    if mesh is None:
+        raise SourcePlateCaptureError(
+            "context-capture", f"could not evaluate visible mesh {evaluated.name!r}"
+        )
+    try:
+        return evaluated_mesh_geometry_record(
+            vertices=(tuple(vertex.co) for vertex in mesh.vertices),
+            edges=(tuple(edge.vertices) for edge in mesh.edges),
+            polygons=(tuple(polygon.vertices) for polygon in mesh.polygons),
+        )
+    finally:
+        evaluated.to_mesh_clear()
+
+
 def _visible_object_records(context):
+    depsgraph = context.evaluated_depsgraph_get()
     records = []
     for obj in sorted(context.visible_objects, key=lambda item: item.name):
-        records.append(
-            {
-                "name": obj.name,
-                "type": obj.type,
-                "hideRender": bool(obj.hide_render),
-                "matrixWorld": _matrix_rows(obj.matrix_world),
-            }
-        )
+        evaluated = obj.evaluated_get(depsgraph)
+        record = {
+            "name": obj.name,
+            "type": obj.type,
+            "hideRender": bool(obj.hide_render),
+            "matrixWorld": _matrix_rows(evaluated.matrix_world),
+        }
+        if obj.type == "MESH":
+            record["evaluatedLocalMeshGeometry"] = (
+                _evaluated_mesh_geometry_from_evaluated(evaluated, depsgraph)
+            )
+        records.append(record)
     return records
 
 
@@ -93,6 +124,16 @@ def _capture_context(context):
     display_settings = scene.display_settings
     sequencer_settings = scene.sequencer_colorspace_settings
     camera = scene.camera if region.view_perspective == "CAMERA" else None
+    visible_objects = _visible_object_records(context)
+    visible_object_mesh_geometry = (
+        (
+            record["name"],
+            record["evaluatedLocalMeshGeometry"],
+            record["matrixWorld"],
+        )
+        for record in visible_objects
+        if "evaluatedLocalMeshGeometry" in record
+    )
     return {
         "scene": scene.name,
         "viewLayer": context.view_layer.name,
@@ -129,7 +170,12 @@ def _capture_context(context):
                 "xray_alpha",
             ),
         ),
-        "visibleObjects": _visible_object_records(context),
+        "visibleObjects": visible_objects,
+        "evaluatedVisibleObjectMeshGeometry": (
+            evaluated_visible_object_mesh_geometry_record(
+                visible_object_mesh_geometry
+            )
+        ),
         "colorManagement": {
             "displayDevice": display_settings.display_device,
             "viewTransform": view_settings.view_transform,

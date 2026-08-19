@@ -146,6 +146,125 @@ def test_atomic_sidecar_round_trip_preserves_requested_and_effective_state():
         assert not list(path.parent.glob(f".{path.name}.*.tmp"))
 
 
+def test_evaluated_geometry_digest_detects_one_float32_vertex_step():
+    core = _load_core()
+    one_float32_step_above_one = struct.unpack(
+        "<f", struct.pack("<I", 0x3F800001)
+    )[0]
+    topology = {
+        "edges": ((0, 1), (1, 2), (2, 0)),
+        "polygons": ((0, 1, 2),),
+    }
+
+    baseline = core.evaluated_mesh_geometry_record(
+        vertices=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        **topology,
+    )
+    altered = core.evaluated_mesh_geometry_record(
+        vertices=(
+            (0.0, 0.0, 0.0),
+            (one_float32_step_above_one, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ),
+        **topology,
+    )
+
+    assert baseline["positionSha256"] != altered["positionSha256"]
+    assert baseline["geometrySha256"] != altered["geometrySha256"]
+    assert baseline["topologySha256"] == altered["topologySha256"]
+
+
+def test_evaluated_geometry_digest_separates_topology_from_positions():
+    core = _load_core()
+    vertices = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+
+    triangle = core.evaluated_mesh_geometry_record(
+        vertices=vertices,
+        edges=((0, 1), (1, 2), (2, 0)),
+        polygons=((0, 1, 2),),
+    )
+    open_path = core.evaluated_mesh_geometry_record(
+        vertices=vertices,
+        edges=((0, 1), (1, 2)),
+        polygons=(),
+    )
+
+    assert triangle["positionSha256"] == open_path["positionSha256"]
+    assert triangle["topologySha256"] != open_path["topologySha256"]
+    assert triangle["geometrySha256"] != open_path["geometrySha256"]
+
+
+def test_visible_object_mesh_digest_binds_evaluated_transform_and_is_order_stable():
+    core = _load_core()
+    cat = core.evaluated_mesh_geometry_record(
+        vertices=((0.0, 0.0, 0.0),), edges=(), polygons=()
+    )
+    skull = core.evaluated_mesh_geometry_record(
+        vertices=((1.0, 0.0, 0.0),), edges=(), polygons=()
+    )
+
+    identity = (
+        (1.0, 0.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+    translated = (
+        (1.0, 0.0, 0.0, 2.0),
+        (0.0, 1.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 0.0),
+        (0.0, 0.0, 0.0, 1.0),
+    )
+
+    forward = core.evaluated_visible_object_mesh_geometry_record(
+        (("Cat", cat, identity), ("Skull", skull, identity))
+    )
+    reverse = core.evaluated_visible_object_mesh_geometry_record(
+        (("Skull", skull, identity), ("Cat", cat, identity))
+    )
+    moved = core.evaluated_visible_object_mesh_geometry_record(
+        (("Cat", cat, translated), ("Skull", skull, identity))
+    )
+
+    assert forward == reverse
+    assert forward["objectCount"] == 2
+    assert forward["aggregateSha256"] == (
+        "f414e679d5b94e315fb4f474eafc48829d9813bddf9922f2c2916c960f3ed98b"
+    )
+    assert forward["aggregateSha256"] != moved["aggregateSha256"]
+    assert forward["schema"] == "kaminos.evaluated-visible-object-mesh-geometry.v0"
+
+
+def test_evaluated_geometry_v0_compatibility_vectors_are_fixed():
+    core = _load_core()
+    empty = core.evaluated_mesh_geometry_record(vertices=(), edges=(), polygons=())
+    triangle = core.evaluated_mesh_geometry_record(
+        vertices=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        edges=((0, 1), (1, 2), (2, 0)),
+        polygons=((0, 1, 2),),
+    )
+
+    assert triangle["positionSha256"] == (
+        "947b929f2154755cd04f31ba00b60c2d5c29e8399ea59d36f51c0645cde29deb"
+    )
+    assert triangle["topologySha256"] == (
+        "77aff16e90ae4b096246bc1d554dc6d5b0fd9ac9d1645477aa94c93ff3f49f35"
+    )
+    assert triangle["geometrySha256"] == (
+        "3c9aa46871cdd1af68962655f490f77b5a601a17bc956fa8828f25edfbd14a22"
+    )
+    assert empty == {
+        "schema": "kaminos.evaluated-mesh-geometry.v0",
+        "vertexCount": 0,
+        "edgeCount": 0,
+        "polygonCount": 0,
+        "loopCount": 0,
+        "positionSha256": "cc74196a5441dcaf465ad766fec0e278f53e577dcc93cc25a0cfba51b1339456",
+        "topologySha256": "d0ea3f3fcec649f8c2599965fe4e7f63ff3a58abc9271e026674e4f45eef1d7b",
+        "geometrySha256": "c779b842256f394b9121a791459b8bc9318e76a74038c817dde38c77246fc03c",
+    }
+
+
 def test_addon_exposes_one_action_without_saving_or_resizing_the_blend_source():
     assert ADDON_PATH.is_file(), "Blender add-on entrypoint is missing"
     source = ADDON_PATH.read_text()
@@ -176,6 +295,8 @@ def test_addon_sidecar_names_effective_view_shading_visibility_and_source_state(
         '"renderSettingsRestored"',
         '"viewportRegion"',
         '"colorManagement"',
+        '"evaluatedLocalMeshGeometry"',
+        '"evaluatedVisibleObjectMeshGeometry"',
         '"output"',
     ):
         assert contract_key in source
@@ -326,5 +447,11 @@ def test_blender_runtime_smoke_exercises_morph_registration_and_restoration():
         '"expectedAppliedMorphs"',
         '"discoveredMorphs"',
         '"restoredMorphs"',
+        '"oneVertexPositionChanged"',
+        '"oneVertexTopologyUnchanged"',
+        '"oneVertexGeometryChanged"',
+        '"shapeKeySourceMeshUnchanged"',
+        '"shapeKeyEvaluatedGeometryChanged"',
+        '"visibleRecordCarriesEvaluatedGeometry"',
     ):
         assert contract_key in source

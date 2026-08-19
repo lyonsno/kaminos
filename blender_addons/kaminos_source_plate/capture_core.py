@@ -15,6 +15,10 @@ import zlib
 
 
 SCHEMA = "kaminos.source-plate-viewport-capture.v0"
+EVALUATED_GEOMETRY_SCHEMA = "kaminos.evaluated-mesh-geometry.v0"
+EVALUATED_VISIBLE_OBJECT_MESH_GEOMETRY_SCHEMA = (
+    "kaminos.evaluated-visible-object-mesh-geometry.v0"
+)
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -192,6 +196,160 @@ def sha256_file(path: str | Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _hash_sized_bytes(digest: Any, payload: bytes) -> None:
+    digest.update(struct.pack("<Q", len(payload)))
+    digest.update(payload)
+
+
+def _mesh_index(value: Any, *, vertex_count: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise SourcePlateCaptureError(
+            "context-capture", f"mesh index must be an integer, got {value!r}"
+        )
+    if value < 0 or value >= vertex_count:
+        raise SourcePlateCaptureError(
+            "context-capture",
+            f"mesh index {value} is outside vertex range [0, {vertex_count})",
+        )
+    return value
+
+
+def evaluated_mesh_geometry_record(
+    *,
+    vertices: Any,
+    edges: Any,
+    polygons: Any,
+) -> dict[str, Any]:
+    vertex_rows = tuple(tuple(vertex) for vertex in vertices)
+    edge_rows = tuple(tuple(edge) for edge in edges)
+    polygon_rows = tuple(tuple(polygon) for polygon in polygons)
+
+    position_digest = hashlib.sha256()
+    position_digest.update(b"kaminos.evaluated-mesh-positions.v0\0")
+    position_digest.update(struct.pack("<Q", len(vertex_rows)))
+    for vertex in vertex_rows:
+        if len(vertex) != 3:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh vertex must have three coordinates, got {vertex!r}"
+            )
+        coordinates = tuple(float(component) for component in vertex)
+        if not all(math.isfinite(component) for component in coordinates):
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh vertex must be finite, got {vertex!r}"
+            )
+        try:
+            position_digest.update(struct.pack("<3f", *coordinates))
+        except (OverflowError, struct.error) as error:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh vertex is outside float32 range: {vertex!r}"
+            ) from error
+
+    topology_digest = hashlib.sha256()
+    topology_digest.update(b"kaminos.evaluated-mesh-topology.v0\0")
+    topology_digest.update(struct.pack("<Q", len(vertex_rows)))
+    topology_digest.update(struct.pack("<Q", len(edge_rows)))
+    for edge in edge_rows:
+        if len(edge) != 2:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh edge must contain two indices, got {edge!r}"
+            )
+        topology_digest.update(
+            struct.pack(
+                "<2Q",
+                *(
+                    _mesh_index(index, vertex_count=len(vertex_rows))
+                    for index in edge
+                ),
+            )
+        )
+    topology_digest.update(struct.pack("<Q", len(polygon_rows)))
+    loop_count = 0
+    for polygon in polygon_rows:
+        topology_digest.update(struct.pack("<Q", len(polygon)))
+        loop_count += len(polygon)
+        for index in polygon:
+            topology_digest.update(
+                struct.pack(
+                    "<Q", _mesh_index(index, vertex_count=len(vertex_rows))
+                )
+            )
+
+    position_sha256 = position_digest.hexdigest()
+    topology_sha256 = topology_digest.hexdigest()
+    geometry_digest = hashlib.sha256()
+    geometry_digest.update(EVALUATED_GEOMETRY_SCHEMA.encode("ascii") + b"\0")
+    geometry_digest.update(bytes.fromhex(position_sha256))
+    geometry_digest.update(bytes.fromhex(topology_sha256))
+    return {
+        "schema": EVALUATED_GEOMETRY_SCHEMA,
+        "vertexCount": len(vertex_rows),
+        "edgeCount": len(edge_rows),
+        "polygonCount": len(polygon_rows),
+        "loopCount": loop_count,
+        "positionSha256": position_sha256,
+        "topologySha256": topology_sha256,
+        "geometrySha256": geometry_digest.hexdigest(),
+    }
+
+
+def evaluated_visible_object_mesh_geometry_record(objects: Any) -> dict[str, Any]:
+    rows = sorted(tuple(objects), key=lambda row: row[0])
+    names = [name for name, _record, _matrix_world in rows]
+    if len(names) != len(set(names)):
+        raise SourcePlateCaptureError(
+            "context-capture",
+            "evaluated visible-object mesh geometry contains duplicate object names",
+        )
+
+    digest = hashlib.sha256()
+    digest.update(
+        EVALUATED_VISIBLE_OBJECT_MESH_GEOMETRY_SCHEMA.encode("ascii") + b"\0"
+    )
+    digest.update(struct.pack("<Q", len(rows)))
+    for name, record, matrix_world in rows:
+        if not isinstance(name, str) or not name:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh object name must be non-empty, got {name!r}"
+            )
+        geometry_sha256 = record.get("geometrySha256")
+        if not isinstance(geometry_sha256, str) or len(geometry_sha256) != 64:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh object {name!r} has no valid geometry digest"
+            )
+        _hash_sized_bytes(digest, name.encode("utf-8"))
+        try:
+            digest.update(bytes.fromhex(geometry_sha256))
+        except ValueError as error:
+            raise SourcePlateCaptureError(
+                "context-capture", f"mesh object {name!r} has an invalid geometry digest"
+            ) from error
+        matrix_rows = tuple(tuple(row) for row in matrix_world)
+        if len(matrix_rows) != 4 or any(len(row) != 4 for row in matrix_rows):
+            raise SourcePlateCaptureError(
+                "context-capture",
+                f"mesh object {name!r} must have a 4x4 evaluated world matrix",
+            )
+        for row in matrix_rows:
+            values = tuple(float(component) for component in row)
+            if not all(math.isfinite(component) for component in values):
+                raise SourcePlateCaptureError(
+                    "context-capture",
+                    f"mesh object {name!r} has a non-finite evaluated world matrix",
+                )
+            try:
+                digest.update(struct.pack("<4f", *values))
+            except (OverflowError, struct.error) as error:
+                raise SourcePlateCaptureError(
+                    "context-capture",
+                    f"mesh object {name!r} has a world matrix outside float32 range",
+                ) from error
+    return {
+        "schema": EVALUATED_VISIBLE_OBJECT_MESH_GEOMETRY_SCHEMA,
+        "objectCount": len(rows),
+        "aggregateSha256": digest.hexdigest(),
+    }
 
 
 def conditioning_geometry(
