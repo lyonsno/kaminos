@@ -1,0 +1,41 @@
+{
+  "chambers": [
+    {
+      "rest_volume": 1.1,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 1.267,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 1.433,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 1.4,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 1.233,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 1.067,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 0.9,
+      "semi_length": 0.5,
+      "septum_depth": 0.5
+    }
+  ],
+  "name": "lerm-neutral",
+  "posture": []
+}
