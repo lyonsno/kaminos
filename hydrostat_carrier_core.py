@@ -450,10 +450,10 @@ def generate_mesh(posed: list) -> tuple:
         a, bring = rings[ri], rings[ri + 1]
         for s in range(RING_SEGMENTS):
             s2 = (s + 1) % RING_SEGMENTS
-            faces.append((a[s], a[s2], bring[s2]))
-            faces.append((a[s], bring[s2], bring[s]))
+            faces.append((a[s], bring[s2], a[s2]))
+            faces.append((a[s], bring[s], bring[s2]))
     # End caps: triangle fans to ring centroids.
-    for ring, flip in ((rings[0], True), (rings[-1], False)):
+    for ring, flip in ((rings[0], False), (rings[-1], True)):
         cx = sum(vertices[i][0] for i in ring) / len(ring)
         cy = sum(vertices[i][1] for i in ring) / len(ring)
         cz = sum(vertices[i][2] for i in ring) / len(ring)
@@ -478,7 +478,7 @@ def mesh_volume(vertices: list, faces: list) -> float:
             - ay * (bx * cz - bz * cx)
             + az * (bx * cy - by * cx)
         )
-    return abs(vol) / 6.0
+    return vol / 6.0
 
 
 def waist_radius(posed: list, boundary_index: int) -> float:
