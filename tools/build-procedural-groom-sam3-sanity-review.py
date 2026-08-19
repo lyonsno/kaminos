@@ -109,28 +109,36 @@ def load(report_path: Path, repo_root: Path) -> dict[str, Any]:
 def build(report_path: Path, repo_root: Path, output_path: Path) -> dict[str, Any]:
     output_path = output_path.resolve()
     report = load(report_path, repo_root)
-    prompt_index = {prompt["id"]: prompt for prompt in report["prompts"]}
-    summary_specs = [
-        ("whole-cat", "default-0p3-nms-0p5", "Whole cat · documented default"),
-        ("cat-nose", "default-0p3-nms-0p5", "Nose · documented default"),
-        ("cat-eye", "raw-0p1", "Eye · old raw 0.1"),
-        ("cat-eye", "default-0p3-nms-0p5", "Eye · documented default"),
-        ("gemma-main-fur-text-only", "raw-0p1", "Gemma phrase, text-only · old raw 0.1"),
-        ("gemma-main-fur-text-only", "default-0p3-nms-0p5", "Gemma phrase, text-only · documented default"),
-        ("gemma-main-fur-box-guided", "raw-0p1", "Gemma phrase + box · old raw 0.1"),
-        ("gemma-main-fur-box-guided", "default-0p3-nms-0p5", "Gemma phrase + box · documented default"),
-        ("negative-car", "default-0p3-nms-0p5", "Negative car control"),
-    ]
-    summary_cards = []
-    for prompt_id, view_id, label in summary_specs:
-        prompt = prompt_index.get(prompt_id)
-        if prompt is None:
-            continue
-        view = next((item for item in prompt["selectionViews"] if item.get("id") == view_id), None)
+    operator_notes = {
+        "whole-cat": "Clean whole-cat segmentation.",
+        "cat-head": "Clean head segmentation.",
+        "cat-nose": "Clean nose segmentation.",
+        "cat-eye": "Both visible eyes segmented.",
+        "cat-ear": "Both visible ears segmented.",
+        "cat-fur": "No ordinary-threshold result; the one coat-like proposal is low confidence.",
+        "lower-long-fur": "One coherent lower-coat / ruff segmentation.",
+        "gemma-main-fur-text-only": "One coherent coat segmentation from Gemma's exact phrase, used as text only.",
+        "gemma-main-fur-box-guided": "Causal control: the same phrase plus Gemma's broad box creates an exterior halo.",
+        "negative-car": "Negative control: no segmentation.",
+    }
+    operator_rows = []
+    for prompt in report["prompts"]:
+        view = next(
+            (item for item in prompt["selectionViews"] if item.get("id") == "default-0p3-nms-0p5"),
+            None,
+        )
         if view is None:
-            continue
-        summary_cards.append(f"""
-<figure><img src="{e(relative(view['overlayPath'], output_path.parent))}" alt="{e(label)}"><figcaption><strong>{e(label)}</strong><span>{e(view['candidateCount'])} candidate(s) · {e(view['positivePixels'])} px</span></figcaption></figure>""")
+            raise ValueError(f"{prompt.get('id')}: ordinary result view is missing")
+        mode_note = "Text prompt"
+        if prompt.get("mode") == "box-guided":
+            mode_note = "Diagnostic box-guided control"
+        operator_rows.append(f"""
+<article class="result-row">
+  <figure><img src="{e(relative(report['sourcePath'], output_path.parent))}" alt="Source image for prompt {e(prompt['text'])}"><figcaption>Source image</figcaption></figure>
+  <div class="prompt-cell"><span class="eyebrow">{e(mode_note)}</span><code>{e(prompt['text'])}</code></div>
+  <figure><img src="{e(relative(view['overlayPath'], output_path.parent))}" alt="Resulting segmentation for prompt {e(prompt['text'])}"><figcaption>Resulting segmentation</figcaption></figure>
+  <p class="verdict">{e(operator_notes.get(prompt['id'], 'Ordinary SAM result.'))}</p>
+</article>""")
     prompt_sections = []
     for prompt in report["prompts"]:
         selection_cards = []
@@ -146,18 +154,16 @@ def build(report_path: Path, repo_root: Path, output_path: Path) -> dict[str, An
             candidate_cards.append(f"""
 <figure><img src="{e(relative(candidate['overlayPath'], output_path.parent))}" alt="{e(prompt['id'])} candidate {e(candidate['index'])}"><figcaption><strong>candidate {e(candidate['index'])}</strong><span>score {float(candidate['score']):.3f} · {e(candidate['positivePixels'])} px</span></figcaption></figure>""")
         prompt_sections.append(f"""
-<section class="panel prompt"><h2>{e(prompt['id'])}</h2><p class="prompt-text"><code>{e(prompt['text'])}</code> · {e(prompt['mode'])} · {e(prompt['rawCandidateCount'])} candidate(s) above raw threshold</p>
+<section class="forensic-prompt"><h3>{e(prompt['id'])}</h3><p class="prompt-text"><code>{e(prompt['text'])}</code> · {e(prompt['mode'])} · {e(prompt['rawCandidateCount'])} raw candidate(s)</p>
 <h3>Selection views</h3><div class="selection-grid">{''.join(selection_cards)}</div>
 <h3>Highest-scoring individual raw candidates</h3><div class="candidate-grid">{''.join(candidate_cards) if candidate_cards else '<p>No candidates.</p>'}</div></section>""")
 
     page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SAM3 Literal Prompt Sanity Matrix</title>
-<style>:root{{--bg:#0b0f13;--panel:#171d23;--line:#36414d;--text:#f4efe7;--muted:#aeb9c6;--accent:#62b6cb}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}main{{width:min(1600px,calc(100% - 28px));margin:auto;padding:34px 0 70px}}h1{{font-size:clamp(34px,5vw,62px);line-height:1.02;margin:0 0 12px}}h2{{font-size:29px;margin:0 0 4px}}h3{{margin:20px 0 10px;color:var(--muted)}}p{{margin:0 0 12px}}.lede{{font-size:19px;color:var(--muted);max-width:1120px}}.panel{{margin-top:24px;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:20px}}.predicate{{border-left:8px solid var(--accent)}}.source{{max-width:850px}}.source img,figure img{{display:block;width:100%;height:auto}}.summary-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}}.selection-grid{{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}}.candidate-grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}}figure{{margin:0;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#070a0d}}figcaption{{padding:9px;background:#212a33;color:var(--muted);font-size:12px}}figcaption strong,figcaption span{{display:block}}figcaption strong{{color:var(--text)}}code{{color:#d5edff}}.audit{{color:var(--muted);font-size:13px}}@media(max-width:1200px){{.selection-grid{{grid-template-columns:repeat(3,1fr)}}.candidate-grid{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:750px){{.summary-grid,.selection-grid,.candidate-grid{{grid-template-columns:1fr 1fr}}}}</style></head><body><main>
-<header><h1>SAM3 literal-prompt sanity matrix</h1><p class="lede">One frozen cat image, one effective SAM3 route, and literal prompts with no Gemma involvement. Every individual raw candidate is preserved. The derived views expose what thresholding, the documented image default, NMS, and top-1 selection actually change.</p></header>
-<section class="panel predicate"><h2>Diagnostic predicate</h2><p>If obvious prompts are polite under <code>0.3 + NMS 0.5</code> but spray under raw <code>0.1</code>, our wrapper manufactured the weirdness. If the documented-default view still sprays, inspect the prompt/image/model route rather than merely changing aggregation.</p></section>
-<section class="panel"><h2>Observed result</h2><p><strong>The ordinary text-only route is polite. Our wrapper manufactured the spray.</strong></p><p>At <code>0.3 + NMS 0.5</code>, whole cat and nose each reduce to one legible mask, eye and ear each reduce to their two visible instances, and the negative car control returns none. <code>Dense, rounded fur</code> reduces from nine raw candidates at <code>0.1</code> to one coherent coat mask when used text-only.</p><p>Adding Gemma's broad box to that same phrase expands the raw return to twenty-six candidates; even the documented-default view retains a spurious exterior halo. In this predictor API the box is a positive geometry prompt, not the post-hoc region filter our wrapper needed. The old result therefore combines three wrapper errors: an abnormally low threshold, skipped NMS, and misuse of box guidance.</p><p>The direct phrase <code>long fur on the lower half of the cat head</code> returns one lower-coat/ruff mask under the documented default, which is encouraging prompt-level evidence but not yet a multiview semantic admission.</p></section>
-<section class="panel"><h2>Decisive comparisons</h2><div class="summary-grid">{''.join(summary_cards)}</div></section>
-<section class="panel source"><h2>Frozen source</h2><img src="{e(relative(report['sourcePath'], output_path.parent))}" alt="Frozen procedural cat front view"></section>
-{''.join(prompt_sections)}
+<style>:root{{--bg:#0b0f13;--panel:#171d23;--line:#36414d;--text:#f4efe7;--muted:#aeb9c6;--accent:#62b6cb}}*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}}main{{width:min(1500px,calc(100% - 28px));margin:auto;padding:34px 0 70px}}h1{{font-size:clamp(34px,5vw,62px);line-height:1.02;margin:0 0 12px}}h2{{font-size:29px;margin:0 0 10px}}h3{{margin:20px 0 10px;color:var(--muted)}}p{{margin:0 0 12px}}.lede{{font-size:19px;color:var(--muted);max-width:1050px}}.panel,details{{margin-top:24px;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:20px}}.predicate{{border-left:8px solid var(--accent)}}figure{{margin:0;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#070a0d}}figure img{{display:block;width:100%;height:auto}}figcaption{{padding:8px;background:#212a33;color:var(--muted);font-size:12px}}figcaption strong,figcaption span{{display:block}}figcaption strong{{color:var(--text)}}code{{display:block;color:#d5edff;font-size:16px;white-space:normal}}.result-row{{display:grid;grid-template-columns:minmax(180px,1fr) minmax(200px,.9fr) minmax(180px,1fr) minmax(190px,.8fr);gap:16px;align-items:center;padding:18px 0;border-top:1px solid var(--line)}}.result-row:first-of-type{{border-top:0}}.eyebrow{{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}}.verdict{{font-size:17px}}summary{{cursor:pointer;font-size:20px;font-weight:700}}.forensic-prompt{{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}}.selection-grid{{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}}.candidate-grid{{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}}.audit{{color:var(--muted);font-size:13px}}@media(max-width:1000px){{.result-row{{grid-template-columns:1fr 1fr}}.selection-grid,.candidate-grid{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:620px){{.result-row,.selection-grid,.candidate-grid{{grid-template-columns:1fr}}}}</style></head><body><main>
+<header><h1>SAM prompt sanity check</h1><p class="lede">For each test: the same source image, the exact prompt, and SAM's ordinary resulting segmentation. The internal threshold and candidate diagnostics are retained separately at the bottom.</p></header>
+<section class="panel predicate"><h2>Result</h2><p><strong>SAM behaves normally on direct text prompts. The previous spray came from our wrapper, especially treating Gemma's broad locality box as positive SAM geometry.</strong></p></section>
+<section class="panel" id="operator-results"><h2>Image → prompt → resulting segmentation</h2>{''.join(operator_rows)}</section>
+<details id="forensic-appendix"><summary>Optional forensic appendix: thresholds and individual candidates</summary><p>This is the machinery used to diagnose the wrapper. It is not needed to judge the prompt results above.</p>{''.join(prompt_sections)}</details>
 <section class="panel audit"><h2>Audit</h2><p>Model: <code>{e(report['effectiveModel'])}</code> · backend: <code>{e(report['effectiveBackend'])}</code> · raw threshold <code>{e(report['rawThreshold'])}</code> · report thresholds <code>{e(report['reportThresholds'])}</code> · NMS IoU <code>{e(report['nmsIouThreshold'])}</code>.</p><p>Candidate custody: <code>{e(report['candidateCustody'])}</code>. Visual admission false. Scientific admission false.</p><p>Claim ceiling: {e(report.get('claimCeiling'))}</p></section>
 </main></body></html>"""
     output_path.parent.mkdir(parents=True, exist_ok=True)

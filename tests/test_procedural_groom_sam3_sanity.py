@@ -161,6 +161,11 @@ class ProceduralGroomSam3SanityTest(unittest.TestCase):
             page = output.read_text()
             self.assertIn("a cat", page)
             self.assertIn("default-0p3-nms-0p5", page)
+            self.assertIn('id="operator-results"', page)
+            self.assertIn('id="forensic-appendix"', page)
+            self.assertLess(page.index('id="operator-results"'), page.index('id="forensic-appendix"'))
+            self.assertIn("Source image", page)
+            self.assertIn("Resulting segmentation", page)
             self.assertNotIn(str(root), page)
 
             selection_overlay.write_bytes(b"tampered")
