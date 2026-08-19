@@ -1,0 +1,73 @@
+{
+  "schema": "kaminos.nbody-packing-localized-boundary-witness.v0",
+  "status": "complete-pending-agent-visual-inspection",
+  "route": {
+    "requested": "nbody-packing-cumulative-debt-boundary-viewer-v0",
+    "effective": "nbody-packing-cumulative-debt-boundary-viewer-v0",
+    "fallbackUsed": false
+  },
+  "classification": {
+    "terminalClass": "strict-global-merit-floor-cumulative-family-debt-floor",
+    "terminalEvidence": {
+      "iteration": 12,
+      "strictStatus": "active-row-trust-region-step-accepted",
+      "strictGlobalMeritStatus": "strict-global-merit-floor",
+      "strictFamilyAdmissibleCandidateCount": 15,
+      "strictGlobalAdmissibleCandidateCount": 0,
+      "elasticStatus": "elastic-all-row-trust-region-step-accepted",
+      "elasticTerminalReason": null,
+      "elasticDebtFilterStatus": "cumulative-family-debt-floor",
+      "elasticRawAdmissibleCandidateCount": 16,
+      "elasticCumulativeAdmissibleCandidateCount": 0,
+      "familyOutstanding": {
+        "pairwisePenetration": 0.00003497129400000009,
+        "skeletalPenetration": 0.00004249525000000001,
+        "compartmentEscape": 0
+      },
+      "familyTradeoffAllowance": 0.00004249551501
+    },
+    "attemptedTransitions": 12,
+    "acceptedTransitions": 11,
+    "strictAccepted": 2,
+    "elasticAccepted": 9,
+    "solverReplayedForPresentation": false,
+    "physicalProjectionCount": 5,
+    "mechanismInputs": {
+      "oracleTargetCoordinatesConsumed": false,
+      "contactGraphRowsConsumed": true
+    }
+  },
+  "bindings": {
+    "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+    "resultsSha256": "b8e4ae7f0e57d2a17fcb7769e6b1ddde0190d301c1db871487dcbe981c46f8f7",
+    "indexHtmlSha256": "f6d547e246e54335922f77dc43f771a945ce5d43016abc34c2bec4769200c0be",
+    "canonicalFileSha256": "b3c022940e480a80a770c348eafef95d510c6921bb2e53524e8544038be51bf3",
+    "canonicalIdentitySha256": "7c51a14bbd087271e7ab1fab4a5ba548892f3e214f31f22a570f6504f896beeb"
+  },
+  "requiredStates": [
+    "step-16-source",
+    "priced-debt-step-1",
+    "priced-debt-step-4",
+    "priced-debt-step-11",
+    "priced-debt-floor-12"
+  ],
+  "requiredModes": [
+    "volume",
+    "slice"
+  ],
+  "claimCeiling": {
+    "admittedClaim": "same-camera true-position visual comparison of one cumulative-priced synthetic trajectory from source through the exact strict-global-merit plus cumulative-family-debt floor",
+    "anatomicalAdmission": "none",
+    "nonGoals": [
+      "production-architecture-selection",
+      "global-convergence",
+      "carrier-sufficiency",
+      "anatomical-plausibility",
+      "arbitrary-N-closure",
+      "fascia-composition"
+    ]
+  },
+  "identity": {
+    "sha256": "63ea184acbdc2677805652f38018668fdf70a017b25b68e842fa1f202d49f56c"
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-screenshot-v0",
+    "effective": "independent-headless-screenshot-v0",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777231,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice",
+    "outputPath": "repo://artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/priced-debt-floor-12-slice.png",
+    "reportPath": "repo://artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/priced-debt-floor-12-slice-capture-report.json",
+    "viewport": {
+      "width": 1400,
+      "height": 900
+    },
+    "captureTimeoutMs": 20000,
+    "cleanupGraceMs": 1000,
+    "virtualTimeBudgetMs": null,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessState",
+      "witnessMode",
+      "witnessRoute",
+      "fixturesSha256",
+      "resultsSha256"
+    ],
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 52827,
+    "processGroupId": 52827,
+    "detachedProcessGroup": true,
+    "exit": {
+      "timedOut": false,
+      "code": 0,
+      "signal": null,
+      "spawnError": null
+    },
+    "cleanup": {
+      "processGroupId": 52827,
+      "graceMs": 1000,
+      "groupPresentBefore": false,
+      "actions": [],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    },
+    "domProbe": {
+      "pid": 52833,
+      "processGroupId": 52833,
+      "detachedProcessGroup": true,
+      "exit": {
+        "timedOut": false,
+        "code": 0,
+        "signal": null,
+        "spawnError": null
+      },
+      "cleanup": {
+        "processGroupId": 52833,
+        "graceMs": 1000,
+        "groupPresentBefore": false,
+        "actions": [],
+        "groupPresentAfter": false,
+        "status": "complete-no-process-group-remains"
+      }
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 4063,
+    "retainedBytes": 4063,
+    "truncated": false,
+    "tail": "[0818/214739.438963:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0818/214739.520553:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0818/214740.088634:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n[0818/214740.088688:INFO:CONSOLE:0] \"[.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n[0818/214740.091169:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0818/214740.174396:INFO:CONSOLE:0] \"[.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n[0818/214740.176606:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0818/214740.187277:INFO:CONSOLE:0] \"[.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n[0818/214740.188135:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0818/214740.198542:INFO:CONSOLE:0] \"[.WebGL-0x11400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n194856 bytes written to file repo://artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/priced-debt-floor-12-slice.png\n[0818/214740.394904:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0818/214740.420430:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n[0818/214740.474352:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0818/214741.046953:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0818/214741.047844:INFO:CONSOLE:0] \"[.WebGL-0x10c00518400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice (0)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/priced-debt-floor-12-slice.png",
+    "sizeBytes": 194856,
+    "sha256": "4dfd170f5de5834c38039f7485796ebc4e3364d414bb467e9344bf7bbba0b42c",
+    "png": {
+      "width": 1400,
+      "height": 900,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 51,
+      "idatBytes": 194223
+    }
+  },
+  "domReceipt": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessState": "priced-debt-floor-12",
+      "witnessMode": "slice",
+      "witnessRoute": "nbody-packing-cumulative-debt-boundary-viewer-v0",
+      "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+      "resultsSha256": "b8e4ae7f0e57d2a17fcb7769e6b1ddde0190d301c1db871487dcbe981c46f8f7"
+    },
+    "stdout": {
+      "limitBytes": 65536,
+      "totalBytes": 112678,
+      "retainedBytes": 65536,
+      "truncated": true,
+      "retention": "prefix-only-no-dom-body-in-report"
+    }
+  },
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "effective-dom-validated",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777231,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/priced-debt-floor-12-slice.png",
+      "sizeBytes": 194856,
+      "sha256": "4dfd170f5de5834c38039f7485796ebc4e3364d414bb467e9344bf7bbba0b42c",
+      "png": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 51,
+        "idatBytes": 194223
+      }
+    },
+    "domReceipt": {
+      "status": "complete",
+      "url": "http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessState": "priced-debt-floor-12",
+        "witnessMode": "slice",
+        "witnessRoute": "nbody-packing-cumulative-debt-boundary-viewer-v0",
+        "fixturesSha256": "d7bf057b1ef590906162550711236f768b17988d5dcf0544d8179937acbfc89e",
+        "resultsSha256": "b8e4ae7f0e57d2a17fcb7769e6b1ddde0190d301c1db871487dcbe981c46f8f7"
+      },
+      "stdout": {
+        "limitBytes": 65536,
+        "totalBytes": 112678,
+        "retainedBytes": 65536,
+        "truncated": true,
+        "retention": "prefix-only-no-dom-body-in-report"
+      }
+    }
+  },
+  "sourceDocument": {
+    "status": "complete",
+    "url": "http://127.0.0.1:8825/artifacts/nbody-packing-cumulative-debt-boundary-viewer-v0/index.html?state=priced-debt-floor-12&mode=slice",
+    "httpStatus": 200,
+    "sizeBytes": 111051,
+    "sha256": "f6d547e246e54335922f77dc43f771a945ce5d43016abc34c2bec4769200c0be"
+  }
+}
