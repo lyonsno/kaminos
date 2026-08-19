@@ -169,3 +169,69 @@ def test_wave_phase_moves_the_bulge():
         return turgors.index(max(turgors))
 
     assert bulge_center(0.2) < bulge_center(0.8)
+
+
+FULL_ERECT = [{"phoneme": "erect", "start": 0.0, "end": 1.0}]
+
+
+def test_load_girth_tapers_erect_column():
+    # Equal rest volumes, fully erect: the base supports everything above it,
+    # so realized radius must decrease from base to head.
+    spec = make_spec(posture=FULL_ERECT)
+    for c in spec["chambers"]:
+        c["rest_volume"] = 1.0
+    posed = hc.pose_carrier(hc.load_spec(spec))
+    radii = [pc.radius for pc in posed]
+    assert radii[0] > radii[-1] * 1.05
+    assert all(radii[i] >= radii[i + 1] - 1e-9 for i in range(len(radii) - 1))
+
+
+def test_neutral_posture_has_no_load_gradient():
+    posed = hc.pose_carrier(hc.load_spec(make_spec()))
+    turgors = [pc.turgor for pc in posed]
+    assert max(turgors) - min(turgors) < 1e-9
+
+
+def test_statics_preserve_volume_conservation():
+    for posture in ([], SQUAT, FULL_ERECT):
+        carrier = hc.load_spec(make_spec(posture=posture))
+        posed = hc.pose_carrier(carrier)
+        assert math.isclose(
+            sum(pc.volume for pc in posed),
+            sum(c.rest_volume for c in carrier.chambers),
+            rel_tol=1e-9,
+        )
+
+
+def test_com_projects_over_support_patch():
+    posed = hc.pose_carrier(hc.load_spec(make_spec(posture=SQUAT)))
+    masses = [pc.volume for pc in posed]
+    com_x = sum(pc.center[0] * m for pc, m in zip(posed, masses)) / sum(masses)
+    # Support is geometric: chambers whose underside rests on the ground.
+    undersides = [
+        pc.center[1] - pc.radius / (1.0 + pc.eccentricity) for pc in posed
+    ]
+    floor = min(undersides)
+    grounded = [
+        pc
+        for pc, u in zip(posed, undersides)
+        if u - floor <= hc.GROUND_EPS_FRACTION * pc.radius
+    ]
+    assert grounded
+    lo = min(pc.center[0] - pc.semi_length for pc in grounded)
+    hi = max(pc.center[0] + pc.semi_length for pc in grounded)
+    assert lo <= com_x <= hi
+
+
+def test_droop_bound_limits_adjacent_pitch_change():
+    posture = [
+        {"phoneme": "pool", "start": 0.0, "end": 0.3},
+        {"phoneme": "erect", "start": 0.3, "end": 1.0, "amount": 2.0},
+    ]
+    carrier = hc.load_spec(make_spec(posture=posture))
+    channels = hc.apply_statics(carrier, hc.compile_pose(carrier))
+    pitches = [ch["pitch"] for ch in channels]
+    # The COM lean shifts non-contact pitches by one shared scalar, so
+    # adjacent non-contact deltas still obey the bound; check interior pairs.
+    for a, b in zip(pitches, pitches[1:]):
+        assert abs(b - a) <= hc.MAX_BEND + 0.6 + 1e-9

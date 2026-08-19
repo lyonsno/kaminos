@@ -35,6 +35,16 @@ RING_SEGMENTS = 24
 ERECT_MAX_PITCH = math.radians(72.0)
 CONTACT_FACET_FRACTION = 0.35
 
+# Statics laws: how strongly supported load thickens a chamber, the maximum
+# bend between adjacent chambers (droop bound), and the lean-search window for
+# putting the center of mass over the support patch.
+LOAD_GIRTH_GAIN = 0.55
+MAX_BEND = math.radians(34.0)
+# Lean window is asymmetric: a rearing hydrostat can curl far back over its
+# own support patch, but pitching much further forward only topples it.
+LEAN_SEARCH = [(-0.4 + 1.6 * k / 60.0) for k in range(61)]
+GROUND_EPS_FRACTION = 0.08
+
 
 class SpecError(ValueError):
     """Raised when a carrier spec violates the contract."""
@@ -185,9 +195,100 @@ def compile_pose(carrier: Carrier) -> list:
     ]
 
 
+def _chain_centers(carrier: Carrier, pitches: list) -> tuple:
+    """Chamber centers and tangents for a given per-chamber pitch sequence."""
+    centers = []
+    tangents = []
+    x, y = 0.0, 0.0
+    for i, c in enumerate(carrier.chambers):
+        t = (math.cos(pitches[i]), math.sin(pitches[i]))
+        if i > 0:
+            prev = carrier.chambers[i - 1]
+            overlap = MAX_SEPTUM_OVERLAP * (1.0 - prev.septum_depth)
+            spacing = (prev.semi_length + c.semi_length) * (1.0 - overlap)
+            x += t[0] * spacing
+            y += t[1] * spacing
+        centers.append((x, y))
+        tangents.append(t)
+    return centers, tangents
+
+
+def apply_statics(carrier: Carrier, channels: list) -> list:
+    """Deterministic statics laws over the compiled pose channels.
+
+    1. Droop bound: adjacent chambers may not differ in pitch by more than
+       MAX_BEND, so the spine curves instead of kinking.
+    2. Load-proportional girth: each chamber's turgor gains with the mass it
+       supports (masses of chambers after it, weighted by how vertical the
+       chain is there), then turgor is re-normalized so total volume is still
+       conserved exactly. This produces the basal bulge and upward taper.
+    3. COM-over-support: a single lean scalar applied to non-contact chambers
+       is searched so the volume-weighted center of mass projects as close as
+       possible to the middle of the ground-contact patch.
+    """
+    n = len(channels)
+    # 1. Droop bound.
+    for i in range(1, n):
+        lo = channels[i - 1]["pitch"] - MAX_BEND
+        hi = channels[i - 1]["pitch"] + MAX_BEND
+        channels[i]["pitch"] = min(max(channels[i]["pitch"], lo), hi)
+
+    # 2. Load-proportional girth.
+    masses = [c.rest_volume for c in carrier.chambers]
+    total_mass = sum(masses)
+    for i in range(n):
+        load = sum(
+            masses[j] * math.sin(channels[j]["pitch"]) for j in range(i + 1, n)
+        )
+        channels[i]["turgor"] *= 1.0 + LOAD_GIRTH_GAIN * max(load, 0.0) / total_mass
+    rest = [c.rest_volume for c in carrier.chambers]
+    total_posed = sum(ch["turgor"] * v for ch, v in zip(channels, rest))
+    scale = sum(rest) / total_posed
+    for ch in channels:
+        ch["turgor"] *= scale
+
+    # 3. COM-over-support. Support is geometric: every chamber whose underside
+    # rests on the ground after the trial pose is grounded, not only the
+    # phoneme-flagged contact chambers. The objective is containment (zero
+    # inside the patch, distance to the nearest edge outside), tie-broken
+    # toward the smallest lean.
+    radii = [
+        math.sqrt(3.0 * ch["turgor"] * v / (4.0 * math.pi * c.semi_length))
+        for ch, v, c in zip(channels, rest, carrier.chambers)
+    ]
+
+    def com_penalty(lean: float) -> float:
+        pitches = [
+            ch["pitch"] + (0.0 if ch["contact"] else lean) for ch in channels
+        ]
+        centers, _ = _chain_centers(carrier, pitches)
+        undersides = [
+            centers[i][1] - radii[i] / (1.0 + channels[i]["eccentricity"])
+            for i in range(n)
+        ]
+        floor = min(undersides)
+        grounded = [
+            i
+            for i in range(n)
+            if undersides[i] - floor <= GROUND_EPS_FRACTION * radii[i]
+        ] or [0]
+        lo = min(centers[i][0] - carrier.chambers[i].semi_length for i in grounded)
+        hi = max(centers[i][0] + carrier.chambers[i].semi_length for i in grounded)
+        com_x = sum(
+            cx * ch["turgor"] * m for (cx, _), ch, m in zip(centers, channels, rest)
+        ) / sum(ch["turgor"] * m for ch, m in zip(channels, rest))
+        return max(lo - com_x, com_x - hi, 0.0)
+
+    best = min(LEAN_SEARCH, key=lambda lean: (com_penalty(lean), abs(lean)))
+    for ch in channels:
+        if not ch["contact"]:
+            ch["pitch"] += best
+    return channels
+
+
 def pose_carrier(carrier: Carrier) -> list:
     """Produce posed chambers: volumes, radii, centers along the posed spline."""
-    channels = compile_pose(carrier)
+    channels = apply_statics(carrier, compile_pose(carrier))
     posed = []
     # Ellipsoid volume v = (4/3) * pi * a * b * c with b*c = r^2, so
     # r = sqrt(3 v / (4 pi a)). Eccentricity trades b against c while
@@ -198,22 +299,9 @@ def pose_carrier(carrier: Carrier) -> list:
         r = math.sqrt(3.0 * v / (4.0 * math.pi * c.semi_length))
         radii.append(r)
 
-    # Lay chamber centers tail-to-head along the pitched tangent chain.
-    centers = []
-    tangents = []
-    x, y = 0.0, 0.0
-    prev_step = 0.0
-    for i, (c, ch) in enumerate(zip(carrier.chambers, channels)):
-        t = (math.cos(ch["pitch"]), math.sin(ch["pitch"]))
-        if i > 0:
-            prev = carrier.chambers[i - 1]
-            overlap = MAX_SEPTUM_OVERLAP * (1.0 - prev.septum_depth)
-            spacing = (prev.semi_length + c.semi_length) * (1.0 - overlap)
-            x += t[0] * spacing
-            y += t[1] * spacing
-        centers.append((x, y))
-        tangents.append(t)
-        prev_step = c.semi_length
+    centers, tangents = _chain_centers(
+        carrier, [ch["pitch"] for ch in channels]
+    )
 
     # Ground the body: contact chambers rest on y=0 with a facet; if no
     # chamber has contact, ground the lowest chamber's underside.
@@ -260,36 +348,6 @@ def _envelope_radius(posed: list, world_axial: float, axials: list) -> float:
         if abs(d) < 1.0:
             best = max(best, pc.radius * math.sqrt(1.0 - d * d))
     return best
-
-
-def _centerline_point(posed: list, axials: list, q: float) -> tuple:
-    """Point and tangent on the piecewise-linear centerline at axial coord q,
-    extended past the terminal chamber centers along their tangents."""
-    if q <= axials[0]:
-        pc = posed[0]
-        d = q - axials[0]
-        return (
-            (pc.center[0] + pc.tangent[0] * d, pc.center[1] + pc.tangent[1] * d),
-            (pc.tangent[0], pc.tangent[1]),
-        )
-    if q >= axials[-1]:
-        pc = posed[-1]
-        d = q - axials[-1]
-        return (
-            (pc.center[0] + pc.tangent[0] * d, pc.center[1] + pc.tangent[1] * d),
-            (pc.tangent[0], pc.tangent[1]),
-        )
-    for i in range(len(axials) - 1):
-        if axials[i] <= q <= axials[i + 1]:
-            span = axials[i + 1] - axials[i]
-            t = (q - axials[i]) / span if span > 0 else 0.0
-            a, b = posed[i].center, posed[i + 1].center
-            px = a[0] + (b[0] - a[0]) * t
-            py = a[1] + (b[1] - a[1]) * t
-            tx, ty = b[0] - a[0], b[1] - a[1]
-            norm = math.hypot(tx, ty) or 1.0
-            return (px, py), (tx / norm, ty / norm)
-    raise AssertionError("unreachable")
 
 
 def _blend_channel(posed: list, axials: list, q: float, getter) -> float:
