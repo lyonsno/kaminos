@@ -12,6 +12,7 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 CORE_PATH = ROOT / "blender_addons" / "kaminos_source_plate" / "capture_core.py"
 ADDON_PATH = ROOT / "blender_addons" / "kaminos_source_plate" / "__init__.py"
+SMOKE_PATH = ROOT / "tools" / "blender-source-plate-addon-smoke.py"
 
 
 def _load_core():
@@ -191,3 +192,139 @@ def test_addon_keeps_the_repeated_export_loop_legible_in_a_narrow_sidebar():
     assert 'bl_options = {"DEFAULT_CLOSED"}' in source
     assert 'layout.label(text="Output Folder")' in source
     assert 'layout.prop(scene, "kaminos_source_plate_output_root", text="")' in source
+
+
+def test_morph_discovery_admits_only_finite_numeric_prefixed_properties():
+    core = _load_core()
+
+    discovered = core.discover_morph_properties(
+        {
+            "morph_canine": 0.72,
+            "morph_face_mass": 1,
+            "morph_enabled": True,
+            "morph_label": "wide",
+            "morph_nan": float("nan"),
+            "morph_inf": float("inf"),
+            "unrelated": 0.25,
+        }
+    )
+
+    assert discovered == {"morph_canine": 0.72, "morph_face_mass": 1.0}
+
+
+def test_morph_sample_parser_preserves_order_deduplicates_and_fails_loud():
+    core = _load_core()
+
+    assert core.parse_morph_sample_values("0, .25, 1, .25") == (0.0, 0.25, 1.0)
+
+    for value in ("", "0, nope, 1", "0, nan", "0, inf"):
+        try:
+            core.parse_morph_sample_values(value)
+        except core.SourcePlateCaptureError as error:
+            assert error.phase == "capture-request"
+        else:
+            raise AssertionError(f"accepted invalid morph sample list {value!r}")
+
+
+def test_one_axis_plan_emits_one_baseline_and_each_nonbaseline_intervention():
+    core = _load_core()
+
+    plan = core.build_morph_sample_plan(
+        {"morph_canine": 0.0, "morph_zygomatic": 0.5},
+        (0.0, 0.5, 1.0),
+        mode="one-axis",
+    )
+
+    assert plan[0] == {
+        "kind": "baseline",
+        "axis": None,
+        "sample": None,
+        "values": {"morph_canine": 0.0, "morph_zygomatic": 0.5},
+    }
+    assert plan[1:] == [
+        {
+            "kind": "axis",
+            "axis": "morph_canine",
+            "sample": 0.5,
+            "values": {"morph_canine": 0.5, "morph_zygomatic": 0.5},
+        },
+        {
+            "kind": "axis",
+            "axis": "morph_canine",
+            "sample": 1.0,
+            "values": {"morph_canine": 1.0, "morph_zygomatic": 0.5},
+        },
+        {
+            "kind": "axis",
+            "axis": "morph_zygomatic",
+            "sample": 0.0,
+            "values": {"morph_canine": 0.0, "morph_zygomatic": 0.0},
+        },
+        {
+            "kind": "axis",
+            "axis": "morph_zygomatic",
+            "sample": 1.0,
+            "values": {"morph_canine": 0.0, "morph_zygomatic": 1.0},
+        },
+    ]
+
+
+def test_cartesian_plan_emits_the_full_uncapped_product():
+    core = _load_core()
+
+    plan = core.build_morph_sample_plan(
+        {"morph_canine": 0.2, "morph_zygomatic": 0.8},
+        (0.0, 0.5, 1.0),
+        mode="cartesian",
+    )
+
+    assert len(plan) == 9
+    assert plan[0]["values"] == {"morph_canine": 0.0, "morph_zygomatic": 0.0}
+    assert plan[-1]["values"] == {"morph_canine": 1.0, "morph_zygomatic": 1.0}
+    assert all(row["kind"] == "cartesian" for row in plan)
+
+
+def test_applied_morph_values_restore_exact_state_after_success_and_failure():
+    core = _load_core()
+    target = {"morph_canine": 0.2, "morph_zygomatic": 0.8, "other": 4.0}
+
+    with core.applied_morph_values(
+        target, {"morph_canine": 1.0, "morph_zygomatic": 0.0}
+    ):
+        assert target == {"morph_canine": 1.0, "morph_zygomatic": 0.0, "other": 4.0}
+    assert target == {"morph_canine": 0.2, "morph_zygomatic": 0.8, "other": 4.0}
+
+    try:
+        with core.applied_morph_values(target, {"morph_canine": 0.5}):
+            raise RuntimeError("capture failed")
+    except RuntimeError:
+        pass
+    assert target == {"morph_canine": 0.2, "morph_zygomatic": 0.8, "other": 4.0}
+
+
+def test_addon_exposes_morph_sweep_action_and_sidecar_identity():
+    source = ADDON_PATH.read_text()
+
+    assert 'bl_idname = "kaminos.export_morph_sweep"' in source
+    assert 'bl_label = "Export Morph Sweep"' in source
+    assert '"morphParameters"' in source
+    assert '"targetObject"' in source
+    assert '"values"' in source
+    assert 'layout.label(text="Sample Values")' in source
+    assert 'layout.prop(scene, "kaminos_source_plate_morph_samples", text="")' in source
+
+
+def test_blender_runtime_smoke_exercises_morph_registration_and_restoration():
+    source = SMOKE_PATH.read_text()
+
+    for contract_key in (
+        '"morphOperatorRegistered"',
+        '"morphPanelRegistered"',
+        '"morphSamplesProperty"',
+        '"morphModeProperty"',
+        '"expectedMorphs"',
+        '"expectedAppliedMorphs"',
+        '"discoveredMorphs"',
+        '"restoredMorphs"',
+    ):
+        assert contract_key in source

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
+from itertools import product
 import json
 import math
 from pathlib import Path
@@ -44,6 +46,120 @@ def validate_fixed_raster(width: int, height: int) -> tuple[int, int]:
             f"fixed raster dimensions must be positive integers, got {width!r} x {height!r}",
         )
     return width, height
+
+
+def discover_morph_properties(
+    properties: Any, *, prefix: str = "morph_"
+) -> dict[str, float]:
+    discovered: dict[str, float] = {}
+    for name, value in sorted(properties.items()):
+        if (
+            not name.startswith(prefix)
+            or isinstance(value, bool)
+            or not isinstance(value, (int, float))
+        ):
+            continue
+        numeric = float(value)
+        if math.isfinite(numeric):
+            discovered[name] = numeric
+    return discovered
+
+
+def parse_morph_sample_values(value: str) -> tuple[float, ...]:
+    samples: list[float] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            sample = float(token)
+        except ValueError as error:
+            raise SourcePlateCaptureError(
+                "capture-request", f"invalid morph sample value {token!r}"
+            ) from error
+        if not math.isfinite(sample):
+            raise SourcePlateCaptureError(
+                "capture-request", f"morph sample value must be finite, got {token!r}"
+            )
+        if sample not in samples:
+            samples.append(sample)
+    if not samples:
+        raise SourcePlateCaptureError(
+            "capture-request", "morph sample values must contain at least one number"
+        )
+    return tuple(samples)
+
+
+def build_morph_sample_plan(
+    baseline: dict[str, float], samples: tuple[float, ...], *, mode: str
+) -> list[dict[str, Any]]:
+    if not baseline:
+        raise SourcePlateCaptureError(
+            "capture-request", "the active object has no finite numeric morph properties"
+        )
+    if not samples:
+        raise SourcePlateCaptureError(
+            "capture-request", "morph sample values must not be empty"
+        )
+    names = sorted(baseline)
+    normalized = {name: float(baseline[name]) for name in names}
+    if mode == "one-axis":
+        plan: list[dict[str, Any]] = [
+            {
+                "kind": "baseline",
+                "axis": None,
+                "sample": None,
+                "values": dict(normalized),
+            }
+        ]
+        for name in names:
+            for sample in samples:
+                if math.isclose(
+                    sample, normalized[name], rel_tol=1e-12, abs_tol=1e-12
+                ):
+                    continue
+                values = dict(normalized)
+                values[name] = float(sample)
+                plan.append(
+                    {
+                        "kind": "axis",
+                        "axis": name,
+                        "sample": float(sample),
+                        "values": values,
+                    }
+                )
+        return plan
+    if mode == "cartesian":
+        return [
+            {
+                "kind": "cartesian",
+                "axis": None,
+                "sample": None,
+                "values": {name: float(sample) for name, sample in zip(names, values)},
+            }
+            for values in product(samples, repeat=len(names))
+        ]
+    raise SourcePlateCaptureError(
+        "capture-request", f"unsupported morph sweep mode {mode!r}"
+    )
+
+
+@contextmanager
+def applied_morph_values(target: Any, values: dict[str, float]):
+    missing = [name for name in values if name not in target]
+    if missing:
+        raise SourcePlateCaptureError(
+            "capture-request",
+            f"morph target is missing properties: {', '.join(sorted(missing))}",
+        )
+    snapshot = {name: target[name] for name in values}
+    try:
+        for name, value in values.items():
+            target[name] = value
+        yield
+    finally:
+        for name, value in snapshot.items():
+            target[name] = value
 
 
 def capture_paths(

@@ -5,14 +5,18 @@ from pathlib import Path
 import traceback
 
 import bpy
-from bpy.props import IntProperty, StringProperty
+from bpy.props import EnumProperty, IntProperty, StringProperty
 
 from .capture_core import (
     SCHEMA,
     SourcePlateCaptureError,
+    applied_morph_values,
     atomic_write_json,
+    build_morph_sample_plan,
     capture_paths,
+    discover_morph_properties,
     inspect_png,
+    parse_morph_sample_values,
     validate_fixed_raster,
 )
 
@@ -20,7 +24,7 @@ from .capture_core import (
 bl_info = {
     "name": "Kaminos Source Plate",
     "author": "Kaminos",
-    "version": (0, 1, 1),
+    "version": (0, 2, 0),
     "blender": (4, 3, 0),
     "location": "View3D > Sidebar > Kaminos",
     "description": "Export the current viewport as a fixed-raster assay conditioning plate",
@@ -163,6 +167,147 @@ def _restore_render_settings(scene, snapshot):
     image_settings.compression = snapshot["compression"]
 
 
+def _active_morph_parameters(context, *, mode="single", row=None):
+    target = context.active_object
+    if target is None:
+        return None
+    values = discover_morph_properties(target)
+    if not values:
+        return None
+    record = {
+        "targetObject": target.name,
+        "mode": mode,
+        "kind": "current",
+        "axis": None,
+        "sample": None,
+        "values": values,
+    }
+    if row is not None:
+        record.update(
+            {
+                "kind": row["kind"],
+                "axis": row["axis"],
+                "sample": row["sample"],
+            }
+        )
+    return record
+
+
+def _capture_assay_plate(context, *, label, morph_parameters=None):
+    scene = context.scene
+    source = _source_record()
+    source_stem = Path(source["path"]).stem if source["path"] else "unsaved"
+    captured_at = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace(
+        "+00:00", "Z"
+    )
+    width, height = validate_fixed_raster(
+        scene.kaminos_source_plate_resolution,
+        scene.kaminos_source_plate_resolution,
+    )
+    paths = capture_paths(
+        output_root=scene.kaminos_source_plate_output_root,
+        source_stem=source_stem,
+        label=label,
+        captured_at=captured_at,
+    )
+    requested = {
+        "outputRoot": str(Path(scene.kaminos_source_plate_output_root).expanduser()),
+        "width": width,
+        "height": height,
+        "label": label,
+    }
+    document = {
+        "schema": SCHEMA,
+        "status": "running",
+        "capturedAt": captured_at,
+        "requested": requested,
+        "effective": {},
+        "sourceBlend": source,
+        "sourceDirty": bool(bpy.data.is_dirty),
+        "output": {
+            "image": str(paths["image"]),
+            "sidecar": str(paths["sidecar"]),
+        },
+    }
+    if morph_parameters is not None:
+        document["morphParameters"] = morph_parameters
+    snapshot = _snapshot_render_settings(scene)
+    phase = "context-capture"
+    succeeded = False
+    try:
+        document["effective"] = _capture_context(context)
+        phase = "viewport-render"
+        scene.render.filepath = str(paths["image"])
+        scene.render.resolution_x = width
+        scene.render.resolution_y = height
+        scene.render.resolution_percentage = 100
+        scene.render.image_settings.file_format = "PNG"
+        scene.render.image_settings.color_mode = "RGBA"
+        scene.render.image_settings.color_depth = "8"
+        scene.render.image_settings.compression = 15
+        result = bpy.ops.render.opengl(write_still=True, view_context=True)
+        if "FINISHED" not in result:
+            raise SourcePlateCaptureError(
+                "viewport-render", f"Blender viewport render returned {sorted(result)}"
+            )
+
+        phase = "output-validation"
+        output_record = inspect_png(
+            paths["image"], expected_width=width, expected_height=height
+        )
+        if not output_record["nonblank"]:
+            raise SourcePlateCaptureError(
+                "output-validation", "viewport render contains no visible pixel signal"
+            )
+        if output_record["uniform"]:
+            raise SourcePlateCaptureError(
+                "output-validation", "viewport render is a uniform image"
+            )
+        document["status"] = "completed"
+        document["effective"]["width"] = output_record["width"]
+        document["effective"]["height"] = output_record["height"]
+        document["output"].update(output_record)
+        succeeded = True
+    except Exception as error:
+        document["status"] = "failed"
+        document["failure"] = {
+            "phase": getattr(error, "phase", phase),
+            "errorType": type(error).__name__,
+            "message": str(error),
+            "traceback": traceback.format_exc(),
+            "lastTrustworthyEvidence": {
+                "contextCaptured": bool(document["effective"]),
+                "imageExists": paths["image"].is_file(),
+            },
+        }
+    finally:
+        _restore_render_settings(scene, snapshot)
+        document["sourceBlendAfter"] = _source_record()
+        document["sourceDirtyAfter"] = bool(bpy.data.is_dirty)
+        document["renderSettingsRestored"] = _snapshot_render_settings(scene) == snapshot
+        atomic_write_json(paths["sidecar"], document)
+
+    if not succeeded:
+        raise SourcePlateCaptureError(
+            document["failure"]["phase"],
+            f"Source Plate failed during {document['failure']['phase']}: "
+            f"{document['failure']['message']}",
+        )
+    return paths["image"]
+
+
+def _morph_row_label(prefix, row, index):
+    if row["kind"] == "baseline":
+        suffix = "baseline"
+    elif row["kind"] == "axis":
+        axis = row["axis"].removeprefix("morph_")
+        sample = f"{row['sample']:.6g}".replace("-", "neg-").replace(".", "p")
+        suffix = f"{axis}-{sample}"
+    else:
+        suffix = f"grid-{index:03d}"
+    return f"{prefix}-{index:03d}-{suffix}"
+
+
 class KAMINOS_OT_export_assay_plate(bpy.types.Operator):
     bl_idname = "kaminos.export_assay_plate"
     bl_label = "Export Assay Plate"
@@ -179,107 +324,73 @@ class KAMINOS_OT_export_assay_plate(bpy.types.Operator):
         )
 
     def execute(self, context):
-        scene = context.scene
-        source = _source_record()
-        source_stem = Path(source["path"]).stem if source["path"] else "unsaved"
-        captured_at = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace(
-            "+00:00", "Z"
-        )
         try:
-            width, height = validate_fixed_raster(
-                scene.kaminos_source_plate_resolution,
-                scene.kaminos_source_plate_resolution,
-            )
-            paths = capture_paths(
-                output_root=scene.kaminos_source_plate_output_root,
-                source_stem=source_stem,
-                label=scene.kaminos_source_plate_label,
-                captured_at=captured_at,
+            path = _capture_assay_plate(
+                context,
+                label=context.scene.kaminos_source_plate_label,
+                morph_parameters=_active_morph_parameters(context),
             )
         except Exception as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
+        self.report({"INFO"}, f"Assay plate: {path}")
+        return {"FINISHED"}
 
-        requested = {
-            "outputRoot": str(Path(scene.kaminos_source_plate_output_root).expanduser()),
-            "width": width,
-            "height": height,
-            "label": scene.kaminos_source_plate_label,
-        }
-        document = {
-            "schema": SCHEMA,
-            "status": "running",
-            "capturedAt": captured_at,
-            "requested": requested,
-            "effective": {},
-            "sourceBlend": source,
-            "sourceDirty": bool(bpy.data.is_dirty),
-            "output": {
-                "image": str(paths["image"]),
-                "sidecar": str(paths["sidecar"]),
-            },
-        }
-        snapshot = _snapshot_render_settings(scene)
-        phase = "context-capture"
-        succeeded = False
+
+class KAMINOS_OT_export_morph_sweep(bpy.types.Operator):
+    bl_idname = "kaminos.export_morph_sweep"
+    bl_label = "Export Morph Sweep"
+    bl_description = "Render the active object's numeric morph properties through this exact viewport"
+    bl_options = {"REGISTER"}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(
+            KAMINOS_OT_export_assay_plate.poll(context)
+            and context.active_object
+            and discover_morph_properties(context.active_object)
+        )
+
+    def execute(self, context):
+        scene = context.scene
+        target = context.active_object
         try:
-            document["effective"] = _capture_context(context)
-            phase = "viewport-render"
-            scene.render.filepath = str(paths["image"])
-            scene.render.resolution_x = width
-            scene.render.resolution_y = height
-            scene.render.resolution_percentage = 100
-            scene.render.image_settings.file_format = "PNG"
-            scene.render.image_settings.color_mode = "RGBA"
-            scene.render.image_settings.color_depth = "8"
-            scene.render.image_settings.compression = 15
-            result = bpy.ops.render.opengl(write_still=True, view_context=True)
-            if "FINISHED" not in result:
-                raise SourcePlateCaptureError(
-                    "viewport-render", f"Blender viewport render returned {sorted(result)}"
-                )
-
-            phase = "output-validation"
-            output_record = inspect_png(
-                paths["image"], expected_width=width, expected_height=height
+            baseline = discover_morph_properties(target)
+            samples = parse_morph_sample_values(scene.kaminos_source_plate_morph_samples)
+            mode = (
+                "one-axis"
+                if scene.kaminos_source_plate_morph_mode == "ONE_AXIS"
+                else "cartesian"
             )
-            if not output_record["nonblank"]:
-                raise SourcePlateCaptureError(
-                    "output-validation", "viewport render contains no visible pixel signal"
-                )
-            if output_record["uniform"]:
-                raise SourcePlateCaptureError(
-                    "output-validation", "viewport render is a uniform image"
-                )
-            document["status"] = "completed"
-            document["effective"]["width"] = output_record["width"]
-            document["effective"]["height"] = output_record["height"]
-            document["output"].update(output_record)
-            succeeded = True
+            plan = build_morph_sample_plan(baseline, samples, mode=mode)
         except Exception as error:
-            document["status"] = "failed"
-            document["failure"] = {
-                "phase": getattr(error, "phase", phase),
-                "errorType": type(error).__name__,
-                "message": str(error),
-                "traceback": traceback.format_exc(),
-                "lastTrustworthyEvidence": {
-                    "contextCaptured": bool(document["effective"]),
-                    "imageExists": paths["image"].is_file(),
-                },
-            }
-        finally:
-            _restore_render_settings(scene, snapshot)
-            document["sourceBlendAfter"] = _source_record()
-            document["sourceDirtyAfter"] = bool(bpy.data.is_dirty)
-            document["renderSettingsRestored"] = _snapshot_render_settings(scene) == snapshot
-            atomic_write_json(paths["sidecar"], document)
-
-        if not succeeded:
-            self.report({"ERROR"}, f"Source Plate failed during {document['failure']['phase']}")
+            self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
 
-        self.report({"INFO"}, f"Assay plate: {paths['image']}")
+        captured = []
+        try:
+            for index, row in enumerate(plan):
+                with applied_morph_values(target, row["values"]):
+                    context.view_layer.update()
+                    label = _morph_row_label(
+                        scene.kaminos_source_plate_label, row, index
+                    )
+                    captured.append(
+                        _capture_assay_plate(
+                            context,
+                            label=label,
+                            morph_parameters=_active_morph_parameters(
+                                context, mode=mode, row=row
+                            ),
+                        )
+                    )
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        finally:
+            context.view_layer.update()
+
+        self.report({"INFO"}, f"Morph sweep: {len(captured)} assay plates")
         return {"FINISHED"}
 
 
@@ -315,10 +426,53 @@ class KAMINOS_PT_source_plate_settings(bpy.types.Panel):
         layout.prop(scene, "kaminos_source_plate_output_root", text="")
 
 
+class KAMINOS_PT_source_plate_morph_sweep(bpy.types.Panel):
+    bl_label = "Morph Sweep"
+    bl_idname = "KAMINOS_PT_source_plate_morph_sweep"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Kaminos"
+    bl_parent_id = "KAMINOS_PT_source_plate"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        target = context.active_object
+        morphs = discover_morph_properties(target) if target else {}
+        if target is None:
+            layout.label(text="Select a morph carrier", icon="INFO")
+            return
+        layout.label(text=target.name, icon="OBJECT_DATA")
+        if not morphs:
+            layout.label(text="No numeric morph_* properties", icon="INFO")
+            return
+        for name, value in morphs.items():
+            row = layout.row(align=True)
+            row.label(text=name.removeprefix("morph_").replace("_", " ").title())
+            row.label(text=f"{value:.3f}")
+        layout.label(text="Sample Values")
+        layout.prop(scene, "kaminos_source_plate_morph_samples", text="")
+        layout.prop(scene, "kaminos_source_plate_morph_mode", expand=True)
+        try:
+            samples = parse_morph_sample_values(scene.kaminos_source_plate_morph_samples)
+            mode = (
+                "one-axis"
+                if scene.kaminos_source_plate_morph_mode == "ONE_AXIS"
+                else "cartesian"
+            )
+            count = len(build_morph_sample_plan(morphs, samples, mode=mode))
+            layout.label(text=f"{count} plates")
+        except SourcePlateCaptureError as error:
+            layout.label(text=str(error), icon="ERROR")
+        layout.operator(KAMINOS_OT_export_morph_sweep.bl_idname, icon="RENDER_ANIMATION")
+
+
 CLASSES = (
     KAMINOS_OT_export_assay_plate,
+    KAMINOS_OT_export_morph_sweep,
     KAMINOS_PT_source_plate,
     KAMINOS_PT_source_plate_settings,
+    KAMINOS_PT_source_plate_morph_sweep,
 )
 
 
@@ -341,9 +495,24 @@ def register():
         description="Optional short label included in the output filename",
         default="view",
     )
+    bpy.types.Scene.kaminos_source_plate_morph_samples = StringProperty(
+        name="Morph Samples",
+        description="Comma-separated finite values applied to every numeric morph_* property",
+        default="0, 0.25, 0.5, 0.75, 1",
+    )
+    bpy.types.Scene.kaminos_source_plate_morph_mode = EnumProperty(
+        name="Sweep Mode",
+        items=(
+            ("ONE_AXIS", "One Axis", "Vary one property at a time around the current vector"),
+            ("CARTESIAN", "Cartesian", "Render the complete property-value product"),
+        ),
+        default="ONE_AXIS",
+    )
 
 
 def unregister():
+    del bpy.types.Scene.kaminos_source_plate_morph_mode
+    del bpy.types.Scene.kaminos_source_plate_morph_samples
     del bpy.types.Scene.kaminos_source_plate_label
     del bpy.types.Scene.kaminos_source_plate_resolution
     del bpy.types.Scene.kaminos_source_plate_output_root

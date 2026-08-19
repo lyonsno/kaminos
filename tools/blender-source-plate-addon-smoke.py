@@ -29,18 +29,56 @@ def main() -> int:
 
         addon.register()
         scene = bpy.context.scene
+        mesh = bpy.data.meshes.new("MorphSmokeMesh")
+        target = bpy.data.objects.new("MorphSmokeTarget", mesh)
+        scene.collection.objects.link(target)
+        bpy.context.view_layer.objects.active = target
+        target.select_set(True)
+        target["morph_canine"] = 0.2
+        target["morph_zygomatic"] = 0.8
+        target["morph_enabled"] = True
+        target["unrelated"] = 4.0
+        expected_morphs = {"morph_canine": 0.2, "morph_zygomatic": 0.8}
+        expected_applied_morphs = {"morph_canine": 1.0, "morph_zygomatic": 0.0}
+        discovered = addon.discover_morph_properties(target)
+        try:
+            with addon.applied_morph_values(
+                target, {"morph_canine": 1.0, "morph_zygomatic": 0.0}
+            ):
+                report["appliedMorphs"] = addon.discover_morph_properties(target)
+                raise RuntimeError("intentional restoration witness")
+        except RuntimeError as error:
+            if str(error) != "intentional restoration witness":
+                raise
+        restored = addon.discover_morph_properties(target)
         report["effective"] = {
             "operatorRegistered": hasattr(bpy.types, "KAMINOS_OT_export_assay_plate"),
             "panelRegistered": hasattr(bpy.types, "KAMINOS_PT_source_plate"),
+            "morphOperatorRegistered": hasattr(bpy.types, "KAMINOS_OT_export_morph_sweep"),
+            "morphPanelRegistered": hasattr(
+                bpy.types, "KAMINOS_PT_source_plate_morph_sweep"
+            ),
             "outputRootProperty": scene.kaminos_source_plate_output_root,
             "resolutionProperty": scene.kaminos_source_plate_resolution,
             "labelProperty": scene.kaminos_source_plate_label,
+            "morphSamplesProperty": scene.kaminos_source_plate_morph_samples,
+            "morphModeProperty": scene.kaminos_source_plate_morph_mode,
+            "expectedMorphs": expected_morphs,
+            "expectedAppliedMorphs": expected_applied_morphs,
+            "discoveredMorphs": discovered,
+            "restoredMorphs": restored,
         }
         if not all(
             (
                 report["effective"]["operatorRegistered"],
                 report["effective"]["panelRegistered"],
+                report["effective"]["morphOperatorRegistered"],
+                report["effective"]["morphPanelRegistered"],
                 report["effective"]["resolutionProperty"] == 1024,
+                report["effective"]["morphModeProperty"] == "ONE_AXIS",
+                discovered == expected_morphs,
+                report["appliedMorphs"] == expected_applied_morphs,
+                restored == expected_morphs,
             )
         ):
             raise RuntimeError("registered add-on does not expose its complete runtime contract")
