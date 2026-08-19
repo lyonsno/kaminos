@@ -1,0 +1,55 @@
+  Preprocessing /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 30.7s
+  3167 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 22.7s (3167 tokens)
+  No-cascade: using LR SLat directly (3,167 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 15573 voxels
+  Level 1 → 2: 81792 voxels
+  Level 2 → 3: 467639 voxels
+  Level 3 → 4: 2819695 voxels
+  Decoded: 47.7s (2,819,695 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  2,819,695 voxels, coord range [0, 506], grid_size=512
+  Extracted: 2.6s
+  2,819,695 vertices, 7,078,908 faces
+  Checkpoint saved: mesh_raw (203.7 MB)
+  Pre-simplify: 99,419V 540,430F (74.8s)
+  Removed 151186 duplicate faces
+  Removed 219425 non-manifold faces
+  Filled 2194 holes (1070 too large, max_perimeter=0.03)
+  Cleanup: 99,419V 540,430F → 98,319V 177,270F
+  Cleanup: 6.0s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 9.0s (3,167 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 15573 voxels
+  Level 1 → 2: 81792 voxels
+  Level 2 → 3: 467639 voxels
+  Level 3 → 4: 2819695 voxels
+  Decoded: 24.5s (2,819,695 voxels, 6 channels)
+  PBR attrs: RGB [-0.01, 0.91] metallic [0.47, 1.03] roughness [0.10, 1.04]
+  Checkpoint saved: texture (101.5 MB)
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 308,361V 177,270F (2.5s)
+    Rasterizing UV space (177,270 tris, 512x512, MLX)...
+    99,174 pixels covered (0.4s)
+    Interpolated 99,174 positions (0.0s)
+    Sampled voxel attrs (1.2s)
+    Inpainted seams (0.7s)
+
+  Saved: /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/output.glb (12.8MB)
+
+Total: 244.4s

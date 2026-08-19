@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "job_id": "bcb28ace4663",
+  "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81402",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "output_files": [
+    "output.glb",
+    "start-receipt.json"
+  ],
+  "created_at": 1787115948.8196218,
+  "duration_s": 245.3
+}

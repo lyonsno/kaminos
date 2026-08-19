@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+  "effectiveUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9510,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9510-7437",
+  "settleMs": 4500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9510/devtools/browser/ff42e3ac-c5de-4f6e-a400-0af0021917b3"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9510/devtools/browser/ff42e3ac-c5de-4f6e-a400-0af0021917b3\nTrying to load the allocator multiple times. This is *not* supported.\n[7446:17304950:0819/010853.419951:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[7446:17304950:0819/010853.420009:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[7446:17304950:0819/010853.446046:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-matrix-2026-08-19/probe-81402-long-trellis/witnesses/81402-long-direct-route.png",
+  "screenshotBytes": 531993,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-matrix-2026-08-19/probe-81402-long-trellis/mesh/output.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+        "fileName": "output.glb",
+        "label": "Mesh",
+        "registeredObjectId": "glb-ebcebdfd-2295-4430-bd44-b235611241c3",
+        "registeredAt": "2026-08-19T05:08:51.407Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-ebcebdfd-2295-4430-bd44-b235611241c3",
+        "label": "Mesh",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-86d91647-e655-4d99-863d-35baacbf891d",
+        "active": true,
+        "transform": {
+          "position": [
+            0.00010994076728820801,
+            -0.002109825611114502,
+            -0.005348652601242065
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.394238154168768,
+            1.394238154168768,
+            1.394238154168768
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8104/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Mesh"
+    }
+  }
+}

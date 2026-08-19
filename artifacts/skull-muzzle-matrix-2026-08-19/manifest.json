@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.skull-muzzle-reconstruction-matrix.v1",
+  "status": "sf3d-matrix-submitted",
+  "source": {
+    "operator_html": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-seeds81405-81408-0818/seven-seed-combined-sheet.html",
+    "prompt": "Complete this skull into a living animal head.",
+    "seed_rows": [81402, 81403, 81404, 81405, 81406, 81407, 81408],
+    "columns": ["base", "long", "longest"],
+    "cell_count": 21,
+    "source_manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/source-manifest.csv"
+  },
+  "trellis_probe": {
+    "cell": "81402-long",
+    "job_id": "bcb28ace4663",
+    "route_identity_passed": true,
+    "viewer_registration_passed": true,
+    "visual_predicate_passed": false,
+    "structural_predicate_passed": false,
+    "disposition": "useful-miss",
+    "artifact_root": "probe-81402-long-trellis",
+    "glb_sha256": "e6022e4b5449f6f9fc62b0a41121e303571aebe1530dfcb97eded58556c62b37"
+  },
+  "sf3d_matrix": {
+    "job_count": 21,
+    "job_manifest": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/sf3d-jobs.csv",
+    "requested_route": {
+      "job_type": "sf3d",
+      "texture_resolution": 1024,
+      "remesh": "none",
+      "dtype": "float16"
+    },
+    "first_job_id": "6fd56df02dc5",
+    "first_cell": "81402-long",
+    "status": "submitted"
+  },
+  "claim_ceiling": "Per-cell visual fidelity and bounded orbitability only after structural and multi-angle inspection; no anatomy, collision, animation, production topology, or unseen-view claim."
+}

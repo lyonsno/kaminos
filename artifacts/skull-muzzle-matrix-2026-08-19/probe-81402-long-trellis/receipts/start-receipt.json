@@ -1,0 +1,55 @@
+{
+  "schema": "kaminos.handy.greenroom_start_receipt.v1",
+  "created_at": "2026-08-19T04:50:48Z",
+  "cell": "81402-long",
+  "source": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png",
+    "sha256": "5c30588d261bcdc31777aef0cda28f3298c55ee2cd8f8750ea77448066560527",
+    "width": 512,
+    "height": 512,
+    "format": "png"
+  },
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "backend": "MLX",
+    "seed": 81402,
+    "steps": 8,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "no_cascade": true,
+    "simplify_first": true
+  },
+  "effective_route": {
+    "started_at_unix": 1787115703.536268,
+    "command": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/output.glb --seed 81402 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/checkpoints",
+    "backend_evidence": "DINOv3 loaded 412 weight arrays; feature tensor (1, 1029, 1024) explicitly reported as MLX.",
+    "sparse_structure_seconds": 30.7,
+    "lr_shape_latent_seconds": 22.7,
+    "sparse_voxels": 3167
+  },
+  "queue_context": {
+    "cooperative_background_job": "3cec145101dd",
+    "operator_observation": "The long-running creature-morphology job is designed to yield to other Greenroom work throughout the day.",
+    "preexisting_pending_job": "dcf6ee011366"
+  },
+  "terminal_evidence": {
+    "greenroom_job_id": "bcb28ace4663",
+    "greenroom_status": "done",
+    "output_glb": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/output.glb",
+    "checkpoints_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/checkpoints",
+    "structural_inspection": {
+      "raw_vertices": 2819695,
+      "raw_faces": 7078908,
+      "pre_simplify_seconds": 74.8,
+      "clean_vertices": 98319,
+      "clean_faces": 177270,
+      "removed_duplicate_faces": 151186,
+      "removed_non_manifold_faces": 219425,
+      "filled_holes": 2194,
+      "holes_too_large": 1070
+    },
+    "multi_angle_witness": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-matrix-2026-08-19/probe-81402-long-trellis/witnesses/81402-long-multiangle.json"
+  },
+  "status": "useful_miss",
+  "failure_phase": null
+}

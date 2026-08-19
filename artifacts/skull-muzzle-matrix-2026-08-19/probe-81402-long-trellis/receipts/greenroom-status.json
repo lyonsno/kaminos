@@ -1,0 +1,22 @@
+{
+  "job_id": "bcb28ace4663",
+  "status": "done",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png",
+  "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis",
+  "params": {
+    "seed": "81402",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "submitted_at": 1787115096.216564,
+  "started_at": 1787115703.536268,
+  "finished_at": 1787115948.8196218,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-molten-skull-muzzle-matched-camera-0818/c70d56ee48353468b2a6/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/output.glb --seed 81402 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-handy-skull-muzzle-matrix-0819/probe-81402-long-trellis/checkpoints",
+  "pid": 31529,
+  "warnings": []
+}

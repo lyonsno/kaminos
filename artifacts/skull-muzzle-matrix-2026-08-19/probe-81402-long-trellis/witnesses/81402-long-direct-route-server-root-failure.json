@@ -1,0 +1,11 @@
+{
+  "schema": "kaminos.asset-smoke-link-witness-failure.v1",
+  "status": "failed",
+  "phase": "assert-expected-server-root",
+  "requested_url": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-matrix-2026-08-19%2Fprobe-81402-long-trellis%2Fmesh%2Foutput.glb",
+  "requested_expected_server_root": "/private/tmp",
+  "effective_server_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "error": "effective server root mismatch: expected /private/tmp but server reported /private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "resolution": "Reran the same asset route with the serving Kaminos checkout as expected-server-root. The lerms-preview mount remained /private/tmp and the corrected route witness passed.",
+  "truth_boundary": "This failure concerns witness server identity only. It does not establish that the GLB failed to load or that the corrected route passed."
+}
