@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.trellis_source_frequency_start.v1",
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "seed": 81414,
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "jobs": [
+    {
+      "label": "04-faceted-81413",
+      "job_id": "993fda2d72a7",
+      "source": "../wave-2/seed-81413/04-faceted-fur-planes/output.png",
+      "output_dir": "04-faceted-81413"
+    },
+    {
+      "label": "08-feature-animation-81412",
+      "job_id": "da74d654295c",
+      "source": "../wave-2/seed-81412/08-feature-animation/output.png",
+      "output_dir": "08-feature-animation-81412"
+    }
+  ],
+  "comparison_contract": "Hold the effective TRELLIS route and reconstruction seed fixed. Compare shell continuity, eyes, muzzle, horn roots, unseen-side completion, raw geometry burden, and orbit witness against the original photoreal-source casts.",
+  "claim_ceiling": "A result may support source-frequency pressure or a local MLX route ceiling. It does not establish production topology, collision, animation, anatomical fidelity, or reference CUDA behavior."
+}
