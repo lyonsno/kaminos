@@ -1,0 +1,24 @@
+{
+  "job_id": "5dfac5a7b3a0",
+  "status": "done",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421",
+  "params": {
+    "seed": "81421",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "submitted_at": 1787310651.345713,
+  "started_at": 1787313491.537942,
+  "finished_at": 1787313618.294067,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421/output.glb --seed 81421 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421/checkpoints",
+  "pid": 3510,
+  "warnings": [
+    "volatile_output"
+  ]
+}

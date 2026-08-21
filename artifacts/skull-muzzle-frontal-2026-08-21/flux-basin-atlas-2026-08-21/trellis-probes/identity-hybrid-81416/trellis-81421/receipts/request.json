@@ -1,0 +1,13 @@
+{
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421",
+  "params": {
+    "seed": "81421",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "job_id": "5dfac5a7b3a0",
+  "submitted_at": 1787310651.345713
+}

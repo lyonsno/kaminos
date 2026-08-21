@@ -13,3 +13,8 @@ eyes, muzzle, horn roots, ears, terminator, and unseen cranial surface.
 
 `start-receipt.json` records source hashes, requested route, matrix cells,
 receiver, and terminal evidence paths before submission.
+
+`result.md` records the completed six-cell comparison, visual dispositions,
+timings, direct Kaminos routes, and the completion-wake failure boundary.
+`promoted/promotion-manifest.json` binds the two promoted casts to their exact
+source cells and GLB hashes.

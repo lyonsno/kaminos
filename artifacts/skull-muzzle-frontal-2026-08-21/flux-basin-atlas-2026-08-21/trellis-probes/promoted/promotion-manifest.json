@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos.handy_candyman.skull_muzzle_trellis_promotions.v1",
+  "promoted_at": "2026-08-21T21:59:43Z",
+  "claim_ceiling": "Orbitable visual casts with inspected front and oblique Kaminos witnesses; no manifold, collision, rigging, animation, production, or reference-CUDA claim.",
+  "assets": [
+    {
+      "name": "horned-skull-identity-hybrid-trellis-81421.glb",
+      "source_cell": "identity-hybrid-81416/trellis-81421",
+      "job_id": "5dfac5a7b3a0",
+      "sha256": "504096d7acfaa7f9b928088ad2560255c09b98c39389f50fc43a92c89d06bbaa",
+      "reason": "Best overall source identity, facial assembly, muzzle volume, silhouette, and oblique continuity."
+    },
+    {
+      "name": "horned-skull-painted-maquette-trellis-81421.glb",
+      "source_cell": "painted-maquette-81415/trellis-81421",
+      "job_id": "bd13cc9108dd",
+      "sha256": "b4986cf9ecc1a37a2eb3813591f3f8f6ddf1a795c6870e56fda122395a27b4e3",
+      "reason": "Strongest stylized character read with coherent frontal and oblique survival."
+    }
+  ]
+}

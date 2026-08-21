@@ -1,0 +1,66 @@
+{
+  "job_id": "273d03021f6f",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/08-polished-low-poly/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/broad-planes-81416/trellis-81421",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/08-polished-low-poly/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/broad-planes-81416/trellis-81421/output.glb --seed 81421 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/broad-planes-81416/trellis-81421/checkpoints",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/08-polished-low-poly/output.png",
+    "--output",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/broad-planes-81416/trellis-81421/output.glb",
+    "--seed",
+    "81421",
+    "--resolution",
+    "512",
+    "--steps",
+    "8",
+    "--no-cascade",
+    "--target-faces",
+    "100000",
+    "--texture-size",
+    "512",
+    "--simplify-first",
+    "--save-checkpoints",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/broad-planes-81416/trellis-81421/checkpoints"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "8",
+    "target_faces": "350000",
+    "texture_size": "4096"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1787313797.45612,
+  "finished_at": 1787313909.664116,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/273d03021f6f/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/273d03021f6f/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/273d03021f6f/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": true,
+    "pid": 3510,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

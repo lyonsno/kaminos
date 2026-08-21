@@ -1,0 +1,55 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81415/09-lifelike-character-maquette/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 27.6s
+  5507 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 46.1s (5507 tokens)
+  No-cascade: using LR SLat directly (5,507 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 26044 voxels
+  Level 1 → 2: 119512 voxels
+  Level 2 → 3: 533048 voxels
+  Level 3 → 4: 2311468 voxels
+  Decoded: 33.9s (2,311,468 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  2,311,468 voxels, coord range [0, 511], grid_size=512
+  Extracted: 1.8s
+  2,311,468 vertices, 4,699,198 faces
+  Checkpoint saved: mesh_raw (140.5 MB)
+  Pre-simplify: 77,969V 224,360F (16.1s)
+  Removed 21730 duplicate faces
+  Removed 60165 non-manifold faces
+  Filled 4212 holes (1757 too large, max_perimeter=0.03)
+  Cleanup: 77,969V 224,360F → 80,907V 157,179F
+  Cleanup: 4.9s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 24.2s (5,507 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 26044 voxels
+  Level 1 → 2: 119512 voxels
+  Level 2 → 3: 533048 voxels
+  Level 3 → 4: 2311468 voxels
+  Decoded: 13.4s (2,311,468 voxels, 6 channels)
+  PBR attrs: RGB [-0.02, 1.01] metallic [-0.00, 0.01] roughness [0.09, 0.76]
+  Checkpoint saved: texture (83.2 MB)
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 191,814V 157,179F (4.2s)
+    Rasterizing UV space (157,179 tris, 512x512, MLX)...
+    136,819 pixels covered (0.6s)
+    Interpolated 136,819 positions (0.0s)
+    Sampled voxel attrs (0.8s)
+    Inpainted seams (0.2s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/painted-maquette-81415/trellis-81422/output.glb (8.8MB)
+
+Total: 184.3s
