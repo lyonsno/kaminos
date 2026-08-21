@@ -7,3 +7,6 @@ The source pixels retain authority over camera, framing, projection, pose, and a
 `matrix-plan.json` records the complete prompt/seed design and requested route. `submit_matrix.py` validates source and prompt digests, submits every missing cell idempotently, and writes `start-receipt.json` after every accepted Greenroom job.
 
 Claim ceiling: the atlas may identify stable image-generation basins and reconstructible source candidates. TRELLIS improvement requires matched reconstruction and close-orbit inspection of selected images.
+
+Direct visual reviews completed: `seed-81415-review.md` and
+`seed-81416-review.md`.
