@@ -7,4 +7,4 @@ This comparison holds the current local MLX TRELLIS route and reconstruction see
 
 Both request Greenroom `trellis2mlx_fast_checkpoint`, seed `81414`, resolution 512, eight steps, no cascade, 100000 target faces, 512 texture, simplify-first, and checkpoint preservation. The comparison may adjudicate source-frequency pressure on this effective route. It cannot by itself establish production topology, collision, animation, anatomical fidelity, or reference CUDA behavior.
 
-Both jobs completed and passed registered Kaminos front/oblique viewer smoke. `result.md` records timings, geometry burden, direct routes, visual disposition, and the resulting claim.
+Both jobs completed and passed registered Kaminos front/oblique viewer smoke. The operator then exercised both through a wider close orbit. Those nine durable screenshots and the route receipt live under `operator-smoke/`; `result.md` records timings, geometry burden, direct routes, visual disposition, and the resulting claim.
