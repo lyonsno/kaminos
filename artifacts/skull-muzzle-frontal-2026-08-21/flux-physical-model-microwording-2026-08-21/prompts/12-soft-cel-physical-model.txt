@@ -1,0 +1,1 @@
+Render the same animal as a soft cel-shaded physical three-dimensional character model with rounded facial volumes and modeled coat pieces.

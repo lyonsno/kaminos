@@ -1,0 +1,1 @@
+Render the same animal as a polished console-adventure creature model with natural eye scale and solid layered coat pieces.

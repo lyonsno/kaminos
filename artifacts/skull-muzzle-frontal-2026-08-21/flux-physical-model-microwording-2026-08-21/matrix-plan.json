@@ -1,0 +1,49 @@
+{
+  "schema": "kaminos.handy_candyman.flux_physical_model_microwording.v1",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "waves": [
+    {"id": "wave-1", "seeds": [81427, 81428]},
+    {"id": "wave-2", "seeds": [81429, 81430]}
+  ],
+  "prompts": [
+    {"id": "01-polystone-solid-pieces", "file": "prompts/01-polystone-solid-pieces.txt"},
+    {"id": "02-polystone-joined-masses", "file": "prompts/02-polystone-joined-masses.txt"},
+    {"id": "03-resin-layered-pieces", "file": "prompts/03-resin-layered-pieces.txt"},
+    {"id": "04-painted-production-maquette", "file": "prompts/04-painted-production-maquette.txt"},
+    {"id": "05-silicone-inset-eyes", "file": "prompts/05-silicone-inset-eyes.txt"},
+    {"id": "06-practical-glass-eyes", "file": "prompts/06-practical-glass-eyes.txt"},
+    {"id": "07-feature-animation-solid-groom", "file": "prompts/07-feature-animation-solid-groom.txt"},
+    {"id": "08-stylized-animation-joined-masses", "file": "prompts/08-stylized-animation-joined-masses.txt"},
+    {"id": "09-family-animation-sculpted-pieces", "file": "prompts/09-family-animation-sculpted-pieces.txt"},
+    {"id": "10-console-adventure-solid-pieces", "file": "prompts/10-console-adventure-solid-pieces.txt"},
+    {"id": "11-hand-painted-physical-model", "file": "prompts/11-hand-painted-physical-model.txt"},
+    {"id": "12-soft-cel-physical-model", "file": "prompts/12-soft-cel-physical-model.txt"},
+    {"id": "13-vinyl-painted-eyes", "file": "prompts/13-vinyl-painted-eyes.txt"},
+    {"id": "14-ceramic-smooth-forms", "file": "prompts/14-ceramic-smooth-forms.txt"},
+    {"id": "15-low-poly-connected-facets", "file": "prompts/15-low-poly-connected-facets.txt"},
+    {"id": "16-stylized-game-subtle-surface", "file": "prompts/16-stylized-game-subtle-surface.txt"}
+  ],
+  "comparison_contract": "Hold exact source bytes and route settings fixed. Compare sixteen minimal physical-model wording interventions at four matched seeds. Preserve every cell and inspect images directly before reconstruction promotion.",
+  "claim_ceiling": "The atlas may establish physical-model wording stability and nominate exact reconstruction sources. It does not establish improved geometry without matched reconstruction and close-orbit inspection."
+}

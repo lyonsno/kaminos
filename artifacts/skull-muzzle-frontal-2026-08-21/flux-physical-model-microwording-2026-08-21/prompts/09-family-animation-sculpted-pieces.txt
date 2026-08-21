@@ -1,0 +1,1 @@
+Render the same animal as a family-animation creature model with natural eye scale and broad sculpted coat pieces.

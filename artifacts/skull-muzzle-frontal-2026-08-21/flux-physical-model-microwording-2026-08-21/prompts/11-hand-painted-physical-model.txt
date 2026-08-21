@@ -1,0 +1,1 @@
+Render the same animal as a hand-painted physical three-dimensional character model with rounded facial volumes and solid layered coat pieces.
