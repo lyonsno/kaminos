@@ -1,0 +1,42 @@
+{
+  "schema": "kaminos.handy_candyman.flux_surface_matrix.v1",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "waves": [
+    {
+      "id": "wave-1",
+      "seeds": [81410, 81411]
+    },
+    {
+      "id": "wave-2",
+      "seeds": [81412, 81413]
+    }
+  ],
+  "prompts": [
+    {"id": "01-directional-tufts", "file": "prompts/01-directional-tufts.txt"},
+    {"id": "02-layered-masses", "file": "prompts/02-layered-masses.txt"},
+    {"id": "03-smooth-close-coat", "file": "prompts/03-smooth-close-coat.txt"},
+    {"id": "04-faceted-fur-planes", "file": "prompts/04-faceted-fur-planes.txt"},
+    {"id": "05-lifelike-maquette", "file": "prompts/05-lifelike-maquette.txt"},
+    {"id": "06-smooth-skin-sparse-tufts", "file": "prompts/06-smooth-skin-sparse-tufts.txt"},
+    {"id": "07-naturalistic-stylization", "file": "prompts/07-naturalistic-stylization.txt"},
+    {"id": "08-feature-animation", "file": "prompts/08-feature-animation.txt"},
+    {"id": "09-soft-cel-shading", "file": "prompts/09-soft-cel-shading.txt"},
+    {"id": "10-adventure-game", "file": "prompts/10-adventure-game.txt"}
+  ],
+  "comparison_contract": "Hold exact source bytes and route settings fixed. Compare every prompt at matched seeds. Wave one is reviewed while wave two continues through Greenroom.",
+  "claim_ceiling": "The matrix may identify visually coherent source-edit basins with broader surface organization. It does not establish improved TRELLIS geometry until selected images are reconstructed and orbit-inspected."
+}

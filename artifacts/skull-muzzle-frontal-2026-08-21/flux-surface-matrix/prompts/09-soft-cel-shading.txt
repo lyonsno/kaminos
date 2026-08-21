@@ -1,0 +1,1 @@
+Render the same animal with soft cel shading, bold shape separation, and large simplified fur planes.
