@@ -1,0 +1,73 @@
+{
+  "schema": "kaminos.trellis-cascade-ceiling.start-receipt.v1",
+  "created_at": "2026-08-21T23:16:48Z",
+  "owner": {
+    "call_sign": "Handy Candyman",
+    "thread_id": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "resume": "codex resume 019f5cfd-dcf1-7072-a015-70ebbe6b33a4"
+  },
+  "worktree": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "branch": "cc/handy-candyman-crucible-shards-0713",
+  "kaminos_commit_at_start": "1adf32194a12c25b2367009555bc4f604e23ab1f",
+  "requested_route": {
+    "queue": "gpu-greenroom",
+    "job_type": "trellis2mlx_cascade_steps",
+    "runner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "runner_commit": "677e7ac98c1a045beec451acd21376a3953b5976",
+    "backend": "native MLX on Apple Silicon",
+    "model": "microsoft/TRELLIS-image-large",
+    "working_directory": "/Users/noahlyons/dev/trellis2mlx",
+    "environment": {
+      "PYTHONPATH": "."
+    },
+    "parameters": {
+      "resolution": 512,
+      "steps": 12,
+      "cascade": true,
+      "target_faces": 100000,
+      "texture_size": 512,
+      "simplify_first": true
+    },
+    "route_invariant": "effective command omits --no-cascade"
+  },
+  "cells": [
+    {
+      "id": "feature-animation-81412/trellis-81414-steps12-cascade",
+      "source": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png",
+      "source_sha256": "07960308ee51479102bc4d1b6bd5416db4538e7e0197f5f04d7d2155b6bf9ba6",
+      "source_dimensions": [512, 512],
+      "trellis_seed": 81414,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade",
+      "control": {
+        "job_id": "da74d654295c",
+        "steps": 8,
+        "cascade": false,
+        "output": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/08-feature-animation-81412/output.glb"
+      },
+      "job_id": "16bf6a2a7390"
+    },
+    {
+      "id": "identity-hybrid-81416/trellis-81421-steps12-cascade",
+      "source": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+      "source_sha256": "fee87cab8e6217d1259977202f5ce31a526eae3c2ec70d691f96d9a09ffb0b20",
+      "source_dimensions": [512, 512],
+      "trellis_seed": 81421,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade",
+      "control": {
+        "job_id": "5dfac5a7b3a0",
+        "steps": 8,
+        "cascade": false,
+        "output": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421/output.glb"
+      },
+      "job_id": "8d5feef7a90a"
+    }
+  ],
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread_id": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_evidence_root": "/Users/noahlyons/.local/state/gpu-greenroom/done",
+    "artifact_evidence_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21",
+    "disposition": "inspect both GLBs and compare each directly with its source and eight-step control"
+  },
+  "claim_ceiling": "A visually inspected two-source delta for twelve-step cascade-enabled native MLX TRELLIS relative to matched eight-step cascade-disabled controls; no CUDA parity or general-production claim."
+}
