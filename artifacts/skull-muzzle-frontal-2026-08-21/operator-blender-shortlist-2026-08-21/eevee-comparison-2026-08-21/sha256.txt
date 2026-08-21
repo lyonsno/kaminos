@@ -1,0 +1,6 @@
+155a021e7ed03dfcd5ebdfe7adec57ea9b282ddfd573b3937064835f516351f5  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/01-oblique-lineup.png
+b419e70c794da47bc532acd1ab51ea1d81f390bc4ef613674c5638727b17cdce  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/02-frontal-lineup.png
+9416902d3621fcbb9c54ff40bc1aa836146f5d45297a0f4e556e891f35fe1ed4  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/03-oblique-stagger.png
+8f2b3fe6e5e0105c640720e829e3cacb7bbb69dd255b96cc767166bbb08d9152  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/04-profile-stagger.png
+dd74cfe1916e3c566c99f5d83a6ccfe69de3c232894d33657b754892e4997f4e  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/05-rear-stagger.png
+6e131b531a666d0b3d1c3d24e305807af6d65af36ceb63d3738b5e7c419cf238  artifacts/skull-muzzle-frontal-2026-08-21/operator-blender-shortlist-2026-08-21/eevee-comparison-2026-08-21/06-tight-oblique-lineup.png
