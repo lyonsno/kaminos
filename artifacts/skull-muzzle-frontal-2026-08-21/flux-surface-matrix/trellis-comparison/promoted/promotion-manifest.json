@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos.handy_candyman.skull_muzzle_promotions.v1",
+  "promoted_at": "2026-08-21",
+  "operator_smoke": "../operator-smoke/README.md",
+  "assets": [
+    {
+      "asset_id": "horned-skull-broad-plane-identity-v0",
+      "path": "horned-skull-broad-plane-identity-v0.glb",
+      "sha256": "0366526c1454f69bc0284819b270d8cf65e36032599a43deead526b7e5763f37",
+      "source_glb": "../04-faceted-81413/output.glb",
+      "source_image": "../../wave-2/seed-81413/04-faceted-fur-planes/output.png",
+      "promotion": "identity-bearing bounded-view visual asset",
+      "visible_strength": "Natural facial proportions, muzzle, horns, ears, and lateral skull remain coherent through front and side orbit.",
+      "limitation": "The rear cranial cap is smoother and less authored; no collision, rigging, manifold, or production-topology claim."
+    },
+    {
+      "asset_id": "horned-skull-feature-animation-geometry-v0",
+      "path": "horned-skull-feature-animation-geometry-v0.glb",
+      "sha256": "61b67a7ad4692dc7f5206477c60fbf73b3db3aa4798888dd8ed3694e900005af",
+      "source_glb": "../08-feature-animation-81412/output.glb",
+      "source_image": "../../wave-2/seed-81412/08-feature-animation/output.png",
+      "promotion": "geometry-first stylized visual asset",
+      "visible_strength": "Complete unseen-side skull, horns, ear bowls, muzzle, and layered rear ruff survive close orbit; GTAO did not expose prior catastrophic winding ghosts.",
+      "limitation": "Large-eyed phenotype drift is intentional source inheritance; no collision, rigging, manifold, or production-topology claim."
+    }
+  ]
+}
