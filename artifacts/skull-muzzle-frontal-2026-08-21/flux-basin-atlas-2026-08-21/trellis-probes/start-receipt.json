@@ -1,0 +1,53 @@
+{
+  "schema": "kaminos.handy_candyman.trellis_basin_probe_start.v1",
+  "created_at": "2026-08-21T11:07:54Z",
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "sources": [
+    {
+      "id": "identity-hybrid-81416",
+      "path": "../wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+      "sha256": "fee87cab8e6217d1259977202f5ce31a526eae3c2ec70d691f96d9a09ffb0b20",
+      "hypothesis": "Best source-identity retention with moderate surface simplification."
+    },
+    {
+      "id": "broad-planes-81416",
+      "path": "../wave-1/seed-81416/08-polished-low-poly/output.png",
+      "sha256": "995aba5395b426c43a42c7b3cd3f4ef23945be110fa879cc7e4c862efdb12a68",
+      "hypothesis": "Most explicit plane ownership and lowest coat-frequency burden."
+    },
+    {
+      "id": "painted-maquette-81415",
+      "path": "../wave-1/seed-81415/09-lifelike-character-maquette/output.png",
+      "sha256": "fc9a27fdd3aab3c586c4181045e900569afb9e78fdd56718264b7df89564f838",
+      "hypothesis": "Best physical maquette surface while retaining painted eyes and natural expression."
+    }
+  ],
+  "trellis_seeds": [81421, 81422],
+  "cells": [
+    {"id": "identity-hybrid-81416/trellis-81421", "output_dir": "identity-hybrid-81416/trellis-81421"},
+    {"id": "identity-hybrid-81416/trellis-81422", "output_dir": "identity-hybrid-81416/trellis-81422"},
+    {"id": "broad-planes-81416/trellis-81421", "output_dir": "broad-planes-81416/trellis-81421"},
+    {"id": "broad-planes-81416/trellis-81422", "output_dir": "broad-planes-81416/trellis-81422"},
+    {"id": "painted-maquette-81415/trellis-81421", "output_dir": "painted-maquette-81415/trellis-81421"},
+    {"id": "painted-maquette-81415/trellis-81422", "output_dir": "painted-maquette-81415/trellis-81422"}
+  ],
+  "completion_delivery": {
+    "receiver_diaulos": "handy-candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_mesh": "<source-id>/trellis-<seed>/output.glb",
+    "terminal_metadata": "<source-id>/trellis-<seed>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "job_ids": {},
+  "comparison_contract": "Hold route parameters fixed. Compare source representation within each TRELLIS seed and seed variance within each exact source.",
+  "claim_ceiling": "The assay may identify locally coherent orbitable visual casts. It cannot establish manifold topology, collision, rigging, animation, production readiness, or reference CUDA parity."
+}
