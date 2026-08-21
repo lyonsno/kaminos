@@ -8,5 +8,5 @@ The source pixels retain authority over camera, framing, projection, pose, and a
 
 Claim ceiling: the atlas may identify stable image-generation basins and reconstructible source candidates. TRELLIS improvement requires matched reconstruction and close-orbit inspection of selected images.
 
-Direct visual reviews completed: `seed-81415-review.md` and
-`seed-81416-review.md`.
+Direct visual reviews completed: `seed-81415-review.md`,
+`seed-81416-review.md`, and `seed-81417-review.md`.
