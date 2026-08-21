@@ -1,0 +1,13 @@
+{
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409",
+  "params": {
+    "seed": "81409",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "job_id": "76825ddaa1fe",
+  "submitted_at": 1787287271.381363
+}

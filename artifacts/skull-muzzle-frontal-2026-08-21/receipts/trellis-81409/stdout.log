@@ -1,0 +1,55 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 42.7s
+  4390 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 42.2s (4390 tokens)
+  No-cascade: using LR SLat directly (4,390 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 22855 voxels
+  Level 1 → 2: 125104 voxels
+  Level 2 → 3: 705007 voxels
+  Level 3 → 4: 3572977 voxels
+  Decoded: 63.3s (3,572,977 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  3,572,977 voxels, coord range [0, 510], grid_size=512
+  Extracted: 3.0s
+  3,572,977 vertices, 6,926,072 faces
+  Checkpoint saved: mesh_raw (209.1 MB)
+  Pre-simplify: 136,758V 427,263F (35.5s)
+  Removed 55415 duplicate faces
+  Removed 130717 non-manifold faces
+  Filled 5672 holes (1997 too large, max_perimeter=0.03)
+  Cleanup: 136,758V 427,263F → 140,423V 260,540F
+  Cleanup: 9.4s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 30.1s (4,390 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 22855 voxels
+  Level 1 → 2: 125104 voxels
+  Level 2 → 3: 705007 voxels
+  Level 3 → 4: 3572977 voxels
+  Decoded: 34.3s (3,572,977 voxels, 6 channels)
+  PBR attrs: RGB [-0.06, 0.98] metallic [-0.01, 0.27] roughness [-0.05, 1.11]
+  Checkpoint saved: texture (128.6 MB)
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 350,584V 260,540F (8.6s)
+    Rasterizing UV space (260,540 tris, 512x512, MLX)...
+    110,932 pixels covered (0.8s)
+    Interpolated 110,932 positions (0.0s)
+    Sampled voxel attrs (1.5s)
+    Inpainted seams (0.6s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/output.glb (15.5MB)
+
+Total: 295.8s

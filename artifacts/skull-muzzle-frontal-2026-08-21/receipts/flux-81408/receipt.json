@@ -1,0 +1,73 @@
+{
+  "job_id": "df7e29bc867c",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/source.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/source.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/prompt.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81408 --mlx-cache-limit-gb 48",
+  "effective_argv": [
+    "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+    "--image-paths",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/source.png",
+    "--prompt-file",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/prompt.txt",
+    "--output",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+    "--metadata",
+    "--model",
+    "flux2-klein-9b",
+    "--quantize",
+    "4",
+    "--height",
+    "512",
+    "--width",
+    "512",
+    "--steps",
+    "8",
+    "--guidance",
+    "1.0",
+    "--seed",
+    "81408",
+    "--mlx-cache-limit-gb",
+    "48"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+  "effective_env": {
+    "TOKENIZERS_PARALLELISM": "false"
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "guidance": "1.0",
+    "height": "512",
+    "mlx_cache_limit_gb": "48",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "seed": "42",
+    "steps": "8",
+    "width": "512"
+  },
+  "effective_timeout": 1800,
+  "ignored_params": null,
+  "started_at": 1787287146.257778,
+  "finished_at": 1787287182.7437398,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/df7e29bc867c/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/df7e29bc867c/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/df7e29bc867c/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": true,
+    "pid": 3510,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

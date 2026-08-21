@@ -1,0 +1,439 @@
+{
+  "capturedAt": "2026-08-21T04:32:05.043443Z",
+  "effective": {
+    "camera": null,
+    "clipEnd": 1000.0,
+    "clipStart": 0.009999999776482582,
+    "colorManagement": {
+      "displayDevice": "Rec.2100-PQ",
+      "exposure": 1.0,
+      "gamma": 1.0,
+      "look": "None",
+      "sequencerColorSpace": "sRGB",
+      "viewTransform": "AgX - HDR 1000 nits"
+    },
+    "height": 1024,
+    "scene": "Scene",
+    "shading": {
+      "background_color": [
+        0.05000000074505806,
+        0.05000000074505806,
+        0.05000000074505806
+      ],
+      "background_type": "WORLD",
+      "cavity_type": "SCREEN",
+      "color_type": "MATERIAL",
+      "light": "STUDIO",
+      "show_cavity": true,
+      "show_shadows": true,
+      "show_specular_highlight": true,
+      "show_xray": false,
+      "single_color": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+      ],
+      "studio_light": "forest.exr",
+      "type": "RENDERED",
+      "xray_alpha": 0.5
+    },
+    "viewCameraOffset": [
+      0.0,
+      0.0
+    ],
+    "viewCameraZoom": 110.65535736083984,
+    "viewDistance": 190.64695739746094,
+    "viewLayer": "ViewLayer",
+    "viewLens": 250.0,
+    "viewLocation": [
+      -52.713314056396484,
+      7.53437614440918,
+      -27.57294464111328
+    ],
+    "viewMatrix": [
+      [
+        0.006982181686908007,
+        0.9999756813049316,
+        4.837676783608913e-07,
+        -7.166125774383545
+      ],
+      [
+        -0.034897781908512115,
+        0.0002440829703118652,
+        -0.9993909001350403,
+        -29.397567749023438
+      ],
+      [
+        -0.9993665814399719,
+        0.00697798328474164,
+        0.03489856421947479,
+        -242.41720581054688
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "viewPerspective": "PERSP",
+    "viewRotation": [
+      0.5104226469993591,
+      -0.49290961027145386,
+      -0.4894801676273346,
+      0.5068708658218384
+    ],
+    "viewportRegion": {
+      "height": 2002,
+      "width": 2009
+    },
+    "visibleObjects": [
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            0.9108173847198486,
+            -0.6355295777320862,
+            -2.0197551250457764,
+            -293.1330871582031
+          ],
+          [
+            -2.1553304195404053,
+            -0.2587299644947052,
+            -0.8578364849090576,
+            -241.41998291015625
+          ],
+          [
+            0.011439980007708073,
+            1.8533928394317627,
+            -0.8123275637626648,
+            -256.2642822265625
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Area.004",
+        "type": "LIGHT"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            -6.771446704864502,
+            -1.5992735624313354,
+            -24.767738342285156,
+            -683.6656494140625
+          ],
+          [
+            -24.58978271484375,
+            -2.6383001804351807,
+            6.961596965789795,
+            141.27369689941406
+          ],
+          [
+            -3.516890525817871,
+            21.526012420654297,
+            -0.9868806600570679,
+            -117.39283752441406
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Area.005",
+        "type": "LIGHT"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            0.07531991600990295,
+            0.016205037012696266,
+            -0.1590566635131836,
+            242.00619506835938
+          ],
+          [
+            0.015467983670532703,
+            0.6096569895744324,
+            0.7600051164627075,
+            241.86773681640625
+          ],
+          [
+            -0.0022774538956582546,
+            4.676593780517578,
+            -0.09852574020624161,
+            17.306568145751953
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Area.006",
+        "type": "LIGHT"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            -6.542553592225886e-07,
+            -6.450977707572747e-07,
+            -5.4882917404174805,
+            -27.10590171813965
+          ],
+          [
+            -5.4882917404174805,
+            -6.450978276006936e-07,
+            0.0,
+            -5.4841437339782715
+          ],
+          [
+            0.0,
+            5.411472797393799,
+            -1.3085107184451772e-06,
+            -32.401004791259766
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Cube.245",
+        "type": "MESH"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            -6.542553592225886e-07,
+            -6.450977707572747e-07,
+            -5.4882917404174805,
+            -26.575958251953125
+          ],
+          [
+            -5.4882917404174805,
+            -6.450978276006936e-07,
+            0.0,
+            -5.196456432342529
+          ],
+          [
+            0.0,
+            5.411472797393799,
+            -1.3085107184451772e-06,
+            -32.401004791259766
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Cube.246",
+        "type": "MESH"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            -1.9564963579177856,
+            0.0,
+            -3.4477670192718506,
+            -27.015335083007812
+          ],
+          [
+            3.4477670192718506,
+            2.8788090133957667e-08,
+            -1.9564964771270752,
+            15.466915130615234
+          ],
+          [
+            0.0,
+            -3.96421217918396,
+            2.8788088357600827e-08,
+            -7.333056449890137
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Cube.247",
+        "type": "MESH"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            -1.8058626651763916,
+            -4.428780755461048e-07,
+            -3.5289995670318604,
+            -26.509645462036133
+          ],
+          [
+            -3.5289995670318604,
+            -1.7816776107792975e-06,
+            1.8058627843856812,
+            2.795964479446411
+          ],
+          [
+            1.8376700836597593e-06,
+            -3.9642112255096436,
+            -3.8688622794325056e-07,
+            -7.206242561340332
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Cube.248",
+        "type": "MESH"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Painted Muscle 001",
+        "type": "EMPTY"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Painted Muscle 002",
+        "type": "EMPTY"
+      },
+      {
+        "hideRender": false,
+        "matrixWorld": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            -4.455474853515625
+          ],
+          [
+            0.0,
+            -1.0,
+            3.2584136988589307e-07,
+            -2.1017608642578125
+          ],
+          [
+            0.0,
+            -3.2584136988589307e-07,
+            -1.0,
+            -1077.426513671875
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "name": "Sun",
+        "type": "LIGHT"
+      }
+    ],
+    "width": 1024
+  },
+  "output": {
+    "byteLength": 1085196,
+    "distinctPixelCountLowerBound": 2,
+    "height": 1024,
+    "image": "/Users/noahlyons/dev/operator-scratch/source-plates/cat-bauplan-056-strong-weightpaint-operator-v017/20260821043205043443-felid-skull-front-base.png",
+    "nonblank": true,
+    "path": "/Users/noahlyons/dev/operator-scratch/source-plates/cat-bauplan-056-strong-weightpaint-operator-v017/20260821043205043443-felid-skull-front-base.png",
+    "sha256": "f02be02a9663da77e2f93d93522ad5452f78ed128c1b54f1ed1c0c1548fea2af",
+    "sidecar": "/Users/noahlyons/dev/operator-scratch/source-plates/cat-bauplan-056-strong-weightpaint-operator-v017/20260821043205043443-felid-skull-front-base.json",
+    "uniform": false,
+    "width": 1024
+  },
+  "renderSettingsRestored": true,
+  "requested": {
+    "height": 1024,
+    "label": "felid-skull-front-base",
+    "outputRoot": "/Users/noahlyons/dev/operator-scratch/source-plates",
+    "width": 1024
+  },
+  "schema": "kaminos.source-plate-viewport-capture.v0",
+  "sourceBlend": {
+    "byteLength": 24000325,
+    "exists": true,
+    "modifiedAtNs": 1787286342120647608,
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-056-strong-weightpaint-operator-v017.blend"
+  },
+  "sourceBlendAfter": {
+    "byteLength": 24000325,
+    "exists": true,
+    "modifiedAtNs": 1787286342120647608,
+    "path": "/Users/noahlyons/dev/operator-scratch/blender-scenes/cat-bauplan-056-strong-weightpaint-operator-v017.blend"
+  },
+  "sourceDirty": true,
+  "sourceDirtyAfter": true,
+  "status": "completed"
+}

@@ -1,0 +1,301 @@
+{
+  "schema": "kaminos.frontal-horned-head-direct-view.v1",
+  "requestedRoute": {
+    "url": "http://127.0.0.1:8104/",
+    "assetUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-seed-81409%2Foutput.glb",
+    "viewerFunction": "window.kaminosImportGLBSceneObject",
+    "debugFunction": "window.kaminosSceneObjectDebugState"
+  },
+  "effectiveUrl": "http://127.0.0.1:8104/",
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-hammer-glb-witness-9466-1492",
+  "debugPort": 9466,
+  "headless": true,
+  "settleMs": 2500,
+  "phase": "recording-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9466/devtools/browser/778c5306-3e16-42ea-9d68-87207db1463a"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9466/devtools/browser/778c5306-3e16-42ea-9d68-87207db1463a\nTrying to load the allocator multiple times. This is *not* supported.\n[1509:24290919:0821/005111.060384:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[1509:24290919:0821/005111.061060:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[1509:24290919:0821/005111.061104:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "truthBoundary": "Kaminos viewer route, GLB load, scene registration, and two camera captures only. This does not prove texture quality, topology repair, collision suitability, or free-orbit production usability.",
+  "status": "passed",
+  "registration": {
+    "initial": {
+      "id": "glb-b28c4185-f169-4430-80d7-ecf9b298ae6e",
+      "label": "Frontal horned head Trellis seed 81409",
+      "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-seed-81409%2Foutput.glb",
+      "type": "glb",
+      "groupId": "group-489ac3d7-300c-448d-9d20-0c8e638a3f6b",
+      "active": true,
+      "transform": {
+        "position": [
+          -0.00033932924270629883,
+          -0.013454407453536987,
+          -0.0023656338453292847
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.2998781670831192,
+          1.2998781670831192,
+          1.2998781670831192
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": null,
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "final": {
+      "id": "glb-b28c4185-f169-4430-80d7-ecf9b298ae6e",
+      "label": "Frontal horned head Trellis seed 81409",
+      "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-seed-81409%2Foutput.glb",
+      "type": "glb",
+      "groupId": "group-489ac3d7-300c-448d-9d20-0c8e638a3f6b",
+      "active": true,
+      "transform": {
+        "position": [
+          -0.00033932924270629883,
+          -0.013454407453536987,
+          -0.0023656338453292847
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.2998781670831192,
+          1.2998781670831192,
+          1.2998781670831192
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": null,
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "rowCount": 1,
+    "finalRowCount": 1
+  },
+  "captures": {
+    "front": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/front.png",
+      "bytes": 366768
+    },
+    "oblique": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/oblique.png",
+      "bytes": 511726
+    }
+  },
+  "cameras": {
+    "initial": {
+      "position": [
+        0,
+        0.5999999999999999,
+        3
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0.98058067569092,
+        0.19611613513818393,
+        0,
+        0,
+        -0.19611613513818393,
+        0.98058067569092,
+        0,
+        0,
+        0,
+        -3.05941170815567,
+        1
+      ]
+    },
+    "front": {
+      "position": [
+        5.143516556418884e-16,
+        2.571758278209442e-16,
+        -4.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        -1,
+        -7.498798913309288e-33,
+        1.2246467991473532e-16,
+        0,
+        0,
+        1,
+        6.123233995736766e-17,
+        0,
+        -1.2246467991473532e-16,
+        6.123233995736766e-17,
+        -1,
+        0,
+        0,
+        0,
+        -4.2,
+        1
+      ]
+    },
+    "oblique": {
+      "position": [
+        -2.6999999999999997,
+        1.5499999999999996,
+        -3.2000000000000006
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        -0.7642914835078911,
+        0.22388428885126724,
+        -0.6047597485306617,
+        0,
+        1.110223024625156e-16,
+        0.937799661544258,
+        0.34717689267500945,
+        0,
+        0.6448709392097822,
+        0.2653443423422428,
+        -0.7167522945548591,
+        0,
+        -2.1429148490869746e-15,
+        -1.0898358594806892e-15,
+        -4.464582847254601,
+        1
+      ]
+    },
+    "final": {
+      "position": [
+        -2.6999999999999993,
+        1.5499999999999994,
+        -3.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        -0.7642914835078909,
+        0.2238842888512674,
+        -0.6047597485306621,
+        0,
+        0,
+        0.9377996615442581,
+        0.3471768926750096,
+        0,
+        0.6448709392097828,
+        0.2653443423422429,
+        -0.7167522945548589,
+        0,
+        -2.0253158634663464e-17,
+        -2.413018569653108e-16,
+        -4.464582847254601,
+        1
+      ]
+    }
+  },
+  "finalInfoText": null,
+  "finalRows": [
+    "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-seed-81409%2Foutput.glb\n      \n      \n        reloadable\n        ×"
+  ]
+}

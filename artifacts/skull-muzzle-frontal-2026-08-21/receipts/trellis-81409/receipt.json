@@ -1,0 +1,66 @@
+{
+  "job_id": "76825ddaa1fe",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/output.glb --seed 81409 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/checkpoints",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+    "--output",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/output.glb",
+    "--seed",
+    "81409",
+    "--resolution",
+    "512",
+    "--steps",
+    "8",
+    "--no-cascade",
+    "--target-faces",
+    "100000",
+    "--texture-size",
+    "512",
+    "--simplify-first",
+    "--save-checkpoints",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-seed-81409/checkpoints"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "8",
+    "target_faces": "350000",
+    "texture_size": "4096"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1787287541.969801,
+  "finished_at": 1787287838.493841,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/76825ddaa1fe/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/76825ddaa1fe/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/76825ddaa1fe/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": true,
+    "pid": 3510,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}
