@@ -1,0 +1,63 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 45.3s
+  3702 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 39.0s (3702 tokens)
+
+=== Stage 2b: Upsample → HR coordinates ===
+  Level 0 → 1: 15969 voxels
+  Level 1 → 2: 66997 voxels
+  Level 2 → 3: 281522 voxels
+  Level 3 → 4: 1187356 voxels
+  Upsampled: 15.3s (1,187,356 voxels)
+  HR coords: 3,512 tokens at res 512, coord range [0, 31]
+
+=== Stage 2c: HR Shape Latent ===
+  Sampled: 36.6s (3,512 tokens)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 14805 voxels
+  Level 1 → 2: 61199 voxels
+  Level 2 → 3: 248218 voxels
+  Level 3 → 4: 1002848 voxels
+  Decoded: 13.5s (1,002,848 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  1,002,848 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.7s
+  1,002,848 vertices, 2,005,636 faces
+  Pre-simplify: 43,659V 99,998F (0.7s)
+  Removed 3129 duplicate faces
+  Removed 14793 non-manifold faces
+  Filled 1900 holes (442 too large, max_perimeter=0.03)
+  Cleanup: 43,659V 99,998F → 45,124V 89,073F
+  Cleanup: 2.6s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 20.6s (3,512 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 14805 voxels
+  Level 1 → 2: 61199 voxels
+  Level 2 → 3: 248218 voxels
+  Level 3 → 4: 1002848 voxels
+  Decoded: 6.1s (1,002,848 voxels, 6 channels)
+  PBR attrs: RGB [-0.07, 1.01] metallic [-0.00, 0.01] roughness [-0.08, 0.91]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 89,077V 89,073F (2.2s)
+    Rasterizing UV space (89,073 tris, 512x512, MLX)...
+    163,581 pixels covered (0.2s)
+    Interpolated 163,581 positions (0.0s)
+    Sampled voxel attrs (0.5s)
+    Inpainted seams (0.2s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/output.glb (4.6MB)
+
+Total: 192.4s

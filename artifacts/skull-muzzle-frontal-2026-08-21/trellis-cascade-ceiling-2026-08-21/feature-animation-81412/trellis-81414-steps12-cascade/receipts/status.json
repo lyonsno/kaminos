@@ -1,0 +1,25 @@
+{
+  "job_id": "16bf6a2a7390",
+  "status": "done",
+  "job_type": "trellis2mlx_cascade_steps",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade",
+  "params": {
+    "seed": "81414",
+    "resolution": "512",
+    "steps": "12",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "submitted_at": 1787354302.675618,
+  "started_at": 1787354303.45381,
+  "finished_at": 1787354551.507723,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/output.glb --seed 81414 --resolution 512 --steps 12 --target-faces 100000 --texture-size 512 --simplify-first",
+  "pid": 3510,
+  "warnings": [
+    "volatile_output"
+  ]
+}

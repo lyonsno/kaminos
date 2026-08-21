@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_cascade_steps",
+  "job_id": "16bf6a2a7390",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81414",
+    "resolution": "512",
+    "steps": "12",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787354551.507723,
+  "duration_s": 248.1
+}

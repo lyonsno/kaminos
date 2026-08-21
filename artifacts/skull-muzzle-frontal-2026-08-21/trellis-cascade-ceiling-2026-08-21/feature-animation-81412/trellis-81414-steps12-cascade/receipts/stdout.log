@@ -1,0 +1,63 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 33.7s
+  5057 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 47.6s (5057 tokens)
+
+=== Stage 2b: Upsample → HR coordinates ===
+  Level 0 → 1: 22119 voxels
+  Level 1 → 2: 94992 voxels
+  Level 2 → 3: 406250 voxels
+  Level 3 → 4: 1745507 voxels
+  Upsampled: 26.0s (1,745,507 voxels)
+  HR coords: 4,694 tokens at res 512, coord range [0, 31]
+
+=== Stage 2c: HR Shape Latent ===
+  Sampled: 41.3s (4,694 tokens)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 21089 voxels
+  Level 1 → 2: 92317 voxels
+  Level 2 → 3: 402289 voxels
+  Level 3 → 4: 1812143 voxels
+  Decoded: 26.9s (1,812,143 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  1,812,143 voxels, coord range [1, 511], grid_size=512
+  Extracted: 1.5s
+  1,812,143 vertices, 3,776,736 faces
+  Pre-simplify: 32,836V 107,393F (7.0s)
+  Removed 12444 duplicate faces
+  Removed 34160 non-manifold faces
+  Filled 1380 holes (717 too large, max_perimeter=0.03)
+  Cleanup: 32,836V 107,393F → 33,608V 65,577F
+  Cleanup: 2.3s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 31.9s (4,694 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 21089 voxels
+  Level 1 → 2: 92317 voxels
+  Level 2 → 3: 402289 voxels
+  Level 3 → 4: 1812143 voxels
+  Decoded: 12.7s (1,812,143 voxels, 6 channels)
+  PBR attrs: RGB [-0.07, 1.09] metallic [-0.01, 0.01] roughness [-0.16, 0.83]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 85,277V 65,577F (1.3s)
+    Rasterizing UV space (65,577 tris, 512x512, MLX)...
+    166,053 pixels covered (0.7s)
+    Interpolated 166,053 positions (0.0s)
+    Sampled voxel attrs (0.9s)
+    Inpainted seams (0.5s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/output.glb (4.1MB)
+
+Total: 247.5s

@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb",
+  "effectiveUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9517,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9517-6327",
+  "settleMs": 4500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9517/devtools/browser/a9995e15-fe49-4fd5-ae14-9d96db8decf8"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9517/devtools/browser/a9995e15-fe49-4fd5-ae14-9d96db8decf8\nTrying to load the allocator multiple times. This is *not* supported.\n[6336:28044542:0821/194756.413112:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/direct-route.png",
+  "screenshotBytes": 518476,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/output.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb",
+        "fileName": "output.glb",
+        "label": "Trellis 81421 Steps12 Cascade",
+        "registeredObjectId": "glb-4b8eef7c-db79-4ba3-95cc-af4c88528e84",
+        "registeredAt": "2026-08-21T23:47:54.566Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-4b8eef7c-db79-4ba3-95cc-af4c88528e84",
+        "label": "Trellis 81421 Steps12 Cascade",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-4f69190b-67c2-447f-8035-cb69641366d7",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.00033809244632720947,
+            -0.0007338523864746094,
+            -0.0014880746603012085
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.2135152910445206,
+            1.2135152910445206,
+            1.2135152910445206
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8104/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Ftrellis-cascade-ceiling-2026-08-21%2Fidentity-hybrid-81416%2Ftrellis-81421-steps12-cascade%2Foutput.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Trellis 81421 Steps12 Cascade"
+    }
+  }
+}

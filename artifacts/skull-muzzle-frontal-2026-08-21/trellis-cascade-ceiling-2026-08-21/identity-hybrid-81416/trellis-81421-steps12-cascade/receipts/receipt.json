@@ -1,0 +1,64 @@
+{
+  "job_id": "8d5feef7a90a",
+  "job_type": "trellis2mlx_cascade_steps",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/output.glb --seed 81421 --resolution 512 --steps 12 --target-faces 100000 --texture-size 512 --simplify-first",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+    "--output",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/output.glb",
+    "--seed",
+    "81421",
+    "--resolution",
+    "512",
+    "--steps",
+    "12",
+    "--target-faces",
+    "100000",
+    "--texture-size",
+    "512",
+    "--simplify-first"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "resolution": "512",
+    "seed": "42",
+    "steps": "4",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1787354551.51282,
+  "finished_at": 1787354744.223166,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/8d5feef7a90a/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/8d5feef7a90a/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/8d5feef7a90a/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": true,
+    "pid": 3510,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

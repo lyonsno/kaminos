@@ -1,0 +1,14 @@
+{
+  "job_type": "trellis2mlx_cascade_steps",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade",
+  "params": {
+    "seed": "81414",
+    "resolution": "512",
+    "steps": "12",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "job_id": "16bf6a2a7390",
+  "submitted_at": 1787354302.675618
+}
