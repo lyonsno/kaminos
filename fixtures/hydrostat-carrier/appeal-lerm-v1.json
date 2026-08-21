@@ -1,0 +1,51 @@
+{
+  "belly_smooth": 0.7,
+  "chambers": [
+    {
+      "rest_volume": 0.3,
+      "semi_length": 0.4,
+      "septum_depth": 0.45
+    },
+    {
+      "rest_volume": 0.6,
+      "semi_length": 0.45,
+      "septum_depth": 0.45
+    },
+    {
+      "rest_volume": 1.9,
+      "semi_length": 0.75,
+      "septum_depth": 0.5
+    },
+    {
+      "rest_volume": 0.9,
+      "semi_length": 0.5,
+      "septum_depth": 0.55
+    },
+    {
+      "rest_volume": 1.5,
+      "semi_length": 0.6,
+      "septum_depth": 0.5
+    }
+  ],
+  "load_girth_gain": 0.1,
+  "name": "appeal-lerm-v1",
+  "posture": [
+    {
+      "end": 0.3,
+      "phoneme": "pool",
+      "start": 0.0
+    },
+    {
+      "amount": 0.72,
+      "end": 1.0,
+      "phoneme": "erect",
+      "start": 0.3
+    },
+    {
+      "amount": 0.8,
+      "end": 0.12,
+      "phoneme": "lean",
+      "start": 0.0
+    }
+  ]
+}

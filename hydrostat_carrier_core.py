@@ -75,6 +75,13 @@ class Carrier:
     name: str
     chambers: list
     posture: list = field(default_factory=list)
+    # Appeal/statics knobs. belly_smooth in [0,1]: 0 keeps the loft as-is;
+    # 1 fully relaxes septum pinches on the ventral side so the belly reads
+    # as one taut mass while the dorsal side keeps segmentation legible.
+    # load_girth_gain overrides the statics thickening law (a big-headed
+    # appeal build must not have its head starved by the default taper).
+    belly_smooth: float = 0.0
+    load_girth_gain: float = LOAD_GIRTH_GAIN
 
 
 def load_spec(raw: dict) -> Carrier:
@@ -109,7 +116,19 @@ def load_spec(raw: dict) -> Carrier:
         end = float(p.get("end", 1.0))
         if not (0.0 <= start < end <= 1.0):
             raise SpecError(f"posture {i}: need 0 <= start < end <= 1")
-    return Carrier(name=name, chambers=chambers, posture=posture)
+    belly_smooth = float(raw.get("belly_smooth", 0.0))
+    if not 0.0 <= belly_smooth <= 1.0:
+        raise SpecError("spec.belly_smooth must be in [0, 1]")
+    load_girth_gain = float(raw.get("load_girth_gain", LOAD_GIRTH_GAIN))
+    if load_girth_gain < 0.0:
+        raise SpecError("spec.load_girth_gain must be >= 0")
+    return Carrier(
+        name=name,
+        chambers=chambers,
+        posture=posture,
+        belly_smooth=belly_smooth,
+        load_girth_gain=load_girth_gain,
+    )
 
 
 def _chamber_positions(n: int) -> list:
@@ -240,7 +259,9 @@ def apply_statics(carrier: Carrier, channels: list) -> list:
         load = sum(
             masses[j] * math.sin(channels[j]["pitch"]) for j in range(i + 1, n)
         )
-        channels[i]["turgor"] *= 1.0 + LOAD_GIRTH_GAIN * max(load, 0.0) / total_mass
+        channels[i]["turgor"] *= (
+            1.0 + carrier.load_girth_gain * max(load, 0.0) / total_mass
+        )
     rest = [c.rest_volume for c in carrier.chambers]
     total_posed = sum(ch["turgor"] * v for ch, v in zip(channels, rest))
     scale = sum(rest) / total_posed
@@ -364,7 +385,7 @@ def _blend_channel(posed: list, axials: list, q: float, getter) -> float:
     raise AssertionError("unreachable")
 
 
-def generate_mesh(posed: list) -> tuple:
+def generate_mesh(posed: list, belly_smooth: float = 0.0) -> tuple:
     """Loft one continuous closed tube over the chamber chain.
 
     Stations are sampled uniformly in the axial coordinate from tail cap to
@@ -419,6 +440,21 @@ def generate_mesh(posed: list) -> tuple:
         )
         stations.append((centers[k], tangents2d[k], r, ecc, contact_w))
 
+    # Ventral smoothing profile: a running max of the station radii over a
+    # one-chamber window. Belly-side vertices blend toward this crevice-free
+    # profile by belly_smooth, so septa stay legible dorsally while the belly
+    # reads as one taut mass.
+    rs = [s[2] for s in stations]
+    half_w = RINGS_PER_CHAMBER // 2
+    # 1-D morphological closing: running max then running min with the same
+    # window. Fills the septum valleys without lifting chamber peaks.
+    rs_max = [
+        max(rs[max(0, i - half_w): i + half_w + 1]) for i in range(len(rs))
+    ]
+    rs_smooth = [
+        min(rs_max[max(0, i - half_w): i + half_w + 1]) for i in range(len(rs_max))
+    ]
+
     # Ground the smoothed body: the underside of contact stations (or the
     # whole body when no station has contact) rests on y = 0.
     grounded = [s for s in stations if s[4] > 0.5] or stations
@@ -426,7 +462,7 @@ def generate_mesh(posed: list) -> tuple:
 
     vertices = []
     rings = []
-    for (cx, cy), (tx, ty), r, ecc, contact_w in stations:
+    for si, ((cx, cy), (tx, ty), r, ecc, contact_w) in enumerate(stations):
         cy -= floor
         b = r * (1.0 + ecc)
         c = r / (1.0 + ecc)
@@ -434,8 +470,12 @@ def generate_mesh(posed: list) -> tuple:
         ring = []
         for s in range(RING_SEGMENTS):
             phi = 2.0 * math.pi * s / RING_SEGMENTS
-            lz = b * math.cos(phi)
-            off = c * math.sin(phi)
+            radial = 1.0
+            if belly_smooth > 0.0 and r > 1e-9:
+                w = belly_smooth * max(0.0, -math.sin(phi))
+                radial = 1.0 + w * (rs_smooth[si] / r - 1.0)
+            lz = b * math.cos(phi) * radial
+            off = c * math.sin(phi) * radial
             vx = cx + ux * off
             vy = cy + uy * off
             vz = lz
@@ -541,7 +581,7 @@ def compile_to_dir(spec_path: Path, out_dir: Path) -> dict:
         report["phase"] = "pose"
         posed = pose_carrier(carrier)
         report["phase"] = "mesh"
-        vertices, faces = generate_mesh(posed)
+        vertices, faces = generate_mesh(posed, carrier.belly_smooth)
         obj_text = write_obj(vertices, faces)
         report["phase"] = "write"
         posed_json = json.dumps(posed_payload(carrier, posed), indent=2, sort_keys=True)

@@ -235,3 +235,34 @@ def test_droop_bound_limits_adjacent_pitch_change():
     # adjacent non-contact deltas still obey the bound; check interior pairs.
     for a, b in zip(pitches, pitches[1:]):
         assert abs(b - a) <= hc.MAX_BEND + 0.6 + 1e-9
+
+
+def test_belly_smooth_fills_ventral_crevices_only():
+    spec = make_spec(septum=0.7)
+    posed = hc.pose_carrier(hc.load_spec(spec))
+    v0, f0 = hc.generate_mesh(posed, belly_smooth=0.0)
+    v1, f1 = hc.generate_mesh(posed, belly_smooth=1.0)
+    assert len(v0) == len(v1)
+    moved = [i for i in range(len(v0)) if v0[i] != v1[i]]
+    assert moved, "belly_smooth=1 must move some vertices"
+    # Smoothed mesh volume grows (crevices filled), and dorsal apexes are
+    # preserved: the maximum-height vertex is identical in both meshes.
+    assert hc.mesh_volume(v1, f1) > hc.mesh_volume(v0, f0)
+    top0 = max(v0, key=lambda v: v[1])
+    top1 = max(v1, key=lambda v: v[1])
+    assert top0 == top1
+
+
+def test_belly_smooth_zero_is_byte_identical():
+    posed = hc.pose_carrier(hc.load_spec(make_spec()))
+    assert hc.write_obj(*hc.generate_mesh(posed)) == hc.write_obj(
+        *hc.generate_mesh(posed, belly_smooth=0.0)
+    )
+
+
+def test_load_girth_gain_override_disables_taper():
+    spec = make_spec(posture=FULL_ERECT)
+    spec["load_girth_gain"] = 0.0
+    posed = hc.pose_carrier(hc.load_spec(spec))
+    radii = [pc.radius for pc in posed]
+    assert abs(radii[0] - radii[-1]) < 0.05 * radii[0]
