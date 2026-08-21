@@ -1,0 +1,1 @@
+Render the same animal as a three-dimensional cel-shaded character with solid forms and sculpted fur masses.

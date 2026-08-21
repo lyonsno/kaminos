@@ -1,0 +1,1 @@
+Render the same animal as a hand-painted 3D game asset with broad readable fur planes.

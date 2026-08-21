@@ -1,0 +1,1 @@
+Render the same animal with natural anatomy and clean contiguous coat masses defining each facial part.

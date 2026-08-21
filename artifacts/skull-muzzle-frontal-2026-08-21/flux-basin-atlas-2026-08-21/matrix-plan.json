@@ -1,0 +1,51 @@
+{
+  "schema": "kaminos.handy_candyman.flux_reconstruction_basin_atlas.v1",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_diaulos": "handy-candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "waves": [
+    {"id": "wave-1", "seeds": [81415, 81416, 81417]},
+    {"id": "wave-2", "seeds": [81418, 81419, 81420]}
+  ],
+  "prompts": [
+    {"id": "01-hybrid-broad-sculpture", "file": "prompts/01-hybrid-broad-sculpture.txt"},
+    {"id": "02-hybrid-owned-masses", "file": "prompts/02-hybrid-owned-masses.txt"},
+    {"id": "03-hybrid-carved-locks", "file": "prompts/03-hybrid-carved-locks.txt"},
+    {"id": "04-cinematic-animation-natural", "file": "prompts/04-cinematic-animation-natural.txt"},
+    {"id": "05-feature-animation-natural-eyes", "file": "prompts/05-feature-animation-natural-eyes.txt"},
+    {"id": "06-modern-game-character", "file": "prompts/06-modern-game-character.txt"},
+    {"id": "07-hand-painted-game-asset", "file": "prompts/07-hand-painted-game-asset.txt"},
+    {"id": "08-polished-low-poly", "file": "prompts/08-polished-low-poly.txt"},
+    {"id": "09-lifelike-character-maquette", "file": "prompts/09-lifelike-character-maquette.txt"},
+    {"id": "10-stop-motion-maquette", "file": "prompts/10-stop-motion-maquette.txt"},
+    {"id": "11-painted-resin-bust", "file": "prompts/11-painted-resin-bust.txt"},
+    {"id": "12-colored-clay-maquette", "file": "prompts/12-colored-clay-maquette.txt"},
+    {"id": "13-painted-carved-wood", "file": "prompts/13-painted-carved-wood.txt"},
+    {"id": "14-glazed-ceramic", "file": "prompts/14-glazed-ceramic.txt"},
+    {"id": "15-cast-bronze", "file": "prompts/15-cast-bronze.txt"},
+    {"id": "16-soft-vinyl-figure", "file": "prompts/16-soft-vinyl-figure.txt"},
+    {"id": "17-three-dimensional-cel", "file": "prompts/17-three-dimensional-cel.txt"},
+    {"id": "18-crafted-felt-puppet", "file": "prompts/18-crafted-felt-puppet.txt"}
+  ],
+  "comparison_contract": "Hold exact source bytes and route settings fixed. Compare all eighteen prompts at six matched seeds. Preserve every completed cell and inspect source images directly before selecting matched TRELLIS probes.",
+  "claim_ceiling": "The atlas may establish image-generation basin stability and nominate reconstruction sources. It does not establish improved geometry until selected images are reconstructed and close-orbit inspected."
+}
