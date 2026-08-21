@@ -47,7 +47,19 @@
     "terminal_metadata": "<source-id>/trellis-<seed>/metadata.json",
     "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
   },
-  "job_ids": {},
+  "effective_submission_route": {
+    "greenroom_worktree": "/private/tmp/gpu-greenroom-handy-skull-basin-0821",
+    "greenroom_branch": "cc/handy-skull-basin-0821",
+    "accepted_state": "/Users/noahlyons/.local/state/gpu-greenroom/pending/<job-id>"
+  },
+  "job_ids": {
+    "identity-hybrid-81416/trellis-81421": "5dfac5a7b3a0",
+    "identity-hybrid-81416/trellis-81422": "7691b0e58bee",
+    "broad-planes-81416/trellis-81421": "273d03021f6f",
+    "broad-planes-81416/trellis-81422": "6bbd9376009f",
+    "painted-maquette-81415/trellis-81421": "bd13cc9108dd",
+    "painted-maquette-81415/trellis-81422": "ddad82f0f4ae"
+  },
   "comparison_contract": "Hold route parameters fixed. Compare source representation within each TRELLIS seed and seed variance within each exact source.",
   "claim_ceiling": "The assay may identify locally coherent orbitable visual casts. It cannot establish manifold topology, collision, rigging, animation, production readiness, or reference CUDA parity."
 }
