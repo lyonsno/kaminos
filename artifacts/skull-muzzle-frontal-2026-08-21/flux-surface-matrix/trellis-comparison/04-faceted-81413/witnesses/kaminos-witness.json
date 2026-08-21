@@ -1,0 +1,301 @@
+{
+  "schema": "kaminos.skull-muzzle-trellis-source-frequency-witness.v1",
+  "requestedRoute": {
+    "url": "http://127.0.0.1:8104/",
+    "assetUrl": "/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/output.glb",
+    "viewerFunction": "window.kaminosImportGLBSceneObject",
+    "debugFunction": "window.kaminosSceneObjectDebugState"
+  },
+  "effectiveUrl": "http://127.0.0.1:8104/",
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-faceted-81413-witness-9461",
+  "debugPort": 9461,
+  "headless": true,
+  "settleMs": 3000,
+  "phase": "recording-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9461/devtools/browser/f569397e-5757-416c-b71f-1b6ea8485150"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9461/devtools/browser/f569397e-5757-416c-b71f-1b6ea8485150\nTrying to load the allocator multiple times. This is *not* supported.\n[25135:24835681:0821/030343.157284:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[25135:24835681:0821/030343.167382:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[25135:24835681:0821/030343.171006:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[25135:24835681:0821/030343.233344:ERROR:google_apis/gcm/engine/mcs_client.cc:702]   Error code: 401  Error message: Authentication Failed: wrong_secret\n[25135:24835681:0821/030343.233355:ERROR:google_apis/gcm/engine/mcs_client.cc:704] Failed to log in to GCM, resetting connection.\n",
+  "truthBoundary": "Kaminos route, GLB load, scene registration, and two camera captures only. Visual inspection is required for shell continuity; this does not prove production topology, collision, animation, or reference CUDA behavior.",
+  "status": "passed",
+  "registration": {
+    "initial": {
+      "id": "glb-d8883ca5-6163-4515-b937-8d83829441a6",
+      "label": "Faceted Fur 81413 TRELLIS 81414",
+      "source": "/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/output.glb",
+      "type": "glb",
+      "groupId": "group-73e983d3-a2c3-4876-a3af-6eea40cec7d7",
+      "active": true,
+      "transform": {
+        "position": [
+          -0.00021098554134368896,
+          -0.013098850846290588,
+          -0.002451270818710327
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.2084705772841002,
+          1.2084705772841002,
+          1.2084705772841002
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": null,
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "final": {
+      "id": "glb-d8883ca5-6163-4515-b937-8d83829441a6",
+      "label": "Faceted Fur 81413 TRELLIS 81414",
+      "source": "/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/output.glb",
+      "type": "glb",
+      "groupId": "group-73e983d3-a2c3-4876-a3af-6eea40cec7d7",
+      "active": true,
+      "transform": {
+        "position": [
+          -0.00021098554134368896,
+          -0.013098850846290588,
+          -0.002451270818710327
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.2084705772841002,
+          1.2084705772841002,
+          1.2084705772841002
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": null,
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "rowCount": 1,
+    "finalRowCount": 1
+  },
+  "captures": {
+    "front": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/witnesses/front.png",
+      "bytes": 411673
+    },
+    "oblique": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/witnesses/oblique.png",
+      "bytes": 483488
+    }
+  },
+  "cameras": {
+    "initial": {
+      "position": [
+        0,
+        0.5999999999999999,
+        3
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0.98058067569092,
+        0.19611613513818393,
+        0,
+        0,
+        -0.19611613513818393,
+        0.98058067569092,
+        0,
+        0,
+        0,
+        -3.05941170815567,
+        1
+      ]
+    },
+    "front": {
+      "position": [
+        0,
+        2.571758278209442e-16,
+        4.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        6.123233995736766e-17,
+        0,
+        0,
+        -6.123233995736766e-17,
+        1,
+        0,
+        0,
+        0,
+        -4.2,
+        1
+      ]
+    },
+    "oblique": {
+      "position": [
+        2.7000000000000006,
+        1.5499999999999996,
+        3.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.7642914835078908,
+        -0.22388428885126743,
+        0.6047597485306622,
+        0,
+        0,
+        0.9377996615442581,
+        0.3471768926750096,
+        0,
+        -0.6448709392097829,
+        -0.26534434234224286,
+        0.7167522945548589,
+        0,
+        -5.158913076266482e-16,
+        -3.3941360100615143e-16,
+        -4.464582847254602,
+        1
+      ]
+    },
+    "final": {
+      "position": [
+        2.700000000000001,
+        1.5499999999999996,
+        3.2
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.7642914835078907,
+        -0.22388428885126752,
+        0.6047597485306623,
+        0,
+        2.7755575615628914e-17,
+        0.9377996615442581,
+        0.3471768926750096,
+        0,
+        -0.644870939209783,
+        -0.2653443423422428,
+        0.7167522945548588,
+        0,
+        0,
+        0,
+        -4.464582847254602,
+        1
+      ]
+    }
+  },
+  "finalInfoText": null,
+  "finalRows": [
+    "glb / /artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/output.glb\n      \n      \n        re-drop required\n        ×"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81412/08-feature-animation/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/08-feature-animation-81412",
+  "params": {
+    "seed": "81414",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "job_id": "da74d654295c",
+  "submitted_at": 1787295412.3750458
+}

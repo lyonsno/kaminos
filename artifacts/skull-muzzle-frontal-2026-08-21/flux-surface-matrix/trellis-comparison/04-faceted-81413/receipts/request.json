@@ -1,0 +1,13 @@
+{
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413",
+  "params": {
+    "seed": "81414",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "job_id": "993fda2d72a7",
+  "submitted_at": 1787295412.1286771
+}
