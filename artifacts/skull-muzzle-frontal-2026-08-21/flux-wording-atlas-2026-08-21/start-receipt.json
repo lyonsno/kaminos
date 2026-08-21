@@ -1,0 +1,26 @@
+{
+  "schema": "kaminos.handy_candyman.flux_reconstruction_basin_start.v1",
+  "plan": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/matrix-plan.json",
+  "source": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+  "source_sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_diaulos": "handy-candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "expected_cell_count": 48,
+  "submitted_at": 1787311200,
+  "cells": []
+}

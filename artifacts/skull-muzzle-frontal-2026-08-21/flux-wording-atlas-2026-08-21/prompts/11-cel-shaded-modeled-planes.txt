@@ -1,0 +1,1 @@
+Render the same animal as a cel-shaded three-dimensional character with modeled facial planes and layered coat pieces.
