@@ -1,0 +1,11 @@
+{
+  "schema": "kaminos.handy_candyman.flux_reconstruction_basin_submission_failure.v1",
+  "failure_phase": "submit-response-parse",
+  "cell_id": "wave-1/seed-81415/01-hybrid-broad-sculpture",
+  "accepted_job_id": "cf7a76d771f0",
+  "greenroom_state_at_recovery": "pending",
+  "stdout_first_line": "Submitted job cf7a76d771f0",
+  "error": "The initial helper expected a one-line confirmation and rejected Greenroom's multi-line accepted-job response before writing start-receipt.json.",
+  "recovery": "Reconcile the exact output directory against Greenroom state, record the accepted job, and submit only the remaining cells.",
+  "recorded_at": "2026-08-21T06:31:00-04:00"
+}
