@@ -1,0 +1,49 @@
+{
+  "schema": "kaminos.handy_candyman.flux_physical_form_controls.v1",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "waves": [
+    {"id": "wave-1", "seeds": [81432, 81433]},
+    {"id": "wave-2", "seeds": [81434, 81435]}
+  ],
+  "prompt_families": [
+    {
+      "id": "continuous-muzzle",
+      "prompts": ["01-silicone-continuous-muzzle", "02-silicone-shallow-facial-relief", "03-silicone-attached-cheek-wedges", "04-silicone-painted-markings"]
+    },
+    {
+      "id": "eye-representation",
+      "prompts": ["05-polystone-inset-eyes", "06-polystone-painted-eyes", "07-polystone-glass-eyes", "08-polystone-enamel-eyes"]
+    },
+    {
+      "id": "coat-organization",
+      "prompts": ["09-polystone-connected-facets", "10-polystone-overlapping-plates", "11-polystone-rounded-masses", "12-polystone-attached-locks"]
+    },
+    {
+      "id": "physical-style-expansion",
+      "prompts": ["13-stop-motion-silicone-puppet", "14-console-adventure-resin-maquette", "15-tabletop-miniature-sculpt", "16-cel-painted-resin-sculpture"]
+    }
+  ],
+  "comparison_contract": "Hold exact source bytes and route settings fixed. Preserve one identity sentence across prompts. Compare four local form-control families at four matched seeds, retain every cell, and inspect images directly before reconstruction promotion.",
+  "claim_ceiling": "The atlas may establish image-generation control tendencies and nominate exact reconstruction sources. It does not establish improved geometry without matched reconstruction and close-orbit inspection."
+}

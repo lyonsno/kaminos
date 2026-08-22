@@ -1,0 +1,693 @@
+{
+  "schema": "kaminos.handy_candyman.flux_physical_form_controls.start_receipt.v1",
+  "recorded_at": "2026-08-22T00:58:02Z",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "claim_ceiling": "The atlas may establish image-generation control tendencies and nominate exact reconstruction sources. It does not establish improved geometry without matched reconstruction and close-orbit inspection.",
+  "job_count": 64,
+  "jobs": [
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "01-silicone-continuous-muzzle",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/01-silicone-continuous-muzzle.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/01-silicone-continuous-muzzle",
+      "job_id": "0e9d2634370f",
+      "submitted_at": 1787359945.295083,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/0e9d2634370f/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "02-silicone-shallow-facial-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/02-silicone-shallow-facial-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/02-silicone-shallow-facial-relief",
+      "job_id": "9bbf1f952b0f",
+      "submitted_at": 1787360278.362449,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9bbf1f952b0f/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "03-silicone-attached-cheek-wedges",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/03-silicone-attached-cheek-wedges.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/03-silicone-attached-cheek-wedges",
+      "job_id": "b78f89475805",
+      "submitted_at": 1787360278.44733,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b78f89475805/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "04-silicone-painted-markings",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/04-silicone-painted-markings.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/04-silicone-painted-markings",
+      "job_id": "88a41a29efbe",
+      "submitted_at": 1787360278.51344,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/88a41a29efbe/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "05-polystone-inset-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/05-polystone-inset-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/05-polystone-inset-eyes",
+      "job_id": "95205e494eba",
+      "submitted_at": 1787360278.579694,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/95205e494eba/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "06-polystone-painted-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/06-polystone-painted-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/06-polystone-painted-eyes",
+      "job_id": "dcad2a03dcd4",
+      "submitted_at": 1787360278.645686,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/dcad2a03dcd4/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "07-polystone-glass-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/07-polystone-glass-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/07-polystone-glass-eyes",
+      "job_id": "91d92d0bb21c",
+      "submitted_at": 1787360278.710123,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/91d92d0bb21c/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "08-polystone-enamel-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/08-polystone-enamel-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/08-polystone-enamel-eyes",
+      "job_id": "accc91f40fd0",
+      "submitted_at": 1787360278.783946,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/accc91f40fd0/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "09-polystone-connected-facets",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/09-polystone-connected-facets.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/09-polystone-connected-facets",
+      "job_id": "8cca3b51255f",
+      "submitted_at": 1787360278.851358,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8cca3b51255f/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "10-polystone-overlapping-plates",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/10-polystone-overlapping-plates.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/10-polystone-overlapping-plates",
+      "job_id": "2c981e1b6f3a",
+      "submitted_at": 1787360278.918045,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/2c981e1b6f3a/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "11-polystone-rounded-masses",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/11-polystone-rounded-masses.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/11-polystone-rounded-masses",
+      "job_id": "8091578a85e4",
+      "submitted_at": 1787360278.992714,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8091578a85e4/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "12-polystone-attached-locks",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/12-polystone-attached-locks.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/12-polystone-attached-locks",
+      "job_id": "ea32e36942ef",
+      "submitted_at": 1787360279.059398,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/ea32e36942ef/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "13-stop-motion-silicone-puppet",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/13-stop-motion-silicone-puppet.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/13-stop-motion-silicone-puppet",
+      "job_id": "aec13b51f441",
+      "submitted_at": 1787360279.1330519,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/aec13b51f441/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "14-console-adventure-resin-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/14-console-adventure-resin-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/14-console-adventure-resin-maquette",
+      "job_id": "e95e2dce0e66",
+      "submitted_at": 1787360279.201011,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e95e2dce0e66/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "15-tabletop-miniature-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/15-tabletop-miniature-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/15-tabletop-miniature-sculpt",
+      "job_id": "d5d48df117db",
+      "submitted_at": 1787360279.264033,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d5d48df117db/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81432,
+      "prompt_id": "16-cel-painted-resin-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/16-cel-painted-resin-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/16-cel-painted-resin-sculpture",
+      "job_id": "d449ec5d7b1b",
+      "submitted_at": 1787360279.3289979,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d449ec5d7b1b/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "01-silicone-continuous-muzzle",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/01-silicone-continuous-muzzle.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/01-silicone-continuous-muzzle",
+      "job_id": "6d19ae1ff11c",
+      "submitted_at": 1787360279.392921,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/6d19ae1ff11c/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "02-silicone-shallow-facial-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/02-silicone-shallow-facial-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/02-silicone-shallow-facial-relief",
+      "job_id": "4cd902f9d134",
+      "submitted_at": 1787360279.462919,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4cd902f9d134/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "03-silicone-attached-cheek-wedges",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/03-silicone-attached-cheek-wedges.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/03-silicone-attached-cheek-wedges",
+      "job_id": "3b70d74b0d4d",
+      "submitted_at": 1787360279.527584,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3b70d74b0d4d/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "04-silicone-painted-markings",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/04-silicone-painted-markings.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/04-silicone-painted-markings",
+      "job_id": "f5489f61f227",
+      "submitted_at": 1787360279.60186,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f5489f61f227/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "05-polystone-inset-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/05-polystone-inset-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/05-polystone-inset-eyes",
+      "job_id": "4c9e87229b33",
+      "submitted_at": 1787360279.667546,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4c9e87229b33/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "06-polystone-painted-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/06-polystone-painted-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/06-polystone-painted-eyes",
+      "job_id": "707f0b2689fa",
+      "submitted_at": 1787360279.7366369,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/707f0b2689fa/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "07-polystone-glass-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/07-polystone-glass-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/07-polystone-glass-eyes",
+      "job_id": "2eae06ef85b5",
+      "submitted_at": 1787360279.803064,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/2eae06ef85b5/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "08-polystone-enamel-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/08-polystone-enamel-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/08-polystone-enamel-eyes",
+      "job_id": "93856ba1a00e",
+      "submitted_at": 1787360279.86698,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/93856ba1a00e/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "09-polystone-connected-facets",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/09-polystone-connected-facets.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/09-polystone-connected-facets",
+      "job_id": "8ec35498604b",
+      "submitted_at": 1787360279.943789,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8ec35498604b/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "10-polystone-overlapping-plates",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/10-polystone-overlapping-plates.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/10-polystone-overlapping-plates",
+      "job_id": "30c2a9e8d935",
+      "submitted_at": 1787360280.013271,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/30c2a9e8d935/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "11-polystone-rounded-masses",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/11-polystone-rounded-masses.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/11-polystone-rounded-masses",
+      "job_id": "b4142eb18271",
+      "submitted_at": 1787360280.083329,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b4142eb18271/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "12-polystone-attached-locks",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/12-polystone-attached-locks.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/12-polystone-attached-locks",
+      "job_id": "0d6e135db0c1",
+      "submitted_at": 1787360280.1568298,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/0d6e135db0c1/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "13-stop-motion-silicone-puppet",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/13-stop-motion-silicone-puppet.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/13-stop-motion-silicone-puppet",
+      "job_id": "3b17ecffa55b",
+      "submitted_at": 1787360280.221738,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3b17ecffa55b/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "14-console-adventure-resin-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/14-console-adventure-resin-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/14-console-adventure-resin-maquette",
+      "job_id": "05a4ad0b9b95",
+      "submitted_at": 1787360280.286759,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/05a4ad0b9b95/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "15-tabletop-miniature-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/15-tabletop-miniature-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/15-tabletop-miniature-sculpt",
+      "job_id": "e7020159be7a",
+      "submitted_at": 1787360280.362339,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e7020159be7a/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81433,
+      "prompt_id": "16-cel-painted-resin-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/16-cel-painted-resin-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81433/16-cel-painted-resin-sculpture",
+      "job_id": "ad4a58166528",
+      "submitted_at": 1787360280.4293602,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/ad4a58166528/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "01-silicone-continuous-muzzle",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/01-silicone-continuous-muzzle.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/01-silicone-continuous-muzzle",
+      "job_id": "47cde2081a57",
+      "submitted_at": 1787360280.494893,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/47cde2081a57/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "02-silicone-shallow-facial-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/02-silicone-shallow-facial-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/02-silicone-shallow-facial-relief",
+      "job_id": "64c58b50f86a",
+      "submitted_at": 1787360280.566803,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/64c58b50f86a/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "03-silicone-attached-cheek-wedges",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/03-silicone-attached-cheek-wedges.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/03-silicone-attached-cheek-wedges",
+      "job_id": "7764c535209f",
+      "submitted_at": 1787360280.63358,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7764c535209f/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "04-silicone-painted-markings",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/04-silicone-painted-markings.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/04-silicone-painted-markings",
+      "job_id": "01a4a5adb484",
+      "submitted_at": 1787360280.697778,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/01a4a5adb484/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "05-polystone-inset-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/05-polystone-inset-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/05-polystone-inset-eyes",
+      "job_id": "5a34fe9c7ca5",
+      "submitted_at": 1787360280.76383,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5a34fe9c7ca5/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "06-polystone-painted-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/06-polystone-painted-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/06-polystone-painted-eyes",
+      "job_id": "4f3798ccb207",
+      "submitted_at": 1787360280.829407,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4f3798ccb207/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "07-polystone-glass-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/07-polystone-glass-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/07-polystone-glass-eyes",
+      "job_id": "5fe4cdb2effe",
+      "submitted_at": 1787360280.906473,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5fe4cdb2effe/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "08-polystone-enamel-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/08-polystone-enamel-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/08-polystone-enamel-eyes",
+      "job_id": "48b6872dbc05",
+      "submitted_at": 1787360280.9808252,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/48b6872dbc05/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "09-polystone-connected-facets",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/09-polystone-connected-facets.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/09-polystone-connected-facets",
+      "job_id": "8d004a796576",
+      "submitted_at": 1787360281.0485919,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8d004a796576/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "10-polystone-overlapping-plates",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/10-polystone-overlapping-plates.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/10-polystone-overlapping-plates",
+      "job_id": "c86e533340ca",
+      "submitted_at": 1787360281.1187751,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c86e533340ca/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "11-polystone-rounded-masses",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/11-polystone-rounded-masses.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/11-polystone-rounded-masses",
+      "job_id": "4d740b70934c",
+      "submitted_at": 1787360281.185385,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4d740b70934c/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "12-polystone-attached-locks",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/12-polystone-attached-locks.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/12-polystone-attached-locks",
+      "job_id": "c65c81888746",
+      "submitted_at": 1787360281.255563,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c65c81888746/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "13-stop-motion-silicone-puppet",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/13-stop-motion-silicone-puppet.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/13-stop-motion-silicone-puppet",
+      "job_id": "a4309a3c9de8",
+      "submitted_at": 1787360281.3206248,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/a4309a3c9de8/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "14-console-adventure-resin-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/14-console-adventure-resin-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/14-console-adventure-resin-maquette",
+      "job_id": "ffc6cb6ad5a8",
+      "submitted_at": 1787360281.3915079,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/ffc6cb6ad5a8/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "15-tabletop-miniature-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/15-tabletop-miniature-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/15-tabletop-miniature-sculpt",
+      "job_id": "e04b5b242667",
+      "submitted_at": 1787360281.4551492,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e04b5b242667/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81434,
+      "prompt_id": "16-cel-painted-resin-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/16-cel-painted-resin-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/16-cel-painted-resin-sculpture",
+      "job_id": "36db9e1477a3",
+      "submitted_at": 1787360281.520092,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/36db9e1477a3/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "01-silicone-continuous-muzzle",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/01-silicone-continuous-muzzle.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/01-silicone-continuous-muzzle",
+      "job_id": "bf575da8a31a",
+      "submitted_at": 1787360281.585094,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/bf575da8a31a/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "02-silicone-shallow-facial-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/02-silicone-shallow-facial-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/02-silicone-shallow-facial-relief",
+      "job_id": "f851cebe84bb",
+      "submitted_at": 1787360281.6544662,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f851cebe84bb/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "03-silicone-attached-cheek-wedges",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/03-silicone-attached-cheek-wedges.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/03-silicone-attached-cheek-wedges",
+      "job_id": "65e527be12b0",
+      "submitted_at": 1787360281.7180202,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/65e527be12b0/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "04-silicone-painted-markings",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/04-silicone-painted-markings.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/04-silicone-painted-markings",
+      "job_id": "afae2f9da304",
+      "submitted_at": 1787360281.782558,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/afae2f9da304/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "05-polystone-inset-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/05-polystone-inset-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/05-polystone-inset-eyes",
+      "job_id": "f26d52203654",
+      "submitted_at": 1787360281.848086,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f26d52203654/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "06-polystone-painted-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/06-polystone-painted-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/06-polystone-painted-eyes",
+      "job_id": "fca594145824",
+      "submitted_at": 1787360281.913428,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fca594145824/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "07-polystone-glass-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/07-polystone-glass-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/07-polystone-glass-eyes",
+      "job_id": "cb7b82504468",
+      "submitted_at": 1787360281.9807591,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cb7b82504468/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "08-polystone-enamel-eyes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/08-polystone-enamel-eyes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/08-polystone-enamel-eyes",
+      "job_id": "681c0f56b6ac",
+      "submitted_at": 1787360282.047457,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/681c0f56b6ac/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "09-polystone-connected-facets",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/09-polystone-connected-facets.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/09-polystone-connected-facets",
+      "job_id": "57685ef24571",
+      "submitted_at": 1787360282.1141639,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/57685ef24571/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "10-polystone-overlapping-plates",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/10-polystone-overlapping-plates.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/10-polystone-overlapping-plates",
+      "job_id": "b5ba1a50b407",
+      "submitted_at": 1787360282.180476,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b5ba1a50b407/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "11-polystone-rounded-masses",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/11-polystone-rounded-masses.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/11-polystone-rounded-masses",
+      "job_id": "a2387aa4fadf",
+      "submitted_at": 1787360282.24823,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/a2387aa4fadf/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "12-polystone-attached-locks",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/12-polystone-attached-locks.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/12-polystone-attached-locks",
+      "job_id": "2802135ab9a0",
+      "submitted_at": 1787360282.322936,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/2802135ab9a0/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "13-stop-motion-silicone-puppet",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/13-stop-motion-silicone-puppet.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/13-stop-motion-silicone-puppet",
+      "job_id": "217a85d14e1e",
+      "submitted_at": 1787360282.388027,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/217a85d14e1e/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "14-console-adventure-resin-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/14-console-adventure-resin-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/14-console-adventure-resin-maquette",
+      "job_id": "5fc3f1e423e7",
+      "submitted_at": 1787360282.454449,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5fc3f1e423e7/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "15-tabletop-miniature-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/15-tabletop-miniature-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/15-tabletop-miniature-sculpt",
+      "job_id": "e13eff7c731a",
+      "submitted_at": 1787360282.546724,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e13eff7c731a/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81435,
+      "prompt_id": "16-cel-painted-resin-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/16-cel-painted-resin-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81435/16-cel-painted-resin-sculpture",
+      "job_id": "ae02fd834bdb",
+      "submitted_at": 1787360282.612406,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/ae02fd834bdb/request.json"
+    }
+  ],
+  "worker_launch": {
+    "recorded_at": "2026-08-22T01:03:23Z",
+    "command": "/Users/noahlyons/dev/gpu-greenroom/.venv/bin/gpu-greenroom worker",
+    "process_id": 84483,
+    "tool_session_id": 34538,
+    "queue_dir": "/Users/noahlyons/.local/state/gpu-greenroom",
+    "execution_authority": "Greenroom gpu.lock plus cooperative lease state"
+  },
+  "route_probe": {
+    "job_id": "0e9d2634370f",
+    "status": "done",
+    "receipt_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/0e9d2634370f/receipt.json",
+    "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/01-silicone-continuous-muzzle.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-1/seed-81432/01-silicone-continuous-muzzle/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81432 --mlx-cache-limit-gb 48",
+    "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+    "effective_env": {
+      "TOKENIZERS_PARALLELISM": "false"
+    },
+    "effective_timeout": 1800,
+    "ignored_params": null,
+    "duration_seconds": 33.73792791366577,
+    "inspected_output": "wave-1/seed-81432/01-silicone-continuous-muzzle/output.png",
+    "visible_result": "Clean nonblank frontal physical maquette with a continuous muzzle, inset amber eyes, broad attached coat masses, and no thin whisker clutter."
+  }
+}
