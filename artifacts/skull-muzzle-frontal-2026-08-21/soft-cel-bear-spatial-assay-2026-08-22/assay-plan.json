@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos.handy_candyman.soft_cel_bear_spatial_assay.plan.v1",
+  "campaign_question": "Does the operator-selected soft-cel bear produce a coherent TRELLIS cast as-is, and can minimal camera normalization produce a stronger alternative source without spending its authored construction?",
+  "source_path": "../flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+  "source_sha256": "980f2ebd3beaa6d76c377cd917170928f3ea6e2a5456a275cba768708163c1c4",
+  "source_dimensions": [512, 512],
+  "trellis_control": {
+    "requested_route": "trellis2mlx_fast_checkpoint",
+    "seed": 81441,
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "checkpoint_preservation": true
+  },
+  "flux_matrix": {
+    "requested_route": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "dimensions": [512, 512],
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48,
+    "seeds": [81441, 81442],
+    "prompts": ["01-near-frontal", "02-long-lens-three-quarter"]
+  },
+  "claim_ceiling": "Source-conditioned MLX-route objectness and bounded orbitability for the exact TRELLIS control; generated FLUX cells are alternative source candidates only until directly inspected."
+}
