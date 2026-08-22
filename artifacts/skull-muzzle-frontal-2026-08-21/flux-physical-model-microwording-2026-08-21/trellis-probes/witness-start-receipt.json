@@ -1,0 +1,78 @@
+{
+  "schema": "handy.glb-witness-start-receipt.v1",
+  "recorded_at": "2026-08-22T02:01:38Z",
+  "requested_route": "kaminos_render_glb_views",
+  "intended_script_override": "/private/tmp/handy-render-glb.py",
+  "actual_initial_request_state": "script parameter omitted from both submitted requests",
+  "durable_rerun_script": "render-glb-witness.py",
+  "render_contract": {
+    "renderer": "Blender EEVEE Next",
+    "material_sidedness": "two-sided",
+    "ambient_occlusion_override": "none",
+    "camera_lens_mm": 70,
+    "views": [
+      "front",
+      "left",
+      "rear",
+      "right"
+    ]
+  },
+  "jobs": [
+    {
+      "role": "smooth silicone source cast",
+      "greenroom_job_id": "ed0918f27b14",
+      "source_glb": "05-silicone-inset-eyes-81427/trellis-81431/output.glb",
+      "output_dir": "05-silicone-inset-eyes-81427/trellis-81431/witness",
+      "terminal_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/ed0918f27b14/receipt.json"
+    },
+    {
+      "role": "connected-facet source cast",
+      "greenroom_job_id": "b40ae122cb68",
+      "source_glb": "15-low-poly-connected-facets-81427/trellis-81431/output.glb",
+      "output_dir": "15-low-poly-connected-facets-81427/trellis-81431/witness",
+      "terminal_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/b40ae122cb68/receipt.json"
+    }
+  ],
+  "initial_disposition": {
+    "status": "failed_before_primary_output",
+    "failure_phase": "route_parameter_omission",
+    "effective_script": "/private/tmp/kaminos-prometheus-envelope-relations-0805/tools/blender-render-glb-views.py",
+    "effective_script_state": "missing",
+    "greenroom_terminal_anomaly": "Both jobs were recorded done with exit code 0 despite Blender producing no image or manifest and reporting a missing script.",
+    "rerun_policy": "Submit exactly one corrected job per cast with the durable script parameter explicit."
+  },
+  "rerun_attempts": [
+    {
+      "phase": "relative_path_retry",
+      "job_ids": [
+        "2a8969fa0512",
+        "4a2e3ed0673c"
+      ],
+      "status": "failed_before_primary_output",
+      "failure_phase": "relative_input_path_with_null_effective_cwd"
+    },
+    {
+      "phase": "absolute_path_retry",
+      "job_ids": [
+        "1a4f6369e0a9",
+        "cf117aa2c6da"
+      ],
+      "status": "failed_before_primary_output",
+      "failure_phase": "blender_argument_separator_not_removed_before_argparse",
+      "effective_route_evidence": "Both terminal receipts show the complete named argument contract after Blender's -- separator.",
+      "repair": "render-glb-witness.py now parses only argv following Blender's -- separator."
+    },
+    {
+      "phase": "engine_enum_retry",
+      "job_ids": [
+        "28e62d41c72e",
+        "db520912b41a"
+      ],
+      "status": "failed_before_primary_output_despite_greenroom_done_state",
+      "failure_phase": "blender_engine_enum_compatibility",
+      "effective_evidence": "Both output directories contained failure.json and no rendered PNGs or manifest.",
+      "repair": "Select BLENDER_EEVEE when BLENDER_EEVEE_NEXT is unavailable, clear stale markers before each run, and force process exit 1 after writing a script-level failure."
+    }
+  ],
+  "claim_ceiling": "The registered renders may support direct multi-angle visual comparison only. They do not establish manifoldness, winding repair, collision suitability, rigging, or production admission."
+}

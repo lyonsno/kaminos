@@ -1,0 +1,61 @@
+{
+  "schema": "handy.trellis-controlled-comparison.start.v1",
+  "recorded_at": "2026-08-22T02:29:39Z",
+  "requested_route": "trellis2mlx_fast_checkpoint",
+  "requested_contract": {
+    "backend": "native MLX TRELLIS",
+    "model": "microsoft/TRELLIS-image-large",
+    "seed": 81431,
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "checkpoint_route": true
+  },
+  "comparison_rule": "Only the conditioning image changes across these four jobs.",
+  "failed_submission_attempt": {
+    "job_ids": [
+      "6ec06c2d533b",
+      "86ea2b6baf7e",
+      "0d50a79344bb",
+      "21b947bb16d6"
+    ],
+    "failure_phase": "execution_before_model_load",
+    "cause": "An invocation-scoped Kaminos cwd override displaced the registered Trellis implementation cwd, so relative generate.py could not be opened.",
+    "model_execution_started": false
+  },
+  "jobs": [
+    {
+      "role": "smooth continuous painted silicone",
+      "job_id": "08d65b363bb6",
+      "source": "wave-2/seed-81435/04-silicone-painted-markings/output.png",
+      "source_sha256": "b5acb8ba906b11d5fe0c06f1f91021ccd885da82417e94479a99bebeff51f96f",
+      "output_dir": "trellis-controls/04-silicone-painted-markings-81435/trellis-81431"
+    },
+    {
+      "role": "connected planar facets",
+      "job_id": "4503b601d5b8",
+      "source": "wave-2/seed-81434/09-polystone-connected-facets/output.png",
+      "source_sha256": "3e2dd76149713fba762ce15bfe97b92e3ac2eba4900bf4a5fc451be2098fc01b",
+      "output_dir": "trellis-controls/09-polystone-connected-facets-81434/trellis-81431"
+    },
+    {
+      "role": "rounded connected masses",
+      "job_id": "abd909cdeaa2",
+      "source": "wave-2/seed-81435/11-polystone-rounded-masses/output.png",
+      "source_sha256": "8dacf1571a7ca0378107b6ea433a95001ab5bae267a5771cb3b534effc3343ab",
+      "output_dir": "trellis-controls/11-polystone-rounded-masses-81435/trellis-81431"
+    },
+    {
+      "role": "enamel and global smoothing diagnostic",
+      "job_id": "3db4cc38ee61",
+      "source": "wave-2/seed-81434/08-polystone-enamel-eyes/output.png",
+      "source_sha256": "4d6fdbc68ab7ac1e59d83d0cc2cd43f04cfea985fcda041d9670f6ff13803156",
+      "output_dir": "trellis-controls/08-polystone-enamel-eyes-81434/trellis-81431"
+    }
+  ],
+  "terminal_evidence_root": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "claim_ceiling": "This matched firing may compare which image basin produces the most coherent single-view reconstruction under the established MLX route. It cannot establish CUDA parity, production topology, riggability, collision suitability, or general superiority beyond these sources and seed."
+}

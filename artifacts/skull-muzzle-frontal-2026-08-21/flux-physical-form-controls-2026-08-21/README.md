@@ -22,3 +22,8 @@ winding, collision suitability, or production admission.
 Wave-one direct inspection and route accounting are recorded in
 [`wave-1-review.md`](wave-1-review.md). Wave one promotes four distinct image
 basins for continued comparison; it does not yet choose a production cast.
+
+The completed four-seed disposition is recorded in
+[`matrix-review.md`](matrix-review.md). It nominates exact sources
+`81435/04`, `81434/09`, `81435/11`, and `81434/08` for matched eight-step,
+cascade-disabled TRELLIS controls.

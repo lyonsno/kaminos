@@ -1,0 +1,24 @@
+{
+  "name": "output",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "5fe4cdb2effe",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+  "input_name": "output.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/prompts/07-polystone-glass-eyes.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "height": "512",
+    "width": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "81434",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1787362879.998326,
+  "duration_s": 53.9
+}
