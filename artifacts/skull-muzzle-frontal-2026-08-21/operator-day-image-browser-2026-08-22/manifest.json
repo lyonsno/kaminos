@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.handy_candyman.operator_image_browser.v1",
-  "generated_at": "2026-08-22T09:47:24.557Z",
+  "generated_at": "2026-08-22T23:31:43.030Z",
   "artifact_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21",
   "claim_boundary": "Complete browsing inventory of image files under the skull-muzzle artifact family; inclusion is not promotion or visual-quality evidence.",
   "image_count": 549,
@@ -1101,7 +1101,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81419 / 05-feature-animation-natural-eyes",
-      "bytes": 332175
+      "bytes": 332177
     },
     {
       "id": 94,
@@ -1155,7 +1155,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81419 / 11-painted-resin-bust",
-      "bytes": 376398
+      "bytes": 376400
     },
     {
       "id": 100,
@@ -1209,7 +1209,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81419 / 17-three-dimensional-cel",
-      "bytes": 235017
+      "bytes": 235019
     },
     {
       "id": 106,
@@ -1218,7 +1218,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81419 / 18-crafted-felt-puppet",
-      "bytes": 410155
+      "bytes": 410153
     },
     {
       "id": 107,
@@ -1236,7 +1236,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81420 / 02-hybrid-owned-masses",
-      "bytes": 352560
+      "bytes": 352558
     },
     {
       "id": 109,
@@ -1272,7 +1272,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81420 / 06-modern-game-character",
-      "bytes": 236452
+      "bytes": 236454
     },
     {
       "id": 113,
@@ -1344,7 +1344,7 @@
       "group_id": "flux-basin-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81420 / 14-glazed-ceramic",
-      "bytes": 232948
+      "bytes": 232950
     },
     {
       "id": 121,
@@ -1605,7 +1605,7 @@
       "group_id": "flux-cross-source-authoring-assay-2026-08-22",
       "kind": "comparison",
       "label": "contact-seed-81439",
-      "bytes": 3089159
+      "bytes": 6180853
     },
     {
       "id": 150,
@@ -1614,7 +1614,7 @@
       "group_id": "flux-cross-source-authoring-assay-2026-08-22",
       "kind": "comparison",
       "label": "contact-seed-81440",
-      "bytes": 2398237
+      "bytes": 2121124
     },
     {
       "id": 151,
@@ -4458,7 +4458,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81423 / 08-cinematic-game-lifelike",
-      "bytes": 326093
+      "bytes": 326091
     },
     {
       "id": 467,
@@ -4512,7 +4512,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 02-stylized-realistic-modeled-clumps",
-      "bytes": 290625
+      "bytes": 290627
     },
     {
       "id": 473,
@@ -4521,7 +4521,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 03-lifelike-simplified-groom-masses",
-      "bytes": 197702
+      "bytes": 197704
     },
     {
       "id": 474,
@@ -4530,7 +4530,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 04-painted-preproduction-maquette",
-      "bytes": 288748
+      "bytes": 288750
     },
     {
       "id": 475,
@@ -4539,7 +4539,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 05-polystone-creature-bust",
-      "bytes": 331646
+      "bytes": 331648
     },
     {
       "id": 476,
@@ -4548,7 +4548,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 06-silicone-creature-maquette",
-      "bytes": 282499
+      "bytes": 282505
     },
     {
       "id": 477,
@@ -4566,7 +4566,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 08-cinematic-game-lifelike",
-      "bytes": 333080
+      "bytes": 333082
     },
     {
       "id": 479,
@@ -4584,7 +4584,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 10-hand-painted-3d-model",
-      "bytes": 228739
+      "bytes": 228741
     },
     {
       "id": 481,
@@ -4593,7 +4593,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81424 / 11-cel-shaded-modeled-planes",
-      "bytes": 256390
+      "bytes": 256388
     },
     {
       "id": 482,
@@ -4647,7 +4647,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81425 / 05-polystone-creature-bust",
-      "bytes": 345941
+      "bytes": 345943
     },
     {
       "id": 488,
@@ -4710,7 +4710,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81425 / 12-low-poly-collectible",
-      "bytes": 241380
+      "bytes": 241382
     },
     {
       "id": 495,
@@ -4728,7 +4728,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81426 / 02-stylized-realistic-modeled-clumps",
-      "bytes": 293631
+      "bytes": 293629
     },
     {
       "id": 497,
@@ -4746,7 +4746,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81426 / 04-painted-preproduction-maquette",
-      "bytes": 292900
+      "bytes": 292902
     },
     {
       "id": 499,
@@ -4800,7 +4800,7 @@
       "group_id": "flux-wording-atlas-2026-08-21",
       "kind": "output",
       "label": "seed-81426 / 10-hand-painted-3d-model",
-      "bytes": 244164
+      "bytes": 244162
     },
     {
       "id": 505,

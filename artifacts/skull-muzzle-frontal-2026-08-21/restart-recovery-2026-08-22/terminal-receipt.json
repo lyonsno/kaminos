@@ -1,0 +1,96 @@
+{
+  "schema": "kaminos.handy_candyman.restart_recovery_terminal.v1",
+  "generated_at": "2026-08-22T23:37:25Z",
+  "receiver": {
+    "owner": "handy-candyman",
+    "thread_id": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4"
+  },
+  "source_receipt": "artifacts/skull-muzzle-frontal-2026-08-21/restart-recovery-2026-08-22/start-receipt.json",
+  "terminal_event": {
+    "last_job_finished_at": "2026-08-22T22:23:24Z",
+    "requested_cells": 84,
+    "done": 84,
+    "outputs_present": 84,
+    "zero_byte_outputs": 0,
+    "running": 0,
+    "pending": 0,
+    "failed": 0,
+    "cancelled": 0,
+    "aggregate_output_sha256": "c8842100fd6c2e825f5aca7ceebb5872c58c0ec6dde527097fe8a753bce340f6"
+  },
+  "route_identity": {
+    "requested_job_type": "mflux_flux2_edit_promptfile",
+    "effective_job_type": "mflux_flux2_edit_promptfile",
+    "requested_model": "flux2-klein-9b",
+    "effective_model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1,
+    "mlx_cache_limit_gb": 48,
+    "seed_contract": "Original seed preserved per cell; seeds span the two missing atlas waves recorded in the start receipt.",
+    "fallback_observed": false
+  },
+  "derived_artifacts": [
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/contact-seed-81439.png",
+      "sha256": "78e93f22ac72de0ba871e9360f22c804ab73dbe1114a7420aef3b6276afae666",
+      "inspection": "All 16 prompt-by-source cells are nonblank, complete, and visually coherent."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/contact-seed-81440.png",
+      "sha256": "85649b8071c1610aa86965267dcef22a697906f7d34e9e09e2f26f14993cd78d",
+      "inspection": "All eight preferred-prompt source cells are nonblank, complete, and visually coherent."
+    }
+  ],
+  "representative_direct_inspection": [
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/01-natural-hand-sculpted-locks/output.png",
+      "verdict": "Coherent frontal horned canid with detailed sculpted hair; no blank, partial, or cached-output signal."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/08-cinematic-game-lifelike/output.png",
+      "verdict": "Coherent lifelike frontal horned canid on a dark field with an intact face."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/12-low-poly-collectible/output.png",
+      "verdict": "Coherent faceted low-poly cast with intact eyes, ears, horns, and muzzle."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/06-modern-game-character/output.png",
+      "verdict": "Coherent stylized shingle-form horned canid with complete silhouette and face."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/15-cast-bronze/output.png",
+      "verdict": "Coherent bronze cast; sculptural blind eyes belong to the intended material basin rather than missing output."
+    },
+    {
+      "path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/18-crafted-felt-puppet/output.png",
+      "verdict": "Coherent felt-puppet cast with a complete face and costume surface."
+    }
+  ],
+  "operator_browser": {
+    "path": "artifacts/skull-muzzle-frontal-2026-08-21/operator-day-image-browser-2026-08-22/index.html",
+    "image_count": 549,
+    "group_count": 15,
+    "manifest_sha256": "111af2bf5c46c48c0965cd684db8003aa11366b1177fc5b135db5b341cf930e3",
+    "inventory_digest": "a341b29593516dcfc3b7c8f5f634252c83658cd465182d950d2f59071ed187ba",
+    "contract_test": "passed: 549 images across 15 groups",
+    "interactive_smoke": "Unavailable after restart because the in-app Browser runtime reported no connected browser instance. This lowers only the browser-interaction witness; the generated browser contract and direct image inspections passed."
+  },
+  "worker_disposition": {
+    "pane_id": 24,
+    "state_after_batch": "The persistent worker returned to idle polling after the final job.",
+    "action": "Sent SIGINT after terminal counts were established; the worker exited and pane 24 closed.",
+    "remaining_worker_processes": 0
+  },
+  "completion_delivery_diagnosis": {
+    "endpoint_state": "Handy Candyman's PTY-broker endpoint was active and healthy before replay execution and remained registered after completion.",
+    "failure_phase": "No batch-level terminal predicate or source-linked completion publisher was registered for the exact 84-job set.",
+    "observed_effect": "The generic persistent Greenroom worker returned to polling after the last cell, so no registered completion nudge was emitted.",
+    "mailer_attribution": "No evidence implicates the notification service or endpoint registration; do not report this as a notification-service fault.",
+    "future_contract": "Register one durable batch start receipt and one source-linked terminal event for the named job set before launching a long Greenroom batch."
+  },
+  "claim_ceiling": "Exact requested-route replay with preserved prompts, seeds, model, and settings, plus direct visual inspection of the rebuilt comparison sheets and representative restored cells. Byte-identical regeneration is not claimed because the pre-restart output receipts did not preserve hashes for comparison."
+}
