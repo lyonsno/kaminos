@@ -4,7 +4,7 @@ This assay asks whether four FLUX edit transformations behave predictably across
 
 All sixteen cells hold the effective route and generation seed fixed. The prompts share one source-neutral identity-preservation clause so the alternate sources are not asked to inherit the canonical horned creature's markings or anatomy. Camera pose remains source-authored and is therefore an explicit comparison limitation.
 
-Open `index.html` for direct row-by-column inspection. Click any image for a full-size overlay; use arrow keys to move through the matrix and Escape to close it.
+Open `index.html` for direct row-by-column inspection. The visual interpretation is in `matrix-review.md`; requested and effective route identity, timings, hashes, output inventories, and failure phase are in `terminal-receipt.json`.
 
 ## Claim ceiling
 
@@ -20,5 +20,8 @@ One fixed-seed pass may establish directional cross-source repeatability, expose
 - Guidance: 1.0
 - Seed: 81439
 - MLX cache limit: 48 GB
-- Completion evidence: each Greenroom receipt plus the cell's `output.png` and `metadata.json`
+- Completion evidence: 16/16 Greenroom terminal receipts plus each cell's `output.png` and `output.metadata.json`
 
+## Result
+
+The four transformations repeat directionally across all four sources, but they do not share one identity contract. `Feature-animation sculptural` repeats a stable attached-shingle construction while preserving the source envelope. `Soft cel-painted resin` repeats as a polished final character rendering while freely rewriting markings and, in the bear row, species cues. `Beveled connected planes` is the most identity-conservative structural transform. `Matte-resin gallery sculpture` preserves anatomy but may amplify latent markings and produced weak eyes on the canonical source.

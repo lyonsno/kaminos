@@ -1,0 +1,24 @@
+{
+  "name": "canonical-horned",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "c8716f251e32",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png",
+  "input_name": "canonical-horned.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "height": "512",
+    "width": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "81439",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1787379177.934176,
+  "duration_s": 43.9
+}

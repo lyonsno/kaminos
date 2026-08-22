@@ -88,7 +88,7 @@
     const cells = [];
     let active = -1;
 
-    matrix.insertAdjacentHTML('beforeend', '<div class="head"><strong>Source identity</strong><small>Click any image to inspect</small></div>');
+    matrix.insertAdjacentHTML('beforeend', '<div class="head"><strong>Source identity</strong><small>reference</small></div>');
     prompts.forEach(prompt => matrix.insertAdjacentHTML('beforeend', `<div class="head ${prompt.role}"><strong>${prompt.label}</strong><small>${prompt.role === 'preferred' ? 'operator preferred' : 'structural control'}</small></div>`));
 
     sources.forEach(source => {
