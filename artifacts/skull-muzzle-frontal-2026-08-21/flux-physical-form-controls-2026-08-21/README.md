@@ -18,3 +18,7 @@ directly before any reconstruction nomination.
 Claim ceiling: the atlas may identify repeatable image-generation controls and
 nominate exact reconstruction sources. It cannot establish improved geometry,
 winding, collision suitability, or production admission.
+
+Wave-one direct inspection and route accounting are recorded in
+[`wave-1-review.md`](wave-1-review.md). Wave one promotes four distinct image
+basins for continued comparison; it does not yet choose a production cast.
