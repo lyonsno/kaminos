@@ -72,6 +72,30 @@
       "failure_phase": "blender_engine_enum_compatibility",
       "effective_evidence": "Both output directories contained failure.json and no rendered PNGs or manifest.",
       "repair": "Select BLENDER_EEVEE when BLENDER_EEVEE_NEXT is unavailable, clear stale markers before each run, and force process exit 1 after writing a script-level failure."
+    },
+    {
+      "phase": "factory_world_retry",
+      "job_ids": [
+        "38cb78bfff86",
+        "6a7768a68fb3"
+      ],
+      "status": "failed_before_primary_output_with_greenroom_exit_1",
+      "failure_phase": "factory_startup_scene_world_missing",
+      "effective_evidence": "Both output directories contain failure.json with the exact scene.world None traceback and no rendered PNGs or manifest.",
+      "repair": "Create and attach WitnessWorld when Blender factory startup supplies no scene world."
+    },
+    {
+      "phase": "post_repair_confirmation",
+      "job_ids": [
+        "de0c2c29f094",
+        "5f5f917ce5b2"
+      ],
+      "status": "completed_and_directly_inspected",
+      "expected_output_dirs": [
+        "05-silicone-inset-eyes-81427/trellis-81431/witness-rerun-v2",
+        "15-low-poly-connected-facets-81427/trellis-81431/witness-rerun-v2"
+      ],
+      "terminal_evidence": "Both Greenroom jobs exited 0 through the repaired script and each output directory contains front, left, rear, and right PNGs plus a manifest and metadata. Direct inspection confirms complete rendered coverage; the smooth cast preserves a detailed rear coat shell, while the connected-facet cast remains visibly rougher around the ears and muzzle and resolves to a flatter rear shell."
     }
   ],
   "claim_ceiling": "The registered renders may support direct multi-angle visual comparison only. They do not establish manifoldness, winding repair, collision suitability, rigging, or production admission."

@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb",
+  "effectiveUrl": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/inbox",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/images/inbox",
+      "exists": true
+    },
+    "pipeline-runs": {
+      "path": "/Users/noahlyons/.local/state/kaminos/assets/pipeline-runs",
+      "exists": true
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9454,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9454-3913",
+  "settleMs": 5000,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/151.0.7922.139",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "V8-Version": "15.1.206.17",
+    "WebKit-Version": "537.36 (@ea11a4bbd0a446173baa44b1f30c6d03d32e4a5f)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9454/devtools/browser/96fadde9-fe00-4d90-9c49-66155bcc9699"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9454/devtools/browser/96fadde9-fe00-4d90-9c49-66155bcc9699\nTrying to load the allocator multiple times. This is *not* supported.\n[3929:28967991:0821/230756.059703:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT\n[3929:28967991:0821/230756.111012:ERROR:google_apis/gcm/engine/mcs_client.cc:702]   Error code: 401  Error message: Authentication Failed: wrong_secret\n[3929:28967991:0821/230756.111025:ERROR:google_apis/gcm/engine/mcs_client.cc:704] Failed to log in to GCM, resetting connection.\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/08-polystone-enamel-eyes-81434/trellis-81431/witness-repaired-v2/direct-route.png",
+  "screenshotBytes": 533460,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/08-polystone-enamel-eyes-81434/trellis-81431/output.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb",
+        "fileName": "output.glb",
+        "label": "Trellis 81431",
+        "registeredObjectId": "glb-ad39a2d1-0d0b-4e8e-9b98-b134263cd69f",
+        "registeredAt": "2026-08-22T03:07:54.044Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-ad39a2d1-0d0b-4e8e-9b98-b134263cd69f",
+        "label": "Trellis 81431",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-bd5a7de8-8d08-43bd-8c2b-c4039b99ac9e",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.00019034743309020996,
+            0.00003476440906524658,
+            -0.000040531158447265625
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.2878151221381446,
+            1.2878151221381446,
+            1.2878151221381446
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8104/api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fflux-physical-form-controls-2026-08-21%2Ftrellis-controls%2F08-polystone-enamel-eyes-81434%2Ftrellis-81431%2Foutput.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Trellis 81431"
+    }
+  }
+}

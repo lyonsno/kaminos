@@ -1,0 +1,21 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "job_id": "3db4cc38ee61",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/wave-2/seed-81434/08-polystone-enamel-eyes/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81431",
+    "resolution": "512",
+    "steps": "8",
+    "no_cascade": "true",
+    "target_faces": "100000",
+    "texture_size": "512",
+    "simplify_first": "true"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787366598.001337,
+  "duration_s": 173.3
+}

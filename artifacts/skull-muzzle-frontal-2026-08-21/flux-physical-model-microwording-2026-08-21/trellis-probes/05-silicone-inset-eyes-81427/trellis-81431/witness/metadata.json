@@ -1,0 +1,13 @@
+{
+  "name": "output",
+  "job_type": "kaminos_render_glb_views",
+  "job_id": "ed0918f27b14",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/05-silicone-inset-eyes-81427/trellis-81431/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "exclude": ""
+  },
+  "output_files": [],
+  "created_at": 1787364696.189512,
+  "duration_s": 1.4
+}

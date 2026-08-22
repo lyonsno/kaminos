@@ -1,0 +1,11 @@
+{
+  "schema": "handy.glb-orbit-witness.failure.v1",
+  "greenroom_job_id": "b40ae122cb68",
+  "failure_phase": "route_parameter_omission",
+  "requested_script_recorded_in_start_receipt": "/private/tmp/handy-render-glb.py",
+  "effective_script": "/private/tmp/kaminos-prometheus-envelope-relations-0805/tools/blender-render-glb-views.py",
+  "effective_script_state": "missing",
+  "primary_output_state": "no images or manifest produced",
+  "terminal_anomaly": "Greenroom recorded status done and exit code 0 despite Blender reporting that the Python file could not be opened",
+  "stderr": "OSError: Python file \"/private/tmp/kaminos-prometheus-envelope-relations-0805/tools/blender-render-glb-views.py\" could not be opened: No such file or directory"
+}

@@ -1,0 +1,6 @@
+{
+  "schema": "handy.glb-orbit-witness.failure.v1",
+  "failure_phase": "import_or_render",
+  "error": "'NoneType' object has no attribute 'color' and no __dict__ for setting new attributes",
+  "traceback": "Traceback (most recent call last):\n  File \"/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/render-glb-witness.py\", line 61, in <module>\n    scene.world.color = (0.008, 0.008, 0.008)\n    ^^^^^^^^^^^^^^^^^\nAttributeError: 'NoneType' object has no attribute 'color' and no __dict__ for setting new attributes\n"
+}

@@ -58,6 +58,8 @@ try:
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
+    if scene.world is None:
+        scene.world = bpy.data.worlds.new("WitnessWorld")
     scene.world.color = (0.008, 0.008, 0.008)
     scene.view_settings.look = "AgX - Medium High Contrast"
 

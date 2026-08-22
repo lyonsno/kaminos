@@ -1,0 +1,30 @@
+{
+  "schema": "handy.glb-orbit-witness.v1",
+  "input_glb": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/output.glb",
+  "renderer": "Blender EEVEE Next",
+  "effective_engine_enum": "BLENDER_EEVEE",
+  "two_sided_materials": true,
+  "ambient_occlusion_override": "none",
+  "camera_lens_mm": 70,
+  "views": [
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/witness-rerun-v2/front.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/witness-rerun-v2/left.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/witness-rerun-v2/rear.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/witness-rerun-v2/right.png"
+  ],
+  "mesh_object_count": 1,
+  "bounds": {
+    "lower": [
+      -0.4436475932598114,
+      -0.5001592636108398,
+      -0.4453560709953308
+    ],
+    "upper": [
+      0.4442867934703827,
+      0.4995409846305847,
+      0.447458952665329
+    ]
+  },
+  "requested_up_axis": "z",
+  "auto_up_requested": true
+}

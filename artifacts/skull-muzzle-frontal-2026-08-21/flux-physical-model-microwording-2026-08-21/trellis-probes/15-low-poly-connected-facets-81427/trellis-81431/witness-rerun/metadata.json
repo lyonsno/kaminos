@@ -1,0 +1,17 @@
+{
+  "name": "output",
+  "job_type": "kaminos_render_glb_views",
+  "job_id": "db520912b41a",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/15-low-poly-connected-facets-81427/trellis-81431/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "script": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/render-glb-witness.py",
+    "exclude": "",
+    "cwd": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819"
+  },
+  "output_files": [
+    "failure.json"
+  ],
+  "created_at": 1787365864.293937,
+  "duration_s": 0.6
+}

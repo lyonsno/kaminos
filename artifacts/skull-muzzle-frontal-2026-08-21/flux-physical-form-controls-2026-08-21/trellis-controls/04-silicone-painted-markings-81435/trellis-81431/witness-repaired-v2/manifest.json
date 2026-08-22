@@ -1,0 +1,30 @@
+{
+  "schema": "handy.glb-orbit-witness.v1",
+  "input_glb": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/04-silicone-painted-markings-81435/trellis-81431/output.glb",
+  "renderer": "Blender EEVEE Next",
+  "effective_engine_enum": "BLENDER_EEVEE",
+  "two_sided_materials": true,
+  "ambient_occlusion_override": "none",
+  "camera_lens_mm": 70,
+  "views": [
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/04-silicone-painted-markings-81435/trellis-81431/witness-repaired-v2/front.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/04-silicone-painted-markings-81435/trellis-81431/witness-repaired-v2/left.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/04-silicone-painted-markings-81435/trellis-81431/witness-repaired-v2/rear.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/04-silicone-painted-markings-81435/trellis-81431/witness-repaired-v2/right.png"
+  ],
+  "mesh_object_count": 1,
+  "bounds": {
+    "lower": [
+      -0.4780139625072479,
+      -0.3920730650424957,
+      -0.4997634291648865
+    ],
+    "upper": [
+      0.478044331073761,
+      0.38970687985420227,
+      0.5026999115943909
+    ]
+  },
+  "requested_up_axis": "z",
+  "auto_up_requested": true
+}

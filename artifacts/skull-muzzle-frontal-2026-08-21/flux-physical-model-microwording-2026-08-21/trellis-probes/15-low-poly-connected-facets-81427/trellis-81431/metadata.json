@@ -1,0 +1,21 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "job_id": "a53515a966e7",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/wave-1/seed-81427/15-low-poly-connected-facets/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81431",
+    "resolution": "512",
+    "steps": "8",
+    "no_cascade": "true",
+    "target_faces": "100000",
+    "texture_size": "512",
+    "simplify_first": "true"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787359167.730228,
+  "duration_s": 161.8
+}

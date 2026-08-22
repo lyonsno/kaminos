@@ -57,5 +57,44 @@
     }
   ],
   "terminal_evidence_root": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "terminal_result": {
+    "recorded_at": "2026-08-22T02:54:16Z",
+    "status": "four_casts_completed_and_directly_inspected",
+    "result": "trellis-result.md",
+    "witness_route": {
+      "job_type": "kaminos_render_glb_views",
+      "effective_renderer": "Blender 5.1 EEVEE",
+      "effective_engine_enum": "BLENDER_EEVEE",
+      "camera_lens_mm": 70,
+      "two_sided_materials": true,
+      "ambient_occlusion_override": "none",
+      "jobs": {
+        "04-silicone-painted-markings-81435": "432e607d0839",
+        "09-polystone-connected-facets-81434": "92d770c6a723",
+        "11-polystone-rounded-masses-81435": "c8a9f975b68c",
+        "08-polystone-enamel-eyes-81434": "fb829e37574b"
+      }
+    },
+    "viewer_route": {
+      "scenario": "mesh-asset-link",
+      "requested_root": "lerms-preview",
+      "effective_mount": "/private/tmp",
+      "effective_server_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+      "status": "four_exact_glbs_loaded_and_registered",
+      "registered_object_ids": {
+        "04-silicone-painted-markings-81435": "glb-edd964c3-86ea-4aea-a4ee-3924c81eaaad",
+        "09-polystone-connected-facets-81434": "glb-1ea9b2ad-938b-4d17-94c5-f7c7686ccdc6",
+        "11-polystone-rounded-masses-81435": "glb-c70af16e-b003-40fb-b2df-1f0366d87777",
+        "08-polystone-enamel-eyes-81434": "glb-ad39a2d1-0d0b-4e8e-9b98-b134263cd69f"
+      }
+    },
+    "ranked_roles": [
+      "smooth continuous painted silicone",
+      "rounded connected masses",
+      "connected planar facets",
+      "enamel and global smoothing diagnostic"
+    ],
+    "promotion_boundary": "The first three are promoted as differentiated static visual casts. Enamel is preserved as a bounded-view cast because its unseen side resolves to a broad smooth envelope."
+  },
   "claim_ceiling": "This matched firing may compare which image basin produces the most coherent single-view reconstruction under the established MLX route. It cannot establish CUDA parity, production topology, riggability, collision suitability, or general superiority beyond these sources and seed."
 }

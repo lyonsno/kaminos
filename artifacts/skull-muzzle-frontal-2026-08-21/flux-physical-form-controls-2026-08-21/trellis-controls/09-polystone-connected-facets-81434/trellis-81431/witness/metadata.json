@@ -1,0 +1,13 @@
+{
+  "name": "output",
+  "job_type": "kaminos_render_glb_views",
+  "job_id": "b63d4cb1d0aa",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-form-controls-2026-08-21/trellis-controls/09-polystone-connected-facets-81434/trellis-81431/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "exclude": ""
+  },
+  "output_files": [],
+  "created_at": 1787366600.115259,
+  "duration_s": 0.4
+}
