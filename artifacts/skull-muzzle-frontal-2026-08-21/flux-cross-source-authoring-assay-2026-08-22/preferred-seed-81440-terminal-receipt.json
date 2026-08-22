@@ -1,0 +1,298 @@
+{
+  "schema": "kaminos.handy_candyman.flux_cross_source_authoring_assay.preferred_seed_terminal_receipt.v1",
+  "recorded_at": "2026-08-22T07:09:55Z",
+  "campaign_question": "Do the operator-preferred soft-cel and feature-animation transformations repeat directionally at a second fixed generation seed?",
+  "comparison_contract": "Hold source bytes, source-neutral preservation clause, exact style clause, requested route, and raster coordinates fixed. Vary only generation seed from 81439 to 81440.",
+  "claim_ceiling": "Two-seed directional stability of the preferred transformations; no universal prompt-behavior or spatial-cast claim.",
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "seed": 81440,
+    "mlx_cache_limit_gb": 48
+  },
+  "terminality": {
+    "submitted": 8,
+    "done": 8,
+    "failed": 0,
+    "missing_outputs": 0
+  },
+  "jobs": [
+    {
+      "source_id": "canonical-horned",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "job_id": "59ef2cd8612b",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/21-soft-cel-painted-resin/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787381809.1286788,
+        "finished_at": 1787381850.423307,
+        "duration_seconds": 41.29462814331055
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/21-soft-cel-painted-resin/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "0badd8a375e629963897561975a5afd12096b68cec45c85708f3ae5783a5e947",
+          "bytes": 268735,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/21-soft-cel-painted-resin/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/21-soft-cel-painted-resin/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "canonical-horned",
+      "prompt_id": "06-feature-animation-sculptural",
+      "job_id": "c2a69bee384a",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/06-feature-animation-sculptural/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787381850.428693,
+        "finished_at": 1787381888.1401331,
+        "duration_seconds": 37.711440086364746
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/06-feature-animation-sculptural/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "85cad6612f384449ae1ceac6b14b5554387c255a27896eae7ee63ad5a4c7d2f6",
+          "bytes": 234960,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/06-feature-animation-sculptural/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/06-feature-animation-sculptural/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "bear-81402",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "job_id": "382c43278592",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787381888.144267,
+        "finished_at": 1787381934.956521,
+        "duration_seconds": 46.81225395202637
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "446ac41228f1b8227dbdc29b8838c0cb97b875bbf60b392eee9e37be628c4b69",
+          "bytes": 266864,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "bear-81402",
+      "prompt_id": "06-feature-animation-sculptural",
+      "job_id": "5f1fec3cb182",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/06-feature-animation-sculptural/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787381934.961217,
+        "finished_at": 1787382011.468742,
+        "duration_seconds": 76.5075249671936
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/06-feature-animation-sculptural/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "6303cbd204c5e5a52b4f425244bf4056b0e78c056d0bfa846d17dbabc29d028a",
+          "bytes": 281870,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/06-feature-animation-sculptural/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/06-feature-animation-sculptural/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "lioness-81406",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "job_id": "c1d7bd1fb095",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/21-soft-cel-painted-resin/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787382011.4762812,
+        "finished_at": 1787382089.921707,
+        "duration_seconds": 78.44542574882507
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/21-soft-cel-painted-resin/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "4892179a8130208bf2f1f07562c409d51796cf649d951c398b4c5bb5f171be10",
+          "bytes": 291819,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/21-soft-cel-painted-resin/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/21-soft-cel-painted-resin/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "lioness-81406",
+      "prompt_id": "06-feature-animation-sculptural",
+      "job_id": "bc6125645b60",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/06-feature-animation-sculptural/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787382089.92895,
+        "finished_at": 1787382156.951783,
+        "duration_seconds": 67.0228328704834
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/06-feature-animation-sculptural/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "2dcbac3bc5da010f4373e2f0f692b079211b8df789d2c05420b9c0e46c6e6329",
+          "bytes": 300563,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/06-feature-animation-sculptural/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/06-feature-animation-sculptural/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "lynx-81408",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "job_id": "5eb1e865e16e",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/21-soft-cel-painted-resin/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787382156.957531,
+        "finished_at": 1787382240.370682,
+        "duration_seconds": 83.4131510257721
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/21-soft-cel-painted-resin/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "5efd6d28d1a0d9415fc71c9473427eee6a4415c8874252f5f99e16a8cf88f7e5",
+          "bytes": 219447,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/21-soft-cel-painted-resin/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/21-soft-cel-painted-resin/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    },
+    {
+      "source_id": "lynx-81408",
+      "prompt_id": "06-feature-animation-sculptural",
+      "job_id": "0d32cd989684",
+      "requested_job_type": "mflux_flux2_edit_promptfile",
+      "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png --prompt-file /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/06-feature-animation-sculptural/seed-81440/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81440 --mlx-cache-limit-gb 48",
+      "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+      "status": "done",
+      "timing": {
+        "started_at": 1787382240.3897228,
+        "finished_at": 1787382316.365859,
+        "duration_seconds": 75.97613620758057
+      },
+      "exit_code": 0,
+      "failure_phase": null,
+      "output_inventory": [
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/06-feature-animation-sculptural/seed-81440/output.png",
+          "media_type": "image/png",
+          "sha256": "6455cb83b1d0ad24c00e537bc7c82afa03c169ca1057ad9f94d54b9990ff7f46",
+          "bytes": 247726,
+          "width": 512,
+          "height": 512
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/06-feature-animation-sculptural/seed-81440/output.metadata.json",
+          "media_type": "application/json"
+        },
+        {
+          "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/06-feature-animation-sculptural/seed-81440/metadata.json",
+          "media_type": "application/json"
+        }
+      ]
+    }
+  ]
+}

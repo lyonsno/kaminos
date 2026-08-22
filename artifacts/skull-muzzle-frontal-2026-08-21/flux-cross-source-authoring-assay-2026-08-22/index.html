@@ -20,7 +20,11 @@
     header { display: flex; align-items: center; gap: 18px; min-height: 52px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: #111214; }
     h1 { margin: 0; font-size: 16px; font-weight: 650; }
     .meta { color: var(--muted); font-size: 12px; }
-    .legend { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
+    .seed-picker { margin-left: auto; display: flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .seed-picker button { min-width: 70px; height: 28px; padding: 0 10px; border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .seed-picker button:last-child { border-right: 0; }
+    .seed-picker button[aria-pressed="true"] { background: #e8eaec; color: #121416; }
+    .legend { display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
     .legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--preferred); }
     .legend span:last-child::before { background: var(--control); }
     main { overflow: auto; }
@@ -51,7 +55,7 @@
     .dialog-bar button { margin-left: auto; width: 32px; height: 32px; border: 0; background: transparent; color: var(--text); font-size: 22px; cursor: pointer; }
     @media (max-width: 760px) {
       header { align-items: flex-start; flex-wrap: wrap; }
-      .legend { margin-left: 0; }
+      .seed-picker { margin-left: 0; }
       .matrix { grid-template-columns: 132px repeat(4, 220px); }
       .head { top: 0; }
     }
@@ -60,7 +64,11 @@
 <body>
   <header>
     <h1>Cross-Source Authoring Assay</h1>
-    <div class="meta">FLUX2 Klein 9B Q4 · seed 81439 · 8 steps</div>
+    <div class="meta">FLUX2 Klein 9B Q4 · 8 steps</div>
+    <div class="seed-picker" aria-label="Generation seed">
+      <button type="button" data-seed="81439" aria-pressed="true">81439</button>
+      <button type="button" data-seed="81440" aria-pressed="false">81440</button>
+    </div>
     <div class="legend"><span>Operator preferred</span><span>Structural control</span></div>
   </header>
   <main><div class="matrix" id="matrix"></div></main>
@@ -86,7 +94,10 @@
     const viewerImage = document.querySelector('#viewer-image');
     const viewerLabel = document.querySelector('#viewer-label');
     const cells = [];
+    const outputCells = [];
     let active = -1;
+    const requestedSeed = Number(new URLSearchParams(window.location.search).get('seed'));
+    let selectedSeed = [81439, 81440].includes(requestedSeed) ? requestedSeed : 81439;
 
     matrix.insertAdjacentHTML('beforeend', '<div class="head"><strong>Source identity</strong><small>reference</small></div>');
     prompts.forEach(prompt => matrix.insertAdjacentHTML('beforeend', `<div class="head ${prompt.role}"><strong>${prompt.label}</strong><small>${prompt.role === 'preferred' ? 'operator preferred' : 'structural control'}</small></div>`));
@@ -102,18 +113,50 @@
       cells.push(sourceButton);
       matrix.append(sourceButton);
       prompts.forEach(prompt => {
-        const path = `cells/${source.id}/${prompt.id}/seed-81439/output.png`;
         const button = document.createElement('button');
         button.className = 'cell';
-        button.dataset.path = path;
-        button.dataset.label = `${source.label} · ${prompt.label}`;
-        button.innerHTML = `<img src="${path}" alt="${button.dataset.label}"><span class="missing">Pending output</span>`;
-        button.querySelector('img').addEventListener('error', () => button.classList.add('missing'));
+        button.dataset.source = source.id;
+        button.dataset.prompt = prompt.id;
+        button.dataset.role = prompt.role;
+        button.dataset.labelBase = `${source.label} · ${prompt.label}`;
+        button.innerHTML = `<img alt=""><span class="missing">Output not run</span>`;
+        const image = button.querySelector('img');
+        image.addEventListener('load', () => button.classList.remove('missing'));
+        image.addEventListener('error', () => button.classList.add('missing'));
         button.addEventListener('click', () => openCell(cells.indexOf(button)));
         cells.push(button);
+        outputCells.push(button);
         matrix.append(button);
       });
     });
+
+    function applySeed(seed) {
+      selectedSeed = seed;
+      document.querySelectorAll('[data-seed]').forEach(button => {
+        button.setAttribute('aria-pressed', Number(button.dataset.seed) === seed ? 'true' : 'false');
+      });
+      outputCells.forEach(cell => {
+        const image = cell.querySelector('img');
+        const missing = cell.querySelector('.missing');
+        cell.dataset.label = `${cell.dataset.labelBase} · seed ${seed}`;
+        image.alt = cell.dataset.label;
+        if (seed === 81440 && cell.dataset.role === 'control') {
+          cell.classList.add('missing');
+          cell.dataset.path = '';
+          image.removeAttribute('src');
+          missing.textContent = 'Control not run at seed 81440';
+          return;
+        }
+        cell.dataset.path = `cells/${cell.dataset.source}/${cell.dataset.prompt}/seed-${seed}/output.png`;
+        missing.textContent = 'Missing output';
+        image.src = cell.dataset.path;
+      });
+    }
+
+    document.querySelectorAll('[data-seed]').forEach(button => {
+      button.addEventListener('click', () => applySeed(Number(button.dataset.seed)));
+    });
+    applySeed(selectedSeed);
 
     function openCell(index) {
       active = (index + cells.length) % cells.length;
