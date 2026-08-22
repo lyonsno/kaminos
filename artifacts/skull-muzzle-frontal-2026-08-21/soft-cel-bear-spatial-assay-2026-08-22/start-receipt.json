@@ -1,0 +1,187 @@
+{
+  "schema": "kaminos.soft_cel_bear_spatial_assay.start_receipt.v1",
+  "recorded_at": "2026-08-22T08:44:31Z",
+  "completion_receiver": "Handy Candyman registered endpoint",
+  "plan": {
+    "schema": "kaminos.handy_candyman.soft_cel_bear_spatial_assay.plan.v1",
+    "campaign_question": "Does the operator-selected soft-cel bear produce a coherent TRELLIS cast as-is, and can minimal camera normalization produce a stronger alternative source without spending its authored construction?",
+    "source_path": "../flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+    "source_sha256": "980f2ebd3beaa6d76c377cd917170928f3ea6e2a5456a275cba768708163c1c4",
+    "source_dimensions": [
+      512,
+      512
+    ],
+    "trellis_control": {
+      "requested_route": "trellis2mlx_fast_checkpoint",
+      "seed": 81441,
+      "resolution": 512,
+      "steps": 8,
+      "cascade": false,
+      "target_faces": 100000,
+      "texture_size": 512,
+      "simplify_first": true,
+      "checkpoint_preservation": true
+    },
+    "flux_matrix": {
+      "requested_route": "mflux_flux2_edit_promptfile",
+      "model": "flux2-klein-9b",
+      "quantize": 4,
+      "dimensions": [
+        512,
+        512
+      ],
+      "steps": 8,
+      "guidance": 1.0,
+      "mlx_cache_limit_gb": 48,
+      "seeds": [
+        81441,
+        81442
+      ],
+      "prompts": [
+        "01-near-frontal",
+        "02-long-lens-three-quarter"
+      ]
+    },
+    "claim_ceiling": "Source-conditioned MLX-route objectness and bounded orbitability for the exact TRELLIS control; generated FLUX cells are alternative source candidates only until directly inspected."
+  },
+  "queue_dir": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "job_count": 5,
+  "jobs": [
+    {
+      "role": "exact-source-trellis-control",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441",
+      "job_id": "4119c6497731",
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4119c6497731/request.json",
+      "requested": {
+        "job_type": "trellis2mlx_fast_checkpoint",
+        "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+        "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441",
+        "params": {
+          "seed": "81441",
+          "resolution": "512",
+          "steps": "8",
+          "target_faces": "100000",
+          "texture_size": "512"
+        },
+        "job_id": "4119c6497731",
+        "submitted_at": 1787388270.960651
+      },
+      "terminal_evidence": {
+        "done_receipt": "done/4119c6497731/receipt.json",
+        "failed_receipt": "failed/4119c6497731/receipt.json"
+      }
+    },
+    {
+      "role": "01-near-frontal-seed-81441",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81441",
+      "job_id": "e8b8b6d4afb2",
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e8b8b6d4afb2/request.json",
+      "requested": {
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+        "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81441",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/prompts/01-near-frontal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "81441",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "e8b8b6d4afb2",
+        "submitted_at": 1787388271.030865
+      },
+      "terminal_evidence": {
+        "done_receipt": "done/e8b8b6d4afb2/receipt.json",
+        "failed_receipt": "failed/e8b8b6d4afb2/receipt.json"
+      }
+    },
+    {
+      "role": "01-near-frontal-seed-81442",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81442",
+      "job_id": "fa413847a420",
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fa413847a420/request.json",
+      "requested": {
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+        "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81442",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/prompts/01-near-frontal.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "81442",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "fa413847a420",
+        "submitted_at": 1787388271.103324
+      },
+      "terminal_evidence": {
+        "done_receipt": "done/fa413847a420/receipt.json",
+        "failed_receipt": "failed/fa413847a420/receipt.json"
+      }
+    },
+    {
+      "role": "02-long-lens-three-quarter-seed-81441",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81441",
+      "job_id": "5896ae532645",
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5896ae532645/request.json",
+      "requested": {
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+        "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81441",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/prompts/02-long-lens-three-quarter.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "81441",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "5896ae532645",
+        "submitted_at": 1787388271.178845
+      },
+      "terminal_evidence": {
+        "done_receipt": "done/5896ae532645/receipt.json",
+        "failed_receipt": "failed/5896ae532645/receipt.json"
+      }
+    },
+    {
+      "role": "02-long-lens-three-quarter-seed-81442",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81442",
+      "job_id": "d4391aac7303",
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d4391aac7303/request.json",
+      "requested": {
+        "job_type": "mflux_flux2_edit_promptfile",
+        "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+        "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81442",
+        "params": {
+          "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/prompts/02-long-lens-three-quarter.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "81442",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "d4391aac7303",
+        "submitted_at": 1787388271.247642
+      },
+      "terminal_evidence": {
+        "done_receipt": "done/d4391aac7303/receipt.json",
+        "failed_receipt": "failed/d4391aac7303/receipt.json"
+      }
+    }
+  ]
+}
