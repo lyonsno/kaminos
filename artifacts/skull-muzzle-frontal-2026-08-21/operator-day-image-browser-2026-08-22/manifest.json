@@ -1,9 +1,9 @@
 {
   "schema": "kaminos.handy_candyman.operator_image_browser.v1",
-  "generated_at": "2026-08-22T08:22:26.980Z",
+  "generated_at": "2026-08-22T09:47:24.557Z",
   "artifact_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21",
   "claim_boundary": "Complete browsing inventory of image files under the skull-muzzle artifact family; inclusion is not promotion or visual-quality evidence.",
-  "image_count": 540,
+  "image_count": 549,
   "groups": [
     {
       "id": "flux-81402",
@@ -183,6 +183,24 @@
       },
       "references": [
         "../operator-blender-shortlist-2026-08-21/README.md"
+      ]
+    },
+    {
+      "id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "title": "Soft Cel Bear Spatial Assay",
+      "page": "group-soft-cel-bear-spatial-assay-2026-08-22.html",
+      "image_count": 9,
+      "kind_counts": {
+        "output": 4,
+        "source": 0,
+        "witness": 5,
+        "comparison": 0,
+        "other": 0
+      },
+      "references": [
+        "../soft-cel-bear-spatial-assay-2026-08-22/README.md",
+        "../soft-cel-bear-spatial-assay-2026-08-22/start-receipt.json",
+        "../soft-cel-bear-spatial-assay-2026-08-22/terminal-receipt.json"
       ]
     },
     {
@@ -4957,6 +4975,87 @@
     },
     {
       "id": 524,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81441/output.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81441/output.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "output",
+      "label": "camera-matrix / 01-near-frontal / seed-81441",
+      "bytes": 363370
+    },
+    {
+      "id": 525,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81442/output.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/01-near-frontal/seed-81442/output.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "output",
+      "label": "camera-matrix / 01-near-frontal / seed-81442",
+      "bytes": 317310
+    },
+    {
+      "id": 526,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81441/output.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81441/output.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "output",
+      "label": "camera-matrix / 02-long-lens-three-quarter / seed-81441",
+      "bytes": 395684
+    },
+    {
+      "id": 527,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81442/output.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/camera-matrix/02-long-lens-three-quarter/seed-81442/output.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "output",
+      "label": "camera-matrix / 02-long-lens-three-quarter / seed-81442",
+      "bytes": 334582
+    },
+    {
+      "id": 528,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/direct-route.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/direct-route.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "witness",
+      "label": "trellis-control / trellis-81441 / witness / direct-route",
+      "bytes": 533605
+    },
+    {
+      "id": 529,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/front.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/front.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "witness",
+      "label": "trellis-control / trellis-81441 / witness / front",
+      "bytes": 688153
+    },
+    {
+      "id": 530,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/left.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/left.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "witness",
+      "label": "trellis-control / trellis-81441 / witness / left",
+      "bytes": 653080
+    },
+    {
+      "id": 531,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/rear.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/rear.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "witness",
+      "label": "trellis-control / trellis-81441 / witness / rear",
+      "bytes": 610824
+    },
+    {
+      "id": 532,
+      "artifact_path": "soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/right.png",
+      "browser_src": "../soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/right.png",
+      "group_id": "soft-cel-bear-spatial-assay-2026-08-22",
+      "kind": "witness",
+      "label": "trellis-control / trellis-81441 / witness / right",
+      "bytes": 674108
+    },
+    {
+      "id": 533,
       "artifact_path": "source.png",
       "browser_src": "../source.png",
       "group_id": "_root",
@@ -4965,7 +5064,7 @@
       "bytes": 1085196
     },
     {
-      "id": 525,
+      "id": 534,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/direct-route.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/direct-route.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -4974,7 +5073,7 @@
       "bytes": 538191
     },
     {
-      "id": 526,
+      "id": 535,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/front.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/front.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -4983,7 +5082,7 @@
       "bytes": 397747
     },
     {
-      "id": 527,
+      "id": 536,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/oblique.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/oblique.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -4992,7 +5091,7 @@
       "bytes": 470160
     },
     {
-      "id": 528,
+      "id": 537,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/rear-oblique.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/rear-oblique.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5001,7 +5100,7 @@
       "bytes": 486944
     },
     {
-      "id": 529,
+      "id": 538,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/rear.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/feature-animation-81412/trellis-81414-steps12-cascade/witnesses/rear.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5010,7 +5109,7 @@
       "bytes": 345218
     },
     {
-      "id": 530,
+      "id": 539,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/direct-route.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/direct-route.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5019,7 +5118,7 @@
       "bytes": 518476
     },
     {
-      "id": 531,
+      "id": 540,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/front.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/front.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5028,7 +5127,7 @@
       "bytes": 383858
     },
     {
-      "id": 532,
+      "id": 541,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/oblique.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/oblique.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5037,7 +5136,7 @@
       "bytes": 465496
     },
     {
-      "id": 533,
+      "id": 542,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/rear-oblique.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/rear-oblique.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5046,7 +5145,7 @@
       "bytes": 500951
     },
     {
-      "id": 534,
+      "id": 543,
       "artifact_path": "trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/rear.png",
       "browser_src": "../trellis-cascade-ceiling-2026-08-21/identity-hybrid-81416/trellis-81421-steps12-cascade/witnesses/rear.png",
       "group_id": "trellis-cascade-ceiling-2026-08-21",
@@ -5055,7 +5154,7 @@
       "bytes": 361097
     },
     {
-      "id": 535,
+      "id": 544,
       "artifact_path": "trellis-seed-81408/front.png",
       "browser_src": "../trellis-seed-81408/front.png",
       "group_id": "trellis-seed-81408",
@@ -5064,7 +5163,7 @@
       "bytes": 381128
     },
     {
-      "id": 536,
+      "id": 545,
       "artifact_path": "trellis-seed-81408/oblique.png",
       "browser_src": "../trellis-seed-81408/oblique.png",
       "group_id": "trellis-seed-81408",
@@ -5073,7 +5172,7 @@
       "bytes": 518849
     },
     {
-      "id": 537,
+      "id": 546,
       "artifact_path": "trellis-seed-81409/front-actual.png",
       "browser_src": "../trellis-seed-81409/front-actual.png",
       "group_id": "trellis-seed-81409",
@@ -5082,7 +5181,7 @@
       "bytes": 390291
     },
     {
-      "id": 538,
+      "id": 547,
       "artifact_path": "trellis-seed-81409/front.png",
       "browser_src": "../trellis-seed-81409/front.png",
       "group_id": "trellis-seed-81409",
@@ -5091,7 +5190,7 @@
       "bytes": 366768
     },
     {
-      "id": 539,
+      "id": 548,
       "artifact_path": "trellis-seed-81409/oblique-actual.png",
       "browser_src": "../trellis-seed-81409/oblique-actual.png",
       "group_id": "trellis-seed-81409",
@@ -5100,7 +5199,7 @@
       "bytes": 471950
     },
     {
-      "id": 540,
+      "id": 549,
       "artifact_path": "trellis-seed-81409/oblique.png",
       "browser_src": "../trellis-seed-81409/oblique.png",
       "group_id": "trellis-seed-81409",

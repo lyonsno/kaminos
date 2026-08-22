@@ -1,0 +1,30 @@
+{
+  "schema": "handy.glb-orbit-witness.v1",
+  "input_glb": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/output.glb",
+  "renderer": "Blender EEVEE Next",
+  "effective_engine_enum": "BLENDER_EEVEE",
+  "two_sided_materials": true,
+  "ambient_occlusion_override": "none",
+  "camera_lens_mm": 70,
+  "views": [
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/front.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/left.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/rear.png",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/witness/right.png"
+  ],
+  "mesh_object_count": 1,
+  "bounds": {
+    "lower": [
+      -0.4358569085597992,
+      -0.4993845820426941,
+      -0.44319796562194824
+    ],
+    "upper": [
+      0.43666839599609375,
+      0.4998641014099121,
+      0.43876132369041443
+    ]
+  },
+  "requested_up_axis": "z",
+  "auto_up_requested": true
+}

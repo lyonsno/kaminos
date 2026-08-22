@@ -16,3 +16,9 @@ The operator selected the seed-81439 `21-soft-cel-painted-resin` bear as the str
 - FLUX normalization: prompts `01` and `02` crossed with seeds `81441` and `81442`; exact source bytes and effective route remain fixed.
 
 Generated variants do not enter TRELLIS automatically. Visual inspection selects or rejects each exact image first.
+
+## Outcome
+
+- [`result.md`](result.md) records the inspected visual result and exact next decision boundary.
+- [`terminal-receipt.json`](terminal-receipt.json) records requested and effective routes, backend/model/config identity, timings, source custody, output hashes, the Greenroom guard event, and live viewer registration.
+- `trellis-control/trellis-81441/witness/` contains direct front/left/rear/right renders plus the dynamic Kaminos route capture.

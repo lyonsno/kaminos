@@ -1,0 +1,141 @@
+{
+  "schema": "kaminos.handy-candyman.route-receipt.v1",
+  "episode": "soft-cel-bear-spatial-assay-2026-08-22",
+  "source": {
+    "path": "../flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+    "sha256": "980f2ebd3beaa6d76c377cd917170928f3ea6e2a5456a275cba768708163c1c4",
+    "bytes": 363410,
+    "dimensions": [512, 512],
+    "crop": null,
+    "mask": null,
+    "source_envelope": "Exact operator-selected image bytes; no crop, mask, or preprocessing."
+  },
+  "jobs": [
+    {
+      "job_id": "4119c6497731",
+      "purpose": "Exact-source spatial control",
+      "requested_route": "trellis2mlx_fast_checkpoint",
+      "effective_backend": "trellis2mlx MLX",
+      "effective_model": "TRELLIS.2 MLX implementation",
+      "effective_config": {
+        "seed": 81441,
+        "resolution": 512,
+        "steps": 8,
+        "cascade": false,
+        "target_faces": 100000,
+        "texture_size": 512,
+        "simplify_first": true,
+        "save_checkpoints": true
+      },
+      "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image <source> --output <assay>/trellis-control/trellis-81441/output.glb --seed 81441 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first --save-checkpoints <assay>/trellis-control/trellis-81441/checkpoints",
+      "elapsed_seconds": 139.5613718032837,
+      "exit_code": 0,
+      "failure_phase": null,
+      "warnings": ["volatile_output", "Greenroom receipt reports resolution as an ignored route parameter while the effective command includes --resolution 512"],
+      "outputs": [
+        {
+          "path": "trellis-control/trellis-81441/output.glb",
+          "sha256": "b7d892c56ad0d5be3c6619db39be17a946c39acd98ea19023fbc70d13e8adc29",
+          "bytes": 4552796
+        },
+        {
+          "path": "trellis-control/trellis-81441/checkpoints/mesh_raw.npz",
+          "sha256": "6c09d77baf25c71802a1464f8b04731d3225490db536417c402f8a41ad4c6ac9"
+        },
+        {
+          "path": "trellis-control/trellis-81441/checkpoints/texture.npz",
+          "sha256": "41e29d2ccb6ebc1dde4c85847792d601ebde47a9b07e98a3a7eb8605a1aec6c6"
+        }
+      ]
+    },
+    {
+      "job_id": "e8b8b6d4afb2",
+      "purpose": "Near-frontal camera normalization, seed 81441",
+      "requested_route": "mflux_flux2_edit_promptfile",
+      "effective_backend": "mflux on MLX",
+      "effective_model": "flux2-klein-9b Q4",
+      "effective_config": {"seed": 81441, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlx_cache_limit_gb": 48},
+      "effective_route": "mflux-generate-flux2-edit --image-paths <source> --prompt-file prompts/01-near-frontal.txt --output camera-matrix/01-near-frontal/seed-81441/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81441 --mlx-cache-limit-gb 48",
+      "elapsed_seconds": 81.59493207931519,
+      "exit_code": 0,
+      "failure_phase": null,
+      "outputs": [{"path": "camera-matrix/01-near-frontal/seed-81441/output.png", "sha256": "473f953532e759a71299d2cad340e7140ab7e849199e7b7434d908744114cffa", "bytes": 363370}]
+    },
+    {
+      "job_id": "fa413847a420",
+      "purpose": "Near-frontal camera normalization, seed 81442",
+      "requested_route": "mflux_flux2_edit_promptfile",
+      "effective_backend": "mflux on MLX",
+      "effective_model": "flux2-klein-9b Q4",
+      "effective_config": {"seed": 81442, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlx_cache_limit_gb": 48},
+      "effective_route": "mflux-generate-flux2-edit --image-paths <source> --prompt-file prompts/01-near-frontal.txt --output camera-matrix/01-near-frontal/seed-81442/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81442 --mlx-cache-limit-gb 48",
+      "elapsed_seconds": 81.8488438129425,
+      "exit_code": 0,
+      "failure_phase": null,
+      "outputs": [{"path": "camera-matrix/01-near-frontal/seed-81442/output.png", "sha256": "dc447a757b34dde48b66b2f64e7ab77830ec1c56796371379295d4e7eea58c03", "bytes": 317310}]
+    },
+    {
+      "job_id": "5896ae532645",
+      "purpose": "Long-lens three-quarter normalization, seed 81441",
+      "requested_route": "mflux_flux2_edit_promptfile",
+      "effective_backend": "mflux on MLX",
+      "effective_model": "flux2-klein-9b Q4",
+      "effective_config": {"seed": 81441, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlx_cache_limit_gb": 48},
+      "effective_route": "mflux-generate-flux2-edit --image-paths <source> --prompt-file prompts/02-long-lens-three-quarter.txt --output camera-matrix/02-long-lens-three-quarter/seed-81441/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81441 --mlx-cache-limit-gb 48",
+      "elapsed_seconds": 78.38603687286377,
+      "exit_code": 0,
+      "failure_phase": null,
+      "outputs": [{"path": "camera-matrix/02-long-lens-three-quarter/seed-81441/output.png", "sha256": "3c565f0a4cad17431b2ac5fb117ca9dc567531155c33a263104b7c19a9776b86", "bytes": 395684}]
+    },
+    {
+      "job_id": "d4391aac7303",
+      "purpose": "Long-lens three-quarter normalization, seed 81442",
+      "requested_route": "mflux_flux2_edit_promptfile",
+      "effective_backend": "mflux on MLX",
+      "effective_model": "flux2-klein-9b Q4",
+      "effective_config": {"seed": 81442, "width": 512, "height": 512, "steps": 8, "guidance": 1.0, "mlx_cache_limit_gb": 48},
+      "effective_route": "mflux-generate-flux2-edit --image-paths <source> --prompt-file prompts/02-long-lens-three-quarter.txt --output camera-matrix/02-long-lens-three-quarter/seed-81442/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 81442 --mlx-cache-limit-gb 48",
+      "elapsed_seconds": 73.27677512168884,
+      "exit_code": 0,
+      "failure_phase": null,
+      "outputs": [{"path": "camera-matrix/02-long-lens-three-quarter/seed-81442/output.png", "sha256": "c85de1641dd7f4aa2a6f42e52460161a5b06cd80b72abab73cb2a7d707099400", "bytes": 334582}]
+    },
+    {
+      "job_id": "dc6c101ada59",
+      "purpose": "Four-view rotating-camera witness",
+      "requested_route": "kaminos_render_glb_views",
+      "effective_backend": "Blender 5.1.2 background renderer via GPU Greenroom",
+      "effective_model": null,
+      "effective_config": {"views": ["front", "left", "rear", "right"], "up_axis": "z", "auto_up": true},
+      "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python <render-glb-witness.py> -- --glb trellis-control/trellis-81441/output.glb --out-dir trellis-control/trellis-81441/witness --manifest trellis-control/trellis-81441/witness/manifest.json --failure trellis-control/trellis-81441/witness/failure.json --up-axis z --auto-up",
+      "elapsed_seconds": 1.798712968826294,
+      "exit_code": 0,
+      "failure_phase": null,
+      "outputs": [
+        {"path": "trellis-control/trellis-81441/witness/front.png", "sha256": "9a5c69870f4552c094928edfb04f43872436678121b7daa41b9221aa3600f9c8", "bytes": 688153},
+        {"path": "trellis-control/trellis-81441/witness/left.png", "sha256": "100a15b3a61e9d17a2e8a18140842de4f57734924024201930bc9df78a2c04c3", "bytes": 653080},
+        {"path": "trellis-control/trellis-81441/witness/rear.png", "sha256": "dac5fb62ad2e3a96fba45865823eb63f970252b3698fc9da145480c8b353ef89", "bytes": 610824},
+        {"path": "trellis-control/trellis-81441/witness/right.png", "sha256": "9b0edccd7756288eab88781b15a314ad953cec3e389986d01dbdf336c559a4ed", "bytes": 674108}
+      ]
+    }
+  ],
+  "route_guard_event": {
+    "requested_action": "Direct Blender witness render outside GPU Greenroom",
+    "effective_route": null,
+    "failure_phase": "greenroom-route-gate",
+    "result": "Rejected before rendering; no visual output claimed. The guard's suggested cmk_painted_muscle_smoke route was stale for this task, so the existing kaminos_render_glb_views route was resolved and used instead.",
+    "hook_manifest_id": "f7969e20467ef7716e3a"
+  },
+  "viewer_smoke": {
+    "requested_url": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fsoft-cel-bear-spatial-assay-2026-08-22%2Ftrellis-control%2Ftrellis-81441%2Foutput.glb",
+    "effective_url": "http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-skull-muzzle-0819%2Fartifacts%2Fskull-muzzle-frontal-2026-08-21%2Fsoft-cel-bear-spatial-assay-2026-08-22%2Ftrellis-control%2Ftrellis-81441%2Foutput.glb",
+    "requested_root": "lerms-preview",
+    "effective_mount_root": "/private/tmp",
+    "expected_worktree_root": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+    "status": "loaded",
+    "registered_object_id": "glb-abdf22db-8aa7-4933-b4d7-a101bc1e0f7a",
+    "object_type": "glb",
+    "witness": "trellis-control/trellis-81441/witness/direct-route.json",
+    "screenshot": {"path": "trellis-control/trellis-81441/witness/direct-route.png", "sha256": "fd74c447a1ed85922907cc86a23f355957c267c689ed8fa36f56b3d43ecac25a", "bytes": 533605}
+  }
+}

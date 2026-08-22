@@ -54,7 +54,7 @@ h1 { margin:0; font-size:20px; font-weight:720; }
   <main class="content"><nav class="refs"><a class="ref" href="../README.md">README.md</a></nav><section class="gallery" id="gallery"></section><div class="empty" id="empty">No matching images</div></main>
   <div class="modal" id="modal"><img class="modal-image" id="modalImage"><div class="modal-bar"><div class="modal-label"><strong id="modalLabel"></strong><div class="modal-path" id="modalPath"></div></div><div class="modal-nav"><button class="icon" id="previous" title="Previous">‹</button><a class="icon" id="openOriginal" title="Open original">↗</a><button class="icon" id="next" title="Next">›</button><button class="icon" id="close" title="Close">×</button></div></div></div>
   <script>
-  const items=[{"id":524,"artifact_path":"source.png","browser_src":"../source.png","group_id":"_root","kind":"other","label":"source","bytes":1085196}]; let activeKind="all"; let visible=[]; let modalIndex=-1;
+  const items=[{"id":533,"artifact_path":"source.png","browser_src":"../source.png","group_id":"_root","kind":"other","label":"source","bytes":1085196}]; let activeKind="all"; let visible=[]; let modalIndex=-1;
   const kinds=["all",...new Set(items.map(item=>item.kind))];
   const gallery=document.getElementById("gallery"), search=document.getElementById("search"), empty=document.getElementById("empty"), segments=document.getElementById("segments");
   segments.innerHTML=kinds.map(kind=>'<button data-kind="'+kind+'">'+kind+'</button>').join('');

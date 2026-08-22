@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast_checkpoint",
+  "job_id": "4119c6497731",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81441",
+    "resolution": "512",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787388636.479838,
+  "duration_s": 139.6
+}

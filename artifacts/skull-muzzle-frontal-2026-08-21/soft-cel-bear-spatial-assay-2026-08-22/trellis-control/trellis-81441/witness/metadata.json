@@ -1,0 +1,21 @@
+{
+  "name": "output",
+  "job_type": "kaminos_render_glb_views",
+  "job_id": "dc6c101ada59",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/soft-cel-bear-spatial-assay-2026-08-22/trellis-control/trellis-81441/output.glb",
+  "input_name": "output.glb",
+  "params": {
+    "script": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/trellis-probes/render-glb-witness.py",
+    "up_axis": "z",
+    "exclude": ""
+  },
+  "output_files": [
+    "front.png",
+    "left.png",
+    "manifest.json",
+    "rear.png",
+    "right.png"
+  ],
+  "created_at": 1787390979.651623,
+  "duration_s": 1.8
+}
