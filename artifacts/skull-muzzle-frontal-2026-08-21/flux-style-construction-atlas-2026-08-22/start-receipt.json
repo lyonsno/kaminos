@@ -1,0 +1,990 @@
+{
+  "schema": "kaminos.handy_candyman.flux_style_construction_atlas.start_receipt.v1",
+  "recorded_at": "2026-08-22T03:20:51Z",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "claim_ceiling": "The atlas may establish image-generation wording tendencies and nominate exact reconstruction sources. It does not establish improved geometry without matched reconstruction and close-orbit inspection.",
+  "job_count": 96,
+  "jobs": [
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "01-silicone-prosthetic-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/01-silicone-prosthetic-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/01-silicone-prosthetic-relief",
+      "job_id": "54d6302cec02",
+      "submitted_at": 1787368844.980909,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/54d6302cec02/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "02-foam-latex-display-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/02-foam-latex-display-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/02-foam-latex-display-bust",
+      "job_id": "2c8c6c05e8d0",
+      "submitted_at": 1787368845.046741,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/2c8c6c05e8d0/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "03-resin-effects-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/03-resin-effects-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/03-resin-effects-maquette",
+      "job_id": "b076883b5452",
+      "submitted_at": 1787368845.1162891,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b076883b5452/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "04-plasticine-stop-motion-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/04-plasticine-stop-motion-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/04-plasticine-stop-motion-bust",
+      "job_id": "214774afeb1a",
+      "submitted_at": 1787368845.1825101,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/214774afeb1a/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "05-feature-animation-adult",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/05-feature-animation-adult.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/05-feature-animation-adult",
+      "job_id": "d9d21c67e9c9",
+      "submitted_at": 1787368845.249954,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d9d21c67e9c9/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/06-feature-animation-sculptural",
+      "job_id": "b9f1d1bc7853",
+      "submitted_at": 1787368845.3161411,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b9f1d1bc7853/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "07-stylized-realism-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/07-stylized-realism-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/07-stylized-realism-maquette",
+      "job_id": "c828c6f4e10d",
+      "submitted_at": 1787368845.3847492,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c828c6f4e10d/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "08-painterly-animation-model",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/08-painterly-animation-model.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/08-painterly-animation-model",
+      "job_id": "fbe8ca10db9d",
+      "submitted_at": 1787368845.4607658,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fbe8ca10db9d/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "09-console-adventure-painted-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/09-console-adventure-painted-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/09-console-adventure-painted-sculpt",
+      "job_id": "5ccca4cddb32",
+      "submitted_at": 1787368845.528078,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5ccca4cddb32/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "10-storybook-game-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/10-storybook-game-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/10-storybook-game-maquette",
+      "job_id": "8b2757ecdec7",
+      "submitted_at": 1787368845.593158,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8b2757ecdec7/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "11-stylized-game-sculpted-normals",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/11-stylized-game-sculpted-normals.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/11-stylized-game-sculpted-normals",
+      "job_id": "3224a3f753f5",
+      "submitted_at": 1787368845.662231,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3224a3f753f5/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "12-console-rpg-physical-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/12-console-rpg-physical-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/12-console-rpg-physical-bust",
+      "job_id": "b715ab6cab08",
+      "submitted_at": 1787368845.727784,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b715ab6cab08/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "13-lacquered-carved-wood",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/13-lacquered-carved-wood.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/13-lacquered-carved-wood",
+      "job_id": "02328dc9b1cb",
+      "submitted_at": 1787368845.794267,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/02328dc9b1cb/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "14-underglaze-ceramic-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/14-underglaze-ceramic-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/14-underglaze-ceramic-sculpt",
+      "job_id": "f767a41e5653",
+      "submitted_at": 1787368845.8625312,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f767a41e5653/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "15-hand-painted-polystone-collectible",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/15-hand-painted-polystone-collectible.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/15-hand-painted-polystone-collectible",
+      "job_id": "cc255448db05",
+      "submitted_at": 1787368845.927179,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cc255448db05/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/16-matte-resin-gallery-sculpture",
+      "job_id": "3b925515c234",
+      "submitted_at": 1787368845.990784,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3b925515c234/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/17-beveled-connected-planes",
+      "job_id": "73a8f4e150c6",
+      "submitted_at": 1787368846.059623,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/73a8f4e150c6/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "18-shallow-relief-over-core",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/18-shallow-relief-over-core.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/18-shallow-relief-over-core",
+      "job_id": "1f0c789cb8ab",
+      "submitted_at": 1787368846.1258292,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1f0c789cb8ab/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "19-attached-wedge-clusters",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/19-attached-wedge-clusters.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/19-attached-wedge-clusters",
+      "job_id": "c612629fd8e0",
+      "submitted_at": 1787368846.196239,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c612629fd8e0/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "20-rounded-attached-lobes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/20-rounded-attached-lobes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/20-rounded-attached-lobes",
+      "job_id": "70f6335692ad",
+      "submitted_at": 1787368846.276098,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/70f6335692ad/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/21-soft-cel-painted-resin",
+      "job_id": "c49b86ac0977",
+      "submitted_at": 1787368846.3454778,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c49b86ac0977/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "22-bold-cel-painted-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/22-bold-cel-painted-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/22-bold-cel-painted-maquette",
+      "job_id": "fb92de2f19f8",
+      "submitted_at": 1787368846.4191449,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fb92de2f19f8/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "23-graphic-low-poly-polystone",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/23-graphic-low-poly-polystone.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/23-graphic-low-poly-polystone",
+      "job_id": "5fee75af348b",
+      "submitted_at": 1787368846.490487,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5fee75af348b/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81436,
+      "prompt_id": "24-illustrative-carved-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/24-illustrative-carved-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81436/24-illustrative-carved-resin",
+      "job_id": "3e1f5eb699b3",
+      "submitted_at": 1787368846.5662878,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3e1f5eb699b3/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "01-silicone-prosthetic-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/01-silicone-prosthetic-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/01-silicone-prosthetic-relief",
+      "job_id": "8d1d31c36546",
+      "submitted_at": 1787368846.6368132,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/8d1d31c36546/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "02-foam-latex-display-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/02-foam-latex-display-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/02-foam-latex-display-bust",
+      "job_id": "9eb1c0b28f90",
+      "submitted_at": 1787368846.704679,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9eb1c0b28f90/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "03-resin-effects-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/03-resin-effects-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/03-resin-effects-maquette",
+      "job_id": "4338c3ccb58e",
+      "submitted_at": 1787368846.7721758,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4338c3ccb58e/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "04-plasticine-stop-motion-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/04-plasticine-stop-motion-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/04-plasticine-stop-motion-bust",
+      "job_id": "75ea9018fda5",
+      "submitted_at": 1787368846.8366342,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/75ea9018fda5/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "05-feature-animation-adult",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/05-feature-animation-adult.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/05-feature-animation-adult",
+      "job_id": "6ca56642ef90",
+      "submitted_at": 1787368846.901999,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/6ca56642ef90/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/06-feature-animation-sculptural",
+      "job_id": "9c7357659deb",
+      "submitted_at": 1787368846.966422,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9c7357659deb/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "07-stylized-realism-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/07-stylized-realism-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/07-stylized-realism-maquette",
+      "job_id": "335b38ceee78",
+      "submitted_at": 1787368847.032196,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/335b38ceee78/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "08-painterly-animation-model",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/08-painterly-animation-model.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/08-painterly-animation-model",
+      "job_id": "a6efa4f70ff1",
+      "submitted_at": 1787368847.097346,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/a6efa4f70ff1/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "09-console-adventure-painted-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/09-console-adventure-painted-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/09-console-adventure-painted-sculpt",
+      "job_id": "7085a37f533c",
+      "submitted_at": 1787368847.165133,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7085a37f533c/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "10-storybook-game-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/10-storybook-game-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/10-storybook-game-maquette",
+      "job_id": "6fcb20a9f21f",
+      "submitted_at": 1787368847.233951,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/6fcb20a9f21f/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "11-stylized-game-sculpted-normals",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/11-stylized-game-sculpted-normals.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/11-stylized-game-sculpted-normals",
+      "job_id": "22f8f3dbc984",
+      "submitted_at": 1787368847.305548,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/22f8f3dbc984/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "12-console-rpg-physical-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/12-console-rpg-physical-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/12-console-rpg-physical-bust",
+      "job_id": "bfbd3153ea93",
+      "submitted_at": 1787368847.3739169,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/bfbd3153ea93/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "13-lacquered-carved-wood",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/13-lacquered-carved-wood.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/13-lacquered-carved-wood",
+      "job_id": "fd7a589b7c00",
+      "submitted_at": 1787368847.4436438,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fd7a589b7c00/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "14-underglaze-ceramic-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/14-underglaze-ceramic-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/14-underglaze-ceramic-sculpt",
+      "job_id": "40f8da6666ad",
+      "submitted_at": 1787368847.509421,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/40f8da6666ad/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "15-hand-painted-polystone-collectible",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/15-hand-painted-polystone-collectible.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/15-hand-painted-polystone-collectible",
+      "job_id": "0ac96e962f02",
+      "submitted_at": 1787368847.585311,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/0ac96e962f02/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/16-matte-resin-gallery-sculpture",
+      "job_id": "25846d75d308",
+      "submitted_at": 1787368847.6519492,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/25846d75d308/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/17-beveled-connected-planes",
+      "job_id": "cbf71ac2a619",
+      "submitted_at": 1787368847.732511,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cbf71ac2a619/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "18-shallow-relief-over-core",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/18-shallow-relief-over-core.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/18-shallow-relief-over-core",
+      "job_id": "3522b2934dc7",
+      "submitted_at": 1787368847.799662,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3522b2934dc7/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "19-attached-wedge-clusters",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/19-attached-wedge-clusters.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/19-attached-wedge-clusters",
+      "job_id": "85d0d1463c42",
+      "submitted_at": 1787368847.877561,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/85d0d1463c42/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "20-rounded-attached-lobes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/20-rounded-attached-lobes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/20-rounded-attached-lobes",
+      "job_id": "fa95e5d30c27",
+      "submitted_at": 1787368847.944017,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fa95e5d30c27/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/21-soft-cel-painted-resin",
+      "job_id": "cde11c4837d0",
+      "submitted_at": 1787368848.015754,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cde11c4837d0/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "22-bold-cel-painted-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/22-bold-cel-painted-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/22-bold-cel-painted-maquette",
+      "job_id": "1f946d747fc3",
+      "submitted_at": 1787368848.08267,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1f946d747fc3/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "23-graphic-low-poly-polystone",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/23-graphic-low-poly-polystone.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/23-graphic-low-poly-polystone",
+      "job_id": "296dc30235bc",
+      "submitted_at": 1787368848.150424,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/296dc30235bc/request.json"
+    },
+    {
+      "wave": "wave-1",
+      "seed": 81437,
+      "prompt_id": "24-illustrative-carved-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/24-illustrative-carved-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-1/seed-81437/24-illustrative-carved-resin",
+      "job_id": "1a5236bbbe58",
+      "submitted_at": 1787368848.221478,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1a5236bbbe58/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "01-silicone-prosthetic-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/01-silicone-prosthetic-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/01-silicone-prosthetic-relief",
+      "job_id": "1c11e62c9798",
+      "submitted_at": 1787368848.293476,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1c11e62c9798/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "02-foam-latex-display-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/02-foam-latex-display-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/02-foam-latex-display-bust",
+      "job_id": "d986f46a4464",
+      "submitted_at": 1787368848.359869,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d986f46a4464/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "03-resin-effects-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/03-resin-effects-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/03-resin-effects-maquette",
+      "job_id": "6623a30c6967",
+      "submitted_at": 1787368848.425046,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/6623a30c6967/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "04-plasticine-stop-motion-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/04-plasticine-stop-motion-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/04-plasticine-stop-motion-bust",
+      "job_id": "96c9ccd22137",
+      "submitted_at": 1787368848.496143,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/96c9ccd22137/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "05-feature-animation-adult",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/05-feature-animation-adult.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/05-feature-animation-adult",
+      "job_id": "cc7864cbca52",
+      "submitted_at": 1787368848.562921,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cc7864cbca52/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/06-feature-animation-sculptural",
+      "job_id": "e8a081479324",
+      "submitted_at": 1787368848.6316018,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e8a081479324/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "07-stylized-realism-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/07-stylized-realism-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/07-stylized-realism-maquette",
+      "job_id": "7ae95dbd855b",
+      "submitted_at": 1787368848.697362,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7ae95dbd855b/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "08-painterly-animation-model",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/08-painterly-animation-model.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/08-painterly-animation-model",
+      "job_id": "5e2c467a7d62",
+      "submitted_at": 1787368848.767904,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5e2c467a7d62/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "09-console-adventure-painted-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/09-console-adventure-painted-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/09-console-adventure-painted-sculpt",
+      "job_id": "7c6b5328972b",
+      "submitted_at": 1787368848.83409,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7c6b5328972b/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "10-storybook-game-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/10-storybook-game-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/10-storybook-game-maquette",
+      "job_id": "6bd1a10ee184",
+      "submitted_at": 1787368848.900651,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/6bd1a10ee184/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "11-stylized-game-sculpted-normals",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/11-stylized-game-sculpted-normals.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/11-stylized-game-sculpted-normals",
+      "job_id": "cd5e653466c0",
+      "submitted_at": 1787368848.965764,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/cd5e653466c0/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "12-console-rpg-physical-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/12-console-rpg-physical-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/12-console-rpg-physical-bust",
+      "job_id": "e34e55751bdc",
+      "submitted_at": 1787368849.0319831,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e34e55751bdc/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "13-lacquered-carved-wood",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/13-lacquered-carved-wood.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/13-lacquered-carved-wood",
+      "job_id": "540818894ee6",
+      "submitted_at": 1787368849.099458,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/540818894ee6/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "14-underglaze-ceramic-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/14-underglaze-ceramic-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/14-underglaze-ceramic-sculpt",
+      "job_id": "f217832ded06",
+      "submitted_at": 1787368849.166461,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f217832ded06/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "15-hand-painted-polystone-collectible",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/15-hand-painted-polystone-collectible.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/15-hand-painted-polystone-collectible",
+      "job_id": "1442fd16140b",
+      "submitted_at": 1787368849.2319129,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1442fd16140b/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/16-matte-resin-gallery-sculpture",
+      "job_id": "559d00ff1aaf",
+      "submitted_at": 1787368849.305654,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/559d00ff1aaf/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/17-beveled-connected-planes",
+      "job_id": "3070ec7479ae",
+      "submitted_at": 1787368849.373076,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/3070ec7479ae/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "18-shallow-relief-over-core",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/18-shallow-relief-over-core.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/18-shallow-relief-over-core",
+      "job_id": "9fd051ce9fd0",
+      "submitted_at": 1787368849.4409971,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9fd051ce9fd0/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "19-attached-wedge-clusters",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/19-attached-wedge-clusters.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/19-attached-wedge-clusters",
+      "job_id": "49b7f6679656",
+      "submitted_at": 1787368849.5073018,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/49b7f6679656/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "20-rounded-attached-lobes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/20-rounded-attached-lobes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/20-rounded-attached-lobes",
+      "job_id": "4703d68cc761",
+      "submitted_at": 1787368849.574612,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4703d68cc761/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/21-soft-cel-painted-resin",
+      "job_id": "1eefe16a504e",
+      "submitted_at": 1787368849.6473758,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1eefe16a504e/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "22-bold-cel-painted-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/22-bold-cel-painted-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/22-bold-cel-painted-maquette",
+      "job_id": "9e9432676dbf",
+      "submitted_at": 1787368849.719198,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9e9432676dbf/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "23-graphic-low-poly-polystone",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/23-graphic-low-poly-polystone.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/23-graphic-low-poly-polystone",
+      "job_id": "460e6d6fd7af",
+      "submitted_at": 1787368849.7900229,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/460e6d6fd7af/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81438,
+      "prompt_id": "24-illustrative-carved-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/24-illustrative-carved-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81438/24-illustrative-carved-resin",
+      "job_id": "22e3b627ead5",
+      "submitted_at": 1787368849.855057,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/22e3b627ead5/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "01-silicone-prosthetic-relief",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/01-silicone-prosthetic-relief.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/01-silicone-prosthetic-relief",
+      "job_id": "83afba942d64",
+      "submitted_at": 1787368849.9203022,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/83afba942d64/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "02-foam-latex-display-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/02-foam-latex-display-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/02-foam-latex-display-bust",
+      "job_id": "e7da36b4dcc2",
+      "submitted_at": 1787368849.986292,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/e7da36b4dcc2/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "03-resin-effects-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/03-resin-effects-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette",
+      "job_id": "b4850c83acbf",
+      "submitted_at": 1787368850.05478,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/b4850c83acbf/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "04-plasticine-stop-motion-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/04-plasticine-stop-motion-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/04-plasticine-stop-motion-bust",
+      "job_id": "d016676a11a9",
+      "submitted_at": 1787368850.122956,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d016676a11a9/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "05-feature-animation-adult",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/05-feature-animation-adult.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/05-feature-animation-adult",
+      "job_id": "1455d4e45c83",
+      "submitted_at": 1787368850.1945522,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/1455d4e45c83/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/06-feature-animation-sculptural",
+      "job_id": "27b3e659feba",
+      "submitted_at": 1787368850.2615721,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/27b3e659feba/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "07-stylized-realism-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/07-stylized-realism-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/07-stylized-realism-maquette",
+      "job_id": "77268191eff0",
+      "submitted_at": 1787368850.328185,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/77268191eff0/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "08-painterly-animation-model",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/08-painterly-animation-model.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/08-painterly-animation-model",
+      "job_id": "fb139bd7bf25",
+      "submitted_at": 1787368850.393662,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/fb139bd7bf25/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "09-console-adventure-painted-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/09-console-adventure-painted-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/09-console-adventure-painted-sculpt",
+      "job_id": "d619d511627c",
+      "submitted_at": 1787368850.4598668,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d619d511627c/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "10-storybook-game-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/10-storybook-game-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/10-storybook-game-maquette",
+      "job_id": "969f65274ffc",
+      "submitted_at": 1787368850.527483,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/969f65274ffc/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "11-stylized-game-sculpted-normals",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/11-stylized-game-sculpted-normals.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/11-stylized-game-sculpted-normals",
+      "job_id": "450bf45308f8",
+      "submitted_at": 1787368850.593575,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/450bf45308f8/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "12-console-rpg-physical-bust",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/12-console-rpg-physical-bust.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/12-console-rpg-physical-bust",
+      "job_id": "d34998ee2c78",
+      "submitted_at": 1787368850.658944,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d34998ee2c78/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "13-lacquered-carved-wood",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/13-lacquered-carved-wood.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/13-lacquered-carved-wood",
+      "job_id": "c474cb62a1c6",
+      "submitted_at": 1787368850.7312052,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c474cb62a1c6/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "14-underglaze-ceramic-sculpt",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/14-underglaze-ceramic-sculpt.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/14-underglaze-ceramic-sculpt",
+      "job_id": "256ece82c0f7",
+      "submitted_at": 1787368850.797947,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/256ece82c0f7/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "15-hand-painted-polystone-collectible",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/15-hand-painted-polystone-collectible.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/15-hand-painted-polystone-collectible",
+      "job_id": "4ce4d7376994",
+      "submitted_at": 1787368850.8639328,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4ce4d7376994/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/16-matte-resin-gallery-sculpture",
+      "job_id": "5fc769c61f14",
+      "submitted_at": 1787368850.929583,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5fc769c61f14/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/17-beveled-connected-planes",
+      "job_id": "26c9bf57448e",
+      "submitted_at": 1787368850.996108,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/26c9bf57448e/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "18-shallow-relief-over-core",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/18-shallow-relief-over-core.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/18-shallow-relief-over-core",
+      "job_id": "5f7206b4111b",
+      "submitted_at": 1787368851.061485,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5f7206b4111b/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "19-attached-wedge-clusters",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/19-attached-wedge-clusters.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/19-attached-wedge-clusters",
+      "job_id": "c503090b52f3",
+      "submitted_at": 1787368851.1313221,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c503090b52f3/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "20-rounded-attached-lobes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/20-rounded-attached-lobes.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/20-rounded-attached-lobes",
+      "job_id": "7720cc9699ff",
+      "submitted_at": 1787368851.1983309,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7720cc9699ff/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/21-soft-cel-painted-resin",
+      "job_id": "113dc5bd8730",
+      "submitted_at": 1787368851.2691898,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/113dc5bd8730/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "22-bold-cel-painted-maquette",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/22-bold-cel-painted-maquette.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/22-bold-cel-painted-maquette",
+      "job_id": "920a8276cd57",
+      "submitted_at": 1787368851.339239,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/920a8276cd57/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "23-graphic-low-poly-polystone",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/23-graphic-low-poly-polystone.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/23-graphic-low-poly-polystone",
+      "job_id": "0e60f75f9b74",
+      "submitted_at": 1787368851.406755,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/0e60f75f9b74/request.json"
+    },
+    {
+      "wave": "wave-2",
+      "seed": 81439,
+      "prompt_id": "24-illustrative-carved-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/prompts/24-illustrative-carved-resin.txt",
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/24-illustrative-carved-resin",
+      "job_id": "151e0bd424c0",
+      "submitted_at": 1787368851.4770648,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/151e0bd424c0/request.json"
+    }
+  ]
+}

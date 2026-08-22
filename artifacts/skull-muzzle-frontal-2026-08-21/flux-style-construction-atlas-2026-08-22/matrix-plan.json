@@ -1,0 +1,57 @@
+{
+  "schema": "kaminos.handy_candyman.flux_style_construction_atlas.v1",
+  "source": {
+    "path": "../flux-81408/output.png",
+    "sha256": "6451fcc15a6fc444e63943039229d958a202ae4ebc001addfc9b20bcb4d511d9",
+    "role": "sole edit target and conditioning image"
+  },
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "mlx_cache_limit_gb": 48
+  },
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_image": "<wave>/seed-<seed>/<prompt-id>/output.png",
+    "terminal_metadata": "<wave>/seed-<seed>/<prompt-id>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "waves": [
+    {"id": "wave-1", "seeds": [81436, 81437]},
+    {"id": "wave-2", "seeds": [81438, 81439]}
+  ],
+  "prompt_families": [
+    {
+      "id": "practical-creature-effects",
+      "prompts": ["01-silicone-prosthetic-relief", "02-foam-latex-display-bust", "03-resin-effects-maquette", "04-plasticine-stop-motion-bust"]
+    },
+    {
+      "id": "restrained-feature-animation",
+      "prompts": ["05-feature-animation-adult", "06-feature-animation-sculptural", "07-stylized-realism-maquette", "08-painterly-animation-model"]
+    },
+    {
+      "id": "console-game-sculpting",
+      "prompts": ["09-console-adventure-painted-sculpt", "10-storybook-game-maquette", "11-stylized-game-sculpted-normals", "12-console-rpg-physical-bust"]
+    },
+    {
+      "id": "carved-and-ceramic-collectibles",
+      "prompts": ["13-lacquered-carved-wood", "14-underglaze-ceramic-sculpt", "15-hand-painted-polystone-collectible", "16-matte-resin-gallery-sculpture"]
+    },
+    {
+      "id": "explicit-geometry-carriers",
+      "prompts": ["17-beveled-connected-planes", "18-shallow-relief-over-core", "19-attached-wedge-clusters", "20-rounded-attached-lobes"]
+    },
+    {
+      "id": "cel-and-graphic-physical-models",
+      "prompts": ["21-soft-cel-painted-resin", "22-bold-cel-painted-maquette", "23-graphic-low-poly-polystone", "24-illustrative-carved-resin"]
+    }
+  ],
+  "comparison_contract": "Hold exact source bytes, identity sentence, shared attached-part construction law, and route settings fixed. Vary style and local form language across 24 prompts at four matched seeds. Preserve every cell and inspect images directly before reconstruction promotion.",
+  "claim_ceiling": "The atlas may establish image-generation wording tendencies and nominate exact reconstruction sources. It does not establish improved geometry without matched reconstruction and close-orbit inspection."
+}
