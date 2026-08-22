@@ -1,0 +1,197 @@
+{
+  "schema": "kaminos.handy_candyman.flux_cross_source_authoring_assay.start_receipt.v1",
+  "recorded_at": "2026-08-22T06:06:45Z",
+  "campaign_question": "Do the operator-preferred soft-cel and feature-animation transformations, plus two structural controls, repeat directionally across distinct source identities?",
+  "requested_route": {
+    "job_type": "mflux_flux2_edit_promptfile",
+    "model": "flux2-klein-9b",
+    "quantize": 4,
+    "width": 512,
+    "height": 512,
+    "steps": 8,
+    "guidance": 1.0,
+    "seed": 81439,
+    "mlx_cache_limit_gb": 48
+  },
+  "comparison_contract": "Hold the source-neutral preservation clause, exact style clause, requested route, and generation seed fixed. Vary only source image bytes. Inspect all outputs directly against their row source.",
+  "claim_ceiling": "Directional cross-source repeatability and exact-cell nomination only; no seed-stable or spatial-cast claim.",
+  "job_count": 16,
+  "jobs": [
+    {
+      "source_id": "canonical-horned",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/21-soft-cel-painted-resin/seed-81439",
+      "job_id": "f1c13df86308",
+      "submitted_at": 1787378804.038663,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/f1c13df86308/request.json"
+    },
+    {
+      "source_id": "canonical-horned",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png",
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/06-feature-animation-sculptural/seed-81439",
+      "job_id": "7a8c61772d19",
+      "submitted_at": 1787378804.106053,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7a8c61772d19/request.json"
+    },
+    {
+      "source_id": "canonical-horned",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png",
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/16-matte-resin-gallery-sculpture/seed-81439",
+      "job_id": "c8716f251e32",
+      "submitted_at": 1787378804.17165,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/c8716f251e32/request.json"
+    },
+    {
+      "source_id": "canonical-horned",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/canonical-horned.png",
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/canonical-horned/17-beveled-connected-planes/seed-81439",
+      "job_id": "5e2d997d54e9",
+      "submitted_at": 1787378804.2385411,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5e2d997d54e9/request.json"
+    },
+    {
+      "source_id": "bear-81402",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439",
+      "job_id": "4e27df2265e7",
+      "submitted_at": 1787378804.3060951,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4e27df2265e7/request.json"
+    },
+    {
+      "source_id": "bear-81402",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png",
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/06-feature-animation-sculptural/seed-81439",
+      "job_id": "78be5289e430",
+      "submitted_at": 1787378804.374638,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/78be5289e430/request.json"
+    },
+    {
+      "source_id": "bear-81402",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png",
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/16-matte-resin-gallery-sculpture/seed-81439",
+      "job_id": "5a866b40c1cf",
+      "submitted_at": 1787378804.450523,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/5a866b40c1cf/request.json"
+    },
+    {
+      "source_id": "bear-81402",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/bear-81402.png",
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/17-beveled-connected-planes/seed-81439",
+      "job_id": "31a455773a80",
+      "submitted_at": 1787378804.527498,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/31a455773a80/request.json"
+    },
+    {
+      "source_id": "lioness-81406",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/21-soft-cel-painted-resin/seed-81439",
+      "job_id": "d50e2ef12464",
+      "submitted_at": 1787378804.595503,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d50e2ef12464/request.json"
+    },
+    {
+      "source_id": "lioness-81406",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png",
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/06-feature-animation-sculptural/seed-81439",
+      "job_id": "9c038e27ac7b",
+      "submitted_at": 1787378804.661233,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/9c038e27ac7b/request.json"
+    },
+    {
+      "source_id": "lioness-81406",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png",
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/16-matte-resin-gallery-sculpture/seed-81439",
+      "job_id": "7ed0b1b59e33",
+      "submitted_at": 1787378804.726938,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7ed0b1b59e33/request.json"
+    },
+    {
+      "source_id": "lioness-81406",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lioness-81406.png",
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lioness-81406/17-beveled-connected-planes/seed-81439",
+      "job_id": "add9f6def238",
+      "submitted_at": 1787378804.801601,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/add9f6def238/request.json"
+    },
+    {
+      "source_id": "lynx-81408",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png",
+      "prompt_id": "21-soft-cel-painted-resin",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/21-soft-cel-painted-resin.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/21-soft-cel-painted-resin/seed-81439",
+      "job_id": "d7b57413ff14",
+      "submitted_at": 1787378804.883193,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/d7b57413ff14/request.json"
+    },
+    {
+      "source_id": "lynx-81408",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png",
+      "prompt_id": "06-feature-animation-sculptural",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/06-feature-animation-sculptural.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/06-feature-animation-sculptural/seed-81439",
+      "job_id": "7274a30985a9",
+      "submitted_at": 1787378804.953045,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/7274a30985a9/request.json"
+    },
+    {
+      "source_id": "lynx-81408",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png",
+      "prompt_id": "16-matte-resin-gallery-sculpture",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/16-matte-resin-gallery-sculpture.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/16-matte-resin-gallery-sculpture/seed-81439",
+      "job_id": "4f3108b14201",
+      "submitted_at": 1787378805.0498781,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/4f3108b14201/request.json"
+    },
+    {
+      "source_id": "lynx-81408",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/sources/lynx-81408.png",
+      "prompt_id": "17-beveled-connected-planes",
+      "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/prompts/17-beveled-connected-planes.txt",
+      "seed": 81439,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/lynx-81408/17-beveled-connected-planes/seed-81439",
+      "job_id": "40872ec551cb",
+      "submitted_at": 1787378805.1503959,
+      "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/pending/40872ec551cb/request.json"
+    }
+  ]
+}
