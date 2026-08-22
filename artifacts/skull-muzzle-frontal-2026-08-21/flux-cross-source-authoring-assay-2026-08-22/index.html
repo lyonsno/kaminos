@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cross-Source Authoring Assay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111214;
+      --panel: #181a1d;
+      --line: #34383d;
+      --text: #f0f1f2;
+      --muted: #a7adb4;
+      --preferred: #d98f38;
+      --control: #6ca6a8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.35 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0; }
+    header { display: flex; align-items: center; gap: 18px; min-height: 52px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: #111214; }
+    h1 { margin: 0; font-size: 16px; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 12px; }
+    .legend { margin-left: auto; display: flex; gap: 14px; color: var(--muted); font-size: 12px; }
+    .legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--preferred); }
+    .legend span:last-child::before { background: var(--control); }
+    main { overflow: auto; }
+    .matrix { display: grid; grid-template-columns: minmax(150px, .72fr) repeat(4, minmax(230px, 1fr)); min-width: 1120px; }
+    .head, .row-label, .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel); }
+    .head { position: sticky; top: 0; z-index: 4; min-height: 58px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: center; }
+    .head strong { font-size: 13px; }
+    .head small { margin-top: 3px; color: var(--muted); }
+    .head.preferred { box-shadow: inset 0 3px var(--preferred); }
+    .head.control { box-shadow: inset 0 3px var(--control); }
+    button.row-label { appearance: none; position: sticky; left: 0; z-index: 3; padding: 0; color: inherit; text-align: left; cursor: zoom-in; overflow: hidden; }
+    .row-label img { display: block; width: 100%; height: 100%; min-height: 230px; object-fit: cover; background: #0b0c0d; }
+    .source-caption { position: absolute; inset: auto 0 0; padding: 24px 10px 9px; background: linear-gradient(transparent, rgba(0, 0, 0, .9)); }
+    .row-label strong, .row-label small { display: block; }
+    .row-label small { margin-top: 3px; color: #d4d7da; }
+    .row-label:hover img, .row-label:focus-visible img { filter: brightness(1.08); }
+    button.cell { appearance: none; margin: 0; padding: 0; min-height: 230px; cursor: zoom-in; border-top: 0; border-left: 0; color: inherit; overflow: hidden; position: relative; }
+    .cell img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; background: #0b0c0d; }
+    .cell:hover img, .cell:focus-visible img { filter: brightness(1.08); }
+    .cell:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+    .cell .missing { position: absolute; inset: 0; display: none; place-items: center; color: var(--muted); background: #141619; }
+    .cell.missing .missing { display: grid; }
+    dialog { width: min(94vw, 1100px); height: min(94vh, 1100px); padding: 0; border: 1px solid var(--line); border-radius: 4px; background: #090a0b; color: var(--text); }
+    dialog::backdrop { background: rgba(0, 0, 0, .86); }
+    dialog img { width: 100%; height: calc(100% - 44px); object-fit: contain; display: block; }
+    .dialog-bar { height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-top: 1px solid var(--line); }
+    .dialog-bar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dialog-bar button { margin-left: auto; width: 32px; height: 32px; border: 0; background: transparent; color: var(--text); font-size: 22px; cursor: pointer; }
+    @media (max-width: 760px) {
+      header { align-items: flex-start; flex-wrap: wrap; }
+      .legend { margin-left: 0; }
+      .matrix { grid-template-columns: 132px repeat(4, 220px); }
+      .head { top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cross-Source Authoring Assay</h1>
+    <div class="meta">FLUX2 Klein 9B Q4 · seed 81439 · 8 steps</div>
+    <div class="legend"><span>Operator preferred</span><span>Structural control</span></div>
+  </header>
+  <main><div class="matrix" id="matrix"></div></main>
+  <dialog id="viewer">
+    <img id="viewer-image" alt="">
+    <div class="dialog-bar"><span id="viewer-label"></span><button id="close" aria-label="Close">×</button></div>
+  </dialog>
+  <script>
+    const prompts = [
+      { id: '21-soft-cel-painted-resin', label: 'Soft cel-painted resin', role: 'preferred' },
+      { id: '06-feature-animation-sculptural', label: 'Feature-animation sculptural', role: 'preferred' },
+      { id: '16-matte-resin-gallery-sculpture', label: 'Matte-resin gallery sculpture', role: 'control' },
+      { id: '17-beveled-connected-planes', label: 'Beveled connected planes', role: 'control' }
+    ];
+    const sources = [
+      { id: 'canonical-horned', label: 'Canonical horned', note: 'frontal baseline' },
+      { id: 'bear-81402', label: 'Bear 81402', note: 'three-quarter source' },
+      { id: 'lioness-81406', label: 'Lioness 81406', note: 'three-quarter source' },
+      { id: 'lynx-81408', label: 'Lynx 81408', note: 'three-quarter source' }
+    ];
+    const matrix = document.querySelector('#matrix');
+    const viewer = document.querySelector('#viewer');
+    const viewerImage = document.querySelector('#viewer-image');
+    const viewerLabel = document.querySelector('#viewer-label');
+    const cells = [];
+    let active = -1;
+
+    matrix.insertAdjacentHTML('beforeend', '<div class="head"><strong>Source identity</strong><small>Click any image to inspect</small></div>');
+    prompts.forEach(prompt => matrix.insertAdjacentHTML('beforeend', `<div class="head ${prompt.role}"><strong>${prompt.label}</strong><small>${prompt.role === 'preferred' ? 'operator preferred' : 'structural control'}</small></div>`));
+
+    sources.forEach(source => {
+      const sourcePath = `sources/${source.id}.png`;
+      const sourceButton = document.createElement('button');
+      sourceButton.className = 'row-label';
+      sourceButton.dataset.path = sourcePath;
+      sourceButton.dataset.label = `${source.label} · source`;
+      sourceButton.innerHTML = `<img src="${sourcePath}" alt="${sourceButton.dataset.label}"><span class="source-caption"><strong>${source.label}</strong><small>${source.note}</small></span>`;
+      sourceButton.addEventListener('click', () => openCell(cells.indexOf(sourceButton)));
+      cells.push(sourceButton);
+      matrix.append(sourceButton);
+      prompts.forEach(prompt => {
+        const path = `cells/${source.id}/${prompt.id}/seed-81439/output.png`;
+        const button = document.createElement('button');
+        button.className = 'cell';
+        button.dataset.path = path;
+        button.dataset.label = `${source.label} · ${prompt.label}`;
+        button.innerHTML = `<img src="${path}" alt="${button.dataset.label}"><span class="missing">Pending output</span>`;
+        button.querySelector('img').addEventListener('error', () => button.classList.add('missing'));
+        button.addEventListener('click', () => openCell(cells.indexOf(button)));
+        cells.push(button);
+        matrix.append(button);
+      });
+    });
+
+    function openCell(index) {
+      active = (index + cells.length) % cells.length;
+      const cell = cells[active];
+      if (cell.classList.contains('missing')) return;
+      viewerImage.src = cell.dataset.path;
+      viewerImage.alt = cell.dataset.label;
+      viewerLabel.textContent = cell.dataset.label;
+      if (!viewer.open) viewer.showModal();
+    }
+    document.querySelector('#close').addEventListener('click', () => viewer.close());
+    viewer.addEventListener('click', event => { if (event.target === viewer) viewer.close(); });
+    document.addEventListener('keydown', event => {
+      if (!viewer.open) return;
+      if (event.key === 'ArrowRight') openCell(active + 1);
+      if (event.key === 'ArrowLeft') openCell(active - 1);
+    });
+  </script>
+</body>
+</html>
