@@ -61,8 +61,9 @@
       "prompt_sha256": "24156e7e5ad9ccac7b7e6260bb60df49b4aeeec19388765b1cd4c1f55a91b062",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/01-natural-hand-sculpted-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/01-natural-hand-sculpted-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "00c2075fcbe2",
+      "recovery_submitted_at": "2026-08-22T13:19:56.751Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/00c2075fcbe2/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/02-stylized-realistic-modeled-clumps",
@@ -75,8 +76,9 @@
       "prompt_sha256": "9f25b62be36f5d9768740e569b97a6e31bd5647caea0ec01a810beda71c36d55",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/02-stylized-realistic-modeled-clumps",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/02-stylized-realistic-modeled-clumps/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "dda94bf55021",
+      "recovery_submitted_at": "2026-08-22T13:19:56.792Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/dda94bf55021/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/03-lifelike-simplified-groom-masses",
@@ -89,8 +91,9 @@
       "prompt_sha256": "9eb00e7681c11d9a7a98585ac0a9da5651493e499e6e1056f4044a1f011963ff",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/03-lifelike-simplified-groom-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/03-lifelike-simplified-groom-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f716d601cf53",
+      "recovery_submitted_at": "2026-08-22T13:19:56.837Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f716d601cf53/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/04-painted-preproduction-maquette",
@@ -103,8 +106,9 @@
       "prompt_sha256": "61c63652e0e5a8fca0c5ece5caa32d1f12cf8fa4903aef2900a4cdad91d46b83",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/04-painted-preproduction-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/04-painted-preproduction-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7be6ff582509",
+      "recovery_submitted_at": "2026-08-22T13:19:56.876Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7be6ff582509/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/05-polystone-creature-bust",
@@ -117,8 +121,9 @@
       "prompt_sha256": "4a322af7c0482ef75110ad153a6a0661696de985c891e4f74a54c559def03b8f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/05-polystone-creature-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/05-polystone-creature-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "a022b07d98b0",
+      "recovery_submitted_at": "2026-08-22T13:19:56.914Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/a022b07d98b0/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/06-silicone-creature-maquette",
@@ -131,8 +136,9 @@
       "prompt_sha256": "1143896e9b0fbc74354f61f5f1634c5040c01c3bd0b267eab32f46503602eb43",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/06-silicone-creature-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/06-silicone-creature-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "892620e96c21",
+      "recovery_submitted_at": "2026-08-22T13:19:56.951Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/892620e96c21/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/07-feature-animation-restrained",
@@ -145,8 +151,9 @@
       "prompt_sha256": "2f13bd37c5def5cfae53ce0029b544c56be1e95e583cc89b2db3d03cfe546d38",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/07-feature-animation-restrained",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/07-feature-animation-restrained/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f3726b6ef2d4",
+      "recovery_submitted_at": "2026-08-22T13:19:56.989Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f3726b6ef2d4/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/08-cinematic-game-lifelike",
@@ -159,8 +166,9 @@
       "prompt_sha256": "c02daae79810c5e7255a267493363d2c6d288f3e409c6484c763f746b2623f35",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/08-cinematic-game-lifelike",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/08-cinematic-game-lifelike/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "8fec5bfedab1",
+      "recovery_submitted_at": "2026-08-22T13:19:57.027Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/8fec5bfedab1/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/09-adventure-game-modeled-locks",
@@ -173,8 +181,9 @@
       "prompt_sha256": "d1c0fcc5c7506829af53ab39324ccb7e2974fd45a2dd45880a4391b34bff722b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/09-adventure-game-modeled-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/09-adventure-game-modeled-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "1b7d5e1c027a",
+      "recovery_submitted_at": "2026-08-22T13:19:57.066Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/1b7d5e1c027a/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/10-hand-painted-3d-model",
@@ -187,8 +196,9 @@
       "prompt_sha256": "d07d02ee01b88d61f6e2c018be2dd40fc5cf1cfe620ee80268a0787c4b51c6c1",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/10-hand-painted-3d-model",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/10-hand-painted-3d-model/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "41a80e1ff9d3",
+      "recovery_submitted_at": "2026-08-22T13:19:57.105Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/41a80e1ff9d3/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/11-cel-shaded-modeled-planes",
@@ -201,8 +211,9 @@
       "prompt_sha256": "135086ae72e6a512221cd9b383bc44f296b7464f273ada5d8f0eb7738a363666",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/11-cel-shaded-modeled-planes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/11-cel-shaded-modeled-planes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "6ad1b7029217",
+      "recovery_submitted_at": "2026-08-22T13:19:57.143Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/6ad1b7029217/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81423/12-low-poly-collectible",
@@ -215,8 +226,9 @@
       "prompt_sha256": "bfac93c782ec05a65c2c3e8dac3ee20949188c9b81051734af94288d4a5c2642",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/12-low-poly-collectible",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81423/12-low-poly-collectible/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "e044a9d342c0",
+      "recovery_submitted_at": "2026-08-22T13:19:57.181Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/e044a9d342c0/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/01-natural-hand-sculpted-locks",
@@ -229,8 +241,9 @@
       "prompt_sha256": "24156e7e5ad9ccac7b7e6260bb60df49b4aeeec19388765b1cd4c1f55a91b062",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/01-natural-hand-sculpted-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/01-natural-hand-sculpted-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "40b85e73dffc",
+      "recovery_submitted_at": "2026-08-22T13:19:57.221Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/40b85e73dffc/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/02-stylized-realistic-modeled-clumps",
@@ -243,8 +256,9 @@
       "prompt_sha256": "9f25b62be36f5d9768740e569b97a6e31bd5647caea0ec01a810beda71c36d55",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/02-stylized-realistic-modeled-clumps",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/02-stylized-realistic-modeled-clumps/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "742d05ce4678",
+      "recovery_submitted_at": "2026-08-22T13:19:57.261Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/742d05ce4678/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/03-lifelike-simplified-groom-masses",
@@ -257,8 +271,9 @@
       "prompt_sha256": "9eb00e7681c11d9a7a98585ac0a9da5651493e499e6e1056f4044a1f011963ff",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/03-lifelike-simplified-groom-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/03-lifelike-simplified-groom-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "c8944b405ba6",
+      "recovery_submitted_at": "2026-08-22T13:19:57.301Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/c8944b405ba6/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/04-painted-preproduction-maquette",
@@ -271,8 +286,9 @@
       "prompt_sha256": "61c63652e0e5a8fca0c5ece5caa32d1f12cf8fa4903aef2900a4cdad91d46b83",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/04-painted-preproduction-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/04-painted-preproduction-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "ed833ae41883",
+      "recovery_submitted_at": "2026-08-22T13:19:57.341Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/ed833ae41883/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/05-polystone-creature-bust",
@@ -285,8 +301,9 @@
       "prompt_sha256": "4a322af7c0482ef75110ad153a6a0661696de985c891e4f74a54c559def03b8f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/05-polystone-creature-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/05-polystone-creature-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f6e39272b027",
+      "recovery_submitted_at": "2026-08-22T13:19:57.382Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f6e39272b027/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/06-silicone-creature-maquette",
@@ -299,8 +316,9 @@
       "prompt_sha256": "1143896e9b0fbc74354f61f5f1634c5040c01c3bd0b267eab32f46503602eb43",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/06-silicone-creature-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/06-silicone-creature-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "11139bb092d8",
+      "recovery_submitted_at": "2026-08-22T13:19:57.421Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/11139bb092d8/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/07-feature-animation-restrained",
@@ -313,8 +331,9 @@
       "prompt_sha256": "2f13bd37c5def5cfae53ce0029b544c56be1e95e583cc89b2db3d03cfe546d38",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/07-feature-animation-restrained",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/07-feature-animation-restrained/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "36f1ba4488b2",
+      "recovery_submitted_at": "2026-08-22T13:19:57.461Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/36f1ba4488b2/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/08-cinematic-game-lifelike",
@@ -327,8 +346,9 @@
       "prompt_sha256": "c02daae79810c5e7255a267493363d2c6d288f3e409c6484c763f746b2623f35",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/08-cinematic-game-lifelike",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/08-cinematic-game-lifelike/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "179d064b9744",
+      "recovery_submitted_at": "2026-08-22T13:19:57.500Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/179d064b9744/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/09-adventure-game-modeled-locks",
@@ -341,8 +361,9 @@
       "prompt_sha256": "d1c0fcc5c7506829af53ab39324ccb7e2974fd45a2dd45880a4391b34bff722b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/09-adventure-game-modeled-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/09-adventure-game-modeled-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "93da03a492b2",
+      "recovery_submitted_at": "2026-08-22T13:19:57.541Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/93da03a492b2/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/10-hand-painted-3d-model",
@@ -355,8 +376,9 @@
       "prompt_sha256": "d07d02ee01b88d61f6e2c018be2dd40fc5cf1cfe620ee80268a0787c4b51c6c1",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/10-hand-painted-3d-model",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/10-hand-painted-3d-model/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "4188af3ae2c3",
+      "recovery_submitted_at": "2026-08-22T13:19:57.580Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/4188af3ae2c3/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/11-cel-shaded-modeled-planes",
@@ -369,8 +391,9 @@
       "prompt_sha256": "135086ae72e6a512221cd9b383bc44f296b7464f273ada5d8f0eb7738a363666",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/11-cel-shaded-modeled-planes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/11-cel-shaded-modeled-planes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "4e1b9a5a5dc7",
+      "recovery_submitted_at": "2026-08-22T13:19:57.618Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/4e1b9a5a5dc7/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-1/seed-81424/12-low-poly-collectible",
@@ -383,8 +406,9 @@
       "prompt_sha256": "bfac93c782ec05a65c2c3e8dac3ee20949188c9b81051734af94288d4a5c2642",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/12-low-poly-collectible",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-1/seed-81424/12-low-poly-collectible/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "42722af5036e",
+      "recovery_submitted_at": "2026-08-22T13:19:57.657Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/42722af5036e/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/01-natural-hand-sculpted-locks",
@@ -397,8 +421,9 @@
       "prompt_sha256": "24156e7e5ad9ccac7b7e6260bb60df49b4aeeec19388765b1cd4c1f55a91b062",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/01-natural-hand-sculpted-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/01-natural-hand-sculpted-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "5a39c8ede78c",
+      "recovery_submitted_at": "2026-08-22T13:19:57.695Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5a39c8ede78c/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/02-stylized-realistic-modeled-clumps",
@@ -411,8 +436,9 @@
       "prompt_sha256": "9f25b62be36f5d9768740e569b97a6e31bd5647caea0ec01a810beda71c36d55",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/02-stylized-realistic-modeled-clumps",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/02-stylized-realistic-modeled-clumps/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "5ef98218ec68",
+      "recovery_submitted_at": "2026-08-22T13:19:57.733Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5ef98218ec68/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/03-lifelike-simplified-groom-masses",
@@ -425,8 +451,9 @@
       "prompt_sha256": "9eb00e7681c11d9a7a98585ac0a9da5651493e499e6e1056f4044a1f011963ff",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/03-lifelike-simplified-groom-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/03-lifelike-simplified-groom-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "82b65bd5312d",
+      "recovery_submitted_at": "2026-08-22T13:19:57.772Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/82b65bd5312d/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/04-painted-preproduction-maquette",
@@ -439,8 +466,9 @@
       "prompt_sha256": "61c63652e0e5a8fca0c5ece5caa32d1f12cf8fa4903aef2900a4cdad91d46b83",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/04-painted-preproduction-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/04-painted-preproduction-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f4bc71d5979b",
+      "recovery_submitted_at": "2026-08-22T13:19:57.812Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f4bc71d5979b/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/05-polystone-creature-bust",
@@ -453,8 +481,9 @@
       "prompt_sha256": "4a322af7c0482ef75110ad153a6a0661696de985c891e4f74a54c559def03b8f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/05-polystone-creature-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/05-polystone-creature-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "e2931db48d3d",
+      "recovery_submitted_at": "2026-08-22T13:19:57.850Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/e2931db48d3d/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/06-silicone-creature-maquette",
@@ -467,8 +496,9 @@
       "prompt_sha256": "1143896e9b0fbc74354f61f5f1634c5040c01c3bd0b267eab32f46503602eb43",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/06-silicone-creature-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/06-silicone-creature-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7dec6932e0bf",
+      "recovery_submitted_at": "2026-08-22T13:19:57.887Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7dec6932e0bf/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/07-feature-animation-restrained",
@@ -481,8 +511,9 @@
       "prompt_sha256": "2f13bd37c5def5cfae53ce0029b544c56be1e95e583cc89b2db3d03cfe546d38",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/07-feature-animation-restrained",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/07-feature-animation-restrained/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "5a685cd3cfc0",
+      "recovery_submitted_at": "2026-08-22T13:19:57.925Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5a685cd3cfc0/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/08-cinematic-game-lifelike",
@@ -495,8 +526,9 @@
       "prompt_sha256": "c02daae79810c5e7255a267493363d2c6d288f3e409c6484c763f746b2623f35",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/08-cinematic-game-lifelike",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/08-cinematic-game-lifelike/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "57f79c4f4007",
+      "recovery_submitted_at": "2026-08-22T13:19:57.963Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/57f79c4f4007/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/09-adventure-game-modeled-locks",
@@ -509,8 +541,9 @@
       "prompt_sha256": "d1c0fcc5c7506829af53ab39324ccb7e2974fd45a2dd45880a4391b34bff722b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/09-adventure-game-modeled-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/09-adventure-game-modeled-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "92e48d1ef9d7",
+      "recovery_submitted_at": "2026-08-22T13:19:58.001Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/92e48d1ef9d7/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/10-hand-painted-3d-model",
@@ -523,8 +556,9 @@
       "prompt_sha256": "d07d02ee01b88d61f6e2c018be2dd40fc5cf1cfe620ee80268a0787c4b51c6c1",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/10-hand-painted-3d-model",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/10-hand-painted-3d-model/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "4c2324490828",
+      "recovery_submitted_at": "2026-08-22T13:19:58.038Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/4c2324490828/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/11-cel-shaded-modeled-planes",
@@ -537,8 +571,9 @@
       "prompt_sha256": "135086ae72e6a512221cd9b383bc44f296b7464f273ada5d8f0eb7738a363666",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/11-cel-shaded-modeled-planes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/11-cel-shaded-modeled-planes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "224976d247d9",
+      "recovery_submitted_at": "2026-08-22T13:19:58.078Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/224976d247d9/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81425/12-low-poly-collectible",
@@ -551,8 +586,9 @@
       "prompt_sha256": "bfac93c782ec05a65c2c3e8dac3ee20949188c9b81051734af94288d4a5c2642",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/12-low-poly-collectible",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81425/12-low-poly-collectible/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "8497c50f0fe3",
+      "recovery_submitted_at": "2026-08-22T13:19:58.117Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/8497c50f0fe3/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/01-natural-hand-sculpted-locks",
@@ -565,8 +601,9 @@
       "prompt_sha256": "24156e7e5ad9ccac7b7e6260bb60df49b4aeeec19388765b1cd4c1f55a91b062",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/01-natural-hand-sculpted-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/01-natural-hand-sculpted-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "9697d71a2108",
+      "recovery_submitted_at": "2026-08-22T13:19:58.156Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/9697d71a2108/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/02-stylized-realistic-modeled-clumps",
@@ -579,8 +616,9 @@
       "prompt_sha256": "9f25b62be36f5d9768740e569b97a6e31bd5647caea0ec01a810beda71c36d55",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/02-stylized-realistic-modeled-clumps",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/02-stylized-realistic-modeled-clumps/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "85fcce81b0cf",
+      "recovery_submitted_at": "2026-08-22T13:19:58.195Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/85fcce81b0cf/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/03-lifelike-simplified-groom-masses",
@@ -593,8 +631,9 @@
       "prompt_sha256": "9eb00e7681c11d9a7a98585ac0a9da5651493e499e6e1056f4044a1f011963ff",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/03-lifelike-simplified-groom-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/03-lifelike-simplified-groom-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "a4bd123f5064",
+      "recovery_submitted_at": "2026-08-22T13:19:58.233Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/a4bd123f5064/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/04-painted-preproduction-maquette",
@@ -607,8 +646,9 @@
       "prompt_sha256": "61c63652e0e5a8fca0c5ece5caa32d1f12cf8fa4903aef2900a4cdad91d46b83",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/04-painted-preproduction-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/04-painted-preproduction-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "918d25d984c1",
+      "recovery_submitted_at": "2026-08-22T13:19:58.271Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/918d25d984c1/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/05-polystone-creature-bust",
@@ -621,8 +661,9 @@
       "prompt_sha256": "4a322af7c0482ef75110ad153a6a0661696de985c891e4f74a54c559def03b8f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/05-polystone-creature-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/05-polystone-creature-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7915cc7ddb96",
+      "recovery_submitted_at": "2026-08-22T13:19:58.312Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7915cc7ddb96/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/06-silicone-creature-maquette",
@@ -635,8 +676,9 @@
       "prompt_sha256": "1143896e9b0fbc74354f61f5f1634c5040c01c3bd0b267eab32f46503602eb43",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/06-silicone-creature-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/06-silicone-creature-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7d2ef0cfe0ab",
+      "recovery_submitted_at": "2026-08-22T13:19:58.353Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7d2ef0cfe0ab/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/07-feature-animation-restrained",
@@ -649,8 +691,9 @@
       "prompt_sha256": "2f13bd37c5def5cfae53ce0029b544c56be1e95e583cc89b2db3d03cfe546d38",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/07-feature-animation-restrained",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/07-feature-animation-restrained/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "d0827382aad0",
+      "recovery_submitted_at": "2026-08-22T13:19:58.393Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/d0827382aad0/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/08-cinematic-game-lifelike",
@@ -663,8 +706,9 @@
       "prompt_sha256": "c02daae79810c5e7255a267493363d2c6d288f3e409c6484c763f746b2623f35",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/08-cinematic-game-lifelike",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/08-cinematic-game-lifelike/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "aef040572447",
+      "recovery_submitted_at": "2026-08-22T13:19:58.433Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/aef040572447/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/09-adventure-game-modeled-locks",
@@ -677,8 +721,9 @@
       "prompt_sha256": "d1c0fcc5c7506829af53ab39324ccb7e2974fd45a2dd45880a4391b34bff722b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/09-adventure-game-modeled-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/09-adventure-game-modeled-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "53c798d690f8",
+      "recovery_submitted_at": "2026-08-22T13:19:58.473Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/53c798d690f8/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/10-hand-painted-3d-model",
@@ -691,8 +736,9 @@
       "prompt_sha256": "d07d02ee01b88d61f6e2c018be2dd40fc5cf1cfe620ee80268a0787c4b51c6c1",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/10-hand-painted-3d-model",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/10-hand-painted-3d-model/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "a3e33feafb89",
+      "recovery_submitted_at": "2026-08-22T13:19:58.513Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/a3e33feafb89/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/11-cel-shaded-modeled-planes",
@@ -705,8 +751,9 @@
       "prompt_sha256": "135086ae72e6a512221cd9b383bc44f296b7464f273ada5d8f0eb7738a363666",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/11-cel-shaded-modeled-planes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/11-cel-shaded-modeled-planes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "e51487d59f3a",
+      "recovery_submitted_at": "2026-08-22T13:19:58.554Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/e51487d59f3a/receipt.json"
     },
     {
       "recovery_cell_id": "flux-wording-atlas-2026-08-21/wave-2/seed-81426/12-low-poly-collectible",
@@ -719,8 +766,9 @@
       "prompt_sha256": "bfac93c782ec05a65c2c3e8dac3ee20949188c9b81051734af94288d4a5c2642",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/12-low-poly-collectible",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-wording-atlas-2026-08-21/wave-2/seed-81426/12-low-poly-collectible/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "5f8770477b68",
+      "recovery_submitted_at": "2026-08-22T13:19:58.598Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5f8770477b68/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/01-hybrid-broad-sculpture",
@@ -733,8 +781,9 @@
       "prompt_sha256": "a205bec25b260ab41f6f9c634c4d07f1371c4d2234dc87b6f43aed4e3c247b29",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/01-hybrid-broad-sculpture",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/01-hybrid-broad-sculpture/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "be02328d2657",
+      "recovery_submitted_at": "2026-08-22T13:19:58.638Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/be02328d2657/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/02-hybrid-owned-masses",
@@ -747,8 +796,9 @@
       "prompt_sha256": "ae0eed57bddda2e0e6de026d3a00c6b965151695f3e087566c4566eae3f80d0d",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/02-hybrid-owned-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/02-hybrid-owned-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "a6b9580c84f8",
+      "recovery_submitted_at": "2026-08-22T13:19:58.677Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/a6b9580c84f8/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/03-hybrid-carved-locks",
@@ -761,8 +811,9 @@
       "prompt_sha256": "7d31bc90bc1b19d4258968a403024038a1d6c1ff717f835a060ba1d22ea8e645",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/03-hybrid-carved-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/03-hybrid-carved-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "876b6e307504",
+      "recovery_submitted_at": "2026-08-22T13:19:58.715Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/876b6e307504/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/04-cinematic-animation-natural",
@@ -775,8 +826,9 @@
       "prompt_sha256": "3794e5971268897366c6192788bce96d5d1cf45f61eba889cea138dafca3436f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/04-cinematic-animation-natural",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/04-cinematic-animation-natural/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "9f5d014bdfd8",
+      "recovery_submitted_at": "2026-08-22T13:19:58.753Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/9f5d014bdfd8/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/05-feature-animation-natural-eyes",
@@ -789,8 +841,9 @@
       "prompt_sha256": "ce78b9997f13c27e61819d5e5e5e911d92efeee97b10adc1945c7662134d65be",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/05-feature-animation-natural-eyes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/05-feature-animation-natural-eyes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "4d9b9b373bdb",
+      "recovery_submitted_at": "2026-08-22T13:19:58.791Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/4d9b9b373bdb/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/06-modern-game-character",
@@ -803,8 +856,9 @@
       "prompt_sha256": "fed36c8da08d7d86ee01c439985bb78b710de306d75a486c547f61ff9356d963",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/06-modern-game-character",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/06-modern-game-character/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "962895bdc33f",
+      "recovery_submitted_at": "2026-08-22T13:19:58.829Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/962895bdc33f/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/07-hand-painted-game-asset",
@@ -817,8 +871,9 @@
       "prompt_sha256": "656096334a9e2b66831284151228d971d7354a889d065a088e75bb27e298762e",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/07-hand-painted-game-asset",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/07-hand-painted-game-asset/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7c0ee49486f6",
+      "recovery_submitted_at": "2026-08-22T13:19:58.866Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7c0ee49486f6/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/08-polished-low-poly",
@@ -831,8 +886,9 @@
       "prompt_sha256": "ff7ff0e04a183f9e7cf79960cb1256dfbcc6390a112aec2d60a98b5d247b2843",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/08-polished-low-poly",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/08-polished-low-poly/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7e220ceeea38",
+      "recovery_submitted_at": "2026-08-22T13:19:58.904Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7e220ceeea38/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/09-lifelike-character-maquette",
@@ -845,8 +901,9 @@
       "prompt_sha256": "72220ddef836797544d5947a4300f93b4f6ffa4da26402a031b875a806fc6cc3",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/09-lifelike-character-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/09-lifelike-character-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "00f2eb16dd7c",
+      "recovery_submitted_at": "2026-08-22T13:19:58.941Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/00f2eb16dd7c/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/10-stop-motion-maquette",
@@ -859,8 +916,9 @@
       "prompt_sha256": "72e2ffeed8bdad3e34c11ec71ef15a5f9d643733cf437d91d07511079c2ccacf",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/10-stop-motion-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/10-stop-motion-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "eeb8e0c4f990",
+      "recovery_submitted_at": "2026-08-22T13:19:58.982Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/eeb8e0c4f990/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/11-painted-resin-bust",
@@ -873,8 +931,9 @@
       "prompt_sha256": "fbf200bd85fb30d85848bff627a784918f007543d7cd72bdd5a4431a8627a4fb",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/11-painted-resin-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/11-painted-resin-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "fe193bbf9e2a",
+      "recovery_submitted_at": "2026-08-22T13:19:59.023Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/fe193bbf9e2a/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/12-colored-clay-maquette",
@@ -887,8 +946,9 @@
       "prompt_sha256": "51b63998a4b05323ffd5f90c2b594a36f420f9e44c12eac5c52e4781c5a46d58",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/12-colored-clay-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/12-colored-clay-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "76a7d3f34b42",
+      "recovery_submitted_at": "2026-08-22T13:19:59.061Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/76a7d3f34b42/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/13-painted-carved-wood",
@@ -901,8 +961,9 @@
       "prompt_sha256": "9e2cfa8e83204ff6cd5e33f54f43345a1e61e67d8a51385507b97eab0d6a119b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/13-painted-carved-wood",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/13-painted-carved-wood/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "89551a9118da",
+      "recovery_submitted_at": "2026-08-22T13:19:59.098Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/89551a9118da/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/14-glazed-ceramic",
@@ -915,8 +976,9 @@
       "prompt_sha256": "7ffb158c7eb1bd7d826d10a0ff097ee6a7bf7f5bde81a283ed72afb3939c6148",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/14-glazed-ceramic",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/14-glazed-ceramic/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f8146ea3fd5f",
+      "recovery_submitted_at": "2026-08-22T13:19:59.137Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f8146ea3fd5f/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/15-cast-bronze",
@@ -929,8 +991,9 @@
       "prompt_sha256": "68594bb10a37e274e2ef4a35471f225a23145445649b5e801325be74edbec23a",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/15-cast-bronze",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/15-cast-bronze/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "2f8d336fa745",
+      "recovery_submitted_at": "2026-08-22T13:19:59.176Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/2f8d336fa745/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/16-soft-vinyl-figure",
@@ -943,8 +1006,9 @@
       "prompt_sha256": "7827a348450601ad1848e1e2bac5e6ec8827c3f7925e2e487f69629f4636a653",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/16-soft-vinyl-figure",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/16-soft-vinyl-figure/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "ea55c23f348f",
+      "recovery_submitted_at": "2026-08-22T13:19:59.215Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/ea55c23f348f/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/17-three-dimensional-cel",
@@ -957,8 +1021,9 @@
       "prompt_sha256": "a77807e20052adf1b2c5a284c16692984aeb541706983c7dbb3d2bb0f4f53952",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/17-three-dimensional-cel",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/17-three-dimensional-cel/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "7314a03f56bf",
+      "recovery_submitted_at": "2026-08-22T13:19:59.253Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/7314a03f56bf/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81419/18-crafted-felt-puppet",
@@ -971,8 +1036,9 @@
       "prompt_sha256": "e211db2e1325a73a82da4473b9c438c016d76394f3ee82cb707c5ead805f38b5",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/18-crafted-felt-puppet",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81419/18-crafted-felt-puppet/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "2d0c443b3f25",
+      "recovery_submitted_at": "2026-08-22T13:19:59.291Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/2d0c443b3f25/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/01-hybrid-broad-sculpture",
@@ -985,8 +1051,9 @@
       "prompt_sha256": "a205bec25b260ab41f6f9c634c4d07f1371c4d2234dc87b6f43aed4e3c247b29",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/01-hybrid-broad-sculpture",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/01-hybrid-broad-sculpture/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "ebfcace62157",
+      "recovery_submitted_at": "2026-08-22T13:19:59.329Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/ebfcace62157/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/02-hybrid-owned-masses",
@@ -999,8 +1066,9 @@
       "prompt_sha256": "ae0eed57bddda2e0e6de026d3a00c6b965151695f3e087566c4566eae3f80d0d",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/02-hybrid-owned-masses",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/02-hybrid-owned-masses/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "c05bde46729e",
+      "recovery_submitted_at": "2026-08-22T13:19:59.369Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/c05bde46729e/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/03-hybrid-carved-locks",
@@ -1013,8 +1081,9 @@
       "prompt_sha256": "7d31bc90bc1b19d4258968a403024038a1d6c1ff717f835a060ba1d22ea8e645",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/03-hybrid-carved-locks",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/03-hybrid-carved-locks/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "6c971ba99433",
+      "recovery_submitted_at": "2026-08-22T13:19:59.410Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/6c971ba99433/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/04-cinematic-animation-natural",
@@ -1027,8 +1096,9 @@
       "prompt_sha256": "3794e5971268897366c6192788bce96d5d1cf45f61eba889cea138dafca3436f",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/04-cinematic-animation-natural",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/04-cinematic-animation-natural/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "a5ea9a5d69ce",
+      "recovery_submitted_at": "2026-08-22T13:19:59.450Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/a5ea9a5d69ce/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/05-feature-animation-natural-eyes",
@@ -1041,8 +1111,9 @@
       "prompt_sha256": "ce78b9997f13c27e61819d5e5e5e911d92efeee97b10adc1945c7662134d65be",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/05-feature-animation-natural-eyes",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/05-feature-animation-natural-eyes/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "9966403ce1f7",
+      "recovery_submitted_at": "2026-08-22T13:19:59.489Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/9966403ce1f7/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/06-modern-game-character",
@@ -1055,8 +1126,9 @@
       "prompt_sha256": "fed36c8da08d7d86ee01c439985bb78b710de306d75a486c547f61ff9356d963",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/06-modern-game-character",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/06-modern-game-character/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "b7e120c12e35",
+      "recovery_submitted_at": "2026-08-22T13:19:59.528Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/b7e120c12e35/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/07-hand-painted-game-asset",
@@ -1069,8 +1141,9 @@
       "prompt_sha256": "656096334a9e2b66831284151228d971d7354a889d065a088e75bb27e298762e",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/07-hand-painted-game-asset",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/07-hand-painted-game-asset/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "86f324c6b8e3",
+      "recovery_submitted_at": "2026-08-22T13:19:59.569Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/86f324c6b8e3/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/08-polished-low-poly",
@@ -1083,8 +1156,9 @@
       "prompt_sha256": "ff7ff0e04a183f9e7cf79960cb1256dfbcc6390a112aec2d60a98b5d247b2843",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/08-polished-low-poly",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/08-polished-low-poly/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "d3d998df4bce",
+      "recovery_submitted_at": "2026-08-22T13:19:59.608Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/d3d998df4bce/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette",
@@ -1097,8 +1171,9 @@
       "prompt_sha256": "72220ddef836797544d5947a4300f93b4f6ffa4da26402a031b875a806fc6cc3",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "5db0faa24fac",
+      "recovery_submitted_at": "2026-08-22T13:19:59.650Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/5db0faa24fac/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/10-stop-motion-maquette",
@@ -1111,8 +1186,9 @@
       "prompt_sha256": "72e2ffeed8bdad3e34c11ec71ef15a5f9d643733cf437d91d07511079c2ccacf",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/10-stop-motion-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/10-stop-motion-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "620b26efa96b",
+      "recovery_submitted_at": "2026-08-22T13:19:59.689Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/620b26efa96b/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/11-painted-resin-bust",
@@ -1125,8 +1201,9 @@
       "prompt_sha256": "fbf200bd85fb30d85848bff627a784918f007543d7cd72bdd5a4431a8627a4fb",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/11-painted-resin-bust",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/11-painted-resin-bust/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "8bc2b4071389",
+      "recovery_submitted_at": "2026-08-22T13:19:59.727Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/8bc2b4071389/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/12-colored-clay-maquette",
@@ -1139,8 +1216,9 @@
       "prompt_sha256": "51b63998a4b05323ffd5f90c2b594a36f420f9e44c12eac5c52e4781c5a46d58",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/12-colored-clay-maquette",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/12-colored-clay-maquette/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "4935defb4468",
+      "recovery_submitted_at": "2026-08-22T13:19:59.767Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/4935defb4468/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/13-painted-carved-wood",
@@ -1153,8 +1231,9 @@
       "prompt_sha256": "9e2cfa8e83204ff6cd5e33f54f43345a1e61e67d8a51385507b97eab0d6a119b",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/13-painted-carved-wood",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/13-painted-carved-wood/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "3ddb78fc0eef",
+      "recovery_submitted_at": "2026-08-22T13:19:59.806Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/3ddb78fc0eef/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/14-glazed-ceramic",
@@ -1167,8 +1246,9 @@
       "prompt_sha256": "7ffb158c7eb1bd7d826d10a0ff097ee6a7bf7f5bde81a283ed72afb3939c6148",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/14-glazed-ceramic",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/14-glazed-ceramic/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "738656d6a7a2",
+      "recovery_submitted_at": "2026-08-22T13:19:59.844Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/738656d6a7a2/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/15-cast-bronze",
@@ -1181,8 +1261,9 @@
       "prompt_sha256": "68594bb10a37e274e2ef4a35471f225a23145445649b5e801325be74edbec23a",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/15-cast-bronze",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/15-cast-bronze/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "283f6fa5bf55",
+      "recovery_submitted_at": "2026-08-22T13:19:59.882Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/283f6fa5bf55/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/16-soft-vinyl-figure",
@@ -1195,8 +1276,9 @@
       "prompt_sha256": "7827a348450601ad1848e1e2bac5e6ec8827c3f7925e2e487f69629f4636a653",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/16-soft-vinyl-figure",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/16-soft-vinyl-figure/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "f307b9671fd7",
+      "recovery_submitted_at": "2026-08-22T13:19:59.920Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/f307b9671fd7/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/17-three-dimensional-cel",
@@ -1209,8 +1291,9 @@
       "prompt_sha256": "a77807e20052adf1b2c5a284c16692984aeb541706983c7dbb3d2bb0f4f53952",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/17-three-dimensional-cel",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/17-three-dimensional-cel/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "0246327a5387",
+      "recovery_submitted_at": "2026-08-22T13:19:59.959Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/0246327a5387/receipt.json"
     },
     {
       "recovery_cell_id": "flux-basin-atlas-2026-08-21/wave-2/seed-81420/18-crafted-felt-puppet",
@@ -1223,8 +1306,14 @@
       "prompt_sha256": "e211db2e1325a73a82da4473b9c438c016d76394f3ee82cb707c5ead805f38b5",
       "output_dir": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/18-crafted-felt-puppet",
       "output_path": "artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/18-crafted-felt-puppet/output.png",
-      "recovery_job_id": null,
-      "recovery_submitted_at": null
+      "recovery_job_id": "1bd8b759f458",
+      "recovery_submitted_at": "2026-08-22T13:19:59.997Z",
+      "recovery_greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/1bd8b759f458/receipt.json"
     }
-  ]
+  ],
+  "submission": {
+    "completed_at": "2026-08-22T13:19:59.998Z",
+    "accepted_cell_count": 84,
+    "submission_failure": null
+  }
 }
