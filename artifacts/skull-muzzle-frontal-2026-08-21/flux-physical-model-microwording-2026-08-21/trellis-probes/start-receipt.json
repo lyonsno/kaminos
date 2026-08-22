@@ -1,0 +1,43 @@
+{
+  "schema": "kaminos.handy_candyman.physical_model_trellis_probe_start.v1",
+  "comparison_contract": "Hold the native MLX Trellis route, seed, and reconstruction parameters fixed. Compare the smooth joined-mass source against the explicit connected-facet source.",
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "backend": "native MLX TRELLIS",
+    "model": "microsoft/TRELLIS-image-large",
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "trellis_seed": 81431,
+  "completion_delivery": {
+    "receiver_call_sign": "Handy Candyman",
+    "receiver_thread": "019f5cfd-dcf1-7072-a015-70ebbe6b33a4",
+    "terminal_mesh": "<output_dir>/output.glb",
+    "terminal_metadata": "<output_dir>/metadata.json",
+    "greenroom_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<job-id>/receipt.json"
+  },
+  "jobs": [
+    {
+      "job_id": "5bac739c0fad",
+      "submitted_at": 1787357408.710861,
+      "source_role": "smooth joined-mass carrier",
+      "source": "../wave-1/seed-81427/05-silicone-inset-eyes/output.png",
+      "source_sha256": "597d937f3983bda4bbbc23cd59ab8005617211ce38881929e0d885975131bf9d",
+      "output_dir": "05-silicone-inset-eyes-81427/trellis-81431"
+    },
+    {
+      "job_id": "a53515a966e7",
+      "submitted_at": 1787357409.614153,
+      "source_role": "explicit connected-facet carrier",
+      "source": "../wave-1/seed-81427/15-low-poly-connected-facets/output.png",
+      "source_sha256": "4848ebfe354b2287357446db9ecc22d31777a4ebcf209db7f3e619fd67615896",
+      "output_dir": "15-low-poly-connected-facets-81427/trellis-81431"
+    }
+  ],
+  "claim_ceiling": "The matched probes may show which source representation gives this native MLX route the better full-orbit cast. Submission or completion alone does not establish visual improvement, usable winding, topology, collision, or production admission."
+}

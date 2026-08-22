@@ -1,0 +1,24 @@
+{
+  "name": "output",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "091c25fda897",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-81408/output.png",
+  "input_name": "output.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-physical-model-microwording-2026-08-21/prompts/02-polystone-joined-masses.txt",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "height": "512",
+    "width": "512",
+    "steps": "8",
+    "guidance": "1.0",
+    "seed": "81428",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1787356177.7140381,
+  "duration_s": 62.0
+}
