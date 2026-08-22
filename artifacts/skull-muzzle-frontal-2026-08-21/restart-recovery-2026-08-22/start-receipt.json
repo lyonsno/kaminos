@@ -36,6 +36,30 @@
     "route_registry": "/Users/noahlyons/.local/state/gpu-greenroom/job_types.json",
     "completion_receipt": "/Users/noahlyons/.local/state/gpu-greenroom/done/<recovery-job-id>/receipt.json"
   },
+  "worker_transfer": {
+    "transfer_observed_at": "2026-08-22T21:31:06Z",
+    "queue_boundary": "paused after the in-flight recovery cell completed",
+    "superseded_worker": {
+      "runtime": "Codex supervised exec session",
+      "session_id": 37030,
+      "terminal_event": "Worker stopped."
+    },
+    "successor_worker": {
+      "runtime": "verified WezTerm watcher pane",
+      "pane_id": 24,
+      "cwd": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819",
+      "command": "/opt/homebrew/bin/uv run --project /private/tmp/gpu-greenroom-handy-candyman-greenroom-read-0822 gpu-greenroom worker --poll 1"
+    },
+    "queue_resumed": true,
+    "post_resume_observation": {
+      "done": 23,
+      "running": 1,
+      "pending": 60,
+      "failed": 0,
+      "cancelled": 0,
+      "running_job_id": "5a39c8ede78c"
+    }
+  },
   "recovery_contract": {
     "action": "Replay only missing generator cells; do not rerun surviving cells.",
     "derived_outputs": [
