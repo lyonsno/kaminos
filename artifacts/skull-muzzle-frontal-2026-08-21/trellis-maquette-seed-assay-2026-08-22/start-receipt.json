@@ -1,0 +1,159 @@
+{
+  "assay_id": "trellis-maquette-seed-assay-2026-08-22",
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "backend": "trellis2mlx native MLX",
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "claim_ceiling": "Source-conditioned seed variance and bounded static visual orbitability only. No topology, winding, collision, rigging, animation, anatomical fidelity, production, or unrestricted 360-degree claim.",
+  "started_at": 1787445321.400649,
+  "cells": [
+    {
+      "cell_id": "resin-effects-81439-trellis-81442",
+      "source_id": "resin-effects-81439",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png",
+      "source_sha256": "99ad70c7555863fa90a94f31da22fada08d6926290af75e7a874186ecf8e4db7",
+      "seed": 81442,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81442",
+      "params": {
+        "seed": "81442",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "eacb86776367",
+      "submitted_at": 1787445323.945759,
+      "submit_stdout": "Submitted job eacb86776367\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81442\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/eacb86776367",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "resin-effects-81439-trellis-81443",
+      "source_id": "resin-effects-81439",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png",
+      "source_sha256": "99ad70c7555863fa90a94f31da22fada08d6926290af75e7a874186ecf8e4db7",
+      "seed": 81443,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81443",
+      "params": {
+        "seed": "81443",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "4673c4f29de3",
+      "submitted_at": 1787445324.019027,
+      "submit_stdout": "Submitted job 4673c4f29de3\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81443\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/4673c4f29de3",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "resin-effects-81439-trellis-81444",
+      "source_id": "resin-effects-81439",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png",
+      "source_sha256": "99ad70c7555863fa90a94f31da22fada08d6926290af75e7a874186ecf8e4db7",
+      "seed": 81444,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81444",
+      "params": {
+        "seed": "81444",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "bb1722afee26",
+      "submitted_at": 1787445324.0916412,
+      "submit_stdout": "Submitted job bb1722afee26\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/resin-effects-81439/trellis-81444\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/bb1722afee26",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "lifelike-character-81420-trellis-81442",
+      "source_id": "lifelike-character-81420",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png",
+      "source_sha256": "f5acc3462c103082c8873a394f5645a5916429cf83607e854aab1639e698f31e",
+      "seed": 81442,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81442",
+      "params": {
+        "seed": "81442",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "a402b84069db",
+      "submitted_at": 1787445324.159554,
+      "submit_stdout": "Submitted job a402b84069db\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81442\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/a402b84069db",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "lifelike-character-81420-trellis-81443",
+      "source_id": "lifelike-character-81420",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png",
+      "source_sha256": "f5acc3462c103082c8873a394f5645a5916429cf83607e854aab1639e698f31e",
+      "seed": 81443,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81443",
+      "params": {
+        "seed": "81443",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "518ab30f27bf",
+      "submitted_at": 1787445324.227215,
+      "submit_stdout": "Submitted job 518ab30f27bf\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81443\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/518ab30f27bf",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "lifelike-character-81420-trellis-81444",
+      "source_id": "lifelike-character-81420",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png",
+      "source_sha256": "f5acc3462c103082c8873a394f5645a5916429cf83607e854aab1639e698f31e",
+      "seed": 81444,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81444",
+      "params": {
+        "seed": "81444",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "067607796ef7",
+      "submitted_at": 1787445324.316343,
+      "submit_stdout": "Submitted job 067607796ef7\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/lifelike-character-81420/trellis-81444\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/067607796ef7",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "soft-cel-bear-81439-trellis-81442",
+      "source_id": "soft-cel-bear-81439",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+      "source_sha256": "980f2ebd3beaa6d76c377cd917170928f3ea6e2a5456a275cba768708163c1c4",
+      "seed": 81442,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/soft-cel-bear-81439/trellis-81442",
+      "params": {
+        "seed": "81442",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      },
+      "job_id": "c4d9563365a9",
+      "submitted_at": 1787445324.391807,
+      "submit_stdout": "Submitted job c4d9563365a9\n  Type: trellis2mlx_fast_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/soft-cel-bear-81439/trellis-81442\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/c4d9563365a9",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    }
+  ],
+  "all_cells_bound_at": 1787445324.392761
+}
