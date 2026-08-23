@@ -1,0 +1,106 @@
+{
+  "assay_id": "trellis-high-resolution-assay-2026-08-22",
+  "requested_route": {
+    "job_type": "trellis2mlx_checkpoint",
+    "backend": "trellis2mlx native MLX",
+    "steps": 8,
+    "cascade": true,
+    "target_faces": 100000,
+    "texture_size": 4096,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "claim_ceiling": "Matched within-source high-resolution cascade response and bounded static visual orbitability only. No topology, winding, collision, rigging, animation, anatomical fidelity, CUDA parity, or production claim.",
+  "started_at": 1787454430.056305,
+  "cells": [
+    {
+      "cell_id": "strong-identity-hybrid-81416-trellis-81421-r768",
+      "source_id": "strong-identity-hybrid-81416",
+      "quality_class": "strong",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+      "source_sha256": "fee87cab8e6217d1259977202f5ce31a526eae3c2ec70d691f96d9a09ffb0b20",
+      "seed": 81421,
+      "resolution": 768,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/strong-identity-hybrid-81416/trellis-81421-r768",
+      "params": {
+        "seed": "81421",
+        "resolution": "768",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "4096"
+      },
+      "job_id": "f12d1ba677fc",
+      "submitted_at": 1787454431.407296,
+      "submit_stdout": "Submitted job f12d1ba677fc\n  Type: trellis2mlx_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/strong-identity-hybrid-81416/trellis-81421-r768\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/f12d1ba677fc",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "strong-identity-hybrid-81416-trellis-81421-r1024",
+      "source_id": "strong-identity-hybrid-81416",
+      "quality_class": "strong",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+      "source_sha256": "fee87cab8e6217d1259977202f5ce31a526eae3c2ec70d691f96d9a09ffb0b20",
+      "seed": 81421,
+      "resolution": 1024,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/strong-identity-hybrid-81416/trellis-81421-r1024",
+      "params": {
+        "seed": "81421",
+        "resolution": "1024",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "4096"
+      },
+      "job_id": "a03623339d9d",
+      "submitted_at": 1787454431.441629,
+      "submit_stdout": "Submitted job a03623339d9d\n  Type: trellis2mlx_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/strong-identity-hybrid-81416/trellis-81421-r1024\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/a03623339d9d",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "moderate-faceted-81413-trellis-81414-r768",
+      "source_id": "moderate-faceted-81413",
+      "quality_class": "moderate",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+      "source_sha256": "1272405bd27d935ca42732d34bf2d5922791a8c8021ff177efbc68870e4d8ad2",
+      "seed": 81414,
+      "resolution": 768,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r768",
+      "params": {
+        "seed": "81414",
+        "resolution": "768",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "4096"
+      },
+      "job_id": "8acafe339080",
+      "submitted_at": 1787454431.476685,
+      "submit_stdout": "Submitted job 8acafe339080\n  Type: trellis2mlx_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r768\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/8acafe339080",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    },
+    {
+      "cell_id": "moderate-faceted-81413-trellis-81414-r1024",
+      "source_id": "moderate-faceted-81413",
+      "quality_class": "moderate",
+      "source_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+      "source_sha256": "1272405bd27d935ca42732d34bf2d5922791a8c8021ff177efbc68870e4d8ad2",
+      "seed": 81414,
+      "resolution": 1024,
+      "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024",
+      "params": {
+        "seed": "81414",
+        "resolution": "1024",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "4096"
+      },
+      "job_id": "e1bdfb8316d6",
+      "submitted_at": 1787454431.511446,
+      "submit_stdout": "Submitted job e1bdfb8316d6\n  Type: trellis2mlx_checkpoint\n  Input: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png\n  Output: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024\n  Dir: /Users/noahlyons/.local/state/gpu-greenroom/pending/e1bdfb8316d6",
+      "submit_stderr": "",
+      "recovered_from_greenroom_state": false
+    }
+  ],
+  "all_cells_bound_at": 1787454431.511949
+}
