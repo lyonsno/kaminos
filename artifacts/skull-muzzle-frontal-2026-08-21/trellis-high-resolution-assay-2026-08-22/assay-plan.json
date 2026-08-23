@@ -1,0 +1,46 @@
+{
+  "assay_id": "trellis-high-resolution-assay-2026-08-22",
+  "campaign_question": "Does TRELLIS HR cascade capacity at 768 and 1024 improve a strong and a moderate skull-muzzle basin nonlinearly or change their visual ranking?",
+  "requested_route": {
+    "job_type": "trellis2mlx_checkpoint",
+    "backend": "trellis2mlx native MLX",
+    "steps": 8,
+    "cascade": true,
+    "target_faces": 100000,
+    "texture_size": 4096,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "claim_ceiling": "Matched within-source high-resolution cascade response and bounded static visual orbitability only. No topology, winding, collision, rigging, animation, anatomical fidelity, CUDA parity, or production claim.",
+  "sources": [
+    {
+      "source_id": "strong-identity-hybrid-81416",
+      "quality_class": "strong",
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+      "sha256": "fee87cab8e6217d1259977202f5ce31a526eae3c2ec70d691f96d9a09ffb0b20",
+      "width": 512,
+      "height": 512,
+      "reconstruction_seeds": [81421],
+      "resolutions": [768, 1024],
+      "control_glb": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/trellis-probes/identity-hybrid-81416/trellis-81421/output.glb"
+    },
+    {
+      "source_id": "moderate-faceted-81413",
+      "quality_class": "moderate",
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+      "sha256": "1272405bd27d935ca42732d34bf2d5922791a8c8021ff177efbc68870e4d8ad2",
+      "width": 512,
+      "height": 512,
+      "reconstruction_seeds": [81414],
+      "resolutions": [768, 1024],
+      "control_glb": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/trellis-comparison/04-faceted-81413/output.glb"
+    }
+  ],
+  "completion_delivery": {
+    "receiver": "handy-candyman",
+    "receiver_diaulos_id": "dia-3aa6e154-0f2a-47bd-a049-0aa81af4d06f",
+    "delivery_mode": "checkpoint",
+    "primary_output": "terminal-receipt.json",
+    "failure_artifact": "failure.json"
+  }
+}

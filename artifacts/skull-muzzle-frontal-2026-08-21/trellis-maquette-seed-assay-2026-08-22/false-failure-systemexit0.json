@@ -1,0 +1,11 @@
+{
+  "assay_id": "trellis-maquette-seed-assay-2026-08-22",
+  "status": "failed",
+  "failure_phase": "runner-exception",
+  "error_type": "SystemExit",
+  "error_message": "0",
+  "failed_at": 1787449405.9301078,
+  "start_receipt": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/start-receipt.json",
+  "last_trustworthy_evidence": "Bound Greenroom job identities in start-receipt.json",
+  "traceback": "Traceback (most recent call last):\n  File \"/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-maquette-seed-assay-2026-08-22/run_assay.py\", line 385, in <module>\n    raise SystemExit(main())\nSystemExit: 0\n"
+}

@@ -2,6 +2,7 @@
 
 import copy
 import unittest
+from unittest import mock
 
 import run_assay
 
@@ -44,6 +45,13 @@ class AssayContractTest(unittest.TestCase):
         )
         with self.assertRaisesRegex(run_assay.AssayError, "omitted --no-cascade"):
             run_assay.validate_effective_route(cell, {"effective_route": route}, self.plan)
+
+    def test_successful_entrypoint_does_not_write_failure(self):
+        with mock.patch.object(run_assay, "main", return_value=0), mock.patch.object(
+            run_assay, "write_failure"
+        ) as write_failure:
+            self.assertEqual(run_assay.entrypoint(), 0)
+            write_failure.assert_not_called()
 
 
 if __name__ == "__main__":

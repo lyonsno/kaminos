@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Submit and await the exact TRELLIS maquette seed assay through GPU Greenroom."""
+"""Submit and await the exact TRELLIS high-resolution assay through GPU Greenroom."""
 
 from __future__ import annotations
 
@@ -79,11 +79,11 @@ def jobs_by_output() -> dict[str, list[tuple[str, Path, dict]]]:
     return found
 
 
-def expected_params(plan: dict, seed: int) -> dict[str, str]:
+def expected_params(plan: dict, seed: int, resolution: int) -> dict[str, str]:
     route = plan["requested_route"]
     return {
         "seed": str(seed),
-        "resolution": str(route["resolution"]),
+        "resolution": str(resolution),
         "steps": str(route["steps"]),
         "target_faces": str(route["target_faces"]),
         "texture_size": str(route["texture_size"]),
@@ -118,18 +118,21 @@ def build_cells(plan: dict) -> list[dict]:
                 f"Source hash drift for {source}: expected {source_record['sha256']} observed {observed_hash}",
             )
         for seed in source_record["reconstruction_seeds"]:
-            output_dir = ROOT / source_record["source_id"] / f"trellis-{seed}"
-            cells.append(
-                {
-                    "cell_id": f"{source_record['source_id']}-trellis-{seed}",
-                    "source_id": source_record["source_id"],
-                    "source_path": str(source),
-                    "source_sha256": observed_hash,
-                    "seed": seed,
-                    "output_dir": str(output_dir),
-                    "params": expected_params(plan, seed),
-                }
-            )
+            for resolution in source_record["resolutions"]:
+                output_dir = ROOT / source_record["source_id"] / f"trellis-{seed}-r{resolution}"
+                cells.append(
+                    {
+                        "cell_id": f"{source_record['source_id']}-trellis-{seed}-r{resolution}",
+                        "source_id": source_record["source_id"],
+                        "quality_class": source_record["quality_class"],
+                        "source_path": str(source),
+                        "source_sha256": observed_hash,
+                        "seed": seed,
+                        "resolution": resolution,
+                        "output_dir": str(output_dir),
+                        "params": expected_params(plan, seed, resolution),
+                    }
+                )
     return cells
 
 
@@ -242,7 +245,7 @@ def validate_effective_route(cell: dict, receipt: dict, plan: dict) -> list[str]
         "--image": cell["source_path"],
         "--output": str(Path(cell["output_dir"]) / "output.glb"),
         "--seed": str(cell["seed"]),
-        "--resolution": str(plan["requested_route"]["resolution"]),
+        "--resolution": str(cell["resolution"]),
         "--steps": str(plan["requested_route"]["steps"]),
         "--target-faces": str(plan["requested_route"]["target_faces"]),
         "--texture-size": str(plan["requested_route"]["texture_size"]),
@@ -257,7 +260,12 @@ def validate_effective_route(cell: dict, receipt: dict, plan: dict) -> list[str]
                 "effective-route-validation",
                 f"{cell['cell_id']} effective {option} mismatch: expected {value!r} route={effective!r}",
             )
-    for flag in ("--no-cascade", "--simplify-first", "--save-checkpoints"):
+    if plan["requested_route"]["cascade"] and "--no-cascade" in tokens:
+        raise AssayError(
+            "effective-route-validation",
+            f"{cell['cell_id']} has unexpected --no-cascade: {effective}",
+        )
+    for flag in ("--simplify-first", "--save-checkpoints"):
         if flag not in tokens:
             raise AssayError("effective-route-validation", f"{cell['cell_id']} omitted {flag}: {effective}")
     return tokens
@@ -295,12 +303,14 @@ def collect_terminal(plan: dict, start_receipt: dict, located: dict[str, tuple[s
             {
                 "cell_id": cell["cell_id"],
                 "source_id": cell["source_id"],
+                "quality_class": cell["quality_class"],
                 "source_path": cell["source_path"],
                 "source_sha256": cell["source_sha256"],
                 "seed": cell["seed"],
+                "resolution": cell["resolution"],
                 "job_id": cell["job_id"],
                 "terminal_state": state,
-                "requested_route": plan["requested_route"],
+                "requested_route": {**plan["requested_route"], "resolution": cell["resolution"]},
                 "effective_route": receipt.get("effective_route"),
                 "effective_backend": "trellis2mlx native MLX" if "trellis2mlx" in (receipt.get("effective_route") or "") else None,
                 "submitted_at": receipt.get("submitted_at", status.get("submitted_at")),
@@ -342,8 +352,14 @@ def collect_terminal(plan: dict, start_receipt: dict, located: dict[str, tuple[s
 
 def write_failure(error: BaseException) -> None:
     phase = error.phase if isinstance(error, AssayError) else "runner-exception"
+    assay_id = "trellis-high-resolution-assay-2026-08-22"
+    if PLAN_PATH.is_file():
+        try:
+            assay_id = load_json(PLAN_PATH).get("assay_id", assay_id)
+        except (OSError, json.JSONDecodeError):
+            pass
     payload = {
-        "assay_id": "trellis-maquette-seed-assay-2026-08-22",
+        "assay_id": assay_id,
         "status": "failed",
         "failure_phase": phase,
         "error_type": type(error).__name__,
@@ -365,7 +381,10 @@ def main() -> int:
         return 0
     plan = load_json(PLAN_PATH)
     cells = build_cells(plan)
-    expected_count = sum(len(source["reconstruction_seeds"]) for source in plan["sources"])
+    expected_count = sum(
+        len(source["reconstruction_seeds"]) * len(source["resolutions"])
+        for source in plan["sources"]
+    )
     if len(cells) != expected_count:
         raise AssayError("plan-validation", f"Expanded {len(cells)} cells but plan declares {expected_count}")
     start_receipt = submit_missing(plan, cells)
