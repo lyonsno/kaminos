@@ -181,7 +181,7 @@ def restrict_selected_optical_medium(
     require(ids.ndim == 1 and np.issubdtype(ids.dtype, np.integer), "native cell indices must be an integer vector")
     require(np.unique(ids).size == ids.size, "native cell indices contain duplicates")
     require(world.shape == (ids.size, 3) and values.shape == (ids.size, 8), "selected source rows are misaligned")
-    require(source_grid > target_grid > 0, "target grid must be positive and smaller than source grid")
+    require(source_grid >= target_grid > 0, "target grid must be positive and no larger than source grid")
     require(source_grid % target_grid == 0, "first witness requires an exact integer simulation-grid restriction")
     require(np.all((ids >= 0) & (ids < source_grid**3)), "native cell index is outside the source grid")
     selected, remainder = population_coefficients(values, population)

@@ -97,6 +97,28 @@ def main() -> None:
     assert restricted.conservation["sourceCellVolume"] == 1.0
     assert restricted.conservation["targetCellVolume"] == 8.0
 
+    # Identity restriction (factor 1): the ceiling probe fits at the source's
+    # native resolution, so target_grid == source_grid must be lawful and be
+    # an exact identity — same active cells, same per-cell coefficients,
+    # unchanged spacing, conservation intact.
+    identity = module.restrict_selected_optical_medium(
+        native_ids,
+        positions,
+        coefficients,
+        source_grid=grid,
+        target_grid=grid,
+        population="ridge",
+    )
+    assert identity.grid == grid
+    ridge_active = np.flatnonzero(coefficients[:, :4].sum(axis=1) > 0.0)
+    assert identity.positions.shape == (ridge_active.size, 3)
+    assert np.allclose(identity.positions, positions[ridge_active])
+    assert np.allclose(identity.coefficients[:, :4], coefficients[ridge_active, :4])
+    assert np.all(identity.coefficients[:, 4:] == 0.0)
+    assert identity.conservation["conserved"] is True
+    assert identity.conservation["targetCellVolume"] == 1.0
+    assert np.allclose(identity.conservation["targetSpacing"], identity.conservation["sourceSpacing"])
+
     homogeneous_coefficients = np.zeros((native_ids.size, 8), dtype=np.float64)
     homogeneous_coefficients[:, 0] = 0.25
     homogeneous = module.restrict_selected_optical_medium(
