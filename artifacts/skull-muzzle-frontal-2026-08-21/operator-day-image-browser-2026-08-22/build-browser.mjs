@@ -331,7 +331,7 @@ const castSearch=document.getElementById('castSearch'), castCards=[...document.q
 castSearch.addEventListener('input',()=>{const query=castSearch.value.trim().toLowerCase(); let shown=0; castCards.forEach(card=>{const visible=!query||card.dataset.castSearch.includes(query); card.style.display=visible?'':'none'; if(visible)shown+=1;}); castEmpty.style.display=shown?'none':'block';});
 document.addEventListener('click',async event=>{const button=event.target.closest('.copy'); if(!button)return; const value=button.dataset.copy; try{await navigator.clipboard.writeText(value);}catch{const area=document.createElement('textarea'); area.value=value; document.body.append(area); area.select(); document.execCommand('copy'); area.remove();} const prior=button.textContent; button.textContent='✓'; setTimeout(()=>button.textContent=prior,900);});
 </script>`;
-fs.writeFileSync(path.join(browserDir, "spatial.html"), chrome("Spatial Cast Atlas", `${casts.length} casts`, spatialBody));
+fs.writeFileSync(path.join(browserDir, "skull-spatial.html"), chrome("Skull Spatial Cast Atlas", `${casts.length} casts`, spatialBody));
 
 for (const group of groups) {
   const groupImages = images.filter((image) => image.group_id === group.id);

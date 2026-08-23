@@ -1,6 +1,6 @@
 {
   "schema": "kaminos.handy_candyman.cross_family_trellis_atlas.v1",
-  "generated_at": "2026-08-23T06:28:01.940Z",
+  "generated_at": "2026-08-23T07:46:14.408Z",
   "claim_boundary": "Curated visual comparison instrument. It binds sources, settings, extant GLBs, and witnesses but does not by itself establish backend or parameter causality.",
   "casts": [
     {
@@ -23,7 +23,8 @@
         "texture_size": "4096",
         "target_faces": "100000",
         "cascade": "on",
-        "simplify_first": "on"
+        "simplify_first": "on",
+        "runtime_s": 2395.4
       },
       "job_type": "trellis2mlx_checkpoint",
       "job_id": "e1bdfb8316d6",
@@ -69,7 +70,8 @@
         "texture_size": "4096",
         "target_faces": "100000",
         "cascade": "on",
-        "simplify_first": "on"
+        "simplify_first": "on",
+        "runtime_s": 757.2
       },
       "job_type": "trellis2mlx_checkpoint",
       "job_id": "8acafe339080",
@@ -115,7 +117,8 @@
         "texture_size": "4096",
         "target_faces": "100000",
         "cascade": "on",
-        "simplify_first": "on"
+        "simplify_first": "on",
+        "runtime_s": 1075.7
       },
       "job_type": "trellis2mlx_checkpoint",
       "job_id": "a03623339d9d",
@@ -161,7 +164,8 @@
         "texture_size": "4096",
         "target_faces": "100000",
         "cascade": "on",
-        "simplify_first": "on"
+        "simplify_first": "on",
+        "runtime_s": 370.1
       },
       "job_type": "trellis2mlx_checkpoint",
       "job_id": "f12d1ba677fc",

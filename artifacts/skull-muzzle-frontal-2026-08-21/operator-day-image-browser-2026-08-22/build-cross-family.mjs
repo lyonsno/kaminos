@@ -75,7 +75,7 @@ const highResolution = mainManifest.casts
     family: "Skull-muzzle head",
     comparison_role: cast.settings.resolution === "1024" ? "High-resolution endpoint" : "High-resolution control",
     claim_ceiling: "Same-route skull comparison only. Resolution, cascade, texture size, and simplification remain coupled; visual quality is not monotonic evidence for any one parameter.",
-    settings: { backend: "TRELLIS2/MLX native checkpoint", ...cast.settings },
+    settings: { backend: "TRELLIS2/MLX native checkpoint", ...cast.settings, runtime_s: cast.duration_s },
   }));
 
 if (highResolution.length !== 4) {
@@ -211,26 +211,80 @@ const manifest = {
   casts,
 };
 
+const highResolutionById = new Map(highResolution.map((cast) => [cast.id, cast]));
+const skullCasts = mainManifest.casts.map((cast) => highResolutionById.get(cast.id) || ({
+  ...cast,
+  family: "Skull-muzzle head",
+  comparison_role: "Skull-family reconstruction assay",
+  claim_ceiling: "Single skull-family reconstruction record. It supports visual comparison under its recorded route and settings, not parameter or backend causality.",
+  settings: {
+    backend: cast.job_type || cast.effective_route || "route recorded in source receipt",
+    ...cast.settings,
+    runtime_s: cast.duration_s,
+  },
+}));
+const spatialCasts = [...skullCasts, ...controls];
+if (new Set(spatialCasts.map((cast) => cast.id)).size !== spatialCasts.length) {
+  throw new Error("canonical spatial atlas contains duplicate cast ids");
+}
+const spatialManifest = {
+  schema: "kaminos.handy_candyman.spatial_cast_atlas.v1",
+  generated_at: new Date().toISOString(),
+  claim_boundary: "Complete skull-family GLB inventory plus named cross-family implementation controls. Presence enables comparison but does not promote a cast or establish parameter, backend, or cleanup causality.",
+  casts: spatialCasts,
+};
+
 const settingOrder = ["backend", "seed", "steps", "resolution", "cascade", "texture_size", "target_faces", "simplify_first", "runtime_s"];
-const cards = casts.map((cast) => `
+function renderCards(records) {
+  return records.map((cast) => `
   <article class="cast" data-search="${escapeHtml(`${cast.title} ${cast.family} ${cast.comparison_role}`.toLowerCase())}">
     <header><div><h2>${escapeHtml(cast.title)}</h2><p>${escapeHtml(cast.family)} / ${escapeHtml(cast.comparison_role)}</p></div></header>
     <div class="body">
       <section><h3>Input</h3><a class="source" href="${escapeHtml(cast.input_src)}"><img loading="lazy" src="${escapeHtml(cast.input_src)}" alt="Input for ${escapeHtml(cast.title)}"></a></section>
-      <section><h3>Output witnesses</h3><div class="witnesses">${cast.witnesses.map((witness) => `<a href="${escapeHtml(witness.src)}"><img loading="lazy" src="${escapeHtml(witness.src)}" alt="${escapeHtml(witness.label)}"><span>${escapeHtml(witness.label)}</span></a>`).join("")}</div></section>
+      <section><h3>Output witnesses</h3>${cast.witnesses.length ? `<div class="witnesses">${cast.witnesses.map((witness) => `<a href="${escapeHtml(witness.src)}"><img loading="lazy" src="${escapeHtml(witness.src)}" alt="${escapeHtml(witness.label)}"><span>${escapeHtml(witness.label)}</span></a>`).join("")}</div>` : '<div class="missing">No surviving witness. Inspect the GLB before making a spatial claim.</div>'}</section>
       <section class="details"><h3>Effective settings</h3><dl>${settingOrder.map((key) => `<div><dt>${escapeHtml(key.replaceAll("_", " "))}</dt><dd>${escapeHtml(cast.settings[key])}</dd></div>`).join("")}</dl><div class="actions"><a href="${escapeHtml(cast.viewer_url)}" target="_blank" rel="noreferrer">Open in KamiNOS</a></div><h3>Blender GLB path</h3><div class="path"><code>${escapeHtml(cast.glb_path)}</code><button data-copy="${escapeHtml(cast.glb_path)}" title="Copy Blender path">Copy</button></div><h3>Claim ceiling</h3><p class="claim">${escapeHtml(cast.claim_ceiling)}</p></section>
     </div>
   </article>`).join("");
+}
 
 const css = `
-:root{color-scheme:dark;--bg:#11110f;--panel:#1b1b18;--ink:#f1ede5;--muted:#aaa59c;--line:#3a3831;--accent:#f0a35b;--teal:#55b8aa}*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0}a{color:inherit;text-decoration:none}.top{position:sticky;z-index:10;top:0;display:flex;align-items:center;gap:12px;padding:11px 18px;background:rgba(17,17,15,.96);border-bottom:1px solid var(--line)}.top h1{margin:0;font-size:20px}.top p{margin:2px 0 0;color:var(--muted);font-size:12px}.nav{display:flex;gap:7px}.nav a,.actions a,.path button{border:1px solid var(--line);border-radius:5px;background:#24231f;padding:8px 10px}.nav a:hover,.actions a:hover,.path button:hover{border-color:var(--accent)}input{width:min(330px,34vw);height:36px;margin-left:auto;border:1px solid var(--line);border-radius:5px;background:#090908;color:var(--ink);padding:0 10px}.content{width:min(1780px,calc(100% - 28px));margin:18px auto 48px}.list{display:grid;gap:14px}.cast{border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)}.cast>header{padding:11px 13px;border-bottom:1px solid var(--line)}h2{margin:0;font-size:16px}.cast header p{margin:2px 0 0;color:var(--muted);font-size:12px}.body{display:grid;grid-template-columns:minmax(180px,250px) minmax(340px,1fr) minmax(300px,430px);gap:13px;padding:13px}.body section{min-width:0}h3{margin:0 0 7px;color:var(--muted);font-size:11px;text-transform:uppercase}.source{display:block;aspect-ratio:1;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#090908}.source img{width:100%;height:100%;object-fit:contain}.witnesses{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px}.witnesses a{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#090908}.witnesses img{display:block;width:100%;aspect-ratio:1.45;object-fit:contain}.witnesses span{display:block;padding:5px 7px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0 0 9px;border:1px solid var(--line);background:var(--line)}dl div{padding:6px 7px;background:#24231f}dt{color:var(--muted);font-size:10px}dd{margin:0;overflow-wrap:anywhere}.actions{display:flex;margin:9px 0 13px}.path{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.path code{padding:7px;border:1px solid var(--line);border-radius:5px;background:#090908;font-size:10px;overflow-wrap:anywhere}.path button{color:var(--ink);cursor:pointer}.claim{margin:0;padding:8px;border-left:3px solid var(--teal);background:#151917;color:#d8d5ce}.empty{display:none;padding:50px;text-align:center;color:var(--muted)}@media(max-width:1100px){.body{grid-template-columns:minmax(180px,240px) 1fr}.details{grid-column:1/-1}}@media(max-width:680px){.top{flex-wrap:wrap}.top input{width:100%;margin:0}.body{grid-template-columns:1fr}.details{grid-column:auto}.witnesses{grid-template-columns:1fr}}
+:root{color-scheme:dark;--bg:#11110f;--panel:#1b1b18;--ink:#f1ede5;--muted:#aaa59c;--line:#3a3831;--accent:#f0a35b;--teal:#55b8aa}*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0}a{color:inherit;text-decoration:none}.top{position:sticky;z-index:10;top:0;display:flex;align-items:center;gap:12px;padding:11px 18px;background:rgba(17,17,15,.96);border-bottom:1px solid var(--line)}.top h1{margin:0;font-size:20px}.top p{margin:2px 0 0;color:var(--muted);font-size:12px}.nav{display:flex;gap:7px}.nav a,.actions a,.path button{border:1px solid var(--line);border-radius:5px;background:#24231f;padding:8px 10px}.nav a:hover,.actions a:hover,.path button:hover{border-color:var(--accent)}input{width:min(330px,34vw);height:36px;margin-left:auto;border:1px solid var(--line);border-radius:5px;background:#090908;color:var(--ink);padding:0 10px}.content{width:min(1780px,calc(100% - 28px));margin:18px auto 48px}.list{display:grid;gap:14px}.cast{border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel)}.cast>header{padding:11px 13px;border-bottom:1px solid var(--line)}h2{margin:0;font-size:16px}.cast header p{margin:2px 0 0;color:var(--muted);font-size:12px}.body{display:grid;grid-template-columns:minmax(180px,250px) minmax(340px,1fr) minmax(300px,430px);gap:13px;padding:13px}.body section{min-width:0}h3{margin:0 0 7px;color:var(--muted);font-size:11px;text-transform:uppercase}.source{display:block;aspect-ratio:1;border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#090908}.source img{width:100%;height:100%;object-fit:contain}.witnesses{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px}.witnesses a{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:#090908}.witnesses img{display:block;width:100%;aspect-ratio:1.45;object-fit:contain}.witnesses span{display:block;padding:5px 7px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}.missing{display:grid;min-height:150px;place-items:center;padding:18px;border:1px dashed #8b534e;border-radius:5px;color:#d98b84;text-align:center}dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:0 0 9px;border:1px solid var(--line);background:var(--line)}dl div{padding:6px 7px;background:#24231f}dt{color:var(--muted);font-size:10px}dd{margin:0;overflow-wrap:anywhere}.actions{display:flex;margin:9px 0 13px}.path{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.path code{padding:7px;border:1px solid var(--line);border-radius:5px;background:#090908;font-size:10px;overflow-wrap:anywhere}.path button{color:var(--ink);cursor:pointer}.claim{margin:0;padding:8px;border-left:3px solid var(--teal);background:#151917;color:#d8d5ce}.empty{display:none;padding:50px;text-align:center;color:var(--muted)}@media(max-width:1100px){.body{grid-template-columns:minmax(180px,240px) 1fr}.details{grid-column:1/-1}}@media(max-width:680px){.top{flex-wrap:wrap}.top input{width:100%;margin:0}.body{grid-template-columns:1fr}.details{grid-column:auto}.witnesses{grid-template-columns:1fr}}
 `;
 
-const embeddedManifest = JSON.stringify(manifest).replaceAll("<", "\\u003c");
-const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cross-Family TRELLIS Atlas</title><style>${css}</style></head><body><header class="top"><nav class="nav"><a href="index.html" title="Image browser">Images</a><a href="spatial.html" title="Skull casts">Skulls</a></nav><div><h1>Cross-Family TRELLIS Atlas</h1><p>${casts.length} casts / source, witness, settings, KamiNOS route, and Blender path on every row</p></div><input id="search" type="search" placeholder="Filter family, route, or role"></header><main class="content"><section class="list">${cards}</section><div class="empty" id="empty">No matching casts</div></main><script id="crossFamilyManifest" type="application/json">${embeddedManifest}</script><script>
+function renderAtlas({ title, subtitle, records, atlasManifest, manifestId, links }) {
+  const embeddedManifest = JSON.stringify(atlasManifest).replaceAll("<", "\\u003c");
+  const navigation = links.map((link) => `<a href="${escapeHtml(link.href)}" title="${escapeHtml(link.title)}">${escapeHtml(link.label)}</a>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${css}</style></head><body><header class="top"><nav class="nav">${navigation}</nav><div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(subtitle)}</p></div><input id="search" type="search" placeholder="Filter family, route, or role"></header><main class="content"><section class="list">${renderCards(records)}</section><div class="empty" id="empty">No matching casts</div></main><script id="${escapeHtml(manifestId)}" type="application/json">${embeddedManifest}</script><script>
 const cards=[...document.querySelectorAll('.cast')],search=document.getElementById('search'),empty=document.getElementById('empty');search.addEventListener('input',()=>{const q=search.value.trim().toLowerCase();let shown=0;cards.forEach(card=>{const visible=!q||card.dataset.search.includes(q);card.style.display=visible?'':'none';if(visible)shown++});empty.style.display=shown?'none':'block'});document.addEventListener('click',async event=>{const button=event.target.closest('[data-copy]');if(!button)return;try{await navigator.clipboard.writeText(button.dataset.copy)}catch{const area=document.createElement('textarea');area.value=button.dataset.copy;document.body.append(area);area.select();document.execCommand('copy');area.remove()}const prior=button.textContent;button.textContent='Copied';setTimeout(()=>button.textContent=prior,900)});
 </script></body></html>`;
+}
+
+const crossFamilyHtml = renderAtlas({
+  title: "Focused Cross-Family TRELLIS Atlas",
+  subtitle: `${casts.length} curated casts / source, witness, settings, KamiNOS route, and Blender path on every row`,
+  records: casts,
+  atlasManifest: manifest,
+  manifestId: "crossFamilyManifest",
+  links: [
+    { href: "index.html", title: "Image browser", label: "Images" },
+    { href: "spatial.html", title: "Complete spatial atlas", label: "All spatial" },
+  ],
+});
+const spatialHtml = renderAtlas({
+  title: "Canonical Spatial Cast Atlas",
+  subtitle: `${spatialCasts.length} casts / complete skull inventory plus full-body and implementation controls`,
+  records: spatialCasts,
+  atlasManifest: spatialManifest,
+  manifestId: "spatialManifest",
+  links: [
+    { href: "index.html", title: "Image browser", label: "Images" },
+    { href: "skull-spatial.html", title: "Skull-only saved view", label: "Skulls only" },
+    { href: "cross-family.html", title: "Focused cross-family comparison", label: "Focused comparison" },
+  ],
+});
 
 fs.writeFileSync(path.join(browserDir, "cross-family-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-fs.writeFileSync(path.join(browserDir, "cross-family.html"), html);
-console.log(`built cross-family TRELLIS atlas with ${casts.length} casts`);
+fs.writeFileSync(path.join(browserDir, "cross-family.html"), crossFamilyHtml);
+fs.writeFileSync(path.join(browserDir, "spatial-manifest.json"), `${JSON.stringify(spatialManifest, null, 2)}\n`);
+fs.writeFileSync(path.join(browserDir, "spatial.html"), spatialHtml);
+console.log(`built canonical spatial atlas with ${spatialCasts.length} casts and focused comparison with ${casts.length} casts`);

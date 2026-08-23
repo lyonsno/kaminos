@@ -6,6 +6,8 @@ const artifactRoot = path.dirname(browserDir);
 const manifestPath = path.join(browserDir, "manifest.json");
 const indexPath = path.join(browserDir, "index.html");
 const spatialPath = path.join(browserDir, "spatial.html");
+const skullSpatialPath = path.join(browserDir, "skull-spatial.html");
+const spatialManifestPath = path.join(browserDir, "spatial-manifest.json");
 const crossFamilyPath = path.join(browserDir, "cross-family.html");
 const crossFamilyManifestPath = path.join(browserDir, "cross-family-manifest.json");
 
@@ -23,6 +25,8 @@ function walkImages(directory) {
 if (!fs.existsSync(manifestPath)) throw new Error("manifest.json is missing");
 if (!fs.existsSync(indexPath)) throw new Error("index.html is missing");
 if (!fs.existsSync(spatialPath)) throw new Error("spatial.html is missing");
+if (!fs.existsSync(skullSpatialPath)) throw new Error("skull-spatial.html is missing");
+if (!fs.existsSync(spatialManifestPath)) throw new Error("spatial-manifest.json is missing");
 if (!fs.existsSync(crossFamilyPath)) throw new Error("cross-family.html is missing");
 if (!fs.existsSync(crossFamilyManifestPath)) throw new Error("cross-family-manifest.json is missing");
 
@@ -60,6 +64,7 @@ for (const group of manifest.groups) {
 
 const index = fs.readFileSync(indexPath, "utf8");
 const spatial = fs.readFileSync(spatialPath, "utf8");
+const spatialManifest = JSON.parse(fs.readFileSync(spatialManifestPath, "utf8"));
 const crossFamily = fs.readFileSync(crossFamilyPath, "utf8");
 const crossFamilyManifest = JSON.parse(fs.readFileSync(crossFamilyManifestPath, "utf8"));
 if (!index.includes(`data-total-images="${actualImages.length}"`)) {
@@ -68,6 +73,10 @@ if (!index.includes(`data-total-images="${actualImages.length}"`)) {
 if (!index.includes("Operator Image Browser")) throw new Error("index title is missing");
 if (!index.includes('href="spatial.html"')) throw new Error("index does not link the spatial cast atlas");
 if (!spatial.includes('href="cross-family.html"')) throw new Error("spatial atlas does not link the cross-family comparison");
+if (!spatial.includes("Polygonal Cat Cycle 2")) throw new Error("canonical spatial atlas omits the polygonal cat control");
+if (spatialManifest.schema !== "kaminos.handy_candyman.spatial_cast_atlas.v1") {
+  throw new Error(`unexpected canonical spatial schema: ${spatialManifest.schema}`);
+}
 
 for (const cast of manifest.casts) {
   if (!path.isAbsolute(cast.glb_path) || !fs.existsSync(cast.glb_path)) {
@@ -106,6 +115,18 @@ const requiredControls = [
   "gribble-baseline-mlx",
   "gribble-trellis-mac",
 ];
+const expectedSpatialCount = manifest.casts.length + requiredControls.length;
+if (spatialManifest.casts.length !== expectedSpatialCount) {
+  throw new Error(`canonical spatial atlas has ${spatialManifest.casts.length} casts; expected ${expectedSpatialCount}`);
+}
+if (new Set(spatialManifest.casts.map((cast) => cast.id)).size !== spatialManifest.casts.length) {
+  throw new Error("canonical spatial atlas contains duplicate cast ids");
+}
+for (const cast of manifest.casts) {
+  if (!spatialManifest.casts.some((candidate) => candidate.id === cast.id)) {
+    throw new Error(`canonical spatial atlas omits skull cast ${cast.id}`);
+  }
+}
 for (const id of requiredControls) {
   const cast = crossFamilyManifest.casts.find((candidate) => candidate.id === id);
   if (!cast) throw new Error(`cross-family atlas omits ${id}`);
@@ -130,6 +151,11 @@ for (const id of requiredControls) {
   }
   if (!crossFamily.includes(cast.glb_path) || !crossFamily.includes(cast.viewer_url)) {
     throw new Error(`cross-family page omits operator routes for ${id}`);
+  }
+  const spatialCast = spatialManifest.casts.find((candidate) => candidate.id === id);
+  if (!spatialCast) throw new Error(`canonical spatial atlas omits ${id}`);
+  if (!spatial.includes(cast.glb_path) || !spatial.includes(cast.viewer_url)) {
+    throw new Error(`canonical spatial page omits operator routes for ${id}`);
   }
 }
 for (const label of ["Input", "Effective settings", "Blender GLB path", "Open in KamiNOS", "Claim ceiling"]) {
