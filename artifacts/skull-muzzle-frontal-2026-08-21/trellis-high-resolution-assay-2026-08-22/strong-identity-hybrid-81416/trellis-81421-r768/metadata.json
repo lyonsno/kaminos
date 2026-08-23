@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_checkpoint",
+  "job_id": "f12d1ba677fc",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-1/seed-81416/01-hybrid-broad-sculpture/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81421",
+    "resolution": "768",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "4096"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787456164.1217248,
+  "duration_s": 370.1
+}

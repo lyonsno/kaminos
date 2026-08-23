@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_checkpoint",
+  "job_id": "8acafe339080",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "81414",
+    "resolution": "768",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "4096"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1787457997.162702,
+  "duration_s": 757.2
+}

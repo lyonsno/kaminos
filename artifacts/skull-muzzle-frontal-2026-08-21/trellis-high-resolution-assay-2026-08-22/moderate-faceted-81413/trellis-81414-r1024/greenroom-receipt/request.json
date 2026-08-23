@@ -1,0 +1,14 @@
+{
+  "job_type": "trellis2mlx_checkpoint",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024",
+  "params": {
+    "seed": "81414",
+    "resolution": "1024",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "4096"
+  },
+  "job_id": "e1bdfb8316d6",
+  "submitted_at": 1787454431.50651
+}

@@ -1,0 +1,66 @@
+{
+  "job_id": "e1bdfb8316d6",
+  "job_type": "trellis2mlx_checkpoint",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024",
+  "repo_root": null,
+  "requested_route": null,
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png --output /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024/output.glb --seed 81414 --resolution 1024 --steps 8 --target-faces 100000 --texture-size 4096 --simplify-first --save-checkpoints /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024/checkpoints",
+  "effective_argv": [
+    "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python",
+    "-u",
+    "generate.py",
+    "--image",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png",
+    "--output",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024/output.glb",
+    "--seed",
+    "81414",
+    "--resolution",
+    "1024",
+    "--steps",
+    "8",
+    "--target-faces",
+    "100000",
+    "--texture-size",
+    "4096",
+    "--simplify-first",
+    "--save-checkpoints",
+    "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r1024/checkpoints"
+  ],
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "environment_inheritance": "worker-plus-overlay",
+  "effective_defaults": {
+    "resolution": "512",
+    "seed": "42",
+    "steps": "12",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1787457997.1742249,
+  "finished_at": 1787460392.551272,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ],
+  "request_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e1bdfb8316d6/request.json",
+  "stdout_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e1bdfb8316d6/stdout.log",
+  "stderr_path": "/Users/noahlyons/.local/state/gpu-greenroom/done/e1bdfb8316d6/stderr.log",
+  "worker": {
+    "source_root": "/Users/noahlyons/.local/state/gpu-greenroom/sjb-cli",
+    "commit": "560f94b437a703bcb2bd9b98f515ffaf6f30428d",
+    "git_dirty": true,
+    "pid": 82633,
+    "capabilities": [
+      "structured-command.v1"
+    ]
+  }
+}

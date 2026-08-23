@@ -1,0 +1,65 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-surface-matrix/wave-2/seed-81413/04-faceted-fur-planes/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 32.5s
+  5014 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 57.6s (5014 tokens)
+
+=== Stage 2b: Upsample → HR coordinates ===
+  Level 0 → 1: 25269 voxels
+  Level 1 → 2: 134764 voxels
+  Level 2 → 3: 665590 voxels
+  Level 3 → 4: 2781512 voxels
+  Upsampled: 46.1s (2,781,512 voxels)
+  HR coords: 12,154 tokens at res 768, coord range [0, 47]
+
+=== Stage 2c: HR Shape Latent ===
+  Sampled: 292.6s (12,154 tokens)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 61290 voxels
+  Level 1 → 2: 267078 voxels
+  Level 2 → 3: 1037152 voxels
+  Level 3 → 4: 4049083 voxels
+  Decoded: 75.0s (4,049,083 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  4,049,083 voxels, coord range [11, 755], grid_size=768
+  Extracted: 3.3s
+  4,049,083 vertices, 7,711,254 faces
+  Checkpoint saved: mesh_raw (233.7 MB)
+  Pre-simplify: 69,383V 131,864F (11.1s)
+  Removed 4427 duplicate faces
+  Removed 19655 non-manifold faces
+  Filled 6769 holes (1153 too large, max_perimeter=0.03)
+  Cleanup: 69,383V 131,864F → 75,344V 132,049F
+  Cleanup: 4.3s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 118.4s (12,154 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 61290 voxels
+  Level 1 → 2: 267078 voxels
+  Level 2 → 3: 1037152 voxels
+  Level 3 → 4: 4049083 voxels
+  Decoded: 37.9s (4,049,083 voxels, 6 channels)
+  PBR attrs: RGB [-0.03, 0.94] metallic [-0.01, 0.02] roughness [0.88, 0.93]
+  Checkpoint saved: texture (145.8 MB)
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 151,027V 132,049F (3.1s)
+    Rasterizing UV space (132,049 tris, 4096x4096, MLX)...
+    10,618,087 pixels covered (5.0s)
+    Interpolated 10,618,087 positions (0.6s)
+    Sampled voxel attrs (16.0s)
+    Inpainted seams (5.6s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/trellis-high-resolution-assay-2026-08-22/moderate-faceted-81413/trellis-81414-r768/output.glb (31.4MB)
+
+Total: 756.4s
