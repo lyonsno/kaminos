@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 
 const browserDir = path.dirname(new URL(import.meta.url).pathname);
 const artifactRoot = path.dirname(browserDir);
+const repoRoot = path.resolve(artifactRoot, "../..");
 const imagePattern = /\.(png|jpe?g|webp)$/i;
 
 function walk(directory) {
@@ -18,7 +19,7 @@ function walk(directory) {
 }
 
 function titleCase(value) {
-  return value
+  return String(value || "Unlabeled cast")
     .replace(/-2026-08-(21|22)$/i, "")
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
@@ -50,6 +51,98 @@ function safeId(value) {
 function jsonForHtml(value) {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
+
+function readJson(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function walkMatching(directory, predicate) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (fullPath === browserDir) return [];
+      return walkMatching(fullPath, predicate);
+    }
+    return predicate(fullPath) ? [fullPath] : [];
+  });
+}
+
+function browserSource(absolutePath) {
+  return path.relative(browserDir, absolutePath).split(path.sep).join("/");
+}
+
+function routeForGlb(absolutePath) {
+  const mountedPath = path.relative(path.dirname(repoRoot), absolutePath).split(path.sep).join("/");
+  return `http://127.0.0.1:8104/index.html?mesh_root=lerms-preview&mesh_path=${encodeURIComponent(mountedPath)}`;
+}
+
+function castTitle(artifactPath) {
+  const parts = artifactPath.split("/");
+  parts.pop();
+  const run = parts.pop() || artifactPath;
+  const source = parts.pop();
+  return source ? `${titleCase(source)} / ${titleCase(run)}` : titleCase(run);
+}
+
+const canonicalGlbs = walkMatching(artifactRoot, (filePath) => path.basename(filePath) === "output.glb")
+  .sort((a, b) => a.localeCompare(b));
+
+const casts = canonicalGlbs.map((glbPath) => {
+  const runDir = path.dirname(glbPath);
+  const artifactPath = path.relative(artifactRoot, glbPath).split(path.sep).join("/");
+  const metadataPath = path.join(runDir, "metadata.json");
+  const metadata = readJson(metadataPath);
+  const receiptPath = [
+    path.join(runDir, "greenroom-receipt", "receipt.json"),
+    path.join(runDir, "receipts", "receipt.json"),
+  ].find((candidate) => fs.existsSync(candidate));
+  const receipt = receiptPath ? readJson(receiptPath) : null;
+  const inputPath = metadata?.input_path && fs.existsSync(metadata.input_path) ? metadata.input_path : null;
+  const witnessPaths = walkMatching(runDir, (filePath) => imagePattern.test(filePath) && /witness/i.test(path.relative(runDir, filePath)))
+    .sort((a, b) => a.localeCompare(b));
+  const params = metadata?.params || {};
+  const argv = receipt?.effective_argv || [];
+  const settings = {
+    seed: params.seed,
+    steps: params.steps,
+    resolution: params.resolution || (String(metadata?.job_type || "").includes("fast") ? "512" : undefined),
+    texture_size: params.texture_size,
+    target_faces: params.target_faces,
+    cascade: params.no_cascade === "true" || argv.includes("--no-cascade") ? "off" : "on",
+    simplify_first: params.simplify_first === "true" || argv.includes("--simplify-first") ? "on" : "off",
+  };
+  const assay = artifactPath.split("/")[0];
+  return {
+    id: safeId(artifactPath),
+    title: castTitle(artifactPath),
+    assay,
+    artifact_path: artifactPath,
+    glb_path: glbPath,
+    glb_bytes: fs.statSync(glbPath).size,
+    input_path: inputPath,
+    input_src: inputPath ? browserSource(inputPath) : null,
+    metadata_path: fs.existsSync(metadataPath) ? metadataPath : null,
+    receipt_path: receiptPath || null,
+    viewer_url: routeForGlb(glbPath),
+    settings,
+    job_type: metadata?.job_type || null,
+    job_id: metadata?.job_id || receipt?.job_id || null,
+    duration_s: metadata?.duration_s ?? (receipt?.finished_at && receipt?.started_at ? receipt.finished_at - receipt.started_at : null),
+    effective_route: receipt?.effective_route || null,
+    route_status: receipt?.status || (metadata ? "metadata-only" : "unverified"),
+    featured: assay === "trellis-high-resolution-assay-2026-08-22",
+    witnesses: witnessPaths.map((witnessPath) => ({
+      path: witnessPath,
+      src: browserSource(witnessPath),
+      label: path.basename(witnessPath, path.extname(witnessPath)),
+      bytes: fs.statSync(witnessPath).size,
+    })),
+  };
+}).sort((a, b) => Number(b.featured) - Number(a.featured) || a.artifact_path.localeCompare(b.artifact_path));
 
 const images = walk(artifactRoot)
   .sort((a, b) => a.localeCompare(b))
@@ -89,13 +182,15 @@ const groups = groupIds.map((id) => {
 
 const generatedAt = new Date().toISOString();
 const manifest = {
-  schema: "kaminos.handy_candyman.operator_image_browser.v1",
+  schema: "kaminos.handy_candyman.operator_image_browser.v2",
   generated_at: generatedAt,
   artifact_root: artifactRoot,
   claim_boundary: "Complete browsing inventory of image files under the skull-muzzle artifact family; inclusion is not promotion or visual-quality evidence.",
   image_count: images.length,
+  cast_count: casts.length,
   groups,
   images,
+  casts,
 };
 
 const sharedCss = `
@@ -148,7 +243,38 @@ h1 { margin:0; font-size:20px; font-weight:720; }
 .refs { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 16px; }
 .ref { padding:5px 8px; border:1px solid var(--line); border-radius:5px; color:var(--muted); }
 .ref:hover { color:var(--ink); border-color:var(--teal); }
+.cast-list { display:grid; gap:14px; }
+.cast { overflow:hidden; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
+.cast.featured { border-color:#815b39; }
+.cast-head { display:flex; align-items:flex-start; gap:12px; padding:13px 14px; border-bottom:1px solid var(--line); }
+.cast-head h2 { margin:0; font-size:16px; }
+.cast-head .meta { overflow-wrap:anywhere; }
+.tags { display:flex; gap:5px; flex-wrap:wrap; margin-left:auto; justify-content:flex-end; }
+.tag { padding:3px 6px; border:1px solid var(--line); border-radius:4px; color:var(--muted); font-size:11px; white-space:nowrap; }
+.tag.accent { color:var(--accent); border-color:#815b39; }
+.cast-body { display:grid; grid-template-columns:minmax(190px,260px) minmax(300px,1fr) minmax(270px,420px); gap:14px; padding:14px; }
+.source-pane, .witness-pane, .detail-pane { min-width:0; }
+.pane-label { margin-bottom:7px; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; }
+.source-frame { overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:5px; background:#080807; }
+.source-frame img { width:100%; height:100%; object-fit:contain; display:block; }
+.missing { display:grid; place-items:center; min-height:160px; padding:18px; border:1px dashed var(--danger); color:var(--danger); text-align:center; }
+.witness-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; }
+.witness { overflow:hidden; min-width:0; border:1px solid var(--line); border-radius:5px; background:#080807; }
+.witness img { display:block; width:100%; aspect-ratio:1.52; object-fit:contain; }
+.witness span { display:block; padding:5px 7px; color:var(--muted); font-size:11px; border-top:1px solid var(--line); }
+.settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; overflow:hidden; margin-bottom:10px; border:1px solid var(--line); border-radius:5px; background:var(--line); }
+.setting { padding:7px 8px; background:var(--panel2); }
+.setting small { display:block; color:var(--muted); }
+.setting strong { font-variant-numeric:tabular-nums; }
+.commands { display:flex; gap:7px; margin:9px 0; }
+.command { display:inline-flex; align-items:center; min-height:34px; padding:0 10px; border:1px solid var(--line); border-radius:5px; background:var(--panel2); }
+.command:hover { border-color:var(--accent); }
+.path-row { display:grid; grid-template-columns:minmax(0,1fr) 36px; gap:6px; align-items:start; }
+.path-row code { min-width:0; max-height:76px; overflow:auto; padding:7px 8px; border:1px solid var(--line); border-radius:5px; background:#0c0c0b; color:#d7d1c7; font-size:10px; overflow-wrap:anywhere; white-space:normal; }
+.route-note { margin-top:8px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
 @media (max-width:760px) { .topbar { align-items:flex-start; flex-wrap:wrap; } .tools { width:100%; margin:0; overflow-x:auto; } .search { width:100%; min-width:170px; } .content { width:min(100% - 18px,1760px); margin-top:12px; } .group-grid { grid-template-columns:1fr; } .gallery { --tile:170px; } .range { display:none; } .modal { padding:6px; } }
+@media (max-width:1100px) { .cast-body { grid-template-columns:minmax(180px,240px) minmax(280px,1fr); } .detail-pane { grid-column:1/-1; } }
+@media (max-width:680px) { .cast-head { display:block; } .tags { margin:9px 0 0; justify-content:flex-start; } .cast-body { grid-template-columns:1fr; } .detail-pane { grid-column:auto; } .witness-grid { grid-template-columns:1fr; } }
 `;
 
 function chrome(title, subtitle, body, extraTools = "") {
@@ -159,7 +285,7 @@ function galleryPage(title, subtitle, pageImages, references = []) {
   const items = jsonForHtml(pageImages);
   const refs = references.map((href) => `<a class="ref" href="${href}">${path.basename(href)}</a>`).join("");
   const body = `
-  <header class="topbar"><a class="icon" href="index.html" title="All assays">⌂</a><div class="title"><h1>${title}</h1><div class="meta">${subtitle}</div></div><div class="tools"><input class="search" id="search" type="search" placeholder="Filter paths"><div class="segment" id="segments"></div><input class="range" id="size" title="Thumbnail size" type="range" min="150" max="360" value="220"></div></header>
+  <header class="topbar"><a class="icon" href="index.html" title="All assays">⌂</a><a class="icon" href="spatial.html" title="Spatial casts">◇</a><div class="title"><h1>${title}</h1><div class="meta">${subtitle}</div></div><div class="tools"><input class="search" id="search" type="search" placeholder="Filter paths"><div class="segment" id="segments"></div><input class="range" id="size" title="Thumbnail size" type="range" min="150" max="360" value="220"></div></header>
   <main class="content">${refs ? `<nav class="refs">${refs}</nav>` : ""}<section class="gallery" id="gallery"></section><div class="empty" id="empty">No matching images</div></main>
   <div class="modal" id="modal"><img class="modal-image" id="modalImage"><div class="modal-bar"><div class="modal-label"><strong id="modalLabel"></strong><div class="modal-path" id="modalPath"></div></div><div class="modal-nav"><button class="icon" id="previous" title="Previous">‹</button><a class="icon" id="openOriginal" title="Open original">↗</a><button class="icon" id="next" title="Next">›</button><button class="icon" id="close" title="Close">×</button></div></div></div>
   <script>
@@ -174,6 +300,39 @@ function galleryPage(title, subtitle, pageImages, references = []) {
   return chrome(title, subtitle, body);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function settingCell(label, value) {
+  return `<div class="setting"><small>${label}</small><strong>${escapeHtml(value ?? "not recorded")}</strong></div>`;
+}
+
+const castCards = casts.map((cast) => {
+  const source = cast.input_src
+    ? `<a class="source-frame" href="${escapeHtml(cast.input_src)}" title="Open input"><img loading="lazy" decoding="async" src="${escapeHtml(cast.input_src)}" alt="Input for ${escapeHtml(cast.title)}"></a>`
+    : `<div class="missing">Input path is missing from the surviving receipt</div>`;
+  const witnesses = cast.witnesses.length
+    ? `<div class="witness-grid">${cast.witnesses.map((witness) => `<a class="witness" href="${escapeHtml(witness.src)}"><img loading="lazy" decoding="async" src="${escapeHtml(witness.src)}" alt="${escapeHtml(witness.label)} witness"><span>${escapeHtml(witness.label)}</span></a>`).join("")}</div>`
+    : `<div class="missing">No camera witness recorded; inspect through KamiNOS before making spatial claims</div>`;
+  return `<article class="cast${cast.featured ? " featured" : ""}" data-cast-search="${escapeHtml(`${cast.title} ${cast.assay} ${cast.artifact_path}`.toLowerCase())}">
+    <header class="cast-head"><div><h2>${escapeHtml(cast.title)}</h2><div class="meta">${escapeHtml(cast.artifact_path)}</div></div><div class="tags"><span class="tag${cast.featured ? " accent" : ""}">${cast.featured ? "High-resolution assay" : escapeHtml(cast.assay)}</span><span class="tag">${escapeHtml(cast.route_status)}</span></div></header>
+    <div class="cast-body">
+      <section class="source-pane"><div class="pane-label">Input</div>${source}</section>
+      <section class="witness-pane"><div class="pane-label">Output witnesses · ${cast.witnesses.length}</div>${witnesses}</section>
+      <section class="detail-pane"><div class="pane-label">Effective settings</div><div class="settings">
+        ${settingCell("Seed", cast.settings.seed)}${settingCell("Steps", cast.settings.steps)}${settingCell("Resolution", cast.settings.resolution)}${settingCell("Texture", cast.settings.texture_size)}${settingCell("Cascade", cast.settings.cascade)}${settingCell("Target faces", cast.settings.target_faces)}${settingCell("Simplify first", cast.settings.simplify_first)}${settingCell("Runtime", cast.duration_s == null ? null : `${Number(cast.duration_s).toFixed(1)} s`)}
+      </div><div class="commands"><a class="command" href="${escapeHtml(cast.viewer_url)}" target="_blank" rel="noreferrer">Open in KamiNOS ↗</a></div><div class="pane-label">Blender GLB path</div><div class="path-row"><code>${escapeHtml(cast.glb_path)}</code><button class="icon copy" data-copy="${escapeHtml(cast.glb_path)}" title="Copy GLB path">⧉</button></div><div class="route-note"><strong>${escapeHtml(cast.job_type || "route unrecorded")}</strong>${cast.job_id ? ` · job ${escapeHtml(cast.job_id)}` : ""}${cast.effective_route ? `<br>${escapeHtml(cast.effective_route)}` : ""}</div></section>
+    </div></article>`;
+}).join("");
+
+const spatialBody = `<header class="topbar"><a class="icon" href="index.html" title="Image assays">⌂</a><div class="title"><h1>Spatial Cast Atlas</h1><div class="meta">${casts.length} canonical GLB runs · paired inputs, settings, routes, and surviving witnesses · generated ${generatedAt}</div></div><div class="tools"><a class="command" href="cross-family.html" title="Cross-family TRELLIS comparison">Cross-family</a><input class="search" id="castSearch" type="search" placeholder="Filter casts"></div></header><main class="content"><section class="cast-list" id="castList">${castCards}</section><div class="empty" id="castEmpty">No matching casts</div></main><script id="castManifest" type="application/json">${jsonForHtml(casts)}</script><script>
+const castSearch=document.getElementById('castSearch'), castCards=[...document.querySelectorAll('.cast')], castEmpty=document.getElementById('castEmpty');
+castSearch.addEventListener('input',()=>{const query=castSearch.value.trim().toLowerCase(); let shown=0; castCards.forEach(card=>{const visible=!query||card.dataset.castSearch.includes(query); card.style.display=visible?'':'none'; if(visible)shown+=1;}); castEmpty.style.display=shown?'none':'block';});
+document.addEventListener('click',async event=>{const button=event.target.closest('.copy'); if(!button)return; const value=button.dataset.copy; try{await navigator.clipboard.writeText(value);}catch{const area=document.createElement('textarea'); area.value=value; document.body.append(area); area.select(); document.execCommand('copy'); area.remove();} const prior=button.textContent; button.textContent='✓'; setTimeout(()=>button.textContent=prior,900);});
+</script>`;
+fs.writeFileSync(path.join(browserDir, "spatial.html"), chrome("Spatial Cast Atlas", `${casts.length} casts`, spatialBody));
+
 for (const group of groups) {
   const groupImages = images.filter((image) => image.group_id === group.id);
   fs.writeFileSync(path.join(browserDir, group.page), galleryPage(group.title, `${group.image_count} images · ${group.id}`, groupImages, group.references));
@@ -187,9 +346,9 @@ const groupCards = groups.map((group) => {
   return `<a class="group" href="${group.page}"><div class="strip">${preferred.map((image) => `<img loading="lazy" decoding="async" src="${image.browser_src}" alt="">`).join("")}</div><div class="group-copy"><strong>${group.title}</strong><span>${group.image_count}</span></div></a>`;
 }).join("");
 
-const indexBody = `<header class="topbar"><div class="title"><h1>Operator Image Browser</h1><div class="meta">${images.length} images · ${groups.length} assays · generated ${generatedAt}</div></div><div class="tools"><a class="icon" href="all.html" title="All images">⊞</a></div></header><main class="content" data-total-images="${images.length}"><section class="group-grid">${groupCards}</section></main>`;
+const indexBody = `<header class="topbar"><div class="title"><h1>Operator Image Browser</h1><div class="meta">${images.length} images · ${casts.length} spatial casts · ${groups.length} assays · generated ${generatedAt}</div></div><div class="tools"><a class="icon" href="spatial.html" title="Spatial casts">◇</a><a class="icon" href="all.html" title="All images">⊞</a></div></header><main class="content" data-total-images="${images.length}"><section class="group-grid">${groupCards}</section></main>`;
 fs.writeFileSync(path.join(browserDir, "index.html"), chrome("Operator Image Browser", `${images.length} images`, indexBody));
 fs.writeFileSync(path.join(browserDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
 
 const digest = crypto.createHash("sha256").update(JSON.stringify(manifest.images)).digest("hex");
-console.log(`built ${images.length} images across ${groups.length} groups; inventory digest ${digest}`);
+console.log(`built ${images.length} images and ${casts.length} canonical casts across ${groups.length} groups; inventory digest ${digest}`);

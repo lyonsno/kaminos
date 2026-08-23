@@ -48,13 +48,44 @@ h1 { margin:0; font-size:20px; font-weight:720; }
 .refs { display:flex; gap:7px; flex-wrap:wrap; margin:0 0 16px; }
 .ref { padding:5px 8px; border:1px solid var(--line); border-radius:5px; color:var(--muted); }
 .ref:hover { color:var(--ink); border-color:var(--teal); }
+.cast-list { display:grid; gap:14px; }
+.cast { overflow:hidden; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
+.cast.featured { border-color:#815b39; }
+.cast-head { display:flex; align-items:flex-start; gap:12px; padding:13px 14px; border-bottom:1px solid var(--line); }
+.cast-head h2 { margin:0; font-size:16px; }
+.cast-head .meta { overflow-wrap:anywhere; }
+.tags { display:flex; gap:5px; flex-wrap:wrap; margin-left:auto; justify-content:flex-end; }
+.tag { padding:3px 6px; border:1px solid var(--line); border-radius:4px; color:var(--muted); font-size:11px; white-space:nowrap; }
+.tag.accent { color:var(--accent); border-color:#815b39; }
+.cast-body { display:grid; grid-template-columns:minmax(190px,260px) minmax(300px,1fr) minmax(270px,420px); gap:14px; padding:14px; }
+.source-pane, .witness-pane, .detail-pane { min-width:0; }
+.pane-label { margin-bottom:7px; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; }
+.source-frame { overflow:hidden; aspect-ratio:1; border:1px solid var(--line); border-radius:5px; background:#080807; }
+.source-frame img { width:100%; height:100%; object-fit:contain; display:block; }
+.missing { display:grid; place-items:center; min-height:160px; padding:18px; border:1px dashed var(--danger); color:var(--danger); text-align:center; }
+.witness-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px; }
+.witness { overflow:hidden; min-width:0; border:1px solid var(--line); border-radius:5px; background:#080807; }
+.witness img { display:block; width:100%; aspect-ratio:1.52; object-fit:contain; }
+.witness span { display:block; padding:5px 7px; color:var(--muted); font-size:11px; border-top:1px solid var(--line); }
+.settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; overflow:hidden; margin-bottom:10px; border:1px solid var(--line); border-radius:5px; background:var(--line); }
+.setting { padding:7px 8px; background:var(--panel2); }
+.setting small { display:block; color:var(--muted); }
+.setting strong { font-variant-numeric:tabular-nums; }
+.commands { display:flex; gap:7px; margin:9px 0; }
+.command { display:inline-flex; align-items:center; min-height:34px; padding:0 10px; border:1px solid var(--line); border-radius:5px; background:var(--panel2); }
+.command:hover { border-color:var(--accent); }
+.path-row { display:grid; grid-template-columns:minmax(0,1fr) 36px; gap:6px; align-items:start; }
+.path-row code { min-width:0; max-height:76px; overflow:auto; padding:7px 8px; border:1px solid var(--line); border-radius:5px; background:#0c0c0b; color:#d7d1c7; font-size:10px; overflow-wrap:anywhere; white-space:normal; }
+.route-note { margin-top:8px; color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
 @media (max-width:760px) { .topbar { align-items:flex-start; flex-wrap:wrap; } .tools { width:100%; margin:0; overflow-x:auto; } .search { width:100%; min-width:170px; } .content { width:min(100% - 18px,1760px); margin-top:12px; } .group-grid { grid-template-columns:1fr; } .gallery { --tile:170px; } .range { display:none; } .modal { padding:6px; } }
+@media (max-width:1100px) { .cast-body { grid-template-columns:minmax(180px,240px) minmax(280px,1fr); } .detail-pane { grid-column:1/-1; } }
+@media (max-width:680px) { .cast-head { display:block; } .tags { margin:9px 0 0; justify-content:flex-start; } .cast-body { grid-template-columns:1fr; } .detail-pane { grid-column:auto; } .witness-grid { grid-template-columns:1fr; } }
 </style></head><body>
-  <header class="topbar"><a class="icon" href="index.html" title="All assays">⌂</a><div class="title"><h1>TRELLIS Seed 81409</h1><div class="meta">4 images · trellis-seed-81409</div></div><div class="tools"><input class="search" id="search" type="search" placeholder="Filter paths"><div class="segment" id="segments"></div><input class="range" id="size" title="Thumbnail size" type="range" min="150" max="360" value="220"></div></header>
+  <header class="topbar"><a class="icon" href="index.html" title="All assays">⌂</a><a class="icon" href="spatial.html" title="Spatial casts">◇</a><div class="title"><h1>TRELLIS Seed 81409</h1><div class="meta">4 images · trellis-seed-81409</div></div><div class="tools"><input class="search" id="search" type="search" placeholder="Filter paths"><div class="segment" id="segments"></div><input class="range" id="size" title="Thumbnail size" type="range" min="150" max="360" value="220"></div></header>
   <main class="content"><section class="gallery" id="gallery"></section><div class="empty" id="empty">No matching images</div></main>
   <div class="modal" id="modal"><img class="modal-image" id="modalImage"><div class="modal-bar"><div class="modal-label"><strong id="modalLabel"></strong><div class="modal-path" id="modalPath"></div></div><div class="modal-nav"><button class="icon" id="previous" title="Previous">‹</button><a class="icon" id="openOriginal" title="Open original">↗</a><button class="icon" id="next" title="Next">›</button><button class="icon" id="close" title="Close">×</button></div></div></div>
   <script>
-  const items=[{"id":546,"artifact_path":"trellis-seed-81409/front-actual.png","browser_src":"../trellis-seed-81409/front-actual.png","group_id":"trellis-seed-81409","kind":"other","label":"front-actual","bytes":390291},{"id":547,"artifact_path":"trellis-seed-81409/front.png","browser_src":"../trellis-seed-81409/front.png","group_id":"trellis-seed-81409","kind":"other","label":"front","bytes":366768},{"id":548,"artifact_path":"trellis-seed-81409/oblique-actual.png","browser_src":"../trellis-seed-81409/oblique-actual.png","group_id":"trellis-seed-81409","kind":"other","label":"oblique-actual","bytes":471950},{"id":549,"artifact_path":"trellis-seed-81409/oblique.png","browser_src":"../trellis-seed-81409/oblique.png","group_id":"trellis-seed-81409","kind":"other","label":"oblique","bytes":511726}]; let activeKind="all"; let visible=[]; let modalIndex=-1;
+  const items=[{"id":554,"artifact_path":"trellis-seed-81409/front-actual.png","browser_src":"../trellis-seed-81409/front-actual.png","group_id":"trellis-seed-81409","kind":"other","label":"front-actual","bytes":390291},{"id":555,"artifact_path":"trellis-seed-81409/front.png","browser_src":"../trellis-seed-81409/front.png","group_id":"trellis-seed-81409","kind":"other","label":"front","bytes":366768},{"id":556,"artifact_path":"trellis-seed-81409/oblique-actual.png","browser_src":"../trellis-seed-81409/oblique-actual.png","group_id":"trellis-seed-81409","kind":"other","label":"oblique-actual","bytes":471950},{"id":557,"artifact_path":"trellis-seed-81409/oblique.png","browser_src":"../trellis-seed-81409/oblique.png","group_id":"trellis-seed-81409","kind":"other","label":"oblique","bytes":511726}]; let activeKind="all"; let visible=[]; let modalIndex=-1;
   const kinds=["all",...new Set(items.map(item=>item.kind))];
   const gallery=document.getElementById("gallery"), search=document.getElementById("search"), empty=document.getElementById("empty"), segments=document.getElementById("segments");
   segments.innerHTML=kinds.map(kind=>'<button data-kind="'+kind+'">'+kind+'</button>').join('');
