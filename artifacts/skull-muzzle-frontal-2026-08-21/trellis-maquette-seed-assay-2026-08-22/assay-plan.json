@@ -1,0 +1,50 @@
+{
+  "assay_id": "trellis-maquette-seed-assay-2026-08-22",
+  "campaign_question": "How do source construction and TRELLIS reconstruction seed jointly affect bounded static orbitability for the strongest frontal horned-canid bust sources?",
+  "requested_route": {
+    "job_type": "trellis2mlx_fast_checkpoint",
+    "backend": "trellis2mlx native MLX",
+    "resolution": 512,
+    "steps": 8,
+    "cascade": false,
+    "target_faces": 100000,
+    "texture_size": 512,
+    "simplify_first": true,
+    "save_checkpoints": true
+  },
+  "claim_ceiling": "Source-conditioned seed variance and bounded static visual orbitability only. No topology, winding, collision, rigging, animation, anatomical fidelity, production, or unrestricted 360-degree claim.",
+  "sources": [
+    {
+      "source_id": "resin-effects-81439",
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-style-construction-atlas-2026-08-22/wave-2/seed-81439/03-resin-effects-maquette/output.png",
+      "sha256": "99ad70c7555863fa90a94f31da22fada08d6926290af75e7a874186ecf8e4db7",
+      "width": 512,
+      "height": 512,
+      "reconstruction_seeds": [81442, 81443, 81444]
+    },
+    {
+      "source_id": "lifelike-character-81420",
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-basin-atlas-2026-08-21/wave-2/seed-81420/09-lifelike-character-maquette/output.png",
+      "sha256": "f5acc3462c103082c8873a394f5645a5916429cf83607e854aab1639e698f31e",
+      "width": 512,
+      "height": 512,
+      "reconstruction_seeds": [81442, 81443, 81444]
+    },
+    {
+      "source_id": "soft-cel-bear-81439",
+      "path": "/private/tmp/kaminos-handy-candyman-skull-muzzle-0819/artifacts/skull-muzzle-frontal-2026-08-21/flux-cross-source-authoring-assay-2026-08-22/cells/bear-81402/21-soft-cel-painted-resin/seed-81439/output.png",
+      "sha256": "980f2ebd3beaa6d76c377cd917170928f3ea6e2a5456a275cba768708163c1c4",
+      "width": 512,
+      "height": 512,
+      "reconstruction_seeds": [81442],
+      "prior_spatial_seed": 81441
+    }
+  ],
+  "completion_delivery": {
+    "receiver": "handy-candyman",
+    "receiver_diaulos_id": "dia-3aa6e154-0f2a-47bd-a049-0aa81af4d06f",
+    "delivery_mode": "checkpoint",
+    "primary_output": "terminal-receipt.json",
+    "failure_artifact": "failure.json"
+  }
+}
