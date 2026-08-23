@@ -107,6 +107,18 @@ class YieldingFitContracts(unittest.TestCase):
             self.assertGreaterEqual(result["completedSteps"], 20,
                                     "yielded before the minimum quantum elapsed")
 
+    def test_hop_fits_are_exempt_from_seat_scale_quantum(self) -> None:
+        # The 300-step minimum quantum protects seat stages (1000-step fits)
+        # from startup-dominated ping-pong. Chain hop fits run at most
+        # hop_iterations (150) steps, so a seat-scale quantum makes the
+        # intra-fit yield gate unreachable and stretches waiter latency from
+        # ~yield_check_steps to a full hop cycle (fit + witness render) —
+        # observed live 2026-08-23 with operator jobs waiting 10+ minutes.
+        # The hop boundary is the natural quantum for hops; intra-hop yields
+        # must stay reachable regardless of the requested seat quantum.
+        self.assertEqual(PIPE.hop_fit_yield_quantum(300), 0)
+        self.assertEqual(PIPE.hop_fit_yield_quantum(0), 0)
+
     def test_checkpoint_preserves_adam_moments(self) -> None:
         medium = synthetic_medium()
         lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
