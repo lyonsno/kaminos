@@ -4,13 +4,13 @@
   "bundleIdentity": {
     "schema": "kaminos.authored-packing-trajectory-visual-bundle.v1",
     "route": "authored-packing-trajectory-orbitable-v1",
-    "generation": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
+    "generation": "3c56d346808be6438fd38937b73458bc701176f12c1f3857ea3bb22e27712988",
     "observedCarrierSha256": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
     "initializedCarrierSha256": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
     "packedCarrierSha256": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
     "sourceInputSha256": "8307c9eccc8872c7e1d188cfa9a339f7fbd98d96b139eb427423382233b466fc",
     "residualLedgerSha256": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa",
-    "sha256": "b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6"
+    "sha256": "0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378"
   },
   "residualLedger": {
     "path": "residual-ledger.json",
@@ -23,12 +23,12 @@
   },
   "captureBatch": {
     "path": "capture-batch-report.json",
-    "sha256": "9732a0ef45958232a74ff8e12e913e6a9a398b89d661f99b9065a1e824edec67",
+    "sha256": "36bb4d9c7741a3bb4737a43847fe2828b91602b2e2d67ec46c39789893c9e51a",
     "identity": {
       "schema": "kaminos.authored-packing-trajectory-capture-batch-identity.v0",
-      "id": "8695d4f6-65c9-454d-8963-6da9ff1770de",
-      "generation": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
-      "bundleSha256": "b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6",
+      "id": "fdd1a319-6076-4b6e-bcaf-83469e6b46aa",
+      "generation": "3c56d346808be6438fd38937b73458bc701176f12c1f3857ea3bb22e27712988",
+      "bundleSha256": "0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378",
       "routeRequested": "authored-packing-trajectory-orbitable-v1",
       "routeEffective": "authored-packing-trajectory-orbitable-v1",
       "semanticViews": [
@@ -47,17 +47,17 @@
         "width": 1600,
         "height": 1000
       },
-      "sha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4"
+      "sha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82"
     }
   },
   "servedViewer": {
     "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html",
     "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html",
-    "sha256": "db7eb118c0e3d2e90fd8dd1581ef7430b4aa7e0ea189717f0588ea3a89cd5e28",
-    "expectedSha256": "db7eb118c0e3d2e90fd8dd1581ef7430b4aa7e0ea189717f0588ea3a89cd5e28",
+    "sha256": "258146bea400682aaa89190a9927fd6d4abfaebaa61b7d774b95f0714d93d34a",
+    "expectedSha256": "258146bea400682aaa89190a9927fd6d4abfaebaa61b7d774b95f0714d93d34a",
     "fallbackUsed": false,
     "observedVisibleIdentity": {
-      "generation": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
+      "generation": "3c56d346808be6438fd38937b73458bc701176f12c1f3857ea3bb22e27712988",
       "observedCarrierSha256": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
       "initializedCarrierSha256": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
       "packedCarrierSha256": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
@@ -69,10 +69,10 @@
   "captures": [
     {
       "semanticView": "observed-front",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "8032d37ee1c21a234f850f51505f5a41b39a162c2c49061305f4c03eb913f465",
-      "sizeBytes": 246519,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "be9079ae6ce283670765aa82fa8f8ac4992be3fc364006ff4eabe3b0a18c6e30",
+      "sizeBytes": 246414,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -82,19 +82,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 63,
-        "idatBytes": 245742
+        "idatBytes": 245637
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "8032d37ee1c21a234f850f51505f5a41b39a162c2c49061305f4c03eb913f465"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "be9079ae6ce283670765aa82fa8f8ac4992be3fc364006ff4eabe3b0a18c6e30"
     },
     {
       "semanticView": "initialized-front",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "0a89e652e5180bc8201ce0b37f63997d9fc24d45258bcb3a4dbf7617ad67c6f1",
-      "sizeBytes": 246902,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "0e3414b502f7f9ecb4874df58b6f5648bbc25f267733356bae317632656ee876",
+      "sizeBytes": 246800,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -104,19 +104,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 64,
-        "idatBytes": 246113
+        "idatBytes": 246011
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "0a89e652e5180bc8201ce0b37f63997d9fc24d45258bcb3a4dbf7617ad67c6f1"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "0e3414b502f7f9ecb4874df58b6f5648bbc25f267733356bae317632656ee876"
     },
     {
       "semanticView": "packed-front",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "a11a24f163758a103dab45f5a7f033f1f3238a9ed14394e86be1b26af4288e3c",
-      "sizeBytes": 246442,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "865fbed4679c894d73205dfeae8989d11e5c4c462dc384326f671ae19094bc8a",
+      "sizeBytes": 246337,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -126,19 +126,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 63,
-        "idatBytes": 245665
+        "idatBytes": 245560
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "a11a24f163758a103dab45f5a7f033f1f3238a9ed14394e86be1b26af4288e3c"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "865fbed4679c894d73205dfeae8989d11e5c4c462dc384326f671ae19094bc8a"
     },
     {
       "semanticView": "observed-side",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "26d286c9b3558f79f75dc9dfbb50a51f350c1b10f395bfd7d95b9568285976c7",
-      "sizeBytes": 252058,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "75bdb10f8e43d0ee9c63b471a5d4f9e1f6c55de1de12af8bbdebc096ef0ad30e",
+      "sizeBytes": 251935,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -148,19 +148,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 65,
-        "idatBytes": 251257
+        "idatBytes": 251134
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "26d286c9b3558f79f75dc9dfbb50a51f350c1b10f395bfd7d95b9568285976c7"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "75bdb10f8e43d0ee9c63b471a5d4f9e1f6c55de1de12af8bbdebc096ef0ad30e"
     },
     {
       "semanticView": "initialized-side",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "c1f671130cd7f0fbd280a3ca28be049ca7d8e6409aded9ff8efe119bd95a2609",
-      "sizeBytes": 252025,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "a5553f1bf5e00f9e8718a1a3415cdd69dc2096461f60fd0416e767f1aa44619e",
+      "sizeBytes": 251900,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -170,19 +170,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 65,
-        "idatBytes": 251224
+        "idatBytes": 251099
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "c1f671130cd7f0fbd280a3ca28be049ca7d8e6409aded9ff8efe119bd95a2609"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "a5553f1bf5e00f9e8718a1a3415cdd69dc2096461f60fd0416e767f1aa44619e"
     },
     {
       "semanticView": "packed-side",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "b0f3c72d8e21fcf57ded231d32138573175db0da67f7f1e7196925e5df6cdc30",
-      "sizeBytes": 251876,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "0473cef17095fcd23fc7f2d435377b137f0220ba1f49767e746542ef4d68c42f",
+      "sizeBytes": 251752,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -192,19 +192,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 65,
-        "idatBytes": 251075
+        "idatBytes": 250951
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "b0f3c72d8e21fcf57ded231d32138573175db0da67f7f1e7196925e5df6cdc30"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "0473cef17095fcd23fc7f2d435377b137f0220ba1f49767e746542ef4d68c42f"
     },
     {
       "semanticView": "packed-diagnostic",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "df61e4a5efcf28ccb8b23af208c2b07405a6ae8218510653fe6038bb0931ee50",
-      "sizeBytes": 317161,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "e32878496664a9f7428262bc664306360c17f6a249924060b45d811052022778",
+      "sizeBytes": 316907,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -214,19 +214,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 81,
-        "idatBytes": 316168
+        "idatBytes": 315914
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "df61e4a5efcf28ccb8b23af208c2b07405a6ae8218510653fe6038bb0931ee50"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "e32878496664a9f7428262bc664306360c17f6a249924060b45d811052022778"
     },
     {
       "semanticView": "observed-contact",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "229a6fc099a464b9ac52edb752c9c1c9b2f87c91279a6f935ea1d9612b9f33bf",
-      "sizeBytes": 306580,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "74766bd20c5574571ff52e9b12959ad129f709dbb8711350446b48520ad9a4e5",
+      "sizeBytes": 306462,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -236,19 +236,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 78,
-        "idatBytes": 305623
+        "idatBytes": 305505
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "229a6fc099a464b9ac52edb752c9c1c9b2f87c91279a6f935ea1d9612b9f33bf"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "74766bd20c5574571ff52e9b12959ad129f709dbb8711350446b48520ad9a4e5"
     },
     {
       "semanticView": "initialized-contact",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "540e1d21c353c937c60a06668dca0352c6975357b78f14db666219be0ba1396e",
-      "sizeBytes": 306948,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "7c6cbb2272ac00c10fed3a4569567cbe163f2ccf60d00eff2bdfc50dbb70a3f9",
+      "sizeBytes": 306828,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -258,19 +258,19 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 78,
-        "idatBytes": 305991
+        "idatBytes": 305871
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "540e1d21c353c937c60a06668dca0352c6975357b78f14db666219be0ba1396e"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "7c6cbb2272ac00c10fed3a4569567cbe163f2ccf60d00eff2bdfc50dbb70a3f9"
     },
     {
       "semanticView": "packed-contact",
-      "requestedUrl": "index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts",
-      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "sha256": "38b36140c94df7dbcfce0d1cd07838e9ce2f8752fbfe7e4482c1b539cae76ada",
-      "sizeBytes": 292295,
+      "requestedUrl": "index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=0ae235b3f56f27adf71150f0159e80630882f66c95693c49046dee324ecb1378&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts&captureBatch=be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "sha256": "e2cb7b2e9777ddd3090b0312c6b7ea65bb2db9150e78bd33cc794817400ab02c",
+      "sizeBytes": 292192,
       "viewport": {
         "width": 1600,
         "height": 1000,
@@ -280,16 +280,16 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 75,
-        "idatBytes": 291374
+        "idatBytes": 291271
       },
       "installedStableChrome": false,
       "cleanupStatus": "complete-no-process-group-remains",
-      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
-      "currentPngSha256": "38b36140c94df7dbcfce0d1cd07838e9ce2f8752fbfe7e4482c1b539cae76ada"
+      "captureBatchIdentitySha256": "be5f0349230fcf0c3dcef998502cdd8b65c4108b62c8a878d24d9706954cbb82",
+      "currentPngSha256": "e2cb7b2e9777ddd3090b0312c6b7ea65bb2db9150e78bd33cc794817400ab02c"
     }
   ],
   "failurePhase": null,
-  "generation": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
+  "generation": "3c56d346808be6438fd38937b73458bc701176f12c1f3857ea3bb22e27712988",
   "receiptPaths": [
     "observed-front-capture-report.json",
     "initialized-front-capture-report.json",
@@ -304,6 +304,6 @@
   ],
   "captureBatchReceipt": {
     "path": "capture-batch-report.json",
-    "sha256": "9732a0ef45958232a74ff8e12e913e6a9a398b89d661f99b9065a1e824edec67"
+    "sha256": "36bb4d9c7741a3bb4737a43847fe2828b91602b2e2d67ec46c39789893c9e51a"
   }
 }
