@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -151,7 +151,50 @@ test('authored intent projects exact observed rings into the existing positive-v
 
   assert.equal(bridge.source.authority.kind, 'operator-authored');
   assert.equal(bridge.source.input.effective.kind, 'operator-authored-fixture');
+  assert.deepEqual(bridge.observedCarrier.orderedConstructionIds, manifest.memberOrder);
   assert.deepEqual(bridge.solverCarrier.orderedConstructionIds, manifest.memberOrder);
+  assert.notEqual(
+    bridge.observedCarrier.identity.sha256,
+    bridge.solverCarrier.identity.sha256,
+    'the exact authored observation must not impersonate endpoint-normalized solver initialization',
+  );
+  assert.deepEqual(bridge.initialization, {
+    schema:'kaminos.authored-packing-solver-initialization.v0',
+    observedCarrierSha256:bridge.observedCarrier.identity.sha256,
+    initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
+    endpointPolicy:'intent-endpoints-observed-interior',
+    endpointDisplacements:bridge.initialization.endpointDisplacements,
+  });
+  assert.ok(bridge.initialization.endpointDisplacements.some(row => row.maximumDisplacement > 0.1));
+  for (const [memberIndex, memberId] of manifest.memberOrder.entries()) {
+    const observedNodes = new Map(bridge.observedCarrier.cages[memberIndex].manifest.nodes.map(
+      node => [node.id, node],
+    ));
+    const initializedNodes = new Map(bridge.solverCarrier.cages[memberIndex].manifest.nodes.map(
+      node => [node.id, node],
+    ));
+    const lastSection = mild.members[memberIndex].rings.length - 1;
+    for (const sectionIndex of [0, lastSection]) {
+      const axisId = `${memberId}:section:${String(sectionIndex).padStart(4, '0')}:axis`;
+      assert.deepEqual(
+        observedNodes.get(axisId).currentPosition,
+        mild.members[memberIndex].centerline[sectionIndex].position,
+        `${memberId} exact observed endpoint ${sectionIndex}`,
+      );
+      assert.deepEqual(
+        initializedNodes.get(axisId).currentPosition,
+        clean.members[memberIndex].centerline[sectionIndex].position,
+        `${memberId} initialized endpoint ${sectionIndex}`,
+      );
+    }
+    const interiorSection = Math.floor(lastSection / 2);
+    const interiorAxisId = `${memberId}:section:${String(interiorSection).padStart(4, '0')}:axis`;
+    assert.deepEqual(
+      initializedNodes.get(interiorAxisId).currentPosition,
+      mild.members[memberIndex].centerline[interiorSection].position,
+      `${memberId} initialized interior remains authored observation`,
+    );
+  }
   assert.equal(bridge.solverCarrier.cages.length, manifest.memberOrder.length);
   assert.ok(bridge.solverCarrier.cages.every(cage =>
     cage.manifest.nodes.some(node => node.restPosition.some(
@@ -175,6 +218,41 @@ test('authored intent projects exact observed rings into the existing positive-v
   assert.ok(measurement.pairwise.totalPenetration > 0);
   assert.equal(measurement.skeletal.totalPenetration, 0);
   assert.equal(measurement.compartment.maximumEscape, 0);
+});
+
+test('accepted authored steps preserve parent, candidate, selected, and exact-contact custody', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const assay = authoredPacking.runAuthoredPackingOneStepAssay({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+
+  assert.equal(assay.result.iterationHistory.length, 1);
+  const accepted = assay.result.iterationHistory[0].acceptedStep;
+  assert.equal(accepted.parentCarrierSha256, assay.bridge.solverCarrier.identity.sha256);
+  assert.equal(accepted.candidateCarrierSha256, assay.result.packedCarrier.identity.sha256);
+  assert.equal(accepted.selectedCarrierSha256, assay.result.packedCarrier.identity.sha256);
+  assert.equal(accepted.fixedNodeMaximumDrift, 0);
+  assert.equal(accepted.nonPositiveCellCount, 0);
+  assert.equal(
+    accepted.maximumRelativeVolumeError,
+    Math.max(...assay.result.metrics.packed.cages.map(row => row.relativeVolumeError)),
+  );
+  assert.equal(
+    accepted.exactContact.summary.maximumPairwisePenetration,
+    assay.exact.packed.summary.maximumPairwisePenetration,
+  );
+  assert.ok(accepted.exactContact.summary.predictedKeys.length > 0);
+  assert.equal(accepted.exactContact.summary.meshTruthKeys, null);
+  assert.equal(accepted.exactContact.summary.meshTruthAgreement, null);
+  assert.equal(
+    accepted.exactContact.source.meshTruthAuthority,
+    'unavailable-for-deformed-or-hybrid-candidate',
+  );
 });
 
 test('one authored N-body step reduces exact pairwise penetration without increasing exact bone or inherited maximum volume debt', async () => {
@@ -230,12 +308,14 @@ test('ring-cage witness renders six authored bodies and the exact authored bone 
   );
   const bundleIdentity = {
     sha256:'a'.repeat(64),
-    sourceCarrierSha256:assay.bridge.solverCarrier.identity.sha256,
+    observedCarrierSha256:assay.bridge.observedCarrier.identity.sha256,
+    initializedCarrierSha256:assay.bridge.solverCarrier.identity.sha256,
     packedCarrierSha256:assay.result.packedCarrier.identity.sha256,
     residualLedgerSha256:'b'.repeat(64),
   };
   const html = renderMuscleCompartmentRingCageContactHtml({
-    sourceCarrier:assay.bridge.solverCarrier,
+    observedCarrier:assay.bridge.observedCarrier,
+    initializedCarrier:assay.bridge.solverCarrier,
     result:assay.result,
     source:assay.bridge.source,
     route:{ requested:'authored-fixture-one-step-v0', effective:'authored-fixture-one-step-v0' },
@@ -267,6 +347,46 @@ test('ring-cage witness renders six authored bodies and the exact authored bone 
     'packed view must show per-ring source-to-proposal displacement segments',
   );
   assert.match(html, /source boundary \/ ring displacement/);
+  assert.match(html, /data-state="observed"/);
+  assert.match(html, /data-state="initialized"/);
+  assert.match(html, /data-state="packed"/);
+  assert.match(html, /data-diagnostic="wireframe"/);
+  assert.match(html, /data-diagnostic="source-ghost"/);
+  assert.match(html, /data-diagnostic="displacement"/);
+  assert.match(html, /data-diagnostic="contacts"/);
+  assert.doesNotMatch(
+    html,
+    /sourceBoundaryGhostGroup\.visible=packed; displacementGroup\.visible=packed; contactGroup\.visible=packed/,
+    'changing comparison state must not silently change diagnostic overlays',
+  );
+  assert.match(html, /exactContactByState/);
+  assert.match(html, /stateContactGroups/);
+  assert.match(html, /diagnostics\.contacts&&state===currentState/);
+  assert.match(html, /viewMode==='contact'/);
+  assert.match(
+    html,
+    /Math\.max\(framingRadius\*\.82,strongestContact\.maximumPenetration\*5\)/,
+    'contact focus must retain enough compartment context to keep the intersecting bodies legible',
+  );
+  assert.match(
+    html,
+    /stateContactGroups\[state\]\.add\(witnessBeam/,
+    'exact contact localization must remain visible at compartment scale instead of relying on one-pixel lines',
+  );
+  assert.match(
+    html,
+    /if\(viewMode==='contact'\).*\.material\.opacity=/s,
+    'contact focus must reduce surface occlusion without changing comparison geometry',
+  );
+  assert.match(html, /exact movable pairwise family witness/);
+  assert.match(html, /exact skeletal family witness/);
+  assert.match(html, /solver init/);
+  assert.match(
+    html,
+    /diagnostic-controls[\s\S]*id="contact-families"[\s\S]*class="metrics"/,
+    'contact family identity must remain visible beside the contact controls instead of below the scroll-heavy metric ledger',
+  );
+  assert.match(html, /strongest → /);
 });
 
 test('authored trajectory runner writes a failure report and no primary artifacts when source identity is unavailable', async () => {
@@ -277,6 +397,22 @@ test('authored trajectory runner writes a failure report and no primary artifact
       import.meta.url,
     ));
     const missingManifest = path.join(output, 'missing-manifest.json');
+    const staleArtifacts = [
+      'assay-result.json',
+      'index.html',
+      'capture-route-verification.json',
+      'source-crowded.png',
+      'source-crowded-report.json',
+      'contact-relieved.png',
+      'contact-relieved-report.json',
+    ];
+    for (const relative of staleArtifacts) {
+      await writeFile(path.join(output, relative), 'stale prior generation');
+    }
+    await writeFile(path.join(output, 'run-report.json'), JSON.stringify({
+      status:'completed',
+      generation:'stale-prior-generation',
+    }));
     const result = spawnSync(process.execPath, [
       runner,
       '--manifest', missingManifest,
@@ -290,6 +426,7 @@ test('authored trajectory runner writes a failure report and no primary artifact
     assert.equal(report.status, 'failed');
     assert.equal(report.failurePhase, 'read-manifest');
     assert.equal(report.outputs, null);
+    assert.match(report.generation, /^[a-f0-9]{64}$/);
     assert.deepEqual(await readdir(output), ['run-report.json']);
   } finally {
     await rm(output, { recursive:true, force:true });
@@ -320,6 +457,16 @@ test('authored trajectory report binds the served viewer and route inside the vi
     assert.deepEqual(report.visual.route, report.route);
     assert.deepEqual(report.visual.viewer, report.outputs.viewer);
     assert.equal(report.visual.bundleIdentity.route, report.visual.route.effective);
+    const contactViews = report.visual.captureUrls.filter(url =>
+      new URL(url, 'http://fixture.invalid/').searchParams.get('view') === 'contact'
+    );
+    assert.deepEqual(
+      contactViews.map(url => new URL(url, 'http://fixture.invalid/').searchParams.get('state')),
+      ['observed', 'initialized', 'packed'],
+    );
+    assert.ok(contactViews.every(url =>
+      new URL(url, 'http://fixture.invalid/').searchParams.get('diagnostics') === 'contacts'
+    ));
   } finally {
     await rm(output, { recursive:true, force:true });
   }

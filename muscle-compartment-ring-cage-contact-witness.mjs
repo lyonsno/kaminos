@@ -41,6 +41,8 @@ function cagePayload(cage) {
 
 export function renderMuscleCompartmentRingCageContactHtml({
   sourceCarrier,
+  observedCarrier,
+  initializedCarrier,
   result,
   source,
   route,
@@ -48,8 +50,17 @@ export function renderMuscleCompartmentRingCageContactHtml({
   residualLedger,
   presentation = {},
 }) {
+  const effectiveObservedCarrier = observedCarrier ?? sourceCarrier;
+  const effectiveInitializedCarrier = initializedCarrier ?? sourceCarrier;
+  const observedCarrierSha256 = bundleIdentity?.observedCarrierSha256 ??
+    bundleIdentity?.sourceCarrierSha256;
+  const initializedCarrierSha256 = bundleIdentity?.initializedCarrierSha256 ??
+    bundleIdentity?.sourceCarrierSha256;
   if (!bundleIdentity?.sha256 ||
-      bundleIdentity.sourceCarrierSha256 !== sourceCarrier.identity.sha256 ||
+      !effectiveObservedCarrier?.identity?.sha256 ||
+      !effectiveInitializedCarrier?.identity?.sha256 ||
+      observedCarrierSha256 !== effectiveObservedCarrier.identity.sha256 ||
+      initializedCarrierSha256 !== effectiveInitializedCarrier.identity.sha256 ||
       bundleIdentity.packedCarrierSha256 !== result.packedCarrier.identity.sha256 ||
       !bundleIdentity.residualLedgerSha256 ||
       residualLedger?.sourceCarrierSha256 !== result.packedCarrier.identity.sha256 ||
@@ -82,15 +93,21 @@ export function renderMuscleCompartmentRingCageContactHtml({
   )) {
     throw new Error('ring-cage witness authored bone requires indexed finite mesh geometry');
   }
-  const exactContact = presentation.exactContact ? {
-    initial:presentation.exactContact.initial?.summary,
-    packed:presentation.exactContact.packed?.summary,
+  const exactContactByState = presentation.exactContact ? {
+    observed:presentation.exactContact.observed ?? presentation.exactContact.initial,
+    initialized:presentation.exactContact.initialized ?? presentation.exactContact.initial,
+    packed:presentation.exactContact.packed,
+  } : null;
+  const exactContact = exactContactByState ? {
+    initial:exactContactByState.initialized?.summary,
+    packed:exactContactByState.packed?.summary,
   } : null;
   if (exactContact && (!exactContact.initial || !exactContact.packed)) {
     throw new Error('ring-cage witness exact contact requires initial and packed summaries');
   }
   const payload = JSON.stringify({
-    sourceCages: sourceCarrier.cages.map(cagePayload),
+    observedCages: effectiveObservedCarrier.cages.map(cagePayload),
+    initializedCages: effectiveInitializedCarrier.cages.map(cagePayload),
     packedCages: result.packedCarrier.cages.map(cagePayload),
     source,
     route,
@@ -99,6 +116,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     presentationFocus,
     authoredBone,
     exactContact,
+    exactContactByState,
   });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
@@ -114,7 +132,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
   const authorityLabel = presentation.authorityLabel ||
     'Agent-authored provisional assay · no packing or anatomical admission';
   const colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff', '#ff9f68', '#4f9dd9'];
-  const legend = sourceCarrier.cages.map((cage, index) =>
+  const legend = effectiveInitializedCarrier.cages.map((cage, index) =>
     `<span><i style="background:${colors[index]}"></i>${escapeHtml(cage.constructionId)}</span>`,
   ).join('');
   const exactRows = exactContact ? `
@@ -139,7 +157,9 @@ export function renderMuscleCompartmentRingCageContactHtml({
     .authority { margin:0 0 7px; color:#e5b77d; font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
     .status { margin:0 0 9px; color:#ffd166; font:700 10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.06em; text-transform:uppercase; }
     .explanation { margin:0 0 13px; color:#aeb9c6; font-size:11px; line-height:1.4; }
-    .controls { display:flex; gap:8px; margin-bottom:13px; }
+    .controls { display:flex; gap:8px; margin-bottom:9px; }
+    .diagnostic-controls { margin-bottom:13px; }
+    .diagnostic-controls button { min-height:31px; padding:5px 6px; font-size:9px; }
     button { flex:1; min-height:42px; padding:8px 10px; border:1px solid #ffffff24; border-radius:9px; color:#dce6f0; background:#111923; cursor:pointer; font:600 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace; }
     button[aria-pressed="true"] { color:#081016; background:#e7d1a8; border-color:#fff1d0; }
     .metrics { display:grid; grid-template-columns:1.45fr .82fr .82fr; gap:5px 9px; font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace; }
@@ -150,6 +170,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     .legend i { display:inline-block; width:8px; height:8px; margin-right:5px; border-radius:50%; }
     .hint { position:fixed; z-index:2; right:18px; bottom:16px; max-width:390px; padding:9px 12px; border-radius:9px; background:#080c12d9; color:#aeb8c4; font-size:11px; text-align:right; }
     .identity { margin:11px 0 0; color:#778493; font:9px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; overflow-wrap:anywhere; }
+    .contact-families { margin:9px 0 0; color:#ffbd82; font:9px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; }
     @media (max-width:600px) { .panel { top:10px; left:10px; width:calc(100vw - 20px); padding:12px; } .hint { display:none; } }
   </style>
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
@@ -161,12 +182,20 @@ export function renderMuscleCompartmentRingCageContactHtml({
     <p class="authority">${escapeHtml(authorityLabel)}</p>
     <p class="status">Solver disposition · ${escapeHtml(result.status)}</p>
     <p class="explanation">${escapeHtml(explanation)}</p>
-    <div class="controls">
-      <button data-state="before">${escapeHtml(sourceLabel)}</button>
+    <div class="controls state-controls">
+      <button data-state="observed">${escapeHtml(presentation.observedLabel || 'Exact authored source')}</button>
+      <button data-state="initialized">${escapeHtml(sourceLabel)}</button>
       <button data-state="packed">${escapeHtml(proposalLabel)}</button>
     </div>
+    <div class="controls diagnostic-controls" aria-label="Independent diagnostic overlays">
+      <button data-diagnostic="wireframe">wireframe</button>
+      <button data-diagnostic="source-ghost">source ghost</button>
+      <button data-diagnostic="displacement">displacement</button>
+      <button data-diagnostic="contacts">contacts</button>
+    </div>
+    <p id="contact-families" class="contact-families"></p>
     <div class="metrics">
-      <span class="head">measurement</span><span class="head value">source</span><span class="head value">proposal</span>
+      <span class="head">measurement</span><span class="head value">solver init</span><span class="head value">proposal</span>
       <span>movable pairwise total</span><span class="value">${formatMetric(initial.pairwise.movableTotalPenetration)}</span><span class="value proposal">${formatMetric(packed.pairwise.movableTotalPenetration)}</span>
       <span>movable pairwise max</span><span class="value">${formatMetric(initial.pairwise.movableMaximumPenetration)}</span><span class="value proposal">${formatMetric(packed.pairwise.movableMaximumPenetration)}</span>
       <span>fixed pairwise total</span><span class="value">${formatMetric(initial.pairwise.fixedTotalPenetration)}</span><span class="value proposal">${formatMetric(packed.pairwise.fixedTotalPenetration)}</span>
@@ -182,8 +211,8 @@ ${exactRows}
       <span>skeletal contact rows</span><span class="value">—</span><span class="value proposal">${residualLedger.skeletal.contacts.length}</span>
       <span>termination</span><span class="value">—</span><span class="value proposal">${escapeHtml(result.termination?.reason || 'unrecorded')}</span>
     </div>
-    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>${authoredBone ? 'exact authored bone' : 'skeletal capsule'}</span><span><i style="background:#99a8ba"></i>source boundary / ring displacement</span><span><i style="background:#ff8a3d"></i>movable pairwise pressure</span><span><i style="background:#ffffff"></i>fixed pairwise pressure</span><span><i style="background:#48c7ff"></i>skeletal pressure</span></div>
-    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>source ${escapeHtml(bundleIdentity.sourceCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
+    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>${authoredBone ? 'exact authored bone' : 'skeletal capsule'}</span><span><i style="background:#99a8ba"></i>source boundary / ring displacement</span><span><i style="background:#ff8a3d"></i>exact movable pairwise family witness</span><span><i style="background:#ffffff"></i>packed fixed pairwise residual</span><span><i style="background:#48c7ff"></i>exact skeletal family witness</span></div>
+    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>observed ${escapeHtml(observedCarrierSha256)}<br>initialized ${escapeHtml(initializedCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · solid colored surfaces are the actual tetrahedral cage boundary, not a centerline tube reconstruction</div>
   <script type="module">
@@ -215,6 +244,17 @@ ${exactRows}
       const visual=new THREE.Line(geometry,new THREE.LineBasicMaterial({color,transparent:true,opacity:.86,depthTest:false,depthWrite:false}));
       visual.renderOrder=20; return visual;
     }
+    function witnessBeam(points,color,radius){
+      const start=new THREE.Vector3(...points[0]),end=new THREE.Vector3(...points[1]),delta=end.clone().sub(start),span=delta.length();
+      const visual=new THREE.Mesh(
+        new THREE.CylinderGeometry(radius,radius,Math.max(.001,span),12),
+        new THREE.MeshBasicMaterial({color,transparent:true,opacity:.96,depthTest:false,depthWrite:false}),
+      );
+      visual.position.copy(start).add(end).multiplyScalar(.5);
+      visual.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());
+      visual.renderOrder=21;
+      return visual;
+    }
     function cageMesh(cage,color,opacity){
       const vertices=[];
       for(const face of cage.faces) for(const index of face) vertices.push(...cage.positions[index]);
@@ -234,10 +274,10 @@ ${exactRows}
       geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3)); geometry.computeVertexNormals();
       return new THREE.Mesh(geometry,new THREE.MeshPhysicalMaterial({color,roughness:.42,metalness:.02,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:true}));
     }
-    function addCage(group,cage,index,opacity=1){
-      const mesh=cageMesh(cage,colors[index],opacity); group.add(mesh);
-      const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,18),new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.2})); group.add(edge);
-      group.add(line(cage.axisNodeIndices.map(nodeIndex=>cage.positions[nodeIndex]),0xffffff,.72));
+    function addCage(surfaceGroup,wireframeGroup,cage,index,opacity=1){
+      const mesh=cageMesh(cage,colors[index],opacity); surfaceGroup.add(mesh);
+      const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,18),new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.45})); wireframeGroup.add(edge);
+      surfaceGroup.add(line(cage.axisNodeIndices.map(nodeIndex=>cage.positions[nodeIndex]),0xffffff,.72));
       const fixedPositions=[];
       for(const nodeIndex of cage.fixedNodeIndices){
         const point=cage.positions[nodeIndex]; fixedPositions.push(point);
@@ -245,7 +285,7 @@ ${exactRows}
       const unique=[];
       for(const point of fixedPositions) if(!unique.some(row=>new THREE.Vector3(...row).distanceTo(new THREE.Vector3(...point))<1e-6)) unique.push(point);
       for(const point of unique){
-        const handle=new THREE.Mesh(new THREE.SphereGeometry(.055,16,12),new THREE.MeshStandardMaterial({color:0xf5f1e8,roughness:.35})); handle.position.set(...point); group.add(handle);
+        const handle=new THREE.Mesh(new THREE.SphereGeometry(.055,16,12),new THREE.MeshStandardMaterial({color:0xf5f1e8,roughness:.35})); handle.position.set(...point); surfaceGroup.add(handle);
       }
     }
     function capsuleBetween(a,b,radius){
@@ -265,10 +305,37 @@ ${exactRows}
     scene.add(environmentGroup);
     const compartment=payload.source.compartment,size=compartment.maximum.map((v,i)=>v-compartment.minimum[i]),center=compartment.maximum.map((v,i)=>(v+compartment.minimum[i])/2);
     const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)),new THREE.LineDashedMaterial({color:0x86a6c8,transparent:true,opacity:.2,dashSize:.08,gapSize:.05})); box.computeLineDistances(); box.position.set(...center); scene.add(box);
-    const beforeGroup=new THREE.Group(),packedGroup=new THREE.Group(),sourceBoundaryGhostGroup=new THREE.Group(),displacementGroup=new THREE.Group(),contactGroup=new THREE.Group();
-    payload.sourceCages.forEach((cage,index)=>addCage(beforeGroup,cage,index,.82));
-    payload.packedCages.forEach((cage,index)=>addCage(packedGroup,cage,index,.82));
-    payload.sourceCages.forEach((sourceCage,index)=>{
+    const stateGroups={
+      observed:{surface:new THREE.Group(),wireframe:new THREE.Group()},
+      initialized:{surface:new THREE.Group(),wireframe:new THREE.Group()},
+      packed:{surface:new THREE.Group(),wireframe:new THREE.Group()},
+    };
+    const sourceBoundaryGhostGroup=new THREE.Group(),displacementGroup=new THREE.Group(),residualContactGroup=new THREE.Group();
+    const stateContactGroups={observed:new THREE.Group(),initialized:new THREE.Group(),packed:new THREE.Group()};
+    const exactContactRowsByState=Object.fromEntries(Object.entries(payload.exactContactByState||{}).map(([state,measurement])=>[
+      state,
+      [
+        ...(measurement?.pairRows||[]).filter(row=>row.intersects).map(row=>({...row,kind:'pairwise'})),
+        ...(measurement?.boneRows||[]).filter(row=>row.intersects).map(row=>({...row,kind:'skeletal'})),
+      ].sort((left,right)=>right.maximumPenetration-left.maximumPenetration),
+    ]));
+    for(const [state,rows] of Object.entries(exactContactRowsByState)){
+      for(const [rowIndex,row] of rows.entries()){
+        if(!row.witness?.leftPoint||!row.witness?.rightPoint) continue;
+        const color=row.kind==='skeletal'?0x48c7ff:0xff8a3d;
+        const emphasis=rowIndex===0?1:.42;
+        stateContactGroups[state].add(witnessBeam([row.witness.leftPoint,row.witness.rightPoint],color,.18+.34*emphasis));
+        for(const point of [row.witness.leftPoint,row.witness.rightPoint]){
+          const radius=.34+.7*emphasis;
+          const marker=new THREE.Mesh(new THREE.SphereGeometry(radius,16,10),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.98,depthTest:false,depthWrite:false}));
+          marker.position.set(...point); marker.renderOrder=22; stateContactGroups[state].add(marker);
+        }
+      }
+    }
+    payload.observedCages.forEach((cage,index)=>addCage(stateGroups.observed.surface,stateGroups.observed.wireframe,cage,index,.82));
+    payload.initializedCages.forEach((cage,index)=>addCage(stateGroups.initialized.surface,stateGroups.initialized.wireframe,cage,index,.82));
+    payload.packedCages.forEach((cage,index)=>addCage(stateGroups.packed.surface,stateGroups.packed.wireframe,cage,index,.82));
+    payload.observedCages.forEach((sourceCage,index)=>{
       const sourceMesh=cageMesh(sourceCage,colors[index],0);
       const sourceBoundary=new THREE.LineSegments(
         new THREE.EdgesGeometry(sourceMesh.geometry,18),
@@ -292,14 +359,15 @@ ${exactRows}
       const color=contact.kind==='pairwise-boundary-inside-cage'
         ? (contact.fixed?0xffffff:0xff8a3d)
         : 0x48c7ff;
-      contactGroup.add(pressureLine([contact.point,target],color));
+      residualContactGroup.add(pressureLine([contact.point,target],color));
       const radius=.018+.065*Math.sqrt(contact.penetration/maximumContact);
       const marker=new THREE.Mesh(new THREE.SphereGeometry(radius,12,8),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.94,depthTest:false,depthWrite:false}));
-      marker.position.set(...contact.point); marker.renderOrder=21; contactGroup.add(marker);
+      marker.position.set(...contact.point); marker.renderOrder=21; residualContactGroup.add(marker);
     }
-    scene.add(beforeGroup,packedGroup,sourceBoundaryGhostGroup,displacementGroup,contactGroup);
+    for(const groups of Object.values(stateGroups)) scene.add(groups.surface,groups.wireframe);
+    scene.add(sourceBoundaryGhostGroup,displacementGroup,residualContactGroup,...Object.values(stateContactGroups));
     const bounds=new THREE.Box3();
-    for(const cage of [...payload.sourceCages,...payload.packedCages]) for(const point of cage.positions) bounds.expandByPoint(new THREE.Vector3(...point));
+    for(const cage of [...payload.observedCages,...payload.initializedCages,...payload.packedCages]) for(const point of cage.positions) bounds.expandByPoint(new THREE.Vector3(...point));
     if(payload.authoredBone) for(const point of payload.authoredBone.positions) bounds.expandByPoint(new THREE.Vector3(...point));
     for(const obstacle of payload.source.obstacles||[]){
       if(obstacle.start) bounds.expandByPoint(new THREE.Vector3(...obstacle.start));
@@ -310,18 +378,26 @@ ${exactRows}
     camera.near=Math.max(.001,framingRadius/500); camera.far=Math.max(100,framingRadius*30); camera.updateProjectionMatrix();
     const query=new URLSearchParams(location.search);
     const expectedIdentity=payload.bundleIdentity;
-    const requestedIdentity={bundle:query.get('bundle'),source:query.get('source'),packed:query.get('packed'),ledger:query.get('ledger'),routeRequested:query.get('routeRequested'),routeEffective:query.get('routeEffective')};
-    if(requestedIdentity.bundle!==expectedIdentity.sha256||requestedIdentity.source!==expectedIdentity.sourceCarrierSha256||requestedIdentity.packed!==expectedIdentity.packedCarrierSha256||requestedIdentity.ledger!==expectedIdentity.residualLedgerSha256||requestedIdentity.routeRequested!==payload.route.requested||requestedIdentity.routeEffective!==payload.route.effective){
+    const requestedIdentity={bundle:query.get('bundle'),observed:query.get('observed')||query.get('source'),initialized:query.get('initialized')||query.get('source'),packed:query.get('packed'),ledger:query.get('ledger'),routeRequested:query.get('routeRequested'),routeEffective:query.get('routeEffective')};
+    const effectiveObservedIdentity=expectedIdentity.observedCarrierSha256||expectedIdentity.sourceCarrierSha256;
+    const effectiveInitializedIdentity=expectedIdentity.initializedCarrierSha256||expectedIdentity.sourceCarrierSha256;
+    if(requestedIdentity.bundle!==expectedIdentity.sha256||requestedIdentity.observed!==effectiveObservedIdentity||requestedIdentity.initialized!==effectiveInitializedIdentity||requestedIdentity.packed!==expectedIdentity.packedCarrierSha256||requestedIdentity.ledger!==expectedIdentity.residualLedgerSha256||requestedIdentity.routeRequested!==payload.route.requested||requestedIdentity.routeEffective!==payload.route.effective){
       document.body.innerHTML='<pre style="margin:24px;color:#ff8b8b">identity-bound capture route mismatch\\n'+JSON.stringify({requested:requestedIdentity,effective:expectedIdentity},null,2)+'</pre>';
       throw new Error('identity-bound capture route mismatch');
     }
     const viewMode=query.get('view');
-    const contactFocus=payload.presentationFocus&&viewMode==='contact';
+    const requestedState=['observed','initialized','packed'].includes(query.get('state'))?query.get('state'):(query.get('state')==='before'?'initialized':'packed');
+    const strongestContact=(exactContactRowsByState[requestedState]||[])[0]||null;
+    const generatedContactFocus=strongestContact?.witness?.leftPoint&&strongestContact?.witness?.rightPoint?{
+      point:strongestContact.witness.leftPoint.map((value,axis)=>(value+strongestContact.witness.rightPoint[axis])/2),
+      radius:Math.max(framingRadius*.82,strongestContact.maximumPenetration*5),
+    }:null;
+    const contactFocus=viewMode==='contact'?(payload.presentationFocus||generatedContactFocus):null;
     const effectiveCenter=contactFocus
-      ? new THREE.Vector3(...payload.presentationFocus.point)
+      ? new THREE.Vector3(...contactFocus.point)
       : framingCenter;
     const effectiveRadius=contactFocus
-      ? payload.presentationFocus.radius
+      ? contactFocus.radius
       : framingRadius;
     const effectiveDistance=effectiveRadius/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.12;
     const viewDirection=viewMode==='side'
@@ -329,21 +405,52 @@ ${exactRows}
       : new THREE.Vector3(1.08,.72,1.12);
     camera.position.copy(effectiveCenter).add(viewDirection.normalize().multiplyScalar(effectiveDistance));
     controls.target.copy(effectiveCenter); controls.minDistance=effectiveRadius*.4; controls.maxDistance=framingRadius*10; controls.update();
+    if(viewMode==='contact'){
+      for(const groups of Object.values(stateGroups)) groups.surface.traverse(object=>{
+        if(object.isMesh&&object.material?.transparent){ object.material.opacity=.48; object.material.depthWrite=false; }
+      });
+      environmentGroup.traverse(object=>{
+        if(object.isMesh&&object.material?.transparent){ object.material.opacity=.32; object.material.depthWrite=false; }
+      });
+    }
+    const diagnostics={wireframe:false,sourceGhost:false,displacement:false,contacts:false};
+    let currentState='packed';
+    function applyDiagnostics(){
+      for(const [state,groups] of Object.entries(stateGroups)) groups.wireframe.visible=diagnostics.wireframe&&state===currentState;
+      sourceBoundaryGhostGroup.visible=diagnostics.sourceGhost;
+      displacementGroup.visible=diagnostics.displacement;
+      for(const [state,groups] of Object.entries(stateContactGroups)) groups.visible=diagnostics.contacts&&state===currentState;
+      residualContactGroup.visible=diagnostics.contacts&&currentState==='packed';
+      const rows=exactContactRowsByState[currentState]||[];
+      document.querySelector('#contact-families').textContent=diagnostics.contacts
+        ? (rows.length?rows.map((row,index)=>(index===0?'strongest → ':'')+row.key+' · '+row.maximumPenetration.toFixed(4)).join('  |  '):'no exact contact families in this state')
+        : '';
+      document.querySelectorAll('[data-diagnostic]').forEach(button=>button.setAttribute('aria-pressed',String(diagnostics[button.dataset.diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase())])));
+    }
     function showState(state){
-      const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; sourceBoundaryGhostGroup.visible=packed; displacementGroup.visible=packed; contactGroup.visible=packed;
+      currentState=state;
+      for(const [name,groups] of Object.entries(stateGroups)) groups.surface.visible=name===state;
+      applyDiagnostics();
       document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));
       document.documentElement.dataset.witnessState=state;
     }
     document.querySelectorAll('[data-state]').forEach(button=>button.addEventListener('click',()=>showState(button.dataset.state)));
+    document.querySelectorAll('[data-diagnostic]').forEach(button=>button.addEventListener('click',()=>{
+      const key=button.dataset.diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase()); diagnostics[key]=!diagnostics[key]; applyDiagnostics();
+    }));
     function resize(){const width=Math.max(1,viewport.clientWidth),height=Math.max(1,viewport.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}
     new ResizeObserver(resize).observe(viewport); resize();
-    const requested=query.get('state'); showState(requested==='before'?'before':'packed');
+    for(const diagnostic of (query.get('diagnostics')||'').split(',').filter(Boolean)){
+      const key=diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase()); if(Object.hasOwn(diagnostics,key)) diagnostics[key]=true;
+    }
+    showState(requestedState);
     renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
     document.documentElement.dataset.witnessLoaded='true';
     document.documentElement.dataset.witnessRouteRequested=payload.route.requested;
     document.documentElement.dataset.witnessRouteEffective=payload.route.effective;
     document.documentElement.dataset.witnessBundle=expectedIdentity.sha256;
-    document.documentElement.dataset.sourceCarrier=expectedIdentity.sourceCarrierSha256;
+    document.documentElement.dataset.observedCarrier=effectiveObservedIdentity;
+    document.documentElement.dataset.initializedCarrier=effectiveInitializedIdentity;
     document.documentElement.dataset.packedCarrier=expectedIdentity.packedCarrierSha256;
     document.documentElement.dataset.residualLedger=expectedIdentity.residualLedgerSha256;
   </script>

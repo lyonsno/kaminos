@@ -34,6 +34,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "0409155aefbe76dbd8814dc4ad00d32d3e3d7cb8629f7cc6098d90785ba309c5",
           "intentGeometrySha256": "f9a4ca66d24c0612accfa83271656835a71539b40c184b3c9c971afce0d2b32c"
         },
@@ -6461,6 +6462,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "26b3e0b1ba6ff6febad77caeffd8827d0813c25ff1cf1ee732ee57b12ded1384",
           "intentGeometrySha256": "94f690b563834ba4b408379fd043fed917c9814c675fc4186970f0e2a239e5d6"
         },
@@ -12888,6 +12890,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "a7b6bca3993465ff1f99e7c368376a6030d898a062859d71cc26d8a1ff17e1c2",
           "intentGeometrySha256": "ba3252ff7ff542f80b044f4f25f0180a8abd4ee19695de2245e2fdfff11970e4"
         },
@@ -19315,6 +19318,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "3de2d042578d89d6b7545e87458dd2acf01b591cd85de09e5edf6671ef7ccf4b",
           "intentGeometrySha256": "5518ebea1b937a58511b579b41e2a8d4057beda09176ff5f9b3914b8253c12de"
         },
@@ -25742,6 +25746,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "032f873185fa82e6812e7e6a6b2951813db3081a55d19a051e5a7f21938cfd32",
           "intentGeometrySha256": "2edfb015c5f0dffc9696fc31e7b4f88544d579687909433e512906330fc17d4e"
         },
@@ -32169,6 +32174,7 @@
         "sourceGeometry": {
           "schema": "kaminos.operator-authored-sweep-geometry.v0",
           "authority": "operator-authored-observed-and-intent-separated",
+          "currentPolicy": "intent-endpoints-observed-interior",
           "observedGeometrySha256": "ad3c13eaec91fd2fd90a2b73fd1e9ee8011ec58a850d242fb3c8f5e2002145bb",
           "intentGeometrySha256": "0178f84b32bb2877b62936a421adee55ddbaa2abe545d6f1af9e6f8525729a01"
         },
@@ -38578,6 +38584,6 @@
   ],
   "identity": {
     "domain": "canonical-json-self-excluding-top-level-identity",
-    "sha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38"
+    "sha256": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9"
   }
 }

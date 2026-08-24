@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.muscle-compartment-ring-cage-contact-residual-ledger.v0",
-  "sourceCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
-  "sourceInputSha256": "d8ef4d4c50603a0ab6f8666fc48ac60a5568a44adbf2193650d959ee70c9f26e",
+  "sourceCarrierSha256": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+  "sourceInputSha256": "8307c9eccc8872c7e1d188cfa9a339f7fbd98d96b139eb427423382233b466fc",
   "orderedConstructionIds": [
     "muscle-1",
     "muscle-2",

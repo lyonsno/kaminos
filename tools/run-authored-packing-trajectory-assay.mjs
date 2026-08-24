@@ -18,16 +18,33 @@ import {
 
 const RUN_REPORT_SCHEMA = 'kaminos.authored-packing-trajectory-run-report.v0';
 const ASSAY_RESULT_SCHEMA = 'kaminos.authored-packing-trajectory-result.v0';
-const VISUAL_BUNDLE_SCHEMA = 'kaminos.authored-packing-trajectory-visual-bundle.v0';
-const VISUAL_ROUTE = 'authored-packing-trajectory-orbitable-v0';
+const VISUAL_BUNDLE_SCHEMA = 'kaminos.authored-packing-trajectory-visual-bundle.v1';
+const VISUAL_ROUTE = 'authored-packing-trajectory-orbitable-v1';
 const OWNED_PATHS = Object.freeze([
   'assay-result.json',
   'authority-profile.json',
   'exact-contact.json',
+  'observed-carrier.json',
+  'initialized-carrier.json',
   'source-carrier.json',
   'packed-carrier.json',
   'residual-ledger.json',
   'index.html',
+  'run-report.json',
+  'capture-route-verification.json',
+  'visual-inspection.json',
+  'source-crowded.png',
+  'source-crowded-report.json',
+  'source-crowded-capture-report.json',
+  'source-crowded-side.png',
+  'source-crowded-side-report.json',
+  'source-crowded-side-capture-report.json',
+  'contact-relieved.png',
+  'contact-relieved-report.json',
+  'contact-relieved-capture-report.json',
+  'contact-relieved-side.png',
+  'contact-relieved-side-report.json',
+  'contact-relieved-side-capture-report.json',
 ]);
 
 function parseArguments(argv) {
@@ -98,11 +115,20 @@ function variantByRole(manifest, role) {
   return matches[0];
 }
 
-function visualBundleIdentity(sourceCarrier, packedCarrier, source, residualLedgerBytes) {
+function visualBundleIdentity(
+  observedCarrier,
+  initializedCarrier,
+  packedCarrier,
+  source,
+  residualLedgerBytes,
+  generation,
+) {
   const domain = {
     schema:VISUAL_BUNDLE_SCHEMA,
     route:VISUAL_ROUTE,
-    sourceCarrierSha256:sourceCarrier.identity.sha256,
+    generation,
+    observedCarrierSha256:observedCarrier.identity.sha256,
+    initializedCarrierSha256:initializedCarrier.identity.sha256,
     packedCarrierSha256:packedCarrier.identity.sha256,
     sourceInputSha256:source.input.effective.sha256,
     residualLedgerSha256:sha256(residualLedgerBytes),
@@ -113,17 +139,29 @@ function visualBundleIdentity(sourceCarrier, packedCarrier, source, residualLedg
 function captureUrls(bundle) {
   const base = new URLSearchParams({
     bundle:bundle.sha256,
-    source:bundle.sourceCarrierSha256,
+    observed:bundle.observedCarrierSha256,
+    initialized:bundle.initializedCarrierSha256,
     packed:bundle.packedCarrierSha256,
     ledger:bundle.residualLedgerSha256,
     routeRequested:VISUAL_ROUTE,
     routeEffective:VISUAL_ROUTE,
   });
-  return [['before', null], ['packed', null], ['before', 'side'], ['packed', 'side']]
-    .map(([state, view]) => {
+  return [
+    ['observed', null, null],
+    ['initialized', null, null],
+    ['packed', null, null],
+    ['observed', 'side', null],
+    ['initialized', 'side', null],
+    ['packed', 'side', null],
+    ['packed', null, 'wireframe,source-ghost,displacement,contacts'],
+    ['observed', 'contact', 'contacts'],
+    ['initialized', 'contact', 'contacts'],
+    ['packed', 'contact', 'contacts'],
+  ].map(([state, view, diagnostics]) => {
       const query = new URLSearchParams(base);
       query.set('state', state);
       if (view) query.set('view', view);
+      if (diagnostics) query.set('diagnostics', diagnostics);
       return `index.html?${query}`;
     });
 }
@@ -133,6 +171,11 @@ function outputEntry(relative, bytes) {
 }
 
 const rawArguments = process.argv.slice(2);
+const generation = sha256(Buffer.from(JSON.stringify({
+  rawArguments,
+  processId:process.pid,
+  startedAt:new Date().toISOString(),
+})));
 const preScannedOutput = preScanOutput(rawArguments);
 let phase = 'parse-arguments';
 let args;
@@ -182,14 +225,17 @@ try {
   );
   const residualLedgerBytes = jsonBytes(residualLedger);
   const bundleIdentity = visualBundleIdentity(
+    assay.bridge.observedCarrier,
     assay.bridge.solverCarrier,
     assay.result.packedCarrier,
     assay.bridge.source,
     residualLedgerBytes,
+    generation,
   );
   const route = { requested:VISUAL_ROUTE, effective:VISUAL_ROUTE, fallbackUsed:false };
   const viewerBytes = Buffer.from(renderMuscleCompartmentRingCageContactHtml({
-    sourceCarrier:assay.bridge.solverCarrier,
+    observedCarrier:assay.bridge.observedCarrier,
+    initializedCarrier:assay.bridge.solverCarrier,
     result:assay.result,
     source:assay.bridge.source,
     route,
@@ -199,7 +245,8 @@ try {
       title:`Operator-authored six-body packing · ${assay.result.iterations}-step trajectory`,
       authorityLabel:'Operator-authored fixture · provisional packing assay · no anatomical admission',
       explanation:'The authored pathology is the source state. The proposal is a bounded simultaneous six-body contact trajectory under fixed attachments, positive cells, a non-increasing inherited maximum volume-debt ceiling, and an exact authored-bone non-worsening gate.',
-      sourceLabel:`Authored ${args.observedRole}`,
+      observedLabel:`Exact authored ${args.observedRole}`,
+      sourceLabel:'Solver initialization · intent endpoints',
       proposalLabel:`${assay.result.iterations} global N-body steps`,
       authoredBone: {
         positions:observed.bone.mesh.vertices,
@@ -218,6 +265,7 @@ try {
   const assayResult = {
     schema:ASSAY_RESULT_SCHEMA,
     status:'completed-bounded-trajectory-residual-remains',
+    generation,
     evidenceTrack:'operator-authored-fixture-provisional-packing',
     claimCeiling:'bounded-trajectory-mechanism-and-visual-assay-only-no-anatomical-admission',
     source: {
@@ -241,6 +289,7 @@ try {
       termination:assay.result.termination,
       fixedNodeMaximumDrift:assay.result.fixedNodeMaximumDrift,
       metrics:assay.result.metrics,
+      iterationHistory:assay.result.iterationHistory,
       lineSearchHistory:assay.result.lineSearchHistory,
     },
     exactContact:assay.exact,
@@ -251,6 +300,8 @@ try {
     assayResult:['assay-result.json', jsonBytes(assayResult)],
     authorityProfile:['authority-profile.json', jsonBytes(assay.authorityProfile)],
     exactContact:['exact-contact.json', jsonBytes(assay.exact)],
+    observedCarrier:['observed-carrier.json', jsonBytes(assay.bridge.observedCarrier)],
+    initializedCarrier:['initialized-carrier.json', jsonBytes(assay.bridge.solverCarrier)],
     sourceCarrier:['source-carrier.json', jsonBytes(assay.bridge.solverCarrier)],
     packedCarrier:['packed-carrier.json', jsonBytes(assay.result.packedCarrier)],
     residualLedger:['residual-ledger.json', residualLedgerBytes],
@@ -267,6 +318,7 @@ try {
   const report = {
     schema:RUN_REPORT_SCHEMA,
     status:'completed',
+    generation,
     failurePhase:null,
     requestedManifestPath:args.requestedManifestPath,
     effectiveManifestPath:receiptPath(effectiveManifestPath),
@@ -306,6 +358,7 @@ try {
     await writeAtomic(path.join(outputDirectory, 'run-report.json'), jsonBytes({
       schema:RUN_REPORT_SCHEMA,
       status:'failed',
+      generation,
       failurePhase:phase,
       error:message,
       rawArguments,

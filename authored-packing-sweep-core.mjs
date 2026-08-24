@@ -304,7 +304,7 @@ function sectionNodeId(memberId, sectionIndex, suffix) {
   return `${memberId}:section:${String(sectionIndex).padStart(4, '0')}:${suffix}`;
 }
 
-function bridgeCage({ memberId, observed, intent, sourceIdentity }) {
+function bridgeCage({ memberId, observed, intent, sourceIdentity, currentPolicy }) {
   if (!sameTopology(observed, intent)) {
     throw new Error(`${memberId} observed and intent variants do not share exact sweep topology`);
   }
@@ -312,8 +312,12 @@ function bridgeCage({ memberId, observed, intent, sourceIdentity }) {
   const nodes = [];
   const boundaryMasks = [];
   const sectionCount = intent.rings.length;
-  const currentCarrierForSection = sectionIndex =>
-    sectionIndex === 0 || sectionIndex === sectionCount - 1 ? intent : observed;
+  if (!['exact-observed', 'intent-endpoints-observed-interior'].includes(currentPolicy)) {
+    throw new Error(`unsupported authored bridge current policy ${currentPolicy}`);
+  }
+  const currentCarrierForSection = sectionIndex => currentPolicy === 'exact-observed'
+    ? observed
+    : sectionIndex === 0 || sectionIndex === sectionCount - 1 ? intent : observed;
   for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
     const fixed = sectionIndex === 0 || sectionIndex === sectionCount - 1;
     const attachmentFrameId = fixed
@@ -443,6 +447,7 @@ function bridgeCage({ memberId, observed, intent, sourceIdentity }) {
       sourceGeometry: {
         schema:'kaminos.operator-authored-sweep-geometry.v0',
         authority:'operator-authored-observed-and-intent-separated',
+        currentPolicy,
         observedGeometrySha256:observed.meshGeometrySha256,
         intentGeometrySha256:intent.meshGeometrySha256,
       },
@@ -487,12 +492,60 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
     lineageId:`${manifest.id}:${memberId}`,
     instanceId:`${observedVariant.id}:${memberId}`,
   }]));
+  const observedCages = manifest.memberOrder.map((memberId, index) => bridgeCage({
+    memberId,
+    observed:observedVariant.members[index],
+    intent:intentVariant.members[index],
+    sourceIdentity:identities.get(memberId),
+    currentPolicy:'exact-observed',
+  }));
   const cages = manifest.memberOrder.map((memberId, index) => bridgeCage({
     memberId,
     observed:observedVariant.members[index],
     intent:intentVariant.members[index],
     sourceIdentity:identities.get(memberId),
+    currentPolicy:'intent-endpoints-observed-interior',
   }));
+  const carrier = cagesForCarrier => {
+    const core = {
+      schema:'kaminos.muscle-compartment-ring-cage-solver-carrier.v0',
+      sourceDocument: {
+        schema:AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA,
+        sha256:authorityProfile.identity.sha256,
+      },
+      orderedConstructionIds:[...manifest.memberOrder],
+      cages:cagesForCarrier,
+    };
+    return {
+      ...core,
+      identity: {
+        domain:'canonical-json-self-excluding-top-level-identity',
+        sha256:hashMuscleCompartmentRingCageCanonicalJson(core),
+      },
+    };
+  };
+  const observedCarrier = carrier(observedCages);
+  const solverCarrier = carrier(cages);
+  const endpointDisplacements = manifest.memberOrder.map((constructionId, memberIndex) => {
+    const observedNodes = new Map(observedCages[memberIndex].manifest.nodes.map(node => [node.id, node]));
+    const displacements = cages[memberIndex].manifest.constraints.boundaryMasks
+      .filter(mask => mask.fixed)
+      .map(mask => length(subtract(
+        observedNodes.get(mask.nodeId).currentPosition,
+        cages[memberIndex].manifest.nodes.find(node => node.id === mask.nodeId).currentPosition,
+      )));
+    return {
+      constructionId,
+      maximumDisplacement:Math.max(0, ...displacements),
+    };
+  });
+  const initialization = {
+    schema:'kaminos.authored-packing-solver-initialization.v0',
+    observedCarrierSha256:observedCarrier.identity.sha256,
+    initializedCarrierSha256:solverCarrier.identity.sha256,
+    endpointPolicy:'intent-endpoints-observed-interior',
+    endpointDisplacements,
+  };
   const sourceCore = {
     schema:MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
     id:`${authorityProfile.id}:solver-source`,
@@ -546,6 +599,9 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
       authorityProfileSha256:authorityProfile.identity.sha256,
       observedVariantId:observedVariant.id,
       intentVariantId:intentVariant.id,
+      observedCarrierSha256:observedCarrier.identity.sha256,
+      initializedCarrierSha256:solverCarrier.identity.sha256,
+      initializationSchema:initialization.schema,
       boneResponse:'not-yet-applied-pairwise-first-slice',
     },
   };
@@ -559,26 +615,12 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
     ...sourceCore,
     input:{ requested:structuredClone(sourceIdentity), effective:structuredClone(sourceIdentity) },
   };
-  const solverCarrierCore = {
-    schema:'kaminos.muscle-compartment-ring-cage-solver-carrier.v0',
-    sourceDocument: {
-      schema:AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA,
-      sha256:authorityProfile.identity.sha256,
-    },
-    orderedConstructionIds:[...manifest.memberOrder],
-    cages,
-  };
-  const solverCarrier = {
-    ...solverCarrierCore,
-    identity: {
-      domain:'canonical-json-self-excluding-top-level-identity',
-      sha256:hashMuscleCompartmentRingCageCanonicalJson(solverCarrierCore),
-    },
-  };
   return {
     schema:AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA,
     source,
+    observedCarrier,
     solverCarrier,
+    initialization,
     authorityProfile: {
       id:authorityProfile.id,
       sha256:authorityProfile.identity.sha256,
@@ -703,6 +745,12 @@ function tetrahedronSatGap(left, right) {
   return maximumGap;
 }
 
+function tetrahedronCentroid(shape) {
+  return [0, 1, 2].map(axis =>
+    shape.vertices.reduce((sum, vertex) => sum + vertex[axis], 0) / shape.vertices.length
+  );
+}
+
 function measureCarrierContact(left, right) {
   let maximumPenetration = 0;
   let nearestSeparatedAabbGap = Infinity;
@@ -740,6 +788,8 @@ function measureCarrierContact(left, right) {
               rightSegment,
               leftTetrahedron,
               rightTetrahedron,
+              leftPoint:tetrahedronCentroid(leftShape),
+              rightPoint:tetrahedronCentroid(rightShape),
               signedGap,
             };
           }
@@ -917,6 +967,11 @@ export function runAuthoredPackingTrajectoryAssay({
     authorityProfile,
     solverCarrier:bridge.solverCarrier,
   });
+  const observedExact = measureAuthoredPackingRingCageBridgeContacts({
+    manifest,
+    authorityProfile,
+    solverCarrier:bridge.observedCarrier,
+  });
   const inheritedMaximumVolumeDebt = Math.max(
     ...initial.cages.map(row => row.relativeVolumeError),
   );
@@ -941,10 +996,17 @@ export function runAuthoredPackingTrajectoryAssay({
         authorityProfile,
         solverCarrier:candidate,
       });
-      return candidateExact.summary.maximumSkeletalPenetration >
+      const violation = candidateExact.summary.maximumSkeletalPenetration >
         initialExact.summary.maximumSkeletalPenetration + exactBoneTolerance
         ? 'exact-authored-bone-penetration-increase'
         : null;
+      return {
+        violation,
+        receipt: {
+          schema:'kaminos.authored-packing-accepted-step-receipt.v0',
+          exactContact:candidateExact,
+        },
+      };
     } },
   );
   const packedExact = measureAuthoredPackingRingCageBridgeContacts({
@@ -966,7 +1028,12 @@ export function runAuthoredPackingTrajectoryAssay({
       positiveCells:true,
     },
     result,
-    exact:{ initial:initialExact, packed:packedExact },
+    exact:{
+      observed:observedExact,
+      initialized:initialExact,
+      initial:initialExact,
+      packed:packedExact,
+    },
   };
 }
 

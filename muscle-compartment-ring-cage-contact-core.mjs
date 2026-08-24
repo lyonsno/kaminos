@@ -2238,6 +2238,8 @@ export function solveMuscleCompartmentRingCageContact(
     let lineSearchScale = config.relaxationStep;
     let acceptedCarrier = null;
     let acceptedMeasurement = null;
+    let acceptedStepReceipt = null;
+    let acceptedAttemptIndex = null;
     const lineSearchAttempts = [];
     while (lineSearchScale >= 1 / 1024) {
       const candidate = structuredClone(packedCarrier);
@@ -2268,14 +2270,20 @@ export function solveMuscleCompartmentRingCageContact(
       if (measurement.compartment.maximumEscape > config.convergenceTolerance) {
         rejectionReasons.push('compartment-escape');
       }
+      let stepReceipt = null;
       if (stepConstraint) {
-        const constraintViolation = stepConstraint(candidate);
-        if (constraintViolation) {
-          rejectionReasons.push(`step-constraint:${constraintViolation}`);
-        }
+        const constraintEvaluation = stepConstraint(candidate);
+        const constraintViolation = typeof constraintEvaluation === 'string'
+          ? constraintEvaluation
+          : constraintEvaluation?.violation ?? null;
+        stepReceipt = typeof constraintEvaluation === 'object' && constraintEvaluation !== null
+          ? structuredClone(constraintEvaluation.receipt ?? null)
+          : null;
+        if (constraintViolation) rejectionReasons.push(`step-constraint:${constraintViolation}`);
       }
       const attempt = {
         scale: lineSearchScale,
+        candidateCarrierSha256:candidate.identity.sha256,
         accepted: rejectionReasons.length === 0,
         rejectionReasons,
         nonPositiveCellCount,
@@ -2290,6 +2298,8 @@ export function solveMuscleCompartmentRingCageContact(
       if (attempt.accepted) {
         acceptedCarrier = candidate;
         acceptedMeasurement = measurement;
+        acceptedStepReceipt = stepReceipt;
+        acceptedAttemptIndex = lineSearchAttempts.length - 1;
         break;
       }
       lineSearchScale *= 0.5;
@@ -2303,6 +2313,7 @@ export function solveMuscleCompartmentRingCageContact(
       };
       break;
     }
+    const parentCarrierSha256 = packedCarrier.identity.sha256;
     packedCarrier.identity = acceptedCarrier.identity;
     packedCarrier.cages = acceptedCarrier.cages;
     packed = acceptedMeasurement;
@@ -2311,6 +2322,22 @@ export function solveMuscleCompartmentRingCageContact(
       iteration,
       lineSearchScale,
       maximumRequestedDelta,
+      acceptedStep: {
+        parentCarrierSha256,
+        candidateCarrierSha256:acceptedCarrier.identity.sha256,
+        selectedCarrierSha256:packedCarrier.identity.sha256,
+        selectedAttemptIndex:acceptedAttemptIndex,
+        fixedNodeMaximumDrift:measureFixedNodeMaximumDrift(packedCarrier, fixedReference),
+        nonPositiveCellCount:packed.cages.reduce(
+          (sum, cage) => sum + cage.nonPositiveCellCount,
+          0,
+        ),
+        maximumRelativeVolumeError:Math.max(
+          ...packed.cages.map(cage => cage.relativeVolumeError),
+        ),
+        constraintReceipt:acceptedStepReceipt,
+        ...(acceptedStepReceipt || {}),
+      },
       pairwiseMovableTotalPenetration: packed.pairwise.movableTotalPenetration,
       skeletalMovableTotalPenetration: packed.skeletal.movableTotalPenetration,
       maximumRelativeVolumeError: Math.max(
