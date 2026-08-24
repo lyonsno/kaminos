@@ -968,6 +968,35 @@ function requireRealizationOriginExpectedParent(expectedParent, bridge) {
   return effectiveParent;
 }
 
+function requireAuthoredPackingContactCarrierLineage({
+  authorityProfile,
+  solverCarrier,
+  lineageBridge,
+  expectedParent,
+  lineageRoot,
+}) {
+  requireRealizationOriginBridge(lineageBridge);
+  requireRealizationOriginExpectedParent(expectedParent, lineageBridge);
+  if (lineageBridge.authorityProfile.sha256 !== authorityProfile.identity.sha256) {
+    throw new Error('authored bridge contact independently preserved carrier lineage authority profile mismatch');
+  }
+  const lineageCarrier = lineageRoot === 'observed'
+    ? lineageBridge.observedCarrier
+    : lineageRoot === 'initialized-descendant'
+      ? lineageBridge.solverCarrier
+      : null;
+  if (lineageCarrier === null) {
+    throw new Error('authored bridge contact independently preserved carrier lineage root mismatch');
+  }
+  if (
+    JSON.stringify(carrierLawBearingDomain(solverCarrier)) !==
+    JSON.stringify(carrierLawBearingDomain(lineageCarrier))
+  ) {
+    throw new Error('authored bridge contact independently preserved carrier lineage law mismatch');
+  }
+  return lineageCarrier;
+}
+
 function requireCanonicalQ9DisplacementRows(rows, bridge) {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error('realization origin generation requires canonical displacement rows');
@@ -1477,6 +1506,9 @@ export function measureAuthoredPackingRingCageBridgeContacts({
   manifest,
   authorityProfile,
   solverCarrier,
+  lineageBridge,
+  expectedParent,
+  lineageRoot,
 } = {}) {
   validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile });
   if (solverCarrier?.schema !== 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
@@ -1493,6 +1525,13 @@ export function measureAuthoredPackingRingCageBridgeContacts({
   if (solverCarrier.identity?.sha256 !== effectiveCarrierSha256) {
     throw new Error('authored bridge contact solver carrier identity mismatch');
   }
+  const lineageCarrier = requireAuthoredPackingContactCarrierLineage({
+    authorityProfile,
+    solverCarrier,
+    lineageBridge,
+    expectedParent,
+    lineageRoot,
+  });
   if (JSON.stringify(solverCarrier.orderedConstructionIds) !== JSON.stringify(manifest.memberOrder)) {
     throw new Error('authored bridge contact construction order mismatch');
   }
@@ -1533,6 +1572,15 @@ export function measureAuthoredPackingRingCageBridgeContacts({
       manifestSha256:manifest.identity.sha256,
       authorityProfileSha256:authorityProfile.identity.sha256,
       solverCarrierSha256:effectiveCarrierSha256,
+      independentlyPreservedCarrierLineage: {
+        bridgeSha256:lineageBridge.identity.sha256,
+        root:lineageRoot,
+        rootCarrierSha256:lineageCarrier.identity.sha256,
+        observedCarrierSha256:expectedParent.observedCarrierSha256,
+        initializedCarrierSha256:expectedParent.initializedCarrierSha256,
+        authorityProfileSha256:expectedParent.authorityProfile.sha256,
+        initializationSha256:expectedParent.initializationSha256,
+      },
       meshTruthAuthority:'unavailable-for-deformed-or-hybrid-candidate',
     },
   });
@@ -1555,6 +1603,7 @@ export function runAuthoredPackingTrajectoryAssay({
     policy,
   });
   const bridge = createAuthoredPackingRingCageBridge({ manifest, authorityProfile });
+  const expectedParent = createAuthoredPackingRealizationOriginParentEnvelope({ bridge });
   const initial = measureMuscleCompartmentRingCageContactState(
     bridge.solverCarrier,
     bridge.source,
@@ -1563,11 +1612,17 @@ export function runAuthoredPackingTrajectoryAssay({
     manifest,
     authorityProfile,
     solverCarrier:bridge.solverCarrier,
+    lineageBridge:bridge,
+    expectedParent,
+    lineageRoot:'initialized-descendant',
   });
   const observedExact = measureAuthoredPackingRingCageBridgeContacts({
     manifest,
     authorityProfile,
     solverCarrier:bridge.observedCarrier,
+    lineageBridge:bridge,
+    expectedParent,
+    lineageRoot:'observed',
   });
   const inheritedMaximumVolumeDebt = Math.max(
     ...initial.cages.map(row => row.relativeVolumeError),
@@ -1592,6 +1647,9 @@ export function runAuthoredPackingTrajectoryAssay({
         manifest,
         authorityProfile,
         solverCarrier:candidate,
+        lineageBridge:bridge,
+        expectedParent,
+        lineageRoot:'initialized-descendant',
       });
       const violation = candidateExact.summary.maximumSkeletalPenetration >
         initialExact.summary.maximumSkeletalPenetration + exactBoneTolerance
@@ -1610,6 +1668,9 @@ export function runAuthoredPackingTrajectoryAssay({
     manifest,
     authorityProfile,
     solverCarrier:result.packedCarrier,
+    lineageBridge:bridge,
+    expectedParent,
+    lineageRoot:'initialized-descendant',
   });
   return {
     schema:AUTHORED_PACKING_TRAJECTORY_ASSAY_SCHEMA,

@@ -364,12 +364,35 @@ test('exact bridge contacts bind the canonical authority profile to the effectiv
     manifest,
     authorityProfile:restorationProfile,
   });
+  const continuationBridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile:continuationProfile,
+  });
+  const restorationParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge:restorationBridge,
+  });
 
-  assert.doesNotThrow(() => authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
+  const restorationMeasurement = authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
     manifest,
     authorityProfile:restorationProfile,
     solverCarrier:restorationBridge.solverCarrier,
-  }));
+    lineageBridge:restorationBridge,
+    expectedParent:restorationParent,
+    lineageRoot:'initialized-descendant',
+  });
+  assert.deepEqual(
+    restorationMeasurement.source.independentlyPreservedCarrierLineage,
+    {
+      bridgeSha256:restorationBridge.identity.sha256,
+      root:'initialized-descendant',
+      rootCarrierSha256:restorationBridge.solverCarrier.identity.sha256,
+      observedCarrierSha256:restorationParent.observedCarrierSha256,
+      initializedCarrierSha256:restorationParent.initializedCarrierSha256,
+      authorityProfileSha256:restorationProfile.identity.sha256,
+      initializationSha256:restorationParent.initializationSha256,
+    },
+    'the measurement receipt must expose the effective independent lineage used for admission',
+  );
   assert.notEqual(
     restorationProfile.identity.sha256,
     continuationProfile.identity.sha256,
@@ -380,10 +403,67 @@ test('exact bridge contacts bind the canonical authority profile to the effectiv
       manifest,
       authorityProfile:continuationProfile,
       solverCarrier:restorationBridge.solverCarrier,
+      lineageBridge:restorationBridge,
+      expectedParent:restorationParent,
+      lineageRoot:'initialized-descendant',
     }),
     /authority profile.*solver carrier source document/i,
     'canonicality of each input independently must not authorize a cross-profile measurement claim',
   );
+
+  const relabeledCarrier = structuredClone(restorationBridge.solverCarrier);
+  relabeledCarrier.sourceDocument.sha256 = continuationProfile.identity.sha256;
+  delete relabeledCarrier.identity;
+  relabeledCarrier.identity = {
+    domain:'canonical-json-self-excluding-top-level-identity',
+    sha256:hashMuscleCompartmentRingCageCanonicalJson(relabeledCarrier),
+  };
+  const differingNodePositions = relabeledCarrier.cages.reduce(
+    (total, cage, cageIndex) => total + cage.manifest.nodes.filter((node, nodeIndex) =>
+      JSON.stringify(node.currentPosition) !== JSON.stringify(
+        continuationBridge.solverCarrier.cages[cageIndex].manifest.nodes[nodeIndex].currentPosition,
+      )
+    ).length,
+    0,
+  );
+  assert.ok(
+    differingNodePositions > 0,
+    'the relabeled restoration carrier must remain geometrically distinct from canonical continuation',
+  );
+  assert.throws(
+    () => authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
+      manifest,
+      authorityProfile:continuationProfile,
+      solverCarrier:relabeledCarrier,
+      lineageBridge:restorationBridge,
+      expectedParent:restorationParent,
+      lineageRoot:'initialized-descendant',
+    }),
+    /independently preserved carrier lineage/i,
+    'carrier-local relabeling and rehashing must not replace independently preserved profile lineage',
+  );
+
+  const evolvedRestorationCarrier = structuredClone(restorationBridge.solverCarrier);
+  const evolvedCage = evolvedRestorationCarrier.cages[0];
+  const fixedNodeIds = new Set(evolvedCage.manifest.constraints.boundaryMasks
+    .filter(row => row.fixed)
+    .map(row => row.nodeId));
+  const evolvedNode = evolvedCage.manifest.nodes.find(node => !fixedNodeIds.has(node.id));
+  assert.ok(evolvedNode, 'the fixture must expose one movable node for lawful descendant pressure');
+  evolvedNode.currentPosition[0] += 0.001;
+  delete evolvedRestorationCarrier.identity;
+  evolvedRestorationCarrier.identity = {
+    domain:'canonical-json-self-excluding-top-level-identity',
+    sha256:hashMuscleCompartmentRingCageCanonicalJson(evolvedRestorationCarrier),
+  };
+  assert.doesNotThrow(() => authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
+    manifest,
+    authorityProfile:restorationProfile,
+    solverCarrier:evolvedRestorationCarrier,
+    lineageBridge:restorationBridge,
+    expectedParent:restorationParent,
+    lineageRoot:'initialized-descendant',
+  }), 'lawful solver-evolved geometry must remain admissible under its original preserved lineage');
 });
 
 test('plural realization origins preserve authored custody and reject counterfeit or duplicate solver starts', async () => {
