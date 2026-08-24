@@ -1099,6 +1099,113 @@ test('collective realization-origin family emits every deterministic source-deri
   assert.ok(severeFamily.candidates.every(row => row.admission.nonPositiveCellCount === 0));
 });
 
+test('collective trajectory assay runs direct-start and every source-derived origin through one unchanged solver contract', async () => {
+  assert.equal(
+    typeof authoredPacking.runAuthoredPackingCollectiveTrajectoryAssay,
+    'function',
+    'the reviewed origin family needs one explicit shared trajectory consumer',
+  );
+
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const assay = authoredPacking.runAuthoredPackingCollectiveTrajectoryAssay({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+    maximumIterations:2,
+  });
+
+  assert.equal(assay.schema, 'kaminos.authored-packing-collective-trajectory-assay.v0');
+  assert.equal(assay.family.candidates.length, 4);
+  assert.deepEqual(assay.family.rejections, []);
+  assert.equal(assay.directStart.semanticId, 'direct-start');
+  assert.equal(assay.directStart.status, 'completed');
+  assert.equal(
+    assay.directStart.initialCarrierSha256,
+    assay.bridge.solverCarrier.identity.sha256,
+  );
+  assert.equal(assay.candidates.length, assay.family.derivation.semanticModeIds.length);
+  assert.equal(assay.population.definedCandidateCount, 4);
+  assert.equal(assay.population.completedCandidateCount, 4);
+  assert.equal(assay.population.sourceRejectedCandidateCount, 0);
+  assert.equal(assay.population.solverFailedCandidateCount, 0);
+  assert.equal(assay.population.arbitraryCandidateCap, null);
+  assert.deepEqual(assay.selection, {
+    status:'not-performed',
+    reason:'raw-multi-candidate-frontier-requires-comparative-and-operator-visual-disposition',
+  });
+
+  const candidateBySemanticId = new Map(
+    assay.family.candidates.map(candidate => [candidate.semanticId, candidate]),
+  );
+  for (const [candidateIndex, outcome] of assay.candidates.entries()) {
+    const semanticId = assay.family.derivation.semanticModeIds[candidateIndex];
+    const sourceCandidate = candidateBySemanticId.get(semanticId);
+    assert.ok(sourceCandidate, `missing source candidate ${semanticId}`);
+    assert.equal(outcome.semanticId, semanticId);
+    assert.equal(outcome.status, 'completed');
+    assert.equal(outcome.originSha256, sourceCandidate.origin.identity.sha256);
+    assert.equal(
+      outcome.initialCarrierSha256,
+      sourceCandidate.origin.candidateCarrier.identity.sha256,
+    );
+    assert.deepEqual(
+      outcome.trajectory.config,
+      assay.directStart.trajectory.config,
+      `${semanticId} must use the direct control's unchanged solver configuration`,
+    );
+    assert.deepEqual(
+      outcome.trajectory.gates,
+      assay.directStart.trajectory.gates,
+      `${semanticId} must use the direct control's unchanged gate contract`,
+    );
+    assert.ok(Array.isArray(outcome.trajectory.result.iterationHistory));
+    assert.ok(Array.isArray(outcome.trajectory.result.lineSearchHistory));
+    assert.equal(
+      outcome.trajectory.exact.initial.source.solverCarrierSha256,
+      outcome.initialCarrierSha256,
+      `${semanticId} exact initial evidence must bind the candidate carrier actually solved`,
+    );
+  }
+
+  const directControl = authoredPacking.runAuthoredPackingTrajectoryAssay({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+    maximumIterations:2,
+  });
+  assert.deepEqual(
+    assay.directStart.trajectory,
+    directControl,
+    'the plural runner must preserve the complete existing direct-start control byte-for-byte',
+  );
+
+  const severe = variant(manifest, 'severe-interpenetration');
+  const severeAssay = authoredPacking.runAuthoredPackingCollectiveTrajectoryAssay({
+    manifest,
+    observedVariantId:severe.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+    maximumIterations:1,
+  });
+  assert.equal(severeAssay.candidates.length, 4);
+  assert.equal(severeAssay.population.completedCandidateCount, 1);
+  assert.equal(severeAssay.population.sourceRejectedCandidateCount, 3);
+  assert.equal(severeAssay.population.solverFailedCandidateCount, 0);
+  assert.deepEqual(
+    severeAssay.candidates.map(row => row.semanticId),
+    severeAssay.family.derivation.semanticModeIds,
+    'stress outcomes must preserve the defined semantic population order',
+  );
+  assert.ok(severeAssay.candidates.filter(row => row.status === 'source-rejected').every(row =>
+    row.rejection.reason === 'source-derived-origin-has-nonpositive-ring-cage-cell' &&
+    row.trajectory === null
+  ));
+});
+
 test('accepted authored steps preserve parent, candidate, selected, and exact-contact custody', async () => {
   const manifest = await fixture();
   const clean = variant(manifest, 'clean-reference');

@@ -25,6 +25,8 @@ export const AUTHORED_PACKING_ONE_STEP_ASSAY_SCHEMA =
   'kaminos.authored-packing-one-step-assay.v0';
 export const AUTHORED_PACKING_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.authored-packing-trajectory-assay.v0';
+export const AUTHORED_PACKING_COLLECTIVE_TRAJECTORY_ASSAY_SCHEMA =
+  'kaminos.authored-packing-collective-trajectory-assay.v0';
 export const AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA =
   'kaminos.authored-packing-realization-origin.v0';
 export const AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA =
@@ -1920,32 +1922,64 @@ export function measureAuthoredPackingRingCageBridgeContacts({
   });
 }
 
-export function runAuthoredPackingTrajectoryAssay({
-  manifest,
-  observedVariantId,
-  intentVariantId,
-  policy,
-  maximumIterations = 8,
-} = {}) {
+function requireAuthoredPackingTrajectoryMaximumIterations(maximumIterations) {
   if (!Number.isInteger(maximumIterations) || maximumIterations <= 0) {
     throw new Error('authored packing trajectory maximumIterations must be a positive integer');
   }
-  const authorityProfile = createAuthoredPackingAuthorityProfile({
-    manifest,
-    observedVariantId,
-    intentVariantId,
-    policy,
-  });
-  const bridge = createAuthoredPackingRingCageBridge({ manifest, authorityProfile });
-  const expectedParent = createAuthoredPackingRealizationOriginParentEnvelope({ bridge });
-  const initial = measureMuscleCompartmentRingCageContactState(
+  return maximumIterations;
+}
+
+function createAuthoredPackingTrajectorySolverContract({ bridge, maximumIterations }) {
+  requireRealizationOriginBridge(bridge);
+  requireAuthoredPackingTrajectoryMaximumIterations(maximumIterations);
+  const sourceInitial = measureMuscleCompartmentRingCageContactState(
     bridge.solverCarrier,
     bridge.source,
   );
+  const inheritedMaximumVolumeDebt = Math.max(
+    ...sourceInitial.cages.map(row => row.relativeVolumeError),
+  );
+  const volumeDebtTolerance = 1e-6;
+  const exactBoneTolerance = 1e-9;
+  return {
+    config: {
+      curvatureRegularization:12,
+      maxIterations:maximumIterations,
+      maximumLocalTurningAngleChange:0.35,
+      relaxationStep:0.2,
+      maximumTotalTurningAngleChange:1.5,
+      convergenceTolerance:1e-4,
+      maximumRelativeVolumeError:inheritedMaximumVolumeDebt + volumeDebtTolerance,
+    },
+    gates: {
+      inheritedMaximumVolumeDebt,
+      volumeDebtTolerance,
+      exactBoneTolerance,
+      exactBoneNonincrease:true,
+      fixedAttachments:true,
+      positiveCells:true,
+    },
+  };
+}
+
+function runAuthoredPackingTrajectoryFromAuthenticatedCarrier({
+  manifest,
+  authorityProfile,
+  bridge,
+  expectedParent,
+  initialCarrier,
+  solverContract,
+} = {}) {
+  validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile });
+  requireRealizationOriginBridge(bridge);
+  requireRealizationOriginExpectedParent(expectedParent, bridge);
+  if (!solverContract?.config || !solverContract?.gates) {
+    throw new Error('authored packing trajectory requires one explicit shared solver contract');
+  }
   const initialExact = measureAuthoredPackingRingCageBridgeContacts({
     manifest,
     authorityProfile,
-    solverCarrier:bridge.solverCarrier,
+    solverCarrier:initialCarrier,
     lineageBridge:bridge,
     expectedParent,
     lineageRoot:'initialized-descendant',
@@ -1958,22 +1992,10 @@ export function runAuthoredPackingTrajectoryAssay({
     expectedParent,
     lineageRoot:'observed',
   });
-  const inheritedMaximumVolumeDebt = Math.max(
-    ...initial.cages.map(row => row.relativeVolumeError),
-  );
-  const volumeDebtTolerance = 1e-6;
-  const exactBoneTolerance = 1e-9;
-  const config = {
-    curvatureRegularization:12,
-    maxIterations:maximumIterations,
-    maximumLocalTurningAngleChange:0.35,
-    relaxationStep:0.2,
-    maximumTotalTurningAngleChange:1.5,
-    convergenceTolerance:1e-4,
-    maximumRelativeVolumeError:inheritedMaximumVolumeDebt + volumeDebtTolerance,
-  };
+  const config = structuredClone(solverContract.config);
+  const gates = structuredClone(solverContract.gates);
   const result = solveMuscleCompartmentRingCageContact(
-    bridge.solverCarrier,
+    initialCarrier,
     bridge.source,
     config,
     { stepConstraint:candidate => {
@@ -1986,7 +2008,7 @@ export function runAuthoredPackingTrajectoryAssay({
         lineageRoot:'initialized-descendant',
       });
       const violation = candidateExact.summary.maximumSkeletalPenetration >
-        initialExact.summary.maximumSkeletalPenetration + exactBoneTolerance
+        initialExact.summary.maximumSkeletalPenetration + gates.exactBoneTolerance
         ? 'exact-authored-bone-penetration-increase'
         : null;
       return {
@@ -2011,14 +2033,7 @@ export function runAuthoredPackingTrajectoryAssay({
     authorityProfile,
     bridge,
     config,
-    gates: {
-      inheritedMaximumVolumeDebt,
-      volumeDebtTolerance,
-      exactBoneTolerance,
-      exactBoneNonincrease:true,
-      fixedAttachments:true,
-      positiveCells:true,
-    },
+    gates,
     result,
     exact:{
       observed:observedExact,
@@ -2026,6 +2041,182 @@ export function runAuthoredPackingTrajectoryAssay({
       initial:initialExact,
       packed:packedExact,
     },
+  };
+}
+
+export function runAuthoredPackingTrajectoryAssay({
+  manifest,
+  observedVariantId,
+  intentVariantId,
+  policy,
+  maximumIterations = 8,
+} = {}) {
+  requireAuthoredPackingTrajectoryMaximumIterations(maximumIterations);
+  const authorityProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId,
+    intentVariantId,
+    policy,
+  });
+  const bridge = createAuthoredPackingRingCageBridge({ manifest, authorityProfile });
+  const expectedParent = createAuthoredPackingRealizationOriginParentEnvelope({ bridge });
+  const solverContract = createAuthoredPackingTrajectorySolverContract({
+    bridge,
+    maximumIterations,
+  });
+  return runAuthoredPackingTrajectoryFromAuthenticatedCarrier({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+    solverContract,
+  });
+}
+
+export function runAuthoredPackingCollectiveTrajectoryAssay({
+  manifest,
+  observedVariantId,
+  intentVariantId,
+  policy,
+  maximumIterations = 8,
+} = {}) {
+  requireAuthoredPackingTrajectoryMaximumIterations(maximumIterations);
+  const authorityProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId,
+    intentVariantId,
+    policy,
+  });
+  const bridge = createAuthoredPackingRingCageBridge({ manifest, authorityProfile });
+  const expectedParent = createAuthoredPackingRealizationOriginParentEnvelope({ bridge });
+  const family = createAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge,
+    expectedParent,
+  });
+  validateAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge,
+    expectedParent,
+    family,
+  });
+  const solverContract = createAuthoredPackingTrajectorySolverContract({
+    bridge,
+    maximumIterations,
+  });
+  const directTrajectory = runAuthoredPackingTrajectoryFromAuthenticatedCarrier({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+    solverContract,
+  });
+  const candidateBySemanticId = new Map(
+    family.candidates.map(candidate => [candidate.semanticId, candidate]),
+  );
+  const rejectionBySemanticId = new Map(
+    family.rejections.map(rejection => [rejection.semanticId, rejection]),
+  );
+  const candidates = family.derivation.semanticModeIds.map(semanticId => {
+    const sourceCandidate = candidateBySemanticId.get(semanticId);
+    if (!sourceCandidate) {
+      const rejection = rejectionBySemanticId.get(semanticId);
+      if (!rejection) {
+        throw new Error(`collective trajectory family omitted semantic mode ${semanticId}`);
+      }
+      return {
+        semanticId,
+        role:'source-derived-realization-origin',
+        status:'source-rejected',
+        originSha256:rejection.attemptedOriginSha256 ?? null,
+        initialCarrierSha256:null,
+        trajectory:null,
+        failure:null,
+        rejection:structuredClone(rejection),
+      };
+    }
+    validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent,
+      origin:sourceCandidate.origin,
+    });
+    try {
+      const trajectory = runAuthoredPackingTrajectoryFromAuthenticatedCarrier({
+        manifest,
+        authorityProfile,
+        bridge,
+        expectedParent,
+        initialCarrier:sourceCandidate.origin.candidateCarrier,
+        solverContract,
+      });
+      return {
+        semanticId,
+        role:'source-derived-realization-origin',
+        status:'completed',
+        originSha256:sourceCandidate.origin.identity.sha256,
+        initialCarrierSha256:sourceCandidate.origin.candidateCarrier.identity.sha256,
+        trajectory,
+        failure:null,
+        rejection:null,
+      };
+    } catch (error) {
+      return {
+        semanticId,
+        role:'source-derived-realization-origin',
+        status:'solver-failed',
+        originSha256:sourceCandidate.origin.identity.sha256,
+        initialCarrierSha256:sourceCandidate.origin.candidateCarrier.identity.sha256,
+        trajectory:null,
+        failure: {
+          phase:'unchanged-global-solver-trajectory',
+          error:error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        },
+        rejection:null,
+      };
+    }
+  });
+  const completedCandidateCount = candidates.filter(row => row.status === 'completed').length;
+  const sourceRejectedCandidateCount = candidates.filter(
+    row => row.status === 'source-rejected',
+  ).length;
+  const solverFailedCandidateCount = candidates.filter(
+    row => row.status === 'solver-failed',
+  ).length;
+  return {
+    schema:AUTHORED_PACKING_COLLECTIVE_TRAJECTORY_ASSAY_SCHEMA,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    family,
+    solverContract,
+    directStart: {
+      semanticId:'direct-start',
+      role:family.directStart.role,
+      status:'completed',
+      originSha256:null,
+      initialCarrierSha256:bridge.solverCarrier.identity.sha256,
+      trajectory:directTrajectory,
+      failure:null,
+      rejection:null,
+    },
+    candidates,
+    population: {
+      definedCandidateCount:family.population.definedSemanticCandidateCount,
+      completedCandidateCount,
+      sourceRejectedCandidateCount,
+      solverFailedCandidateCount,
+      arbitraryCandidateCap:null,
+    },
+    route: {
+      requested:'collective-origin-family-through-unchanged-global-solver-v0',
+      effective:'collective-origin-family-through-unchanged-global-solver-v0',
+      fallbackUsed:false,
+    },
+    selection: {
+      status:'not-performed',
+      reason:'raw-multi-candidate-frontier-requires-comparative-and-operator-visual-disposition',
+    },
+    claimCeiling:'raw-shared-solver-trajectories-only-no-candidate-benefit-or-architecture-selection',
   };
 }
 
