@@ -894,6 +894,211 @@ test('plural realization origins preserve authored custody and reject counterfei
   );
 });
 
+test('collective realization-origin family emits every deterministic source-derived semantic mode', async () => {
+  assert.equal(
+    typeof authoredPacking.createAuthoredPackingCollectiveRealizationOriginFamily,
+    'function',
+    'plural search requires one explicit deterministic collective-origin family constructor',
+  );
+
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge,
+  });
+  const create = () => authoredPacking.createAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge,
+    expectedParent,
+  });
+  const family = create();
+
+  assert.equal(
+    typeof authoredPacking.validateAuthoredPackingCollectiveRealizationOriginFamily,
+    'function',
+    'collective family consumers require deterministic replay validation',
+  );
+  assert.deepEqual(family, create(), 'the same authenticated parent must reproduce byte-stable origins');
+  assert.equal(
+    authoredPacking.validateAuthoredPackingCollectiveRealizationOriginFamily({
+      bridge,
+      expectedParent,
+      family,
+    }),
+    family,
+  );
+  const forgedFamily = structuredClone(family);
+  forgedFamily.derivation.amplitudeAuthority = 'caller-selected-unearned-scale';
+  forgedFamily.identity.sha256 = authoredPacking.hashAuthoredPackingCanonicalJson(
+    Object.fromEntries(Object.entries(forgedFamily).filter(([key]) => key !== 'identity')),
+  );
+  assert.throws(
+    () => authoredPacking.validateAuthoredPackingCollectiveRealizationOriginFamily({
+      bridge,
+      expectedParent,
+      family:forgedFamily,
+    }),
+    /deterministic source-derived replay mismatch/,
+    'a self-rehashed family-level derivation forgery must fail from its authenticated source replay',
+  );
+  assert.equal(family.schema, 'kaminos.authored-packing-collective-origin-family.v0');
+  assert.equal(family.parent.initializedCarrierSha256, bridge.solverCarrier.identity.sha256);
+  assert.deepEqual(family.directStart, {
+    role:'unchanged-global-solver-control-not-a-realization-origin',
+    carrierSha256:bridge.solverCarrier.identity.sha256,
+  });
+  assert.deepEqual(family.route, {
+    requested:'source-derived-low-frequency-collective-origins-v0',
+    effective:'source-derived-low-frequency-collective-origins-v0',
+    fallbackUsed:false,
+  });
+  assert.deepEqual(family.derivation.semanticModeIds, [
+    'contact-pressure-relief',
+    'contact-slip-positive',
+    'contact-slip-negative',
+    'radial-breathing-relief',
+  ]);
+  assert.equal(family.derivation.longitudinalEnvelope, 'endpoint-pinned-sine-half-wave');
+  assert.equal(family.derivation.vertexPolicy, 'translate-complete-ring-with-axis');
+  assert.equal(family.derivation.randomness, 'none');
+  assert.equal(family.population.arbitraryCandidateCap, null);
+  assert.equal(family.population.definedSemanticCandidateCount, 4);
+  assert.equal(family.population.emittedCandidateCount, 4);
+  assert.equal(family.population.rejectedCandidateCount, 0);
+  assert.equal(family.candidates.length, 4);
+  assert.deepEqual(family.rejections, []);
+  assert.equal(
+    family.derivation.maximumDisplacementAmplitude,
+    family.source.maximumMovablePairwisePenetration,
+    'candidate scale must come from the authenticated source residual rather than a caller knob',
+  );
+  assert.match(family.source.residualLedgerSha256, /^[a-f0-9]{64}$/);
+  assert.match(family.identity.sha256, /^[a-f0-9]{64}$/);
+
+  const origins = family.candidates.map(row => row.origin);
+  assert.equal(authoredPacking.assertUniqueAuthoredPackingRealizationOrigins(origins), origins);
+  for (const [candidateIndex, candidate] of family.candidates.entries()) {
+    assert.equal(candidate.semanticId, family.derivation.semanticModeIds[candidateIndex]);
+    assert.equal(candidate.origin.generation.basis.id, candidate.semanticId);
+    assert.equal(candidate.origin.generation.basis.authority, 'source-derived-provisional-experimental');
+    assert.equal(
+      candidate.origin.generation.basis.longitudinalEnvelope,
+      'endpoint-pinned-sine-half-wave',
+    );
+    assert.equal(
+      candidate.origin.generation.basis.vertexPolicy,
+      'translate-complete-ring-with-axis',
+    );
+    assert.doesNotThrow(() => authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent,
+      origin:candidate.origin,
+    }));
+    assert.equal(
+      measureMuscleCompartmentRingCageContactState(
+        candidate.origin.candidateCarrier,
+        bridge.source,
+      ).schema,
+      'kaminos.muscle-compartment-ring-cage-contact-measurement.v0',
+      `${candidate.semanticId} must re-enter the unchanged direct global solver surface`,
+    );
+
+    const rowsBySection = new Map();
+    for (const row of candidate.origin.generation.nodeDisplacements) {
+      const section = row.nodeId.match(/:section:(\d{4}):/)?.[1];
+      assert.ok(section, `collective displacement must retain section identity: ${row.nodeId}`);
+      const key = `${row.constructionId}|${section}`;
+      const prior = rowsBySection.get(key);
+      if (prior) {
+        assert.deepEqual(
+          row.displacementQ9,
+          prior,
+          `${candidate.semanticId} must translate the complete ring instead of deforming its vertices`,
+        );
+      } else {
+        rowsBySection.set(key, row.displacementQ9);
+      }
+    }
+    assert.ok(rowsBySection.size > 0, `${candidate.semanticId} must move at least one interior ring`);
+    assert.equal(candidate.origin.difference.fixedNodeMaximumDrift, 0);
+    assert.equal(candidate.admission.nonPositiveCellCount, 0);
+    assert.equal(candidate.admission.fixedNodeMaximumDrift, 0);
+    assert.equal(
+      candidate.admission.claim,
+      'mechanically-initializable-origin-only-no-packing-benefit-claim',
+    );
+  }
+
+  const cleanProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:clean.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const cleanBridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile:cleanProfile,
+  });
+  const cleanFamily = authoredPacking.createAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge:cleanBridge,
+    expectedParent:authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+      bridge:cleanBridge,
+    }),
+  });
+  assert.equal(cleanFamily.candidates.length, 0);
+  assert.equal(cleanFamily.rejections.length, 4);
+  assert.ok(cleanFamily.rejections.every(row =>
+    row.reason === 'source-has-no-positive-movable-pairwise-penetration'
+  ));
+  assert.equal(cleanFamily.population.arbitraryCandidateCap, null);
+  assert.equal(
+    cleanFamily.population.emittedCandidateCount + cleanFamily.population.rejectedCandidateCount,
+    cleanFamily.population.definedSemanticCandidateCount,
+  );
+
+  const severe = variant(manifest, 'severe-interpenetration');
+  const severeProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:severe.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const severeBridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile:severeProfile,
+  });
+  const severeFamily = authoredPacking.createAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge:severeBridge,
+    expectedParent:authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+      bridge:severeBridge,
+    }),
+  });
+  assert.equal(
+    severeFamily.population.emittedCandidateCount + severeFamily.population.rejectedCandidateCount,
+    severeFamily.population.definedSemanticCandidateCount,
+    'stress inputs must account for every semantic mode without truncating or hiding refusals',
+  );
+  assert.ok(
+    severeFamily.rejections.some(row =>
+      row.reason === 'source-derived-origin-has-nonpositive-ring-cage-cell' &&
+      row.nonPositiveCellCount > 0 &&
+      /^[a-f0-9]{64}$/.test(row.attemptedOriginSha256)
+    ),
+    'topologically invalid stress origins must become source-linked rejection evidence',
+  );
+  assert.ok(severeFamily.candidates.every(row => row.admission.nonPositiveCellCount === 0));
+});
+
 test('accepted authored steps preserve parent, candidate, selected, and exact-contact custody', async () => {
   const manifest = await fixture();
   const clean = variant(manifest, 'clean-reference');

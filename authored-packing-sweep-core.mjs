@@ -4,6 +4,7 @@ import {
   hashMuscleCompartmentRingCageCanonicalJson,
 } from './muscle-compartment-ring-cage-core.mjs';
 import {
+  measureMuscleCompartmentRingCageContactResidualLedger,
   measureMuscleCompartmentRingCageContactState,
   solveMuscleCompartmentRingCageContact,
 } from './muscle-compartment-ring-cage-contact-core.mjs';
@@ -26,6 +27,8 @@ export const AUTHORED_PACKING_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.authored-packing-trajectory-assay.v0';
 export const AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA =
   'kaminos.authored-packing-realization-origin.v0';
+export const AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA =
+  'kaminos.authored-packing-collective-origin-family.v0';
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const IDENTITY_QUANTIZATION = 1_000_000_000;
@@ -1038,10 +1041,23 @@ function canonicalQ9RowsFromRequestedDisplacements(rows, bridge) {
     throw new Error('realization origin requires at least one node displacement');
   }
   const cages = new Map(bridge.solverCarrier.cages.map(cage => [cage.constructionId, cage]));
+  const constructionOrder = new Map(
+    bridge.solverCarrier.orderedConstructionIds.map((constructionId, index) => [constructionId, index]),
+  );
+  const nodeOrder = new Map(bridge.solverCarrier.cages.flatMap(cage =>
+    cage.manifest.nodes.map((node, index) => [`${cage.constructionId}|${node.id}`, index])
+  ));
   const seen = new Set();
   const canonicalRows = [];
-  const orderedRows = structuredClone(rows).sort((left, right) =>
-    `${left.constructionId}|${left.nodeId}`.localeCompare(`${right.constructionId}|${right.nodeId}`));
+  const orderedRows = structuredClone(rows).sort((left, right) => {
+    const constructionDifference = (constructionOrder.get(left.constructionId) ?? Infinity) -
+      (constructionOrder.get(right.constructionId) ?? Infinity);
+    if (constructionDifference !== 0) return constructionDifference;
+    const leftKey = `${left.constructionId}|${left.nodeId}`;
+    const rightKey = `${right.constructionId}|${right.nodeId}`;
+    const nodeDifference = (nodeOrder.get(leftKey) ?? Infinity) - (nodeOrder.get(rightKey) ?? Infinity);
+    return nodeDifference !== 0 ? nodeDifference : leftKey.localeCompare(rightKey);
+  });
   for (const row of orderedRows) {
     requireString(row?.constructionId, 'realization origin displacement constructionId');
     requireString(row?.nodeId, 'realization origin displacement nodeId');
@@ -1255,6 +1271,324 @@ export function assertUniqueAuthoredPackingRealizationOrigins(origins) {
     seen.set(origin.equivalence.sha256, origin.generation?.basis?.id || 'unknown');
   }
   return origins;
+}
+
+const COLLECTIVE_ORIGIN_MODE_IDS = Object.freeze([
+  'contact-pressure-relief',
+  'contact-slip-positive',
+  'contact-slip-negative',
+  'radial-breathing-relief',
+]);
+
+function addVectors(...vectors) {
+  return [0, 1, 2].map(axis => vectors.reduce((sum, vector) => sum + vector[axis], 0));
+}
+
+function normalizeVectorOrNull(vector) {
+  const magnitude = length(vector);
+  return magnitude > 1e-12 ? scale(vector, 1 / magnitude) : null;
+}
+
+function projectPerpendicular(vector, axis) {
+  return subtract(vector, scale(axis, dot(vector, axis)));
+}
+
+function averagePoints(points) {
+  if (!Array.isArray(points) || points.length === 0) {
+    throw new Error('collective origin geometry requires at least one point');
+  }
+  return [0, 1, 2].map(axis =>
+    points.reduce((sum, point) => sum + point[axis], 0) / points.length
+  );
+}
+
+function cageAxisNodes(cage) {
+  return cage.manifest.nodes
+    .filter(node => node.id.endsWith(':axis'))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function collectiveLongitudinalAxis(carrier) {
+  const endpointDirections = carrier.cages.map(cage => {
+    const axes = cageAxisNodes(cage);
+    if (axes.length < 2) {
+      throw new Error(`collective origin cage lacks a longitudinal axis: ${cage.constructionId}`);
+    }
+    return subtract(axes.at(-1).currentPosition, axes[0].currentPosition);
+  });
+  const reference = endpointDirections.reduce((longest, candidate) =>
+    length(candidate) > length(longest) ? candidate : longest
+  , [0, 0, 0]);
+  const referenceDirection = normalizeVectorOrNull(reference);
+  if (referenceDirection === null) {
+    throw new Error('collective origin source has no nonzero longitudinal extent');
+  }
+  const aligned = endpointDirections.map(direction => {
+    const normalized = normalizeVectorOrNull(direction);
+    if (normalized === null) return [0, 0, 0];
+    return dot(normalized, referenceDirection) < 0 ? scale(normalized, -1) : normalized;
+  });
+  return normalizeVectorOrNull(addVectors(...aligned)) ?? referenceDirection;
+}
+
+function collectivePressureDirections(carrier, residualLedger, longitudinalAxis) {
+  const pressureByConstruction = new Map(
+    carrier.orderedConstructionIds.map(constructionId => [constructionId, [0, 0, 0]]),
+  );
+  for (const contact of residualLedger.pairwise.contacts) {
+    const rawEscape = subtract(contact.closestObstacleBoundaryPoint, contact.point);
+    const crossSectionEscape = projectPerpendicular(rawEscape, longitudinalAxis);
+    const direction = normalizeVectorOrNull(crossSectionEscape) ?? normalizeVectorOrNull(rawEscape);
+    if (direction === null) continue;
+    const weighted = scale(direction, contact.penetration);
+    pressureByConstruction.set(
+      contact.subjectConstructionId,
+      addVectors(pressureByConstruction.get(contact.subjectConstructionId), weighted),
+    );
+    pressureByConstruction.set(
+      contact.obstacleConstructionId,
+      addVectors(pressureByConstruction.get(contact.obstacleConstructionId), scale(weighted, -1)),
+    );
+  }
+  return new Map([...pressureByConstruction].map(([constructionId, pressure]) => [
+    constructionId,
+    normalizeVectorOrNull(projectPerpendicular(pressure, longitudinalAxis)),
+  ]));
+}
+
+function collectiveRadialDirections(carrier, longitudinalAxis) {
+  const allAxisPoints = carrier.cages.flatMap(cage =>
+    cageAxisNodes(cage).map(node => node.currentPosition)
+  );
+  const center = averagePoints(allAxisPoints);
+  return new Map(carrier.cages.map(cage => {
+    const constructionCenter = averagePoints(cageAxisNodes(cage).map(node => node.currentPosition));
+    const radial = projectPerpendicular(subtract(constructionCenter, center), longitudinalAxis);
+    return [cage.constructionId, normalizeVectorOrNull(radial)];
+  }));
+}
+
+function collectiveModeDirections({ carrier, residualLedger, longitudinalAxis, semanticId }) {
+  const pressureDirections = collectivePressureDirections(
+    carrier,
+    residualLedger,
+    longitudinalAxis,
+  );
+  if (semanticId === 'radial-breathing-relief') {
+    return collectiveRadialDirections(carrier, longitudinalAxis);
+  }
+  return new Map([...pressureDirections].map(([constructionId, pressure]) => {
+    if (pressure === null || semanticId === 'contact-pressure-relief') {
+      return [constructionId, pressure];
+    }
+    const tangent = normalizeVectorOrNull(cross(longitudinalAxis, pressure));
+    if (tangent === null) return [constructionId, pressure];
+    const signedTangent = semanticId === 'contact-slip-positive'
+      ? tangent
+      : scale(tangent, -1);
+    return [constructionId, normalizeVectorOrNull(addVectors(pressure, signedTangent))];
+  }));
+}
+
+function collectiveModeNodeDisplacements({ carrier, directions, amplitude }) {
+  const rows = [];
+  for (const cage of carrier.cages) {
+    const direction = directions.get(cage.constructionId);
+    if (direction === null || direction === undefined) continue;
+    const fixedNodeIds = new Set(cage.manifest.constraints.boundaryMasks
+      .filter(row => row.fixed)
+      .map(row => row.nodeId));
+    const sectionIds = [...new Set(cage.manifest.nodes.map(node =>
+      node.id.match(/:section:(\d{4}):/)?.[1]
+    ).filter(Boolean))].sort();
+    if (sectionIds.length < 3) continue;
+    for (const [sectionIndex, sectionId] of sectionIds.entries()) {
+      const phase = sectionIndex / (sectionIds.length - 1);
+      const weight = Math.sin(Math.PI * phase);
+      if (weight <= 1e-12) continue;
+      const displacement = scale(direction, amplitude * weight);
+      for (const node of cage.manifest.nodes.filter(row =>
+        row.id.includes(`:section:${sectionId}:`) && !fixedNodeIds.has(row.id)
+      )) {
+        rows.push({
+          constructionId:cage.constructionId,
+          nodeId:node.id,
+          displacement,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+export function createAuthoredPackingCollectiveRealizationOriginFamily({
+  bridge,
+  expectedParent,
+} = {}) {
+  requireRealizationOriginBridge(bridge);
+  const effectiveParent = requireRealizationOriginExpectedParent(expectedParent, bridge);
+  const residualLedger = measureMuscleCompartmentRingCageContactResidualLedger(
+    bridge.solverCarrier,
+    bridge.source,
+  );
+  const maximumDisplacementAmplitude = residualLedger.pairwise.movableMaximumPenetration;
+  const residualLedgerSha256 = hashAuthoredPackingCanonicalJson(residualLedger);
+  const longitudinalAxis = collectiveLongitudinalAxis(bridge.solverCarrier);
+  const candidates = [];
+  const rejections = [];
+  const seenEquivalence = new Map();
+
+  for (const semanticId of COLLECTIVE_ORIGIN_MODE_IDS) {
+    if (!(maximumDisplacementAmplitude > 0)) {
+      rejections.push({
+        semanticId,
+        reason:'source-has-no-positive-movable-pairwise-penetration',
+      });
+      continue;
+    }
+    const directions = collectiveModeDirections({
+      carrier:bridge.solverCarrier,
+      residualLedger,
+      longitudinalAxis,
+      semanticId,
+    });
+    const nodeDisplacements = collectiveModeNodeDisplacements({
+      carrier:bridge.solverCarrier,
+      directions,
+      amplitude:maximumDisplacementAmplitude,
+    });
+    if (nodeDisplacements.length === 0) {
+      rejections.push({ semanticId, reason:'source-derived-mode-has-no-material-movable-node' });
+      continue;
+    }
+    const origin = createAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent,
+      generationBasis: {
+        schema:'kaminos.authored-packing-realization-origin-basis.v0',
+        id:semanticId,
+        authority:'source-derived-provisional-experimental',
+        familySchema:AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA,
+        sourceCarrierSha256:bridge.solverCarrier.identity.sha256,
+        residualLedgerSha256,
+        maximumDisplacementAmplitude,
+        amplitudeAuthority:'maximum-movable-pairwise-penetration',
+        longitudinalAxis,
+        longitudinalEnvelope:'endpoint-pinned-sine-half-wave',
+        vertexPolicy:'translate-complete-ring-with-axis',
+        randomness:'none',
+      },
+      coefficients:[1],
+      nodeDisplacements,
+    });
+    const initialState = measureMuscleCompartmentRingCageContactState(
+      origin.candidateCarrier,
+      bridge.source,
+    );
+    const nonPositiveCellCount = initialState.cages.reduce(
+      (total, cage) => total + cage.nonPositiveCellCount,
+      0,
+    );
+    if (nonPositiveCellCount > 0) {
+      rejections.push({
+        semanticId,
+        reason:'source-derived-origin-has-nonpositive-ring-cage-cell',
+        attemptedOriginSha256:origin.identity.sha256,
+        equivalenceSha256:origin.equivalence.sha256,
+        nonPositiveCellCount,
+      });
+      continue;
+    }
+    const prior = seenEquivalence.get(origin.equivalence.sha256);
+    if (prior) {
+      rejections.push({
+        semanticId,
+        reason:'physically-duplicate-source-derived-origin',
+        duplicateOf:prior,
+        equivalenceSha256:origin.equivalence.sha256,
+      });
+      continue;
+    }
+    seenEquivalence.set(origin.equivalence.sha256, semanticId);
+    candidates.push({
+      semanticId,
+      origin,
+      admission: {
+        nonPositiveCellCount,
+        fixedNodeMaximumDrift:origin.difference.fixedNodeMaximumDrift,
+        maximumPairwisePenetration:initialState.pairwise.maximumPenetration,
+        maximumSkeletalPenetration:initialState.skeletal.maximumPenetration,
+        maximumCompartmentEscape:initialState.compartment.maximumEscape,
+        maximumRelativeVolumeError:Math.max(
+          ...initialState.cages.map(cage => cage.relativeVolumeError),
+        ),
+        claim:'mechanically-initializable-origin-only-no-packing-benefit-claim',
+      },
+    });
+  }
+
+  const core = {
+    schema:AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA,
+    parent:structuredClone(effectiveParent),
+    source: {
+      bridgeSha256:bridge.identity.sha256,
+      initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
+      residualLedgerSchema:residualLedger.schema,
+      residualLedgerSha256,
+      maximumMovablePairwisePenetration:maximumDisplacementAmplitude,
+    },
+    directStart: {
+      role:'unchanged-global-solver-control-not-a-realization-origin',
+      carrierSha256:bridge.solverCarrier.identity.sha256,
+    },
+    derivation: {
+      semanticModeIds:[...COLLECTIVE_ORIGIN_MODE_IDS],
+      maximumDisplacementAmplitude,
+      amplitudeAuthority:'maximum-movable-pairwise-penetration',
+      longitudinalAxis,
+      longitudinalEnvelope:'endpoint-pinned-sine-half-wave',
+      vertexPolicy:'translate-complete-ring-with-axis',
+      randomness:'none',
+      basisReplayAuthority:'structural-lineage-only-no-admitted-basis-evaluator',
+    },
+    candidates,
+    rejections,
+    population: {
+      definedSemanticCandidateCount:COLLECTIVE_ORIGIN_MODE_IDS.length,
+      emittedCandidateCount:candidates.length,
+      rejectedCandidateCount:rejections.length,
+      arbitraryCandidateCap:null,
+      mohelIndicator: {
+        status:'nominal-explicit-semantic-enumeration',
+        observedCandidateCount:candidates.length,
+        permissiveGeneratorSuspected:false,
+      },
+    },
+    route: {
+      requested:'source-derived-low-frequency-collective-origins-v0',
+      effective:'source-derived-low-frequency-collective-origins-v0',
+      fallbackUsed:false,
+    },
+  };
+  return { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
+}
+
+export function validateAuthoredPackingCollectiveRealizationOriginFamily({
+  bridge,
+  expectedParent,
+  family,
+} = {}) {
+  if (family?.schema !== AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA) {
+    throw new Error('authored packing collective realization-origin family schema mismatch');
+  }
+  const expectedFamily = createAuthoredPackingCollectiveRealizationOriginFamily({
+    bridge,
+    expectedParent,
+  });
+  if (JSON.stringify(family) !== JSON.stringify(expectedFamily)) {
+    throw new Error('collective realization-origin family deterministic source-derived replay mismatch');
+  }
+  return family;
 }
 
 function subtract(left, right) {
