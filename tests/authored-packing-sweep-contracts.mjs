@@ -15,9 +15,15 @@ import {
 } from '../authored-packing-sweep-core.mjs';
 import * as authoredPacking from '../authored-packing-sweep-core.mjs';
 import {
+  hashMuscleCompartmentRingCageCanonicalJson,
+} from '../muscle-compartment-ring-cage-core.mjs';
+import {
   measureMuscleCompartmentRingCageContactResidualLedger,
   measureMuscleCompartmentRingCageContactState,
 } from '../muscle-compartment-ring-cage-contact-core.mjs';
+import {
+  hashMusclePackingCanonicalJson,
+} from '../muscle-compartment-packing-core.mjs';
 import {
   renderMuscleCompartmentRingCageContactHtml,
 } from '../muscle-compartment-ring-cage-contact-witness.mjs';
@@ -208,7 +214,14 @@ test('authored intent projects exact observed rings into the existing positive-v
     initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
     endpointPolicy:'intent-endpoints-observed-interior',
     endpointDisplacements:bridge.initialization.endpointDisplacements,
+    identity:bridge.initialization.identity,
   });
+  const initializationCore = structuredClone(bridge.initialization);
+  delete initializationCore.identity;
+  assert.equal(
+    bridge.initialization.identity.sha256,
+    authoredPacking.hashAuthoredPackingCanonicalJson(initializationCore),
+  );
   assert.ok(bridge.initialization.endpointDisplacements.some(row => row.maximumDisplacement > 0.1));
   for (const [memberIndex, memberId] of manifest.memberOrder.entries()) {
     const observedNodes = new Map(bridge.observedCarrier.cages[memberIndex].manifest.nodes.map(
@@ -262,6 +275,543 @@ test('authored intent projects exact observed rings into the existing positive-v
   assert.ok(measurement.pairwise.totalPenetration > 0);
   assert.equal(measurement.skeletal.totalPenetration, 0);
   assert.equal(measurement.compartment.maximumEscape, 0);
+});
+
+test('ring-cage bridge admits only the canonical manifest-derived authority profile', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const exerciseCounterfeitChain = counterfeitProfile => {
+    const counterfeitBridge = authoredPacking.createAuthoredPackingRingCageBridge({
+      manifest,
+      authorityProfile:counterfeitProfile,
+    });
+    const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+      bridge:counterfeitBridge,
+    });
+    const cage = counterfeitBridge.solverCarrier.cages[0];
+    const fixedNodeIds = new Set(cage.manifest.constraints.boundaryMasks
+      .filter(row => row.fixed)
+      .map(row => row.nodeId));
+    const movableNode = cage.manifest.nodes.find(node => !fixedNodeIds.has(node.id));
+    assert.ok(movableNode, 'fixture must expose a movable node for counterfeit-chain pressure');
+    const origin = authoredPacking.createAuthoredPackingRealizationOrigin({
+      bridge:counterfeitBridge,
+      expectedParent,
+      generationBasis:{
+        schema:'kaminos.authored-packing-realization-origin-basis.v0',
+        id:'counterfeit-authority-profile-probe',
+        authority:'provisional-experimental',
+      },
+      coefficients:[1],
+      nodeDisplacements:[{
+        constructionId:cage.constructionId,
+        nodeId:movableNode.id,
+        displacement:[0.01, 0, 0],
+      }],
+    });
+    return authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge:counterfeitBridge,
+      expectedParent,
+      origin,
+    });
+  };
+
+  const staleIdentityProfile = structuredClone(authorityProfile);
+  staleIdentityProfile.packingLaw.endpoints = 'counterfeit-endpoint-authority';
+  staleIdentityProfile.members[0].intent.targetVolume *= 1.01;
+  assert.throws(
+    () => exerciseCounterfeitChain(staleIdentityProfile),
+    /authority profile.*canonical manifest-derived profile/i,
+    'mutated authority fields must fail before a counterfeit bridge or parent is admitted',
+  );
+
+  const rehashedProfile = structuredClone(staleIdentityProfile);
+  delete rehashedProfile.identity;
+  rehashedProfile.identity = {
+    sha256:authoredPacking.hashAuthoredPackingCanonicalJson(rehashedProfile),
+  };
+  assert.throws(
+    () => exerciseCounterfeitChain(rehashedProfile),
+    /authority profile.*canonical manifest-derived profile/i,
+    'self-consistent rehashing must not let a counterfeit profile authenticate its own bridge chain',
+  );
+});
+
+test('exact bridge contacts bind the canonical authority profile to the effective solver carrier', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const restorationProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const continuationProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:mild.id,
+    policy:'sculpt-continuation',
+  });
+  const restorationBridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile:restorationProfile,
+  });
+
+  assert.doesNotThrow(() => authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
+    manifest,
+    authorityProfile:restorationProfile,
+    solverCarrier:restorationBridge.solverCarrier,
+  }));
+  assert.notEqual(
+    restorationProfile.identity.sha256,
+    continuationProfile.identity.sha256,
+    'the counterexample requires two independently valid but semantically distinct profiles',
+  );
+  assert.throws(
+    () => authoredPacking.measureAuthoredPackingRingCageBridgeContacts({
+      manifest,
+      authorityProfile:continuationProfile,
+      solverCarrier:restorationBridge.solverCarrier,
+    }),
+    /authority profile.*solver carrier source document/i,
+    'canonicality of each input independently must not authorize a cross-profile measurement claim',
+  );
+});
+
+test('plural realization origins preserve authored custody and reject counterfeit or duplicate solver starts', async () => {
+  assert.equal(
+    typeof authoredPacking.createAuthoredPackingRealizationOrigin,
+    'function',
+    'plural search requires a source-bound origin carrier before candidate generation',
+  );
+  assert.equal(
+    typeof authoredPacking.validateAuthoredPackingRealizationOrigin,
+    'function',
+    'realization origins require an independently replayable custody validator',
+  );
+  assert.equal(
+    typeof authoredPacking.assertUniqueAuthoredPackingRealizationOrigins,
+    'function',
+    'plural search must reject physically duplicate starts instead of counting renamed candidates',
+  );
+
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const cage = bridge.solverCarrier.cages[0];
+  const fixedNodeIds = new Set(cage.manifest.constraints.boundaryMasks
+    .filter(row => row.fixed)
+    .map(row => row.nodeId));
+  const sectionIds = cage.manifest.nodes
+    .filter(node => !fixedNodeIds.has(node.id))
+    .map(node => node.id.match(/:section:(\d{4}):/)?.[1])
+    .filter(Boolean);
+  const displacedSection = [...new Set(sectionIds)].sort()[0];
+  const nodeDisplacements = cage.manifest.nodes
+    .filter(node => node.id.includes(`:section:${displacedSection}:`))
+    .map(node => ({
+      constructionId:cage.constructionId,
+      nodeId:node.id,
+      displacement:[0.025, -0.01, 0.015],
+    }));
+  const parent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({ bridge });
+  const create = (overrides = {}) => authoredPacking.createAuthoredPackingRealizationOrigin({
+    bridge,
+    expectedParent:parent,
+    generationBasis:{
+      schema:'kaminos.authored-packing-realization-origin-basis.v0',
+      id:'collective-section-translation-probe',
+      authority:'provisional-experimental',
+    },
+    coefficients:[1],
+    nodeDisplacements,
+    ...overrides,
+  });
+  const origin = create();
+  const rehashOrigin = value => {
+    const rehashed = structuredClone(value);
+    delete rehashed.identity;
+    rehashed.identity = {
+      sha256:authoredPacking.hashAuthoredPackingCanonicalJson(rehashed),
+    };
+    return rehashed;
+  };
+  const rehashCandidateCarrier = value => {
+    const rehashed = structuredClone(value);
+    delete rehashed.identity;
+    rehashed.identity = {
+      domain:'canonical-json-self-excluding-top-level-identity',
+      sha256:hashMuscleCompartmentRingCageCanonicalJson(rehashed),
+    };
+    return rehashed;
+  };
+  const rehashBridgeSource = value => {
+    const rehashed = structuredClone(value);
+    const sourcePayload = structuredClone(rehashed.source);
+    delete sourcePayload.input;
+    const sourceIdentity = {
+      kind:'operator-authored-fixture',
+      id:sourcePayload.id,
+      sha256:hashMusclePackingCanonicalJson(sourcePayload),
+    };
+    rehashed.source.input = {
+      requested:structuredClone(sourceIdentity),
+      effective:structuredClone(sourceIdentity),
+    };
+    return rehashed;
+  };
+  const rehashBridge = value => {
+    const rehashed = structuredClone(value);
+    delete rehashed.identity;
+    rehashed.identity = {
+      domain:'canonical-json-self-excluding-top-level-identity',
+      sha256:authoredPacking.hashAuthoredPackingCanonicalJson(rehashed),
+    };
+    return rehashed;
+  };
+  const rehashInitialization = value => {
+    const rehashed = structuredClone(value);
+    delete rehashed.identity;
+    rehashed.identity = {
+      domain:'canonical-json-self-excluding-top-level-identity',
+      sha256:authoredPacking.hashAuthoredPackingCanonicalJson(rehashed),
+    };
+    return rehashed;
+  };
+
+  assert.equal(origin.schema, 'kaminos.authored-packing-realization-origin.v0');
+  assert.deepEqual(origin.parent, parent);
+  assert.equal(origin.route.requested, 'plural-realization-origin-to-existing-global-solver-v0');
+  assert.equal(origin.route.effective, origin.route.requested);
+  assert.equal(origin.route.fallbackUsed, false);
+  assert.ok(origin.difference.changedNodeCount > 0);
+  assert.ok(origin.difference.maximumNodeDisplacement > 0);
+  assert.equal(origin.difference.fixedNodeMaximumDrift, 0);
+  assert.notEqual(
+    origin.candidateCarrier.identity.sha256,
+    bridge.solverCarrier.identity.sha256,
+  );
+  assert.doesNotThrow(() => authoredPacking.validateAuthoredPackingRealizationOrigin({
+    bridge,
+    expectedParent:parent,
+    origin,
+  }));
+  assert.equal(
+    measureMuscleCompartmentRingCageContactState(
+      origin.candidateCarrier,
+      bridge.source,
+    ).schema,
+    'kaminos.muscle-compartment-ring-cage-contact-measurement.v0',
+    'the realization origin must be consumable by the existing direct global solver path',
+  );
+
+  const parentNodes = new Map(cage.manifest.nodes.map(node => [node.id, node]));
+  const candidateCage = origin.candidateCarrier.cages[0];
+  for (const mask of candidateCage.manifest.constraints.boundaryMasks.filter(row => row.fixed)) {
+    const candidate = candidateCage.manifest.nodes.find(node => node.id === mask.nodeId);
+    assert.deepEqual(candidate.currentPosition, parentNodes.get(mask.nodeId).currentPosition);
+  }
+  assert.deepEqual(
+    origin.candidateCarrier.cages.map(row => ({
+      constructionId:row.constructionId,
+      sourceIdentity:row.sourceIdentity,
+      restPositions:row.manifest.nodes.map(node => node.restPosition),
+      cells:row.manifest.cells,
+      constraints:row.manifest.constraints,
+    })),
+    bridge.solverCarrier.cages.map(row => ({
+      constructionId:row.constructionId,
+      sourceIdentity:row.sourceIdentity,
+      restPositions:row.manifest.nodes.map(node => node.restPosition),
+      cells:row.manifest.cells,
+      constraints:row.manifest.constraints,
+    })),
+    'candidate origins may change only movable current positions, never source or law-bearing fields',
+  );
+
+  const fixedNodeId = cage.manifest.constraints.boundaryMasks.find(row => row.fixed).nodeId;
+  assert.throws(
+    () => create({
+      nodeDisplacements:[{
+        constructionId:cage.constructionId,
+        nodeId:fixedNodeId,
+        displacement:[0.01, 0, 0],
+      }],
+    }),
+    /fixed attachment drift/i,
+  );
+  assert.throws(
+    () => create({
+      expectedParent:{ ...parent, initializedCarrierSha256:'0'.repeat(64) },
+    }),
+    /independently preserved parent authority mismatch/i,
+  );
+
+  assert.throws(
+    () => create({
+      nodeDisplacements:[{
+        constructionId:cage.constructionId,
+        nodeId:nodeDisplacements[0].nodeId,
+        displacement:[1e-12, 0, 0],
+      }],
+    }),
+    /physically identical/i,
+    'a displacement that rounds to q9 zero cannot mint a distinct realization origin',
+  );
+
+  const displacedNodeIds = new Set(nodeDisplacements.map(row => row.nodeId));
+  const dustNode = cage.manifest.nodes.find(node =>
+    !fixedNodeIds.has(node.id) && !displacedNodeIds.has(node.id));
+  assert.ok(dustNode, 'fixture must expose a second movable node for q9-zero row-membership pressure');
+  const largePlusDust = create({
+    nodeDisplacements:[
+      ...nodeDisplacements,
+      {
+        constructionId:cage.constructionId,
+        nodeId:dustNode.id,
+        displacement:[1e-12, 0, 0],
+      },
+    ],
+  });
+  assert.equal(
+    largePlusDust.equivalence.sha256,
+    origin.equivalence.sha256,
+    'adding a q9-zero row on a previously absent node must not change physical equivalence',
+  );
+  assert.throws(
+    () => authoredPacking.assertUniqueAuthoredPackingRealizationOrigins([
+      origin,
+      largePlusDust,
+    ]),
+    /duplicate physical realization origin/i,
+  );
+
+  const forgedAuthorityBridge = structuredClone(bridge);
+  forgedAuthorityBridge.authorityProfile.sha256 = '1'.repeat(64);
+  assert.throws(
+    () => create({ bridge:forgedAuthorityBridge }),
+    /authority profile.*mismatch/i,
+  );
+
+  const forgedSourceBridge = structuredClone(bridge);
+  forgedSourceBridge.source.input.requested.sha256 = '2'.repeat(64);
+  forgedSourceBridge.source.input.effective.sha256 = '2'.repeat(64);
+  assert.throws(
+    () => create({ bridge:forgedSourceBridge }),
+    /source identity.*mismatch/i,
+    'matching requested/effective source strings are insufficient without payload binding',
+  );
+
+  const staleInitializationBridge = structuredClone(bridge);
+  staleInitializationBridge.initialization.initializedCarrierSha256 = '3'.repeat(64);
+  assert.throws(
+    () => create({ bridge:staleInitializationBridge }),
+    /initialization.*carrier identity mismatch/i,
+  );
+
+  const staleSourceParentBridge = structuredClone(bridge);
+  staleSourceParentBridge.source.authoredPacking.observedCarrierSha256 = '4'.repeat(64);
+  assert.throws(
+    () => create({ bridge:staleSourceParentBridge }),
+    /source authored parent identity mismatch/i,
+  );
+
+  const fallbackBridge = structuredClone(bridge);
+  fallbackBridge.route.effective = 'fallback-authored-sweep';
+  fallbackBridge.route.fallbackUsed = true;
+  assert.throws(
+    () => create({ bridge:fallbackBridge }),
+    /bridge route identity mismatch/i,
+  );
+
+  const sourceForgery = structuredClone(origin);
+  sourceForgery.candidateCarrier.cages[0].sourceIdentity.sourceId = 'forged-source';
+  assert.throws(
+    () => authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent:parent,
+      origin:sourceForgery,
+    }),
+    /source identity substitution/i,
+  );
+
+  const missingGenerationBasis = structuredClone(origin);
+  delete missingGenerationBasis.generation.basis;
+  assert.throws(
+    () => authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent:parent,
+      origin:rehashOrigin(missingGenerationBasis),
+    }),
+    /generation basis schema mismatch/i,
+  );
+
+  const forgedGenerationDisplacement = structuredClone(origin);
+  forgedGenerationDisplacement.generation.nodeDisplacements[0].displacementQ9[0] = String(
+    Number(forgedGenerationDisplacement.generation.nodeDisplacements[0].displacementQ9[0]) + 1_000_000,
+  );
+  assert.throws(
+    () => authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent:parent,
+      origin:rehashOrigin(forgedGenerationDisplacement),
+    }),
+    /generation displacement.*candidate geometry mismatch/i,
+    'rehashing cannot convert invented generation lineage into observed candidate geometry',
+  );
+
+  const hiddenSubQ9Motion = structuredClone(origin);
+  hiddenSubQ9Motion.candidateCarrier.cages[0].manifest.nodes
+    .find(node => node.id === nodeDisplacements[0].nodeId)
+    .currentPosition[0] += 1e-12;
+  hiddenSubQ9Motion.candidateCarrier = rehashCandidateCarrier(
+    hiddenSubQ9Motion.candidateCarrier,
+  );
+  assert.throws(
+    () => authoredPacking.validateAuthoredPackingRealizationOrigin({
+      bridge,
+      expectedParent:parent,
+      origin:rehashOrigin(hiddenSubQ9Motion),
+    }),
+    /candidate geometry.*exactly reconstructed/i,
+    'a rehashed candidate cannot hide sub-q9 motion outside its declared generation rows',
+  );
+
+  let rehashedAttachmentBridge = rehashBridgeSource(bridge);
+  rehashedAttachmentBridge.source.muscles[0].attachments.origin.position[0] += 0.125;
+  const rehashedAttachmentPayload = structuredClone(rehashedAttachmentBridge.source);
+  delete rehashedAttachmentPayload.input;
+  const rehashedAttachmentIdentity = {
+    kind:'operator-authored-fixture',
+    id:rehashedAttachmentPayload.id,
+    sha256:hashMusclePackingCanonicalJson(rehashedAttachmentPayload),
+  };
+  rehashedAttachmentBridge.source.input = {
+    requested:structuredClone(rehashedAttachmentIdentity),
+    effective:structuredClone(rehashedAttachmentIdentity),
+  };
+  rehashedAttachmentBridge = rehashBridge(rehashedAttachmentBridge);
+  assert.throws(
+    () => create({ bridge:rehashedAttachmentBridge }),
+    /source geometry|parent authority|bridge identity/i,
+    'a source that rehashes substituted attachment geometry must not authenticate itself',
+  );
+
+  let rehashedParentSubstitution = rehashBridgeSource(bridge);
+  rehashedParentSubstitution.source.muscles[0].centerline[1].radius *= 1.01;
+  const rehashedParentPayload = structuredClone(rehashedParentSubstitution.source);
+  delete rehashedParentPayload.input;
+  const rehashedParentSourceIdentity = {
+    kind:'operator-authored-fixture',
+    id:rehashedParentPayload.id,
+    sha256:hashMusclePackingCanonicalJson(rehashedParentPayload),
+  };
+  rehashedParentSubstitution.source.input = {
+    requested:structuredClone(rehashedParentSourceIdentity),
+    effective:structuredClone(rehashedParentSourceIdentity),
+  };
+  rehashedParentSubstitution = rehashBridge(rehashedParentSubstitution);
+  assert.throws(
+    () => create({ bridge:rehashedParentSubstitution }),
+    /independently preserved parent authority mismatch/i,
+    'a self-consistent new bridge identity cannot replace the caller-preserved parent authority',
+  );
+
+  let rehashedManifestBridge = rehashBridgeSource(bridge);
+  rehashedManifestBridge.source.authoredPacking.manifestSha256 = 'f'.repeat(64);
+  const rehashedManifestPayload = structuredClone(rehashedManifestBridge.source);
+  delete rehashedManifestPayload.input;
+  const rehashedManifestIdentity = {
+    kind:'operator-authored-fixture',
+    id:rehashedManifestPayload.id,
+    sha256:hashMusclePackingCanonicalJson(rehashedManifestPayload),
+  };
+  rehashedManifestBridge.source.input = {
+    requested:structuredClone(rehashedManifestIdentity),
+    effective:structuredClone(rehashedManifestIdentity),
+  };
+  rehashedManifestBridge = rehashBridge(rehashedManifestBridge);
+  assert.throws(
+    () => create({ bridge:rehashedManifestBridge }),
+    /manifest.*carrier lineage|parent authority|bridge identity/i,
+    'a rehashed manifest substitution must fail against retained carrier lineage',
+  );
+
+  let counterfeitInitializationBridge = structuredClone(bridge);
+  counterfeitInitializationBridge.initialization.endpointPolicy = 'counterfeit-endpoint-policy';
+  counterfeitInitializationBridge.initialization.endpointDisplacements[0].maximumDisplacement += 9;
+  counterfeitInitializationBridge.initialization = rehashInitialization(
+    counterfeitInitializationBridge.initialization,
+  );
+  counterfeitInitializationBridge.source.authoredPacking.initializationSha256 =
+    counterfeitInitializationBridge.initialization.identity.sha256;
+  const counterfeitSourcePayload = structuredClone(counterfeitInitializationBridge.source);
+  delete counterfeitSourcePayload.input;
+  const counterfeitSourceIdentity = {
+    kind:'operator-authored-fixture',
+    id:counterfeitSourcePayload.id,
+    sha256:hashMusclePackingCanonicalJson(counterfeitSourcePayload),
+  };
+  counterfeitInitializationBridge.source.input = {
+    requested:structuredClone(counterfeitSourceIdentity),
+    effective:structuredClone(counterfeitSourceIdentity),
+  };
+  counterfeitInitializationBridge = rehashBridge(counterfeitInitializationBridge);
+  assert.throws(
+    () => create({ bridge:counterfeitInitializationBridge }),
+    /initialization.*policy|initialization.*ledger|parent authority|bridge identity/i,
+    'a counterfeit initialization receipt cannot inherit unchanged carrier authority',
+  );
+
+  const renamedDuplicate = create({
+    generationBasis:{
+      schema:'kaminos.authored-packing-realization-origin-basis.v0',
+      id:'renamed-but-physically-identical-probe',
+      authority:'provisional-experimental',
+    },
+  });
+  const perturbedDuplicate = create({
+    nodeDisplacements:nodeDisplacements.map((row, index) => ({
+      ...row,
+      displacement:index === 0
+        ? [row.displacement[0] + 1e-12, ...row.displacement.slice(1)]
+        : row.displacement,
+    })),
+  });
+  assert.equal(renamedDuplicate.equivalence.sha256, origin.equivalence.sha256);
+  assert.equal(perturbedDuplicate.equivalence.sha256, origin.equivalence.sha256);
+  assert.throws(
+    () => authoredPacking.assertUniqueAuthoredPackingRealizationOrigins([
+      origin,
+      renamedDuplicate,
+    ]),
+    /duplicate physical realization origin/i,
+  );
+  assert.throws(
+    () => authoredPacking.assertUniqueAuthoredPackingRealizationOrigins([
+      origin,
+      perturbedDuplicate,
+    ]),
+    /duplicate physical realization origin/i,
+  );
 });
 
 test('accepted authored steps preserve parent, candidate, selected, and exact-contact custody', async () => {

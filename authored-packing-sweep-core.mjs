@@ -24,6 +24,8 @@ export const AUTHORED_PACKING_ONE_STEP_ASSAY_SCHEMA =
   'kaminos.authored-packing-one-step-assay.v0';
 export const AUTHORED_PACKING_TRAJECTORY_ASSAY_SCHEMA =
   'kaminos.authored-packing-trajectory-assay.v0';
+export const AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA =
+  'kaminos.authored-packing-realization-origin.v0';
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const IDENTITY_QUANTIZATION = 1_000_000_000;
@@ -52,18 +54,31 @@ function canonical(value) {
 
 function identityBasis(value) {
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw new Error('identity basis cannot contain a non-finite number');
-    const quantized = Math.sign(value) * Math.floor(Math.abs(value) * IDENTITY_QUANTIZATION + 0.5);
-    if (!Number.isSafeInteger(quantized)) {
-      throw new Error(`identity basis number exceeds safe quantization range: ${value}`);
-    }
-    return ['$number-q9', String(quantized)];
+    return ['$number-q9', String(identityQuantizedInteger(value))];
   }
   if (Array.isArray(value)) return value.map(identityBasis);
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.keys(value).sort().map(key => [key, identityBasis(value[key])]));
   }
   return value;
+}
+
+function identityQuantizedInteger(value) {
+  if (!Number.isFinite(value)) throw new Error('identity basis cannot contain a non-finite number');
+  const quantized = Math.sign(value) * Math.floor(Math.abs(value) * IDENTITY_QUANTIZATION + 0.5);
+  if (!Number.isSafeInteger(quantized)) {
+    throw new Error(`identity basis number exceeds safe quantization range: ${value}`);
+  }
+  return Object.is(quantized, -0) ? 0 : quantized;
+}
+
+function q9Displacement(displacement) {
+  const integers = displacement.map(identityQuantizedInteger);
+  return {
+    integers,
+    values:integers.map(value => value / IDENTITY_QUANTIZATION),
+    isZero:integers.every(value => value === 0),
+  };
 }
 
 export function hashAuthoredPackingCanonicalJson(value) {
@@ -288,6 +303,30 @@ export function createAuthoredPackingAuthorityProfile({
   return { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
 }
 
+function validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile } = {}) {
+  validateAuthoredPackingSweepManifest(manifest);
+  if (authorityProfile?.schema !== AUTHORED_PACKING_AUTHORITY_PROFILE_SCHEMA) {
+    throw new Error('authored packing authority profile does not match canonical manifest-derived profile');
+  }
+  let canonicalProfile;
+  try {
+    canonicalProfile = createAuthoredPackingAuthorityProfile({
+      manifest,
+      observedVariantId:authorityProfile.observedState?.variantId,
+      intentVariantId:authorityProfile.intentState?.variantId,
+      policy:authorityProfile.packingLaw?.policy,
+    });
+  } catch (error) {
+    throw new Error(
+      `authored packing authority profile does not match canonical manifest-derived profile: ${error.message}`,
+    );
+  }
+  if (JSON.stringify(authorityProfile) !== JSON.stringify(canonicalProfile)) {
+    throw new Error('authored packing authority profile does not match canonical manifest-derived profile');
+  }
+  return canonicalProfile;
+}
+
 function signedTetrahedronVolume(points) {
   const [a, b, c, d] = points;
   return dot(subtract(b, a), cross(subtract(c, a), subtract(d, a))) / 6;
@@ -477,13 +516,7 @@ function bridgeCompartment(cages) {
 }
 
 export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile } = {}) {
-  validateAuthoredPackingSweepManifest(manifest);
-  if (authorityProfile?.schema !== AUTHORED_PACKING_AUTHORITY_PROFILE_SCHEMA) {
-    throw new Error('authored packing ring-cage bridge requires an authority profile');
-  }
-  if (authorityProfile.source?.manifestSha256 !== manifest.identity.sha256) {
-    throw new Error('authored packing ring-cage bridge manifest/profile identity mismatch');
-  }
+  validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile });
   const observedVariant = variantById(manifest, authorityProfile.observedState.variantId);
   const intentVariant = variantById(manifest, authorityProfile.intentState.variantId);
   const identities = new Map(manifest.memberOrder.map(memberId => [memberId, {
@@ -526,25 +559,16 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
   };
   const observedCarrier = carrier(observedCages);
   const solverCarrier = carrier(cages);
-  const endpointDisplacements = manifest.memberOrder.map((constructionId, memberIndex) => {
-    const observedNodes = new Map(observedCages[memberIndex].manifest.nodes.map(node => [node.id, node]));
-    const displacements = cages[memberIndex].manifest.constraints.boundaryMasks
-      .filter(mask => mask.fixed)
-      .map(mask => length(subtract(
-        observedNodes.get(mask.nodeId).currentPosition,
-        cages[memberIndex].manifest.nodes.find(node => node.id === mask.nodeId).currentPosition,
-      )));
-    return {
-      constructionId,
-      maximumDisplacement:Math.max(0, ...displacements),
-    };
+  const initializationCore = canonicalInitializationReceipt({
+    observedCarrier,
+    solverCarrier,
   });
   const initialization = {
-    schema:'kaminos.authored-packing-solver-initialization.v0',
-    observedCarrierSha256:observedCarrier.identity.sha256,
-    initializedCarrierSha256:solverCarrier.identity.sha256,
-    endpointPolicy:'intent-endpoints-observed-interior',
-    endpointDisplacements,
+    ...initializationCore,
+    identity: {
+      domain:'canonical-json-self-excluding-top-level-identity',
+      sha256:hashAuthoredPackingCanonicalJson(initializationCore),
+    },
   };
   const sourceCore = {
     schema:MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
@@ -602,6 +626,7 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
       observedCarrierSha256:observedCarrier.identity.sha256,
       initializedCarrierSha256:solverCarrier.identity.sha256,
       initializationSchema:initialization.schema,
+      initializationSha256:initialization.identity.sha256,
       boneResponse:'not-yet-applied-pairwise-first-slice',
     },
   };
@@ -615,7 +640,7 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
     ...sourceCore,
     input:{ requested:structuredClone(sourceIdentity), effective:structuredClone(sourceIdentity) },
   };
-  return {
+  const bridgeCore = {
     schema:AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA,
     source,
     observedCarrier,
@@ -631,6 +656,576 @@ export function createAuthoredPackingRingCageBridge({ manifest, authorityProfile
       fallbackUsed:false,
     },
   };
+  return {
+    ...bridgeCore,
+    identity: {
+      domain:'canonical-json-self-excluding-top-level-identity',
+      sha256:hashAuthoredPackingCanonicalJson(bridgeCore),
+    },
+  };
+}
+
+function canonicalInitializationReceipt({ observedCarrier, solverCarrier }) {
+  const observedCages = new Map(observedCarrier.cages.map(cage => [cage.constructionId, cage]));
+  const endpointDisplacements = solverCarrier.orderedConstructionIds.map(constructionId => {
+    const observedCage = observedCages.get(constructionId);
+    const solverCage = solverCarrier.cages.find(cage => cage.constructionId === constructionId);
+    if (!observedCage || !solverCage) {
+      throw new Error(`initialization carrier construction mismatch: ${constructionId}`);
+    }
+    const observedNodes = new Map(observedCage.manifest.nodes.map(node => [node.id, node]));
+    const solverNodes = new Map(solverCage.manifest.nodes.map(node => [node.id, node]));
+    const displacements = solverCage.manifest.constraints.boundaryMasks
+      .filter(mask => mask.fixed)
+      .map(mask => {
+        const observedNode = observedNodes.get(mask.nodeId);
+        const solverNode = solverNodes.get(mask.nodeId);
+        if (!observedNode || !solverNode) {
+          throw new Error(`initialization fixed node mismatch: ${mask.nodeId}`);
+        }
+        return length(subtract(observedNode.currentPosition, solverNode.currentPosition));
+      });
+    return {
+      constructionId,
+      maximumDisplacement:Math.max(0, ...displacements),
+    };
+  });
+  return {
+    schema:'kaminos.authored-packing-solver-initialization.v0',
+    observedCarrierSha256:observedCarrier.identity.sha256,
+    initializedCarrierSha256:solverCarrier.identity.sha256,
+    endpointPolicy:'intent-endpoints-observed-interior',
+    endpointDisplacements,
+  };
+}
+
+function ringCageCarrierIdentity(carrier) {
+  return hashMuscleCompartmentRingCageCanonicalJson(coreWithoutIdentity(carrier));
+}
+
+function carrierSourceIdentityRows(carrier) {
+  return carrier.cages.map(cage => ({
+    constructionId:cage.constructionId,
+    cageSourceIdentity:cage.sourceIdentity,
+    manifestSourceIdentity:cage.manifest?.sourceIdentity,
+  }));
+}
+
+function carrierLawBearingDomain(carrier) {
+  const domain = coreWithoutIdentity(carrier);
+  for (const cage of domain.cages || []) {
+    const fixedNodeIds = new Set((cage.manifest?.constraints?.boundaryMasks || [])
+      .filter(row => row.fixed)
+      .map(row => row.nodeId));
+    for (const node of cage.manifest?.nodes || []) {
+      if (!fixedNodeIds.has(node.id)) delete node.currentPosition;
+    }
+  }
+  return domain;
+}
+
+function ringCageBridgeIdentity(bridge) {
+  return hashAuthoredPackingCanonicalJson(coreWithoutIdentity(bridge));
+}
+
+function realizationOriginParentEnvelope(bridge) {
+  return {
+    bridgeSha256:bridge.identity.sha256,
+    observedCarrierSha256:bridge.observedCarrier.identity.sha256,
+    initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
+    authorityProfile:structuredClone(bridge.authorityProfile),
+    sourceInput:structuredClone(bridge.source.input),
+    initializationSha256:bridge.initialization.identity.sha256,
+  };
+}
+
+export function createAuthoredPackingRealizationOriginParentEnvelope({ bridge } = {}) {
+  requireRealizationOriginBridge(bridge);
+  return realizationOriginParentEnvelope(bridge);
+}
+
+function sourceManifestShaFromCarrier(carrier) {
+  const manifestShas = new Set();
+  for (const cage of carrier.cages) {
+    if (JSON.stringify(cage.sourceIdentity) !== JSON.stringify(cage.manifest?.sourceIdentity)) {
+      throw new Error(`realization origin carrier source identity mismatch: ${cage.constructionId}`);
+    }
+    const suffix = `:${cage.constructionId}`;
+    const sourceId = cage.sourceIdentity?.sourceId;
+    if (typeof sourceId !== 'string' || !sourceId.endsWith(suffix)) {
+      throw new Error(`realization origin carrier manifest lineage mismatch: ${cage.constructionId}`);
+    }
+    manifestShas.add(sourceId.slice(0, -suffix.length));
+  }
+  if (manifestShas.size !== 1) {
+    throw new Error('realization origin carriers do not share one manifest lineage');
+  }
+  const [manifestSha256] = manifestShas;
+  requireHash(manifestSha256, 'realization origin carrier manifest lineage');
+  return manifestSha256;
+}
+
+function requireSourceCarrierProjection(bridge) {
+  const manifestSha256 = sourceManifestShaFromCarrier(bridge.solverCarrier);
+  if (sourceManifestShaFromCarrier(bridge.observedCarrier) !== manifestSha256) {
+    throw new Error('realization origin observed/initialized manifest lineage mismatch');
+  }
+  if (bridge.source.authoredPacking?.manifestSha256 !== manifestSha256) {
+    throw new Error('realization origin source manifest and carrier lineage mismatch');
+  }
+  if (bridge.source.id !== `${bridge.authorityProfile.id}:solver-source`) {
+    throw new Error('realization origin source authority profile id mismatch');
+  }
+  const constructionIds = bridge.solverCarrier.orderedConstructionIds;
+  if (
+    JSON.stringify(bridge.observedCarrier.orderedConstructionIds) !== JSON.stringify(constructionIds) ||
+    JSON.stringify(bridge.source.muscles?.map(muscle => muscle.id)) !== JSON.stringify(constructionIds)
+  ) {
+    throw new Error('realization origin source construction order mismatch');
+  }
+  const cages = new Map(bridge.solverCarrier.cages.map(cage => [cage.constructionId, cage]));
+  for (const muscle of bridge.source.muscles) {
+    const cage = cages.get(muscle.id);
+    if (!cage || JSON.stringify(muscle.identity) !== JSON.stringify(cage.sourceIdentity)) {
+      throw new Error(`realization origin source construction identity mismatch: ${muscle.id}`);
+    }
+    if (cage.sourceIdentity.instanceId !== `${bridge.source.authoredPacking.observedVariantId}:${muscle.id}`) {
+      throw new Error(`realization origin source observed variant lineage mismatch: ${muscle.id}`);
+    }
+    const axisNodes = cage.manifest.nodes
+      .filter(node => node.id.endsWith(':axis'))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (
+      !Array.isArray(muscle.centerline) ||
+      muscle.centerline.length !== axisNodes.length ||
+      muscle.centerline.some((row, index) =>
+        JSON.stringify(row.position) !== JSON.stringify(axisNodes[index].currentPosition) ||
+        !Number.isFinite(row.radius) || row.radius <= 0)
+    ) {
+      throw new Error(`realization origin source geometry projection mismatch: ${muscle.id}`);
+    }
+    if (
+      JSON.stringify(muscle.attachments?.origin?.position) !==
+        JSON.stringify(muscle.centerline[0].position) ||
+      JSON.stringify(muscle.attachments?.insertion?.position) !==
+        JSON.stringify(muscle.centerline.at(-1).position)
+    ) {
+      throw new Error(`realization origin source geometry attachment mismatch: ${muscle.id}`);
+    }
+    if (!Number.isFinite(muscle.targetVolume) || muscle.targetVolume <= 0) {
+      throw new Error(`realization origin source target volume mismatch: ${muscle.id}`);
+    }
+  }
+}
+
+function realizationOriginDifference(parentCarrier, candidateCarrier) {
+  const rows = [];
+  const constructionRows = [];
+  let squaredDisplacementTotal = 0;
+  let nodeCount = 0;
+  let fixedNodeMaximumDrift = 0;
+  for (const [cageIndex, parentCage] of parentCarrier.cages.entries()) {
+    const candidateCage = candidateCarrier.cages[cageIndex];
+    const candidateNodes = new Map(candidateCage.manifest.nodes.map(node => [node.id, node]));
+    const fixedNodeIds = new Set(parentCage.manifest.constraints.boundaryMasks
+      .filter(row => row.fixed)
+      .map(row => row.nodeId));
+    let changedNodeCount = 0;
+    let maximumNodeDisplacement = 0;
+    for (const parentNode of parentCage.manifest.nodes) {
+      const candidateNode = candidateNodes.get(parentNode.id);
+      if (!candidateNode) {
+        throw new Error(`realization origin is missing node ${parentNode.id}`);
+      }
+      requirePoint(candidateNode.currentPosition, `realization origin node ${parentNode.id}`);
+      const rawDisplacement = subtract(candidateNode.currentPosition, parentNode.currentPosition);
+      const displacement = q9Displacement(rawDisplacement);
+      const magnitude = length(displacement.values);
+      nodeCount += 1;
+      squaredDisplacementTotal += magnitude * magnitude;
+      maximumNodeDisplacement = Math.max(maximumNodeDisplacement, magnitude);
+      if (fixedNodeIds.has(parentNode.id)) {
+        fixedNodeMaximumDrift = Math.max(fixedNodeMaximumDrift, magnitude);
+      }
+      if (!displacement.isZero) {
+        changedNodeCount += 1;
+        rows.push({
+          constructionId:parentCage.constructionId,
+          nodeId:parentNode.id,
+          displacementQ9:displacement.integers.map(String),
+        });
+      }
+    }
+    constructionRows.push({
+      constructionId:parentCage.constructionId,
+      changedNodeCount,
+      maximumNodeDisplacement,
+    });
+  }
+  return {
+    changedNodeCount:rows.length,
+    maximumNodeDisplacement:Math.max(0, ...constructionRows.map(
+      row => row.maximumNodeDisplacement,
+    )),
+    rootMeanSquareNodeDisplacement:nodeCount === 0
+      ? 0
+      : Math.sqrt(squaredDisplacementTotal / nodeCount),
+    fixedNodeMaximumDrift,
+    constructionRows,
+    displacementRows:rows,
+  };
+}
+
+function requireRealizationOriginBridge(bridge) {
+  if (bridge?.schema !== AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA) {
+    throw new Error('realization origin requires an authored packing ring-cage bridge');
+  }
+  for (const [label, carrier] of [
+    ['observed', bridge.observedCarrier],
+    ['initialized', bridge.solverCarrier],
+  ]) {
+    if (carrier?.schema !== 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+      throw new Error(`realization origin ${label} parent is not a ring-cage solver carrier`);
+    }
+    if (carrier.identity?.sha256 !== ringCageCarrierIdentity(carrier)) {
+      throw new Error(`realization origin ${label} parent carrier identity mismatch`);
+    }
+  }
+  requireHash(bridge.authorityProfile?.sha256, 'realization origin authority profile');
+  if (
+    bridge.authorityProfile.sha256 !== bridge.observedCarrier.sourceDocument?.sha256 ||
+    bridge.authorityProfile.sha256 !== bridge.solverCarrier.sourceDocument?.sha256 ||
+    bridge.authorityProfile.sha256 !== bridge.source?.authoredPacking?.authorityProfileSha256
+  ) {
+    throw new Error('realization origin authority profile binding mismatch');
+  }
+  if (
+    bridge.initialization?.schema !== 'kaminos.authored-packing-solver-initialization.v0' ||
+    bridge.initialization.observedCarrierSha256 !== bridge.observedCarrier.identity.sha256 ||
+    bridge.initialization.initializedCarrierSha256 !== bridge.solverCarrier.identity.sha256
+  ) {
+    throw new Error('realization origin initialization carrier identity mismatch');
+  }
+  const expectedInitialization = canonicalInitializationReceipt({
+    observedCarrier:bridge.observedCarrier,
+    solverCarrier:bridge.solverCarrier,
+  });
+  if (
+    JSON.stringify(coreWithoutIdentity(bridge.initialization)) !==
+      JSON.stringify(expectedInitialization) ||
+    bridge.initialization.identity?.domain !==
+      'canonical-json-self-excluding-top-level-identity' ||
+    bridge.initialization.identity?.sha256 !==
+      hashAuthoredPackingCanonicalJson(expectedInitialization)
+  ) {
+    throw new Error('realization origin initialization policy or displacement ledger mismatch');
+  }
+  if (
+    bridge.source?.authoredPacking?.observedCarrierSha256 !== bridge.observedCarrier.identity.sha256 ||
+    bridge.source?.authoredPacking?.initializedCarrierSha256 !== bridge.solverCarrier.identity.sha256 ||
+    bridge.source?.authoredPacking?.initializationSchema !== bridge.initialization.schema ||
+    bridge.source?.authoredPacking?.initializationSha256 !== bridge.initialization.identity.sha256
+  ) {
+    throw new Error('realization origin source authored parent identity mismatch');
+  }
+  if (
+    bridge.route?.requested !== 'exact-authored-sweep-to-positive-volume-ring-cage-v0' ||
+    bridge.route?.effective !== bridge.route.requested ||
+    bridge.route?.fallbackUsed !== false
+  ) {
+    throw new Error('realization origin bridge route identity mismatch');
+  }
+  const sourcePayload = structuredClone(bridge.source);
+  delete sourcePayload.input;
+  const sourceSha256 = hashMusclePackingCanonicalJson(sourcePayload);
+  const expectedSourceIdentity = {
+    kind:'operator-authored-fixture',
+    id:sourcePayload.id,
+    sha256:sourceSha256,
+  };
+  if (
+    JSON.stringify(bridge.source?.input?.requested) !== JSON.stringify(expectedSourceIdentity) ||
+    JSON.stringify(bridge.source?.input?.effective) !== JSON.stringify(expectedSourceIdentity)
+  ) {
+    throw new Error('realization origin bridge requested/effective source identity mismatch');
+  }
+  requireSourceCarrierProjection(bridge);
+  requireHash(bridge.identity?.sha256, 'realization origin bridge');
+  if (
+    bridge.identity.domain !== 'canonical-json-self-excluding-top-level-identity' ||
+    bridge.identity.sha256 !== ringCageBridgeIdentity(bridge)
+  ) {
+    throw new Error('realization origin bridge identity mismatch');
+  }
+  return bridge;
+}
+
+function requireRealizationOriginExpectedParent(expectedParent, bridge) {
+  const effectiveParent = realizationOriginParentEnvelope(bridge);
+  if (JSON.stringify(expectedParent) !== JSON.stringify(effectiveParent)) {
+    throw new Error('realization origin independently preserved parent authority mismatch');
+  }
+  return effectiveParent;
+}
+
+function requireCanonicalQ9DisplacementRows(rows, bridge) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('realization origin generation requires canonical displacement rows');
+  }
+  const cages = new Map(bridge.solverCarrier.cages.map(cage => [cage.constructionId, cage]));
+  const seen = new Set();
+  for (const row of rows) {
+    requireString(row?.constructionId, 'realization origin generation displacement constructionId');
+    requireString(row?.nodeId, 'realization origin generation displacement nodeId');
+    if (
+      !Array.isArray(row.displacementQ9) || row.displacementQ9.length !== 3 ||
+      !row.displacementQ9.every(value => {
+        if (typeof value !== 'string' || !/^-?(0|[1-9]\d*)$/.test(value)) return false;
+        const integer = Number(value);
+        return Number.isSafeInteger(integer) && String(integer) === value;
+      }) ||
+      row.displacementQ9.every(value => value === '0')
+    ) {
+      throw new Error(`realization origin generation displacement ${row.nodeId} is not canonical q9`);
+    }
+    const key = `${row.constructionId}|${row.nodeId}`;
+    if (seen.has(key)) {
+      throw new Error(`realization origin generation repeats node displacement ${key}`);
+    }
+    seen.add(key);
+    const cage = cages.get(row.constructionId);
+    const mask = cage?.manifest?.constraints?.boundaryMasks?.find(item => item.nodeId === row.nodeId);
+    if (!mask) {
+      throw new Error(`realization origin generation node is not constraint-accounted: ${row.nodeId}`);
+    }
+    if (mask.fixed) {
+      throw new Error(`realization origin generation claims fixed attachment drift at ${row.nodeId}`);
+    }
+  }
+}
+
+function canonicalQ9RowsFromRequestedDisplacements(rows, bridge) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('realization origin requires at least one node displacement');
+  }
+  const cages = new Map(bridge.solverCarrier.cages.map(cage => [cage.constructionId, cage]));
+  const seen = new Set();
+  const canonicalRows = [];
+  const orderedRows = structuredClone(rows).sort((left, right) =>
+    `${left.constructionId}|${left.nodeId}`.localeCompare(`${right.constructionId}|${right.nodeId}`));
+  for (const row of orderedRows) {
+    requireString(row?.constructionId, 'realization origin displacement constructionId');
+    requireString(row?.nodeId, 'realization origin displacement nodeId');
+    requirePoint(row.displacement, `realization origin displacement ${row.nodeId}`);
+    const key = `${row.constructionId}|${row.nodeId}`;
+    if (seen.has(key)) throw new Error(`realization origin repeats node displacement ${key}`);
+    seen.add(key);
+    const cage = cages.get(row.constructionId);
+    if (!cage) throw new Error(`realization origin construction not found: ${row.constructionId}`);
+    const mask = cage.manifest.constraints.boundaryMasks.find(item => item.nodeId === row.nodeId);
+    if (!mask) throw new Error(`realization origin node is not constraint-accounted: ${row.nodeId}`);
+    if (mask.fixed) throw new Error(`realization origin fixed attachment drift attempted at ${row.nodeId}`);
+    const displacement = q9Displacement(row.displacement);
+    if (!displacement.isZero) {
+      canonicalRows.push({
+        constructionId:row.constructionId,
+        nodeId:row.nodeId,
+        displacementQ9:displacement.integers.map(String),
+      });
+    }
+  }
+  if (canonicalRows.length === 0) {
+    throw new Error('realization origin is physically identical to its initialized parent');
+  }
+  requireCanonicalQ9DisplacementRows(canonicalRows, bridge);
+  return canonicalRows;
+}
+
+function candidateCarrierFromCanonicalQ9Rows(bridge, rows) {
+  requireCanonicalQ9DisplacementRows(rows, bridge);
+  const candidateCarrier = structuredClone(bridge.solverCarrier);
+  const cages = new Map(candidateCarrier.cages.map(cage => [cage.constructionId, cage]));
+  for (const row of rows) {
+    const cage = cages.get(row.constructionId);
+    const node = cage.manifest.nodes.find(item => item.id === row.nodeId);
+    if (!node) throw new Error(`realization origin node not found: ${row.nodeId}`);
+    node.currentPosition = node.currentPosition.map(
+      (value, axis) => value + Number(row.displacementQ9[axis]) / IDENTITY_QUANTIZATION,
+    );
+  }
+  candidateCarrier.identity = {
+    domain:'canonical-json-self-excluding-top-level-identity',
+    sha256:ringCageCarrierIdentity(candidateCarrier),
+  };
+  return candidateCarrier;
+}
+
+function requireRealizationOriginGeneration(generation, bridge, difference) {
+  if (generation?.basis?.schema !== 'kaminos.authored-packing-realization-origin-basis.v0') {
+    throw new Error('realization origin generation basis schema mismatch');
+  }
+  requireString(generation.basis.id, 'realization origin generation basis id');
+  requireString(generation.basis.authority, 'realization origin generation basis authority');
+  if (!Array.isArray(generation.coefficients) || generation.coefficients.length === 0 ||
+      !generation.coefficients.every(Number.isFinite)) {
+    throw new Error('realization origin generation coefficients must be a nonempty finite array');
+  }
+  if (generation.basisReplayAuthority !== 'structural-lineage-only-no-admitted-basis-evaluator') {
+    throw new Error('realization origin generation basis replay authority mismatch');
+  }
+  requireCanonicalQ9DisplacementRows(generation.nodeDisplacements, bridge);
+  if (JSON.stringify(generation.nodeDisplacements) !== JSON.stringify(difference.displacementRows)) {
+    throw new Error('realization origin generation displacement and candidate geometry mismatch');
+  }
+}
+
+export function createAuthoredPackingRealizationOrigin({
+  bridge,
+  expectedParent,
+  generationBasis,
+  coefficients,
+  nodeDisplacements,
+} = {}) {
+  requireRealizationOriginBridge(bridge);
+  requireRealizationOriginExpectedParent(expectedParent, bridge);
+  if (generationBasis?.schema !== 'kaminos.authored-packing-realization-origin-basis.v0') {
+    throw new Error('realization origin generation basis schema mismatch');
+  }
+  requireString(generationBasis.id, 'realization origin generation basis id');
+  requireString(generationBasis.authority, 'realization origin generation basis authority');
+  if (!Array.isArray(coefficients) || coefficients.length === 0 || !coefficients.every(Number.isFinite)) {
+    throw new Error('realization origin coefficients must be a nonempty finite array');
+  }
+  const canonicalDisplacementRows = canonicalQ9RowsFromRequestedDisplacements(
+    nodeDisplacements,
+    bridge,
+  );
+  const candidateCarrier = candidateCarrierFromCanonicalQ9Rows(
+    bridge,
+    canonicalDisplacementRows,
+  );
+  const difference = realizationOriginDifference(bridge.solverCarrier, candidateCarrier);
+  if (difference.changedNodeCount === 0) {
+    throw new Error('realization origin is physically identical to its initialized parent');
+  }
+  if (difference.fixedNodeMaximumDrift !== 0) {
+    throw new Error('realization origin fixed attachment drift is nonzero');
+  }
+  const equivalenceCore = {
+    domain:'parent-and-q9-canonical-current-position-displacements',
+    initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
+    displacementRows:difference.displacementRows,
+  };
+  const core = {
+    schema:AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA,
+    parent:structuredClone(expectedParent),
+    generation: {
+      basis:structuredClone(generationBasis),
+      coefficients:[...coefficients],
+      basisReplayAuthority:'structural-lineage-only-no-admitted-basis-evaluator',
+      nodeDisplacements:structuredClone(canonicalDisplacementRows),
+    },
+    candidateCarrier,
+    difference,
+    equivalence: {
+      ...equivalenceCore,
+      sha256:hashAuthoredPackingCanonicalJson(equivalenceCore),
+    },
+    route: {
+      requested:'plural-realization-origin-to-existing-global-solver-v0',
+      effective:'plural-realization-origin-to-existing-global-solver-v0',
+      fallbackUsed:false,
+    },
+  };
+  const origin = { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
+  validateAuthoredPackingRealizationOrigin({ bridge, expectedParent, origin });
+  return origin;
+}
+
+export function validateAuthoredPackingRealizationOrigin({ bridge, expectedParent, origin } = {}) {
+  requireRealizationOriginBridge(bridge);
+  if (origin?.schema !== AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA) {
+    throw new Error('authored packing realization origin schema mismatch');
+  }
+  const effectiveParent = requireRealizationOriginExpectedParent(expectedParent, bridge);
+  if (JSON.stringify(origin.parent) !== JSON.stringify(effectiveParent)) {
+    throw new Error('realization origin parent or source authority mismatch');
+  }
+  if (
+    origin.route?.requested !== 'plural-realization-origin-to-existing-global-solver-v0' ||
+    origin.route?.effective !== origin.route.requested ||
+    origin.route?.fallbackUsed !== false
+  ) {
+    throw new Error('realization origin route identity mismatch');
+  }
+  const candidateCarrier = origin.candidateCarrier;
+  if (candidateCarrier?.schema !== 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
+    throw new Error('realization origin candidate is not a ring-cage solver carrier');
+  }
+  if (JSON.stringify(carrierSourceIdentityRows(candidateCarrier)) !==
+      JSON.stringify(carrierSourceIdentityRows(bridge.solverCarrier))) {
+    throw new Error('realization origin source identity substitution');
+  }
+  if (JSON.stringify(carrierLawBearingDomain(candidateCarrier)) !==
+      JSON.stringify(carrierLawBearingDomain(bridge.solverCarrier))) {
+    throw new Error('realization origin substituted topology, rest state, constraints, or attachment law');
+  }
+  if (candidateCarrier.identity?.sha256 !== ringCageCarrierIdentity(candidateCarrier)) {
+    throw new Error('realization origin candidate carrier identity mismatch');
+  }
+  const difference = realizationOriginDifference(bridge.solverCarrier, candidateCarrier);
+  if (difference.changedNodeCount === 0) {
+    throw new Error('realization origin is physically identical to its initialized parent');
+  }
+  if (difference.fixedNodeMaximumDrift !== 0) {
+    throw new Error('realization origin fixed attachment drift is nonzero');
+  }
+  if (JSON.stringify(origin.difference) !== JSON.stringify(difference)) {
+    throw new Error('realization origin difference descriptor mismatch');
+  }
+  requireRealizationOriginGeneration(origin.generation, bridge, difference);
+  const reconstructedCandidate = candidateCarrierFromCanonicalQ9Rows(
+    bridge,
+    origin.generation.nodeDisplacements,
+  );
+  if (JSON.stringify(candidateCarrier) !== JSON.stringify(reconstructedCandidate)) {
+    throw new Error('realization origin candidate geometry is not exactly reconstructed from generation');
+  }
+  const equivalenceCore = {
+    domain:'parent-and-q9-canonical-current-position-displacements',
+    initializedCarrierSha256:bridge.solverCarrier.identity.sha256,
+    displacementRows:difference.displacementRows,
+  };
+  const expectedEquivalence = {
+    ...equivalenceCore,
+    sha256:hashAuthoredPackingCanonicalJson(equivalenceCore),
+  };
+  if (JSON.stringify(origin.equivalence) !== JSON.stringify(expectedEquivalence)) {
+    throw new Error('realization origin physical equivalence identity mismatch');
+  }
+  requireHash(origin.identity?.sha256, 'realization origin');
+  if (origin.identity.sha256 !== hashAuthoredPackingCanonicalJson(coreWithoutIdentity(origin))) {
+    throw new Error('realization origin identity does not match effective payload');
+  }
+  return origin;
+}
+
+export function assertUniqueAuthoredPackingRealizationOrigins(origins) {
+  if (!Array.isArray(origins) || origins.length === 0) {
+    throw new Error('realization origin set must be a nonempty array');
+  }
+  const seen = new Map();
+  for (const origin of origins) {
+    requireHash(origin?.equivalence?.sha256, 'realization origin equivalence');
+    const prior = seen.get(origin.equivalence.sha256);
+    if (prior) {
+      throw new Error(
+        `duplicate physical realization origin: ${prior} and ${origin.generation?.basis?.id || 'unknown'}`,
+      );
+    }
+    seen.set(origin.equivalence.sha256, origin.generation?.basis?.id || 'unknown');
+  }
+  return origins;
 }
 
 function subtract(left, right) {
@@ -883,13 +1478,15 @@ export function measureAuthoredPackingRingCageBridgeContacts({
   authorityProfile,
   solverCarrier,
 } = {}) {
-  validateAuthoredPackingSweepManifest(manifest);
-  if (authorityProfile?.schema !== AUTHORED_PACKING_AUTHORITY_PROFILE_SCHEMA ||
-      authorityProfile.source?.manifestSha256 !== manifest.identity.sha256) {
-    throw new Error('authored bridge contact measurement requires the matching authority profile');
-  }
+  validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile });
   if (solverCarrier?.schema !== 'kaminos.muscle-compartment-ring-cage-solver-carrier.v0') {
     throw new Error('authored bridge contact measurement requires a ring-cage solver carrier');
+  }
+  if (
+    solverCarrier.sourceDocument?.schema !== AUTHORED_PACKING_RING_CAGE_BRIDGE_SCHEMA ||
+    solverCarrier.sourceDocument?.sha256 !== authorityProfile.identity.sha256
+  ) {
+    throw new Error('authored bridge contact authority profile does not match solver carrier source document');
   }
   const { identity: _identity, ...identityDomain } = solverCarrier;
   const effectiveCarrierSha256 = hashMuscleCompartmentRingCageCanonicalJson(identityDomain);
