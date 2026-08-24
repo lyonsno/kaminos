@@ -334,6 +334,7 @@ def _capture_assay_plate(context, *, label, morph_parameters=None):
                 target_width=width,
                 target_height=height,
                 use_border=snapshot["use_border"],
+                use_crop_to_border=snapshot["use_crop_to_border"],
                 border_min_x=snapshot["border_min_x"],
                 border_max_x=snapshot["border_max_x"],
                 border_min_y=snapshot["border_min_y"],

@@ -387,6 +387,7 @@ def camera_frame_capture_plan(
     target_width: int,
     target_height: int,
     use_border: bool,
+    use_crop_to_border: bool,
     border_min_x: float,
     border_max_x: float,
     border_min_y: float,
@@ -399,6 +400,12 @@ def camera_frame_capture_plan(
         raise SourcePlateCaptureError(
             "capture-request",
             f"camera pixel aspect must be positive and finite, got {aspects!r}",
+        )
+
+    if not isinstance(use_border, bool) or not isinstance(use_crop_to_border, bool):
+        raise SourcePlateCaptureError(
+            "capture-request",
+            "camera render border and crop flags must be booleans",
         )
 
     if use_border:
@@ -419,18 +426,28 @@ def camera_frame_capture_plan(
             raise SourcePlateCaptureError(
                 "capture-request", f"camera render border is invalid: {bounds!r}"
             )
-        frame = "render-border"
         fraction_x = bounds[1] - bounds[0]
         fraction_y = bounds[3] - bounds[2]
     else:
         bounds = (0.0, 1.0, 0.0, 1.0)
-        frame = "camera-frame"
         fraction_x = fraction_y = 1.0
+
+    crop_to_border = bool(use_border and use_crop_to_border)
+    if crop_to_border:
+        frame = "render-border"
+        output_fraction_x = fraction_x
+        output_fraction_y = fraction_y
+    elif use_border:
+        frame = "camera-frame-with-render-border"
+        output_fraction_x = output_fraction_y = 1.0
+    else:
+        frame = "camera-frame"
+        output_fraction_x = output_fraction_y = 1.0
 
     display_source_width = source_width * aspects[0]
     display_source_height = source_height * aspects[1]
-    display_frame_width = display_source_width * fraction_x
-    display_frame_height = display_source_height * fraction_y
+    display_frame_width = display_source_width * output_fraction_x
+    display_frame_height = display_source_height * output_fraction_y
     scale = min(
         target_width / display_frame_width,
         target_height / display_frame_height,
@@ -438,10 +455,10 @@ def camera_frame_capture_plan(
     render_width = max(1, math.floor(display_source_width * scale + 1e-9))
     render_height = max(1, math.floor(display_source_height * scale + 1e-9))
     expected_content_width = max(
-        1, math.floor(render_width * fraction_x + 1e-9)
+        1, math.floor(render_width * output_fraction_x + 1e-9)
     )
     expected_content_height = max(
-        1, math.floor(render_height * fraction_y + 1e-9)
+        1, math.floor(render_height * output_fraction_y + 1e-9)
     )
     if (
         expected_content_width > target_width
@@ -453,7 +470,9 @@ def camera_frame_capture_plan(
         )
     return {
         "frame": frame,
-        "cropToBorder": bool(use_border),
+        "useBorder": use_border,
+        "requestedCropToBorder": use_crop_to_border,
+        "cropToBorder": crop_to_border,
         "sourceWidth": source_width,
         "sourceHeight": source_height,
         "sourcePixelAspectX": aspects[0],

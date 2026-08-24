@@ -41,6 +41,27 @@ def _png_bytes(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
     )
 
 
+def _nonuniform_png_bytes(width: int, height: int) -> bytes:
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        body = kind + payload
+        return struct.pack(">I", len(payload)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    raw = b"".join(
+        bytes([0])
+        + b"".join(
+            bytes(((x * 37 + y * 11) % 256, (x * 13 + y * 53) % 256, (x * 71 + y * 7) % 256))
+            for x in range(width)
+        )
+        for y in range(height)
+    )
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
 def test_viewport_capture_addon_exists_as_an_installable_package():
     assert CORE_PATH.is_file(), "viewport capture core is missing"
     assert ADDON_PATH.is_file(), "Blender add-on entrypoint is missing"
@@ -141,6 +162,7 @@ def test_camera_frame_plan_preserves_render_border_aspect_inside_square_output()
         target_width=1024,
         target_height=1024,
         use_border=True,
+        use_crop_to_border=True,
         border_min_x=0.16093750298023224,
         border_max_x=0.8708333373069763,
         border_min_y=0.13518518209457397,
@@ -172,6 +194,7 @@ def test_camera_frame_plan_uses_the_whole_camera_when_no_render_border_is_active
         target_width=1024,
         target_height=1024,
         use_border=False,
+        use_crop_to_border=False,
         border_min_x=0.0,
         border_max_x=1.0,
         border_min_y=0.0,
@@ -184,6 +207,34 @@ def test_camera_frame_plan_uses_the_whole_camera_when_no_render_border_is_active
     assert plan["renderHeight"] == 576
     assert plan["expectedContentWidth"] == 1024
     assert plan["expectedContentHeight"] == 576
+
+
+def test_camera_frame_plan_preserves_full_frame_when_border_is_not_cropped():
+    core = _load_core()
+
+    plan = core.camera_frame_capture_plan(
+        source_width=1920,
+        source_height=1080,
+        pixel_aspect_x=1.0,
+        pixel_aspect_y=1.0,
+        target_width=1024,
+        target_height=1024,
+        use_border=True,
+        use_crop_to_border=False,
+        border_min_x=0.2,
+        border_max_x=0.8,
+        border_min_y=0.25,
+        border_max_y=0.75,
+    )
+
+    assert plan["frame"] == "camera-frame-with-render-border"
+    assert plan["useBorder"] is True
+    assert plan["cropToBorder"] is False
+    assert plan["renderWidth"] == 1024
+    assert plan["renderHeight"] == 576
+    assert plan["expectedContentWidth"] == 1024
+    assert plan["expectedContentHeight"] == 576
+    assert math.isclose(plan["sourceFrameAspectRatio"], 1920 / 1080)
 
 
 def test_letterbox_png_preserves_wide_pixels_without_stretch_or_crop():
@@ -216,6 +267,34 @@ def test_letterbox_png_preserves_wide_pixels_without_stretch_or_crop():
         assert rows[1] == bytes((20, 40, 60)) * 4
         assert rows[2] == bytes((20, 40, 60)) * 4
         assert rows[3] == bytes(12)
+
+
+def test_letterbox_png_preserves_nonuniform_wide_and_tall_pixels_without_crop():
+    core = _load_core()
+    with TemporaryDirectory() as tmp:
+        for source_width, source_height in ((5, 2), (2, 5)):
+            source = Path(tmp) / f"source-{source_width}x{source_height}.png"
+            target = Path(tmp) / f"target-{source_width}x{source_height}.png"
+            source.write_bytes(_nonuniform_png_bytes(source_width, source_height))
+            _, _, source_channels, source_pixels = core._read_png_pixels(source)
+
+            placement = core.letterbox_png(
+                source,
+                target,
+                target_width=5,
+                target_height=5,
+            )
+            width, height, channels, target_pixels = core._read_png_pixels(target)
+
+            assert (width, height, channels) == (5, 5, source_channels)
+            row_stride = 5 * channels
+            copied = bytearray()
+            for y in range(source_height):
+                start = (placement["offsetY"] + y) * row_stride + placement["offsetX"] * channels
+                copied.extend(target_pixels[start : start + source_width * channels])
+            assert bytes(copied) == source_pixels
+            assert placement["sourceWidth"] == source_width
+            assert placement["sourceHeight"] == source_height
 
 
 def test_atomic_sidecar_round_trip_preserves_requested_and_effective_state():
