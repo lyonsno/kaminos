@@ -208,8 +208,10 @@ function authoredEvidence() {
         viewport:{ width:1400, height:900 },
         plannedCaptures,
         captures:plannedCaptures.map((capture, index) => ({
-          ...capture,
+          semanticView:capture.semanticView,
           requestedUrl:capture.url,
+          outputPath:capture.outputPath,
+          reportPath:capture.reportPath,
           batchIdentitySha256:authoredBatchIdentity.sha256,
           reportSha256:reportSha256s[index],
           sha256:reports[index].primaryOutput.sha256,

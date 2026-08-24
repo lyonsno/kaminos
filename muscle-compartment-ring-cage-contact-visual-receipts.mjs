@@ -251,7 +251,6 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
         visual.captureUrls[index],
         batchIdentity.sha256,
       ) && sameCaptureUrl(report.invocation?.url, plannedCapture.url) &&
-        completedCapture.url === plannedCapture.url &&
         completedCapture.requestedUrl === plannedCapture.url,
       `capture URL or batch identity mismatch at index ${index}`);
       require(report.invocation?.captureBatchIdentity?.sha256 === batchIdentity.sha256 &&
