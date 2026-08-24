@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export const MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA =
   'kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0';
 export const AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA =
@@ -84,6 +86,27 @@ export function captureReportPathsForVisual(runReport) {
   return semanticViews.map(view => `${view}-capture-report.json`);
 }
 
+export function captureArtifactPathsForVisual(runReport) {
+  return captureReportPathsForVisual(runReport).map(reportPath => {
+    require(reportPath.endsWith('-capture-report.json'),
+      `capture report does not have the required semantic suffix: ${reportPath}`);
+    return {
+      semanticView:reportPath.replace(/-capture-report\.json$/, ''),
+      reportPath,
+      outputPath:reportPath.replace(/-capture-report\.json$/, '.png'),
+    };
+  });
+}
+
+export function authoredCaptureBatchIdentitySha256(batchIdentity) {
+  require(batchIdentity && typeof batchIdentity === 'object',
+    'capture batch identity payload is missing');
+  const { sha256:ignored, ...payload } = batchIdentity;
+  return createHash('sha256')
+    .update(`${JSON.stringify(payload, null, 2)}\n`)
+    .digest('hex');
+}
+
 export function validateMuscleCompartmentRingCageContactVisualReceipts({
   runReport,
   servedViewer,
@@ -168,6 +191,10 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
       batchIdentity.routeEffective === visual.route.effective &&
       JSON.stringify(batchIdentity.semanticViews) === JSON.stringify(AUTHORED_VIEW_ORDER),
     'capture batch identity or generation mismatch');
+    require(
+      authoredCaptureBatchIdentitySha256(batchIdentity) === batchIdentity.sha256,
+      'capture batch identity SHA does not match its payload',
+    );
     require(captureBatch.report.generation === runReport.generation &&
       captureBatch.report.bundleIdentity?.sha256 === visual.bundleIdentity.sha256 &&
       JSON.stringify(captureBatch.report.route) === JSON.stringify(visual.route),
@@ -188,6 +215,7 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
   }
   require(Array.isArray(captureReports) && captureReports.length === visual.captureUrls.length,
     'capture receipt count is incomplete');
+  const canonicalArtifacts = authored ? captureArtifactPathsForVisual(runReport) : null;
 
   const captures = captureReports.map((report, index) => {
     require(report?.schema === 'kaminos.receipt-bearing-browser-capture.v0',
@@ -206,18 +234,25 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
     const batchIdentity = authored ? captureBatch.report.batchIdentity : null;
     const plannedCapture = authored ? captureBatch.report.plannedCaptures[index] : null;
     const completedCapture = authored ? captureBatch.report.captures[index] : null;
+    const canonicalArtifact = authored ? canonicalArtifacts[index] : null;
     if (authored) {
       require(plannedCapture?.semanticView === AUTHORED_VIEW_ORDER[index] &&
         completedCapture?.semanticView === AUTHORED_VIEW_ORDER[index] &&
+        plannedCapture.outputPath === canonicalArtifact.outputPath &&
+        completedCapture.outputPath === canonicalArtifact.outputPath &&
+        plannedCapture.reportPath === canonicalArtifact.reportPath &&
+        completedCapture.reportPath === canonicalArtifact.reportPath &&
         plannedCapture.outputPath === completedCapture.outputPath &&
         plannedCapture.reportPath === completedCapture.reportPath &&
         completedCapture.batchIdentitySha256 === batchIdentity.sha256,
-      `capture batch row mismatch at index ${index}`);
+      `capture batch row does not use the canonical report and PNG paths at index ${index}`);
       require(authoredBatchCaptureUrl(
         plannedCapture.url,
         visual.captureUrls[index],
         batchIdentity.sha256,
-      ) && sameCaptureUrl(report.invocation?.url, plannedCapture.url),
+      ) && sameCaptureUrl(report.invocation?.url, plannedCapture.url) &&
+        completedCapture.url === plannedCapture.url &&
+        completedCapture.requestedUrl === plannedCapture.url,
       `capture URL or batch identity mismatch at index ${index}`);
       require(report.invocation?.captureBatchIdentity?.sha256 === batchIdentity.sha256 &&
         captureReportSha256s[index] === completedCapture.reportSha256,
@@ -257,7 +292,8 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
         dataset?.packedCarrier === visual.bundleIdentity.packedCarrierSha256 &&
         dataset?.residualLedger === visual.bundleIdentity.residualLedgerSha256,
       `capture ${index} same-page frame identity or render completion mismatch`);
-      require(currentPng?.path === completedCapture.outputPath &&
+      require(currentPng?.path === canonicalArtifact.outputPath &&
+        currentPng.path === completedCapture.outputPath &&
         currentPng.sha256 === report.primaryOutput.sha256 &&
         currentPng.sha256 === completedCapture.sha256 &&
         currentPng.sizeBytes === report.primaryOutput.sizeBytes &&

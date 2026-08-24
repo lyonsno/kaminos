@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
 import {
@@ -125,7 +126,7 @@ const authoredBatchIdentity = {
   routeEffective:authoredRoute.effective,
   semanticViews:[],
   viewport:{ width:1400, height:900 },
-  sha256:'6'.repeat(64),
+  sha256:null,
 };
 
 const authoredViewSpecs = [
@@ -160,6 +161,12 @@ authoredBatchIdentity.semanticViews = authoredViewSpecs.map(([state, view, diagn
   if (state === 'packed' && !view && diagnostics) return 'packed-diagnostic';
   return `${state}-${view || 'front'}`;
 });
+{
+  const { sha256:ignored, ...payload } = authoredBatchIdentity;
+  authoredBatchIdentity.sha256 = createHash('sha256')
+    .update(`${JSON.stringify(payload, null, 2)}\n`)
+    .digest('hex');
+}
 
 function authoredEvidence() {
   const reports = authoredUrls.map((url, index) =>
@@ -475,6 +482,54 @@ test('authored verification rejects current-byte, mixed-batch, render-completion
       name:'partial in-progress batch beside old-looking receipts',
       mutate:evidence => { evidence.batch.report.status = 'in-progress'; },
       error:/completed.*capture batch/i,
+    },
+  ];
+  for (const scenario of scenarios) {
+    const evidence = authoredEvidence();
+    scenario.mutate(evidence);
+    assert.throws(() => validateMuscleCompartmentRingCageContactVisualReceipts({
+      runReport:authoredRunReport,
+      servedViewer:authoredServedViewer,
+      captureReports:evidence.reports,
+      captureBatch:evidence.batch,
+      captureReportSha256s:evidence.reportSha256s,
+      currentPngOutputs:evidence.currentPngOutputs,
+    }), scenario.error, scenario.name);
+  }
+});
+
+test('authored verification rejects batch-declared artifact paths and stale identity payloads', () => {
+  const scenarios = [
+    {
+      name:'foreign current PNG path',
+      mutate:evidence => {
+        evidence.batch.report.plannedCaptures[0].outputPath = 'foreign-stale-pixels.png';
+        evidence.batch.report.captures[0].outputPath = 'foreign-stale-pixels.png';
+        evidence.currentPngOutputs[0].path = 'foreign-stale-pixels.png';
+      },
+      error:/canonical.*PNG|PNG.*canonical/i,
+    },
+    {
+      name:'foreign capture report path',
+      mutate:evidence => {
+        evidence.batch.report.plannedCaptures[0].reportPath = 'foreign-stale-report.json';
+        evidence.batch.report.captures[0].reportPath = 'foreign-stale-report.json';
+      },
+      error:/canonical.*report|report.*canonical/i,
+    },
+    {
+      name:'traversal-bearing PNG path',
+      mutate:evidence => {
+        evidence.batch.report.plannedCaptures[0].outputPath = '../observed-front.png';
+        evidence.batch.report.captures[0].outputPath = '../observed-front.png';
+        evidence.currentPngOutputs[0].path = '../observed-front.png';
+      },
+      error:/canonical.*PNG|PNG.*canonical|traversal/i,
+    },
+    {
+      name:'mutated batch identity payload with stale SHA',
+      mutate:evidence => { evidence.batch.report.batchIdentity.id = 'forged-batch'; },
+      error:/batch identity.*SHA|SHA.*batch identity/i,
     },
   ];
   for (const scenario of scenarios) {

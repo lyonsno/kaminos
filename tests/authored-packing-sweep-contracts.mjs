@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -35,6 +36,45 @@ async function fixture() {
 
 function variant(manifest, role) {
   return Object.values(manifest.variants).find(row => row.role === role);
+}
+
+async function withStaticFixtureServer(root, action) {
+  const server = createServer(async (request, response) => {
+    const requestUrl = new URL(request.url || '/', 'http://127.0.0.1/');
+    const relative = decodeURIComponent(requestUrl.pathname).replace(/^\/+/, '') || 'index.html';
+    try {
+      const bytes = await readFile(path.join(root, relative));
+      response.writeHead(200, { 'content-type':'application/octet-stream' });
+      response.end(bytes);
+    } catch {
+      response.writeHead(404);
+      response.end('not found');
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    await action(`http://127.0.0.1:${address.port}/`);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+}
+
+async function runChild(command, args, options) {
+  const child = spawn(command, args, options);
+  let stdout = '';
+  let stderr = '';
+  child.stdout?.on('data', chunk => { stdout += chunk; });
+  child.stderr?.on('data', chunk => { stderr += chunk; });
+  const status = await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  return { status, stdout, stderr };
 }
 
 test('authored sweep manifest preserves the effective operator source and fails loud on geometry or route drift', async () => {
@@ -623,5 +663,60 @@ test('authored recapture publishes a new batch and invalidates old verification 
   } finally {
     child?.kill('SIGKILL');
     await rm(output, { recursive:true, force:true });
+  }
+});
+
+test('authored current-byte verifier rejects batch-path substitution through its real file-opening route', async t => {
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const source = path.join(root, 'artifacts/authored-packing-mild-trajectory-v0');
+  const verifier = path.join(root, 'tools/verify-current-k4-ring-cage-contact-visual-receipts.mjs');
+  const scenarios = [
+    {
+      name:'missing canonical PNG hidden by redirected stale copy',
+      mutate:async (output, batch) => {
+        await cp(
+          path.join(output, 'observed-front.png'),
+          path.join(output, 'foreign-stale-pixels.png'),
+        );
+        await rm(path.join(output, 'observed-front.png'));
+        batch.plannedCaptures[0].outputPath = 'foreign-stale-pixels.png';
+        batch.captures[0].outputPath = 'foreign-stale-pixels.png';
+      },
+    },
+    {
+      name:'foreign report path while canonical report bytes are consumed',
+      mutate:async (_output, batch) => {
+        batch.plannedCaptures[0].reportPath = 'foreign-stale-report.json';
+        batch.captures[0].reportPath = 'foreign-stale-report.json';
+      },
+    },
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async () => {
+      const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-path-substitution-'));
+      try {
+        await cp(source, output, { recursive:true });
+        const batchPath = path.join(output, 'capture-batch-report.json');
+        const batch = JSON.parse(await readFile(batchPath, 'utf8'));
+        await scenario.mutate(output, batch);
+        await writeFile(batchPath, `${JSON.stringify(batch, null, 2)}\n`);
+        await withStaticFixtureServer(output, async baseUrl => {
+          const result = await runChild(process.execPath, [
+            verifier,
+            '--output', output,
+            '--base-url', baseUrl,
+          ], { cwd:root, stdio:['ignore', 'pipe', 'pipe'] });
+          assert.notEqual(result.status, 0, result.stdout);
+          const verification = JSON.parse(await readFile(
+            path.join(output, 'capture-route-verification.json'),
+            'utf8',
+          ));
+          assert.equal(verification.status, 'failed');
+          assert.match(verification.error, /canonical|ENOENT/i);
+        });
+      } finally {
+        await rm(output, { recursive:true, force:true });
+      }
+    });
   }
 });

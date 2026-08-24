@@ -8,7 +8,7 @@ import process from 'node:process';
 import {
   AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA,
   MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA,
-  captureReportPathsForVisual,
+  captureArtifactPathsForVisual,
   validateMuscleCompartmentRingCageContactVisualReceipts,
 } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
 import {
@@ -62,7 +62,8 @@ try {
       'kaminos.authored-packing-trajectory-visual-bundle.v1') {
     failureSchema = AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA;
   }
-  const captureReportPaths = captureReportPathsForVisual(runReport);
+  const captureArtifacts = captureArtifactPathsForVisual(runReport);
+  const captureReportPaths = captureArtifacts.map(artifact => artifact.reportPath);
   const captureBytes = await Promise.all(
     captureReportPaths.map(relative => readFile(path.join(args.outputDirectory, relative))),
   );
@@ -82,11 +83,11 @@ try {
     };
     captureReportSha256s = captureBytes.map(sha256);
     phase = 'read-current-png-bytes';
-    currentPngOutputs = await Promise.all(batchReport.plannedCaptures.map(async capture => {
-      const pngBytes = await readFile(path.join(args.outputDirectory, capture.outputPath));
+    currentPngOutputs = await Promise.all(captureArtifacts.map(async artifact => {
+      const pngBytes = await readFile(path.join(args.outputDirectory, artifact.outputPath));
       const viewport = batchReport.viewport;
       return {
-        path:capture.outputPath,
+        path:artifact.outputPath,
         sha256:sha256(pngBytes),
         sizeBytes:pngBytes.length,
         png:validateReceiptBearingPng(pngBytes, viewport),

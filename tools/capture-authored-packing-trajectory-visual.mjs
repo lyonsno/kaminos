@@ -6,7 +6,10 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { captureSamePageBrowserScreenshot } from '../lib/receipt-bearing-browser-capture.mjs';
-import { captureReportPathsForVisual } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
+import {
+  authoredCaptureBatchIdentitySha256,
+  captureArtifactPathsForVisual,
+} from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
 
 const BATCH_SCHEMA = 'kaminos.authored-packing-trajectory-capture-batch.v1';
 const BATCH_IDENTITY_SCHEMA = 'kaminos.authored-packing-trajectory-capture-batch-identity.v0';
@@ -83,7 +86,7 @@ function batchIdentity({ generation, bundleIdentity, route, semanticViews, viewp
     semanticViews,
     viewport,
   };
-  return { ...payload, sha256:sha256(jsonBytes(payload)) };
+  return { ...payload, sha256:authoredCaptureBatchIdentitySha256(payload) };
 }
 
 function delay(milliseconds) {
@@ -94,13 +97,6 @@ async function writeAtomic(target, value) {
   const temporary = `${target}.tmp-${process.pid}`;
   await writeFile(temporary, jsonBytes(value));
   await rename(temporary, target);
-}
-
-function pngPathForReport(reportPath) {
-  if (!reportPath.endsWith('-capture-report.json')) {
-    throw new Error(`capture report does not have the required semantic suffix: ${reportPath}`);
-  }
-  return reportPath.replace(/-capture-report\.json$/, '.png');
 }
 
 let batchPath = null;
@@ -122,12 +118,11 @@ try {
       runReport.generation !== runReport.visual.bundleIdentity.generation) {
     throw new Error('authored visual capture generation or bundle schema mismatch');
   }
-  const reportPaths = captureReportPathsForVisual(runReport);
-  const captures = reportPaths.map((reportPath, index) => ({
-    semanticView:reportPath.replace(/-capture-report\.json$/, ''),
+  const captures = captureArtifactPathsForVisual(runReport).map((artifact, index) => ({
+    semanticView:artifact.semanticView,
     url:new URL(runReport.visual.captureUrls[index], args.baseUrl).href,
-    outputPath:pngPathForReport(reportPath),
-    reportPath,
+    outputPath:artifact.outputPath,
+    reportPath:artifact.reportPath,
   }));
   const identity = batchIdentity({
     generation:runReport.generation,
