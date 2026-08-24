@@ -53,16 +53,16 @@ class YieldingFitContracts(unittest.TestCase):
             first = ORACLE.fit_modes(
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
-                yield_pending_dir=pending, yield_check_steps=10,
-                yield_min_steps=0,
+                yield_pending_dir=pending,
+                yield_min_seconds=0.0,
                 **shared,
             )
             (pending / "waiter").write_text("x")
             second = ORACLE.fit_modes(
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
-                yield_pending_dir=pending, yield_check_steps=10,
-                yield_min_steps=0,
+                yield_pending_dir=pending,
+                yield_min_seconds=0.0,
                 **shared,
             )
             self.assertFalse(second["finished"])
@@ -74,8 +74,8 @@ class YieldingFitContracts(unittest.TestCase):
             third = ORACLE.fit_modes(
                 medium, lattice, [synthetic_camera()],
                 iterations=40, checkpoint_path=ckpt,
-                yield_pending_dir=pending, yield_check_steps=10,
-                yield_min_steps=0,
+                yield_pending_dir=pending,
+                yield_min_seconds=0.0,
                 **shared,
             )
             self.assertTrue(third["finished"])
@@ -84,11 +84,13 @@ class YieldingFitContracts(unittest.TestCase):
             # First (uninterrupted) chunk finished normally
             self.assertTrue(first["finished"])
 
-    def test_minimum_quantum_defers_yield_after_resume(self) -> None:
-        # Two yield-aware jobs ping-ponging on 50-step quanta spent a whole
-        # night paying process startup for slivers of work. A resumed (or
-        # fresh) fit must run at least yield_min_steps before it may yield,
-        # even with a waiter present the entire time.
+    def test_minimum_residency_is_wall_clock_not_steps(self) -> None:
+        # A 300-STEP quantum is 5 minutes at seat speed and 15 HOURS at
+        # memory-thrash speed (3.4 min/step, measured 2026-08-24 holding a
+        # 20-job operator assay hostage; candyman packets 041528Z/082932Z).
+        # Residency amortization must be wall-clock: a generation earns its
+        # startup with seconds of GPU residency, then defers to waiters at
+        # the NEXT STEP regardless of how many steps that residency bought.
         medium = synthetic_medium()
         lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
         with tempfile.TemporaryDirectory() as scratch:
@@ -96,28 +98,42 @@ class YieldingFitContracts(unittest.TestCase):
             pending = Path(scratch) / "pending"
             pending.mkdir()
             (pending / "waiter").write_text("x")
-            result = ORACLE.fit_modes(
+            # Quantum far above the fit's runtime: waiter present the whole
+            # time, but the fit must complete without yielding.
+            held = ORACLE.fit_modes(
                 medium, lattice, [synthetic_camera()],
                 mode_count=3, iterations=30, fit_width=32, fit_samples_per_cell=4,
                 seed=7, init="analytical", learning_rate=0.05,
                 checkpoint_path=ckpt, yield_pending_dir=pending,
-                yield_check_steps=10, yield_min_steps=20,
+                yield_min_seconds=3600.0,
             )
-            self.assertFalse(result["finished"])
-            self.assertGreaterEqual(result["completedSteps"], 20,
-                                    "yielded before the minimum quantum elapsed")
+            self.assertTrue(held["finished"],
+                            "yielded before the wall-clock residency elapsed")
+            ckpt.unlink(missing_ok=True)
+            # Zero quantum: the same fit must yield almost immediately —
+            # within a handful of steps, NOT a step-count quantum later.
+            released = ORACLE.fit_modes(
+                medium, lattice, [synthetic_camera()],
+                mode_count=3, iterations=30, fit_width=32, fit_samples_per_cell=4,
+                seed=7, init="analytical", learning_rate=0.05,
+                checkpoint_path=ckpt, yield_pending_dir=pending,
+                yield_min_seconds=0.0,
+            )
+            self.assertFalse(released["finished"])
+            self.assertLessEqual(released["completedSteps"], 3,
+                                 "waiter check did not run at the first post-quantum step")
 
-    def test_hop_fits_are_exempt_from_seat_scale_quantum(self) -> None:
-        # The 300-step minimum quantum protects seat stages (1000-step fits)
-        # from startup-dominated ping-pong. Chain hop fits run at most
-        # hop_iterations (150) steps, so a seat-scale quantum makes the
-        # intra-fit yield gate unreachable and stretches waiter latency from
-        # ~yield_check_steps to a full hop cycle (fit + witness render) —
-        # observed live 2026-08-23 with operator jobs waiting 10+ minutes.
-        # The hop boundary is the natural quantum for hops; intra-hop yields
-        # must stay reachable regardless of the requested seat quantum.
-        self.assertEqual(PIPE.hop_fit_yield_quantum(300), 0)
-        self.assertEqual(PIPE.hop_fit_yield_quantum(0), 0)
+    def test_wall_clock_quantum_is_universal(self) -> None:
+        # With residency measured in seconds, seat stages and chain hops need
+        # no separate policies and step-count quanta must be fully retired —
+        # any surviving yield_min_steps is a latent 15-hour hostage.
+        pipeline_source = (ROOT / "volume-longmotion-yielding-pipeline-mlx.py").read_text()
+        oracle_source = (ROOT / "volume-grid16-ceiling-oracle-mlx.py").read_text()
+        self.assertNotIn("yield_min_steps", pipeline_source)
+        self.assertNotIn("yield_min_steps", oracle_source)
+        self.assertNotIn("hop_fit_yield_quantum", pipeline_source)
+        self.assertIn("yield_min_seconds", pipeline_source)
+        self.assertIn("yield_min_seconds", oracle_source)
 
     def test_setup_cache_is_wired(self) -> None:
         # Every generation was rebuilding all chain-state mediums+lattices
@@ -144,8 +160,8 @@ class YieldingFitContracts(unittest.TestCase):
                 medium, lattice, [synthetic_camera()],
                 mode_count=3, iterations=40, fit_width=32, fit_samples_per_cell=4,
                 seed=7, init="analytical", learning_rate=0.05,
-                checkpoint_path=ckpt, yield_pending_dir=pending, yield_check_steps=10,
-                yield_min_steps=0,
+                checkpoint_path=ckpt, yield_pending_dir=pending,
+                yield_min_seconds=0.0,
             )
             archive = np.load(ckpt)
             opt_keys = [k for k in archive.files if k.startswith("opt.")]

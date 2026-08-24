@@ -8,7 +8,7 @@ resumable pipeline:
 
 - Every fit stage checkpoints parameters AND Adam moments (fresh-moments
   restarts shatter — measured), and checks the Greenroom pending directory
-  every `yield_check_steps` steps.
+  for waiters once its wall-clock residency quantum has elapsed.
 - If anyone is waiting, the stage checkpoints, the pipeline records its
   position in progress.json, resubmits ITSELF to the back of the FIFO via the
   provided CLI, and exits. Waiting jobs run; the pipeline resumes later from
@@ -174,8 +174,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 high_frequency_weight=args.high_frequency_weight,
                 checkpoint_path=stage_ckpt,
                 yield_pending_dir=yield_dir,
-                yield_check_steps=args.yield_check_steps,
-                yield_min_steps=args.yield_min_steps,
+                yield_min_seconds=args.yield_min_seconds,
             )
             if not result["finished"]:
                 save_progress(progress_path, progress)
@@ -234,10 +233,6 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 return report
             report["failurePhase"] = f"chain-hop{index}-{short}"
             hop_ckpt = checkpoints / f"hop-{index:02d}-fit.npz"
-            # Hop fits never run longer than hop_iterations, so the hop
-            # boundary already bounds startup churn; a seat-scale minimum
-            # quantum would make the intra-fit yield gate unreachable and
-            # stretch waiter latency to a full hop cycle.
             fit = ORACLE.fit_modes(
                 data["medium"], data["lattice"], fit_cameras,
                 mode_count=args.mode_count,
@@ -252,8 +247,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
                 high_frequency_weight=args.high_frequency_weight,
                 checkpoint_path=hop_ckpt,
                 yield_pending_dir=yield_dir,
-                yield_check_steps=args.yield_check_steps,
-                yield_min_steps=hop_fit_yield_quantum(args.yield_min_steps),
+                yield_min_seconds=args.yield_min_seconds,
             )
             if not fit["finished"]:
                 save_progress(progress_path, progress)
@@ -349,8 +343,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="disk cache for per-state mediums/lattices; deterministic products keyed by manifest identity",
     )
     parser.add_argument("--yield-pending-dir", type=Path, default=None)
-    parser.add_argument("--yield-check-steps", type=int, default=50)
-    parser.add_argument("--yield-min-steps", type=int, default=300)
+    parser.add_argument(
+        "--yield-min-seconds", type=float, default=120.0,
+        help="wall-clock GPU residency a generation earns before deferring to waiters",
+    )
     parser.add_argument("--resubmit-cli", type=Path, default=None)
     parser.add_argument("--route-identity", default="sjb/longmotion-yielding-pipeline")
     return parser.parse_args(argv)
@@ -377,17 +373,6 @@ def execute(argv: list[str] | None = None) -> int:
             pass
         print(f"yielding-pipeline failure [{report['failurePhase']}]: {failure}", file=sys.stderr)
         return 1
-
-
-def hop_fit_yield_quantum(requested_min_steps: int) -> int:
-    """Chain hop fits ignore the seat-scale minimum yield quantum.
-
-    The quantum exists to stop startup-dominated ping-pong across 1000-step
-    seat fits. Hop fits cap at hop_iterations (150), so the requested seat
-    quantum (default 300) would disable intra-hop yield checks entirely and
-    waiters would sit through a full hop cycle (fit + witness render).
-    """
-    return 0
 
 
 if __name__ == "__main__":

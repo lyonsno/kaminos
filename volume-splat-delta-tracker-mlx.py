@@ -298,8 +298,7 @@ def train(
     high_frequency_weight: float = 4.0,
     ray_chunk: int = 4096,
     yield_pending_dir: Path | None = None,
-    yield_check_steps: int = 50,
-    yield_min_steps: int = 200,
+    yield_min_seconds: float = 120.0,
     on_yield=None,
     log_every: int = 10,
 ) -> dict[str, Any]:
@@ -387,6 +386,8 @@ def train(
         np.savez(tmp, **payload)
         tmp.replace(checkpoint_path)
 
+    import time as _time
+    residency_start = _time.monotonic()
     losses: list[float] = []
     finished = True
     for step in range(start_step, iterations):
@@ -409,8 +410,7 @@ def train(
         if (
             yield_pending_dir is not None
             and step + 1 > start_step
-            and (step + 1 - start_step) >= yield_min_steps
-            and (step + 1 - start_step) % yield_check_steps == 0
+            and (_time.monotonic() - residency_start) >= yield_min_seconds
             and any(Path(yield_pending_dir).iterdir())
         ):
             save(step + 1)

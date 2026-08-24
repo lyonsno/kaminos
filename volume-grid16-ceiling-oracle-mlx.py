@@ -244,8 +244,7 @@ def fit_modes(
     high_frequency_weight: float = 0.0,
     checkpoint_path: Path | None = None,
     yield_pending_dir: Path | None = None,
-    yield_check_steps: int = 50,
-    yield_min_steps: int = 300,
+    yield_min_seconds: float = 120.0,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -512,12 +511,17 @@ def fit_modes(
         pending = Path(yield_pending_dir)
         return pending.is_dir() and any(pending.iterdir())
 
+    # Residency amortization is WALL-CLOCK: a generation earns its startup
+    # with seconds of GPU residency, then checks for waiters at every step.
+    # A step-count quantum is 5 minutes at seat speed and 15 hours at
+    # memory-thrash speed (measured 2026-08-24 against an operator assay).
+    import time as _time
+    residency_start = _time.monotonic()
     for step in range(start_step, iterations):
         if (
             checkpoint_path is not None
             and step > start_step
-            and (step - start_step) >= yield_min_steps
-            and (step - start_step) % yield_check_steps == 0
+            and (_time.monotonic() - residency_start) >= yield_min_seconds
             and someone_is_waiting()
         ):
             save_checkpoint(step)
