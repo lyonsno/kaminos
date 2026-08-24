@@ -47,6 +47,7 @@ def load_module(name: str, filename: str) -> Any:
 
 
 CHAIN = load_module("chained_witness_pipeline", "volume-grid-chained-tracking-witness-mlx.py")
+SETUP_CACHE = load_module("state_setup_cache", "volume-state-setup-cache.py")
 PROBE = CHAIN.PROBE
 ORACLE = CHAIN.ORACLE
 TARGET = CHAIN.TARGET
@@ -115,15 +116,27 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
 
     report["failurePhase"] = "source-load"
     seat_medium_by_rung: dict[int, Any] = {}
-    manifest, state, native_ids, positions, coefficients = FITTER.load_source_rows(manifest_path, seat_state_id)
-    held_camera = state.get("target") or {}
-    require(held_camera.get("cameraPose") and int(held_camera.get("width", 0)) > 0, "held camera is missing")
-    source_grid = int((state.get("replay") or {}).get("grid", 0))
-    for rung in rungs:
-        seat_medium_by_rung[rung] = FITTER.restrict_selected_optical_medium(
-            native_ids, positions, coefficients,
-            source_grid=source_grid, target_grid=rung, population=args.population,
+    seat_lattice_by_rung: dict[int, Any] = {}
+    held_camera: dict[str, Any] = {}
+
+    def cached_state_setup(state_id: str, rung: int):
+        return SETUP_CACHE.load_or_build(
+            manifest_path, state_id, rung, args.population,
+            args.sigma_cells, args.fine_grid, args.setup_cache_dir,
+            build_medium=lambda: PROBE.restricted_medium_for_state(
+                manifest_path, state_id, rung, args.population
+            ),
+            build_lattice=lambda medium: TARGET.build_gaussian_density_lattice(
+                medium, sigma_cells=args.sigma_cells, fine_grid=args.fine_grid
+            )[0],
         )
+
+    for rung in rungs:
+        medium, camera, lattice = cached_state_setup(seat_state_id, rung)
+        seat_medium_by_rung[rung] = medium
+        seat_lattice_by_rung[rung] = lattice
+        held_camera = camera or held_camera
+    require(held_camera.get("cameraPose") and int(held_camera.get("width", 0)) > 0, "held camera is missing")
     fine_medium = seat_medium_by_rung[rungs[-1]]
     world_center = fine_medium.origin + fine_medium.source_spacing * fine_medium.source_grid * 0.5
     fit_cameras = ORACLE.orbit_cameras(held_camera, count=args.fit_cameras, pivot=world_center)
@@ -134,9 +147,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
             if stage_index < progress["seatStage"]:
                 continue
             medium = seat_medium_by_rung[rung]
-            lattice, _receipt = TARGET.build_gaussian_density_lattice(
-                medium, sigma_cells=args.sigma_cells, fine_grid=args.fine_grid
-            )
+            lattice = seat_lattice_by_rung[rung]
             stage_ckpt = checkpoints / f"seat-stage{stage_index}-g{rung}.npz"
             stage_state_file = checkpoints / f"seat-stage{stage_index}-g{rung}-state.json"
             if stage_state_file.is_file():
@@ -185,12 +196,7 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
     require(seat_state_file.is_file(), "seat solution missing at chain start")
     per_state: dict[str, dict[str, Any]] = {}
     for state_id in chain_states:
-        medium, _camera = PROBE.restricted_medium_for_state(
-            manifest_path, state_id, rungs[-1], args.population
-        )
-        lattice, _r = TARGET.build_gaussian_density_lattice(
-            medium, sigma_cells=args.sigma_cells, fine_grid=args.fine_grid
-        )
+        medium, _camera, lattice = cached_state_setup(state_id, rungs[-1])
         per_state[state_id] = {"medium": medium, "lattice": lattice}
     render_kwargs = {"width": args.render_width, "samples_per_cell": args.samples_per_cell}
 
@@ -337,6 +343,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260727)
+    parser.add_argument(
+        "--setup-cache-dir", type=Path,
+        default=Path.home() / ".local/state/gpu-greenroom/cache/state-setup",
+        help="disk cache for per-state mediums/lattices; deterministic products keyed by manifest identity",
+    )
     parser.add_argument("--yield-pending-dir", type=Path, default=None)
     parser.add_argument("--yield-check-steps", type=int, default=50)
     parser.add_argument("--yield-min-steps", type=int, default=300)

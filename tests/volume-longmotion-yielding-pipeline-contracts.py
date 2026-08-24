@@ -119,6 +119,19 @@ class YieldingFitContracts(unittest.TestCase):
         self.assertEqual(PIPE.hop_fit_yield_quantum(300), 0)
         self.assertEqual(PIPE.hop_fit_yield_quantum(0), 0)
 
+    def test_setup_cache_is_wired(self) -> None:
+        # Every generation was rebuilding all chain-state mediums+lattices
+        # from raw source rows — an unyieldable multi-minute block, measured
+        # live holding operator jobs behind pure setup. The pipeline must
+        # expose a setup-cache directory and route state setup through the
+        # cache module.
+        self.assertTrue(hasattr(PIPE, "SETUP_CACHE"),
+                        "pipeline does not load the setup cache module")
+        import argparse
+        parser_source = (ROOT / "volume-longmotion-yielding-pipeline-mlx.py").read_text()
+        self.assertIn("--setup-cache-dir", parser_source)
+        self.assertIn("load_or_build", parser_source)
+
     def test_checkpoint_preserves_adam_moments(self) -> None:
         medium = synthetic_medium()
         lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
