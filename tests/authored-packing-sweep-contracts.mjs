@@ -546,7 +546,82 @@ test('authored trajectory report binds the served viewer and route inside the vi
     assert.ok(contactViews.every(url =>
       new URL(url, 'http://fixture.invalid/').searchParams.get('diagnostics') === 'contacts'
     ));
+    const viewerHtml = await readFile(path.join(output, 'index.html'), 'utf8');
+    assert.match(
+      viewerHtml,
+      /witnessRenderComplete/,
+      'the viewer must publish render completion only after an actual rendered frame',
+    );
   } finally {
+    await rm(output, { recursive:true, force:true });
+  }
+});
+
+test('authored recapture publishes a new batch and invalidates old verification before replacing pixels', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-capture-transition-'));
+  let child = null;
+  try {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const run = spawnSync(process.execPath, [
+      path.join(root, 'tools/run-authored-packing-trajectory-assay.mjs'),
+      '--manifest', fileURLToPath(FIXTURE_URL),
+      '--output', output,
+      '--observed-role', 'mild-interpenetration',
+      '--intent-role', 'clean-reference',
+      '--policy', 'restoration-to-reference',
+      '--iterations', '1',
+    ], { cwd:root, encoding:'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    const stalePixel = path.join(output, 'observed-front.png');
+    await writeFile(stalePixel, 'prior verified pixel bytes');
+    await writeFile(path.join(output, 'capture-route-verification.json'), JSON.stringify({
+      status:'verified',
+      generation:'0'.repeat(64),
+    }));
+    child = spawn(process.execPath, [
+      path.join(root, 'tools/capture-authored-packing-trajectory-visual.mjs'),
+      '--output', output,
+      '--base-url', 'http://127.0.0.1:9/fixture/',
+    ], {
+      cwd:root,
+      env:{
+        ...process.env,
+        NODE_ENV:'test',
+        KAMINOS_AUTHORED_CAPTURE_TEST_TRANSITION_PAUSE_MS:'20000',
+      },
+      stdio:'ignore',
+    });
+    const closePromise = new Promise(resolve => child.once('close', resolve));
+    let batch = null;
+    let verification = null;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      batch = await readFile(path.join(output, 'capture-batch-report.json'), 'utf8')
+        .then(JSON.parse).catch(() => null);
+      verification = await readFile(path.join(output, 'capture-route-verification.json'), 'utf8')
+        .then(JSON.parse).catch(() => null);
+      if (batch?.status === 'in-progress' && verification?.status === 'inapplicable') break;
+      await delay(10);
+    }
+    assert.equal(batch?.status, 'in-progress');
+    assert.match(batch.batchIdentity.sha256, /^[a-f0-9]{64}$/);
+    assert.equal(verification?.status, 'inapplicable');
+    assert.equal(verification.captureBatchIdentity.sha256, batch.batchIdentity.sha256);
+    assert.equal(await readFile(stalePixel, 'utf8'), 'prior verified pixel bytes');
+    child.kill('SIGKILL');
+    await closePromise;
+    child = null;
+    const interruptedBatch = JSON.parse(await readFile(
+      path.join(output, 'capture-batch-report.json'),
+      'utf8',
+    ));
+    assert.equal(interruptedBatch.status, 'in-progress');
+    const interruptedVerification = JSON.parse(await readFile(
+      path.join(output, 'capture-route-verification.json'),
+      'utf8',
+    ));
+    assert.equal(interruptedVerification.status, 'inapplicable');
+  } finally {
+    child?.kill('SIGKILL');
     await rm(output, { recursive:true, force:true });
   }
 });

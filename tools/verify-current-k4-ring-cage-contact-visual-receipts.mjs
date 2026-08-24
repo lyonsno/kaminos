@@ -11,6 +11,10 @@ import {
   captureReportPathsForVisual,
   validateMuscleCompartmentRingCageContactVisualReceipts,
 } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
+import {
+  analyzeReceiptBearingPngVisualSignal,
+  validateReceiptBearingPng,
+} from '../lib/receipt-bearing-browser-capture.mjs';
 
 function parseArguments(argv) {
   const values = new Map();
@@ -63,6 +67,33 @@ try {
     captureReportPaths.map(relative => readFile(path.join(args.outputDirectory, relative))),
   );
   const captureReports = captureBytes.map(bytes => JSON.parse(bytes));
+  let captureBatch = null;
+  let captureReportSha256s = null;
+  let currentPngOutputs = null;
+  if (failureSchema === AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA) {
+    phase = 'read-current-capture-batch';
+    const batchPath = path.join(args.outputDirectory, 'capture-batch-report.json');
+    const batchBytes = await readFile(batchPath);
+    const batchReport = JSON.parse(batchBytes);
+    captureBatch = {
+      path:'capture-batch-report.json',
+      sha256:sha256(batchBytes),
+      report:batchReport,
+    };
+    captureReportSha256s = captureBytes.map(sha256);
+    phase = 'read-current-png-bytes';
+    currentPngOutputs = await Promise.all(batchReport.plannedCaptures.map(async capture => {
+      const pngBytes = await readFile(path.join(args.outputDirectory, capture.outputPath));
+      const viewport = batchReport.viewport;
+      return {
+        path:capture.outputPath,
+        sha256:sha256(pngBytes),
+        sizeBytes:pngBytes.length,
+        png:validateReceiptBearingPng(pngBytes, viewport),
+        visualSignal:analyzeReceiptBearingPngVisualSignal(pngBytes, viewport),
+      };
+    }));
+  }
 
   phase = 'fetch-served-viewer';
   const viewerUrl = new URL('index.html', args.baseUrl).href;
@@ -79,12 +110,19 @@ try {
       html: viewerBytes.toString('utf8'),
     },
     captureReports,
+    captureBatch,
+    captureReportSha256s,
+    currentPngOutputs,
   });
   await writeAtomic(outputPath, {
     ...verification,
     failurePhase: null,
     generation:runReport.generation || null,
     receiptPaths:captureReportPaths,
+    captureBatchReceipt:captureBatch ? {
+      path:captureBatch.path,
+      sha256:captureBatch.sha256,
+    } : null,
   });
   process.stdout.write(`${JSON.stringify({
     status: verification.status,

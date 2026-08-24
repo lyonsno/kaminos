@@ -2,8 +2,8 @@
   "schema": "kaminos.receipt-bearing-browser-capture.v0",
   "status": "complete",
   "route": {
-    "requested": "independent-headless-screenshot-v0",
-    "effective": "independent-headless-screenshot-v0",
+    "requested": "independent-headless-same-page-screenshot-v1",
+    "effective": "independent-headless-same-page-screenshot-v1",
     "fallbackUsed": false
   },
   "browser": {
@@ -29,7 +29,7 @@
     "rejectedCandidates": []
   },
   "invocation": {
-    "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+    "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
     "outputPath": "repo://artifacts/authored-packing-mild-trajectory-v0/initialized-side.png",
     "reportPath": "repo://artifacts/authored-packing-mild-trajectory-v0/initialized-side-capture-report.json",
     "viewport": {
@@ -38,9 +38,11 @@
     },
     "captureTimeoutMs": 30000,
     "cleanupGraceMs": 1000,
-    "virtualTimeBudgetMs": null,
     "domDatasetKeys": [
       "witnessLoaded",
+      "witnessRenderComplete",
+      "witnessRenderFrame",
+      "witnessCaptureBatch",
       "witnessState",
       "witnessRouteRequested",
       "witnessRouteEffective",
@@ -51,61 +53,70 @@
       "packedCarrier",
       "residualLedger"
     ],
+    "captureBatchIdentity": {
+      "schema": "kaminos.authored-packing-trajectory-capture-batch-identity.v0",
+      "id": "8695d4f6-65c9-454d-8963-6da9ff1770de",
+      "generation": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
+      "bundleSha256": "b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6",
+      "routeRequested": "authored-packing-trajectory-orbitable-v1",
+      "routeEffective": "authored-packing-trajectory-orbitable-v1",
+      "semanticViews": [
+        "observed-front",
+        "initialized-front",
+        "packed-front",
+        "observed-side",
+        "initialized-side",
+        "packed-side",
+        "packed-diagnostic",
+        "observed-contact",
+        "initialized-contact",
+        "packed-contact"
+      ],
+      "viewport": {
+        "width": 1600,
+        "height": 1000
+      },
+      "sha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4"
+    },
     "pathEncoding": "public-locators-v0"
   },
   "process": {
-    "pid": 15334,
-    "processGroupId": 15334,
+    "pid": 69628,
+    "processGroupId": 69628,
     "detachedProcessGroup": true,
     "exit": {
-      "timedOut": false,
-      "code": 0,
-      "signal": null,
-      "spawnError": null
+      "code": 143,
+      "signal": null
     },
     "cleanup": {
-      "processGroupId": 15334,
+      "processGroupId": 69628,
       "graceMs": 1000,
-      "groupPresentBefore": false,
-      "actions": [],
+      "groupPresentBefore": true,
+      "actions": [
+        {
+          "signal": "SIGTERM",
+          "result": "sent"
+        }
+      ],
       "groupPresentAfter": false,
       "status": "complete-no-process-group-remains"
     },
     "profileCleanup": {
       "status": "complete-removed",
       "path": "tmp://independent-headless-profile"
-    },
-    "domProbe": {
-      "pid": 15340,
-      "processGroupId": 15340,
-      "detachedProcessGroup": true,
-      "exit": {
-        "timedOut": false,
-        "code": 0,
-        "signal": null,
-        "spawnError": null
-      },
-      "cleanup": {
-        "processGroupId": 15340,
-        "graceMs": 1000,
-        "groupPresentBefore": false,
-        "actions": [],
-        "groupPresentAfter": false,
-        "status": "complete-no-process-group-remains"
-      }
     }
   },
   "stderr": {
     "limitBytes": 65536,
-    "totalBytes": 7221,
-    "retainedBytes": 7221,
+    "totalBytes": 6325,
+    "retainedBytes": 6325,
     "truncated": false,
-    "tail": "[0824/103559.164001:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0824/103559.281929:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/103559.842067:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n[0824/103559.842161:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n[0824/103559.843842:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/103559.956584:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n[0824/103559.959064:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/103559.981896:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n[0824/103559.983221:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0824/103600.035610:INFO:CONSOLE:0] \"[.WebGL-0x10400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n251939 bytes written to file repo://artifacts/authored-packing-mild-trajectory-v0/initialized-side.png\n[0824/103600.189777:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0824/103600.220049:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n[0824/103600.279360:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400517e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/103600.843652:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400517e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/103600.846190:INFO:CONSOLE:0] \"[.WebGL-0x11400517e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side (0)\n"
+    "tail": "\nDevTools listening on ws://127.0.0.1:49882/devtools/browser/6ed2cc20-cf91-4b8c-97c0-f9dae3354f50\n[0824/112014.875526:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0824/112014.972460:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/112015.502680:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4 (0)\n[0824/112015.502859:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4 (0)\n[0824/112015.504672:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/112015.630788:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4 (0)\n[0824/112015.633198:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0824/112015.654495:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4 (0)\n[0824/112015.655919:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0824/112015.676986:INFO:CONSOLE:0] \"[.WebGL-0x13400508400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4 (0)\n[0824/112015.805067:ERROR:content/browser/network_service_instance_impl.cc:618] Network service crashed or was terminated, restarting service.\n[0824/112015.805301:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15\n[0824/112015.805306:WARNING:content/browser/gpu/gpu_process_host.cc:1479] The GPU process has crashed 1 time(s)\n[0824/112015.816480:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Unknown service name (1102)\n[0824/112015.816644:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n[0824/112015.823318:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Permission denied (1100)\n[0824/112015.823498:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n"
   },
   "primaryOutput": {
     "path": "repo://artifacts/authored-packing-mild-trajectory-v0/initialized-side.png",
-    "sizeBytes": 251939,
-    "sha256": "213a4afb4609ed51e230ae741aba81a4c8d846124b236c78cc45546ed77bf0d5",
+    "sizeBytes": 252025,
+    "sha256": "c1f671130cd7f0fbd280a3ca28be049ca7d8e6409aded9ff8efe119bd95a2609",
     "png": {
       "width": 1600,
       "height": 1000,
@@ -115,37 +126,51 @@
       "filter": 0,
       "interlace": 0,
       "chunkCount": 65,
-      "idatBytes": 251138
+      "idatBytes": 251224
+    },
+    "visualSignal": {
+      "width": 1600,
+      "height": 1000,
+      "pixelCount": 1600000,
+      "nonUniformPixels": 594438,
+      "minimumChannel": 1,
+      "maximumChannel": 255,
+      "channelRange": 254,
+      "admission": "nonblank-v0"
     }
   },
-  "domReceipt": {
+  "frameReceipt": {
     "status": "complete",
-    "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+    "route": "same-cdp-page-frame-v0",
+    "targetId": "EBE3F0951FA1999D57C920D9A6ADC572",
+    "targetType": "page",
+    "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
     "dataset": {
       "witnessLoaded": "true",
+      "witnessRenderComplete": "true",
+      "witnessRenderFrame": "4",
+      "witnessCaptureBatch": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
       "witnessState": "initialized",
       "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
       "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
-      "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
-      "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+      "witnessBundle": "b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6",
+      "witnessGeneration": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
       "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
       "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
       "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
       "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
     },
-    "stdout": {
-      "limitBytes": 65536,
-      "totalBytes": 209054,
-      "retainedBytes": 65536,
-      "truncated": true,
-      "retention": "prefix-only-no-dom-body-in-report"
-    }
+    "renderComplete": "true",
+    "renderFrame": "4",
+    "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
+    "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
   },
+  "domReceipt": null,
   "interruption": null,
   "failurePhase": null,
   "error": null,
   "lastTrustworthyEvidence": {
-    "phase": "effective-dom-validated",
+    "phase": "same-page-frame-captured",
     "browser": {
       "schema": "kaminos.headless-browser-resolution.v0",
       "request": {
@@ -170,8 +195,8 @@
     },
     "primaryOutput": {
       "path": "repo://artifacts/authored-packing-mild-trajectory-v0/initialized-side.png",
-      "sizeBytes": 251939,
-      "sha256": "213a4afb4609ed51e230ae741aba81a4c8d846124b236c78cc45546ed77bf0d5",
+      "sizeBytes": 252025,
+      "sha256": "c1f671130cd7f0fbd280a3ca28be049ca7d8e6409aded9ff8efe119bd95a2609",
       "png": {
         "width": 1600,
         "height": 1000,
@@ -181,31 +206,44 @@
         "filter": 0,
         "interlace": 0,
         "chunkCount": 65,
-        "idatBytes": 251138
+        "idatBytes": 251224
+      },
+      "visualSignal": {
+        "width": 1600,
+        "height": 1000,
+        "pixelCount": 1600000,
+        "nonUniformPixels": 594438,
+        "minimumChannel": 1,
+        "maximumChannel": 255,
+        "channelRange": 254,
+        "admission": "nonblank-v0"
       }
     },
-    "domReceipt": {
+    "frameReceipt": {
       "status": "complete",
-      "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+      "route": "same-cdp-page-frame-v0",
+      "targetId": "EBE3F0951FA1999D57C920D9A6ADC572",
+      "targetType": "page",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side&captureBatch=14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
       "dataset": {
         "witnessLoaded": "true",
+        "witnessRenderComplete": "true",
+        "witnessRenderFrame": "4",
+        "witnessCaptureBatch": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
         "witnessState": "initialized",
         "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
         "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
-        "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
-        "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+        "witnessBundle": "b7eab4ec2e6d7c4e814d06e279944f52de5876e14b473db3c748072a93c83be6",
+        "witnessGeneration": "d4d11213bc97577ffb9e67c1f514ab0b3ce8cade08b34d01a1770877dbe147e6",
         "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
         "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
         "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
         "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
       },
-      "stdout": {
-        "limitBytes": 65536,
-        "totalBytes": 209054,
-        "retainedBytes": 65536,
-        "truncated": true,
-        "retention": "prefix-only-no-dom-body-in-report"
-      }
+      "renderComplete": "true",
+      "renderFrame": "4",
+      "captureBatchIdentitySha256": "14adce6675e35d950d2f07f5fcbb3418f272b3aa29027ad9e1d9177c2b69a6e4",
+      "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
     }
   }
 }

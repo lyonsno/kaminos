@@ -32,23 +32,36 @@ const urls = [
 function report(url, hash) {
   const parsed = new URL(url, 'http://fixture.invalid/');
   const authored = parsed.searchParams.get('bundle') === authoredIdentity.sha256;
+  if (authored) parsed.searchParams.set('captureBatch', authoredBatchIdentity.sha256);
   return {
     schema: 'kaminos.receipt-bearing-browser-capture.v0',
     status: 'complete',
     route: {
-      requested: 'independent-headless-screenshot-v0',
-      effective: 'independent-headless-screenshot-v0',
+      requested: authored
+        ? 'independent-headless-same-page-screenshot-v1'
+        : 'independent-headless-screenshot-v0',
+      effective: authored
+        ? 'independent-headless-same-page-screenshot-v1'
+        : 'independent-headless-screenshot-v0',
       fallbackUsed: false,
     },
     browser: { effective: { installedStableChrome: false } },
-    invocation: { url: `http://127.0.0.1:8774/assay/${url}` },
+    invocation: {
+      url:authored ? parsed.href : `http://127.0.0.1:8774/assay/${url}`,
+      captureBatchIdentity:authored ? structuredClone(authoredBatchIdentity) : null,
+    },
     process: { cleanup: { status: 'complete-no-process-group-remains' } },
     stderr: { tail: 'GPU stall due to ReadPixels' },
     primaryOutput: { sha256: hash, sizeBytes: 190000, png: { width: 1400, height: 900 } },
-    domReceipt:authored ? {
+    frameReceipt:authored ? {
       status:'complete',
+      route:'same-cdp-page-frame-v0',
+      captureBatchIdentitySha256:authoredBatchIdentity.sha256,
       dataset: {
         witnessLoaded:'true',
+        witnessRenderComplete:'true',
+        witnessRenderFrame:'3',
+        witnessCaptureBatch:authoredBatchIdentity.sha256,
         witnessState:parsed.searchParams.get('state'),
         witnessRouteRequested:authoredRoute.requested,
         witnessRouteEffective:authoredRoute.effective,
@@ -60,6 +73,7 @@ function report(url, hash) {
         residualLedger:authoredIdentity.residualLedgerSha256,
       },
     } : null,
+    domReceipt:null,
   };
 }
 
@@ -102,6 +116,18 @@ const authoredRoute = {
   fallbackUsed: false,
 };
 
+const authoredBatchIdentity = {
+  schema:'kaminos.authored-packing-trajectory-capture-batch-identity.v0',
+  id:'fixture-batch',
+  generation:authoredIdentity.generation,
+  bundleSha256:authoredIdentity.sha256,
+  routeRequested:authoredRoute.requested,
+  routeEffective:authoredRoute.effective,
+  semanticViews:[],
+  viewport:{ width:1400, height:900 },
+  sha256:'6'.repeat(64),
+};
+
 const authoredViewSpecs = [
   ['observed', null, null],
   ['initialized', null, null],
@@ -130,6 +156,62 @@ const authoredUrls = authoredViewSpecs.map(([state, view, diagnostics]) => {
   if (diagnostics) query.set('diagnostics', diagnostics);
   return `index.html?${query}`;
 });
+authoredBatchIdentity.semanticViews = authoredViewSpecs.map(([state, view, diagnostics]) => {
+  if (state === 'packed' && !view && diagnostics) return 'packed-diagnostic';
+  return `${state}-${view || 'front'}`;
+});
+
+function authoredEvidence() {
+  const reports = authoredUrls.map((url, index) =>
+    report(url, (index + 10).toString(16).padStart(64, '0')));
+  const reportSha256s = reports.map((_, index) =>
+    (index + 20).toString(16).padStart(64, '0'));
+  const semanticViews = authoredBatchIdentity.semanticViews;
+  const plannedCaptures = reports.map((entry, index) => ({
+    semanticView:semanticViews[index],
+    url:entry.invocation.url,
+    outputPath:`${semanticViews[index]}.png`,
+    reportPath:`${semanticViews[index]}-capture-report.json`,
+  }));
+  const currentPngOutputs = reports.map((entry, index) => ({
+    path:plannedCaptures[index].outputPath,
+    sha256:entry.primaryOutput.sha256,
+    sizeBytes:entry.primaryOutput.sizeBytes,
+    png:entry.primaryOutput.png,
+    visualSignal:{
+      admission:'nonblank-v0',
+      channelRange:255,
+      nonUniformPixels:1000,
+    },
+  }));
+  return {
+    reports,
+    reportSha256s,
+    currentPngOutputs,
+    batch:{
+      path:'capture-batch-report.json',
+      sha256:'7'.repeat(64),
+      report:{
+        schema:'kaminos.authored-packing-trajectory-capture-batch.v1',
+        status:'completed',
+        batchIdentity:authoredBatchIdentity,
+        generation:authoredIdentity.generation,
+        bundleIdentity:authoredIdentity,
+        route:authoredRoute,
+        viewport:{ width:1400, height:900 },
+        plannedCaptures,
+        captures:plannedCaptures.map((capture, index) => ({
+          ...capture,
+          requestedUrl:capture.url,
+          batchIdentitySha256:authoredBatchIdentity.sha256,
+          reportSha256:reportSha256s[index],
+          sha256:reports[index].primaryOutput.sha256,
+          sizeBytes:reports[index].primaryOutput.sizeBytes,
+        })),
+      },
+    },
+  };
+}
 
 const authoredRunReport = {
   status: 'completed',
@@ -260,11 +342,14 @@ test('authored visual receipt validation binds one generation to all ten declare
     'initialized-contact-capture-report.json',
     'packed-contact-capture-report.json',
   ]);
+  const evidence = authoredEvidence();
   const result = validateMuscleCompartmentRingCageContactVisualReceipts({
     runReport: authoredRunReport,
     servedViewer: authoredServedViewer,
-    captureReports: authoredUrls.map((url, index) =>
-      report(url, (index + 10).toString(16).padStart(64, '0'))),
+    captureReports:evidence.reports,
+    captureBatch:evidence.batch,
+    captureReportSha256s:evidence.reportSha256s,
+    currentPngOutputs:evidence.currentPngOutputs,
   });
   assert.equal(result.status, 'verified');
   assert.equal(
@@ -288,8 +373,8 @@ test('authored visual receipt validation binds one generation to all ten declare
 });
 
 test('authored visual receipt validation rejects generation, state, and duplicate-view forgery', () => {
-  const valid = authoredUrls.map((url, index) =>
-    report(url, (index + 10).toString(16).padStart(64, '0')));
+  const evidence = authoredEvidence();
+  const valid = evidence.reports;
 
   const staleGeneration = structuredClone(authoredRunReport);
   staleGeneration.generation = '7'.repeat(64);
@@ -297,6 +382,9 @@ test('authored visual receipt validation rejects generation, state, and duplicat
     runReport: staleGeneration,
     servedViewer: authoredServedViewer,
     captureReports: valid,
+    captureBatch:evidence.batch,
+    captureReportSha256s:evidence.reportSha256s,
+    currentPngOutputs:evidence.currentPngOutputs,
   }), /generation mismatch/i);
 
   const missingState = structuredClone(authoredRunReport);
@@ -305,6 +393,9 @@ test('authored visual receipt validation rejects generation, state, and duplicat
     runReport: missingState,
     servedViewer: authoredServedViewer,
     captureReports: valid.slice(1),
+    captureBatch:evidence.batch,
+    captureReportSha256s:evidence.reportSha256s.slice(1),
+    currentPngOutputs:evidence.currentPngOutputs.slice(1),
   }), /ten declared authored views/i);
 
   const duplicateState = structuredClone(authoredRunReport);
@@ -315,5 +406,87 @@ test('authored visual receipt validation rejects generation, state, and duplicat
     runReport: duplicateState,
     servedViewer: authoredServedViewer,
     captureReports: duplicateReports,
+    captureBatch:evidence.batch,
+    captureReportSha256s:evidence.reportSha256s,
+    currentPngOutputs:evidence.currentPngOutputs,
   }), /duplicate or unexpected authored view/i);
+});
+
+test('authored visual verification rejects a foreign batch even when capture reports still look valid', () => {
+  const evidence = authoredEvidence();
+  const valid = evidence.reports;
+  assert.throws(() => validateMuscleCompartmentRingCageContactVisualReceipts({
+    runReport: authoredRunReport,
+    servedViewer: authoredServedViewer,
+    captureReports: valid,
+    captureBatch: {
+      path:'capture-batch-report.json',
+      sha256:'6'.repeat(64),
+      report: {
+        schema:'kaminos.authored-packing-trajectory-capture-batch.v1',
+        status:'completed',
+        generation:'7'.repeat(64),
+        captures:[],
+      },
+    },
+    captureReportSha256s:evidence.reportSha256s,
+    currentPngOutputs:evidence.currentPngOutputs,
+  }), /batch|generation/i);
+});
+
+test('authored verification rejects current-byte, mixed-batch, render-completion, and blank-frame forgeries', () => {
+  const scenarios = [
+    {
+      name:'replaced current PNG',
+      mutate:evidence => { evidence.currentPngOutputs[2].sha256 = '0'.repeat(64); },
+      error:/current PNG byte identity/i,
+    },
+    {
+      name:'mixed same-generation capture batch',
+      mutate:evidence => {
+        evidence.reports[4].invocation.captureBatchIdentity.sha256 = '1'.repeat(64);
+      },
+      error:/capture report byte or batch identity/i,
+    },
+    {
+      name:'stale capture report bytes',
+      mutate:evidence => { evidence.reportSha256s[6] = '2'.repeat(64); },
+      error:/capture report byte or batch identity/i,
+    },
+    {
+      name:'not-render-complete frame',
+      mutate:evidence => {
+        evidence.reports[7].frameReceipt.dataset.witnessRenderComplete = 'false';
+      },
+      error:/render completion/i,
+    },
+    {
+      name:'structurally valid blank frame',
+      mutate:evidence => {
+        evidence.currentPngOutputs[9].visualSignal = {
+          admission:'blank-or-near-uniform-v0',
+          channelRange:0,
+          nonUniformPixels:0,
+        };
+      },
+      error:/blank|visually rendered/i,
+    },
+    {
+      name:'partial in-progress batch beside old-looking receipts',
+      mutate:evidence => { evidence.batch.report.status = 'in-progress'; },
+      error:/completed.*capture batch/i,
+    },
+  ];
+  for (const scenario of scenarios) {
+    const evidence = authoredEvidence();
+    scenario.mutate(evidence);
+    assert.throws(() => validateMuscleCompartmentRingCageContactVisualReceipts({
+      runReport:authoredRunReport,
+      servedViewer:authoredServedViewer,
+      captureReports:evidence.reports,
+      captureBatch:evidence.batch,
+      captureReportSha256s:evidence.reportSha256s,
+      currentPngOutputs:evidence.currentPngOutputs,
+    }), scenario.error, scenario.name);
+  }
 });

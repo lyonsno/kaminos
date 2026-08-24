@@ -66,6 +66,15 @@ test('a receipt-bearing independent browser capture carrier exists', () => {
   );
 });
 
+test('the browser carrier exposes one-page DOM-and-pixel capture', async () => {
+  const carrier = await import(pathToFileURL(modulePath));
+  assert.equal(
+    typeof carrier.captureSamePageBrowserScreenshot,
+    'function',
+    'identity-bearing screenshots must read DOM identity and pixels from one CDP page',
+  );
+});
+
 test('successful capture kills surviving descendants and publishes exact identity', {
   skip: !carrierPresentAtStartup,
 }, async () => {

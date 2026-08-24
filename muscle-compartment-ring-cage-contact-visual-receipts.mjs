@@ -6,6 +6,11 @@ export const AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA =
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const AUTHORED_VISUAL_BUNDLE_SCHEMA =
   'kaminos.authored-packing-trajectory-visual-bundle.v1';
+const AUTHORED_CAPTURE_BATCH_SCHEMA =
+  'kaminos.authored-packing-trajectory-capture-batch.v1';
+const AUTHORED_CAPTURE_BATCH_IDENTITY_SCHEMA =
+  'kaminos.authored-packing-trajectory-capture-batch-identity.v0';
+const SAME_PAGE_CAPTURE_ROUTE = 'independent-headless-same-page-screenshot-v1';
 const AUTHORED_VIEW_ORDER = Object.freeze([
   'observed-front',
   'initialized-front',
@@ -56,6 +61,13 @@ function authoredSemanticView(urlValue) {
   return null;
 }
 
+function authoredBatchCaptureUrl(actualValue, expectedValue, batchIdentitySha256) {
+  const expected = new URL(expectedValue, new URL(actualValue).origin +
+    new URL(actualValue).pathname.replace(/[^/]+$/, ''));
+  expected.searchParams.set('captureBatch', batchIdentitySha256);
+  return sameCaptureUrl(actualValue, expected.href);
+}
+
 export function captureReportPathsForVisual(runReport) {
   const visual = runReport?.visual;
   if (visual?.bundleIdentity?.schema !== AUTHORED_VISUAL_BUNDLE_SCHEMA) {
@@ -76,6 +88,9 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
   runReport,
   servedViewer,
   captureReports,
+  captureBatch = null,
+  captureReportSha256s = null,
+  currentPngOutputs = null,
 }) {
   require(runReport?.status === 'completed', 'visual receipts require a completed assay run');
   const visual = runReport.visual;
@@ -140,6 +155,33 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
         new Set(visual.captureUrls.map(authoredSemanticView)).size === AUTHORED_VIEW_ORDER.length,
       'duplicate or unexpected authored view in identity-bound capture URLs',
     );
+    require(captureBatch?.report?.schema === AUTHORED_CAPTURE_BATCH_SCHEMA &&
+      captureBatch.report.status === 'completed' &&
+      SHA256_PATTERN.test(captureBatch.sha256 || ''),
+    'authored visual verification requires one completed byte-identified capture batch');
+    const batchIdentity = captureBatch.report.batchIdentity;
+    require(batchIdentity?.schema === AUTHORED_CAPTURE_BATCH_IDENTITY_SCHEMA &&
+      SHA256_PATTERN.test(batchIdentity.sha256 || '') &&
+      batchIdentity.generation === runReport.generation &&
+      batchIdentity.bundleSha256 === visual.bundleIdentity.sha256 &&
+      batchIdentity.routeRequested === visual.route.requested &&
+      batchIdentity.routeEffective === visual.route.effective &&
+      JSON.stringify(batchIdentity.semanticViews) === JSON.stringify(AUTHORED_VIEW_ORDER),
+    'capture batch identity or generation mismatch');
+    require(captureBatch.report.generation === runReport.generation &&
+      captureBatch.report.bundleIdentity?.sha256 === visual.bundleIdentity.sha256 &&
+      JSON.stringify(captureBatch.report.route) === JSON.stringify(visual.route),
+    'completed capture batch does not bind the current run identity');
+    require(Array.isArray(captureBatch.report.plannedCaptures) &&
+      captureBatch.report.plannedCaptures.length === AUTHORED_VIEW_ORDER.length &&
+      Array.isArray(captureBatch.report.captures) &&
+      captureBatch.report.captures.length === AUTHORED_VIEW_ORDER.length,
+    'completed capture batch does not contain the ten planned and completed views');
+    require(Array.isArray(captureReportSha256s) &&
+      captureReportSha256s.length === AUTHORED_VIEW_ORDER.length &&
+      Array.isArray(currentPngOutputs) &&
+      currentPngOutputs.length === AUTHORED_VIEW_ORDER.length,
+    'authored verification must reopen current report and PNG bytes');
   } else {
     require(Array.isArray(visual.captureUrls) && visual.captureUrls.length === 4,
       'exactly four identity-bound capture URLs are required');
@@ -151,15 +193,39 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
     require(report?.schema === 'kaminos.receipt-bearing-browser-capture.v0',
       `capture ${index} schema mismatch`);
     require(report.status === 'complete', `capture ${index} is incomplete`);
-    require(report.route?.requested === 'independent-headless-screenshot-v0' &&
-      report.route?.effective === 'independent-headless-screenshot-v0' &&
+    const requiredCaptureRoute = authored
+      ? SAME_PAGE_CAPTURE_ROUTE
+      : 'independent-headless-screenshot-v0';
+    require(report.route?.requested === requiredCaptureRoute &&
+      report.route?.effective === requiredCaptureRoute &&
       report.route?.fallbackUsed === false, `capture ${index} route mismatch`);
     require(report.browser?.effective?.installedStableChrome === false,
       `capture ${index} used or failed to exclude installed stable Chrome`);
     require(report.process?.cleanup?.status === 'complete-no-process-group-remains',
       `capture ${index} process cleanup is incomplete`);
-    require(sameCaptureUrl(report.invocation?.url, visual.captureUrls[index]),
-      `capture URL mismatch at index ${index}`);
+    const batchIdentity = authored ? captureBatch.report.batchIdentity : null;
+    const plannedCapture = authored ? captureBatch.report.plannedCaptures[index] : null;
+    const completedCapture = authored ? captureBatch.report.captures[index] : null;
+    if (authored) {
+      require(plannedCapture?.semanticView === AUTHORED_VIEW_ORDER[index] &&
+        completedCapture?.semanticView === AUTHORED_VIEW_ORDER[index] &&
+        plannedCapture.outputPath === completedCapture.outputPath &&
+        plannedCapture.reportPath === completedCapture.reportPath &&
+        completedCapture.batchIdentitySha256 === batchIdentity.sha256,
+      `capture batch row mismatch at index ${index}`);
+      require(authoredBatchCaptureUrl(
+        plannedCapture.url,
+        visual.captureUrls[index],
+        batchIdentity.sha256,
+      ) && sameCaptureUrl(report.invocation?.url, plannedCapture.url),
+      `capture URL or batch identity mismatch at index ${index}`);
+      require(report.invocation?.captureBatchIdentity?.sha256 === batchIdentity.sha256 &&
+        captureReportSha256s[index] === completedCapture.reportSha256,
+      `capture report byte or batch identity mismatch at index ${index}`);
+    } else {
+      require(sameCaptureUrl(report.invocation?.url, visual.captureUrls[index]),
+        `capture URL mismatch at index ${index}`);
+    }
     const stderr = report.stderr?.tail || '';
     require(!/Uncaught|SyntaxError|identity-bound capture route mismatch/i.test(stderr),
       `browser console failure at capture ${index}`);
@@ -169,9 +235,15 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
       report.primaryOutput?.png?.height > 0,
     `capture ${index} primary output is missing or blank`);
     if (authored) {
-      const dataset = report.domReceipt?.dataset;
-      require(report.domReceipt?.status === 'complete' &&
+      const dataset = report.frameReceipt?.dataset;
+      const currentPng = currentPngOutputs[index];
+      require(report.frameReceipt?.status === 'complete' &&
+        report.frameReceipt.route === 'same-cdp-page-frame-v0' &&
+        report.frameReceipt.captureBatchIdentitySha256 === batchIdentity.sha256 &&
         dataset?.witnessLoaded === 'true' &&
+        dataset?.witnessRenderComplete === 'true' &&
+        Number(dataset?.witnessRenderFrame) >= 1 &&
+        dataset?.witnessCaptureBatch === batchIdentity.sha256 &&
         dataset?.witnessState === new URL(
           visual.captureUrls[index],
           'http://authored.invalid/',
@@ -184,7 +256,19 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
         dataset?.initializedCarrier === visual.bundleIdentity.initializedCarrierSha256 &&
         dataset?.packedCarrier === visual.bundleIdentity.packedCarrierSha256 &&
         dataset?.residualLedger === visual.bundleIdentity.residualLedgerSha256,
-      `capture ${index} DOM identity mismatch`);
+      `capture ${index} same-page frame identity or render completion mismatch`);
+      require(currentPng?.path === completedCapture.outputPath &&
+        currentPng.sha256 === report.primaryOutput.sha256 &&
+        currentPng.sha256 === completedCapture.sha256 &&
+        currentPng.sizeBytes === report.primaryOutput.sizeBytes &&
+        currentPng.sizeBytes === completedCapture.sizeBytes &&
+        currentPng.png?.width === report.primaryOutput.png.width &&
+        currentPng.png?.height === report.primaryOutput.png.height,
+      `capture ${index} current PNG byte identity mismatch`);
+      require(currentPng.visualSignal?.admission === 'nonblank-v0' &&
+        currentPng.visualSignal.channelRange >= 8 &&
+        currentPng.visualSignal.nonUniformPixels >= 64,
+      `capture ${index} current PNG is blank or not visually rendered`);
     }
     return {
       semanticView: authored ? authoredSemanticView(visual.captureUrls[index]) : null,
@@ -195,6 +279,8 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
       viewport: report.primaryOutput.png,
       installedStableChrome: report.browser.effective.installedStableChrome,
       cleanupStatus: report.process.cleanup.status,
+      captureBatchIdentitySha256:batchIdentity?.sha256 || null,
+      currentPngSha256:authored ? currentPngOutputs[index].sha256 : null,
     };
   });
   require(new Set(captures.map(capture => capture.sha256)).size === captures.length,
@@ -208,6 +294,11 @@ export function validateMuscleCompartmentRingCageContactVisualReceipts({
     bundleIdentity: visual.bundleIdentity,
     residualLedger: runReport.outputs.residualLedger,
     witnessRoute: visual.route,
+    captureBatch:authored ? {
+      path:captureBatch.path,
+      sha256:captureBatch.sha256,
+      identity:captureBatch.report.batchIdentity,
+    } : null,
     servedViewer: {
       requestedUrl: servedViewer.url,
       effectiveUrl: servedViewer.url,

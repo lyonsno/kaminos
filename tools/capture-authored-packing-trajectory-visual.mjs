@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 
+import { createHash, randomUUID } from 'node:crypto';
 import { rename, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 
-import { captureIndependentBrowserScreenshot } from '../lib/receipt-bearing-browser-capture.mjs';
+import { captureSamePageBrowserScreenshot } from '../lib/receipt-bearing-browser-capture.mjs';
 import { captureReportPathsForVisual } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
 
-const BATCH_SCHEMA = 'kaminos.authored-packing-trajectory-capture-batch.v0';
+const BATCH_SCHEMA = 'kaminos.authored-packing-trajectory-capture-batch.v1';
+const BATCH_IDENTITY_SCHEMA = 'kaminos.authored-packing-trajectory-capture-batch-identity.v0';
 const AUTHORED_BUNDLE_SCHEMA = 'kaminos.authored-packing-trajectory-visual-bundle.v1';
 const DOM_IDENTITY_KEYS = Object.freeze([
   'witnessLoaded',
+  'witnessRenderComplete',
+  'witnessRenderFrame',
+  'witnessCaptureBatch',
   'witnessState',
   'witnessRouteRequested',
   'witnessRouteEffective',
@@ -63,6 +68,28 @@ function jsonBytes(value) {
   return Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function batchIdentity({ generation, bundleIdentity, route, semanticViews, viewport }) {
+  const payload = {
+    schema:BATCH_IDENTITY_SCHEMA,
+    id:randomUUID(),
+    generation,
+    bundleSha256:bundleIdentity.sha256,
+    routeRequested:route.requested,
+    routeEffective:route.effective,
+    semanticViews,
+    viewport,
+  };
+  return { ...payload, sha256:sha256(jsonBytes(payload)) };
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
 async function writeAtomic(target, value) {
   const temporary = `${target}.tmp-${process.pid}`;
   await writeFile(temporary, jsonBytes(value));
@@ -102,14 +129,28 @@ try {
     outputPath:pngPathForReport(reportPath),
     reportPath,
   }));
+  const identity = batchIdentity({
+    generation:runReport.generation,
+    bundleIdentity:runReport.visual.bundleIdentity,
+    route:runReport.visual.route,
+    semanticViews:captures.map(capture => capture.semanticView),
+    viewport:args.viewport,
+  });
+  for (const capture of captures) {
+    const url = new URL(capture.url);
+    url.searchParams.set('captureBatch', identity.sha256);
+    capture.url = url.href;
+  }
   batch = {
     schema:BATCH_SCHEMA,
     status:'in-progress',
+    batchIdentity:identity,
     generation:runReport.generation,
     bundleIdentity:runReport.visual.bundleIdentity,
     route:runReport.visual.route,
     requestedBaseUrl:args.baseUrl,
     viewport:args.viewport,
+    plannedCaptures:captures,
     captures:[],
     nextCapture:captures[0].semanticView,
     failurePhase:null,
@@ -117,29 +158,47 @@ try {
     lastTrustworthyEvidence:{ phase:'capture-plan-published', completedCaptureCount:0 },
   };
   await writeAtomic(batchPath, batch);
+  phase = 'invalidate-prior-verification';
+  await writeAtomic(path.join(args.outputDirectory, 'capture-route-verification.json'), {
+    schema:'kaminos.authored-packing-trajectory-visual-receipt-verification.v1',
+    status:'inapplicable',
+    reason:'capture-batch-transition',
+    generation:runReport.generation,
+    captureBatchIdentity:identity,
+    lastTrustworthyEvidence:'new-batch-published-before-capture-artifact-replacement',
+  });
+  if (process.env.NODE_ENV === 'test') {
+    const pauseMs = Number(process.env.KAMINOS_AUTHORED_CAPTURE_TEST_TRANSITION_PAUSE_MS || 0);
+    if (pauseMs > 0) await delay(pauseMs);
+  }
 
   for (const capture of captures) {
     phase = `capture-${capture.semanticView}`;
-    const result = await captureIndependentBrowserScreenshot({
+    const absoluteReportPath = path.join(args.outputDirectory, capture.reportPath);
+    const result = await captureSamePageBrowserScreenshot({
       cliExecutable:args.browserExecutable,
       url:capture.url,
       outputPath:path.join(args.outputDirectory, capture.outputPath),
-      reportPath:path.join(args.outputDirectory, capture.reportPath),
+      reportPath:absoluteReportPath,
       viewport:args.viewport,
       captureTimeoutMs:args.captureTimeoutMs,
       cleanupGraceMs:1_000,
       receiptRoot:process.cwd(),
       domDatasetKeys:DOM_IDENTITY_KEYS,
+      captureBatchIdentity:identity,
     });
+    const reportSha256 = sha256(await readFile(absoluteReportPath));
     batch.captures.push({
       semanticView:capture.semanticView,
       requestedUrl:capture.url,
       outputPath:capture.outputPath,
       reportPath:capture.reportPath,
+      batchIdentitySha256:identity.sha256,
+      reportSha256,
       sha256:result.report.primaryOutput.sha256,
       sizeBytes:result.report.primaryOutput.sizeBytes,
       route:result.report.route,
-      domReceipt:result.report.domReceipt,
+      frameReceipt:result.report.frameReceipt,
     });
     batch.nextCapture = captures[batch.captures.length]?.semanticView || null;
     batch.lastTrustworthyEvidence = {

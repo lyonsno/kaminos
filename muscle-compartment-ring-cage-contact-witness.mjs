@@ -379,6 +379,7 @@ ${exactRows}
     const query=new URLSearchParams(location.search);
     const expectedIdentity=payload.bundleIdentity;
     const requestedIdentity={bundle:query.get('bundle'),observed:query.get('observed')||query.get('source'),initialized:query.get('initialized')||query.get('source'),packed:query.get('packed'),ledger:query.get('ledger'),routeRequested:query.get('routeRequested'),routeEffective:query.get('routeEffective')};
+    const requestedCaptureBatch=query.get('captureBatch')||'manual-unbatched';
     const effectiveObservedIdentity=expectedIdentity.observedCarrierSha256||expectedIdentity.sourceCarrierSha256;
     const effectiveInitializedIdentity=expectedIdentity.initializedCarrierSha256||expectedIdentity.sourceCarrierSha256;
     if(requestedIdentity.bundle!==expectedIdentity.sha256||requestedIdentity.observed!==effectiveObservedIdentity||requestedIdentity.initialized!==effectiveInitializedIdentity||requestedIdentity.packed!==expectedIdentity.packedCarrierSha256||requestedIdentity.ledger!==expectedIdentity.residualLedgerSha256||requestedIdentity.routeRequested!==payload.route.requested||requestedIdentity.routeEffective!==payload.route.effective){
@@ -444,8 +445,10 @@ ${exactRows}
       const key=diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase()); if(Object.hasOwn(diagnostics,key)) diagnostics[key]=true;
     }
     showState(requestedState);
-    renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
-    document.documentElement.dataset.witnessLoaded='true';
+    document.documentElement.dataset.witnessLoaded='false';
+    document.documentElement.dataset.witnessRenderComplete='false';
+    document.documentElement.dataset.witnessRenderFrame='0';
+    document.documentElement.dataset.witnessCaptureBatch=requestedCaptureBatch;
     document.documentElement.dataset.witnessRouteRequested=payload.route.requested;
     document.documentElement.dataset.witnessRouteEffective=payload.route.effective;
     document.documentElement.dataset.witnessBundle=expectedIdentity.sha256;
@@ -454,6 +457,17 @@ ${exactRows}
     document.documentElement.dataset.initializedCarrier=effectiveInitializedIdentity;
     document.documentElement.dataset.packedCarrier=expectedIdentity.packedCarrierSha256;
     document.documentElement.dataset.residualLedger=expectedIdentity.residualLedgerSha256;
+    let renderedFrameCount=0;
+    renderer.setAnimationLoop(()=>{
+      controls.update();
+      renderer.render(scene,camera);
+      renderedFrameCount+=1;
+      document.documentElement.dataset.witnessRenderFrame=String(renderedFrameCount);
+      if(renderedFrameCount===1){
+        document.documentElement.dataset.witnessRenderComplete='true';
+        document.documentElement.dataset.witnessLoaded='true';
+      }
+    });
   </script>
 </body>
 </html>`;
