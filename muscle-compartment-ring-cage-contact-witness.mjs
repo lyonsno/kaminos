@@ -212,7 +212,7 @@ ${exactRows}
       <span>termination</span><span class="value">—</span><span class="value proposal">${escapeHtml(result.termination?.reason || 'unrecorded')}</span>
     </div>
     <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>${authoredBone ? 'exact authored bone' : 'skeletal capsule'}</span><span><i style="background:#99a8ba"></i>source boundary / ring displacement</span><span><i style="background:#ff8a3d"></i>exact movable pairwise family witness</span><span><i style="background:#ffffff"></i>packed fixed pairwise residual</span><span><i style="background:#48c7ff"></i>exact skeletal family witness</span></div>
-    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>observed ${escapeHtml(observedCarrierSha256)}<br>initialized ${escapeHtml(initializedCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
+    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>generation ${escapeHtml(bundleIdentity.generation || 'legacy-unversioned')}<br>observed ${escapeHtml(observedCarrierSha256)}<br>initialized ${escapeHtml(initializedCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · solid colored surfaces are the actual tetrahedral cage boundary, not a centerline tube reconstruction</div>
   <script type="module">
@@ -449,6 +449,7 @@ ${exactRows}
     document.documentElement.dataset.witnessRouteRequested=payload.route.requested;
     document.documentElement.dataset.witnessRouteEffective=payload.route.effective;
     document.documentElement.dataset.witnessBundle=expectedIdentity.sha256;
+    document.documentElement.dataset.witnessGeneration=expectedIdentity.generation||'legacy-unversioned';
     document.documentElement.dataset.observedCarrier=effectiveObservedIdentity;
     document.documentElement.dataset.initializedCarrier=effectiveInitializedIdentity;
     document.documentElement.dataset.packedCarrier=expectedIdentity.packedCarrierSha256;

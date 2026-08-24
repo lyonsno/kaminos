@@ -6,16 +6,11 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {
+  AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA,
   MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA,
+  captureReportPathsForVisual,
   validateMuscleCompartmentRingCageContactVisualReceipts,
 } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
-
-const CAPTURE_REPORTS = [
-  'source-crowded-capture-report.json',
-  'contact-relieved-capture-report.json',
-  'source-crowded-side-capture-report.json',
-  'contact-relieved-side-capture-report.json',
-];
 
 function parseArguments(argv) {
   const values = new Map();
@@ -52,16 +47,21 @@ async function writeAtomic(target, value) {
 
 let outputPath = null;
 let phase = 'parse-arguments';
+let failureSchema = MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA;
 
 try {
   const args = parseArguments(process.argv.slice(2));
   outputPath = path.join(args.outputDirectory, 'capture-route-verification.json');
   phase = 'read-receipts';
-  const [runReportBytes, ...captureBytes] = await Promise.all([
-    readFile(path.join(args.outputDirectory, 'run-report.json')),
-    ...CAPTURE_REPORTS.map(relative => readFile(path.join(args.outputDirectory, relative))),
-  ]);
-  const runReport = JSON.parse(runReportBytes);
+  const runReport = JSON.parse(await readFile(path.join(args.outputDirectory, 'run-report.json')));
+  if (runReport.visual?.bundleIdentity?.schema ===
+      'kaminos.authored-packing-trajectory-visual-bundle.v1') {
+    failureSchema = AUTHORED_PACKING_TRAJECTORY_VISUAL_RECEIPT_SCHEMA;
+  }
+  const captureReportPaths = captureReportPathsForVisual(runReport);
+  const captureBytes = await Promise.all(
+    captureReportPaths.map(relative => readFile(path.join(args.outputDirectory, relative))),
+  );
   const captureReports = captureBytes.map(bytes => JSON.parse(bytes));
 
   phase = 'fetch-served-viewer';
@@ -83,7 +83,8 @@ try {
   await writeAtomic(outputPath, {
     ...verification,
     failurePhase: null,
-    receiptPaths: CAPTURE_REPORTS,
+    generation:runReport.generation || null,
+    receiptPaths:captureReportPaths,
   });
   process.stdout.write(`${JSON.stringify({
     status: verification.status,
@@ -95,7 +96,7 @@ try {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   if (outputPath) {
     await writeAtomic(outputPath, {
-      schema: MUSCLE_COMPARTMENT_RING_CAGE_CONTACT_VISUAL_RECEIPT_SCHEMA,
+      schema:failureSchema,
       status: 'failed',
       failurePhase: phase,
       error: message,

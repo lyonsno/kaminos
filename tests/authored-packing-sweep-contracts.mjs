@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -19,6 +20,9 @@ import {
 import {
   renderMuscleCompartmentRingCageContactHtml,
 } from '../muscle-compartment-ring-cage-contact-witness.mjs';
+import {
+  validateMuscleCompartmentRingCageContactVisualReceipts,
+} from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
 
 const FIXTURE_URL = new URL(
   '../fixtures/authored-packing/packing-fixture-v001.json',
@@ -433,6 +437,76 @@ test('authored trajectory runner writes a failure report and no primary artifact
   }
 });
 
+test('authored trajectory publishes the new generation before invalidation can be interrupted', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-packing-interruption-'));
+  let child = null;
+  try {
+    const runner = fileURLToPath(new URL(
+      '../tools/run-authored-packing-trajectory-assay.mjs',
+      import.meta.url,
+    ));
+    const priorGeneration = '7'.repeat(64);
+    await writeFile(path.join(output, 'assay-result.json'), 'stale primary artifact');
+    await writeFile(path.join(output, 'capture-route-verification.json'), JSON.stringify({
+      status:'verified',
+      generation:priorGeneration,
+    }));
+    await writeFile(path.join(output, 'run-report.json'), JSON.stringify({
+      status:'completed',
+      generation:priorGeneration,
+    }));
+    child = spawn(process.execPath, [
+      runner,
+      '--manifest', path.join(output, 'missing-manifest.json'),
+      '--output', output,
+    ], {
+      cwd:fileURLToPath(new URL('..', import.meta.url)),
+      env:{
+        ...process.env,
+        NODE_ENV:'test',
+        KAMINOS_AUTHORED_PACKING_TEST_INVALIDATION_PAUSE_MS:'20000',
+      },
+      stdio:'ignore',
+    });
+    let closed = false;
+    const closePromise = new Promise(resolve => child.once('close', code => {
+      closed = true;
+      resolve(code);
+    }));
+    let currentReport = null;
+    for (let attempt = 0; attempt < 150 && !closed; attempt += 1) {
+      currentReport = await readFile(path.join(output, 'run-report.json'), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null);
+      const stalePrimaryWasInvalidated = !await readFile(path.join(output, 'assay-result.json'))
+        .then(() => true)
+        .catch(() => false);
+      if (currentReport?.status === 'in-progress' && stalePrimaryWasInvalidated) break;
+      await delay(10);
+    }
+    assert.equal(currentReport?.status, 'in-progress');
+    assert.match(currentReport.generation, /^[a-f0-9]{64}$/);
+    assert.notEqual(currentReport.generation, priorGeneration);
+    child.kill('SIGKILL');
+    await closePromise;
+    child = null;
+
+    const staleVerification = JSON.parse(await readFile(
+      path.join(output, 'capture-route-verification.json'),
+      'utf8',
+    ));
+    assert.equal(staleVerification.generation, priorGeneration);
+    assert.throws(() => validateMuscleCompartmentRingCageContactVisualReceipts({
+      runReport:currentReport,
+      servedViewer:null,
+      captureReports:[],
+    }), /completed assay run/i);
+  } finally {
+    child?.kill('SIGKILL');
+    await rm(output, { recursive:true, force:true });
+  }
+});
+
 test('authored trajectory report binds the served viewer and route inside the visual receipt envelope', async () => {
   const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-packing-visual-envelope-'));
   try {
@@ -454,6 +528,11 @@ test('authored trajectory report binds the served viewer and route inside the vi
     });
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+    assert.equal(
+      report.requestedManifestPath,
+      'repo://fixtures/authored-packing/packing-fixture-v001.json',
+      'durable reports must not leak the generating host path for a repo-owned fixture',
+    );
     assert.deepEqual(report.visual.route, report.route);
     assert.deepEqual(report.visual.viewer, report.outputs.viewer);
     assert.equal(report.visual.bundleIdentity.route, report.visual.route.effective);

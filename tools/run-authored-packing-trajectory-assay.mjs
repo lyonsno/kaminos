@@ -32,6 +32,7 @@ const OWNED_PATHS = Object.freeze([
   'index.html',
   'run-report.json',
   'capture-route-verification.json',
+  'capture-batch-report.json',
   'visual-inspection.json',
   'source-crowded.png',
   'source-crowded-report.json',
@@ -45,6 +46,26 @@ const OWNED_PATHS = Object.freeze([
   'contact-relieved-side.png',
   'contact-relieved-side-report.json',
   'contact-relieved-side-capture-report.json',
+  'observed-front.png',
+  'observed-front-capture-report.json',
+  'initialized-front.png',
+  'initialized-front-capture-report.json',
+  'packed-front.png',
+  'packed-front-capture-report.json',
+  'observed-side.png',
+  'observed-side-capture-report.json',
+  'initialized-side.png',
+  'initialized-side-capture-report.json',
+  'packed-side.png',
+  'packed-side-capture-report.json',
+  'packed-diagnostic.png',
+  'packed-diagnostic-capture-report.json',
+  'observed-contact.png',
+  'observed-contact-capture-report.json',
+  'initialized-contact.png',
+  'initialized-contact-capture-report.json',
+  'packed-contact.png',
+  'packed-contact-capture-report.json',
 ]);
 
 function parseArguments(argv) {
@@ -94,11 +115,25 @@ async function writeAtomic(target, bytes) {
   await rename(temporary, target);
 }
 
-async function clearOwned(outputDirectory) {
+async function pauseAfterInvalidationForTest() {
+  if (process.env.NODE_ENV !== 'test') return;
+  const milliseconds = Number(
+    process.env.KAMINOS_AUTHORED_PACKING_TEST_INVALIDATION_PAUSE_MS || 0,
+  );
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return;
+  await new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function clearOwned(outputDirectory, { preserve = new Set() } = {}) {
   for (const relative of OWNED_PATHS) {
-    await unlink(path.join(outputDirectory, relative)).catch(error => {
+    if (preserve.has(relative)) continue;
+    let removed = false;
+    await unlink(path.join(outputDirectory, relative)).then(() => {
+      removed = true;
+    }).catch(error => {
       if (error.code !== 'ENOENT') throw error;
     });
+    if (removed) await pauseAfterInvalidationForTest();
   }
 }
 
@@ -185,7 +220,22 @@ let manifestFileSha256 = null;
 try {
   args = parseArguments(rawArguments);
   await mkdir(args.outputDirectory, { recursive:true });
-  await clearOwned(args.outputDirectory);
+  phase = 'publish-generation';
+  await writeAtomic(path.join(args.outputDirectory, 'run-report.json'), jsonBytes({
+    schema:RUN_REPORT_SCHEMA,
+    status:'in-progress',
+    generation,
+    failurePhase:null,
+    rawArguments,
+    requestedManifestPath:receiptPath(path.resolve(args.requestedManifestPath)),
+    effectiveManifestPath:null,
+    manifestFileSha256:null,
+    outputs:null,
+    visual:{ status:'invalidating-prior-generation' },
+    lastTrustworthyEvidence:{ phase:'generation-published-before-invalidation' },
+  }));
+  phase = 'invalidate-prior-generation';
+  await clearOwned(args.outputDirectory, { preserve:new Set(['run-report.json']) });
   phase = 'read-manifest';
   effectiveManifestPath = await realpath(path.resolve(args.requestedManifestPath));
   const manifestBytes = await readFile(effectiveManifestPath);
@@ -269,7 +319,7 @@ try {
     evidenceTrack:'operator-authored-fixture-provisional-packing',
     claimCeiling:'bounded-trajectory-mechanism-and-visual-assay-only-no-anatomical-admission',
     source: {
-      requestedManifestPath:args.requestedManifestPath,
+      requestedManifestPath:receiptPath(path.resolve(args.requestedManifestPath)),
       effectiveManifestPath:receiptPath(effectiveManifestPath),
       manifestFileSha256,
       manifestIdentitySha256:manifest.identity.sha256,
@@ -315,12 +365,15 @@ try {
   const outputs = Object.fromEntries(Object.entries(artifacts).map(
     ([key, [relative, bytes]]) => [key, outputEntry(relative, bytes)],
   ));
+  outputs.observedCarrier.identitySha256 = assay.bridge.observedCarrier.identity.sha256;
+  outputs.initializedCarrier.identitySha256 = assay.bridge.solverCarrier.identity.sha256;
+  outputs.packedCarrier.identitySha256 = assay.result.packedCarrier.identity.sha256;
   const report = {
     schema:RUN_REPORT_SCHEMA,
     status:'completed',
     generation,
     failurePhase:null,
-    requestedManifestPath:args.requestedManifestPath,
+    requestedManifestPath:receiptPath(path.resolve(args.requestedManifestPath)),
     effectiveManifestPath:receiptPath(effectiveManifestPath),
     manifestFileSha256,
     manifestIdentitySha256:manifest.identity.sha256,
@@ -354,7 +407,7 @@ try {
   const outputDirectory = args?.outputDirectory || preScannedOutput;
   if (outputDirectory) {
     await mkdir(outputDirectory, { recursive:true });
-    await clearOwned(outputDirectory);
+    await clearOwned(outputDirectory, { preserve:new Set(['run-report.json']) });
     await writeAtomic(path.join(outputDirectory, 'run-report.json'), jsonBytes({
       schema:RUN_REPORT_SCHEMA,
       status:'failed',
@@ -362,7 +415,9 @@ try {
       failurePhase:phase,
       error:message,
       rawArguments,
-      requestedManifestPath:args?.requestedManifestPath || null,
+      requestedManifestPath:args?.requestedManifestPath
+        ? receiptPath(path.resolve(args.requestedManifestPath))
+        : null,
       effectiveManifestPath:effectiveManifestPath ? receiptPath(effectiveManifestPath) : null,
       manifestFileSha256,
       outputs:null,

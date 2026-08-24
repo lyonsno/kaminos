@@ -1,0 +1,395 @@
+{
+  "schema": "kaminos.authored-packing-trajectory-capture-batch.v0",
+  "status": "completed",
+  "generation": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+  "bundleIdentity": {
+    "schema": "kaminos.authored-packing-trajectory-visual-bundle.v1",
+    "route": "authored-packing-trajectory-orbitable-v1",
+    "generation": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+    "observedCarrierSha256": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+    "initializedCarrierSha256": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+    "packedCarrierSha256": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+    "sourceInputSha256": "8307c9eccc8872c7e1d188cfa9a339f7fbd98d96b139eb427423382233b466fc",
+    "residualLedgerSha256": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa",
+    "sha256": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566"
+  },
+  "route": {
+    "requested": "authored-packing-trajectory-orbitable-v1",
+    "effective": "authored-packing-trajectory-orbitable-v1",
+    "fallbackUsed": false
+  },
+  "requestedBaseUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/",
+  "viewport": {
+    "width": 1600,
+    "height": 1000
+  },
+  "captures": [
+    {
+      "semanticView": "observed-front",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed",
+      "outputPath": "observed-front.png",
+      "reportPath": "observed-front-capture-report.json",
+      "sha256": "ee76aaef8edac9e532fe931b9b579e81eb0617dbc66f8db700b829bfe06cdba6",
+      "sizeBytes": 246449,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "observed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209051,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "initialized-front",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized",
+      "outputPath": "initialized-front.png",
+      "reportPath": "initialized-front-capture-report.json",
+      "sha256": "da24277108d2c2cc9bf835ff543e38981c4bcac6b7c8c9593d16417ac4ac9e0c",
+      "sizeBytes": 246837,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "initialized",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209054,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "packed-front",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed",
+      "outputPath": "packed-front.png",
+      "reportPath": "packed-front-capture-report.json",
+      "sha256": "b2c285045a7dea75ecad00dc3c5976e0155cab09e6179d4b6cf505c666de6558",
+      "sizeBytes": 246365,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "packed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209049,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "observed-side",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side",
+      "outputPath": "observed-side.png",
+      "reportPath": "observed-side-capture-report.json",
+      "sha256": "ee2299d4120b01feddb371b141c00f752d28b3113eaf2c068ade2f0c31bf1ee3",
+      "sizeBytes": 251974,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=side",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "observed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209051,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "initialized-side",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+      "outputPath": "initialized-side.png",
+      "reportPath": "initialized-side-capture-report.json",
+      "sha256": "213a4afb4609ed51e230ae741aba81a4c8d846124b236c78cc45546ed77bf0d5",
+      "sizeBytes": 251939,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=side",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "initialized",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209054,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "packed-side",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side",
+      "outputPath": "packed-side.png",
+      "reportPath": "packed-side-capture-report.json",
+      "sha256": "11d112c07728712dcdc197e788bcb86f5092559730c064c1c29c7a13546696b1",
+      "sizeBytes": 251784,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=side",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "packed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209049,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "packed-diagnostic",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts",
+      "outputPath": "packed-diagnostic.png",
+      "reportPath": "packed-diagnostic-capture-report.json",
+      "sha256": "38fe03c06ac0e1f86d3c678627f7dcccf008ab2957fafed1f4897ee7fc97ca32",
+      "sizeBytes": 316897,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&diagnostics=wireframe%2Csource-ghost%2Cdisplacement%2Ccontacts",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "packed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209330,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "observed-contact",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts",
+      "outputPath": "observed-contact.png",
+      "reportPath": "observed-contact-capture-report.json",
+      "sha256": "93084935efcbad744a76e57608ed2cc685f107751dc29e6e819b96971443ad53",
+      "sizeBytes": 306455,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=observed&view=contact&diagnostics=contacts",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "observed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209335,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "initialized-contact",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts",
+      "outputPath": "initialized-contact.png",
+      "reportPath": "initialized-contact-capture-report.json",
+      "sha256": "1ac8dcb9cfb60d8b7f56885b0a21426b6305f3df1ec8a46842d0669ac08c17d1",
+      "sizeBytes": 306823,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=initialized&view=contact&diagnostics=contacts",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "initialized",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209338,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    },
+    {
+      "semanticView": "packed-contact",
+      "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts",
+      "outputPath": "packed-contact.png",
+      "reportPath": "packed-contact-capture-report.json",
+      "sha256": "7415409f0dd7e3c5bee45726de3af6c136317d12871f5c1f4de6b5f79e770133",
+      "sizeBytes": 292179,
+      "route": {
+        "requested": "independent-headless-screenshot-v0",
+        "effective": "independent-headless-screenshot-v0",
+        "fallbackUsed": false
+      },
+      "domReceipt": {
+        "status": "complete",
+        "url": "http://127.0.0.1:8794/artifacts/authored-packing-mild-trajectory-v0/index.html?bundle=c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566&observed=f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476&initialized=06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c&packed=25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9&ledger=18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa&routeRequested=authored-packing-trajectory-orbitable-v1&routeEffective=authored-packing-trajectory-orbitable-v1&state=packed&view=contact&diagnostics=contacts",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessState": "packed",
+          "witnessRouteRequested": "authored-packing-trajectory-orbitable-v1",
+          "witnessRouteEffective": "authored-packing-trajectory-orbitable-v1",
+          "witnessBundle": "c1d6be4a571781b3ab3157209a7747dca51a8fc3e619e74a08905e5434452566",
+          "witnessGeneration": "b3e40e316b566933975d73f540fef7f47341d0cc7a75ee75c50f7358224a9f1c",
+          "observedCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "initializedCarrier": "06a9dfc37716f44d58ac3c93df5c440d45b7827c54643b9a19d0de20615a0d9c",
+          "packedCarrier": "25fe632262cb021e699b33952122f08149a80ace7ea2f43fa7b62a9de4c312b9",
+          "residualLedger": "18e256788b5e121fbf30de1eb103697baa09520f6863ead63bedd8af3ba2c4aa"
+        },
+        "stdout": {
+          "limitBytes": 65536,
+          "totalBytes": 209333,
+          "retainedBytes": 65536,
+          "truncated": true,
+          "retention": "prefix-only-no-dom-body-in-report"
+        }
+      }
+    }
+  ],
+  "nextCapture": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "all-declared-captures-completed",
+    "completedCaptureCount": 10
+  }
+}
