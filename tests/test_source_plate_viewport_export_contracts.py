@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 from pathlib import Path
 import struct
 import sys
@@ -127,6 +128,94 @@ def test_conditioning_geometry_reports_anisotropic_resize_instead_of_hiding_it()
     assert historical["geometryPreserved"] is False
     assert historical["anisotropyRatio"] != 1.0
     assert historical["sourceAspectRatio"] != historical["targetAspectRatio"]
+
+
+def test_camera_frame_plan_preserves_render_border_aspect_inside_square_output():
+    core = _load_core()
+
+    plan = core.camera_frame_capture_plan(
+        source_width=1920,
+        source_height=1080,
+        pixel_aspect_x=1.0,
+        pixel_aspect_y=1.0,
+        target_width=1024,
+        target_height=1024,
+        use_border=True,
+        border_min_x=0.16093750298023224,
+        border_max_x=0.8708333373069763,
+        border_min_y=0.13518518209457397,
+        border_max_y=0.7731481194496155,
+    )
+
+    assert plan["frame"] == "render-border"
+    assert plan["cropToBorder"] is True
+    assert plan["renderWidth"] > 1024
+    assert plan["renderHeight"] < 1024
+    assert plan["expectedContentWidth"] <= 1024
+    assert plan["expectedContentHeight"] <= 1024
+    assert plan["expectedContentWidth"] > plan["expectedContentHeight"]
+    assert math.isclose(
+        plan["sourceFrameAspectRatio"],
+        (1920 * (0.8708333373069763 - 0.16093750298023224))
+        / (1080 * (0.7731481194496155 - 0.13518518209457397)),
+    )
+
+
+def test_camera_frame_plan_uses_the_whole_camera_when_no_render_border_is_active():
+    core = _load_core()
+
+    plan = core.camera_frame_capture_plan(
+        source_width=1920,
+        source_height=1080,
+        pixel_aspect_x=1.0,
+        pixel_aspect_y=1.0,
+        target_width=1024,
+        target_height=1024,
+        use_border=False,
+        border_min_x=0.0,
+        border_max_x=1.0,
+        border_min_y=0.0,
+        border_max_y=1.0,
+    )
+
+    assert plan["frame"] == "camera-frame"
+    assert plan["cropToBorder"] is False
+    assert plan["renderWidth"] == 1024
+    assert plan["renderHeight"] == 576
+    assert plan["expectedContentWidth"] == 1024
+    assert plan["expectedContentHeight"] == 576
+
+
+def test_letterbox_png_preserves_wide_pixels_without_stretch_or_crop():
+    core = _load_core()
+    with TemporaryDirectory() as tmp:
+        source = Path(tmp) / "wide.png"
+        target = Path(tmp) / "square.png"
+        source.write_bytes(_png_bytes(4, 2, (20, 40, 60)))
+
+        placement = core.letterbox_png(
+            source,
+            target,
+            target_width=4,
+            target_height=4,
+        )
+        width, height, channels, pixels = core._read_png_pixels(target)
+
+        assert placement == {
+            "sourceWidth": 4,
+            "sourceHeight": 2,
+            "targetWidth": 4,
+            "targetHeight": 4,
+            "offsetX": 0,
+            "offsetY": 1,
+            "padding": "opaque-black",
+        }
+        assert (width, height, channels) == (4, 4, 3)
+        rows = [pixels[index : index + 12] for index in range(0, len(pixels), 12)]
+        assert rows[0] == bytes(12)
+        assert rows[1] == bytes((20, 40, 60)) * 4
+        assert rows[2] == bytes((20, 40, 60)) * 4
+        assert rows[3] == bytes(12)
 
 
 def test_atomic_sidecar_round_trip_preserves_requested_and_effective_state():
@@ -280,6 +369,25 @@ def test_addon_exposes_one_action_without_saving_or_resizing_the_blend_source():
     assert "finally:" in source
 
 
+def test_camera_view_uses_camera_render_and_letterbox_while_free_view_keeps_viewport_capture():
+    source = ADDON_PATH.read_text()
+
+    assert 'capture_mode = "camera-render"' in source
+    assert 'capture_mode = "viewport-render"' in source
+    assert "bpy.ops.render.render(write_still=True)" in source
+    assert "bpy.ops.render.opengl(write_still=True, view_context=True)" in source
+    assert "camera_frame_capture_plan(" in source
+    assert "letterbox_png(" in source
+    assert 'document["effective"]["captureMode"] = capture_mode' in source
+    assert '"cameraFrame"' in source
+    assert '"pixel_aspect_x"' in source
+    assert '"use_crop_to_border"' in source
+    camera_branch = source[source.index('capture_mode = "camera-render"') :]
+    assert camera_branch.index('if "FINISHED" not in result') < camera_branch.index(
+        "placement = letterbox_png("
+    )
+
+
 def test_addon_sidecar_names_effective_view_shading_visibility_and_source_state():
     assert ADDON_PATH.is_file(), "Blender add-on entrypoint is missing"
     source = ADDON_PATH.read_text()
@@ -300,6 +408,8 @@ def test_addon_sidecar_names_effective_view_shading_visibility_and_source_state(
         '"output"',
     ):
         assert contract_key in source
+    assert '"camera": camera.name if camera else None' in source
+    assert '"cameraState"' in source
 
 
 def test_addon_keeps_the_repeated_export_loop_legible_in_a_narrow_sidebar():

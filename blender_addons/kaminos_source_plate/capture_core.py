@@ -378,6 +378,102 @@ def conditioning_geometry(
     }
 
 
+def camera_frame_capture_plan(
+    *,
+    source_width: int,
+    source_height: int,
+    pixel_aspect_x: float,
+    pixel_aspect_y: float,
+    target_width: int,
+    target_height: int,
+    use_border: bool,
+    border_min_x: float,
+    border_max_x: float,
+    border_min_y: float,
+    border_max_y: float,
+) -> dict[str, Any]:
+    source_width, source_height = validate_fixed_raster(source_width, source_height)
+    target_width, target_height = validate_fixed_raster(target_width, target_height)
+    aspects = (float(pixel_aspect_x), float(pixel_aspect_y))
+    if not all(math.isfinite(value) and value > 0 for value in aspects):
+        raise SourcePlateCaptureError(
+            "capture-request",
+            f"camera pixel aspect must be positive and finite, got {aspects!r}",
+        )
+
+    if use_border:
+        bounds = tuple(
+            float(value)
+            for value in (
+                border_min_x,
+                border_max_x,
+                border_min_y,
+                border_max_y,
+            )
+        )
+        if (
+            not all(math.isfinite(value) for value in bounds)
+            or not 0.0 <= bounds[0] < bounds[1] <= 1.0
+            or not 0.0 <= bounds[2] < bounds[3] <= 1.0
+        ):
+            raise SourcePlateCaptureError(
+                "capture-request", f"camera render border is invalid: {bounds!r}"
+            )
+        frame = "render-border"
+        fraction_x = bounds[1] - bounds[0]
+        fraction_y = bounds[3] - bounds[2]
+    else:
+        bounds = (0.0, 1.0, 0.0, 1.0)
+        frame = "camera-frame"
+        fraction_x = fraction_y = 1.0
+
+    display_source_width = source_width * aspects[0]
+    display_source_height = source_height * aspects[1]
+    display_frame_width = display_source_width * fraction_x
+    display_frame_height = display_source_height * fraction_y
+    scale = min(
+        target_width / display_frame_width,
+        target_height / display_frame_height,
+    )
+    render_width = max(1, math.floor(display_source_width * scale + 1e-9))
+    render_height = max(1, math.floor(display_source_height * scale + 1e-9))
+    expected_content_width = max(
+        1, math.floor(render_width * fraction_x + 1e-9)
+    )
+    expected_content_height = max(
+        1, math.floor(render_height * fraction_y + 1e-9)
+    )
+    if (
+        expected_content_width > target_width
+        or expected_content_height > target_height
+    ):
+        raise SourcePlateCaptureError(
+            "capture-request",
+            "camera frame plan exceeds the requested fixed raster",
+        )
+    return {
+        "frame": frame,
+        "cropToBorder": bool(use_border),
+        "sourceWidth": source_width,
+        "sourceHeight": source_height,
+        "sourcePixelAspectX": aspects[0],
+        "sourcePixelAspectY": aspects[1],
+        "sourceFrameAspectRatio": display_frame_width / display_frame_height,
+        "border": {
+            "minX": bounds[0],
+            "maxX": bounds[1],
+            "minY": bounds[2],
+            "maxY": bounds[3],
+        },
+        "renderWidth": render_width,
+        "renderHeight": render_height,
+        "expectedContentWidth": expected_content_width,
+        "expectedContentHeight": expected_content_height,
+        "targetWidth": target_width,
+        "targetHeight": target_height,
+    }
+
+
 def _paeth(left: int, above: int, upper_left: int) -> int:
     prediction = left + above - upper_left
     left_distance = abs(prediction - left)
@@ -479,6 +575,109 @@ def _read_png_pixels(path: Path) -> tuple[int, int, int, bytes]:
     channels = channels_by_color_type[color_type]
     pixels = _unfilter_scanlines(raw, width=width, height=height, channels=channels)
     return width, height, channels, pixels
+
+
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    body = kind + payload
+    return (
+        struct.pack(">I", len(payload))
+        + body
+        + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+    )
+
+
+def letterbox_png(
+    source: str | Path,
+    target: str | Path,
+    *,
+    target_width: int,
+    target_height: int,
+) -> dict[str, Any]:
+    target_width, target_height = validate_fixed_raster(target_width, target_height)
+    source_path = Path(source)
+    target_path = Path(target)
+    source_width, source_height, channels, source_pixels = _read_png_pixels(
+        source_path
+    )
+    if source_width > target_width or source_height > target_height:
+        raise SourcePlateCaptureError(
+            "output-validation",
+            f"camera-frame PNG is {source_width} x {source_height}; "
+            f"cannot place it without resizing inside {target_width} x {target_height}",
+        )
+
+    offset_x = (target_width - source_width) // 2
+    offset_y = (target_height - source_height) // 2
+    if channels == 1:
+        padding_pixel = b"\x00"
+        color_type = 0
+    elif channels == 2:
+        padding_pixel = b"\x00\xff"
+        color_type = 4
+    elif channels == 3:
+        padding_pixel = b"\x00\x00\x00"
+        color_type = 2
+    elif channels == 4:
+        padding_pixel = b"\x00\x00\x00\xff"
+        color_type = 6
+    else:
+        raise SourcePlateCaptureError(
+            "output-validation", f"camera-frame PNG has unsupported channel count {channels}"
+        )
+
+    padded = bytearray(padding_pixel * (target_width * target_height))
+    source_stride = source_width * channels
+    target_stride = target_width * channels
+    for row in range(source_height):
+        source_start = row * source_stride
+        target_start = (row + offset_y) * target_stride + offset_x * channels
+        padded[target_start : target_start + source_stride] = source_pixels[
+            source_start : source_start + source_stride
+        ]
+
+    raw = b"".join(
+        b"\x00" + padded[row * target_stride : (row + 1) * target_stride]
+        for row in range(target_height)
+    )
+    payload = (
+        PNG_SIGNATURE
+        + _png_chunk(
+            b"IHDR",
+            struct.pack(
+                ">IIBBBBB",
+                target_width,
+                target_height,
+                8,
+                color_type,
+                0,
+                0,
+                0,
+            ),
+        )
+        + _png_chunk(b"IDAT", zlib.compress(raw))
+        + _png_chunk(b"IEND", b"")
+    )
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target_path.name}.", suffix=".tmp", dir=target_path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with open(descriptor, "wb") as handle:
+            handle.write(payload)
+        temporary.replace(target_path)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return {
+        "sourceWidth": source_width,
+        "sourceHeight": source_height,
+        "targetWidth": target_width,
+        "targetHeight": target_height,
+        "offsetX": offset_x,
+        "offsetY": offset_y,
+        "padding": "opaque-black",
+    }
 
 
 def inspect_png(

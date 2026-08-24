@@ -13,11 +13,13 @@ from .capture_core import (
     applied_morph_values,
     atomic_write_json,
     build_morph_sample_plan,
+    camera_frame_capture_plan,
     capture_paths,
     discover_morph_properties,
     evaluated_mesh_geometry_record,
     evaluated_visible_object_mesh_geometry_record,
     inspect_png,
+    letterbox_png,
     parse_morph_sample_values,
     validate_fixed_raster,
 )
@@ -152,6 +154,21 @@ def _capture_context(context):
             "height": int(context.region.height),
         },
         "camera": camera.name if camera else None,
+        "cameraState": (
+            {
+                "name": camera.name,
+                "type": camera.data.type,
+                "matrixWorld": _matrix_rows(camera.matrix_world),
+                "lens": float(camera.data.lens),
+                "sensorFit": camera.data.sensor_fit,
+                "sensorWidth": float(camera.data.sensor_width),
+                "sensorHeight": float(camera.data.sensor_height),
+                "shiftX": float(camera.data.shift_x),
+                "shiftY": float(camera.data.shift_y),
+            }
+            if camera
+            else None
+        ),
         "shading": _attributes(
             shading,
             (
@@ -194,6 +211,14 @@ def _snapshot_render_settings(scene):
         "resolution_x": scene.render.resolution_x,
         "resolution_y": scene.render.resolution_y,
         "resolution_percentage": scene.render.resolution_percentage,
+        "pixel_aspect_x": scene.render.pixel_aspect_x,
+        "pixel_aspect_y": scene.render.pixel_aspect_y,
+        "use_border": scene.render.use_border,
+        "use_crop_to_border": scene.render.use_crop_to_border,
+        "border_min_x": scene.render.border_min_x,
+        "border_max_x": scene.render.border_max_x,
+        "border_min_y": scene.render.border_min_y,
+        "border_max_y": scene.render.border_max_y,
         "file_format": image_settings.file_format,
         "color_mode": image_settings.color_mode,
         "color_depth": image_settings.color_depth,
@@ -207,6 +232,14 @@ def _restore_render_settings(scene, snapshot):
     scene.render.resolution_x = snapshot["resolution_x"]
     scene.render.resolution_y = snapshot["resolution_y"]
     scene.render.resolution_percentage = snapshot["resolution_percentage"]
+    scene.render.pixel_aspect_x = snapshot["pixel_aspect_x"]
+    scene.render.pixel_aspect_y = snapshot["pixel_aspect_y"]
+    scene.render.use_border = snapshot["use_border"]
+    scene.render.use_crop_to_border = snapshot["use_crop_to_border"]
+    scene.render.border_min_x = snapshot["border_min_x"]
+    scene.render.border_max_x = snapshot["border_max_x"]
+    scene.render.border_min_y = snapshot["border_min_y"]
+    scene.render.border_max_y = snapshot["border_max_y"]
     image_settings.file_format = snapshot["file_format"]
     image_settings.color_mode = snapshot["color_mode"]
     image_settings.color_depth = snapshot["color_depth"]
@@ -284,18 +317,60 @@ def _capture_assay_plate(context, *, label, morph_parameters=None):
         document["effective"] = _capture_context(context)
         phase = "viewport-render"
         scene.render.filepath = str(paths["image"])
-        scene.render.resolution_x = width
-        scene.render.resolution_y = height
         scene.render.resolution_percentage = 100
         scene.render.image_settings.file_format = "PNG"
         scene.render.image_settings.color_mode = "RGBA"
         scene.render.image_settings.color_depth = "8"
         scene.render.image_settings.compression = 15
-        result = bpy.ops.render.opengl(write_still=True, view_context=True)
-        if "FINISHED" not in result:
-            raise SourcePlateCaptureError(
-                "viewport-render", f"Blender viewport render returned {sorted(result)}"
+        region = context.space_data.region_3d
+        if region.view_perspective == "CAMERA" and scene.camera is not None:
+            capture_mode = "camera-render"
+            phase = capture_mode
+            camera_frame = camera_frame_capture_plan(
+                source_width=snapshot["resolution_x"],
+                source_height=snapshot["resolution_y"],
+                pixel_aspect_x=snapshot["pixel_aspect_x"],
+                pixel_aspect_y=snapshot["pixel_aspect_y"],
+                target_width=width,
+                target_height=height,
+                use_border=snapshot["use_border"],
+                border_min_x=snapshot["border_min_x"],
+                border_max_x=snapshot["border_max_x"],
+                border_min_y=snapshot["border_min_y"],
+                border_max_y=snapshot["border_max_y"],
             )
+            scene.render.resolution_x = camera_frame["renderWidth"]
+            scene.render.resolution_y = camera_frame["renderHeight"]
+            scene.render.pixel_aspect_x = 1.0
+            scene.render.pixel_aspect_y = 1.0
+            scene.render.use_crop_to_border = camera_frame["cropToBorder"]
+            result = bpy.ops.render.render(write_still=True)
+            if "FINISHED" not in result:
+                raise SourcePlateCaptureError(
+                    capture_mode, f"Blender {capture_mode} returned {sorted(result)}"
+                )
+            phase = "output-validation"
+            placement = letterbox_png(
+                paths["image"],
+                paths["image"],
+                target_width=width,
+                target_height=height,
+            )
+            document["effective"]["cameraFrame"] = {
+                **camera_frame,
+                "placement": placement,
+            }
+        else:
+            capture_mode = "viewport-render"
+            phase = capture_mode
+            scene.render.resolution_x = width
+            scene.render.resolution_y = height
+            result = bpy.ops.render.opengl(write_still=True, view_context=True)
+            if "FINISHED" not in result:
+                raise SourcePlateCaptureError(
+                    capture_mode, f"Blender {capture_mode} returned {sorted(result)}"
+                )
+        document["effective"]["captureMode"] = capture_mode
 
         phase = "output-validation"
         output_record = inspect_png(
