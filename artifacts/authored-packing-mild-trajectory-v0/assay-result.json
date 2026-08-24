@@ -1,0 +1,1434 @@
+{
+  "schema": "kaminos.authored-packing-trajectory-result.v0",
+  "status": "completed-bounded-trajectory-residual-remains",
+  "evidenceTrack": "operator-authored-fixture-provisional-packing",
+  "claimCeiling": "bounded-trajectory-mechanism-and-visual-assay-only-no-anatomical-admission",
+  "source": {
+    "requestedManifestPath": "fixtures/authored-packing/packing-fixture-v001.json",
+    "effectiveManifestPath": "repo://fixtures/authored-packing/packing-fixture-v001.json",
+    "manifestFileSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+    "manifestIdentitySha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+    "observedVariantId": "packing-fixture-v001-mild",
+    "observedRole": "mild-interpenetration",
+    "intentVariantId": "packing-fixture-v001-clean",
+    "intentRole": "clean-reference",
+    "policy": "restoration-to-reference",
+    "maximumIterations": 8
+  },
+  "route": {
+    "requested": "exact-authored-sweep-to-positive-volume-ring-cage-v0",
+    "effective": "exact-authored-sweep-to-positive-volume-ring-cage-v0",
+    "fallbackUsed": false
+  },
+  "config": {
+    "requested": {
+      "curvatureRegularization": 12,
+      "maxIterations": 8,
+      "maximumLocalTurningAngleChange": 0.35,
+      "relaxationStep": 0.2,
+      "maximumTotalTurningAngleChange": 1.5,
+      "convergenceTolerance": 0.0001,
+      "maximumRelativeVolumeError": 0.20652477983729972
+    },
+    "effective": {
+      "curvatureRegularization": 12,
+      "maxIterations": 8,
+      "maximumLocalTurningAngleChange": 0.35,
+      "relaxationStep": 0.2,
+      "maximumTotalTurningAngleChange": 1.5,
+      "convergenceTolerance": 0.0001,
+      "maximumRelativeVolumeError": 0.20652477983729972
+    },
+    "fallbackUsed": false
+  },
+  "gates": {
+    "inheritedMaximumVolumeDebt": 0.20652377983729972,
+    "volumeDebtTolerance": 0.000001,
+    "exactBoneTolerance": 1e-9,
+    "exactBoneNonincrease": true,
+    "fixedAttachments": true,
+    "positiveCells": true
+  },
+  "result": {
+    "status": "residual-constraint",
+    "iterations": 8,
+    "termination": {
+      "reason": "iteration-limit",
+      "attemptedIteration": null,
+      "lineSearchAttempts": []
+    },
+    "fixedNodeMaximumDrift": 0,
+    "metrics": {
+      "initial": {
+        "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+        "sourceCarrierSha256": "0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af",
+        "sourceInputSha256": "d8ef4d4c50603a0ab6f8666fc48ac60a5568a44adbf2193650d959ee70c9f26e",
+        "orderedConstructionIds": [
+          "muscle-1",
+          "muscle-2",
+          "tendon-1",
+          "muscle-3",
+          "muscle-4",
+          "tendon-2"
+        ],
+        "cages": [
+          {
+            "cageId": "muscle-1:authored-cage",
+            "constructionId": "muscle-1",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.25199476170742025,
+                0.15373073219399086,
+                0.00911222165489236,
+                0.08517459879636051,
+                0.03131390956834492,
+                0.00836801111730368,
+                0.007483941044299683,
+                0.03110261261655585,
+                0.06146906887537687
+              ],
+              "maximumTurningAngle": 0.25199476170742025,
+              "totalTurningAngle": 0.639749857574545,
+              "bendingEnergy": 0.10032465566853864
+            },
+            "referenceVolume": 125897.99932835638,
+            "currentVolume": 127851.5039741137,
+            "relativeVolumeError": 0.015516566237580595,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-2:authored-cage",
+            "constructionId": "muscle-2",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.02409248685734504,
+                0.06381837605274894,
+                0.009635639342376755,
+                0.07440280661544431,
+                0.03422704508211708,
+                0.045015715671186236,
+                0.0967065953337887,
+                0.09524778882693984,
+                0.11932135158264379
+              ],
+              "maximumTurningAngle": 0.11932135158264379,
+              "totalTurningAngle": 0.5624678053645907,
+              "bendingEnergy": 0.046141653296198716
+            },
+            "referenceVolume": 28156.818809376142,
+            "currentVolume": 32342.80671992448,
+            "relativeVolumeError": 0.148666933537052,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "tendon-1:authored-cage",
+            "constructionId": "tendon-1",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.024708771547770163,
+                0.009364713551492102,
+                0.008652799569704092,
+                0.05085906492467375,
+                0.0333092415530553,
+                0.02158855515448029,
+                0.12118277902253484,
+                0.11563584215298232,
+                0.110522461423248
+              ],
+              "maximumTurningAngle": 0.12118277902253484,
+              "totalTurningAngle": 0.4958242288999409,
+              "bendingEnergy": 0.04520743636431217
+            },
+            "referenceVolume": 16752.383204507154,
+            "currentVolume": 20212.148705184867,
+            "relativeVolumeError": 0.20652377983729972,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-3:authored-cage",
+            "constructionId": "muscle-3",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.06115811516084937,
+                0.07686969403791333,
+                0.02809907851904369,
+                0.017349159002816486,
+                0.05842552237462795,
+                0.14994893064189782,
+                0.14089254520815236,
+                0.21939999689423687,
+                0.47684240879821527
+              ],
+              "maximumTurningAngle": 0.47684240879821527,
+              "totalTurningAngle": 1.228985450637753,
+              "bendingEnergy": 0.332003790669538
+            },
+            "referenceVolume": 42696.28881572217,
+            "currentVolume": 44750.73772544738,
+            "relativeVolumeError": 0.048117739660986654,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-4:authored-cage",
+            "constructionId": "muscle-4",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.056777742015541276,
+                0.01972947964805609,
+                0.08091984258485471,
+                0.08516547457032678,
+                0.05679679197127189,
+                0.09494711236506467,
+                0.03805149931873068,
+                0.05415141556552198,
+                0.021142113736044483
+              ],
+              "maximumTurningAngle": 0.09494711236506467,
+              "totalTurningAngle": 0.5076814717754126,
+              "bendingEnergy": 0.034482254444386275
+            },
+            "referenceVolume": 16972.845612367255,
+            "currentVolume": 18007.791956611836,
+            "relativeVolumeError": 0.06097659566822832,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "tendon-2:authored-cage",
+            "constructionId": "tendon-2",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.1413716677353221,
+                0.09591262561655055,
+                0.12913137968824545,
+                0.06876270855091618,
+                0.09783904037478373,
+                0.0674700815649774,
+                0.015080266302488638,
+                0.02741030639258587,
+                0.06456532900701639
+              ],
+              "maximumTurningAngle": 0.1413716677353221,
+              "totalTurningAngle": 0.7075434052328863,
+              "bendingEnergy": 0.06986051426429188
+            },
+            "referenceVolume": 12973.580578417363,
+            "currentVolume": 12973.580280129712,
+            "relativeVolumeError": 2.2991929526592918e-8,
+            "nonPositiveCellCount": 0
+          }
+        ],
+        "pairwise": {
+          "penetratingBoundaryNodeCount": 12,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 2.201647786896121,
+          "totalPenetration": 10.403177217628023,
+          "movableMaximumPenetration": 2.201647786896121,
+          "movableTotalPenetration": 10.403177217628023,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0
+        },
+        "skeletal": {
+          "penetratingBoundaryNodeCount": 0,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 0,
+          "totalPenetration": 0,
+          "movableMaximumPenetration": 0,
+          "movableTotalPenetration": 0,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0,
+          "penetratingAxisSampleCount": 0,
+          "axisSampleCount": 0
+        },
+        "compartment": {
+          "escapingBoundaryNodeCount": 0,
+          "fixedEscapingBoundaryNodeCount": 0,
+          "maximumEscape": 0
+        }
+      },
+      "packed": {
+        "schema": "kaminos.muscle-compartment-ring-cage-contact-measurement.v0",
+        "sourceCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
+        "sourceInputSha256": "d8ef4d4c50603a0ab6f8666fc48ac60a5568a44adbf2193650d959ee70c9f26e",
+        "orderedConstructionIds": [
+          "muscle-1",
+          "muscle-2",
+          "tendon-1",
+          "muscle-3",
+          "muscle-4",
+          "tendon-2"
+        ],
+        "cages": [
+          {
+            "cageId": "muscle-1:authored-cage",
+            "constructionId": "muscle-1",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.2520298854450328,
+                0.15369707066695795,
+                0.009110759823487502,
+                0.08512923753649601,
+                0.03154336928272476,
+                0.00863857984111865,
+                0.007918807497461117,
+                0.03213291227367431,
+                0.06154307880734232
+              ],
+              "maximumTurningAngle": 0.2520298854450328,
+              "totalTurningAngle": 0.6417437011742954,
+              "bendingEnergy": 0.10042423703698063
+            },
+            "referenceVolume": 125897.99932835638,
+            "currentVolume": 127850.84957073869,
+            "relativeVolumeError": 0.015511368352161431,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-2:authored-cage",
+            "constructionId": "muscle-2",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.023261258080021684,
+                0.05434756650025341,
+                0.020277485912691788,
+                0.08278218532022827,
+                0.03327448800354347,
+                0.04055802895436085,
+                0.09462096451424641,
+                0.09266052507933363,
+                0.12223187711313262
+              ],
+              "maximumTurningAngle": 0.12223187711313262,
+              "totalTurningAngle": 0.5640143794778122,
+              "bendingEnergy": 0.04599068763404165
+            },
+            "referenceVolume": 28156.818809376142,
+            "currentVolume": 32354.797615940377,
+            "relativeVolumeError": 0.14909279471466144,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "tendon-1:authored-cage",
+            "constructionId": "tendon-1",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.024666537091632492,
+                0.010107132025780426,
+                0.009728164726737622,
+                0.05145806541239457,
+                0.033484294345844046,
+                0.02184683140376172,
+                0.12133344146919066,
+                0.11603717332684091,
+                0.10945073358124369
+              ],
+              "maximumTurningAngle": 0.12133344146919066,
+              "totalTurningAngle": 0.4981123733834262,
+              "bendingEnergy": 0.045217536558952984
+            },
+            "referenceVolume": 16752.383204507154,
+            "currentVolume": 20208.718018327327,
+            "relativeVolumeError": 0.20631899184888877,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-3:authored-cage",
+            "constructionId": "muscle-3",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.06075455622085132,
+                0.08635569607869387,
+                0.03171295154527675,
+                0.01658533126837412,
+                0.05444956935085518,
+                0.14897267516112608,
+                0.14176600761401115,
+                0.2140825303414493,
+                0.4763603135922511
+              ],
+              "maximumTurningAngle": 0.4763603135922511,
+              "totalTurningAngle": 1.2310396311728888,
+              "bendingEnergy": 0.3304348994809003
+            },
+            "referenceVolume": 42696.28881572217,
+            "currentVolume": 44807.05753531091,
+            "relativeVolumeError": 0.049436819408329634,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "muscle-4:authored-cage",
+            "constructionId": "muscle-4",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.0568357449300107,
+                0.019741443883332016,
+                0.08090216796242711,
+                0.08519616676444898,
+                0.057187298311050724,
+                0.09473735664537974,
+                0.03789737445822853,
+                0.053830865361622876,
+                0.021123953616808116
+              ],
+              "maximumTurningAngle": 0.09473735664537974,
+              "totalTurningAngle": 0.5074523719333088,
+              "bendingEnergy": 0.034449322425808955
+            },
+            "referenceVolume": 16972.845612367255,
+            "currentVolume": 18008.060585856125,
+            "relativeVolumeError": 0.06099242266921706,
+            "nonPositiveCellCount": 0
+          },
+          {
+            "cageId": "tendon-2:authored-cage",
+            "constructionId": "tendon-2",
+            "boundaryFaceCount": 176,
+            "boundaryNodeCount": 90,
+            "fixedBoundaryNodeCount": 18,
+            "centerline": {
+              "turningAngles": [
+                0.1413716677353221,
+                0.09591262561655055,
+                0.12913137968824545,
+                0.06876270855091618,
+                0.09783904037478373,
+                0.0674700815649774,
+                0.015080266302488638,
+                0.02741030639258587,
+                0.06456532900701639
+              ],
+              "maximumTurningAngle": 0.1413716677353221,
+              "totalTurningAngle": 0.7075434052328863,
+              "bendingEnergy": 0.06986051426429188
+            },
+            "referenceVolume": 12973.580578417363,
+            "currentVolume": 12973.580280129712,
+            "relativeVolumeError": 2.2991929526592918e-8,
+            "nonPositiveCellCount": 0
+          }
+        ],
+        "pairwise": {
+          "penetratingBoundaryNodeCount": 12,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 1.4418738504666504,
+          "totalPenetration": 6.735105257722268,
+          "movableMaximumPenetration": 1.4418738504666504,
+          "movableTotalPenetration": 6.735105257722268,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0
+        },
+        "skeletal": {
+          "penetratingBoundaryNodeCount": 0,
+          "fixedPenetratingBoundaryNodeCount": 0,
+          "maximumPenetration": 0,
+          "totalPenetration": 0,
+          "movableMaximumPenetration": 0,
+          "movableTotalPenetration": 0,
+          "fixedMaximumPenetration": 0,
+          "fixedTotalPenetration": 0,
+          "penetratingAxisSampleCount": 0,
+          "axisSampleCount": 0
+        },
+        "compartment": {
+          "escapingBoundaryNodeCount": 0,
+          "fixedEscapingBoundaryNodeCount": 0,
+          "maximumEscape": 0
+        }
+      }
+    },
+    "lineSearchHistory": [
+      {
+        "iteration": 1,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20649360394617708,
+            "maximumLocalTurningAngleChange": 0.005844524312954699,
+            "maximumTotalTurningAngleChange": 0.009447272209826366,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 2,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20646492264963814,
+            "maximumLocalTurningAngleChange": 0.011084240821214036,
+            "maximumTotalTurningAngleChange": 0.018087605814959214,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 3,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.2064376342123542,
+            "maximumLocalTurningAngleChange": 0.01581402648412132,
+            "maximumTotalTurningAngleChange": 0.026228489020250816,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 4,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20641164396019687,
+            "maximumLocalTurningAngleChange": 0.014518644796403338,
+            "maximumTotalTurningAngleChange": 0.02826402019960436,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 5,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20638686378807708,
+            "maximumLocalTurningAngleChange": 0.010571177494844066,
+            "maximumTotalTurningAngleChange": 0.02781166831571677,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 6,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20636321170233526,
+            "maximumLocalTurningAngleChange": 0.008794448820572955,
+            "maximumTotalTurningAngleChange": 0.032923571355925135,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 7,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20634061139516952,
+            "maximumLocalTurningAngleChange": 0.009776811008069179,
+            "maximumTotalTurningAngleChange": 0.03775519109784384,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      },
+      {
+        "iteration": 8,
+        "attempts": [
+          {
+            "scale": 0.2,
+            "accepted": true,
+            "rejectionReasons": [],
+            "nonPositiveCellCount": 0,
+            "maximumRelativeVolumeError": 0.20631899184888877,
+            "maximumLocalTurningAngleChange": 0.010641846570315033,
+            "maximumTotalTurningAngleChange": 0.0423169274979542,
+            "compartmentMaximumEscape": 0
+          }
+        ]
+      }
+    ]
+  },
+  "exactContact": {
+    "initial": {
+      "schema": "kaminos.authored-packing-contact-measurement.v0",
+      "source": {
+        "manifestSha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+        "authorityProfileSha256": "5d825562528f1bffd01a634d0113131f7d355f96f3b73d62dc5187b1b175ad52",
+        "solverCarrierSha256": "0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af",
+        "meshTruthAuthority": "unavailable-for-deformed-or-hybrid-candidate"
+      },
+      "variant": {
+        "id": "packing-fixture-v001-mild:solver-carrier:0c72172c3dc19f9e",
+        "role": "mild-interpenetration"
+      },
+      "method": {
+        "decomposition": "ring-sweep-side-wedges-to-three-tetrahedra",
+        "broadPhase": "axis-aligned-tetrahedron-bounds",
+        "narrowPhase": "convex-tetrahedron-separating-axis-theorem",
+        "contactTolerance": 1e-9
+      },
+      "pairRows": [
+        {
+          "key": "muscle-1|muscle-2",
+          "members": [
+            "muscle-1",
+            "muscle-2"
+          ],
+          "intersects": true,
+          "maximumPenetration": 1.6270339701770968,
+          "nearestSeparatedAabbGap": 0.07541656494200133,
+          "witness": {
+            "leftSegment": 2,
+            "rightSegment": 4,
+            "leftTetrahedron": 2,
+            "rightTetrahedron": 2,
+            "signedGap": -1.6270339701770968
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 580
+          }
+        },
+        {
+          "key": "muscle-1|tendon-1",
+          "members": [
+            "muscle-1",
+            "tendon-1"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.007610321045000035,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 243
+          }
+        },
+        {
+          "key": "muscle-1|muscle-3",
+          "members": [
+            "muscle-1",
+            "muscle-3"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 4.576469421386999,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-1|muscle-4",
+          "members": [
+            "muscle-1",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 4.074043273926001,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-1|tendon-2",
+          "members": [
+            "muscle-1",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.059249877929001826,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 74
+          }
+        },
+        {
+          "key": "muscle-2|tendon-1",
+          "members": [
+            "muscle-2",
+            "tendon-1"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 3.809854507446,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-2|muscle-3",
+          "members": [
+            "muscle-2",
+            "muscle-3"
+          ],
+          "intersects": true,
+          "maximumPenetration": 2.294736030859558,
+          "nearestSeparatedAabbGap": 0.04776000976599981,
+          "witness": {
+            "leftSegment": 6,
+            "rightSegment": 4,
+            "leftTetrahedron": 8,
+            "rightTetrahedron": 11,
+            "signedGap": -2.294736030859558
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 925
+          }
+        },
+        {
+          "key": "muscle-2|muscle-4",
+          "members": [
+            "muscle-2",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 1.7748107910160003,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-2|tendon-2",
+          "members": [
+            "muscle-2",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.012115478516001588,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 883
+          }
+        },
+        {
+          "key": "muscle-3|tendon-1",
+          "members": [
+            "tendon-1",
+            "muscle-3"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.12600421905499992,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 6
+          }
+        },
+        {
+          "key": "muscle-4|tendon-1",
+          "members": [
+            "tendon-1",
+            "muscle-4"
+          ],
+          "intersects": true,
+          "maximumPenetration": 0.20598008283943514,
+          "nearestSeparatedAabbGap": 0.01651763915999993,
+          "witness": {
+            "leftSegment": 7,
+            "rightSegment": 4,
+            "leftTetrahedron": 7,
+            "rightTetrahedron": 23,
+            "signedGap": -0.20598008283943514
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 675
+          }
+        },
+        {
+          "key": "tendon-1|tendon-2",
+          "members": [
+            "tendon-1",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 20.393737792968,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-3|muscle-4",
+          "members": [
+            "muscle-3",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.09955978393499976,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 173
+          }
+        },
+        {
+          "key": "muscle-3|tendon-2",
+          "members": [
+            "muscle-3",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.019584655761999414,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 238
+          }
+        },
+        {
+          "key": "muscle-4|tendon-2",
+          "members": [
+            "muscle-4",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 17.373933792114997,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        }
+      ],
+      "boneRows": [
+        {
+          "key": "central-bone|muscle-1",
+          "memberId": "muscle-1",
+          "intersects": true,
+          "maximumPenetration": 1.4009295115009106,
+          "nearestSeparatedAabbGap": 0.2171859741209996,
+          "witness": {
+            "leftSegment": 2,
+            "rightSegment": 2,
+            "leftTetrahedron": 14,
+            "rightTetrahedron": 7,
+            "signedGap": -1.4009295115009106
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 340
+          }
+        },
+        {
+          "key": "central-bone|muscle-2",
+          "memberId": "muscle-2",
+          "intersects": true,
+          "maximumPenetration": 1.3143518198579933,
+          "nearestSeparatedAabbGap": 0.015975952148000516,
+          "witness": {
+            "leftSegment": 5,
+            "rightSegment": 2,
+            "leftTetrahedron": 20,
+            "rightTetrahedron": 16,
+            "signedGap": -1.3143518198579933
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 413
+          }
+        },
+        {
+          "key": "central-bone|tendon-1",
+          "memberId": "tendon-1",
+          "intersects": true,
+          "maximumPenetration": 2.053948773653694,
+          "nearestSeparatedAabbGap": 0.043169975281000195,
+          "witness": {
+            "leftSegment": 7,
+            "rightSegment": 4,
+            "leftTetrahedron": 20,
+            "rightTetrahedron": 4,
+            "signedGap": -2.053948773653694
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 537
+          }
+        },
+        {
+          "key": "central-bone|muscle-3",
+          "memberId": "muscle-3",
+          "intersects": true,
+          "maximumPenetration": 1.6453694787511601,
+          "nearestSeparatedAabbGap": 0.0068359375,
+          "witness": {
+            "leftSegment": 4,
+            "rightSegment": 3,
+            "leftTetrahedron": 5,
+            "rightTetrahedron": 1,
+            "signedGap": -1.6453694787511601
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 369
+          }
+        },
+        {
+          "key": "central-bone|muscle-4",
+          "memberId": "muscle-4",
+          "intersects": true,
+          "maximumPenetration": 0.647048268864598,
+          "nearestSeparatedAabbGap": 0.01441574096699938,
+          "witness": {
+            "leftSegment": 4,
+            "rightSegment": 4,
+            "leftTetrahedron": 4,
+            "rightTetrahedron": 20,
+            "signedGap": -0.647048268864598
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 484
+          }
+        },
+        {
+          "key": "central-bone|tendon-2",
+          "memberId": "tendon-2",
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.1660480499269994,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 5
+          }
+        }
+      ],
+      "summary": {
+        "pairwiseIntersectionCount": 3,
+        "skeletalIntersectionCount": 5,
+        "maximumPairwisePenetration": 2.294736030859558,
+        "maximumSkeletalPenetration": 2.053948773653694,
+        "meshTruthKeys": null,
+        "predictedKeys": [
+          "central-bone|muscle-1",
+          "central-bone|muscle-2",
+          "central-bone|muscle-3",
+          "central-bone|muscle-4",
+          "central-bone|tendon-1",
+          "muscle-1|muscle-2",
+          "muscle-2|muscle-3",
+          "muscle-4|tendon-1"
+        ],
+        "meshTruthAgreement": null
+      },
+      "identity": {
+        "sha256": "dd7a730179abd4488a429cfd6ead13c3d11f85be6c2281c8bf288729246f2e66"
+      }
+    },
+    "packed": {
+      "schema": "kaminos.authored-packing-contact-measurement.v0",
+      "source": {
+        "manifestSha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+        "authorityProfileSha256": "5d825562528f1bffd01a634d0113131f7d355f96f3b73d62dc5187b1b175ad52",
+        "solverCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
+        "meshTruthAuthority": "unavailable-for-deformed-or-hybrid-candidate"
+      },
+      "variant": {
+        "id": "packing-fixture-v001-mild:solver-carrier:8e73f44443f70dfa",
+        "role": "mild-interpenetration"
+      },
+      "method": {
+        "decomposition": "ring-sweep-side-wedges-to-three-tetrahedra",
+        "broadPhase": "axis-aligned-tetrahedron-bounds",
+        "narrowPhase": "convex-tetrahedron-separating-axis-theorem",
+        "contactTolerance": 1e-9
+      },
+      "pairRows": [
+        {
+          "key": "muscle-1|muscle-2",
+          "members": [
+            "muscle-1",
+            "muscle-2"
+          ],
+          "intersects": true,
+          "maximumPenetration": 1.4418738504666502,
+          "nearestSeparatedAabbGap": 0.0012161300251403162,
+          "witness": {
+            "leftSegment": 2,
+            "rightSegment": 4,
+            "leftTetrahedron": 2,
+            "rightTetrahedron": 2,
+            "signedGap": -1.4418738504666502
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 577
+          }
+        },
+        {
+          "key": "muscle-1|tendon-1",
+          "members": [
+            "muscle-1",
+            "tendon-1"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.005513866054473127,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 243
+          }
+        },
+        {
+          "key": "muscle-1|muscle-3",
+          "members": [
+            "muscle-1",
+            "muscle-3"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 4.585751358148039,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-1|muscle-4",
+          "members": [
+            "muscle-1",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 4.074043273926001,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-1|tendon-2",
+          "members": [
+            "muscle-1",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.06514872574000918,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 74
+          }
+        },
+        {
+          "key": "muscle-2|tendon-1",
+          "members": [
+            "muscle-2",
+            "tendon-1"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 3.809854507446,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-2|muscle-3",
+          "members": [
+            "muscle-2",
+            "muscle-3"
+          ],
+          "intersects": true,
+          "maximumPenetration": 1.360406387441457,
+          "nearestSeparatedAabbGap": 0.015019043476039329,
+          "witness": {
+            "leftSegment": 6,
+            "rightSegment": 4,
+            "leftTetrahedron": 8,
+            "rightTetrahedron": 11,
+            "signedGap": -1.360406387441457
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 761
+          }
+        },
+        {
+          "key": "muscle-2|muscle-4",
+          "members": [
+            "muscle-2",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 1.7748107910160003,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-2|tendon-2",
+          "members": [
+            "muscle-2",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.04814484355598192,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 888
+          }
+        },
+        {
+          "key": "muscle-3|tendon-1",
+          "members": [
+            "tendon-1",
+            "muscle-3"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.17881066298205717,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 6
+          }
+        },
+        {
+          "key": "muscle-4|tendon-1",
+          "members": [
+            "tendon-1",
+            "muscle-4"
+          ],
+          "intersects": true,
+          "maximumPenetration": 0.14632156505123461,
+          "nearestSeparatedAabbGap": 0.009741818122422252,
+          "witness": {
+            "leftSegment": 7,
+            "rightSegment": 4,
+            "leftTetrahedron": 7,
+            "rightTetrahedron": 23,
+            "signedGap": -0.14632156505123461
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 672
+          }
+        },
+        {
+          "key": "tendon-1|tendon-2",
+          "members": [
+            "tendon-1",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 20.401230942802016,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        },
+        {
+          "key": "muscle-3|muscle-4",
+          "members": [
+            "muscle-3",
+            "muscle-4"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.06619344356385426,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 148
+          }
+        },
+        {
+          "key": "muscle-3|tendon-2",
+          "members": [
+            "muscle-3",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.038605378295126336,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 234
+          }
+        },
+        {
+          "key": "muscle-4|tendon-2",
+          "members": [
+            "muscle-4",
+            "tendon-2"
+          ],
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 17.373933792114997,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 0
+          }
+        }
+      ],
+      "boneRows": [
+        {
+          "key": "central-bone|muscle-1",
+          "memberId": "muscle-1",
+          "intersects": true,
+          "maximumPenetration": 1.3914901571150757,
+          "nearestSeparatedAabbGap": 0.23152503124205737,
+          "witness": {
+            "leftSegment": 2,
+            "rightSegment": 2,
+            "leftTetrahedron": 14,
+            "rightTetrahedron": 7,
+            "signedGap": -1.3914901571150757
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 340
+          }
+        },
+        {
+          "key": "central-bone|muscle-2",
+          "memberId": "muscle-2",
+          "intersects": true,
+          "maximumPenetration": 1.2340595338773497,
+          "nearestSeparatedAabbGap": 0.007233497345302098,
+          "witness": {
+            "leftSegment": 5,
+            "rightSegment": 2,
+            "leftTetrahedron": 20,
+            "rightTetrahedron": 16,
+            "signedGap": -1.2340595338773497
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 413
+          }
+        },
+        {
+          "key": "central-bone|tendon-1",
+          "memberId": "tendon-1",
+          "intersects": true,
+          "maximumPenetration": 2.0251857882667323,
+          "nearestSeparatedAabbGap": 0.07519820467784433,
+          "witness": {
+            "leftSegment": 7,
+            "rightSegment": 4,
+            "leftTetrahedron": 20,
+            "rightTetrahedron": 4,
+            "signedGap": -2.0251857882667323
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 537
+          }
+        },
+        {
+          "key": "central-bone|muscle-3",
+          "memberId": "muscle-3",
+          "intersects": true,
+          "maximumPenetration": 0.950892648772351,
+          "nearestSeparatedAabbGap": 0.013495731904764163,
+          "witness": {
+            "leftSegment": 4,
+            "rightSegment": 3,
+            "leftTetrahedron": 5,
+            "rightTetrahedron": 1,
+            "signedGap": -0.950892648772351
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 297
+          }
+        },
+        {
+          "key": "central-bone|muscle-4",
+          "memberId": "muscle-4",
+          "intersects": true,
+          "maximumPenetration": 0.6521627641789554,
+          "nearestSeparatedAabbGap": 0.02424172231816968,
+          "witness": {
+            "leftSegment": 4,
+            "rightSegment": 4,
+            "leftTetrahedron": 4,
+            "rightTetrahedron": 20,
+            "signedGap": -0.6521627641789554
+          },
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 484
+          }
+        },
+        {
+          "key": "central-bone|tendon-2",
+          "memberId": "tendon-2",
+          "intersects": false,
+          "maximumPenetration": 0,
+          "nearestSeparatedAabbGap": 0.1660480499269994,
+          "witness": null,
+          "work": {
+            "tetrahedronComparisonCount": 57600,
+            "narrowPhaseCandidateCount": 5
+          }
+        }
+      ],
+      "summary": {
+        "pairwiseIntersectionCount": 3,
+        "skeletalIntersectionCount": 5,
+        "maximumPairwisePenetration": 1.4418738504666502,
+        "maximumSkeletalPenetration": 2.0251857882667323,
+        "meshTruthKeys": null,
+        "predictedKeys": [
+          "central-bone|muscle-1",
+          "central-bone|muscle-2",
+          "central-bone|muscle-3",
+          "central-bone|muscle-4",
+          "central-bone|tendon-1",
+          "muscle-1|muscle-2",
+          "muscle-2|muscle-3",
+          "muscle-4|tendon-1"
+        ],
+        "meshTruthAgreement": null
+      },
+      "identity": {
+        "sha256": "038c1807c4ee8ec6bf7e5f2fc45cd29a20b934a9376f2219bd1473c6ee01ba80"
+      }
+    }
+  },
+  "volumeDebt": [
+    {
+      "constructionId": "muscle-1",
+      "initial": 0.015516566237580595,
+      "packed": 0.015511368352161431,
+      "delta": -0.000005197885419163523
+    },
+    {
+      "constructionId": "muscle-2",
+      "initial": 0.148666933537052,
+      "packed": 0.14909279471466144,
+      "delta": 0.0004258611776094545
+    },
+    {
+      "constructionId": "tendon-1",
+      "initial": 0.20652377983729972,
+      "packed": 0.20631899184888877,
+      "delta": -0.00020478798841094825
+    },
+    {
+      "constructionId": "muscle-3",
+      "initial": 0.048117739660986654,
+      "packed": 0.049436819408329634,
+      "delta": 0.00131907974734298
+    },
+    {
+      "constructionId": "muscle-4",
+      "initial": 0.06097659566822832,
+      "packed": 0.06099242266921706,
+      "delta": 0.000015827000988739848
+    },
+    {
+      "constructionId": "tendon-2",
+      "initial": 2.2991929526592918e-8,
+      "packed": 2.2991929526592918e-8,
+      "delta": 0
+    }
+  ],
+  "visual": {
+    "route": {
+      "requested": "authored-packing-trajectory-orbitable-v0",
+      "effective": "authored-packing-trajectory-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "bundleIdentity": {
+      "schema": "kaminos.authored-packing-trajectory-visual-bundle.v0",
+      "route": "authored-packing-trajectory-orbitable-v0",
+      "sourceCarrierSha256": "0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af",
+      "packedCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
+      "sourceInputSha256": "d8ef4d4c50603a0ab6f8666fc48ac60a5568a44adbf2193650d959ee70c9f26e",
+      "residualLedgerSha256": "cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30",
+      "sha256": "f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859"
+    },
+    "captureUrls": [
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before&view=side",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed&view=side"
+    ]
+  }
+}

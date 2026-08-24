@@ -524,9 +524,10 @@ function validateInputs(solverCarrier, source) {
   }
   const { input, ...sourceIdentityDomain } = source;
   const actualSourceSha256 = hashMusclePackingCanonicalJson(sourceIdentityDomain);
+  const admittedInputKinds = new Set(['synthetic-fixture', 'operator-authored-fixture']);
   if (
-    input?.requested?.kind !== 'synthetic-fixture' ||
-    input?.effective?.kind !== 'synthetic-fixture' ||
+    !admittedInputKinds.has(input?.requested?.kind) ||
+    input?.effective?.kind !== input?.requested?.kind ||
     input.requested.id !== input.effective.id ||
     input.requested.sha256 !== input.effective.sha256 ||
     input.effective.id !== source.id ||

@@ -70,6 +70,25 @@ export function renderMuscleCompartmentRingCageContactHtml({
   )) {
     throw new Error('ring-cage witness presentation focus requires point[3] and radius > 0');
   }
+  const authoredBone = presentation.authoredBone || null;
+  if (authoredBone && (
+    !Array.isArray(authoredBone.positions) ||
+    !authoredBone.positions.every(point =>
+      Array.isArray(point) && point.length === 3 && point.every(Number.isFinite)) ||
+    !Array.isArray(authoredBone.faces) ||
+    !authoredBone.faces.every(face =>
+      Array.isArray(face) && face.length >= 3 &&
+      face.every(index => Number.isInteger(index) && index >= 0 && index < authoredBone.positions.length))
+  )) {
+    throw new Error('ring-cage witness authored bone requires indexed finite mesh geometry');
+  }
+  const exactContact = presentation.exactContact ? {
+    initial:presentation.exactContact.initial?.summary,
+    packed:presentation.exactContact.packed?.summary,
+  } : null;
+  if (exactContact && (!exactContact.initial || !exactContact.packed)) {
+    throw new Error('ring-cage witness exact contact requires initial and packed summaries');
+  }
   const payload = JSON.stringify({
     sourceCages: sourceCarrier.cages.map(cagePayload),
     packedCages: result.packedCarrier.cages.map(cagePayload),
@@ -78,6 +97,8 @@ export function renderMuscleCompartmentRingCageContactHtml({
     bundleIdentity,
     residualLedger,
     presentationFocus,
+    authoredBone,
+    exactContact,
   });
   const initial = result.metrics.initial;
   const packed = result.metrics.packed;
@@ -90,10 +111,17 @@ export function renderMuscleCompartmentRingCageContactHtml({
   const sourceLabel = presentation.sourceLabel || 'Source crowded input';
   const proposalLabel = presentation.proposalLabel ||
     'Curvature-bearing proposal · residual remains';
-  const colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff'];
+  const authorityLabel = presentation.authorityLabel ||
+    'Agent-authored provisional assay · no packing or anatomical admission';
+  const colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff', '#ff9f68', '#4f9dd9'];
   const legend = sourceCarrier.cages.map((cage, index) =>
     `<span><i style="background:${colors[index]}"></i>${escapeHtml(cage.constructionId)}</span>`,
   ).join('');
+  const exactRows = exactContact ? `
+      <span>exact authored pairwise max</span><span class="value">${formatMetric(exactContact.initial.maximumPairwisePenetration)}</span><span class="value proposal">${formatMetric(exactContact.packed.maximumPairwisePenetration)}</span>
+      <span>exact authored bone max</span><span class="value">${formatMetric(exactContact.initial.maximumSkeletalPenetration)}</span><span class="value proposal">${formatMetric(exactContact.packed.maximumSkeletalPenetration)}</span>
+      <span>exact pairwise families</span><span class="value">${exactContact.initial.pairwiseIntersectionCount}</span><span class="value proposal">${exactContact.packed.pairwiseIntersectionCount}</span>
+      <span>exact bone families</span><span class="value">${exactContact.initial.skeletalIntersectionCount}</span><span class="value proposal">${exactContact.packed.skeletalIntersectionCount}</span>` : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -130,7 +158,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
   <div id="viewport"></div>
   <section class="panel" aria-label="Ring-cage contact assay controls and residuals">
     <h1>${escapeHtml(title)}</h1>
-    <p class="authority">Agent-authored provisional assay · no packing or anatomical admission</p>
+    <p class="authority">${escapeHtml(authorityLabel)}</p>
     <p class="status">Solver disposition · ${escapeHtml(result.status)}</p>
     <p class="explanation">${escapeHtml(explanation)}</p>
     <div class="controls">
@@ -148,12 +176,13 @@ export function renderMuscleCompartmentRingCageContactHtml({
       <span>maximum total turn</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.centerline.totalTurningAngle)))}</span><span class="value proposal">${formatMetric(Math.max(...packed.cages.map(row => row.centerline.totalTurningAngle)))}</span>
       <span>compartment escape</span><span class="value">${formatMetric(initial.compartment.maximumEscape)}</span><span class="value proposal">${formatMetric(packed.compartment.maximumEscape)}</span>
       <span>maximum volume error</span><span class="value">${formatMetric(Math.max(...initial.cages.map(row => row.relativeVolumeError)))}</span><span class="value proposal">${formatMetric(maxVolumeError)}</span>
+${exactRows}
       <span>fixed-node drift</span><span class="value">0.0000</span><span class="value proposal">${formatMetric(result.fixedNodeMaximumDrift)}</span>
       <span>pairwise contact rows</span><span class="value">—</span><span class="value proposal">${residualLedger.pairwise.contacts.length}</span>
       <span>skeletal contact rows</span><span class="value">—</span><span class="value proposal">${residualLedger.skeletal.contacts.length}</span>
       <span>termination</span><span class="value">—</span><span class="value proposal">${escapeHtml(result.termination?.reason || 'unrecorded')}</span>
     </div>
-    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>skeletal capsule</span><span><i style="background:#ff8a3d"></i>movable pairwise pressure</span><span><i style="background:#ffffff"></i>fixed pairwise pressure</span><span><i style="background:#48c7ff"></i>skeletal pressure</span></div>
+    <div class="legend">${legend}<span><i style="background:#f5f1e8"></i>fixed attachments</span><span><i style="background:#b9d8ef"></i>${authoredBone ? 'exact authored bone' : 'skeletal capsule'}</span><span><i style="background:#99a8ba"></i>source boundary / ring displacement</span><span><i style="background:#ff8a3d"></i>movable pairwise pressure</span><span><i style="background:#ffffff"></i>fixed pairwise pressure</span><span><i style="background:#48c7ff"></i>skeletal pressure</span></div>
     <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>source ${escapeHtml(bundleIdentity.sourceCarrierSha256)}<br>proposal ${escapeHtml(bundleIdentity.packedCarrierSha256)}<br>ledger ${escapeHtml(bundleIdentity.residualLedgerSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
   </section>
   <div class="hint">Drag to orbit · wheel to zoom · solid colored surfaces are the actual tetrahedral cage boundary, not a centerline tube reconstruction</div>
@@ -161,7 +190,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     const payload=${payload};
-    const colors=[0xff6b6b,0xffd166,0x4ecdc4,0x8f7cff];
+    const colors=[0xff6b6b,0xffd166,0x4ecdc4,0x8f7cff,0xff9f68,0x4f9dd9];
     const viewport=document.querySelector('#viewport');
     const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});
     renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -194,6 +223,17 @@ export function renderMuscleCompartmentRingCageContactHtml({
       const material=new THREE.MeshPhysicalMaterial({color,roughness:.34,metalness:.02,clearcoat:.25,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:true});
       return new THREE.Mesh(geometry,material);
     }
+    function indexedSurfaceMesh(surface,color,opacity){
+      const vertices=[];
+      for(const face of surface.faces){
+        for(let index=1;index<face.length-1;index+=1){
+          vertices.push(...surface.positions[face[0]],...surface.positions[face[index]],...surface.positions[face[index+1]]);
+        }
+      }
+      const geometry=new THREE.BufferGeometry();
+      geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3)); geometry.computeVertexNormals();
+      return new THREE.Mesh(geometry,new THREE.MeshPhysicalMaterial({color,roughness:.42,metalness:.02,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:true}));
+    }
     function addCage(group,cage,index,opacity=1){
       const mesh=cageMesh(cage,colors[index],opacity); group.add(mesh);
       const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,18),new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.2})); group.add(edge);
@@ -213,13 +253,38 @@ export function renderMuscleCompartmentRingCageContactHtml({
       const mesh=new THREE.Mesh(new THREE.CapsuleGeometry(radius,Math.max(.001,span-radius*2),8,22),new THREE.MeshPhysicalMaterial({color:0xcdd6df,roughness:.42,transparent:true,opacity:.88}));
       mesh.position.copy(start).add(end).multiplyScalar(.5); mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize()); return mesh;
     }
-    const obstacle=payload.source.obstacles[0]; scene.add(capsuleBetween(obstacle.start,obstacle.end,obstacle.radius+(obstacle.clearance||0)));
+    const environmentGroup=new THREE.Group();
+    if(payload.authoredBone){
+      const bone=indexedSurfaceMesh(payload.authoredBone,0xcdd6df,.78); environmentGroup.add(bone);
+      environmentGroup.add(new THREE.LineSegments(new THREE.EdgesGeometry(bone.geometry,18),new THREE.LineBasicMaterial({color:0xb9d8ef,transparent:true,opacity:.26})));
+    }else{
+      for(const obstacle of payload.source.obstacles||[]){
+        if(obstacle.kind==='capsule') environmentGroup.add(capsuleBetween(obstacle.start,obstacle.end,obstacle.radius+(obstacle.clearance||0)));
+      }
+    }
+    scene.add(environmentGroup);
     const compartment=payload.source.compartment,size=compartment.maximum.map((v,i)=>v-compartment.minimum[i]),center=compartment.maximum.map((v,i)=>(v+compartment.minimum[i])/2);
     const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)),new THREE.LineDashedMaterial({color:0x86a6c8,transparent:true,opacity:.2,dashSize:.08,gapSize:.05})); box.computeLineDistances(); box.position.set(...center); scene.add(box);
-    const beforeGroup=new THREE.Group(),packedGroup=new THREE.Group(),ghostGroup=new THREE.Group(),contactGroup=new THREE.Group();
+    const beforeGroup=new THREE.Group(),packedGroup=new THREE.Group(),sourceBoundaryGhostGroup=new THREE.Group(),displacementGroup=new THREE.Group(),contactGroup=new THREE.Group();
     payload.sourceCages.forEach((cage,index)=>addCage(beforeGroup,cage,index,.82));
     payload.packedCages.forEach((cage,index)=>addCage(packedGroup,cage,index,.82));
-    payload.sourceCages.forEach((cage,index)=>ghostGroup.add(line(cage.axisNodeIndices.map(nodeIndex=>cage.positions[nodeIndex]),colors[index],.2)));
+    payload.sourceCages.forEach((sourceCage,index)=>{
+      const sourceMesh=cageMesh(sourceCage,colors[index],0);
+      const sourceBoundary=new THREE.LineSegments(
+        new THREE.EdgesGeometry(sourceMesh.geometry,18),
+        new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.42,depthTest:false,depthWrite:false}),
+      );
+      sourceBoundary.renderOrder=18;
+      sourceBoundaryGhostGroup.add(sourceBoundary);
+      const packedCage=payload.packedCages[index];
+      for(const nodeIndex of sourceCage.axisNodeIndices){
+        const sourcePoint=sourceCage.positions[nodeIndex];
+        const packedPoint=packedCage.positions[nodeIndex];
+        if(new THREE.Vector3(...sourcePoint).distanceTo(new THREE.Vector3(...packedPoint))>1e-6){
+          displacementGroup.add(pressureLine([sourcePoint,packedPoint],colors[index]));
+        }
+      }
+    });
     const contacts=[...payload.residualLedger.pairwise.contacts,...payload.residualLedger.skeletal.contacts];
     const maximumContact=Math.max(1e-9,...contacts.map(contact=>contact.penetration));
     for(const contact of contacts){
@@ -232,10 +297,14 @@ export function renderMuscleCompartmentRingCageContactHtml({
       const marker=new THREE.Mesh(new THREE.SphereGeometry(radius,12,8),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.94,depthTest:false,depthWrite:false}));
       marker.position.set(...contact.point); marker.renderOrder=21; contactGroup.add(marker);
     }
-    scene.add(beforeGroup,packedGroup,ghostGroup,contactGroup);
+    scene.add(beforeGroup,packedGroup,sourceBoundaryGhostGroup,displacementGroup,contactGroup);
     const bounds=new THREE.Box3();
     for(const cage of [...payload.sourceCages,...payload.packedCages]) for(const point of cage.positions) bounds.expandByPoint(new THREE.Vector3(...point));
-    bounds.expandByPoint(new THREE.Vector3(...obstacle.start)); bounds.expandByPoint(new THREE.Vector3(...obstacle.end));
+    if(payload.authoredBone) for(const point of payload.authoredBone.positions) bounds.expandByPoint(new THREE.Vector3(...point));
+    for(const obstacle of payload.source.obstacles||[]){
+      if(obstacle.start) bounds.expandByPoint(new THREE.Vector3(...obstacle.start));
+      if(obstacle.end) bounds.expandByPoint(new THREE.Vector3(...obstacle.end));
+    }
     const framingCenter=bounds.getCenter(new THREE.Vector3()),framingSize=bounds.getSize(new THREE.Vector3()),framingRadius=Math.max(.25,framingSize.length()*.5);
     const framingDistance=framingRadius/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.12;
     camera.near=Math.max(.001,framingRadius/500); camera.far=Math.max(100,framingRadius*30); camera.updateProjectionMatrix();
@@ -261,7 +330,7 @@ export function renderMuscleCompartmentRingCageContactHtml({
     camera.position.copy(effectiveCenter).add(viewDirection.normalize().multiplyScalar(effectiveDistance));
     controls.target.copy(effectiveCenter); controls.minDistance=effectiveRadius*.4; controls.maxDistance=framingRadius*10; controls.update();
     function showState(state){
-      const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; ghostGroup.visible=packed; contactGroup.visible=packed;
+      const packed=state==='packed'; beforeGroup.visible=!packed; packedGroup.visible=packed; sourceBoundaryGhostGroup.visible=packed; displacementGroup.visible=packed; contactGroup.visible=packed;
       document.querySelectorAll('[data-state]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.state===state)));
       document.documentElement.dataset.witnessState=state;
     }

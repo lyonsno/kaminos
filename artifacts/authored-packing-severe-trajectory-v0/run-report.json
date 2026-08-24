@@ -1,0 +1,84 @@
+{
+  "schema": "kaminos.authored-packing-trajectory-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedManifestPath": "fixtures/authored-packing/packing-fixture-v001.json",
+  "effectiveManifestPath": "repo://fixtures/authored-packing/packing-fixture-v001.json",
+  "manifestFileSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+  "manifestIdentitySha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+  "observedRole": "severe-interpenetration",
+  "intentRole": "clean-reference",
+  "policy": "restoration-to-reference",
+  "maximumIterations": 8,
+  "resultStatus": "completed-bounded-trajectory-residual-remains",
+  "route": {
+    "requested": "authored-packing-trajectory-orbitable-v0",
+    "effective": "authored-packing-trajectory-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "2131c202cf6eef5f6881b0ea6b26c2132039f4e3bc7a3975c709bf3c5ab8c91f"
+    },
+    "authorityProfile": {
+      "path": "authority-profile.json",
+      "sha256": "11fd44b2b8eafaeedbdc3e8ef1969a55c23189ebe25738c0fe6c6dd7be13565c"
+    },
+    "exactContact": {
+      "path": "exact-contact.json",
+      "sha256": "805f8c49614438e03841059ed1e4b77061a5da04d590238d1917c936b7dd8cbe"
+    },
+    "sourceCarrier": {
+      "path": "source-carrier.json",
+      "sha256": "3299d94274947ec0830d9c50819bc4d6a20e835ad4f6957aacccb2df728f84c2"
+    },
+    "packedCarrier": {
+      "path": "packed-carrier.json",
+      "sha256": "7a69784243aa2ea27709c04839523d986a4374e4d172b0efce87f1da6cd1a8cc"
+    },
+    "residualLedger": {
+      "path": "residual-ledger.json",
+      "sha256": "0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "5b940ea2bd480fb7d7a197fc7a74776aa376a26f4d9198bf3ae65c3016b62c84"
+    }
+  },
+  "visual": {
+    "route": {
+      "requested": "authored-packing-trajectory-orbitable-v0",
+      "effective": "authored-packing-trajectory-orbitable-v0",
+      "fallbackUsed": false
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "5b940ea2bd480fb7d7a197fc7a74776aa376a26f4d9198bf3ae65c3016b62c84"
+    },
+    "bundleIdentity": {
+      "schema": "kaminos.authored-packing-trajectory-visual-bundle.v0",
+      "route": "authored-packing-trajectory-orbitable-v0",
+      "sourceCarrierSha256": "f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014",
+      "packedCarrierSha256": "bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f",
+      "sourceInputSha256": "624d034bf6d853561d00e518788d46547bcc9dd3d18296866e4582cf119a79d0",
+      "residualLedgerSha256": "0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b",
+      "sha256": "e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0"
+    },
+    "captureUrls": [
+      "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before",
+      "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed",
+      "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before&view=side",
+      "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed&view=side"
+    ],
+    "status": "pending-agent-inspection"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "exactPairwiseInitial": 9.5149820048862,
+    "exactPairwisePacked": 6.909201095684134,
+    "exactBoneInitial": 6.1626139143582055,
+    "exactBonePacked": 5.766501302719964,
+    "fixedNodeMaximumDrift": 0
+  }
+}

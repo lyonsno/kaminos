@@ -1,0 +1,26 @@
+{
+  "output": {
+    "fileSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+    "manifestSha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+    "path": "/private/tmp/kaminos-packer-authority-carrier-0824/fixtures/authored-packing/packing-fixture-v001.json"
+  },
+  "phase": "complete",
+  "schema": "kaminos.authored-packing-sweep-export-report.v0",
+  "source": {
+    "blenderVersion": "5.1.2",
+    "input": {
+      "effective": {
+        "id": "packing_fixture_v001.blend",
+        "kind": "operator-authored-blender-fixture",
+        "sha256": "be7fc3a006cf13d4bea91d0cd425ddab5da0e06f0cf3d6abeda62432bf0f5bc5"
+      },
+      "requested": {
+        "id": "packing_fixture_v001.blend",
+        "kind": "operator-authored-blender-fixture",
+        "sha256": "be7fc3a006cf13d4bea91d0cd425ddab5da0e06f0cf3d6abeda62432bf0f5bc5"
+      }
+    },
+    "locator": "/Users/noahlyons/dev/operator-scratch/blender-scenes/packing_fixture_v001.blend"
+  },
+  "status": "succeeded"
+}

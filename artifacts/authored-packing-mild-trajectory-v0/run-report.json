@@ -1,0 +1,75 @@
+{
+  "schema": "kaminos.authored-packing-trajectory-run-report.v0",
+  "status": "completed",
+  "failurePhase": null,
+  "requestedManifestPath": "fixtures/authored-packing/packing-fixture-v001.json",
+  "effectiveManifestPath": "repo://fixtures/authored-packing/packing-fixture-v001.json",
+  "manifestFileSha256": "0b7fd5374edaa70dc38c68d0da41e67a9df56dadc0cb2c29199e1ce8fbe991fb",
+  "manifestIdentitySha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+  "observedRole": "mild-interpenetration",
+  "intentRole": "clean-reference",
+  "policy": "restoration-to-reference",
+  "maximumIterations": 8,
+  "resultStatus": "completed-bounded-trajectory-residual-remains",
+  "route": {
+    "requested": "authored-packing-trajectory-orbitable-v0",
+    "effective": "authored-packing-trajectory-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "outputs": {
+    "assayResult": {
+      "path": "assay-result.json",
+      "sha256": "0c590a1aad69a933535abc459847ff741171abbbaf1f26d4e24c4031020b0f16"
+    },
+    "authorityProfile": {
+      "path": "authority-profile.json",
+      "sha256": "2397aa1145501ced76963ff14c45518d524fad1e38819b4d7acba435bbbd052c"
+    },
+    "exactContact": {
+      "path": "exact-contact.json",
+      "sha256": "6d6c68e42c67284d565dc8f252c19b156c3f0bdef0bd373e69369012be949d76"
+    },
+    "sourceCarrier": {
+      "path": "source-carrier.json",
+      "sha256": "9bb4ac5ba7f7b6d306d4206d01ca81d5095541a5cc7673f31510f97a305a96b3"
+    },
+    "packedCarrier": {
+      "path": "packed-carrier.json",
+      "sha256": "81427d7beab3939f8a26a61342395da95012424a8e7adf3795bbbf323bb1dd56"
+    },
+    "residualLedger": {
+      "path": "residual-ledger.json",
+      "sha256": "cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30"
+    },
+    "viewer": {
+      "path": "index.html",
+      "sha256": "43f6172e4bd43db1c0671af1bb5d16a8eb5afa8764451aa9e01d8ac8402a41f0"
+    }
+  },
+  "visual": {
+    "bundleIdentity": {
+      "schema": "kaminos.authored-packing-trajectory-visual-bundle.v0",
+      "route": "authored-packing-trajectory-orbitable-v0",
+      "sourceCarrierSha256": "0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af",
+      "packedCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
+      "sourceInputSha256": "d8ef4d4c50603a0ab6f8666fc48ac60a5568a44adbf2193650d959ee70c9f26e",
+      "residualLedgerSha256": "cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30",
+      "sha256": "f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859"
+    },
+    "captureUrls": [
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before&view=side",
+      "index.html?bundle=f4ad86f040fe22304a2921c60d2a29d5cae0a7ed44424f85239539e90a6cd859&source=0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af&packed=8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38&ledger=cbb4f0c73c06a4a92dd8789b1e9a207799c9dbe5cdf5c9f2834d195210f9fe30&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed&view=side"
+    ],
+    "status": "pending-agent-inspection"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "primary-artifacts-written",
+    "exactPairwiseInitial": 2.294736030859558,
+    "exactPairwisePacked": 1.4418738504666502,
+    "exactBoneInitial": 2.053948773653694,
+    "exactBonePacked": 2.0251857882667323,
+    "fixedNodeMaximumDrift": 0
+  }
+}

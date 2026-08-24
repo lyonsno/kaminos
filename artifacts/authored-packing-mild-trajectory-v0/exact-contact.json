@@ -1,0 +1,780 @@
+{
+  "initial": {
+    "schema": "kaminos.authored-packing-contact-measurement.v0",
+    "source": {
+      "manifestSha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+      "authorityProfileSha256": "5d825562528f1bffd01a634d0113131f7d355f96f3b73d62dc5187b1b175ad52",
+      "solverCarrierSha256": "0c72172c3dc19f9e9367f7a262fd2bcce0f57eb692377dd04fb2be3ffb39e8af",
+      "meshTruthAuthority": "unavailable-for-deformed-or-hybrid-candidate"
+    },
+    "variant": {
+      "id": "packing-fixture-v001-mild:solver-carrier:0c72172c3dc19f9e",
+      "role": "mild-interpenetration"
+    },
+    "method": {
+      "decomposition": "ring-sweep-side-wedges-to-three-tetrahedra",
+      "broadPhase": "axis-aligned-tetrahedron-bounds",
+      "narrowPhase": "convex-tetrahedron-separating-axis-theorem",
+      "contactTolerance": 1e-9
+    },
+    "pairRows": [
+      {
+        "key": "muscle-1|muscle-2",
+        "members": [
+          "muscle-1",
+          "muscle-2"
+        ],
+        "intersects": true,
+        "maximumPenetration": 1.6270339701770968,
+        "nearestSeparatedAabbGap": 0.07541656494200133,
+        "witness": {
+          "leftSegment": 2,
+          "rightSegment": 4,
+          "leftTetrahedron": 2,
+          "rightTetrahedron": 2,
+          "signedGap": -1.6270339701770968
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 580
+        }
+      },
+      {
+        "key": "muscle-1|tendon-1",
+        "members": [
+          "muscle-1",
+          "tendon-1"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.007610321045000035,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 243
+        }
+      },
+      {
+        "key": "muscle-1|muscle-3",
+        "members": [
+          "muscle-1",
+          "muscle-3"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 4.576469421386999,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-1|muscle-4",
+        "members": [
+          "muscle-1",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 4.074043273926001,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-1|tendon-2",
+        "members": [
+          "muscle-1",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.059249877929001826,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 74
+        }
+      },
+      {
+        "key": "muscle-2|tendon-1",
+        "members": [
+          "muscle-2",
+          "tendon-1"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 3.809854507446,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-2|muscle-3",
+        "members": [
+          "muscle-2",
+          "muscle-3"
+        ],
+        "intersects": true,
+        "maximumPenetration": 2.294736030859558,
+        "nearestSeparatedAabbGap": 0.04776000976599981,
+        "witness": {
+          "leftSegment": 6,
+          "rightSegment": 4,
+          "leftTetrahedron": 8,
+          "rightTetrahedron": 11,
+          "signedGap": -2.294736030859558
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 925
+        }
+      },
+      {
+        "key": "muscle-2|muscle-4",
+        "members": [
+          "muscle-2",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 1.7748107910160003,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-2|tendon-2",
+        "members": [
+          "muscle-2",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.012115478516001588,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 883
+        }
+      },
+      {
+        "key": "muscle-3|tendon-1",
+        "members": [
+          "tendon-1",
+          "muscle-3"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.12600421905499992,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 6
+        }
+      },
+      {
+        "key": "muscle-4|tendon-1",
+        "members": [
+          "tendon-1",
+          "muscle-4"
+        ],
+        "intersects": true,
+        "maximumPenetration": 0.20598008283943514,
+        "nearestSeparatedAabbGap": 0.01651763915999993,
+        "witness": {
+          "leftSegment": 7,
+          "rightSegment": 4,
+          "leftTetrahedron": 7,
+          "rightTetrahedron": 23,
+          "signedGap": -0.20598008283943514
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 675
+        }
+      },
+      {
+        "key": "tendon-1|tendon-2",
+        "members": [
+          "tendon-1",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 20.393737792968,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-3|muscle-4",
+        "members": [
+          "muscle-3",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.09955978393499976,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 173
+        }
+      },
+      {
+        "key": "muscle-3|tendon-2",
+        "members": [
+          "muscle-3",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.019584655761999414,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 238
+        }
+      },
+      {
+        "key": "muscle-4|tendon-2",
+        "members": [
+          "muscle-4",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 17.373933792114997,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      }
+    ],
+    "boneRows": [
+      {
+        "key": "central-bone|muscle-1",
+        "memberId": "muscle-1",
+        "intersects": true,
+        "maximumPenetration": 1.4009295115009106,
+        "nearestSeparatedAabbGap": 0.2171859741209996,
+        "witness": {
+          "leftSegment": 2,
+          "rightSegment": 2,
+          "leftTetrahedron": 14,
+          "rightTetrahedron": 7,
+          "signedGap": -1.4009295115009106
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 340
+        }
+      },
+      {
+        "key": "central-bone|muscle-2",
+        "memberId": "muscle-2",
+        "intersects": true,
+        "maximumPenetration": 1.3143518198579933,
+        "nearestSeparatedAabbGap": 0.015975952148000516,
+        "witness": {
+          "leftSegment": 5,
+          "rightSegment": 2,
+          "leftTetrahedron": 20,
+          "rightTetrahedron": 16,
+          "signedGap": -1.3143518198579933
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 413
+        }
+      },
+      {
+        "key": "central-bone|tendon-1",
+        "memberId": "tendon-1",
+        "intersects": true,
+        "maximumPenetration": 2.053948773653694,
+        "nearestSeparatedAabbGap": 0.043169975281000195,
+        "witness": {
+          "leftSegment": 7,
+          "rightSegment": 4,
+          "leftTetrahedron": 20,
+          "rightTetrahedron": 4,
+          "signedGap": -2.053948773653694
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 537
+        }
+      },
+      {
+        "key": "central-bone|muscle-3",
+        "memberId": "muscle-3",
+        "intersects": true,
+        "maximumPenetration": 1.6453694787511601,
+        "nearestSeparatedAabbGap": 0.0068359375,
+        "witness": {
+          "leftSegment": 4,
+          "rightSegment": 3,
+          "leftTetrahedron": 5,
+          "rightTetrahedron": 1,
+          "signedGap": -1.6453694787511601
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 369
+        }
+      },
+      {
+        "key": "central-bone|muscle-4",
+        "memberId": "muscle-4",
+        "intersects": true,
+        "maximumPenetration": 0.647048268864598,
+        "nearestSeparatedAabbGap": 0.01441574096699938,
+        "witness": {
+          "leftSegment": 4,
+          "rightSegment": 4,
+          "leftTetrahedron": 4,
+          "rightTetrahedron": 20,
+          "signedGap": -0.647048268864598
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 484
+        }
+      },
+      {
+        "key": "central-bone|tendon-2",
+        "memberId": "tendon-2",
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.1660480499269994,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 5
+        }
+      }
+    ],
+    "summary": {
+      "pairwiseIntersectionCount": 3,
+      "skeletalIntersectionCount": 5,
+      "maximumPairwisePenetration": 2.294736030859558,
+      "maximumSkeletalPenetration": 2.053948773653694,
+      "meshTruthKeys": null,
+      "predictedKeys": [
+        "central-bone|muscle-1",
+        "central-bone|muscle-2",
+        "central-bone|muscle-3",
+        "central-bone|muscle-4",
+        "central-bone|tendon-1",
+        "muscle-1|muscle-2",
+        "muscle-2|muscle-3",
+        "muscle-4|tendon-1"
+      ],
+      "meshTruthAgreement": null
+    },
+    "identity": {
+      "sha256": "dd7a730179abd4488a429cfd6ead13c3d11f85be6c2281c8bf288729246f2e66"
+    }
+  },
+  "packed": {
+    "schema": "kaminos.authored-packing-contact-measurement.v0",
+    "source": {
+      "manifestSha256": "08e890c109ec70357dbe7db21586e4b348555f5491179034e8222d1d00ce13ec",
+      "authorityProfileSha256": "5d825562528f1bffd01a634d0113131f7d355f96f3b73d62dc5187b1b175ad52",
+      "solverCarrierSha256": "8e73f44443f70dfa9d30c9cf7f1a055fb8e0d11dcd9bc5376496614825663e38",
+      "meshTruthAuthority": "unavailable-for-deformed-or-hybrid-candidate"
+    },
+    "variant": {
+      "id": "packing-fixture-v001-mild:solver-carrier:8e73f44443f70dfa",
+      "role": "mild-interpenetration"
+    },
+    "method": {
+      "decomposition": "ring-sweep-side-wedges-to-three-tetrahedra",
+      "broadPhase": "axis-aligned-tetrahedron-bounds",
+      "narrowPhase": "convex-tetrahedron-separating-axis-theorem",
+      "contactTolerance": 1e-9
+    },
+    "pairRows": [
+      {
+        "key": "muscle-1|muscle-2",
+        "members": [
+          "muscle-1",
+          "muscle-2"
+        ],
+        "intersects": true,
+        "maximumPenetration": 1.4418738504666502,
+        "nearestSeparatedAabbGap": 0.0012161300251403162,
+        "witness": {
+          "leftSegment": 2,
+          "rightSegment": 4,
+          "leftTetrahedron": 2,
+          "rightTetrahedron": 2,
+          "signedGap": -1.4418738504666502
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 577
+        }
+      },
+      {
+        "key": "muscle-1|tendon-1",
+        "members": [
+          "muscle-1",
+          "tendon-1"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.005513866054473127,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 243
+        }
+      },
+      {
+        "key": "muscle-1|muscle-3",
+        "members": [
+          "muscle-1",
+          "muscle-3"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 4.585751358148039,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-1|muscle-4",
+        "members": [
+          "muscle-1",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 4.074043273926001,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-1|tendon-2",
+        "members": [
+          "muscle-1",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.06514872574000918,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 74
+        }
+      },
+      {
+        "key": "muscle-2|tendon-1",
+        "members": [
+          "muscle-2",
+          "tendon-1"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 3.809854507446,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-2|muscle-3",
+        "members": [
+          "muscle-2",
+          "muscle-3"
+        ],
+        "intersects": true,
+        "maximumPenetration": 1.360406387441457,
+        "nearestSeparatedAabbGap": 0.015019043476039329,
+        "witness": {
+          "leftSegment": 6,
+          "rightSegment": 4,
+          "leftTetrahedron": 8,
+          "rightTetrahedron": 11,
+          "signedGap": -1.360406387441457
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 761
+        }
+      },
+      {
+        "key": "muscle-2|muscle-4",
+        "members": [
+          "muscle-2",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 1.7748107910160003,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-2|tendon-2",
+        "members": [
+          "muscle-2",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.04814484355598192,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 888
+        }
+      },
+      {
+        "key": "muscle-3|tendon-1",
+        "members": [
+          "tendon-1",
+          "muscle-3"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.17881066298205717,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 6
+        }
+      },
+      {
+        "key": "muscle-4|tendon-1",
+        "members": [
+          "tendon-1",
+          "muscle-4"
+        ],
+        "intersects": true,
+        "maximumPenetration": 0.14632156505123461,
+        "nearestSeparatedAabbGap": 0.009741818122422252,
+        "witness": {
+          "leftSegment": 7,
+          "rightSegment": 4,
+          "leftTetrahedron": 7,
+          "rightTetrahedron": 23,
+          "signedGap": -0.14632156505123461
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 672
+        }
+      },
+      {
+        "key": "tendon-1|tendon-2",
+        "members": [
+          "tendon-1",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 20.401230942802016,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      },
+      {
+        "key": "muscle-3|muscle-4",
+        "members": [
+          "muscle-3",
+          "muscle-4"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.06619344356385426,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 148
+        }
+      },
+      {
+        "key": "muscle-3|tendon-2",
+        "members": [
+          "muscle-3",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.038605378295126336,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 234
+        }
+      },
+      {
+        "key": "muscle-4|tendon-2",
+        "members": [
+          "muscle-4",
+          "tendon-2"
+        ],
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 17.373933792114997,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 0
+        }
+      }
+    ],
+    "boneRows": [
+      {
+        "key": "central-bone|muscle-1",
+        "memberId": "muscle-1",
+        "intersects": true,
+        "maximumPenetration": 1.3914901571150757,
+        "nearestSeparatedAabbGap": 0.23152503124205737,
+        "witness": {
+          "leftSegment": 2,
+          "rightSegment": 2,
+          "leftTetrahedron": 14,
+          "rightTetrahedron": 7,
+          "signedGap": -1.3914901571150757
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 340
+        }
+      },
+      {
+        "key": "central-bone|muscle-2",
+        "memberId": "muscle-2",
+        "intersects": true,
+        "maximumPenetration": 1.2340595338773497,
+        "nearestSeparatedAabbGap": 0.007233497345302098,
+        "witness": {
+          "leftSegment": 5,
+          "rightSegment": 2,
+          "leftTetrahedron": 20,
+          "rightTetrahedron": 16,
+          "signedGap": -1.2340595338773497
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 413
+        }
+      },
+      {
+        "key": "central-bone|tendon-1",
+        "memberId": "tendon-1",
+        "intersects": true,
+        "maximumPenetration": 2.0251857882667323,
+        "nearestSeparatedAabbGap": 0.07519820467784433,
+        "witness": {
+          "leftSegment": 7,
+          "rightSegment": 4,
+          "leftTetrahedron": 20,
+          "rightTetrahedron": 4,
+          "signedGap": -2.0251857882667323
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 537
+        }
+      },
+      {
+        "key": "central-bone|muscle-3",
+        "memberId": "muscle-3",
+        "intersects": true,
+        "maximumPenetration": 0.950892648772351,
+        "nearestSeparatedAabbGap": 0.013495731904764163,
+        "witness": {
+          "leftSegment": 4,
+          "rightSegment": 3,
+          "leftTetrahedron": 5,
+          "rightTetrahedron": 1,
+          "signedGap": -0.950892648772351
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 297
+        }
+      },
+      {
+        "key": "central-bone|muscle-4",
+        "memberId": "muscle-4",
+        "intersects": true,
+        "maximumPenetration": 0.6521627641789554,
+        "nearestSeparatedAabbGap": 0.02424172231816968,
+        "witness": {
+          "leftSegment": 4,
+          "rightSegment": 4,
+          "leftTetrahedron": 4,
+          "rightTetrahedron": 20,
+          "signedGap": -0.6521627641789554
+        },
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 484
+        }
+      },
+      {
+        "key": "central-bone|tendon-2",
+        "memberId": "tendon-2",
+        "intersects": false,
+        "maximumPenetration": 0,
+        "nearestSeparatedAabbGap": 0.1660480499269994,
+        "witness": null,
+        "work": {
+          "tetrahedronComparisonCount": 57600,
+          "narrowPhaseCandidateCount": 5
+        }
+      }
+    ],
+    "summary": {
+      "pairwiseIntersectionCount": 3,
+      "skeletalIntersectionCount": 5,
+      "maximumPairwisePenetration": 1.4418738504666502,
+      "maximumSkeletalPenetration": 2.0251857882667323,
+      "meshTruthKeys": null,
+      "predictedKeys": [
+        "central-bone|muscle-1",
+        "central-bone|muscle-2",
+        "central-bone|muscle-3",
+        "central-bone|muscle-4",
+        "central-bone|tendon-1",
+        "muscle-1|muscle-2",
+        "muscle-2|muscle-3",
+        "muscle-4|tendon-1"
+      ],
+      "meshTruthAgreement": null
+    },
+    "identity": {
+      "sha256": "038c1807c4ee8ec6bf7e5f2fc45cd29a20b934a9376f2219bd1473c6ee01ba80"
+    }
+  }
+}

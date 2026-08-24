@@ -1,0 +1,119 @@
+{
+  "schema": "kaminos.current-k4-ring-cage-contact-visual-receipt-verification.v0",
+  "status": "verified",
+  "bundleIdentity": {
+    "schema": "kaminos.authored-packing-trajectory-visual-bundle.v0",
+    "route": "authored-packing-trajectory-orbitable-v0",
+    "sourceCarrierSha256": "f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014",
+    "packedCarrierSha256": "bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f",
+    "sourceInputSha256": "624d034bf6d853561d00e518788d46547bcc9dd3d18296866e4582cf119a79d0",
+    "residualLedgerSha256": "0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b",
+    "sha256": "e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0"
+  },
+  "residualLedger": {
+    "path": "residual-ledger.json",
+    "sha256": "0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b"
+  },
+  "witnessRoute": {
+    "requested": "authored-packing-trajectory-orbitable-v0",
+    "effective": "authored-packing-trajectory-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "servedViewer": {
+    "requestedUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html",
+    "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html",
+    "sha256": "5b940ea2bd480fb7d7a197fc7a74776aa376a26f4d9198bf3ae65c3016b62c84",
+    "expectedSha256": "5b940ea2bd480fb7d7a197fc7a74776aa376a26f4d9198bf3ae65c3016b62c84",
+    "fallbackUsed": false,
+    "observedVisibleIdentity": {
+      "residualLedgerSha256": "0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b",
+      "routeRequested": "authored-packing-trajectory-orbitable-v0",
+      "routeEffective": "authored-packing-trajectory-orbitable-v0"
+    }
+  },
+  "captures": [
+    {
+      "requestedUrl": "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before",
+      "sha256": "9540c2229a6bf8edde16e5a18f9f1159c30ef33e1acba4093a57902fced5c616",
+      "sizeBytes": 226517,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 59,
+        "idatBytes": 225788
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed",
+      "sha256": "f49ab537d16bf6f1c12afe0c3077244dd677aa4d9ee13b86a0d6027d8c7282c1",
+      "sizeBytes": 283250,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 72,
+        "idatBytes": 282365
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before&view=side",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=before&view=side",
+      "sha256": "dbae5444f6caa9f739c9f4332dede87d3c40f74d7923f10e751f9852c7c30b0e",
+      "sizeBytes": 246387,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 63,
+        "idatBytes": 245610
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    },
+    {
+      "requestedUrl": "index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed&view=side",
+      "effectiveUrl": "http://127.0.0.1:8794/artifacts/authored-packing-severe-trajectory-v0/index.html?bundle=e9bc013cb9c96bb36cb5fd67aff7d50a160142337c4423a802be1c85efae10b0&source=f0b89e406b9e091b909d18f66fe93f7f01185aaf2801c4d11d9cc79e41163014&packed=bcc8f653e490a7d559cbb07c08b73f0996beedf91c300d5786fb10fe6ecfb20f&ledger=0883844b79c4ddb1dc5190c0224080d52772b82c84147f85cd515d77dee9062b&routeRequested=authored-packing-trajectory-orbitable-v0&routeEffective=authored-packing-trajectory-orbitable-v0&state=packed&view=side",
+      "sha256": "a8cf9b56a2265ccb47c8cb6dad14c80f3d29e9a4d609a357ffc4bb81de3858d7",
+      "sizeBytes": 305910,
+      "viewport": {
+        "width": 1400,
+        "height": 900,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 78,
+        "idatBytes": 304953
+      },
+      "installedStableChrome": false,
+      "cleanupStatus": "complete-no-process-group-remains"
+    }
+  ],
+  "failurePhase": null,
+  "receiptPaths": [
+    "source-crowded-capture-report.json",
+    "contact-relieved-capture-report.json",
+    "source-crowded-side-capture-report.json",
+    "contact-relieved-side-capture-report.json"
+  ]
+}
