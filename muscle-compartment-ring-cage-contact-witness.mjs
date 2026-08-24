@@ -472,3 +472,171 @@ ${exactRows}
 </body>
 </html>`;
 }
+
+export function renderAuthoredPackingCollectiveTrajectoryHtml({
+  assay,
+  arms,
+  source,
+  route,
+  bundleIdentity,
+  presentation = {},
+}) {
+  if (assay?.schema !== 'kaminos.authored-packing-collective-trajectory-assay.v0' ||
+      !assay.family?.identity?.sha256 ||
+      bundleIdentity?.familySha256 !== assay.family.identity.sha256 ||
+      bundleIdentity?.sourceCarrierSha256 !== assay.bridge?.observedCarrier?.identity?.sha256 ||
+      bundleIdentity?.route !== route?.effective ||
+      route?.requested !== route?.effective ||
+      route?.fallbackUsed !== false ||
+      !bundleIdentity?.sha256 ||
+      !Array.isArray(arms) || arms.length === 0) {
+    throw new Error('collective trajectory witness requires one exact family and visual route');
+  }
+  const identityByArm = new Map(
+    (bundleIdentity.armIdentities || []).map(identity => [identity.semanticId, identity]),
+  );
+  const sourceCandidateByArm = new Map(
+    assay.family.candidates.map(candidate => [candidate.semanticId, candidate]),
+  );
+  const renderedArms = arms.map(arm => {
+    const initialCarrier = arm.semanticId === 'direct-start'
+      ? assay.bridge.solverCarrier
+      : sourceCandidateByArm.get(arm.semanticId)?.origin?.candidateCarrier;
+    const identity = identityByArm.get(arm.semanticId);
+    if (arm.status !== 'completed' ||
+        !initialCarrier?.identity?.sha256 ||
+        identity?.initialCarrierSha256 !== initialCarrier.identity.sha256 ||
+        identity?.packedCarrierSha256 !== arm.trajectory?.result?.packedCarrier?.identity?.sha256 ||
+        arm.residualLedger?.sourceCarrierSha256 !== identity.packedCarrierSha256 ||
+        arm.residualLedger?.sourceInputSha256 !== source?.input?.effective?.sha256) {
+      throw new Error(`collective trajectory witness arm identity mismatch: ${arm.semanticId}`);
+    }
+    return {
+      semanticId:arm.semanticId,
+      label:arm.label,
+      status:arm.status,
+      initialCages:initialCarrier.cages.map(cagePayload),
+      packedCages:arm.trajectory.result.packedCarrier.cages.map(cagePayload),
+      exact:arm.trajectory.exact,
+      result: {
+        status:arm.trajectory.result.status,
+        iterations:arm.trajectory.result.iterations,
+        termination:arm.trajectory.result.termination,
+        fixedNodeMaximumDrift:arm.trajectory.result.fixedNodeMaximumDrift,
+        metrics:arm.trajectory.result.metrics,
+      },
+      residualLedger:arm.residualLedger,
+      identity,
+    };
+  });
+  if (renderedArms.length !== identityByArm.size) {
+    throw new Error('collective trajectory witness bundle contains unrendered arm identities');
+  }
+  const authoredBone = presentation.authoredBone;
+  if (!authoredBone ||
+      !Array.isArray(authoredBone.positions) ||
+      !Array.isArray(authoredBone.faces)) {
+    throw new Error('collective trajectory witness requires the exact authored bone');
+  }
+  const rejections = assay.candidates
+    .filter(row => row.status !== 'completed')
+    .map(row => ({
+      semanticId:row.semanticId,
+      status:row.status,
+      reason:row.rejection?.reason || row.failure?.error || 'unrecorded',
+    }));
+  const payload = JSON.stringify({
+    sourceCages:assay.bridge.observedCarrier.cages.map(cagePayload),
+    arms:renderedArms,
+    rejections,
+    source,
+    route,
+    bundleIdentity,
+    authoredBone,
+  });
+  const colors = ['#ff6b6b', '#ffd166', '#4ecdc4', '#8f7cff', '#ff9f68', '#4f9dd9'];
+  const armButtons = renderedArms.map((arm, index) =>
+    `<button data-arm="${escapeHtml(arm.semanticId)}"><i style="background:${colors[index % colors.length]}"></i>${escapeHtml(arm.label)}</button>`,
+  ).join('');
+  const rejectionRows = rejections.length
+    ? rejections.map(row =>
+      `<li><strong>${escapeHtml(row.semanticId)}</strong> · ${escapeHtml(row.status)} · ${escapeHtml(row.reason)}</li>`,
+    ).join('')
+    : '<li>no source-rejected or solver-failed arms</li>';
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Authored packing collective trajectory frontier</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;overflow:hidden;background:#07090d;color:#f4eee3}#viewport{position:fixed;inset:0}canvas{display:block;width:100%;height:100%}.panel{position:fixed;z-index:3;top:16px;left:16px;width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:16px;border:1px solid #ffffff24;border-radius:14px;background:#0b1017ed;box-shadow:0 16px 60px #000b;backdrop-filter:blur(14px)}h1{margin:0 0 5px;font:650 19px/1.15 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.03em}.authority{margin:0 0 6px;color:#e5b77d;font-size:10px;letter-spacing:.08em;text-transform:uppercase}.status{margin:0 0 11px;color:#8ce6be;font:700 10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.05em}.rule{margin:0 0 12px;color:#aeb9c6;font-size:11px;line-height:1.38}.controls{display:flex;gap:7px;margin-bottom:8px}.arms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.arms button:last-child:nth-child(odd){grid-column:1/-1}.diagnostics button{min-height:29px;font-size:9px}.phases button{min-height:36px}button{min-width:0;min-height:40px;padding:7px 8px;border:1px solid #ffffff24;border-radius:9px;color:#dce6f0;background:#111923;cursor:pointer;font:600 10px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}button i{display:inline-block;width:7px;height:7px;margin-right:6px;border-radius:50%}button[aria-pressed="true"]{color:#081016;background:#e7d1a8;border-color:#fff1d0}.summary{display:grid;grid-template-columns:1.45fr .8fr .8fr;gap:5px 10px;margin-top:12px;font:10px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace}.head{color:#8e9baa;text-transform:uppercase;font-size:9px;letter-spacing:.08em}.value{text-align:right}.proposal{color:#8ce6be}.contacts{min-height:28px;margin:9px 0 0;color:#ffbd82;font:9px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace}.refusals{margin:11px 0 0;padding:9px 10px 9px 24px;border:1px solid #ffffff16;border-radius:9px;color:#9aa7b6;background:#090d13;font:9px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}.identity{margin:10px 0 0;color:#718091;font:9px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.hint{position:fixed;z-index:2;right:16px;bottom:14px;padding:8px 11px;border-radius:8px;background:#080c12dc;color:#aeb8c4;font-size:11px}@media(max-width:650px){.panel{top:8px;left:8px;width:calc(100vw - 16px);padding:12px}.hint{display:none}}
+  </style>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+</head>
+<body>
+  <div id="viewport"></div>
+  <section class="panel">
+    <h1>Collective realization-origin frontier</h1>
+    <p class="authority">operator-authored fixture · provisional solver assay · no anatomical admission</p>
+    <p class="status">selection not performed · raw trajectories and refusals only</p>
+    <p class="rule">Same camera · same materials · overlays independent. Choose an origin family, then switch between the exact origin delivered to the solver and its packed result without resetting the view.</p>
+    <div class="controls arms">${armButtons}</div>
+    <div class="controls phases"><button data-phase="initial">origin entering solver</button><button data-phase="packed">packed result</button></div>
+    <div class="controls diagnostics"><button data-diagnostic="wireframe">wireframe</button><button data-diagnostic="contacts">contacts</button><button data-diagnostic="source-ghost">authored source</button><button data-diagnostic="displacement">origin→packed</button></div>
+    <p id="contacts" class="contacts"></p>
+    <div class="summary">
+      <span class="head">measurement</span><span class="head value">origin</span><span class="head value">packed</span>
+      <span>exact pairwise max</span><span id="pair-initial" class="value"></span><span id="pair-packed" class="value proposal"></span>
+      <span>exact bone max</span><span id="bone-initial" class="value"></span><span id="bone-packed" class="value proposal"></span>
+      <span>iterations</span><span class="value">—</span><span id="iterations" class="value proposal"></span>
+      <span>termination</span><span class="value">—</span><span id="termination" class="value proposal"></span>
+      <span>fixed-node drift</span><span class="value">0.0000</span><span id="fixed-drift" class="value proposal"></span>
+    </div>
+    <ul class="refusals">${rejectionRows}</ul>
+    <p class="identity">bundle ${escapeHtml(bundleIdentity.sha256)}<br>family ${escapeHtml(bundleIdentity.familySha256)}<br>source ${escapeHtml(bundleIdentity.sourceCarrierSha256)}<br>route requested ${escapeHtml(route.requested)}<br>route effective ${escapeHtml(route.effective)}</p>
+  </section>
+  <div class="hint">Drag to orbit · wheel to zoom · switch arms and phases without moving the camera</div>
+  <script type="module">
+    import * as THREE from 'three';
+    import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+    const payload=${payload};
+    const colors=[0xff6b6b,0xffd166,0x4ecdc4,0x8f7cff,0xff9f68,0x4f9dd9];
+    const viewport=document.querySelector('#viewport');
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;renderer.setClearColor(0x07090d,1);viewport.append(renderer.domElement);
+    const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(38,1,.01,1000),controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=.08;
+    scene.add(new THREE.HemisphereLight(0xc8ddff,0x23140d,2.25));const key=new THREE.DirectionalLight(0xffead1,4.4);key.position.set(4,6,3);scene.add(key);const rim=new THREE.DirectionalLight(0x6e8fff,2.7);rim.position.set(-4,1,-5);scene.add(rim);
+    function line(points,color,opacity=1){const geometry=new THREE.BufferGeometry().setFromPoints(points.map(point=>new THREE.Vector3(...point)));return new THREE.Line(geometry,new THREE.LineBasicMaterial({color,transparent:opacity<1,opacity,depthTest:opacity>.3}));}
+    function beam(points,color,radius=.032){const start=new THREE.Vector3(...points[0]),end=new THREE.Vector3(...points[1]),delta=end.clone().sub(start),span=delta.length();const mesh=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,Math.max(.001,span),10),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.94,depthTest:false,depthWrite:false}));mesh.position.copy(start).add(end).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize());mesh.renderOrder=20;return mesh;}
+    function cageMesh(cage,color,opacity=.72){const vertices=[];for(const face of cage.faces)for(const index of face)vertices.push(...cage.positions[index]);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();return new THREE.Mesh(geometry,new THREE.MeshPhysicalMaterial({color,roughness:.34,metalness:.02,clearcoat:.25,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:true}));}
+    function addCage(groups,cage,index){const mesh=cageMesh(cage,colors[index]);groups.surface.add(mesh);groups.wireframe.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,18),new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.45})));groups.surface.add(line(cage.axisNodeIndices.map(nodeIndex=>cage.positions[nodeIndex]),0xffffff,.7));for(const nodeIndex of cage.fixedNodeIndices){const handle=new THREE.Mesh(new THREE.SphereGeometry(.045,12,8),new THREE.MeshStandardMaterial({color:0xf5f1e8,roughness:.35}));handle.position.set(...cage.positions[nodeIndex]);groups.surface.add(handle);}}
+    function surfaceMesh(surface,color,opacity){const vertices=[];for(const face of surface.faces)for(let index=1;index<face.length-1;index+=1)vertices.push(...surface.positions[face[0]],...surface.positions[face[index]],...surface.positions[face[index+1]]);const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.computeVertexNormals();return new THREE.Mesh(geometry,new THREE.MeshPhysicalMaterial({color,roughness:.42,transparent:true,opacity,side:THREE.DoubleSide,depthWrite:true}));}
+    const environment=surfaceMesh(payload.authoredBone,0xcdd6df,.72);scene.add(environment);scene.add(new THREE.LineSegments(new THREE.EdgesGeometry(environment.geometry,18),new THREE.LineBasicMaterial({color:0xb9d8ef,transparent:true,opacity:.24})));
+    const compartment=payload.source.compartment,size=compartment.maximum.map((value,index)=>value-compartment.minimum[index]),center=compartment.maximum.map((value,index)=>(value+compartment.minimum[index])/2);const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...size)),new THREE.LineDashedMaterial({color:0x86a6c8,transparent:true,opacity:.18,dashSize:.08,gapSize:.05}));box.computeLineDistances();box.position.set(...center);scene.add(box);
+    const armGroups={},sourceGhost=new THREE.Group(),displacements={};
+    for(const [armIndex,arm] of payload.arms.entries()){
+      armGroups[arm.semanticId]={};
+      displacements[arm.semanticId]=new THREE.Group();scene.add(displacements[arm.semanticId]);
+      for(const phase of ['initial','packed']){
+        const groups={surface:new THREE.Group(),wireframe:new THREE.Group(),contacts:new THREE.Group()};armGroups[arm.semanticId][phase]=groups;
+        const cages=phase==='initial'?arm.initialCages:arm.packedCages;cages.forEach((cage,index)=>addCage(groups,cage,index));
+        const exact=phase==='initial'?arm.exact.initial:arm.exact.packed;const rows=[...(exact.pairRows||[]).filter(row=>row.intersects).map(row=>({...row,kind:'pairwise'})),...(exact.boneRows||[]).filter(row=>row.intersects).map(row=>({...row,kind:'skeletal'}))].sort((left,right)=>right.maximumPenetration-left.maximumPenetration);
+        groups.contactRows=rows;
+        for(const [rowIndex,row] of rows.entries()){if(!row.witness?.leftPoint||!row.witness?.rightPoint)continue;const color=row.kind==='skeletal'?0x48c7ff:0xff8a3d;groups.contacts.add(beam([row.witness.leftPoint,row.witness.rightPoint],color,rowIndex===0?.07:.035));}
+        scene.add(groups.surface,groups.wireframe,groups.contacts);
+      }
+      for(const [cageIndex,initialCage] of arm.initialCages.entries())for(const nodeIndex of initialCage.axisNodeIndices){const initial=initialCage.positions[nodeIndex],packed=arm.packedCages[cageIndex].positions[nodeIndex];if(new THREE.Vector3(...initial).distanceTo(new THREE.Vector3(...packed))>1e-6)displacements[arm.semanticId].add(line([initial,packed],colors[cageIndex],.72));}
+    }
+    payload.sourceCages.forEach((cage,index)=>{const mesh=cageMesh(cage,colors[index],0);const edge=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,18),new THREE.LineBasicMaterial({color:colors[index],transparent:true,opacity:.42,depthTest:false,depthWrite:false}));edge.renderOrder=18;sourceGhost.add(edge);});scene.add(sourceGhost);
+    const bounds=new THREE.Box3();for(const arm of payload.arms)for(const cage of [...arm.initialCages,...arm.packedCages])for(const point of cage.positions)bounds.expandByPoint(new THREE.Vector3(...point));for(const point of payload.authoredBone.positions)bounds.expandByPoint(new THREE.Vector3(...point));const framingCenter=bounds.getCenter(new THREE.Vector3()),framingSize=bounds.getSize(new THREE.Vector3()),framingRadius=Math.max(.25,framingSize.length()*.5),framingDistance=framingRadius/Math.tan(THREE.MathUtils.degToRad(camera.fov*.5))*1.12;camera.near=Math.max(.001,framingRadius/500);camera.far=Math.max(100,framingRadius*30);camera.updateProjectionMatrix();camera.position.copy(framingCenter).add(new THREE.Vector3(1.08,.72,1.12).normalize().multiplyScalar(framingDistance));controls.target.copy(framingCenter);controls.minDistance=framingRadius*.4;controls.maxDistance=framingRadius*10;controls.update();
+    const query=new URLSearchParams(location.search),expected=payload.bundleIdentity,requested={bundle:query.get('bundle'),family:query.get('family'),source:query.get('source'),routeRequested:query.get('routeRequested'),routeEffective:query.get('routeEffective')},requestedCaptureBatch=query.get('captureBatch')||'manual-unbatched';if(requested.bundle!==expected.sha256||requested.family!==expected.familySha256||requested.source!==expected.sourceCarrierSha256||requested.routeRequested!==payload.route.requested||requested.routeEffective!==payload.route.effective){document.body.innerHTML='<pre style="margin:24px;color:#ff8b8b">identity-bound collective capture route mismatch\\n'+JSON.stringify({requested,effective:expected},null,2)+'</pre>';throw new Error('identity-bound collective capture route mismatch');}
+    const diagnostics={wireframe:false,contacts:false,sourceGhost:false,displacement:false};let currentArm=payload.arms.some(row=>row.semanticId===query.get('arm'))?query.get('arm'):payload.arms[0].semanticId,currentPhase=['initial','packed'].includes(query.get('phase'))?query.get('phase'):'packed';
+    function format(value){return Number.isFinite(value)?(Math.abs(value)<1e-6?value.toExponential(2):value.toFixed(4)):'—';}
+    function show(){for(const [armId,phases] of Object.entries(armGroups))for(const [phase,groups] of Object.entries(phases)){const active=armId===currentArm&&phase===currentPhase;groups.surface.visible=active;groups.wireframe.visible=active&&diagnostics.wireframe;groups.contacts.visible=active&&diagnostics.contacts;}for(const [armId,group] of Object.entries(displacements))group.visible=diagnostics.displacement&&armId===currentArm;sourceGhost.visible=diagnostics.sourceGhost;const arm=payload.arms.find(row=>row.semanticId===currentArm),rows=armGroups[currentArm][currentPhase].contactRows;document.querySelector('#contacts').textContent=diagnostics.contacts?(rows.length?rows.map((row,index)=>(index===0?'strongest → ':'')+row.key+' · '+row.maximumPenetration.toFixed(4)).join(' | '):'no exact contact families in this state'):'';document.querySelector('#pair-initial').textContent=format(arm.exact.initial.summary.maximumPairwisePenetration);document.querySelector('#pair-packed').textContent=format(arm.exact.packed.summary.maximumPairwisePenetration);document.querySelector('#bone-initial').textContent=format(arm.exact.initial.summary.maximumSkeletalPenetration);document.querySelector('#bone-packed').textContent=format(arm.exact.packed.summary.maximumSkeletalPenetration);document.querySelector('#iterations').textContent=String(arm.result.iterations);document.querySelector('#termination').textContent=arm.result.termination?.reason||'unrecorded';document.querySelector('#fixed-drift').textContent=format(arm.result.fixedNodeMaximumDrift);document.querySelectorAll('[data-arm]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.arm===currentArm)));document.querySelectorAll('[data-phase]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.phase===currentPhase)));document.querySelectorAll('[data-diagnostic]').forEach(button=>{const key=button.dataset.diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());button.setAttribute('aria-pressed',String(diagnostics[key]));});document.documentElement.dataset.witnessArm=currentArm;document.documentElement.dataset.witnessPhase=currentPhase;}
+    document.querySelectorAll('[data-arm]').forEach(button=>button.addEventListener('click',()=>{currentArm=button.dataset.arm;show();}));document.querySelectorAll('[data-phase]').forEach(button=>button.addEventListener('click',()=>{currentPhase=button.dataset.phase;show();}));document.querySelectorAll('[data-diagnostic]').forEach(button=>button.addEventListener('click',()=>{const key=button.dataset.diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());diagnostics[key]=!diagnostics[key];show();}));for(const diagnostic of(query.get('diagnostics')||'').split(',').filter(Boolean)){const key=diagnostic.replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());if(Object.hasOwn(diagnostics,key))diagnostics[key]=true;}show();
+    function resize(){const width=Math.max(1,viewport.clientWidth),height=Math.max(1,viewport.clientHeight);renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();}new ResizeObserver(resize).observe(viewport);resize();document.documentElement.dataset.witnessLoaded='false';document.documentElement.dataset.witnessRenderComplete='false';document.documentElement.dataset.witnessRenderFrame='0';document.documentElement.dataset.witnessCaptureBatch=requestedCaptureBatch;document.documentElement.dataset.witnessRouteRequested=payload.route.requested;document.documentElement.dataset.witnessRouteEffective=payload.route.effective;document.documentElement.dataset.witnessBundle=expected.sha256;document.documentElement.dataset.witnessFamily=expected.familySha256;let frames=0;renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);frames+=1;document.documentElement.dataset.witnessRenderFrame=String(frames);if(frames===1){document.documentElement.dataset.witnessRenderComplete='true';document.documentElement.dataset.witnessLoaded='true';}});
+  </script>
+</body>
+</html>`;
+}

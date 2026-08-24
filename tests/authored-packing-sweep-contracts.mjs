@@ -27,6 +27,7 @@ import {
 import {
   renderMuscleCompartmentRingCageContactHtml,
 } from '../muscle-compartment-ring-cage-contact-witness.mjs';
+import * as contactWitness from '../muscle-compartment-ring-cage-contact-witness.mjs';
 import {
   validateMuscleCompartmentRingCageContactVisualReceipts,
 } from '../muscle-compartment-ring-cage-contact-visual-receipts.mjs';
@@ -1373,6 +1374,166 @@ test('ring-cage witness renders six authored bodies and the exact authored bone 
     'contact family identity must remain visible beside the contact controls instead of below the scroll-heavy metric ledger',
   );
   assert.match(html, /strongest → /);
+});
+
+test('collective trajectory witness compares every admitted arm with symmetric presentation and independent diagnostics', async () => {
+  assert.equal(
+    typeof contactWitness.renderAuthoredPackingCollectiveTrajectoryHtml,
+    'function',
+    'plural trajectories need one same-camera visual frontier instead of isolated screenshots',
+  );
+
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const assay = authoredPacking.runAuthoredPackingCollectiveTrajectoryAssay({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+    maximumIterations:1,
+  });
+  const arms = [assay.directStart, ...assay.candidates]
+    .filter(row => row.status === 'completed')
+    .map(row => ({
+      semanticId:row.semanticId,
+      label:row.semanticId,
+      status:row.status,
+      trajectory:row.trajectory,
+      residualLedger:measureMuscleCompartmentRingCageContactResidualLedger(
+        row.trajectory.result.packedCarrier,
+        assay.bridge.source,
+      ),
+    }));
+  const bundleIdentity = {
+    schema:'kaminos.authored-packing-collective-trajectory-visual-bundle.v0',
+    sha256:'a'.repeat(64),
+    generation:'b'.repeat(64),
+    familySha256:assay.family.identity.sha256,
+    sourceCarrierSha256:assay.bridge.observedCarrier.identity.sha256,
+    armIdentities:arms.map(arm => ({
+      semanticId:arm.semanticId,
+      initialCarrierSha256:arm.trajectory.exact.initial.source.solverCarrierSha256,
+      packedCarrierSha256:arm.trajectory.result.packedCarrier.identity.sha256,
+      residualLedgerSha256:'c'.repeat(64),
+    })),
+    route:'authored-packing-collective-trajectory-orbitable-v0',
+  };
+  const html = contactWitness.renderAuthoredPackingCollectiveTrajectoryHtml({
+    assay,
+    arms,
+    source:assay.bridge.source,
+    route:{
+      requested:'authored-packing-collective-trajectory-orbitable-v0',
+      effective:'authored-packing-collective-trajectory-orbitable-v0',
+      fallbackUsed:false,
+    },
+    bundleIdentity,
+    presentation:{
+      authoredBone:{
+        positions:mild.bone.mesh.vertices,
+        faces:mild.bone.mesh.polygons,
+      },
+    },
+  });
+
+  for (const arm of arms) assert.match(html, new RegExp(`data-arm="${arm.semanticId}"`));
+  assert.match(html, /data-phase="initial"/);
+  assert.match(html, /data-phase="packed"/);
+  assert.match(html, /data-diagnostic="wireframe"/);
+  assert.match(html, /data-diagnostic="contacts"/);
+  assert.match(html, /data-diagnostic="source-ghost"/);
+  assert.match(html, /data-diagnostic="displacement"/);
+  assert.match(
+    html,
+    /displacements\[arm\.semanticId\]=new THREE\.Group\(\)/,
+    'each origin family must own its displacement overlay instead of leaking every arm into one diagnostic layer',
+  );
+  assert.match(
+    html,
+    /group\.visible=diagnostics\.displacement&&armId===currentArm/,
+    'the displacement diagnostic must remain local to the selected origin family',
+  );
+  assert.match(html, /same camera · same materials · overlays independent/i);
+  assert.match(html, /selection not performed/i);
+  assert.match(html, /source-rejected/);
+  assert.match(html, /identity-bound collective capture route mismatch/);
+  assert.match(html, /witnessRenderComplete/);
+  assert.doesNotMatch(
+    html,
+    /wireframe[^\n]+packed[^\n]+true/i,
+    'packed arms must not receive an asymmetric default wireframe treatment',
+  );
+});
+
+test('collective trajectory runner publishes one immutable identity-bound frontier generation', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-collective-frontier-'));
+  try {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const runner = path.join(root, 'tools/run-authored-packing-collective-trajectory-assay.mjs');
+    const result = spawnSync(process.execPath, [
+      runner,
+      '--manifest', fileURLToPath(FIXTURE_URL),
+      '--output', output,
+      '--observed-role', 'mild-interpenetration',
+      '--intent-role', 'clean-reference',
+      '--policy', 'restoration-to-reference',
+      '--iterations', '1',
+    ], { cwd:root, encoding:'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+    assert.equal(report.status, 'completed');
+    assert.match(report.generation, /^[a-f0-9]{64}$/);
+    assert.equal(report.publishedGeneration, `generations/${report.generation}`);
+    assert.deepEqual(report.route, {
+      requested:'authored-packing-collective-trajectory-orbitable-v0',
+      effective:'authored-packing-collective-trajectory-orbitable-v0',
+      fallbackUsed:false,
+    });
+    assert.deepEqual(report.selection, {
+      status:'not-performed',
+      reason:'raw-multi-candidate-frontier-requires-comparative-and-operator-visual-disposition',
+    });
+    assert.equal(report.population.definedCandidateCount, 4);
+    assert.equal(report.population.completedCandidateCount, 4);
+    assert.equal(report.visual.captureUrls.length, 10);
+    assert.deepEqual(report.visual.viewer, report.outputs.viewer);
+    const frontier = JSON.parse(await readFile(
+      path.join(output, report.outputs.frontier.path),
+      'utf8',
+    ));
+    assert.equal(frontier.status, 'completed-raw-frontier-selection-not-performed');
+    assert.equal(frontier.arms.length, 5);
+    assert.equal(frontier.arms.filter(row => row.status === 'completed').length, 5);
+    const viewer = await readFile(path.join(output, report.outputs.viewer.path), 'utf8');
+    assert.match(viewer, new RegExp(report.visual.bundleIdentity.sha256));
+    assert.match(viewer, /witnessRouteEffective/);
+    assert.ok((await readdir(output)).every(relative => !relative.startsWith('.staging-')));
+  } finally {
+    await rm(output, { recursive:true, force:true });
+  }
+});
+
+test('collective trajectory runner preserves a failure report without publishing partial primary evidence', async () => {
+  const output = await mkdtemp(path.join(tmpdir(), 'kaminos-authored-collective-failure-'));
+  try {
+    const root = fileURLToPath(new URL('..', import.meta.url));
+    const runner = path.join(root, 'tools/run-authored-packing-collective-trajectory-assay.mjs');
+    const result = spawnSync(process.execPath, [
+      runner,
+      '--manifest', path.join(output, 'missing.json'),
+      '--output', output,
+    ], { cwd:root, encoding:'utf8' });
+    assert.notEqual(result.status, 0);
+    const report = JSON.parse(await readFile(path.join(output, 'run-report.json'), 'utf8'));
+    assert.equal(report.status, 'failed');
+    assert.equal(report.failurePhase, 'read-manifest');
+    assert.equal(report.publishedGeneration, null);
+    assert.equal(report.outputs, null);
+    assert.deepEqual(await readdir(output), ['run-report.json']);
+  } finally {
+    await rm(output, { recursive:true, force:true });
+  }
 });
 
 test('authored trajectory runner writes a failure report and no primary artifacts when source identity is unavailable', async () => {
