@@ -1454,6 +1454,34 @@ test('collective trajectory witness compares every admitted arm with symmetric p
     /group\.visible=diagnostics\.displacement&&armId===currentArm/,
     'the displacement diagnostic must remain local to the selected origin family',
   );
+  assert.match(
+    html,
+    /diagnosticScale=Math\.max\(/,
+    'diagnostic geometry must derive its visible scale from the authored compartment instead of using synthetic-scene constants',
+  );
+  assert.match(
+    html,
+    /diagnosticAvailability=\{wireframe:true,contacts:groups\.contacts\.children\.length>0,sourceGhost:cagesDiffer\(currentCages,payload\.sourceCages\),displacement:displacements\[currentArm\]\.children\.length>0\}/,
+    'each selected arm and phase must declare which diagnostic controls can produce a visible effect',
+  );
+  assert.match(
+    html,
+    /button\.disabled=!diagnosticAvailability\[key\]/,
+    'diagnostic controls with no visible effect must be visibly disabled instead of pretending to actuate',
+  );
+  assert.match(html, /witnessDiagnosticAvailability/);
+  assert.match(html, /witnessDiagnosticsActive/);
+  assert.match(html, /witnessDiagnosticsActive=.*\.join\(','\)\|\|'none'/);
+  assert.match(
+    html,
+    /groups\.contacts\.add\(beam\([^;]+diagnosticScale/s,
+    'exact contact witnesses must use authored-scale geometry that remains visible inside the packed bodies',
+  );
+  assert.match(
+    html,
+    /displacements\[arm\.semanticId\]\.add\(beam\([^;]+diagnosticScale/s,
+    'origin-to-packed motion must use authored-scale depth-independent geometry instead of one-pixel interior lines',
+  );
   assert.match(html, /same camera · same materials · overlays independent/i);
   assert.match(html, /selection not performed/i);
   assert.match(html, /source-rejected/);
