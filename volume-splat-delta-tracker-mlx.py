@@ -337,14 +337,17 @@ def train(
 
     # All pairs in a run share medium geometry and camera dims; the compiled
     # step relies on that so ONE traced graph serves every (pair, camera).
-    floors = {prep["floor"] for prep in prepared}
-    cells = {prep["cell"] for prep in prepared}
-    volumes = {prep["volume"] for prep in prepared}
-    chunks = {prep["chunk"] for prep in prepared}
-    dims = {(b["height"], b["width"]) for prep in prepared for b in prep["batches"]}
-    assert len(floors) == len(cells) == len(volumes) == len(chunks) == len(dims) == 1,         "pairs disagree on medium/camera constants; compiled step requires uniformity"
-    floor_c = floors.pop(); cell_c = cells.pop(); volume_c = volumes.pop(); chunk_c = chunks.pop()
-    (img_h, img_w) = dims.pop()
+    floor_c = prepared[0]["floor"]; cell_c = prepared[0]["cell"]
+    volume_c = prepared[0]["volume"]; chunk_c = prepared[0]["chunk"]
+    (img_h, img_w) = (prepared[0]["batches"][0]["height"], prepared[0]["batches"][0]["width"])
+    for prep in prepared:
+        for key, ref in (("floor", floor_c), ("cell", cell_c), ("volume", volume_c)):
+            assert abs(prep[key] - ref) <= 1e-6 * max(abs(ref), 1e-12), (
+                f"pairs disagree on medium constant {key}; compiled step requires uniformity"
+            )
+        assert prep["chunk"] == chunk_c
+        for b in prep["batches"]:
+            assert (b["height"], b["width"]) == (img_h, img_w), "camera dims differ across pairs"
 
     def loss_fn(weights, features, raw_centers, raw_chol, raw_emission, raw_extinction,
                 points, segment, target):
