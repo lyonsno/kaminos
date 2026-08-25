@@ -335,20 +335,32 @@ def train(
             "chunk": chunk,
         })
 
-    def loss_fn(weights, prep, batch):
-        deltas = DeltaTracker.forward(weights, prep["features"])
-        params = _apply_deltas_mx(prep["raw"], deltas, cell_world=prep["cell"])
-        centers, precision, norm, emission, extinction = _decode_mx(params, prep["floor"])
+    # All pairs in a run share medium geometry and camera dims; the compiled
+    # step relies on that so ONE traced graph serves every (pair, camera).
+    floors = {prep["floor"] for prep in prepared}
+    cells = {prep["cell"] for prep in prepared}
+    volumes = {prep["volume"] for prep in prepared}
+    chunks = {prep["chunk"] for prep in prepared}
+    dims = {(b["height"], b["width"]) for prep in prepared for b in prep["batches"]}
+    assert len(floors) == len(cells) == len(volumes) == len(chunks) == len(dims) == 1,         "pairs disagree on medium/camera constants; compiled step requires uniformity"
+    floor_c = floors.pop(); cell_c = cells.pop(); volume_c = volumes.pop(); chunk_c = chunks.pop()
+    (img_h, img_w) = dims.pop()
+
+    def loss_fn(weights, features, raw_centers, raw_chol, raw_emission, raw_extinction,
+                points, segment, target):
+        deltas = DeltaTracker.forward(weights, features)
+        raw = {"centers": raw_centers, "rawCholesky": raw_chol,
+               "rawEmission": raw_emission, "rawExtinction": raw_extinction}
+        params = _apply_deltas_mx(raw, deltas, cell_world=cell_c)
+        centers, precision, norm, emission, extinction = _decode_mx(params, floor_c)
         predicted = _render_mx(
-            batch["points"], batch["segment"], centers, precision, norm,
-            emission, extinction, prep["volume"], prep["chunk"],
+            points, segment, centers, precision, norm,
+            emission, extinction, volume_c, chunk_c,
         )
-        target = batch["target"]
         loss = mx.mean(mx.abs(predicted - target)) + 0.25 * mx.mean(mx.square(predicted - target))
         if high_frequency_weight > 0.0:
-            h, w = batch["height"], batch["width"]
-            pred_img = predicted.reshape((h, w, 3))
-            targ_img = target.reshape((h, w, 3))
+            pred_img = predicted.reshape((img_h, img_w, 3))
+            targ_img = target.reshape((img_h, img_w, 3))
             dx = mx.abs((pred_img[:, 1:] - pred_img[:, :-1]) - (targ_img[:, 1:] - targ_img[:, :-1]))
             dy = mx.abs((pred_img[1:] - pred_img[:-1]) - (targ_img[1:] - targ_img[:-1]))
             loss = loss + high_frequency_weight * (mx.mean(dx) + mx.mean(dy))
@@ -386,25 +398,35 @@ def train(
         np.savez(tmp, **payload)
         tmp.replace(checkpoint_path)
 
+    from functools import partial
+
+    compile_state = [model.weights, optimizer.state]
+
+    @partial(mx.compile, inputs=compile_state, outputs=compile_state)
+    def train_step(features, raw_centers, raw_chol, raw_emission, raw_extinction,
+                   points, segment, target):
+        loss, gradients = loss_and_grad(
+            model.weights, features, raw_centers, raw_chol, raw_emission,
+            raw_extinction, points, segment, target,
+        )
+        optimizer.update(model.weights, gradients)
+        return loss
+
     import time as _time
     residency_start = _time.monotonic()
     losses: list[float] = []
     finished = True
     for step in range(start_step, iterations):
         prep = prepared[step % len(prepared)]
-        step_loss = 0.0
-        grads_total = None
-        for batch in prep["batches"]:
-            value, grads = loss_and_grad(model.weights, prep, batch)
-            step_loss += float(value)
-            if grads_total is None:
-                grads_total = grads
-            else:
-                grads_total = {k: grads_total[k] + grads[k] for k in grads}
-        optimizer.update_wrapped = None  # no-op guard
-        model.weights = optimizer.apply_gradients(grads_total, model.weights)
-        mx.eval(list(model.weights.values()))
-        losses.append(step_loss / len(prep["batches"]))
+        batch = prep["batches"][(step // len(prepared)) % len(prep["batches"])]
+        raw = prep["raw"]
+        loss = train_step(
+            prep["features"], raw["centers"], raw["rawCholesky"],
+            raw["rawEmission"], raw["rawExtinction"],
+            batch["points"], batch["segment"], batch["target"],
+        )
+        mx.eval(compile_state)
+        losses.append(float(loss))
         if (step + 1) % log_every == 0 or step == start_step:
             print(f"[tracker] step {step + 1}/{iterations} loss {losses[-1]:.6f}", flush=True)
         if (
