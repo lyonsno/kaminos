@@ -12,6 +12,12 @@ import {
   MUSCLE_COMPARTMENT_PACKING_SOURCE_SCHEMA,
   hashMusclePackingCanonicalJson,
 } from './muscle-compartment-packing-core.mjs';
+import {
+  createNBodyActiveRowTrustRegionConfig,
+  createNBodyActiveRowTrustRegionTrajectoryConfig,
+  solveNBodyActiveRowTrustRegionStep,
+  solveNBodyActiveRowTrustRegionTrajectory,
+} from './nbody-packing-restoration.mjs';
 
 export const AUTHORED_PACKING_SWEEP_MANIFEST_SCHEMA =
   'kaminos.authored-packing-sweep-manifest.v0';
@@ -31,9 +37,16 @@ export const AUTHORED_PACKING_REALIZATION_ORIGIN_SCHEMA =
   'kaminos.authored-packing-realization-origin.v0';
 export const AUTHORED_PACKING_COLLECTIVE_ORIGIN_FAMILY_SCHEMA =
   'kaminos.authored-packing-collective-origin-family.v0';
+export const AUTHORED_PACKING_EXACT_RESIDUAL_PROBLEM_SCHEMA =
+  'kaminos.authored-packing-exact-residual-problem.v0';
+export const AUTHORED_PACKING_EXACT_RESIDUAL_STEP_SCHEMA =
+  'kaminos.authored-packing-exact-residual-step.v0';
+export const AUTHORED_PACKING_EXACT_RESIDUAL_TRAJECTORY_SCHEMA =
+  'kaminos.authored-packing-exact-residual-trajectory.v0';
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const IDENTITY_QUANTIZATION = 1_000_000_000;
+const AUTHORED_PACKING_CONTACT_TOLERANCE = 1e-9;
 const VARIANT_ROLES = Object.freeze(['clean-reference', 'mild-interpenetration', 'severe-interpenetration']);
 const POLICIES = Object.freeze({
   'restoration-to-reference': {
@@ -1711,9 +1724,59 @@ function tetrahedronCentroid(shape) {
   );
 }
 
+function tetrahedronHalfSpaces(shape) {
+  return shape.faces.map(face => {
+    let normal = faceNormal(shape, face);
+    if (!normal) throw new Error('tetrahedron intersection encountered a degenerate face');
+    const oppositeIndex = [0, 1, 2, 3].find(index => !face.includes(index));
+    const anchor = shape.vertices[face[0]];
+    if (dot(normal, subtract(shape.vertices[oppositeIndex], anchor)) > 0) {
+      normal = scale(normal, -1);
+    }
+    return { normal, offset:dot(normal, anchor) };
+  });
+}
+
+function threePlaneIntersection(left, middle, right) {
+  const middleCrossRight = cross(middle.normal, right.normal);
+  const denominator = dot(left.normal, middleCrossRight);
+  if (Math.abs(denominator) <= 1e-10) return null;
+  const numerator = [
+    scale(middleCrossRight, left.offset),
+    scale(cross(right.normal, left.normal), middle.offset),
+    scale(cross(left.normal, middle.normal), right.offset),
+  ].reduce((sum, value) => sum.map((entry, axis) => entry + value[axis]), [0, 0, 0]);
+  return scale(numerator, 1 / denominator);
+}
+
+function tetrahedronIntersectionVertices(left, right) {
+  const planes = [...tetrahedronHalfSpaces(left), ...tetrahedronHalfSpaces(right)];
+  const candidates = [];
+  for (let first = 0; first < planes.length - 2; first += 1) {
+    for (let second = first + 1; second < planes.length - 1; second += 1) {
+      for (let third = second + 1; third < planes.length; third += 1) {
+        const point = threePlaneIntersection(
+          planes[first],
+          planes[second],
+          planes[third],
+        );
+        if (!point || planes.some(plane => dot(plane.normal, point) > plane.offset + 1e-7)) {
+          continue;
+        }
+        if (candidates.some(existing => length(subtract(existing, point)) <= 1e-7)) continue;
+        candidates.push(point.map(value => Number(value.toFixed(12))));
+      }
+    }
+  }
+  return candidates.sort((a, b) =>
+    a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+  );
+}
+
 function measureCarrierContact(left, right) {
   let maximumPenetration = 0;
   let nearestSeparatedAabbGap = Infinity;
+  let nearestSeparatedSatGap = Infinity;
   let witness = null;
   let narrowPhaseCandidateCount = 0;
   let tetrahedronComparisonCount = 0;
@@ -1741,6 +1804,9 @@ function measureCarrierContact(left, right) {
           }
           narrowPhaseCandidateCount += 1;
           const signedGap = tetrahedronSatGap(leftShape, rightShape);
+          if (signedGap >= 0) {
+            nearestSeparatedSatGap = Math.min(nearestSeparatedSatGap, signedGap);
+          }
           if (signedGap < 0 && -signedGap > maximumPenetration) {
             maximumPenetration = -signedGap;
             witness = {
@@ -1750,6 +1816,7 @@ function measureCarrierContact(left, right) {
               rightTetrahedron,
               leftPoint:tetrahedronCentroid(leftShape),
               rightPoint:tetrahedronCentroid(rightShape),
+              intersectionVertices:tetrahedronIntersectionVertices(leftShape, rightShape),
               signedGap,
             };
           }
@@ -1757,11 +1824,24 @@ function measureCarrierContact(left, right) {
       }
     }
   }
+  const nearestSeparatedGap = Math.min(
+    nearestSeparatedAabbGap,
+    nearestSeparatedSatGap,
+  );
+  const intersects = maximumPenetration > AUTHORED_PACKING_CONTACT_TOLERANCE;
   return {
-    intersects:maximumPenetration > 1e-9,
+    intersects,
+    signedGap:intersects
+      ? -maximumPenetration
+      : Number.isFinite(nearestSeparatedGap)
+        ? nearestSeparatedGap
+        : 0,
     maximumPenetration:maximumPenetration,
     nearestSeparatedAabbGap:Number.isFinite(nearestSeparatedAabbGap)
       ? nearestSeparatedAabbGap
+      : 0,
+    nearestSeparatedSatGap:Number.isFinite(nearestSeparatedSatGap)
+      ? nearestSeparatedSatGap
       : 0,
     witness,
     work:{ tetrahedronComparisonCount, narrowPhaseCandidateCount },
@@ -1807,7 +1887,7 @@ function measureVariantContacts({ manifestSha256, variant, meshTruthKeys = null,
       decomposition:'ring-sweep-side-wedges-to-three-tetrahedra',
       broadPhase:'axis-aligned-tetrahedron-bounds',
       narrowPhase:'convex-tetrahedron-separating-axis-theorem',
-      contactTolerance:1e-9,
+      contactTolerance:AUTHORED_PACKING_CONTACT_TOLERANCE,
     },
     pairRows,
     boneRows,
@@ -1816,6 +1896,14 @@ function measureVariantContacts({ manifestSha256, variant, meshTruthKeys = null,
       skeletalIntersectionCount:boneRows.filter(row => row.intersects).length,
       maximumPairwisePenetration:Math.max(0, ...pairRows.map(row => row.maximumPenetration)),
       maximumSkeletalPenetration:Math.max(0, ...boneRows.map(row => row.maximumPenetration)),
+      admittedMaximumPairwisePenetration:Math.max(
+        0,
+        ...pairRows.map(row => row.intersects ? row.maximumPenetration : 0),
+      ),
+      admittedMaximumSkeletalPenetration:Math.max(
+        0,
+        ...boneRows.map(row => row.intersects ? row.maximumPenetration : 0),
+      ),
       meshTruthKeys:effectiveMeshTruthKeys,
       predictedKeys,
       meshTruthAgreement:effectiveMeshTruthKeys === null
@@ -1920,6 +2008,449 @@ export function measureAuthoredPackingRingCageBridgeContacts({
       meshTruthAuthority:'unavailable-for-deformed-or-hybrid-candidate',
     },
   });
+}
+
+const AUTHORED_EXACT_RESIDUAL_ROUTE =
+  'exact-authored-tetrahedral-family-residuals-v0';
+const AUTHORED_EXACT_ACTIVE_ROW_STEP_ROUTE =
+  'authored-exact-active-row-trust-region-step-v0';
+const AUTHORED_EXACT_ACTIVE_ROW_TRAJECTORY_ROUTE =
+  'authored-exact-active-row-trust-region-trajectory-v0';
+const AUTHORED_EXACT_TRANSLATION_BASIS =
+  'first-sine-zero-at-fixed-attachments';
+
+function validateAuthoredPackingExactResidualProblem(problem) {
+  if (problem?.schema !== AUTHORED_PACKING_EXACT_RESIDUAL_PROBLEM_SCHEMA) {
+    throw new Error(
+      `authored exact residual problem schema mismatch: ${problem?.schema || 'missing'}`,
+    );
+  }
+  const { identity, ...core } = problem;
+  if (identity?.sha256 !== hashAuthoredPackingCanonicalJson(core)) {
+    throw new Error('authored exact residual problem identity mismatch');
+  }
+  validateCanonicalAuthoredPackingAuthorityProfile({
+    manifest:problem.manifest,
+    authorityProfile:problem.authorityProfile,
+  });
+  requireRealizationOriginBridge(problem.bridge);
+  requireRealizationOriginExpectedParent(problem.expectedParent, problem.bridge);
+  if (
+    problem.route?.requested !== AUTHORED_EXACT_RESIDUAL_ROUTE ||
+    problem.route?.effective !== AUTHORED_EXACT_RESIDUAL_ROUTE ||
+    problem.route?.fallbackUsed !== false
+  ) {
+    throw new Error('authored exact residual problem route is not exact or used fallback');
+  }
+  if (
+    problem.initialCarrier?.identity?.sha256 !== problem.initialCarrierSha256 ||
+    problem.initialCarrierSha256 !== problem.expectedParent.initializedCarrierSha256
+  ) {
+    throw new Error('authored exact residual initial carrier lineage mismatch');
+  }
+  requireAuthoredPackingContactCarrierLineage({
+    authorityProfile:problem.authorityProfile,
+    solverCarrier:problem.initialCarrier,
+    lineageBridge:problem.bridge,
+    expectedParent:problem.expectedParent,
+    lineageRoot:'initialized-descendant',
+  });
+  if (
+    problem.variables.length !== problem.initialCarrier.orderedConstructionIds.length * 3 ||
+    problem.variables.some((variable, index) =>
+      variable.index !== index ||
+      variable.basis !== AUTHORED_EXACT_TRANSLATION_BASIS ||
+      variable.axis !== index % 3 ||
+      variable.constructionId !==
+        problem.initialCarrier.orderedConstructionIds[Math.floor(index / 3)]
+    )
+  ) {
+    throw new Error('authored exact residual variable layout mismatch');
+  }
+}
+
+function authoredCarrierFixedNodeDrift(initialCarrier, candidateCarrier) {
+  let maximum = 0;
+  for (const [cageIndex, cage] of initialCarrier.cages.entries()) {
+    const candidate = candidateCarrier.cages[cageIndex];
+    const candidateById = new Map(candidate.manifest.nodes.map(node => [node.id, node]));
+    for (const mask of cage.manifest.constraints.boundaryMasks.filter(row => row.fixed)) {
+      const source = cage.manifest.nodes.find(node => node.id === mask.nodeId);
+      const observed = candidateById.get(mask.nodeId);
+      if (!source || !observed) {
+        throw new Error(`authored exact residual fixed node ${mask.nodeId} is missing`);
+      }
+      maximum = Math.max(maximum, length(subtract(
+        observed.currentPosition,
+        source.currentPosition,
+      )));
+    }
+  }
+  return maximum;
+}
+
+function instantiateAuthoredPackingExactResidualCarrier(problem, vector) {
+  if (
+    !Array.isArray(vector) || vector.length !== problem.variables.length ||
+    vector.some(value => !Number.isFinite(value))
+  ) {
+    throw new Error(
+      `authored exact residual vector must contain ${problem.variables.length} finite values`,
+    );
+  }
+  const carrier = structuredClone(problem.initialCarrier);
+  for (const [cageIndex, cage] of carrier.cages.entries()) {
+    const fixedNodeIds = new Set(cage.manifest.constraints.boundaryMasks
+      .filter(row => row.fixed)
+      .map(row => row.nodeId));
+    const sectionIndices = [...new Set(cage.manifest.nodes.map(node => {
+      const match = /:section:(\d{4}):/.exec(node.id);
+      if (!match) throw new Error(`authored exact residual node lacks section: ${node.id}`);
+      return Number(match[1]);
+    }))].sort((left, right) => left - right);
+    const finalSection = sectionIndices.at(-1);
+    if (!(finalSection > 0) || sectionIndices[0] !== 0) {
+      throw new Error(`authored exact residual cage ${cage.constructionId} has invalid sections`);
+    }
+    const coefficients = vector.slice(cageIndex * 3, cageIndex * 3 + 3);
+    for (const node of cage.manifest.nodes) {
+      if (fixedNodeIds.has(node.id)) continue;
+      const sectionIndex = Number(/:section:(\d{4}):/.exec(node.id)[1]);
+      const weight = Math.sin(Math.PI * sectionIndex / finalSection);
+      node.currentPosition = node.currentPosition.map(
+        (value, axis) => value + coefficients[axis] * weight,
+      );
+    }
+  }
+  delete carrier.identity;
+  carrier.identity = {
+    domain:'canonical-json-self-excluding-top-level-identity',
+    sha256:hashMuscleCompartmentRingCageCanonicalJson(carrier),
+  };
+  return carrier;
+}
+
+export function createAuthoredPackingExactResidualProblem({
+  manifest,
+  authorityProfile,
+  bridge,
+  expectedParent,
+  initialCarrier = bridge?.solverCarrier,
+} = {}) {
+  validateCanonicalAuthoredPackingAuthorityProfile({ manifest, authorityProfile });
+  requireRealizationOriginBridge(bridge);
+  requireRealizationOriginExpectedParent(expectedParent, bridge);
+  requireAuthoredPackingContactCarrierLineage({
+    authorityProfile,
+    solverCarrier:initialCarrier,
+    lineageBridge:bridge,
+    expectedParent,
+    lineageRoot:'initialized-descendant',
+  });
+  const initialContactState = measureMuscleCompartmentRingCageContactState(
+    initialCarrier,
+    bridge.source,
+  );
+  const inheritedMaximumVolumeDebt = Math.max(
+    ...initialContactState.cages.map(row => row.relativeVolumeError),
+  );
+  const variables = initialCarrier.orderedConstructionIds.flatMap(
+    (constructionId, memberIndex) => [0, 1, 2].map(axis => ({
+      index:memberIndex * 3 + axis,
+      constructionId,
+      axis,
+      basis:AUTHORED_EXACT_TRANSLATION_BASIS,
+    })),
+  );
+  const core = {
+    schema:AUTHORED_PACKING_EXACT_RESIDUAL_PROBLEM_SCHEMA,
+    route:{
+      requested:AUTHORED_EXACT_RESIDUAL_ROUTE,
+      effective:AUTHORED_EXACT_RESIDUAL_ROUTE,
+      fallbackUsed:false,
+    },
+    stateEvaluatorRoute:{
+      requested:AUTHORED_EXACT_RESIDUAL_ROUTE,
+      effective:AUTHORED_EXACT_RESIDUAL_ROUTE,
+      fallbackUsed:false,
+    },
+    manifest:structuredClone(manifest),
+    authorityProfile:structuredClone(authorityProfile),
+    bridge:structuredClone(bridge),
+    expectedParent:structuredClone(expectedParent),
+    initialCarrier:structuredClone(initialCarrier),
+    initialCarrierSha256:initialCarrier.identity.sha256,
+    sourceInput:structuredClone(bridge.source.input),
+    variables,
+    carrier:{
+      translationBasis:AUTHORED_EXACT_TRANSLATION_BASIS,
+      degreesOfFreedomPerMember:3,
+      fixedAttachments:true,
+      wholeSectionTranslation:true,
+    },
+    constraintFamilyMetricKeys:[
+      'pairwisePenetration',
+      'skeletalPenetration',
+      'compartmentEscape',
+      'endpointDrift',
+      'maximumRelativeVolumeError',
+    ],
+    admission:{
+      inheritedMaximumVolumeDebt,
+      maximumRelativeVolumeError:inheritedMaximumVolumeDebt + 1e-6,
+      exactContactTolerance:AUTHORED_PACKING_CONTACT_TOLERANCE,
+    },
+  };
+  return { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
+}
+
+export function evaluateAuthoredPackingExactResidualState({ problem, vector } = {}) {
+  validateAuthoredPackingExactResidualProblem(problem);
+  const carrier = instantiateAuthoredPackingExactResidualCarrier(problem, vector);
+  const exactContact = measureAuthoredPackingRingCageBridgeContacts({
+    manifest:problem.manifest,
+    authorityProfile:problem.authorityProfile,
+    solverCarrier:carrier,
+    lineageBridge:problem.bridge,
+    expectedParent:problem.expectedParent,
+    lineageRoot:'initialized-descendant',
+  });
+  const contactState = measureMuscleCompartmentRingCageContactState(
+    carrier,
+    problem.bridge.source,
+  );
+  const rawMaximumRelativeVolumeError = Math.max(
+    ...contactState.cages.map(row => row.relativeVolumeError),
+  );
+  const endpointDrift = authoredCarrierFixedNodeDrift(problem.initialCarrier, carrier);
+  const maximumRelativeVolumeError = Math.max(
+    0,
+    rawMaximumRelativeVolumeError - problem.admission.maximumRelativeVolumeError,
+  );
+  const metrics = {
+    pairwisePenetration:exactContact.summary.admittedMaximumPairwisePenetration,
+    skeletalPenetration:exactContact.summary.admittedMaximumSkeletalPenetration,
+    rawPairwisePenetration:exactContact.summary.maximumPairwisePenetration,
+    rawSkeletalPenetration:exactContact.summary.maximumSkeletalPenetration,
+    compartmentEscape:contactState.compartment.maximumEscape,
+    endpointDrift,
+    maximumRelativeVolumeError,
+    rawMaximumRelativeVolumeError,
+  };
+  const rows = [
+    ...exactContact.pairRows.map(row => ({
+      key:`pair:${row.key}`,
+      kind:'pairwise-clearance',
+      members:[...row.members],
+      signedGap:row.signedGap,
+      maximumPenetration:row.maximumPenetration,
+    })),
+    ...exactContact.boneRows.map(row => ({
+      key:`bone:${row.key}`,
+      kind:'skeletal-clearance',
+      memberId:row.memberId,
+      signedGap:row.signedGap,
+      maximumPenetration:row.maximumPenetration,
+    })),
+  ];
+  const maximumPhysicalResidual = Math.max(
+    metrics.pairwisePenetration,
+    metrics.skeletalPenetration,
+    metrics.compartmentEscape,
+    metrics.endpointDrift,
+    metrics.maximumRelativeVolumeError,
+  );
+  return {
+    schema:'kaminos.authored-packing-exact-residual-state.v0',
+    route:structuredClone(problem.route),
+    source:{ problemSha256:problem.identity.sha256 },
+    vector:[...vector],
+    carrier,
+    exactContact,
+    contactState,
+    rows,
+    metrics,
+    maximumPhysicalResidual,
+    deformationEnergy:vector.reduce((sum, value) => sum + 0.5 * value ** 2, 0),
+    muscles:[],
+  };
+}
+
+export function createAuthoredPackingExactResidualStepConfig() {
+  return {
+    ...createNBodyActiveRowTrustRegionConfig({
+      activeSetPolicy:'family-maximum-relative-band',
+      guardRowPolicy:'candidate-crossing-clear-rows',
+      relativeActivationBand:0.01,
+    }),
+    finiteDifferenceStep:0.001,
+    translationBounds:[-50, 50],
+    trustRegionRadii:[
+      2,
+      1,
+      0.5,
+      0.25,
+      0.125,
+      0.0625,
+      0.03125,
+      0.015625,
+      0.0078125,
+      0.00390625,
+      0.001953125,
+      0.0009765625,
+      0.00048828125,
+      0.000244140625,
+      0.0001220703125,
+      0.00006103515625,
+      0.000030517578125,
+      0.0000152587890625,
+      0.00000762939453125,
+      0.000003814697265625,
+      0.0000019073486328125,
+      0.00000095367431640625,
+      0.000000476837158203125,
+      0.0000002384185791015625,
+      0.00000011920928955078125,
+      0.000000059604644775390625,
+      0.0000000298023223876953125,
+      0.00000001490116119384765625,
+      0.000000007450580596923828125,
+      0.0000000037252902984619140625,
+      0.000000001862645149230957,
+    ],
+  };
+}
+
+export function solveAuthoredPackingExactResidualStep({
+  problem,
+  startVector,
+  requestedConfig = createAuthoredPackingExactResidualStepConfig(),
+} = {}) {
+  validateAuthoredPackingExactResidualProblem(problem);
+  const startState = evaluateAuthoredPackingExactResidualState({ problem, vector:startVector });
+  const search = solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector,
+    requestedConfig,
+    stateEvaluator:evaluateAuthoredPackingExactResidualState,
+  });
+  const accepted = search.status === 'active-row-trust-region-step-accepted';
+  const selectedState = evaluateAuthoredPackingExactResidualState({
+    problem,
+    vector:accepted ? search.selected.vector : startVector,
+  });
+  const core = {
+    schema:AUTHORED_PACKING_EXACT_RESIDUAL_STEP_SCHEMA,
+    status:accepted
+      ? 'authored-exact-active-row-step-accepted'
+      : 'authored-exact-active-row-local-floor',
+    route:{
+      requested:AUTHORED_EXACT_ACTIVE_ROW_STEP_ROUTE,
+      effective:AUTHORED_EXACT_ACTIVE_ROW_STEP_ROUTE,
+      fallbackUsed:false,
+    },
+    source:{
+      problemSha256:problem.identity.sha256,
+      initialCarrierSha256:problem.initialCarrierSha256,
+      startCarrierSha256:startState.carrier.identity.sha256,
+      sourceInputSha256:problem.sourceInput.effective.sha256,
+    },
+    control:'legacy-vertex-inside-relaxer-not-consumed',
+    exact:{
+      start:structuredClone(startState.exactContact),
+      selected:structuredClone(selectedState.exactContact),
+    },
+    selected:{
+      vector:[...selectedState.vector],
+      carrier:structuredClone(selectedState.carrier),
+      metrics:structuredClone(selectedState.metrics),
+    },
+    search,
+    certificate:structuredClone(search.certificate),
+    claimCeiling:
+      'one-authored-first-sine-ring-translation-step-or-local-floor-not-global-convergence-or-production-packing',
+  };
+  return { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
+}
+
+export function createAuthoredPackingExactResidualTrajectoryConfig({
+  iterationBudget = 8,
+  convergenceTolerance = 1e-7,
+  step = createAuthoredPackingExactResidualStepConfig(),
+} = {}) {
+  return createNBodyActiveRowTrustRegionTrajectoryConfig({
+    iterationBudget,
+    convergenceTolerance,
+    step,
+  });
+}
+
+export function solveAuthoredPackingExactResidualTrajectory({
+  problem,
+  startVector,
+  requestedConfig = createAuthoredPackingExactResidualTrajectoryConfig(),
+} = {}) {
+  validateAuthoredPackingExactResidualProblem(problem);
+  const startState = evaluateAuthoredPackingExactResidualState({ problem, vector:startVector });
+  const search = solveNBodyActiveRowTrustRegionTrajectory({
+    problem,
+    startVector,
+    requestedConfig,
+    stateEvaluator:evaluateAuthoredPackingExactResidualState,
+  });
+  const selectedState = evaluateAuthoredPackingExactResidualState({
+    problem,
+    vector:search.selected.vector,
+  });
+  const status = search.status === 'active-row-trust-region-trajectory-feasible'
+    ? 'authored-exact-active-row-trajectory-feasible'
+    : search.status === 'active-row-trust-region-trajectory-budget-exhausted'
+      ? 'authored-exact-active-row-trajectory-budget-exhausted'
+      : 'authored-exact-active-row-trajectory-local-floor';
+  const core = {
+    schema:AUTHORED_PACKING_EXACT_RESIDUAL_TRAJECTORY_SCHEMA,
+    status,
+    route:{
+      requested:AUTHORED_EXACT_ACTIVE_ROW_TRAJECTORY_ROUTE,
+      effective:AUTHORED_EXACT_ACTIVE_ROW_TRAJECTORY_ROUTE,
+      fallbackUsed:false,
+    },
+    source:{
+      problemSha256:problem.identity.sha256,
+      initialCarrierSha256:problem.initialCarrierSha256,
+      startCarrierSha256:startState.carrier.identity.sha256,
+      sourceInputSha256:problem.sourceInput.effective.sha256,
+    },
+    control:'legacy-vertex-inside-relaxer-not-consumed',
+    exact:{
+      start:structuredClone(startState.exactContact),
+      selected:structuredClone(selectedState.exactContact),
+    },
+    start:{
+      vector:[...startState.vector],
+      carrier:structuredClone(startState.carrier),
+      metrics:structuredClone(startState.metrics),
+    },
+    selected:{
+      vector:[...selectedState.vector],
+      carrier:structuredClone(selectedState.carrier),
+      metrics:structuredClone(selectedState.metrics),
+    },
+    work:structuredClone(search.work),
+    certificate:structuredClone(search.work.rows.at(-1)?.certificate || null),
+    mechanism:{
+      activeSetPolicy:search.mechanism.activeSetPolicy,
+      directionBasis:search.mechanism.directionBasis,
+      nonlinearAcceptance:search.mechanism.nonlinearAcceptance,
+      stateEvaluatorRoute:structuredClone(problem.stateEvaluatorRoute),
+      exactTetrahedralContactRowsConsumed:true,
+      legacyVertexInsideRelaxerConsumed:false,
+      fixedEndpointMotionBasis:AUTHORED_EXACT_TRANSLATION_BASIS,
+    },
+    claimCeiling:
+      'one-authored-first-sine-ring-translation-trajectory-or-local-floor-not-global-convergence-or-production-packing',
+  };
+  return { ...core, identity:{ sha256:hashAuthoredPackingCanonicalJson(core) } };
 }
 
 function requireAuthoredPackingTrajectoryMaximumIterations(maximumIterations) {

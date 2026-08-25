@@ -1279,6 +1279,531 @@ test('one authored N-body step reduces exact pairwise penetration without increa
   assert.equal(assay.config.maximumRelativeVolumeError, initialMaximumDebt + 1e-6);
 });
 
+test('exact trajectory witness keeps the authored source distinct from a continuation start', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = authoredPacking.createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge,
+  });
+  const problem = authoredPacking.createAuthoredPackingExactResidualProblem({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+  });
+  const metrics = {
+    pairwisePenetration:1,
+    skeletalPenetration:1,
+    compartmentEscape:0,
+    endpointDrift:0,
+    maximumRelativeVolumeError:0,
+    rawMaximumRelativeVolumeError:0.2,
+  };
+  const exact = {
+    variant:{ role:'mild-interpenetration' },
+    pairRows:[],
+    boneRows:[],
+    summary:{ maximumPairwisePenetration:1, maximumSkeletalPenetration:1 },
+  };
+  const trajectory = {
+    schema:'kaminos.authored-packing-exact-residual-trajectory.v0',
+    status:'authored-exact-active-row-trajectory-local-floor',
+    route:{
+      requested:'authored-exact-active-row-trust-region-trajectory-v0',
+      effective:'authored-exact-active-row-trust-region-trajectory-v0',
+      fallbackUsed:false,
+    },
+    source:{
+      problemSha256:problem.identity.sha256,
+      initialCarrierSha256:problem.initialCarrier.identity.sha256,
+      startCarrierSha256:problem.initialCarrier.identity.sha256,
+      sourceInputSha256:bridge.source.input.effective.sha256,
+    },
+    control:'legacy-vertex-inside-relaxer-not-consumed',
+    exact:{ start:exact, selected:exact },
+    start:{ vector:Array(problem.variables.length).fill(0), carrier:problem.initialCarrier, metrics },
+    selected:{
+      vector:Array(problem.variables.length).fill(0),
+      carrier:problem.initialCarrier,
+      metrics,
+    },
+    work:{ rows:[] },
+  };
+  const visualRoute = {
+    requested:'authored-packing-exact-residual-trajectory-orbitable-v0',
+    effective:'authored-packing-exact-residual-trajectory-orbitable-v0',
+    fallbackUsed:false,
+  };
+  const bundleIdentity = {
+    sha256:'a'.repeat(64),
+    familySha256:problem.identity.sha256,
+    sourceCarrierSha256:problem.initialCarrier.identity.sha256,
+    authoredSourceCarrierSha256:bridge.observedCarrier.identity.sha256,
+    armIdentities:[{
+      semanticId:'exact-active-row-trajectory',
+      initialCarrierSha256:problem.initialCarrier.identity.sha256,
+      packedCarrierSha256:problem.initialCarrier.identity.sha256,
+    }],
+    route:visualRoute.effective,
+  };
+  const html = contactWitness.renderAuthoredPackingExactResidualTrajectoryHtml({
+    problem,
+    trajectory,
+    source:bridge.source,
+    route:visualRoute,
+    bundleIdentity,
+    presentation:{
+      authoredBone:{ positions:mild.bone.mesh.vertices, faces:mild.bone.mesh.polygons },
+    },
+  });
+  assert.match(
+    html,
+    new RegExp(`"sourceGhostCarrierSha256":"${bridge.observedCarrier.identity.sha256}"`),
+    'the authored-source diagnostic must bind the actual observed carrier, not relabel the continuation start as authored source',
+  );
+  assert.match(
+    html,
+    /dataset\.witnessAuthoredSourceCarrier=payload\.sourceGhostCarrierSha256/,
+    'capture evidence must expose the effective authored-source carrier identity',
+  );
+});
+
+test('authored exact-residual problem exposes fixed-endpoint ring motion to the global active-row search law', async () => {
+  assert.equal(
+    typeof authoredPacking.createAuthoredPackingExactResidualProblem,
+    'function',
+    'the authored carrier needs an explicit exact-residual problem instead of impersonating the tapered synthetic carrier',
+  );
+  assert.equal(typeof authoredPacking.evaluateAuthoredPackingExactResidualState, 'function');
+  assert.equal(typeof authoredPacking.solveAuthoredPackingExactResidualStep, 'function');
+  assert.equal(typeof authoredPacking.createAuthoredPackingExactResidualTrajectoryConfig, 'function');
+  assert.equal(typeof authoredPacking.solveAuthoredPackingExactResidualTrajectory, 'function');
+  const exactTrustRegionRadii =
+    authoredPacking.createAuthoredPackingExactResidualStepConfig().trustRegionRadii;
+  assert.ok(
+    exactTrustRegionRadii.includes(0.000244140625),
+    'the exact authored schedule must include the measured lawful radius below the former adapter floor',
+  );
+  assert.equal(
+    exactTrustRegionRadii.at(-1),
+    0.000000001862645149230957,
+    'the exact adapter must preserve the mature search law through its full supported scale rather than imposing a shallower local cap',
+  );
+
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = authoredPacking.createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge,
+  });
+  const problem = authoredPacking.createAuthoredPackingExactResidualProblem({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+  });
+
+  assert.equal(problem.schema, 'kaminos.authored-packing-exact-residual-problem.v0');
+  assert.equal(problem.route.requested, 'exact-authored-tetrahedral-family-residuals-v0');
+  assert.equal(problem.route.effective, problem.route.requested);
+  assert.equal(problem.route.fallbackUsed, false);
+  assert.equal(problem.variables.length, manifest.memberOrder.length * 3);
+  assert.ok(problem.variables.every(row => row.basis === 'first-sine-zero-at-fixed-attachments'));
+
+  const zero = Array(problem.variables.length).fill(0);
+  const state = authoredPacking.evaluateAuthoredPackingExactResidualState({ problem, vector:zero });
+  assert.equal(state.route.effective, problem.route.effective);
+  assert.equal(state.route.fallbackUsed, false);
+  assert.equal(state.rows.filter(row => row.kind === 'pairwise-clearance').length, 15);
+  assert.equal(state.rows.filter(row => row.kind === 'skeletal-clearance').length, 6);
+  assert.ok(state.rows.every(row => Number.isFinite(row.signedGap)));
+  assert.equal(
+    state.metrics.pairwisePenetration,
+    state.exactContact.summary.admittedMaximumPairwisePenetration,
+  );
+  assert.equal(
+    state.metrics.skeletalPenetration,
+    state.exactContact.summary.admittedMaximumSkeletalPenetration,
+  );
+  assert.equal(
+    state.metrics.rawPairwisePenetration,
+    state.exactContact.summary.maximumPairwisePenetration,
+  );
+  assert.equal(
+    state.metrics.rawSkeletalPenetration,
+    state.exactContact.summary.maximumSkeletalPenetration,
+  );
+  assert.equal(state.metrics.endpointDrift, 0);
+  assert.equal(state.metrics.maximumRelativeVolumeError, 0);
+
+  const displaced = [...zero];
+  displaced[0] = 0.01;
+  const moved = authoredPacking.evaluateAuthoredPackingExactResidualState({
+    problem,
+    vector:displaced,
+  });
+  assert.notEqual(moved.carrier.identity.sha256, state.carrier.identity.sha256);
+  assert.equal(moved.metrics.endpointDrift, 0);
+  assert.equal(
+    bridge.solverCarrier.identity.sha256,
+    problem.initialCarrierSha256,
+    'evaluation must not mutate the authenticated initial carrier',
+  );
+
+  const step = authoredPacking.solveAuthoredPackingExactResidualStep({
+    problem,
+    startVector:zero,
+    requestedConfig: {
+      ...authoredPacking.createAuthoredPackingExactResidualStepConfig(),
+      trustRegionRadii:[0.01, 0.005, 0.0025],
+    },
+  });
+  assert.equal(step.route.requested, 'authored-exact-active-row-trust-region-step-v0');
+  assert.equal(step.route.effective, step.route.requested);
+  assert.equal(step.route.fallbackUsed, false);
+  assert.equal(step.control, 'legacy-vertex-inside-relaxer-not-consumed');
+  assert.ok([
+    'authored-exact-active-row-step-accepted',
+    'authored-exact-active-row-local-floor',
+  ].includes(step.status));
+  assert.ok(step.exact.start.summary.maximumPairwisePenetration > 0);
+  if (step.status === 'authored-exact-active-row-step-accepted') {
+    assert.ok(
+      step.exact.selected.summary.maximumPairwisePenetration <
+        step.exact.start.summary.maximumPairwisePenetration,
+    );
+  } else {
+    assert.ok(step.certificate, 'an unaccepted exact step must return the local obstruction');
+  }
+
+  const continuationStart = zero.map((value, index) => index === 0 ? 0.01 : value);
+  const trajectory = authoredPacking.solveAuthoredPackingExactResidualTrajectory({
+    problem,
+    startVector:continuationStart,
+    requestedConfig:authoredPacking.createAuthoredPackingExactResidualTrajectoryConfig({
+      iterationBudget:2,
+      step:{
+        ...authoredPacking.createAuthoredPackingExactResidualStepConfig(),
+        trustRegionRadii:[0.01, 0.005, 0.0025],
+      },
+    }),
+  });
+  assert.equal(
+    trajectory.route.requested,
+    'authored-exact-active-row-trust-region-trajectory-v0',
+  );
+  assert.equal(trajectory.route.effective, trajectory.route.requested);
+  assert.equal(trajectory.route.fallbackUsed, false);
+  assert.equal(trajectory.control, 'legacy-vertex-inside-relaxer-not-consumed');
+  assert.ok(trajectory.work.attempts >= 1);
+  assert.ok(trajectory.work.attempts <= 2);
+  assert.ok(trajectory.work.rows.every(row => row.stepResultSha256));
+  assert.equal(
+    trajectory.start.carrier.identity.sha256,
+    authoredPacking.evaluateAuthoredPackingExactResidualState({
+      problem,
+      vector:trajectory.start.vector,
+    }).carrier.identity.sha256,
+    'a trajectory witness must bind exact start geometry even when the run is a nonzero continuation',
+  );
+  assert.equal(
+    trajectory.source.startCarrierSha256,
+    trajectory.start.carrier.identity.sha256,
+    'the route receipt must name the effective start carrier separately from the root problem carrier',
+  );
+  assert.notEqual(
+    trajectory.source.startCarrierSha256,
+    problem.initialCarrier.identity.sha256,
+    'the continuation witness must not silently substitute the root carrier for a nonzero start vector',
+  );
+  assert.equal(trajectory.selected.metrics.endpointDrift, 0);
+  assert.equal(trajectory.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.ok(
+    trajectory.exact.selected.summary.maximumPairwisePenetration <=
+      trajectory.exact.start.summary.maximumPairwisePenetration,
+  );
+  assert.equal(
+    trajectory.mechanism.stateEvaluatorRoute.effective,
+    'exact-authored-tetrahedral-family-residuals-v0',
+  );
+
+  assert.equal(
+    typeof contactWitness.renderAuthoredPackingExactResidualTrajectoryHtml,
+    'function',
+    'the exact global search result needs its own causal witness instead of inheriting the legacy relaxer viewer labels',
+  );
+  const visualRoute = {
+    requested:'authored-packing-exact-residual-trajectory-orbitable-v0',
+    effective:'authored-packing-exact-residual-trajectory-orbitable-v0',
+    fallbackUsed:false,
+  };
+  const bundleIdentity = {
+    schema:'kaminos.authored-packing-exact-residual-trajectory-visual-bundle.v0',
+    sha256:'d'.repeat(64),
+    generation:'e'.repeat(64),
+    familySha256:problem.identity.sha256,
+    sourceCarrierSha256:trajectory.start.carrier.identity.sha256,
+    authoredSourceCarrierSha256:bridge.observedCarrier.identity.sha256,
+    armIdentities:[{
+      semanticId:'exact-active-row-trajectory',
+      initialCarrierSha256:trajectory.start.carrier.identity.sha256,
+      packedCarrierSha256:trajectory.selected.carrier.identity.sha256,
+      residualLedgerSha256:'f'.repeat(64),
+    }],
+    route:visualRoute.effective,
+  };
+  const html = contactWitness.renderAuthoredPackingExactResidualTrajectoryHtml({
+    problem,
+    trajectory,
+    source:bridge.source,
+    route:visualRoute,
+    bundleIdentity,
+    presentation:{
+      authoredBone:{
+        positions:mild.bone.mesh.vertices,
+        faces:mild.bone.mesh.polygons,
+      },
+    },
+  });
+  assert.match(html, /Exact authored global trajectory/i);
+  assert.match(html, /exact tetrahedral residual families/i);
+  assert.match(html, /GLOBAL SEARCH START/i);
+  assert.match(html, /AFTER <span id="solver-step-count">N<\/span> ACCEPTED GLOBAL STEPS/i);
+  assert.match(html, /legacy vertex-inside relaxer not consumed/i);
+  assert.doesNotMatch(html, /starting-state strategies/i);
+  assert.doesNotMatch(html, /same bounded legacy contact relaxer/i);
+  assert.match(html, /data-diagnostic="contacts"/);
+  assert.match(html, /new ConvexGeometry\(points\)/);
+
+  const floorTrajectory = structuredClone(trajectory);
+  floorTrajectory.status = 'authored-exact-active-row-trajectory-local-floor';
+  floorTrajectory.work.rows.push({
+    ...structuredClone(floorTrajectory.work.rows.at(-1)),
+    iteration:floorTrajectory.work.rows.length + 1,
+    accepted:false,
+  });
+  floorTrajectory.work.attempts = floorTrajectory.work.rows.length;
+  const acceptedStepCount = trajectory.work.rows.filter(row => row.accepted).length;
+  const floorHtml = contactWitness.renderAuthoredPackingExactResidualTrajectoryHtml({
+    problem,
+    trajectory:floorTrajectory,
+    source:bridge.source,
+    route:visualRoute,
+    bundleIdentity,
+    presentation:{
+      authoredBone:{
+        positions:mild.bone.mesh.vertices,
+        faces:mild.bone.mesh.polygons,
+      },
+    },
+  });
+  assert.match(
+    floorHtml,
+    new RegExp(`"iterations":${acceptedStepCount}`),
+    'an unaccepted terminal attempt must not be presented as an accepted solver step',
+  );
+});
+
+test('authored exact residual admission does not resurrect a sub-tolerance non-contact as skeletal family debt', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = authoredPacking.createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge,
+  });
+  const problem = authoredPacking.createAuthoredPackingExactResidualProblem({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+  });
+  const terminalBoundaryCandidate = [
+    1.89158220463222,
+    0.069825356250897,
+    0.805485883285688,
+    0.566899233585648,
+    -0.024098961179734,
+    -1.27729502819462,
+    0.614066665168394,
+    0.365002297312511,
+    2.964514510133601,
+    -2.04442776027165,
+    -0.06553002350901,
+    -0.687032408190818,
+    -0.499200510419071,
+    0.05310367779342,
+    0.497974748157125,
+    -0.008826549297801,
+    -0.016885957574312,
+    -0.201629129735106,
+  ];
+  const state = authoredPacking.evaluateAuthoredPackingExactResidualState({
+    problem,
+    vector:terminalBoundaryCandidate,
+  });
+  const rawBoneRow = state.exactContact.boneRows.find(
+    row => row.key === 'central-bone|muscle-2',
+  );
+  const solverBoneRow = state.rows.find(
+    row => row.key === 'bone:central-bone|muscle-2',
+  );
+
+  assert.equal(
+    problem.admission.exactContactTolerance,
+    state.exactContact.method.contactTolerance,
+    'the problem admission and exact-contact classifier must consume one tolerance law',
+  );
+  assert.equal(rawBoneRow.intersects, false);
+  assert.ok(rawBoneRow.signedGap >= 0);
+  assert.ok(rawBoneRow.maximumPenetration > 0);
+  assert.ok(
+    rawBoneRow.maximumPenetration < problem.admission.exactContactTolerance,
+    'the raw SAT overlap must remain below the authority-bearing exact-contact tolerance',
+  );
+  assert.ok(solverBoneRow.signedGap >= 0);
+  assert.equal(
+    state.exactContact.summary.admittedMaximumSkeletalPenetration,
+    0,
+    'the exact summary must distinguish admitted residual depth from raw diagnostic SAT depth',
+  );
+  assert.equal(state.metrics.rawSkeletalPenetration, rawBoneRow.maximumPenetration);
+  assert.equal(
+    state.metrics.skeletalPenetration,
+    0,
+    'a row classified as a non-contact must not reappear as family debt through a stricter unrelated threshold',
+  );
+});
+
+test('authored exact search enriches its working set when a useful candidate crosses a clear bone row', async () => {
+  const manifest = await fixture();
+  const clean = variant(manifest, 'clean-reference');
+  const mild = variant(manifest, 'mild-interpenetration');
+  const authorityProfile = authoredPacking.createAuthoredPackingAuthorityProfile({
+    manifest,
+    observedVariantId:mild.id,
+    intentVariantId:clean.id,
+    policy:'restoration-to-reference',
+  });
+  const bridge = authoredPacking.createAuthoredPackingRingCageBridge({
+    manifest,
+    authorityProfile,
+  });
+  const expectedParent = authoredPacking.createAuthoredPackingRealizationOriginParentEnvelope({
+    bridge,
+  });
+  const problem = authoredPacking.createAuthoredPackingExactResidualProblem({
+    manifest,
+    authorityProfile,
+    bridge,
+    expectedParent,
+    initialCarrier:bridge.solverCarrier,
+  });
+  const startVector = [
+    1.89158220463222,
+    0.069825356250897,
+    0.805485883285688,
+    0.566899233585648,
+    -0.024098961179734,
+    -1.27729502819462,
+    0.614066665168394,
+    0.365002297312511,
+    2.964514510133601,
+    -2.04442776027165,
+    -0.06553002350901,
+    -0.687032408190818,
+    -0.499200510419071,
+    0.05310367779342,
+    0.497974748157125,
+    -0.008826549297801,
+    -0.016885957574312,
+    -0.201629129735106,
+  ];
+  const start = authoredPacking.evaluateAuthoredPackingExactResidualState({
+    problem,
+    vector:startVector,
+  });
+  const blockingBone = start.rows.find(
+    row => row.key === 'bone:central-bone|muscle-2',
+  );
+  assert.ok(blockingBone.signedGap > 0, 'the blocking bone row must start clear');
+
+  const requestedConfig = authoredPacking.createAuthoredPackingExactResidualStepConfig();
+  assert.equal(
+    requestedConfig.guardRowPolicy,
+    'candidate-crossing-clear-rows',
+    'the exact authored route must opt into evidence-driven guard-row enrichment',
+  );
+  const trajectory = authoredPacking.solveAuthoredPackingExactResidualTrajectory({
+    problem,
+    startVector,
+    requestedConfig:authoredPacking.createAuthoredPackingExactResidualTrajectoryConfig({
+      iterationBudget:1,
+      step:requestedConfig,
+    }),
+  });
+
+  assert.equal(trajectory.work.rows.length, 1);
+  const row = trajectory.work.rows[0];
+  assert.equal(row.accepted, true);
+  assert.ok(row.work, 'the exact trajectory row must preserve step-local work custody');
+  assert.ok(row.work.guardRowExchanges.length > 0);
+  assert.equal(
+    trajectory.work.evaluationCount,
+    row.work.evaluationCount + trajectory.work.selectedStateEvaluationCount,
+    'the exact trajectory must preserve reconcilable step-local and terminal work accounting',
+  );
+  assert.ok(
+    row.work.guardRowExchanges.some(exchange =>
+      exchange.addedConstraintKeys.includes('bone:central-bone|muscle-2')
+    ),
+    'the nonlinear candidate that crosses the clear authored bone must promote that row into direction construction',
+  );
+  assert.ok(
+    row.directionConstruction.activeRows.some(
+      row => row.key === 'bone:central-bone|muscle-2',
+    ),
+  );
+  assert.ok(trajectory.selected.metrics.pairwisePenetration < start.metrics.pairwisePenetration);
+  assert.equal(trajectory.selected.metrics.skeletalPenetration, 0);
+  assert.equal(trajectory.selected.metrics.compartmentEscape, 0);
+  assert.equal(trajectory.selected.metrics.endpointDrift, 0);
+  assert.equal(trajectory.selected.metrics.maximumRelativeVolumeError, 0);
+});
+
 test('ring-cage witness renders six authored bodies and the exact authored bone without a synthetic capsule', async () => {
   const manifest = await fixture();
   const clean = variant(manifest, 'clean-reference');
@@ -1440,19 +1965,26 @@ test('collective trajectory witness compares every admitted arm with symmetric p
   for (const arm of arms) assert.match(html, new RegExp(`data-arm="${arm.semanticId}"`));
   assert.match(html, /data-phase="initial"/);
   assert.match(html, /data-phase="packed"/);
-  assert.match(html, /data-diagnostic="wireframe"/);
+  assert.match(html, /MILD INTERPENETRATION CONDITION/i);
+  assert.match(html, /starting-state strategies · not solver configurations/i);
+  assert.match(html, /STARTING STATE/i);
+  assert.match(html, /AFTER <span id="solver-step-count">N<\/span> SOLVER STEPS/i);
+  assert.match(html, /data-render="solid"/);
+  assert.match(html, /data-render="xray"/);
   assert.match(html, /data-diagnostic="contacts"/);
   assert.match(html, /data-diagnostic="source-ghost"/);
-  assert.match(html, /data-diagnostic="displacement"/);
+  assert.match(html, /data-diagnostic="motion-ghost"/);
+  assert.doesNotMatch(html, /data-diagnostic="wireframe"/);
+  assert.doesNotMatch(html, /data-diagnostic="displacement"/);
   assert.match(
     html,
-    /displacements\[arm\.semanticId\]=new THREE\.Group\(\)/,
-    'each origin family must own its displacement overlay instead of leaking every arm into one diagnostic layer',
+    /motionGhosts\[arm\.semanticId\]=new THREE\.Group\(\)/,
+    'each starting-state strategy must own a whole-surface motion ghost',
   );
   assert.match(
     html,
-    /group\.visible=diagnostics\.displacement&&armId===currentArm/,
-    'the displacement diagnostic must remain local to the selected origin family',
+    /group\.visible=diagnostics\.motionGhost&&armId===currentArm/,
+    'the motion ghost must remain local to the selected starting-state strategy',
   );
   assert.match(
     html,
@@ -1461,8 +1993,8 @@ test('collective trajectory witness compares every admitted arm with symmetric p
   );
   assert.match(
     html,
-    /diagnosticAvailability=\{wireframe:true,contacts:groups\.contacts\.children\.length>0,sourceGhost:cagesDiffer\(currentCages,payload\.sourceCages\),displacement:displacements\[currentArm\]\.children\.length>0\}/,
-    'each selected arm and phase must declare which diagnostic controls can produce a visible effect',
+    /diagnosticAvailability=\{contacts:groups\.contacts\.children\.length>0,sourceGhost:cagesDiffer\(currentCages,payload\.sourceCages\),motionGhost:motionGhosts\[currentArm\]\.children\.length>0&&currentPhase==='packed'\}/,
+    'each selected strategy and phase must declare which diagnostic controls can produce a visible effect',
   );
   assert.match(
     html,
@@ -1474,24 +2006,22 @@ test('collective trajectory witness compares every admitted arm with symmetric p
   assert.match(html, /witnessDiagnosticsActive=.*\.join\(','\)\|\|'none'/);
   assert.match(
     html,
-    /groups\.contacts\.add\(beam\([^;]+diagnosticScale/s,
-    'exact contact witnesses must use authored-scale geometry that remains visible inside the packed bodies',
+    /groups\.contacts\.add\(intersectionVolume\(row\.witness\.intersectionVertices/,
+    'contact mode must render the exact deepest tetrahedral intersection volume instead of a centroid beam',
   );
   assert.match(
     html,
-    /displacements\[arm\.semanticId\]\.add\(beam\([^;]+diagnosticScale/s,
-    'origin-to-packed motion must use authored-scale depth-independent geometry instead of one-pixel interior lines',
+    /motionGhosts\[arm\.semanticId\]\.add\(cageMesh\(initialCage/,
+    'origin-to-packed motion must use a whole-surface ghost instead of interior centerline points',
   );
+  assert.match(html, /new ConvexGeometry\(points\)/);
+  assert.match(html, /renderMode==='xray'/);
   assert.match(html, /same camera · same materials · overlays independent/i);
   assert.match(html, /selection not performed/i);
   assert.match(html, /source-rejected/);
   assert.match(html, /identity-bound collective capture route mismatch/);
   assert.match(html, /witnessRenderComplete/);
-  assert.doesNotMatch(
-    html,
-    /wireframe[^\n]+packed[^\n]+true/i,
-    'packed arms must not receive an asymmetric default wireframe treatment',
-  );
+  assert.match(html, /0 solver steps · unchanged/i);
 });
 
 test('collective trajectory runner publishes one immutable identity-bound frontier generation', async () => {

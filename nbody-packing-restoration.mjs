@@ -425,6 +425,7 @@ function minimumNormConvexCombinationFrankWolfe(vectors, {
 
 export function createNBodyActiveRowTrustRegionConfig({
   activeSetPolicy = 'all-violated',
+  guardRowPolicy = 'none',
   relativeActivationBand = 0.01,
 } = {}) {
   return {
@@ -437,6 +438,7 @@ export function createNBodyActiveRowTrustRegionConfig({
     directionalDerivativeTolerance:1e-10,
     familyRegressionTolerance:1e-12,
     finiteDifferenceStep:1e-5,
+    guardRowPolicy,
     improvementTolerance:1e-12,
     relativeActivationBand,
     translationBounds:[-0.3, 0.3],
@@ -465,10 +467,14 @@ export function createNBodyActiveRowTrustRegionConfig({
   };
 }
 
-export function solveNBodyActiveRowTrustRegionStep({
+function solveNBodyActiveRowTrustRegionStepInternal({
   problem,
   startVector,
   requestedConfig = createNBodyActiveRowTrustRegionConfig(),
+  stateEvaluator = evaluateNBodyUnifiedKktState,
+  guardConstraintKeys = [],
+  guardRowExchanges = [],
+  priorEvaluationCount = 0,
 } = {}) {
   const expectedKeys = [
     'activeSetPolicy',
@@ -480,6 +486,7 @@ export function solveNBodyActiveRowTrustRegionStep({
     'directionalDerivativeTolerance',
     'familyRegressionTolerance',
     'finiteDifferenceStep',
+    'guardRowPolicy',
     'improvementTolerance',
     'relativeActivationBand',
     'translationBounds',
@@ -497,6 +504,9 @@ export function solveNBodyActiveRowTrustRegionStep({
     requestedConfig.activeSetPolicy,
   )) {
     throw new Error('active-row trust-region activeSetPolicy is unsupported');
+  }
+  if (!['none', 'candidate-crossing-clear-rows'].includes(requestedConfig.guardRowPolicy)) {
+    throw new Error('active-row trust-region guardRowPolicy is unsupported');
   }
   if (!['canonical', 'reverse'].includes(requestedConfig.candidateEnumeration)) {
     throw new Error('active-row trust-region candidateEnumeration must be canonical or reverse');
@@ -542,9 +552,31 @@ export function solveNBodyActiveRowTrustRegionStep({
       (value, index) => index > 0 && value >= requestedConfig.trustRegionRadii[index - 1],
     )
   ) throw new Error('active-row trust-region radii must be strictly decreasing');
+  if (typeof stateEvaluator !== 'function') {
+    throw new Error('active-row trust-region stateEvaluator must be a function');
+  }
   validateStart(problem, startVector, requestedConfig.translationBounds);
 
-  const startState = evaluateNBodyUnifiedKktState({ problem, vector:startVector });
+  const familyMetricKeys = problem?.constraintFamilyMetricKeys ||
+    CONSTRAINT_FAMILY_METRIC_KEYS;
+  if (
+    !Array.isArray(familyMetricKeys) || familyMetricKeys.length === 0 ||
+    familyMetricKeys.some(key => typeof key !== 'string' || key.length === 0)
+  ) {
+    throw new Error('active-row trust-region constraintFamilyMetricKeys are invalid');
+  }
+  const familyMetrics = state => Object.fromEntries(
+    familyMetricKeys.map(key => {
+      const value = state.metrics?.[key];
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`active-row trust-region state metric ${key} must be finite and nonnegative`);
+      }
+      return [key, value];
+    }),
+  );
+  const evaluateState = vector => stateEvaluator({ problem, vector });
+
+  const startState = evaluateState(startVector);
   let evaluationCount = 1;
   const violatedSourceRows = startState.rows.filter(row => row.signedGap <= 0);
   const rowFamilyMaxima = Object.fromEntries(
@@ -558,12 +590,24 @@ export function solveNBodyActiveRowTrustRegionStep({
   const activeCandidates = requestedConfig.activeSetPolicy === 'all-violated'
     ? startState.rows.filter(row => row.signedGap <= requestedConfig.activationMargin)
     : violatedSourceRows;
-  const activeSourceRows = activeCandidates
+  const policyActiveSourceRows = activeCandidates
     .filter(row => requestedConfig.activeSetPolicy === 'all-violated'
       ? row.signedGap <= requestedConfig.activationMargin
       : Math.max(0, -row.signedGap) >=
         rowFamilyMaxima[row.kind] * (1 - requestedConfig.relativeActivationBand)
     )
+    .sort((left, right) => left.key.localeCompare(right.key));
+  const startRowsByKey = Object.fromEntries(startState.rows.map(row => [row.key, row]));
+  const missingGuardConstraintKeys = guardConstraintKeys.filter(key => !startRowsByKey[key]);
+  if (missingGuardConstraintKeys.length > 0) {
+    throw new Error(
+      `active-row trust-region guard rows are absent from the start state: ${missingGuardConstraintKeys.join(', ')}`,
+    );
+  }
+  const activeSourceRows = [...new Map([
+    ...policyActiveSourceRows,
+    ...guardConstraintKeys.map(key => startRowsByKey[key]),
+  ].map(row => [row.key, row])).values()]
     .sort((left, right) => left.key.localeCompare(right.key));
   if (activeSourceRows.length === 0) {
     throw new Error('active-row trust-region start has no active constraint rows');
@@ -583,8 +627,8 @@ export function solveNBodyActiveRowTrustRegionStep({
     if (!(span > 0)) {
       throw new Error(`active-row trust-region finite-difference span collapsed at ${axis}`);
     }
-    const positiveState = evaluateNBodyUnifiedKktState({ problem, vector:positive });
-    const negativeState = evaluateNBodyUnifiedKktState({ problem, vector:negative });
+    const positiveState = evaluateState(positive);
+    const negativeState = evaluateState(negative);
     evaluationCount += 2;
     const positiveByKey = Object.fromEntries(positiveState.rows.map(row => [row.key, row]));
     const negativeByKey = Object.fromEntries(negativeState.rows.map(row => [row.key, row]));
@@ -634,7 +678,7 @@ export function solveNBodyActiveRowTrustRegionStep({
   const startMaximumActiveRowViolation = Math.max(
     ...activeRows.map(row => row.violation),
   );
-  const beforeFamilies = constraintFamilyMetrics(startState);
+  const beforeFamilies = familyMetrics(startState);
   const enumeratedRadii = requestedConfig.candidateEnumeration === 'canonical'
     ? [...requestedConfig.trustRegionRadii]
     : [...requestedConfig.trustRegionRadii].reverse();
@@ -643,14 +687,14 @@ export function solveNBodyActiveRowTrustRegionStep({
       startVector.map((value, axis) => value + radius * direction[axis]),
       requestedConfig.translationBounds,
     );
-    const state = evaluateNBodyUnifiedKktState({ problem, vector });
+    const state = evaluateState(vector);
     evaluationCount += 1;
     const stateByKey = Object.fromEntries(state.rows.map(row => [row.key, row]));
     const maximumActiveRowViolation = Math.max(
       ...activeRows.map(row => Math.max(0, -stateByKey[row.key].signedGap)),
     );
-    const families = constraintFamilyMetrics(state);
-    const regressedFamilies = CONSTRAINT_FAMILY_METRIC_KEYS.filter(
+    const families = familyMetrics(state);
+    const regressedFamilies = familyMetricKeys.filter(
       key => families[key] > beforeFamilies[key] + requestedConfig.familyRegressionTolerance,
     );
     return { radius, vector, state, maximumActiveRowViolation, families, regressedFamilies };
@@ -670,6 +714,59 @@ export function solveNBodyActiveRowTrustRegionStep({
       startMaximumActiveRowViolation - requestedConfig.improvementTolerance &&
     candidate.regressedFamilies.length === 0;
   const accepted = candidates.find(familyAdmissible) || null;
+  const activeConstraintKeySet = new Set(activeSourceRows.map(row => row.key));
+  const crossingProbe = accepted || requestedConfig.guardRowPolicy === 'none'
+    ? null
+    : [...candidates]
+      .sort((left, right) => left.radius - right.radius)
+      .map(candidate => {
+        const candidateRowsByKey = Object.fromEntries(
+          candidate.state.rows.map(row => [row.key, row]),
+        );
+        const crossedRows = startState.rows
+          .filter(row =>
+            !activeConstraintKeySet.has(row.key) &&
+            row.signedGap > 0 &&
+            candidateRowsByKey[row.key]?.signedGap <= 0
+          )
+          .map(row => ({
+            key:row.key,
+            kind:row.kind,
+            startSignedGap:row.signedGap,
+            candidateSignedGap:candidateRowsByKey[row.key].signedGap,
+          }))
+          .sort((left, right) => left.key.localeCompare(right.key));
+        return { candidate, crossedRows };
+      })
+      .find(({ candidate, crossedRows }) =>
+        predictedCommonDescent &&
+        candidate.maximumActiveRowViolation <
+          startMaximumActiveRowViolation - requestedConfig.improvementTolerance &&
+        candidate.regressedFamilies.length > 0 &&
+        crossedRows.length > 0
+      ) || null;
+  if (crossingProbe) {
+    const addedConstraintKeys = crossingProbe.crossedRows.map(row => row.key);
+    const exchange = {
+      round:guardRowExchanges.length + 1,
+      policy:requestedConfig.guardRowPolicy,
+      sourceActiveConstraintKeys:[...activeSourceRows.map(row => row.key)],
+      triggerCandidateRadius:crossingProbe.candidate.radius,
+      triggerCandidateVector:[...crossingProbe.candidate.vector],
+      triggerCandidateRegressedFamilies:[...crossingProbe.candidate.regressedFamilies],
+      crossedRows:structuredClone(crossingProbe.crossedRows),
+      addedConstraintKeys:[...addedConstraintKeys],
+    };
+    return solveNBodyActiveRowTrustRegionStepInternal({
+      problem,
+      startVector,
+      requestedConfig,
+      stateEvaluator,
+      guardConstraintKeys:[...new Set([...guardConstraintKeys, ...addedConstraintKeys])].sort(),
+      guardRowExchanges:[...guardRowExchanges, exchange],
+      priorEvaluationCount:priorEvaluationCount + evaluationCount,
+    });
+  }
   const candidateReceipts = [...candidates]
     .sort((left, right) => right.radius - left.radius)
     .map(candidate => ({
@@ -739,6 +836,8 @@ export function solveNBodyActiveRowTrustRegionStep({
     directionConstruction:{
       activeRows,
       activationMargin:requestedConfig.activationMargin,
+      guardConstraintKeys:[...guardConstraintKeys],
+      guardRowPolicy:requestedConfig.guardRowPolicy,
       degenerateConstraintKeys,
       convexWeights:optimizer?.weights.map(value => rounded(value)) || activeRows.map(() => 0),
       minimumNorm:optimizer ? rounded(optimizer.norm) : null,
@@ -761,12 +860,13 @@ export function solveNBodyActiveRowTrustRegionStep({
         : rounded(startMaximumActiveRowViolation),
       maximumPhysicalResidual:selectedState.maximumPhysicalResidual,
       metrics:structuredClone(selectedState.metrics),
-      muscles:structuredClone(selectedState.muscles),
+      muscles:structuredClone(selectedState.muscles || []),
     },
     work:{
       iterations:accepted ? 1 : 0,
       attempts:direction ? 1 : 0,
-      evaluationCount,
+      evaluationCount:priorEvaluationCount + evaluationCount,
+      guardRowExchanges:structuredClone(guardRowExchanges),
       terminalReason:accepted
         ? null
         : predictedCommonDescent
@@ -777,15 +877,53 @@ export function solveNBodyActiveRowTrustRegionStep({
     certificate,
     mechanism:{
       directionBasis:'minimum-norm-convex-combination-of-normalized-active-row-violation-gradients',
+      guardRowPolicy:requestedConfig.guardRowPolicy,
       nonlinearAcceptance:'lower-active-row-maximum-and-no-family-regression',
       oracleTargetCoordinatesConsumed:false,
       contactGraphRowsConsumed:true,
       carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+      stateEvaluatorRoute:structuredClone(problem.stateEvaluatorRoute || {
+        requested:'nbody-unified-kkt-state-v0',
+        effective:'nbody-unified-kkt-state-v0',
+        fallbackUsed:false,
+      }),
     },
     claimCeiling:
       'bounded-severity-0.32-active-row-step-or-local-floor-certificate-not-global-feasibility-or-carrier-impossibility',
   };
   return { ...core, identity:{ sha256:hashMusclePackingCanonicalJson(core) } };
+}
+
+export function solveNBodyActiveRowTrustRegionStep(args = {}) {
+  const publicKeys = ['problem', 'requestedConfig', 'startVector', 'stateEvaluator'];
+  const recursionOwnedKeys = [
+    'guardConstraintKeys',
+    'guardRowExchanges',
+    'priorEvaluationCount',
+  ];
+  const suppliedRecursionOwnedKeys = recursionOwnedKeys.filter(key =>
+    Object.hasOwn(args, key)
+  );
+  if (suppliedRecursionOwnedKeys.length > 0) {
+    throw new Error(
+      `active-row trust-region recursion-owned inputs are internal: ${
+        suppliedRecursionOwnedKeys.join(', ')
+      }`,
+    );
+  }
+  const unsupportedKeys = Object.keys(args).filter(key => !publicKeys.includes(key)).sort();
+  if (unsupportedKeys.length > 0) {
+    throw new Error(
+      `active-row trust-region public inputs are unsupported: ${unsupportedKeys.join(', ')}`,
+    );
+  }
+  const { problem, startVector, requestedConfig, stateEvaluator } = args;
+  return solveNBodyActiveRowTrustRegionStepInternal({
+    problem,
+    startVector,
+    requestedConfig,
+    stateEvaluator,
+  });
 }
 
 export function createNBodyElasticAllRowComparatorConfig() {
@@ -1912,6 +2050,7 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
   problem,
   startVector,
   requestedConfig = createNBodyActiveRowTrustRegionTrajectoryConfig(),
+  stateEvaluator = evaluateNBodyUnifiedKktState,
 } = {}) {
   const expectedKeys = ['algorithm', 'convergenceTolerance', 'iterationBudget', 'step'];
   if (JSON.stringify(Object.keys(requestedConfig || {}).sort()) !== JSON.stringify(expectedKeys)) {
@@ -1934,6 +2073,9 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
   if (requestedConfig.step?.activeSetPolicy !== 'family-maximum-relative-band') {
     throw new Error('active-row trajectory requires family-maximum-relative-band step policy');
   }
+  if (typeof stateEvaluator !== 'function') {
+    throw new Error('active-row trajectory stateEvaluator must be a function');
+  }
 
   let currentVector = [...startVector];
   let firstStep = null;
@@ -1946,6 +2088,7 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
       problem,
       startVector:currentVector,
       requestedConfig:requestedConfig.step,
+      stateEvaluator,
     });
     firstStep ||= stepResult;
     finalStep = stepResult;
@@ -1969,6 +2112,7 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
       before,
       after,
       directionConstruction:structuredClone(stepResult.directionConstruction),
+      work:structuredClone(stepResult.work),
       candidateReceipts:structuredClone(stepResult.work.candidateReceipts),
       certificate:structuredClone(stepResult.certificate),
       stepResultSha256:stepResult.identity.sha256,
@@ -1994,9 +2138,10 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
       maximumActiveRowViolation:firstStep.start.maximumActiveRowViolation,
       maximumPhysicalResidual:firstStep.start.maximumPhysicalResidual,
       metrics:structuredClone(firstStep.start.metrics),
-    };
-  const selectedState = evaluateNBodyUnifiedKktState({ problem, vector:selected.vector });
-  evaluationCount += 1;
+  };
+  const selectedState = stateEvaluator({ problem, vector:selected.vector });
+  const selectedStateEvaluationCount = 1;
+  evaluationCount += selectedStateEvaluationCount;
   const status = terminalReason === 'convergence-tolerance-satisfied'
     ? 'active-row-trust-region-trajectory-feasible'
     : terminalReason
@@ -2026,6 +2171,7 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
       iterations,
       attempts:rows.length,
       evaluationCount,
+      selectedStateEvaluationCount,
       terminalReason,
       rows,
     },
@@ -2036,6 +2182,11 @@ export function solveNBodyActiveRowTrustRegionTrajectory({
       oracleTargetCoordinatesConsumed:false,
       contactGraphRowsConsumed:true,
       carrierDegreesOfFreedomPerMember:problem.carrier.degreesOfFreedomPerMember,
+      stateEvaluatorRoute:structuredClone(problem.stateEvaluatorRoute || {
+        requested:'nbody-unified-kkt-state-v0',
+        effective:'nbody-unified-kkt-state-v0',
+        fallbackUsed:false,
+      }),
     },
     claimCeiling:
       'bounded-severity-0.32-repeated-family-maximum-active-row-progress-or-local-floor-not-global-feasibility-or-carrier-impossibility',

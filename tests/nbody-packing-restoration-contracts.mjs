@@ -1447,6 +1447,192 @@ test('active-row trust-region either advances all binding families or certifies 
   );
 });
 
+function createCandidateCrossingGuardExchangeFixture(restoration) {
+  const problem = {
+    identity:{ sha256:'synthetic-candidate-crossing-guard-exchange-v0' },
+    variables:[{ key:'x' }, { key:'y' }],
+    carrier:{ degreesOfFreedomPerMember:2 },
+    stateEvaluatorRoute:{
+      requested:'synthetic-candidate-crossing-guard-exchange-v0',
+      effective:'synthetic-candidate-crossing-guard-exchange-v0',
+      fallbackUsed:false,
+    },
+  };
+  const stateEvaluator = ({ vector:[x, y] }) => {
+    const pairwisePenetration = Math.max(0, 1 - x);
+    const skeletalPenetration = Math.max(0, x - y - 0.1);
+    const metrics = {
+      pairwisePenetration,
+      skeletalPenetration,
+      compartmentEscape:0,
+      endpointDrift:0,
+      maximumRelativeVolumeError:0,
+    };
+    return {
+      rows:[
+        { key:'pair:movable-a|movable-b', kind:'pairwise-clearance', signedGap:x - 1 },
+        { key:'bone:fixed-a|movable-a', kind:'skeletal-clearance', signedGap:0.1 - x + y },
+      ],
+      metrics,
+      maximumPhysicalResidual:Math.max(...Object.values(metrics)),
+      muscles:[],
+    };
+  };
+  const baseConfig = {
+    ...restoration.createNBodyActiveRowTrustRegionConfig({
+      guardRowPolicy:'none',
+    }),
+    translationBounds:[-2, 2],
+    trustRegionRadii:[0.2, 0.15, 0.11],
+  };
+  return { problem, stateEvaluator, baseConfig };
+}
+
+test('public active-row step rejects caller-authored recursion evidence', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const { problem, stateEvaluator, baseConfig } =
+    createCandidateCrossingGuardExchangeFixture(restoration);
+  const forgedInputs = [
+    ['guardConstraintKeys', ['bone:fixed-a|movable-a'], /recursion-owned inputs are internal: guardConstraintKeys/],
+    ['guardRowExchanges', [{
+      round:99,
+      policy:'caller-forged',
+      addedConstraintKeys:['bone:fixed-a|movable-a'],
+    }], /recursion-owned inputs are internal: guardRowExchanges/],
+    ['priorEvaluationCount', 123456, /recursion-owned inputs are internal: priorEvaluationCount/],
+    ['unsupportedReceiptKey', 'caller-forged', /public inputs are unsupported: unsupportedReceiptKey/],
+  ];
+
+  for (const [key, value, expectedError] of forgedInputs) {
+    let enteredInternal = false;
+    const args = {
+      get problem() {
+        enteredInternal = true;
+        return problem;
+      },
+      startVector:[0, 0],
+      requestedConfig:baseConfig,
+      stateEvaluator,
+      [key]:value,
+    };
+    assert.throws(
+      () => restoration.solveNBodyActiveRowTrustRegionStep(args),
+      expectedError,
+      `${key} must be rejected at the public boundary`,
+    );
+    assert.equal(
+      enteredInternal,
+      false,
+      `${key} must be rejected before the internal problem is read`,
+    );
+  }
+});
+
+test('candidate-crossing guard exchange rebuilds a useful direction around a clear constraint', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const { problem, stateEvaluator, baseConfig } =
+    createCandidateCrossingGuardExchangeFixture(restoration);
+  const withoutExchange = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:[0, 0],
+    requestedConfig:baseConfig,
+    stateEvaluator,
+  });
+  assert.equal(withoutExchange.status, 'nonlinear-active-row-trust-region-floor');
+  assert.deepEqual(withoutExchange.work.guardRowExchanges, []);
+
+  const requestedConfig = {
+    ...baseConfig,
+    guardRowPolicy:'candidate-crossing-clear-rows',
+  };
+  const result = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:[0, 0],
+    requestedConfig,
+    stateEvaluator,
+  });
+  const reverse = restoration.solveNBodyActiveRowTrustRegionStep({
+    problem,
+    startVector:[0, 0],
+    requestedConfig:{ ...requestedConfig, candidateEnumeration:'reverse' },
+    stateEvaluator,
+  });
+
+  assert.equal(result.status, 'active-row-trust-region-step-accepted');
+  assert.equal(result.work.guardRowExchanges.length, 1);
+  assert.deepEqual(
+    result.work.guardRowExchanges[0].addedConstraintKeys,
+    ['bone:fixed-a|movable-a'],
+  );
+  assert.deepEqual(
+    result.directionConstruction.guardConstraintKeys,
+    ['bone:fixed-a|movable-a'],
+  );
+  assert.deepEqual(
+    result.directionConstruction.activeRows.map(row => row.key),
+    ['bone:fixed-a|movable-a', 'pair:movable-a|movable-b'],
+  );
+  assert.ok(result.selected.metrics.pairwisePenetration < 1);
+  assert.equal(result.selected.metrics.skeletalPenetration, 0);
+  assert.equal(result.selected.metrics.compartmentEscape, 0);
+  assert.equal(result.selected.metrics.endpointDrift, 0);
+  assert.equal(result.selected.metrics.maximumRelativeVolumeError, 0);
+  assert.deepEqual(reverse.selected, result.selected);
+  assert.deepEqual(reverse.work.guardRowExchanges, result.work.guardRowExchanges);
+  assert.deepEqual(reverse.work.candidateReceipts, result.work.candidateReceipts);
+});
+
+test('candidate-crossing exchange causality survives the repeated trajectory carrier', async () => {
+  const restoration = await import('../nbody-packing-restoration.mjs');
+  const { problem, stateEvaluator, baseConfig } =
+    createCandidateCrossingGuardExchangeFixture(restoration);
+  const result = restoration.solveNBodyActiveRowTrustRegionTrajectory({
+    problem,
+    startVector:[0, 0],
+    requestedConfig:restoration.createNBodyActiveRowTrustRegionTrajectoryConfig({
+      iterationBudget:1,
+      step:{
+        ...baseConfig,
+        activeSetPolicy:'family-maximum-relative-band',
+        relativeActivationBand:0.01,
+        guardRowPolicy:'candidate-crossing-clear-rows',
+      },
+    }),
+    stateEvaluator,
+  });
+  const reverse = restoration.solveNBodyActiveRowTrustRegionTrajectory({
+    problem,
+    startVector:[0, 0],
+    requestedConfig:{
+      ...result.config.requested,
+      step:{ ...result.config.requested.step, candidateEnumeration:'reverse' },
+    },
+    stateEvaluator,
+  });
+  const row = result.work.rows[0];
+  assert.equal(row.accepted, true);
+  assert.ok(row.work, 'trajectory row must preserve step-local work custody');
+  assert.equal(row.work.guardRowExchanges.length, 1);
+  assert.deepEqual(
+    row.work.guardRowExchanges[0].addedConstraintKeys,
+    ['bone:fixed-a|movable-a'],
+  );
+  assert.equal(
+    result.work.evaluationCount,
+    row.work.evaluationCount + result.work.selectedStateEvaluationCount,
+    'top-level trajectory work must reconcile from row-local and terminal evaluation counts',
+  );
+  assert.deepEqual(reverse.selected, result.selected);
+  assert.deepEqual(
+    reverse.work.rows[0].work.guardRowExchanges,
+    row.work.guardRowExchanges,
+  );
+  assert.deepEqual(
+    reverse.work.rows[0].candidateReceipts,
+    row.candidateReceipts,
+  );
+});
+
 test('family-maximum active bands do not let shallow satisfied-neighbor pressure manufacture a cone floor', async () => {
   const restoration = await import('../nbody-packing-restoration.mjs');
   const fixture = createNBodyLocalizedChallengeSuite().find(
