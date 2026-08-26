@@ -6,6 +6,7 @@ import {
 } from './bounded-gpu-submission.js';
 import {
   WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+  validateWebGpuCooperativeAdapterConformanceReport,
 } from './cooperative-adapter-conformance.js';
 import {
   WEBGPU_FOREGROUND_OPPORTUNITY_SCHEMA,
@@ -20,6 +21,8 @@ import { WEBGPU_INFERENCE_KIT_VERSION } from './kernel-profile.js';
 
 export const WEBGPU_INFERENCE_KIT_IDENTITY_SCHEMA =
   'kaminos.webgpu-inference-kit-identity.v0';
+export const WEBGPU_INFERENCE_KIT_EXPECTATION_SCHEMA =
+  'kaminos.webgpu-inference-kit-expectation.v0';
 export const WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA =
   'kaminos.webgpu-inference-kit-adoption-preflight.v0';
 export const WEBGPU_INFERENCE_KIT_ADOPTION_RECEIPT_SCHEMA =
@@ -100,6 +103,7 @@ export const WEBGPU_INFERENCE_KIT_CAPABILITIES = deepFreeze([
 
 const PACKAGE_IDENTITY = deepFreeze({
   schema: WEBGPU_INFERENCE_KIT_IDENTITY_SCHEMA,
+  authority: 'package-owned',
   packageName: PACKAGE_NAME,
   packageVersion: WEBGPU_INFERENCE_KIT_VERSION,
   moduleUrl: import.meta.url,
@@ -118,52 +122,112 @@ function normalizeRequiredCapabilities(value) {
   }));
 }
 
+function normalizeExpectation(value) {
+  if (!isPlainObject(value)) return null;
+  return {
+    schema: value.schema,
+    authority: value.authority,
+    expectationId: value.expectationId,
+    packageName: value.packageName,
+    packageVersion: value.packageVersion,
+    requiredCapabilities: normalizeRequiredCapabilities(value.requiredCapabilities),
+  };
+}
+
 function checkRequiredCapabilities(requiredCapabilities) {
   const available = new Map(
     WEBGPU_INFERENCE_KIT_CAPABILITIES.map(capability => [capability.capabilityId, capability.schema]),
   );
   const failures = [];
   if (requiredCapabilities.length === 0) failures.push('at least one capability is required');
+  const seen = new Set();
   for (const capability of requiredCapabilities) {
     if (!isNonEmptyString(capability.capabilityId) || !isNonEmptyString(capability.schema)) {
       failures.push('capabilityId and schema must be non-empty strings');
       continue;
     }
+    if (seen.has(capability.capabilityId)) {
+      failures.push(`${capability.capabilityId}: duplicate required capability`);
+      continue;
+    }
+    seen.add(capability.capabilityId);
     const effectiveSchema = available.get(capability.capabilityId);
     if (effectiveSchema !== capability.schema) {
       failures.push(
-        `${capability.capabilityId}: requested ${capability.schema}, effective ${effectiveSchema || 'missing'}`,
+        `${capability.capabilityId}: expected ${capability.schema}, effective ${effectiveSchema || 'missing'}`,
       );
     }
   }
   return failures;
 }
 
+function assessResolverLocator(resolver) {
+  if (!isPlainObject(resolver) || !RESOLVER_LOCATOR_KINDS.has(resolver.locatorKind)) {
+    return {
+      passed: false,
+      verification: 'invalid',
+      authority: 'none',
+      loadBearing: false,
+      reason: 'resolver locator kind is invalid',
+    };
+  }
+  if (resolver.locatorKind === 'module-url') {
+    const passed = resolver.locator === PACKAGE_IDENTITY.moduleUrl;
+    return {
+      passed,
+      verification: passed ? 'package-bound' : 'mismatch',
+      authority: 'package-module-url-comparison',
+      loadBearing: true,
+      expectedModuleUrl: PACKAGE_IDENTITY.moduleUrl,
+      observedModuleUrl: resolver.locator || null,
+    };
+  }
+  return {
+    passed: true,
+    verification: 'unverified-diagnostic',
+    authority: 'consumer-observed-locator',
+    loadBearing: false,
+    reason: `${resolver.locatorKind} requires a consumer or bundler manifest for location binding`,
+  };
+}
+
 export function assertWebGpuInferenceKitAdoption(input = {}) {
   const source = isPlainObject(input) ? input : {};
-  const requestedPackage = clone(source.requestedPackage) || null;
+  const expectation = normalizeExpectation(source.expectation);
   const consumer = clone(source.consumer) || null;
   const resolver = clone(source.resolver) || null;
   const callerClaims = clone(source.callerClaims) || null;
-  const requiredCapabilities = normalizeRequiredCapabilities(source.requiredCapabilities);
+  const requiredCapabilities = expectation?.requiredCapabilities || [];
+  const resolverAssessment = assessResolverLocator(resolver);
   const checks = [];
 
   checks.push(createCheck('adoption-identity', isNonEmptyString(source.adoptionId), {
     adoptionId: source.adoptionId || null,
   }));
   checks.push(createCheck(
-    'requested-package-name',
-    requestedPackage?.name === PACKAGE_IDENTITY.packageName,
+    'consumer-expectation',
+    expectation?.schema === WEBGPU_INFERENCE_KIT_EXPECTATION_SCHEMA
+      && expectation?.authority === 'consumer-owned'
+      && isNonEmptyString(expectation?.expectationId),
     {
-      requested: requestedPackage?.name || null,
+      schema: expectation?.schema || null,
+      authority: expectation?.authority || null,
+      expectationId: expectation?.expectationId || null,
+    },
+  ));
+  checks.push(createCheck(
+    'expected-package-name',
+    expectation?.packageName === PACKAGE_IDENTITY.packageName,
+    {
+      expected: expectation?.packageName || null,
       effective: PACKAGE_IDENTITY.packageName,
     },
   ));
   checks.push(createCheck(
-    'requested-package-version',
-    requestedPackage?.version === PACKAGE_IDENTITY.packageVersion,
+    'expected-package-version',
+    expectation?.packageVersion === PACKAGE_IDENTITY.packageVersion,
     {
-      requested: requestedPackage?.version || null,
+      expected: expectation?.packageVersion || null,
       effective: PACKAGE_IDENTITY.packageVersion,
     },
   ));
@@ -197,9 +261,15 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
       callerClaim: callerClaims?.kitVersion || null,
     },
   ));
+  checks.push(createCheck(
+    'resolver-locator-binding',
+    resolverAssessment.passed,
+    resolverAssessment,
+  ));
 
   const capabilityFailures = checkRequiredCapabilities(requiredCapabilities);
   checks.push(createCheck('required-capabilities', capabilityFailures.length === 0, {
+    authority: 'consumer-owned-expectation',
     requiredCapabilities,
     failures: capabilityFailures,
   }));
@@ -214,9 +284,10 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
     status: summary.failedCheckCount === 0 ? 'passed' : 'failed',
     adoptionId: isNonEmptyString(source.adoptionId) ? source.adoptionId : null,
     packageIdentity: PACKAGE_IDENTITY,
-    requestedPackage,
+    expectation,
     consumer,
     resolver,
+    resolverAssessment,
     callerClaims,
     requiredCapabilities,
     checks,
@@ -232,9 +303,14 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
   return receipt;
 }
 
-function isPassedCheck(report, checkId) {
-  return Array.isArray(report?.checks)
-    && report.checks.some(check => check?.checkId === checkId && check?.status === 'passed');
+function validateOutputIdentity(outputIdentity) {
+  if (!isPlainObject(outputIdentity)) return false;
+  if (outputIdentity.kind === 'sha256') {
+    return /^[0-9a-f]{64}$/.test(outputIdentity.value || '');
+  }
+  return outputIdentity.kind === 'caller-fingerprint'
+    && outputIdentity.authority === 'caller-declared'
+    && isNonEmptyString(outputIdentity.value);
 }
 
 function isSettledTerminal(terminalSettlement, routeId) {
@@ -243,14 +319,12 @@ function isSettledTerminal(terminalSettlement, routeId) {
     && terminalSettlement.routeId === routeId
     && terminalSettlement.pendingRangeCount === 0
     && terminalSettlement.activeWorkCount === 0
-    && isPlainObject(terminalSettlement.outputIdentity)
-    && isNonEmptyString(terminalSettlement.outputIdentity.kind)
-    && isNonEmptyString(terminalSettlement.outputIdentity.value);
+    && validateOutputIdentity(terminalSettlement.outputIdentity);
 }
 
 export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
   const source = isPlainObject(input) ? input : {};
-  const preflight = clone(source.preflight) || null;
+  const submittedPreflight = clone(source.preflight) || null;
   const conformance = clone(source.conformanceReport) || null;
   const terminalSettlement = clone(source.terminalSettlement) || null;
   const checks = [];
@@ -259,99 +333,71 @@ export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
   let preflightFailure = null;
   try {
     revalidatedPreflight = assertWebGpuInferenceKitAdoption({
-      adoptionId: preflight?.adoptionId,
-      requestedPackage: preflight?.requestedPackage,
-      consumer: preflight?.consumer,
-      resolver: preflight?.resolver,
-      callerClaims: preflight?.callerClaims,
-      requiredCapabilities: preflight?.requiredCapabilities,
+      adoptionId: submittedPreflight?.adoptionId,
+      expectation: submittedPreflight?.expectation,
+      consumer: submittedPreflight?.consumer,
+      resolver: submittedPreflight?.resolver,
+      callerClaims: submittedPreflight?.callerClaims,
     });
   } catch (error) {
     preflightFailure = error?.receipt || null;
   }
 
-  const preflightIdentityPassed = preflight?.schema === WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA
-    && preflight?.status === 'passed'
-    && preflight?.packageIdentity?.packageName === PACKAGE_IDENTITY.packageName
-    && preflight?.packageIdentity?.packageVersion === PACKAGE_IDENTITY.packageVersion
-    && preflight?.packageIdentity?.moduleUrl === PACKAGE_IDENTITY.moduleUrl
-    && preflight?.summary?.failedCheckCount === 0
+  const preflightIdentityPassed = submittedPreflight?.schema
+      === WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA
+    && submittedPreflight?.packageIdentity?.packageName === PACKAGE_IDENTITY.packageName
+    && submittedPreflight?.packageIdentity?.packageVersion === PACKAGE_IDENTITY.packageVersion
+    && submittedPreflight?.packageIdentity?.moduleUrl === PACKAGE_IDENTITY.moduleUrl
     && revalidatedPreflight?.status === 'passed';
   checks.push(createCheck('adoption-preflight', preflightIdentityPassed, {
-    adoptionId: preflight?.adoptionId || null,
-    schema: preflight?.schema || null,
-    status: preflight?.status || null,
+    adoptionId: submittedPreflight?.adoptionId || null,
+    schema: submittedPreflight?.schema || null,
+    submittedStatus: submittedPreflight?.status || null,
     revalidatedStatus: revalidatedPreflight?.status || preflightFailure?.status || null,
     revalidationFailedCheckIds: preflightFailure?.summary?.failedCheckIds || [],
+    authority: 'canonical-revalidation',
   }));
 
-  const conformanceIdentityPassed = conformance?.schema
-      === WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA
-    && conformance?.status === 'passed'
-    && conformance?.summary?.failedCheckCount === 0;
-  checks.push(createCheck('conformance-report', conformanceIdentityPassed, {
-    schema: conformance?.schema || null,
-    status: conformance?.status || null,
-    failedCheckIds: conformance?.summary?.failedCheckIds || null,
-  }));
-  checks.push(createCheck(
-    'conformance-package-version',
-    conformance?.kitVersion === PACKAGE_IDENTITY.packageVersion,
-    {
-      conformance: conformance?.kitVersion || null,
-      effective: PACKAGE_IDENTITY.packageVersion,
-    },
-  ));
-
-  const routeId = preflight?.consumer?.routeId;
-  const adapterId = preflight?.consumer?.adapterId;
-  checks.push(createCheck(
-    'conformance-consumer-identity',
-    isNonEmptyString(routeId)
-      && conformance?.routeId === routeId
-      && conformance?.adapterIdentity?.routeId === routeId
-      && conformance?.adapterIdentity?.adapterId === adapterId
-      && conformance?.adapterIdentity?.packageName === PACKAGE_IDENTITY.packageName
-      && conformance?.adapterIdentity?.packageVersion === PACKAGE_IDENTITY.packageVersion
-      && conformance?.adapterIdentity?.sourceRevision === preflight?.consumer?.sourceRevision,
-    {
-      expectedRouteId: routeId || null,
-      expectedAdapterId: adapterId || null,
-      conformanceRouteId: conformance?.routeId || null,
-      conformanceAdapterIdentity: conformance?.adapterIdentity || null,
-    },
-  ));
-
-  const conformanceTerminalPassed = isPassedCheck(
+  const authoritativePreflight = revalidatedPreflight || preflightFailure;
+  const routeId = authoritativePreflight?.consumer?.routeId;
+  const adapterId = authoritativePreflight?.consumer?.adapterId;
+  const conformanceValidation = validateWebGpuCooperativeAdapterConformanceReport(
     conformance,
-    'no-pending-terminal-ranges',
-  ) && Array.isArray(conformance?.checks)
-    && conformance.checks.some(check => (
-      isNonEmptyString(check?.checkId)
-      && check.checkId.endsWith('-terminal-settlement')
-      && check.status === 'passed'
-    ));
-  checks.push(createCheck('conformance-terminal-settlement', conformanceTerminalPassed, {
-    terminalCheckIds: conformance?.checks
-      ?.filter(check => check?.checkId?.endsWith('-terminal-settlement'))
-      .map(check => ({ checkId: check.checkId, status: check.status })) || [],
-    noPendingTerminalRanges: isPassedCheck(conformance, 'no-pending-terminal-ranges'),
+    {
+      expectedKitVersion: PACKAGE_IDENTITY.packageVersion,
+      expectedRouteId: routeId,
+      expectedAdapterId: adapterId,
+      expectedAdapterPackageName: PACKAGE_IDENTITY.packageName,
+      expectedAdapterPackageVersion: PACKAGE_IDENTITY.packageVersion,
+      expectedSourceRevision: authoritativePreflight?.consumer?.sourceRevision,
+    },
+  );
+  checks.push(createCheck('conformance-report', conformanceValidation.ok, {
+    validationSchema: conformanceValidation.schema,
+    errors: conformanceValidation.errors,
+    effective: conformanceValidation.effective,
+    authority: 'semantically-validated-caller-report',
   }));
 
   checks.push(createCheck(
     'terminal-settlement',
     isSettledTerminal(terminalSettlement, routeId),
-    { terminalSettlement },
+    {
+      terminalSettlement,
+      recognizedOutputIdentityKinds: ['sha256', 'caller-fingerprint'],
+      sha256Encoding: '64-lowercase-hex',
+    },
   ));
 
   const summary = summarize(checks);
   const receipt = deepFreeze({
     schema: WEBGPU_INFERENCE_KIT_ADOPTION_RECEIPT_SCHEMA,
     status: summary.failedCheckCount === 0 ? 'passed' : 'failed',
-    adoptionId: preflight?.adoptionId || null,
+    adoptionId: authoritativePreflight?.adoptionId || submittedPreflight?.adoptionId || null,
     packageIdentity: PACKAGE_IDENTITY,
-    preflight,
+    preflight: authoritativePreflight,
     conformance,
+    conformanceValidation,
     terminalSettlement,
     checks,
     summary,

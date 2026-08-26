@@ -12,6 +12,7 @@ const {
   WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
   defineWebGpuCooperativeBoundaryManifest,
   runWebGpuCooperativeAdapterConformance,
+  validateWebGpuCooperativeAdapterConformanceReport,
 } = kit;
 
 const ROUTE_ID = 'sf3d.image-to-mesh.webgpu-local.v0';
@@ -173,6 +174,69 @@ assert.ok(Object.isFrozen(report.scenarios[0].executionReport));
 assert.throws(() => {
   report.checks.push({ checkId: 'forged', status: 'passed' });
 }, TypeError);
+
+const reportValidation = validateWebGpuCooperativeAdapterConformanceReport(report);
+assert.equal(reportValidation.ok, true);
+assert.deepEqual(reportValidation.errors, []);
+assert.ok(Object.isFrozen(reportValidation));
+
+function expectValidationFailure(mutator, pattern) {
+  const candidate = JSON.parse(JSON.stringify(report));
+  mutator(candidate);
+  const validation = validateWebGpuCooperativeAdapterConformanceReport(candidate);
+  assert.equal(validation.ok, false, `validator accepted invalid report: ${pattern}`);
+  assert.match(validation.errors.join('\n'), pattern);
+}
+
+expectValidationFailure(
+  candidate => {
+    candidate.checks = [
+      { checkId: 'explicit-failure', status: 'failed' },
+      { checkId: 'invented-terminal-settlement', status: 'passed' },
+    ];
+    candidate.summary.failedCheckCount = 0;
+    candidate.summary.failedCheckIds = [];
+  },
+  /checks must match the recomputed canonical value/,
+);
+expectValidationFailure(
+  candidate => { candidate.checks.push(candidate.checks[0]); },
+  /checks must match the recomputed canonical value/,
+);
+expectValidationFailure(
+  candidate => { candidate.scenarios.pop(); },
+  /scenarios must contain exactly 4 canonical scenarios/,
+);
+expectValidationFailure(
+  candidate => { candidate.summary.checkCount += 1; },
+  /summary must match the recomputed canonical value/,
+);
+expectValidationFailure(
+  candidate => { delete candidate.manifest; },
+  /complete matching cooperative boundary manifest/,
+);
+expectValidationFailure(
+  candidate => { candidate.adapterIdentityAuthority = 'package-owned'; },
+  /adapterIdentityAuthority must be caller-declared/,
+);
+expectValidationFailure(
+  candidate => {
+    candidate.scenarios.find(scenario => scenario.scenario === 'cancellation')
+      .expectedFailurePhase = null;
+  },
+  /cancellation.expectedFailurePhase must be cancellation/,
+);
+expectValidationFailure(
+  candidate => { candidate.manifest.phases = {}; },
+  /complete matching cooperative boundary manifest/,
+);
+expectValidationFailure(
+  candidate => {
+    candidate.scenarios.find(scenario => scenario.scenario === 'runtime-failure')
+      .executionReport.boundaries = null;
+  },
+  /runtime-failure.executionReport must preserve canonical terminal failure settlement/,
+);
 
 await assert.rejects(
   () => runWebGpuCooperativeAdapterConformance(createInput({

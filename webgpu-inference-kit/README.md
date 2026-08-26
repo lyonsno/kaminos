@@ -288,6 +288,13 @@ cap. `kitVersion` is runtime-owned; adapter package identity and output
 fingerprints are explicitly caller-declared. Bind the fingerprint to a
 deterministic numerical or artifact baseline rather than a label.
 
+`validateWebGpuCooperativeAdapterConformanceReport()` validates a returned or
+serialized report before another subsystem depends on it. It checks the exact
+four-scenario set, validates successful execution reports, verifies canonical
+cancellation and injected-failure settlement, recomputes resource lifecycle,
+coverage, progress, enabled/disabled equivalence, every check, and the summary,
+and preserves adapter identity as caller-declared authority.
+
 This catches orchestration defects before browser smoke. It does not compile
 WGSL, execute model kernels, observe physical buffer destruction, prove
 numerical parity by itself, or claim foreground cadence. Those remain real
@@ -300,18 +307,38 @@ same package-owned identity:
 
 ```js
 import {
-  WEBGPU_INFERENCE_KIT_CAPABILITIES,
-  WEBGPU_INFERENCE_KIT_VERSION,
   assertWebGpuInferenceKitAdoption,
   createWebGpuInferenceKitAdoptionReceipt,
+  createWebGpuInferenceKitIdentity,
 } from "@kaminos/webgpu-inference-kit";
+
+// Keep this literal in the consumer repo and advance it deliberately with the adapter.
+const SHARP_KIT_EXPECTATION = Object.freeze({
+  schema: "kaminos.webgpu-inference-kit-expectation.v0",
+  authority: "consumer-owned",
+  expectationId: "sharp:webgpu-kit-contract:0.1.43",
+  packageName: "@kaminos/webgpu-inference-kit",
+  packageVersion: "0.1.43",
+  requiredCapabilities: [
+    {
+      capabilityId: "adaptive-command-duty",
+      schema: "kaminos.webgpu-adaptive-command-duty-planner.v0",
+    },
+    {
+      capabilityId: "bounded-gpu-submission",
+      schema: "kaminos.webgpu-bounded-gpu-submission-report.v0",
+    },
+    {
+      capabilityId: "cooperative-adapter-conformance",
+      schema: "kaminos.webgpu-cooperative-adapter-conformance-report.v0",
+    },
+  ],
+});
+const loadedKit = createWebGpuInferenceKitIdentity();
 
 const preflight = assertWebGpuInferenceKitAdoption({
   adoptionId: "sharp:browser-webgpu:current-kit",
-  requestedPackage: {
-    name: "@kaminos/webgpu-inference-kit",
-    version: WEBGPU_INFERENCE_KIT_VERSION,
-  },
+  expectation: SHARP_KIT_EXPECTATION,
   consumer: {
     consumerId: "sharp-webgpu",
     sourceRevision: SHARP_SOURCE_REVISION,
@@ -320,12 +347,11 @@ const preflight = assertWebGpuInferenceKitAdoption({
   },
   resolver: {
     authority: "consumer-observed",
-    locatorKind: "bundle-url",
-    locator: import.meta.url,
+    locatorKind: "module-url",
+    locator: loadedKit.moduleUrl,
     packageName: "@kaminos/webgpu-inference-kit",
     packageVersion: RESOLVED_KIT_VERSION,
   },
-  requiredCapabilities: WEBGPU_INFERENCE_KIT_CAPABILITIES,
   callerClaims: { kitVersion: configuredKitVersion },
 });
 
@@ -345,19 +371,30 @@ const adoption = createWebGpuInferenceKitAdoptionReceipt({
 });
 ```
 
-The package version and capability schemas in `packageIdentity` come from the
-code that executed. `resolver` records what the consumer's loader observed;
-its authority remains `consumer-observed`. A bundle URL stays a bundle URL and
-is never presented as an NPM installation path. Caller claims are retained for
-diagnosis but cannot override either identity.
+`expectation` is consumer-owned source: its package version and mature
+capability schemas do not come from the package under observation.
+`packageIdentity` is package-owned and comes from the code that executed.
+Preflight compares those two authorities with the package name and version
+observed by the consumer's resolver. Caller claims are retained as
+diagnostic-only metadata and cannot override either side.
+
+A direct `module-url` observation binds exactly to the package-owned module
+URL. `package-path` and `bundle-url` locators remain explicitly
+`unverified-diagnostic` until the consumer or bundler supplies a manifest that
+can bind those locations; their observed package name and version still
+participate in preflight. The receipt never presents a bundle URL as an NPM
+installation path.
 
 Preflight throws `WebGpuInferenceKitAdoptionError` before model work when the
-requested, loaded, or resolver-observed versions disagree, or when a required
-capability schema is stale. Terminal receipt construction re-runs that
-preflight and also requires matching route, adapter, package, source revision,
-conformance settlement, zero pending ranges, zero active work, and a concrete
-output identity. Every failure retains the immutable failed receipt at
-`error.receipt`.
+expected, loaded, or resolver-observed versions disagree, or when a required
+capability schema is stale. Terminal receipt construction embeds a fresh
+canonical preflight, semantically validates the complete four-scenario
+cooperative conformance report, binds its route/adapter/package/source
+identity, and requires zero pending ranges, zero active work, and a recognized
+output identity. `sha256` values are exactly 64 lowercase hexadecimal
+characters; non-cryptographic identities use `caller-fingerprint` with
+`authority: "caller-declared"`. Every failure retains the immutable failed
+receipt at `error.receipt`.
 
 ## Build Runtime Primitives
 

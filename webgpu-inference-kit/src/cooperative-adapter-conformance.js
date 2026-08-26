@@ -2,10 +2,13 @@ import {
   WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA,
 } from './cooperative-boundary-manifest.js';
 import { createWebGpuCooperativeExecution } from './cooperative-execution.js';
+import { validateWebGpuCooperativeExecutionReport } from './cooperative-report-validation.js';
 import { WEBGPU_INFERENCE_KIT_VERSION } from './kernel-profile.js';
 
 export const WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA =
   'kaminos.webgpu-cooperative-adapter-conformance-report.v0';
+export const WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_VALIDATION_SCHEMA =
+  'kaminos.webgpu-cooperative-adapter-conformance-validation.v0';
 
 const SCENARIOS = Object.freeze([
   Object.freeze({
@@ -30,6 +33,7 @@ const SCENARIOS = Object.freeze([
     expectedStatus: 'failed',
   }),
 ]);
+const SCENARIO_BY_ID = new Map(SCENARIOS.map(scenario => [scenario.scenario, scenario]));
 
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -497,40 +501,13 @@ async function runScenario({ input, manifest, adapterIdentity, scenario, scenari
   };
 }
 
-async function runConformance(input, normalized) {
-  const { manifest, adapterIdentity, initialResources, expectedFinalResources } = normalized;
-  const scenarios = [];
-  for (const [index, scenario] of SCENARIOS.entries()) {
-    try {
-      scenarios.push(await runScenario({
-        input,
-        manifest,
-        adapterIdentity,
-        scenario,
-        scenarioIndex: index,
-      }));
-    } catch (error) {
-      scenarios.push({
-        scenario: scenario.scenario,
-        schedulingMode: scenario.schedulingMode,
-        expectedStatus: scenario.expectedStatus,
-        expectedFailurePhase: scenario.scenario === 'runtime-failure'
-          ? manifest.phases.some(
-              phase => phase.boundaries.some(boundary => boundary.kind === 'gpu-command'),
-            )
-            ? 'queue-submission'
-            : 'cpu-work'
-          : scenario.expectedFailurePhase || null,
-        status: 'harness-failed',
-        invocationId: `${input.conformanceId}:${scenario.scenario}`,
-        outputFingerprint: null,
-        progressEvents: [],
-        executionReport: null,
-        error: normalizeError(error),
-      });
-    }
-  }
-
+function createConformanceChecks({
+  manifest,
+  adapterIdentity,
+  initialResources,
+  expectedFinalResources,
+  scenarios,
+}) {
   const checks = [];
   checks.push(createCheck('effective-runtime-identity', true, {
     routeId: manifest.routeId,
@@ -638,11 +615,65 @@ async function runConformance(input, normalized) {
         })) || null,
     })),
   }));
+  return checks;
+}
 
+function createConformanceSummary(checks, scenarioCount) {
   const failedChecks = checks.filter(check => check.status === 'failed');
+  return {
+    scenarioCount,
+    checkCount: checks.length,
+    passedCheckCount: checks.length - failedChecks.length,
+    failedCheckCount: failedChecks.length,
+    failedCheckIds: failedChecks.map(check => check.checkId),
+  };
+}
+
+async function runConformance(input, normalized) {
+  const { manifest, adapterIdentity, initialResources, expectedFinalResources } = normalized;
+  const scenarios = [];
+  for (const [index, scenario] of SCENARIOS.entries()) {
+    try {
+      scenarios.push(await runScenario({
+        input,
+        manifest,
+        adapterIdentity,
+        scenario,
+        scenarioIndex: index,
+      }));
+    } catch (error) {
+      scenarios.push({
+        scenario: scenario.scenario,
+        schedulingMode: scenario.schedulingMode,
+        expectedStatus: scenario.expectedStatus,
+        expectedFailurePhase: scenario.scenario === 'runtime-failure'
+          ? manifest.phases.some(
+              phase => phase.boundaries.some(boundary => boundary.kind === 'gpu-command'),
+            )
+            ? 'queue-submission'
+            : 'cpu-work'
+          : scenario.expectedFailurePhase || null,
+        status: 'harness-failed',
+        invocationId: `${input.conformanceId}:${scenario.scenario}`,
+        outputFingerprint: null,
+        progressEvents: [],
+        executionReport: null,
+        error: normalizeError(error),
+      });
+    }
+  }
+
+  const checks = createConformanceChecks({
+    manifest,
+    adapterIdentity,
+    initialResources,
+    expectedFinalResources,
+    scenarios,
+  });
+  const summary = createConformanceSummary(checks, scenarios.length);
   const report = deepFreeze({
     schema: WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
-    status: failedChecks.length === 0 ? 'passed' : 'failed',
+    status: summary.failedCheckCount === 0 ? 'passed' : 'failed',
     conformanceId: input.conformanceId,
     routeId: manifest.routeId,
     manifestId: manifest.manifestId,
@@ -650,15 +681,12 @@ async function runConformance(input, normalized) {
     adapterIdentity: clone(adapterIdentity),
     adapterIdentityAuthority: 'caller-declared',
     retention: 'uncapped',
+    manifest: clone(manifest),
+    initialResources: clone(initialResources),
+    expectedFinalResources: clone(expectedFinalResources),
     scenarios,
     checks,
-    summary: {
-      scenarioCount: scenarios.length,
-      checkCount: checks.length,
-      passedCheckCount: checks.length - failedChecks.length,
-      failedCheckCount: failedChecks.length,
-      failedCheckIds: failedChecks.map(check => check.checkId),
-    },
+    summary,
   });
 
   if (report.status === 'failed') {
@@ -697,4 +725,210 @@ export function runWebGpuCooperativeAdapterConformance(input = {}) {
       expectedFinalResources,
     },
   );
+}
+
+function compareCanonicalValue(errors, label, actual, expected) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    errors.push(`${label} must match the recomputed canonical value`);
+  }
+}
+
+export function validateWebGpuCooperativeAdapterConformanceReport(
+  report,
+  expectations = {},
+) {
+  const errors = [];
+  if (!isPlainObject(report)) {
+    return deepFreeze({
+      schema: WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_VALIDATION_SCHEMA,
+      ok: false,
+      errors: ['report must be an object'],
+      effective: null,
+    });
+  }
+
+  if (report.schema !== WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA) {
+    errors.push(`schema must be ${WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA}`);
+  }
+  if (report.status !== 'passed') errors.push('status must be passed');
+  for (const field of ['conformanceId', 'routeId', 'manifestId', 'kitVersion']) {
+    if (!isNonEmptyString(report[field])) errors.push(`${field} must be a non-empty string`);
+  }
+  if (report.retention !== 'uncapped') errors.push('retention must be uncapped');
+  if (report.adapterIdentityAuthority !== 'caller-declared') {
+    errors.push('adapterIdentityAuthority must be caller-declared');
+  }
+
+  const expectedIdentities = [
+    ['kitVersion', expectations.expectedKitVersion ?? WEBGPU_INFERENCE_KIT_VERSION],
+    ['routeId', expectations.expectedRouteId],
+    ['manifestId', expectations.expectedManifestId],
+  ];
+  for (const [field, expected] of expectedIdentities) {
+    if (expected != null && report[field] !== expected) {
+      errors.push(`${field} must match expected ${expected}`);
+    }
+  }
+
+  let adapterIdentity = null;
+  try {
+    adapterIdentity = normalizeAdapterIdentity(report.adapterIdentity, report.routeId);
+  } catch (error) {
+    errors.push(error.message);
+  }
+  const adapterExpectations = [
+    ['adapterId', expectations.expectedAdapterId],
+    ['packageName', expectations.expectedAdapterPackageName],
+    ['packageVersion', expectations.expectedAdapterPackageVersion],
+    ['sourceRevision', expectations.expectedSourceRevision],
+  ];
+  for (const [field, expected] of adapterExpectations) {
+    if (expected != null && adapterIdentity?.[field] !== expected) {
+      errors.push(`adapterIdentity.${field} must match expected ${expected}`);
+    }
+  }
+
+  const manifest = report.manifest;
+  if (!isPlainObject(manifest)
+    || manifest.schema !== WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA
+    || manifest.manifestId !== report.manifestId
+    || manifest.routeId !== report.routeId
+    || !Array.isArray(manifest.phases)
+    || manifest.phases.length === 0) {
+    errors.push('manifest must be the complete matching cooperative boundary manifest');
+  }
+
+  let initialResources = null;
+  let expectedFinalResources = null;
+  try {
+    initialResources = normalizeIdentities(report.initialResources, 'initialResources');
+    expectedFinalResources = normalizeIdentities(
+      report.expectedFinalResources,
+      'expectedFinalResources',
+    );
+  } catch (error) {
+    errors.push(error.message);
+  }
+
+  const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+  if (scenarios.length !== SCENARIOS.length) {
+    errors.push(`scenarios must contain exactly ${SCENARIOS.length} canonical scenarios`);
+  }
+  const scenarioIds = scenarios.map(scenario => scenario?.scenario);
+  if (new Set(scenarioIds).size !== scenarioIds.length) {
+    errors.push('scenarios must not contain duplicate scenario identities');
+  }
+
+  let scenarioReportsValid = true;
+  for (const expectedScenario of SCENARIOS) {
+    const scenario = scenarios.find(candidate => candidate?.scenario === expectedScenario.scenario);
+    if (!isPlainObject(scenario)) {
+      errors.push(`missing canonical scenario ${expectedScenario.scenario}`);
+      scenarioReportsValid = false;
+      continue;
+    }
+    if (scenario.schedulingMode !== expectedScenario.schedulingMode) {
+      errors.push(`${scenario.scenario}.schedulingMode must be ${expectedScenario.schedulingMode}`);
+    }
+    if (scenario.expectedStatus !== expectedScenario.expectedStatus) {
+      errors.push(`${scenario.scenario}.expectedStatus must be ${expectedScenario.expectedStatus}`);
+    }
+    const expectedFailurePhase = expectedScenario.scenario === 'runtime-failure'
+      ? Array.isArray(manifest?.phases) && manifest.phases.some(
+          phase => Array.isArray(phase?.boundaries)
+            && phase.boundaries.some(boundary => boundary.kind === 'gpu-command'),
+        )
+        ? 'queue-submission'
+        : 'cpu-work'
+      : expectedScenario.expectedFailurePhase || null;
+    if ((scenario.expectedFailurePhase || null) !== expectedFailurePhase) {
+      errors.push(`${scenario.scenario}.expectedFailurePhase must be ${expectedFailurePhase}`);
+    }
+    if (scenario.status !== expectedScenario.expectedStatus) {
+      errors.push(`${scenario.scenario}.status must be ${expectedScenario.expectedStatus}`);
+    }
+    const expectedInvocationId = `${report.conformanceId}:${scenario.scenario}`;
+    if (scenario.invocationId !== expectedInvocationId) {
+      errors.push(`${scenario.scenario}.invocationId must be ${expectedInvocationId}`);
+    }
+    if (expectedScenario.expectedStatus === 'succeeded') {
+      let executionValidation;
+      try {
+        executionValidation = validateWebGpuCooperativeExecutionReport(
+          scenario.executionReport,
+          {
+            expectedStatus: expectedScenario.expectedStatus,
+            expectedRouteId: report.routeId,
+            expectedManifestId: report.manifestId,
+            expectedInvocationId,
+            expectedSchedulingMode: expectedScenario.schedulingMode,
+          },
+        );
+      } catch (error) {
+        executionValidation = { ok: false, errors: [error.message] };
+      }
+      if (!executionValidation.ok) {
+        scenarioReportsValid = false;
+        errors.push(...executionValidation.errors.map(
+          error => `${scenario.scenario}.executionReport: ${error}`,
+        ));
+      }
+    } else {
+      let failureSettlementPassed = false;
+      try {
+        failureSettlementPassed = isPlainObject(scenario.executionReport)
+          && scenario.executionReport.routeId === report.routeId
+          && scenario.executionReport.manifestId === report.manifestId
+          && scenario.executionReport.invocationId === expectedInvocationId
+          && scenario.executionReport.schedulingMode === expectedScenario.schedulingMode
+          && terminalSettlement(scenario).passed;
+      } catch {
+        failureSettlementPassed = false;
+      }
+      if (!failureSettlementPassed) {
+        scenarioReportsValid = false;
+        errors.push(`${scenario.scenario}.executionReport must preserve canonical terminal failure settlement`);
+      }
+    }
+  }
+  for (const scenarioId of scenarioIds) {
+    if (!SCENARIO_BY_ID.has(scenarioId)) errors.push(`unsupported scenario ${scenarioId}`);
+  }
+
+  if (scenarioReportsValid && manifest && adapterIdentity
+    && initialResources && expectedFinalResources) {
+    try {
+      const canonicalChecks = createConformanceChecks({
+        manifest,
+        adapterIdentity,
+        initialResources,
+        expectedFinalResources,
+        scenarios,
+      });
+      const canonicalSummary = createConformanceSummary(canonicalChecks, scenarios.length);
+      compareCanonicalValue(errors, 'checks', report.checks, canonicalChecks);
+      compareCanonicalValue(errors, 'summary', report.summary, canonicalSummary);
+      const canonicalStatus = canonicalSummary.failedCheckCount === 0 ? 'passed' : 'failed';
+      if (report.status !== canonicalStatus) {
+        errors.push(`status must match recomputed ${canonicalStatus}`);
+      }
+    } catch (error) {
+      errors.push(`conformance recomputation failed: ${error.message}`);
+    }
+  }
+
+  return deepFreeze({
+    schema: WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_VALIDATION_SCHEMA,
+    ok: errors.length === 0,
+    errors,
+    effective: {
+      conformanceId: report.conformanceId || null,
+      routeId: report.routeId || null,
+      manifestId: report.manifestId || null,
+      kitVersion: report.kitVersion || null,
+      adapterIdentityAuthority: report.adapterIdentityAuthority || null,
+      adapterIdentity: clone(report.adapterIdentity) || null,
+      scenarioCount: scenarios.length,
+    },
+  });
 }

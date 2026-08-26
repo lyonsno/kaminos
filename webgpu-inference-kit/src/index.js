@@ -83,7 +83,9 @@ export {
 
 export {
   WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA,
+  WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_VALIDATION_SCHEMA,
   runWebGpuCooperativeAdapterConformance,
+  validateWebGpuCooperativeAdapterConformanceReport,
 } from './cooperative-adapter-conformance.js';
 
 export {
@@ -113,6 +115,7 @@ export {
   WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA,
   WEBGPU_INFERENCE_KIT_ADOPTION_RECEIPT_SCHEMA,
   WEBGPU_INFERENCE_KIT_CAPABILITIES,
+  WEBGPU_INFERENCE_KIT_EXPECTATION_SCHEMA,
   WEBGPU_INFERENCE_KIT_IDENTITY_SCHEMA,
   assertWebGpuInferenceKitAdoption,
   createWebGpuInferenceKitAdoptionReceipt,
