@@ -356,9 +356,10 @@ function createScenarioRuntime({ manifest, scenario, abortController, now }) {
   }
 
   const queue = {
-    submit() {},
-    async onSubmittedWorkDone() {
+    submit() {
       maybeFail('gpu');
+    },
+    async onSubmittedWorkDone() {
     },
   };
 
@@ -728,9 +729,26 @@ export function runWebGpuCooperativeAdapterConformance(input = {}) {
 }
 
 function compareCanonicalValue(errors, label, actual, expected) {
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+  if (!semanticEqual(actual, expected)) {
     errors.push(`${label} must match the recomputed canonical value`);
   }
+}
+
+function semanticEqual(left, right) {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => semanticEqual(value, right[index]));
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => (
+      key === rightKeys[index] && semanticEqual(left[key], right[key])
+    ));
 }
 
 export function validateWebGpuCooperativeAdapterConformanceReport(
@@ -851,44 +869,36 @@ export function validateWebGpuCooperativeAdapterConformanceReport(
     if (scenario.invocationId !== expectedInvocationId) {
       errors.push(`${scenario.scenario}.invocationId must be ${expectedInvocationId}`);
     }
-    if (expectedScenario.expectedStatus === 'succeeded') {
-      let executionValidation;
-      try {
-        executionValidation = validateWebGpuCooperativeExecutionReport(
-          scenario.executionReport,
-          {
-            expectedStatus: expectedScenario.expectedStatus,
-            expectedRouteId: report.routeId,
-            expectedManifestId: report.manifestId,
-            expectedInvocationId,
-            expectedSchedulingMode: expectedScenario.schedulingMode,
-          },
-        );
-      } catch (error) {
-        executionValidation = { ok: false, errors: [error.message] };
-      }
-      if (!executionValidation.ok) {
-        scenarioReportsValid = false;
-        errors.push(...executionValidation.errors.map(
-          error => `${scenario.scenario}.executionReport: ${error}`,
-        ));
-      }
-    } else {
-      let failureSettlementPassed = false;
-      try {
-        failureSettlementPassed = isPlainObject(scenario.executionReport)
-          && scenario.executionReport.routeId === report.routeId
-          && scenario.executionReport.manifestId === report.manifestId
-          && scenario.executionReport.invocationId === expectedInvocationId
-          && scenario.executionReport.schedulingMode === expectedScenario.schedulingMode
-          && terminalSettlement(scenario).passed;
-      } catch {
-        failureSettlementPassed = false;
-      }
-      if (!failureSettlementPassed) {
-        scenarioReportsValid = false;
-        errors.push(`${scenario.scenario}.executionReport must preserve canonical terminal failure settlement`);
-      }
+    let executionValidation;
+    try {
+      executionValidation = validateWebGpuCooperativeExecutionReport(
+        scenario.executionReport,
+        {
+          expectedStatus: expectedScenario.expectedStatus,
+          expectedRouteId: report.routeId,
+          expectedManifestId: report.manifestId,
+          expectedInvocationId,
+          expectedSchedulingMode: expectedScenario.schedulingMode,
+        },
+      );
+    } catch (error) {
+      executionValidation = { ok: false, errors: [error.message] };
+    }
+    if (!executionValidation.ok) {
+      scenarioReportsValid = false;
+      errors.push(...executionValidation.errors.map(
+        error => `${scenario.scenario}.executionReport: ${error}`,
+      ));
+    }
+    let terminalPassed = false;
+    try {
+      terminalPassed = terminalSettlement(scenario).passed;
+    } catch {
+      terminalPassed = false;
+    }
+    if (!terminalPassed) {
+      scenarioReportsValid = false;
+      errors.push(`${scenario.scenario}.executionReport must preserve canonical terminal settlement`);
     }
   }
   for (const scenarioId of scenarioIds) {

@@ -15,6 +15,8 @@ import {
 const PACKAGE_NAME = '@kaminos/webgpu-inference-kit';
 const ROUTE_ID = 'sharp.image-to-splat.webgpu-local.v0';
 const ADAPTER_ID = 'sharp.browser-webgpu.v0';
+const ADAPTER_PACKAGE_NAME = '@kaminos/sharp-webgpu';
+const ADAPTER_PACKAGE_VERSION = '0.1.0';
 const SOURCE_REVISION = 'sharp-stage-zero-review-falsifier';
 const VALID_SHA256 = 'a'.repeat(64);
 
@@ -41,6 +43,10 @@ function createLegacyPreflightInput(overrides = {}) {
       sourceRevision: SOURCE_REVISION,
       routeId: ROUTE_ID,
       adapterId: ADAPTER_ID,
+      adapterPackage: {
+        name: ADAPTER_PACKAGE_NAME,
+        version: ADAPTER_PACKAGE_VERSION,
+      },
     },
     resolver: createResolver(),
     requiredCapabilities: [{
@@ -56,7 +62,7 @@ function createPreflightInput(overrides = {}) {
     adoptionId: 'sharp:stage-zero:review-falsifier',
     expectation: {
       schema: WEBGPU_INFERENCE_KIT_EXPECTATION_SCHEMA,
-      authority: 'consumer-owned',
+      authority: 'consumer-declared',
       expectationId: 'sharp:webgpu-kit-contract:0.1.43',
       packageName: PACKAGE_NAME,
       packageVersion: '0.1.43',
@@ -80,6 +86,10 @@ function createPreflightInput(overrides = {}) {
       sourceRevision: SOURCE_REVISION,
       routeId: ROUTE_ID,
       adapterId: ADAPTER_ID,
+      adapterPackage: {
+        name: ADAPTER_PACKAGE_NAME,
+        version: ADAPTER_PACKAGE_VERSION,
+      },
     },
     resolver: createResolver(),
     ...overrides,
@@ -139,8 +149,8 @@ const actualConformance = await runWebGpuCooperativeAdapterConformance({
   adapterIdentity: {
     adapterId: ADAPTER_ID,
     routeId: ROUTE_ID,
-    packageName: PACKAGE_NAME,
-    packageVersion: WEBGPU_INFERENCE_KIT_VERSION,
+    packageName: ADAPTER_PACKAGE_NAME,
+    packageVersion: ADAPTER_PACKAGE_VERSION,
     sourceRevision: SOURCE_REVISION,
   },
   manifest,

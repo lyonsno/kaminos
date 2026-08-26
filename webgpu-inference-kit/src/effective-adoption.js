@@ -191,7 +191,7 @@ function assessResolverLocator(resolver) {
   };
 }
 
-export function assertWebGpuInferenceKitAdoption(input = {}) {
+function assertWebGpuInferenceKitAdoptionCore(input = {}) {
   const source = isPlainObject(input) ? input : {};
   const expectation = normalizeExpectation(source.expectation);
   const consumer = clone(source.consumer) || null;
@@ -207,7 +207,7 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
   checks.push(createCheck(
     'consumer-expectation',
     expectation?.schema === WEBGPU_INFERENCE_KIT_EXPECTATION_SCHEMA
-      && expectation?.authority === 'consumer-owned'
+      && expectation?.authority === 'consumer-declared'
       && isNonEmptyString(expectation?.expectationId),
     {
       schema: expectation?.schema || null,
@@ -234,7 +234,10 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
 
   const consumerIdentityValid = isPlainObject(consumer)
     && ['consumerId', 'sourceRevision', 'routeId', 'adapterId']
-      .every(key => isNonEmptyString(consumer[key]));
+      .every(key => isNonEmptyString(consumer[key]))
+    && isPlainObject(consumer.adapterPackage)
+    && isNonEmptyString(consumer.adapterPackage.name)
+    && isNonEmptyString(consumer.adapterPackage.version);
   checks.push(createCheck('consumer-identity', consumerIdentityValid, { consumer }));
 
   const resolverIdentityValid = isPlainObject(resolver)
@@ -269,7 +272,7 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
 
   const capabilityFailures = checkRequiredCapabilities(requiredCapabilities);
   checks.push(createCheck('required-capabilities', capabilityFailures.length === 0, {
-    authority: 'consumer-owned-expectation',
+    authority: 'consumer-declared-expectation',
     requiredCapabilities,
     failures: capabilityFailures,
   }));
@@ -303,6 +306,38 @@ export function assertWebGpuInferenceKitAdoption(input = {}) {
   return receipt;
 }
 
+function createInputNormalizationFailure(schema, phase, error) {
+  const checks = [createCheck('input-normalization', false, {
+    phase,
+    error: {
+      name: isNonEmptyString(error?.name) ? error.name : 'Error',
+      message: isNonEmptyString(error?.message) ? error.message : String(error),
+    },
+  })];
+  return deepFreeze({
+    schema,
+    status: 'failed',
+    packageIdentity: PACKAGE_IDENTITY,
+    failurePhase: phase,
+    checks,
+    summary: summarize(checks),
+  });
+}
+
+export function assertWebGpuInferenceKitAdoption(input = {}) {
+  try {
+    return assertWebGpuInferenceKitAdoptionCore(input);
+  } catch (error) {
+    if (error?.name === 'WebGpuInferenceKitAdoptionError') throw error;
+    const receipt = createInputNormalizationFailure(
+      WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA,
+      'preflight-input-normalization',
+      error,
+    );
+    throwFailedReceipt('WebGPU inference kit adoption preflight input normalization failed', receipt);
+  }
+}
+
 function validateOutputIdentity(outputIdentity) {
   if (!isPlainObject(outputIdentity)) return false;
   if (outputIdentity.kind === 'sha256') {
@@ -322,7 +357,7 @@ function isSettledTerminal(terminalSettlement, routeId) {
     && validateOutputIdentity(terminalSettlement.outputIdentity);
 }
 
-export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
+function createWebGpuInferenceKitAdoptionReceiptCore(input = {}) {
   const source = isPlainObject(input) ? input : {};
   const submittedPreflight = clone(source.preflight) || null;
   const conformance = clone(source.conformanceReport) || null;
@@ -367,8 +402,8 @@ export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
       expectedKitVersion: PACKAGE_IDENTITY.packageVersion,
       expectedRouteId: routeId,
       expectedAdapterId: adapterId,
-      expectedAdapterPackageName: PACKAGE_IDENTITY.packageName,
-      expectedAdapterPackageVersion: PACKAGE_IDENTITY.packageVersion,
+      expectedAdapterPackageName: authoritativePreflight?.consumer?.adapterPackage?.name,
+      expectedAdapterPackageVersion: authoritativePreflight?.consumer?.adapterPackage?.version,
       expectedSourceRevision: authoritativePreflight?.consumer?.sourceRevision,
     },
   );
@@ -410,4 +445,18 @@ export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
     );
   }
   return receipt;
+}
+
+export function createWebGpuInferenceKitAdoptionReceipt(input = {}) {
+  try {
+    return createWebGpuInferenceKitAdoptionReceiptCore(input);
+  } catch (error) {
+    if (error?.name === 'WebGpuInferenceKitAdoptionError') throw error;
+    const receipt = createInputNormalizationFailure(
+      WEBGPU_INFERENCE_KIT_ADOPTION_RECEIPT_SCHEMA,
+      'terminal-input-normalization',
+      error,
+    );
+    throwFailedReceipt('WebGPU inference kit adoption terminal input normalization failed', receipt);
+  }
 }

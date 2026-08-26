@@ -180,6 +180,21 @@ assert.equal(reportValidation.ok, true);
 assert.deepEqual(reportValidation.errors, []);
 assert.ok(Object.isFrozen(reportValidation));
 
+const reorderedSummaryReport = JSON.parse(JSON.stringify(report));
+reorderedSummaryReport.summary = {
+  failedCheckIds: [...report.summary.failedCheckIds],
+  failedCheckCount: report.summary.failedCheckCount,
+  passedCheckCount: report.summary.passedCheckCount,
+  checkCount: report.summary.checkCount,
+  scenarioCount: report.summary.scenarioCount,
+};
+reorderedSummaryReport.nonAuthoritativeMetadata = { producer: 'serialized-consumer' };
+assert.equal(
+  validateWebGpuCooperativeAdapterConformanceReport(reorderedSummaryReport).ok,
+  true,
+  'object key order and additive top-level metadata are not semantic authority',
+);
+
 function expectValidationFailure(mutator, pattern) {
   const candidate = JSON.parse(JSON.stringify(report));
   mutator(candidate);
@@ -235,8 +250,26 @@ expectValidationFailure(
     candidate.scenarios.find(scenario => scenario.scenario === 'runtime-failure')
       .executionReport.boundaries = null;
   },
-  /runtime-failure.executionReport must preserve canonical terminal failure settlement/,
+  /runtime-failure.executionReport.*terminal settlement/,
 );
+for (const [label, mutate, pattern] of [
+  ['schema', execution => { execution.schema = 'forged.execution.schema'; }, /schema must be/],
+  ['retention', execution => { execution.retention = 'capped'; }, /retention must be uncapped/],
+  ['in-flight count', execution => { execution.inFlightGpuDutyCount = 37; }, /inFlightGpuDutyCount must be zero/],
+  ['in-flight ids', execution => { execution.inFlightGpuDutyIds = ['still-live']; }, /inFlightGpuDutyIds must be empty/],
+  ['unfenced submissions', execution => { execution.unfencedSubmittedGpuDutyCount = 11; }, /unfencedSubmittedGpuDutyCount must be zero/],
+  ['progress schema', execution => { execution.progress.schema = 'forged.progress'; }, /progress.schema must be/],
+  ['failure identity', execution => { execution.failure.error.name = ''; }, /error.name must be a non-empty string/],
+]) {
+  expectValidationFailure(
+    candidate => {
+      const execution = candidate.scenarios
+        .find(scenario => scenario.scenario === 'runtime-failure').executionReport;
+      mutate(execution);
+    },
+    pattern,
+  );
+}
 
 await assert.rejects(
   () => runWebGpuCooperativeAdapterConformance(createInput({

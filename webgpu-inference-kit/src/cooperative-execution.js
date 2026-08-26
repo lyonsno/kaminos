@@ -1119,9 +1119,11 @@ export function createWebGpuCooperativeExecution(input = {}) {
         throw failExecution(error, phase, boundaryState, { secondaryFailures });
       }
       if (error?.cooperativeExecutionReport) throw error;
+      const activeBoundary = boundaryStates.get(state.currentBoundaryId) || null;
       throw failExecution(
         error,
         error?.name === 'AbortError' ? 'cancellation' : 'completion',
+        activeBoundary,
       );
     }
   }

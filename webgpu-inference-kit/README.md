@@ -315,7 +315,7 @@ import {
 // Keep this literal in the consumer repo and advance it deliberately with the adapter.
 const SHARP_KIT_EXPECTATION = Object.freeze({
   schema: "kaminos.webgpu-inference-kit-expectation.v0",
-  authority: "consumer-owned",
+  authority: "consumer-declared",
   expectationId: "sharp:webgpu-kit-contract:0.1.43",
   packageName: "@kaminos/webgpu-inference-kit",
   packageVersion: "0.1.43",
@@ -344,6 +344,10 @@ const preflight = assertWebGpuInferenceKitAdoption({
     sourceRevision: SHARP_SOURCE_REVISION,
     routeId: "sharp.image-to-splat.webgpu-local.v0",
     adapterId: "sharp.browser-webgpu.v0",
+    adapterPackage: {
+      name: "@kaminos/sharp-webgpu",
+      version: SHARP_PACKAGE_VERSION,
+    },
   },
   resolver: {
     authority: "consumer-observed",
@@ -371,12 +375,20 @@ const adoption = createWebGpuInferenceKitAdoptionReceipt({
 });
 ```
 
-`expectation` is consumer-owned source: its package version and mature
-capability schemas do not come from the package under observation.
+`expectation` is a consumer declaration: its package version and mature
+capability schemas are maintained independently from the package under
+observation. The runtime records that declaration; it does not infer source
+custody from a JavaScript object.
 `packageIdentity` is package-owned and comes from the code that executed.
 Preflight compares those two authorities with the package name and version
 observed by the consumer's resolver. Caller claims are retained as
 diagnostic-only metadata and cannot override either side.
+
+Stale-install rejection is conditional on maintaining the consumer declaration
+independently. Rebuilding that declaration from `packageIdentity` records
+self-consistency, not an independent freshness requirement. `consumer` also
+names the adapter package separately from the inference-kit package, preserving
+which SHARP, SF3D, MoGe, Kimodo, or later adapter supplied the production path.
 
 A direct `module-url` observation binds exactly to the package-owned module
 URL. `package-path` and `bundle-url` locators remain explicitly
