@@ -22,7 +22,8 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent
 Q = Path("/Users/noahlyons/.local/state/gpu-greenroom")
-OUT = Q / "outputs" / "kaminos-sjb-tracker-train-r1"
+import os
+OUT = Q / "outputs" / os.environ.get("ANATOMY_RUN", "kaminos-sjb-tracker-train-r1")
 CHECKPOINTS = Q / "outputs" / "kaminos-sjb-grid48-curriculum-r1" / "checkpoints"
 MANIFEST = Q / "outputs" / "kaminos-tiger-grid96-exact-motion-62-120-r41" / "motion-manifest.json"
 PAIR = ("coefficient-state-082", "coefficient-state-080")  # best holdout gain

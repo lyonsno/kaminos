@@ -39,7 +39,7 @@ STENCIL_OFFSETS = np.array(
     [(dx, dy, dz) for dx in (-2, 0, 2) for dy in (-2, 0, 2) for dz in (-2, 0, 2)],
     dtype=np.float64,
 )
-LOCAL_FEATURE_DIM = 27 + 27 + 12
+LOCAL_FEATURE_DIM = 27 + 27 + 54 + 12  # fine stencils + regional stencils + raw params
 FEATURE_DIM = LOCAL_FEATURE_DIM * 2  # local + population-pooled context
 OUTPUT_DIM = 3 + 6 + 3 + 1
 HIDDEN = 128
@@ -115,6 +115,19 @@ def splat_features(
     flat = stencil.reshape(-1, 3)
     rho_b = _lattice_lookup(lattice_b, flat).reshape(n, -1)
     rho_a = _lattice_lookup(lattice_a, flat).reshape(n, -1)
+    # Regional stencil: the v1.1 anatomy showed untouched 10-30px diffuse
+    # error blotches — structure BETWEEN the fine stencil (2-cell stride)
+    # and a global pooled mean. Sample a 4x average-pooled field pyramid at
+    # 8-cell stride so every splat sees its regional neighborhood.
+    def pool4(lat):
+        g = lat.shape[0] // 4
+        return lat[: g * 4, : g * 4, : g * 4].reshape(g, 4, g, 4, g, 4).mean(axis=(1, 3, 5))
+    pooled_b = pool4(lattice_b)
+    pooled_a = pool4(lattice_a)
+    regional = grid_pos[:, None, :] / 4.0 + STENCIL_OFFSETS[None, :, :]
+    rflat = regional.reshape(-1, 3)
+    reg_b = _lattice_lookup(pooled_b, rflat).reshape(n, -1)
+    reg_a = _lattice_lookup(pooled_a, rflat).reshape(n, -1)
     scale = max(float(np.abs(lattice_b).max()), 1e-9)
     raw = state_to_raw_np(state_a, medium)
     frac = grid_pos - np.floor(grid_pos)
@@ -122,6 +135,8 @@ def splat_features(
     parts = [
         rho_b / scale,
         (rho_b - rho_a) / scale,
+        reg_b / scale,
+        (reg_b - reg_a) / scale,
         frac,
         diag,
         raw["rawEmission"],
