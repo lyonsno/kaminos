@@ -1,0 +1,281 @@
+{
+  "schema": "kaminos.receipt-bearing-browser-capture.v0",
+  "status": "complete",
+  "route": {
+    "requested": "independent-headless-same-page-screenshot-v1",
+    "effective": "independent-headless-same-page-screenshot-v1",
+    "fallbackUsed": false
+  },
+  "browser": {
+    "schema": "kaminos.headless-browser-resolution.v0",
+    "request": {
+      "source": "independent-default",
+      "executable": null
+    },
+    "effective": {
+      "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+      "kind": "playwright-chromium-headless-shell",
+      "playwrightRevision": 1234,
+      "installedStableChrome": false,
+      "fileIdentity": {
+        "device": 16777234,
+        "inode": 789173631,
+        "sizeBytes": 163329264,
+        "modifiedMs": 1785793228817.7512
+      }
+    },
+    "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+    "rejectedCandidates": []
+  },
+  "invocation": {
+    "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+    "outputPath": "repo://artifacts/authored-packing-exact-repeated-convergence-v0/selected-solid.png",
+    "reportPath": "repo://artifacts/authored-packing-exact-repeated-convergence-v0/selected-solid-capture-report.json",
+    "viewport": {
+      "width": 1800,
+      "height": 1200
+    },
+    "captureTimeoutMs": 30000,
+    "cleanupGraceMs": 1000,
+    "domDatasetKeys": [
+      "witnessLoaded",
+      "witnessRenderComplete",
+      "witnessRenderFrame",
+      "witnessCaptureBatch",
+      "witnessRouteRequested",
+      "witnessRouteEffective",
+      "witnessBundle",
+      "witnessFamily",
+      "witnessAuthoredSourceCarrier",
+      "witnessArm",
+      "witnessPhase",
+      "witnessRenderMode",
+      "witnessDiagnosticAvailability",
+      "witnessDiagnosticsActive"
+    ],
+    "captureBatchIdentity": {
+      "schema": "kaminos.authored-packing-exact-repeated-convergence-capture-batch.v0",
+      "semanticName": "Same-camera start and selected captures for repeated exact authored descent",
+      "sourceVisualReportSha256": "d00b7175439c1ac57811c8970c73a5c540e38fe26edf8fcd83ae355893a983d6",
+      "sourceResultSha256": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+      "bundleSha256": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+      "routeRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+      "routeEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+      "viewport": {
+        "width": 1800,
+        "height": 1200
+      },
+      "semanticViews": [
+        {
+          "id": "start-solid",
+          "parameters": {
+            "phase": "initial",
+            "render": "solid"
+          }
+        },
+        {
+          "id": "selected-solid",
+          "parameters": {
+            "phase": "packed",
+            "render": "solid"
+          }
+        },
+        {
+          "id": "start-overlaps",
+          "parameters": {
+            "phase": "initial",
+            "render": "solid",
+            "diagnostics": "contacts"
+          }
+        },
+        {
+          "id": "selected-overlaps",
+          "parameters": {
+            "phase": "packed",
+            "render": "solid",
+            "diagnostics": "contacts"
+          }
+        },
+        {
+          "id": "selected-motion-ghost",
+          "parameters": {
+            "phase": "packed",
+            "render": "solid",
+            "diagnostics": "motion-ghost"
+          }
+        }
+      ],
+      "sha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f"
+    },
+    "pathEncoding": "public-locators-v0"
+  },
+  "process": {
+    "pid": 36538,
+    "processGroupId": 36538,
+    "detachedProcessGroup": true,
+    "exit": {
+      "code": 143,
+      "signal": null
+    },
+    "cleanup": {
+      "processGroupId": 36538,
+      "graceMs": 1000,
+      "groupPresentBefore": true,
+      "actions": [
+        {
+          "signal": "SIGTERM",
+          "result": "sent"
+        }
+      ],
+      "groupPresentAfter": false,
+      "status": "complete-no-process-group-remains"
+    },
+    "profileCleanup": {
+      "status": "complete-removed",
+      "path": "tmp://independent-headless-profile"
+    }
+  },
+  "stderr": {
+    "limitBytes": 65536,
+    "totalBytes": 5765,
+    "retainedBytes": 5765,
+    "truncated": false,
+    "tail": "\nDevTools listening on ws://127.0.0.1:56759/devtools/browser/f22e5a80-357f-45c8-88f2-5d32e073f229\n[0825/201916.572455:ERROR:gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc:1211] []Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\n[0825/201916.634118:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0825/201917.023280:INFO:CONSOLE:0] \"[]Automatic fallback to software WebGL has been deprecated. Please use the --enable-unsafe-swiftshader flag to opt in to lower security guarantees for trusted content.\", source: http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f (0)\n[0825/201917.023310:INFO:CONSOLE:0] \"[.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f (0)\n[0825/201917.025486:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0825/201917.045968:INFO:CONSOLE:0] \"[.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f (0)\n[0825/201917.048235:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\n[0825/201917.067904:INFO:CONSOLE:0] \"[.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels\", source: http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f (0)\n[0825/201917.069430:ERROR:gpu/command_buffer/service/gl_utils.cc:430] [.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\n[0825/201917.088726:INFO:CONSOLE:0] \"[.WebGL-0x11400519000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)\", source: http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f (0)\n[0825/201917.207251:ERROR:content/browser/network_service_instance_impl.cc:618] Network service crashed or was terminated, restarting service.\n[0825/201917.210875:ERROR:content/browser/gpu/gpu_process_host.cc:1035] GPU process exited unexpectedly: exit_code=15\n[0825/201917.210888:WARNING:content/browser/gpu/gpu_process_host.cc:1479] The GPU process has crashed 1 time(s)\n[0825/201917.218963:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Unknown service name (1102)\n[0825/201917.219190:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n[0825/201917.228117:ERROR:base/apple/mach_port_rendezvous_mac.cc:256] bootstrap_look_up org.chromium.Chromium.MachPortRendezvousServer.1: Permission denied (1100)\n[0825/201917.228313:ERROR:base/memory/shared_memory_switch.cc:261] No rendezvous client, terminating process (parent died?)\n"
+  },
+  "primaryOutput": {
+    "path": "repo://artifacts/authored-packing-exact-repeated-convergence-v0/selected-solid.png",
+    "sizeBytes": 173622,
+    "sha256": "8d01ba4c2f438f3639e691d21de5609d7133c3cd98ff9c0895defff1910a272c",
+    "png": {
+      "width": 1800,
+      "height": 1200,
+      "bitDepth": 8,
+      "colorType": 2,
+      "compression": 0,
+      "filter": 0,
+      "interlace": 0,
+      "chunkCount": 46,
+      "idatBytes": 173049
+    },
+    "visualSignal": {
+      "width": 1800,
+      "height": 1200,
+      "pixelCount": 2160000,
+      "nonUniformPixels": 527527,
+      "minimumChannel": 0,
+      "maximumChannel": 255,
+      "channelRange": 255,
+      "admission": "nonblank-v0"
+    }
+  },
+  "frameReceipt": {
+    "status": "complete",
+    "route": "same-cdp-page-frame-v0",
+    "targetId": "D82FCEE2FCCA6E4EB30FCE22AFEA16A7",
+    "targetType": "page",
+    "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+    "dataset": {
+      "witnessLoaded": "true",
+      "witnessRenderComplete": "true",
+      "witnessRenderFrame": "4",
+      "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+      "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+      "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+      "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+      "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+      "witnessArm": "exact-active-row-trajectory",
+      "witnessPhase": "packed",
+      "witnessRenderMode": "solid",
+      "witnessDiagnosticAvailability": "contacts,sourceGhost,motionGhost",
+      "witnessDiagnosticsActive": "none"
+    },
+    "renderComplete": "true",
+    "renderFrame": "4",
+    "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+    "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+  },
+  "domReceipt": null,
+  "interruption": null,
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "same-page-frame-captured",
+    "browser": {
+      "schema": "kaminos.headless-browser-resolution.v0",
+      "request": {
+        "source": "independent-default",
+        "executable": null
+      },
+      "effective": {
+        "executable": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "realPath": "home://Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell",
+        "kind": "playwright-chromium-headless-shell",
+        "playwrightRevision": 1234,
+        "installedStableChrome": false,
+        "fileIdentity": {
+          "device": 16777234,
+          "inode": 789173631,
+          "sizeBytes": 163329264,
+          "modifiedMs": 1785793228817.7512
+        }
+      },
+      "fallbackPolicy": "independent-artifact-or-fail-no-stable-chrome",
+      "rejectedCandidates": []
+    },
+    "primaryOutput": {
+      "path": "repo://artifacts/authored-packing-exact-repeated-convergence-v0/selected-solid.png",
+      "sizeBytes": 173622,
+      "sha256": "8d01ba4c2f438f3639e691d21de5609d7133c3cd98ff9c0895defff1910a272c",
+      "png": {
+        "width": 1800,
+        "height": 1200,
+        "bitDepth": 8,
+        "colorType": 2,
+        "compression": 0,
+        "filter": 0,
+        "interlace": 0,
+        "chunkCount": 46,
+        "idatBytes": 173049
+      },
+      "visualSignal": {
+        "width": 1800,
+        "height": 1200,
+        "pixelCount": 2160000,
+        "nonUniformPixels": 527527,
+        "minimumChannel": 0,
+        "maximumChannel": 255,
+        "channelRange": 255,
+        "admission": "nonblank-v0"
+      }
+    },
+    "frameReceipt": {
+      "status": "complete",
+      "route": "same-cdp-page-frame-v0",
+      "targetId": "D82FCEE2FCCA6E4EB30FCE22AFEA16A7",
+      "targetType": "page",
+      "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "dataset": {
+        "witnessLoaded": "true",
+        "witnessRenderComplete": "true",
+        "witnessRenderFrame": "4",
+        "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+        "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+        "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+        "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+        "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+        "witnessArm": "exact-active-row-trajectory",
+        "witnessPhase": "packed",
+        "witnessRenderMode": "solid",
+        "witnessDiagnosticAvailability": "contacts,sourceGhost,motionGhost",
+        "witnessDiagnosticsActive": "none"
+      },
+      "renderComplete": "true",
+      "renderFrame": "4",
+      "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+    }
+  }
+}

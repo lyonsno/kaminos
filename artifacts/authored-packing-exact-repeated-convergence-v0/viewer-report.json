@@ -1,0 +1,74 @@
+{
+  "schema": "kaminos.authored-packing-exact-repeated-convergence-visual-report.v0",
+  "semanticName": "Identity-bound same-camera witness for eight exact authored packing steps",
+  "status": "generated-and-exercised",
+  "sourceResultSha256": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+  "sourceVerificationSha256": "e971d5f6b2817e32a8763a2284a2dc9ab5a007d3d3b909bb90038e8c74a5a43d",
+  "bundleIdentity": {
+    "schema": "kaminos.authored-packing-exact-residual-trajectory-visual-bundle.v0",
+    "semanticName": "Repeated exact authored six-body descent visual witness",
+    "generation": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+    "sourceResultSha256": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+    "verificationSha256": "e971d5f6b2817e32a8763a2284a2dc9ab5a007d3d3b909bb90038e8c74a5a43d",
+    "trajectorySha256": "5f06426383b53eb9d27bf058b132a342f5958b212c6f82f35128dcaeaefcae00",
+    "familySha256": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+    "sourceCarrierSha256": "f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391",
+    "authoredSourceCarrierSha256": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+    "armIdentities": [
+      {
+        "semanticId": "exact-active-row-trajectory",
+        "initialCarrierSha256": "f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391",
+        "packedCarrierSha256": "fedf18c8e1bcdc9b72d688700ae6e2a17d6bd15200979cc9254904ca6bc35bd3"
+      }
+    ],
+    "route": "authored-packing-exact-residual-trajectory-orbitable-v0",
+    "sha256": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3"
+  },
+  "route": {
+    "requested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+    "effective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+    "fallbackUsed": false
+  },
+  "registration": {
+    "mount": "Kaminos worktree HTTP root",
+    "relativeUrl": "/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0",
+    "state": "served-and-captured",
+    "baseUrl": "http://127.0.0.1:8798",
+    "captureBatchSha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f"
+  },
+  "html": {
+    "path": "index.html",
+    "sha256": "4c24dc655870d93be1585a673ae84d4fa1152c127da1175399a36404f4119cd5",
+    "sizeBytes": 197471
+  },
+  "semanticViews": [
+    {
+      "id": "start-solid",
+      "query": "phase=initial&render=solid"
+    },
+    {
+      "id": "selected-solid",
+      "query": "phase=packed&render=solid"
+    },
+    {
+      "id": "start-overlaps",
+      "query": "phase=initial&render=solid&diagnostics=contacts"
+    },
+    {
+      "id": "selected-overlaps",
+      "query": "phase=packed&render=solid&diagnostics=contacts"
+    },
+    {
+      "id": "selected-motion-ghost",
+      "query": "phase=packed&render=solid&diagnostics=motion-ghost"
+    }
+  ],
+  "claimCeiling": "same-camera visual comparison of one independently verified eight-step exact authored trajectory",
+  "captureBatch": {
+    "path": "capture-batch-report.json",
+    "sha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f"
+  },
+  "identity": {
+    "sha256": "c15f23b1c88b3d2d1399b4e4d18e4ba0d0aed906550f747fb686cbbaf0904598"
+  }
+}

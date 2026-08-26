@@ -1,0 +1,327 @@
+{
+  "schema": "kaminos.authored-packing-exact-repeated-convergence-capture-batch.v0",
+  "semanticName": "Same-camera start and selected captures for repeated exact authored descent",
+  "sourceVisualReportSha256": "d00b7175439c1ac57811c8970c73a5c540e38fe26edf8fcd83ae355893a983d6",
+  "sourceResultSha256": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+  "bundleSha256": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+  "routeRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+  "routeEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+  "viewport": {
+    "width": 1800,
+    "height": 1200
+  },
+  "semanticViews": [
+    {
+      "id": "start-solid",
+      "parameters": {
+        "phase": "initial",
+        "render": "solid"
+      }
+    },
+    {
+      "id": "selected-solid",
+      "parameters": {
+        "phase": "packed",
+        "render": "solid"
+      }
+    },
+    {
+      "id": "start-overlaps",
+      "parameters": {
+        "phase": "initial",
+        "render": "solid",
+        "diagnostics": "contacts"
+      }
+    },
+    {
+      "id": "selected-overlaps",
+      "parameters": {
+        "phase": "packed",
+        "render": "solid",
+        "diagnostics": "contacts"
+      }
+    },
+    {
+      "id": "selected-motion-ghost",
+      "parameters": {
+        "phase": "packed",
+        "render": "solid",
+        "diagnostics": "motion-ghost"
+      }
+    }
+  ],
+  "status": "completed",
+  "identity": {
+    "schema": "kaminos.authored-packing-exact-repeated-convergence-capture-batch.v0",
+    "semanticName": "Same-camera start and selected captures for repeated exact authored descent",
+    "sourceVisualReportSha256": "d00b7175439c1ac57811c8970c73a5c540e38fe26edf8fcd83ae355893a983d6",
+    "sourceResultSha256": "e6b2e8fac52dcf00bcc765a53b45a68f71ae8b56e1e394560fa2175cff754a51",
+    "bundleSha256": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+    "routeRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+    "routeEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+    "viewport": {
+      "width": 1800,
+      "height": 1200
+    },
+    "semanticViews": [
+      {
+        "id": "start-solid",
+        "parameters": {
+          "phase": "initial",
+          "render": "solid"
+        }
+      },
+      {
+        "id": "selected-solid",
+        "parameters": {
+          "phase": "packed",
+          "render": "solid"
+        }
+      },
+      {
+        "id": "start-overlaps",
+        "parameters": {
+          "phase": "initial",
+          "render": "solid",
+          "diagnostics": "contacts"
+        }
+      },
+      {
+        "id": "selected-overlaps",
+        "parameters": {
+          "phase": "packed",
+          "render": "solid",
+          "diagnostics": "contacts"
+        }
+      },
+      {
+        "id": "selected-motion-ghost",
+        "parameters": {
+          "phase": "packed",
+          "render": "solid",
+          "diagnostics": "motion-ghost"
+        }
+      }
+    ],
+    "sha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f"
+  },
+  "registration": {
+    "requestedBaseUrl": "http://127.0.0.1:8798",
+    "effectiveBaseUrl": "http://127.0.0.1:8798",
+    "relativeUrl": "/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0",
+    "mountState": "served-from-kaminos-worktree-root"
+  },
+  "captures": [
+    {
+      "semanticView": "start-solid",
+      "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=initial&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "outputPath": "start-solid.png",
+      "reportPath": "start-solid-capture-report.json",
+      "reportSha256": "5526c62e1cc4dcd9be2f16b41bf6d90cadb4b0e342e08294b9cee512450dac5d",
+      "sha256": "a90df24afdc0877d63f29834f6004138279639d9febbd9b80dc9429805795c66",
+      "sizeBytes": 174398,
+      "frameReceipt": {
+        "status": "complete",
+        "route": "same-cdp-page-frame-v0",
+        "targetId": "131590D7077D85855D9882897638E50F",
+        "targetType": "page",
+        "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=initial&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessRenderComplete": "true",
+          "witnessRenderFrame": "4",
+          "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+          "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+          "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+          "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "witnessArm": "exact-active-row-trajectory",
+          "witnessPhase": "initial",
+          "witnessRenderMode": "solid",
+          "witnessDiagnosticAvailability": "contacts,sourceGhost",
+          "witnessDiagnosticsActive": "none"
+        },
+        "renderComplete": "true",
+        "renderFrame": "4",
+        "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+      },
+      "route": {
+        "requested": "independent-headless-same-page-screenshot-v1",
+        "effective": "independent-headless-same-page-screenshot-v1",
+        "fallbackUsed": false
+      }
+    },
+    {
+      "semanticView": "selected-solid",
+      "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "outputPath": "selected-solid.png",
+      "reportPath": "selected-solid-capture-report.json",
+      "reportSha256": "2bc92f3ef78cfb42b76698aeb14385c0a39d8151e10e4606b9a79b7c9c232c7a",
+      "sha256": "8d01ba4c2f438f3639e691d21de5609d7133c3cd98ff9c0895defff1910a272c",
+      "sizeBytes": 173622,
+      "frameReceipt": {
+        "status": "complete",
+        "route": "same-cdp-page-frame-v0",
+        "targetId": "D82FCEE2FCCA6E4EB30FCE22AFEA16A7",
+        "targetType": "page",
+        "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessRenderComplete": "true",
+          "witnessRenderFrame": "4",
+          "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+          "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+          "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+          "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "witnessArm": "exact-active-row-trajectory",
+          "witnessPhase": "packed",
+          "witnessRenderMode": "solid",
+          "witnessDiagnosticAvailability": "contacts,sourceGhost,motionGhost",
+          "witnessDiagnosticsActive": "none"
+        },
+        "renderComplete": "true",
+        "renderFrame": "4",
+        "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+      },
+      "route": {
+        "requested": "independent-headless-same-page-screenshot-v1",
+        "effective": "independent-headless-same-page-screenshot-v1",
+        "fallbackUsed": false
+      }
+    },
+    {
+      "semanticView": "start-overlaps",
+      "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=initial&render=solid&diagnostics=contacts&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "outputPath": "start-overlaps.png",
+      "reportPath": "start-overlaps-capture-report.json",
+      "reportSha256": "43f1ef962715ebcc4e78ad3d57e33ae4e474eb5e83846cf90bd511c498f9eb9c",
+      "sha256": "9e8409fef15265ba5c2e5e590f3797d0ff158dbd67d979bd806aeeda5e969a34",
+      "sizeBytes": 219615,
+      "frameReceipt": {
+        "status": "complete",
+        "route": "same-cdp-page-frame-v0",
+        "targetId": "434E265247076F2FFACA1CCF6A8A9923",
+        "targetType": "page",
+        "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=initial&render=solid&diagnostics=contacts&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessRenderComplete": "true",
+          "witnessRenderFrame": "4",
+          "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+          "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+          "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+          "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "witnessArm": "exact-active-row-trajectory",
+          "witnessPhase": "initial",
+          "witnessRenderMode": "solid",
+          "witnessDiagnosticAvailability": "contacts,sourceGhost",
+          "witnessDiagnosticsActive": "contacts"
+        },
+        "renderComplete": "true",
+        "renderFrame": "4",
+        "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+      },
+      "route": {
+        "requested": "independent-headless-same-page-screenshot-v1",
+        "effective": "independent-headless-same-page-screenshot-v1",
+        "fallbackUsed": false
+      }
+    },
+    {
+      "semanticView": "selected-overlaps",
+      "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&diagnostics=contacts&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "outputPath": "selected-overlaps.png",
+      "reportPath": "selected-overlaps-capture-report.json",
+      "reportSha256": "da54875bfdc39a08fbda08a0cd1d79e81b8df82c3d591e75c79120fcb0ef6718",
+      "sha256": "c9065acd38e89b713c9bd9f96240f8d977778155bdf6640e40839930fd2156cd",
+      "sizeBytes": 219075,
+      "frameReceipt": {
+        "status": "complete",
+        "route": "same-cdp-page-frame-v0",
+        "targetId": "61C49E8648D77DC00965A7B31B34900E",
+        "targetType": "page",
+        "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&diagnostics=contacts&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessRenderComplete": "true",
+          "witnessRenderFrame": "4",
+          "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+          "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+          "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+          "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "witnessArm": "exact-active-row-trajectory",
+          "witnessPhase": "packed",
+          "witnessRenderMode": "solid",
+          "witnessDiagnosticAvailability": "contacts,sourceGhost,motionGhost",
+          "witnessDiagnosticsActive": "contacts"
+        },
+        "renderComplete": "true",
+        "renderFrame": "4",
+        "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+      },
+      "route": {
+        "requested": "independent-headless-same-page-screenshot-v1",
+        "effective": "independent-headless-same-page-screenshot-v1",
+        "fallbackUsed": false
+      }
+    },
+    {
+      "semanticView": "selected-motion-ghost",
+      "url": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&diagnostics=motion-ghost&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+      "outputPath": "selected-motion-ghost.png",
+      "reportPath": "selected-motion-ghost-capture-report.json",
+      "reportSha256": "6791dd8a34d5cf169da50a3e822a1047d81f92e673053f6b5c588f0ccd91c892",
+      "sha256": "e6f50aee5755a4cc0c4ac2b879349532557ab660cf300033d3c55b66deee28c7",
+      "sizeBytes": 206978,
+      "frameReceipt": {
+        "status": "complete",
+        "route": "same-cdp-page-frame-v0",
+        "targetId": "65E52E5D98E5F4446C9ACEEFE8F4F03E",
+        "targetType": "page",
+        "requestedUrl": "http://127.0.0.1:8798/artifacts/authored-packing-exact-repeated-convergence-v0/index.html?bundle=cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3&family=d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f&source=f4467a84ca6bab72eaaf9044a30af7f0ca0f1b4696c4ec6f992f0b578871f391&routeRequested=authored-packing-exact-residual-trajectory-orbitable-v0&routeEffective=authored-packing-exact-residual-trajectory-orbitable-v0&phase=packed&render=solid&diagnostics=motion-ghost&captureBatch=0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "dataset": {
+          "witnessLoaded": "true",
+          "witnessRenderComplete": "true",
+          "witnessRenderFrame": "4",
+          "witnessCaptureBatch": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+          "witnessRouteRequested": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessRouteEffective": "authored-packing-exact-residual-trajectory-orbitable-v0",
+          "witnessBundle": "cd5fc2790069b96c541af3c13e40f45a321e1f2521e1b2de9f227691083189c3",
+          "witnessFamily": "d58ca4fc4fa664b836438b26cb3e33d61271f85a2cd2573fe6f9caa41515db6f",
+          "witnessAuthoredSourceCarrier": "f5cddefa114eb87c0b88de1eb0af11d3dc99abfed1863a6282da7c0771768476",
+          "witnessArm": "exact-active-row-trajectory",
+          "witnessPhase": "packed",
+          "witnessRenderMode": "solid",
+          "witnessDiagnosticAvailability": "contacts,sourceGhost,motionGhost",
+          "witnessDiagnosticsActive": "motionGhost"
+        },
+        "renderComplete": "true",
+        "renderFrame": "4",
+        "captureBatchIdentitySha256": "0cac948e470d1d4f3ce53561b8cb006e4999c99ab49d5491f90acbd9d8f1963f",
+        "ordering": "dataset-after-two-animation-frames-then-page-capture-screenshot"
+      },
+      "route": {
+        "requested": "independent-headless-same-page-screenshot-v1",
+        "effective": "independent-headless-same-page-screenshot-v1",
+        "fallbackUsed": false
+      }
+    }
+  ],
+  "failurePhase": null,
+  "error": null,
+  "lastTrustworthyEvidence": {
+    "phase": "all-declared-captures-completed",
+    "completedCaptureCount": 5
+  }
+}
