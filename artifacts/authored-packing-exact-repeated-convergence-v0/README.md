@@ -2,7 +2,7 @@
 
 Question: Does the reviewed exact tetrahedral residual carrier produce a visually meaningful packing change across its first eight accepted global active-row/trust-region steps, while preserving the authenticated start and hard constraints?
 
-Result: The exact trajectory is lawful and strictly descending, but the visible change after eight accepted steps is modest. The solid start and selected frames are nearly indistinguishable from the default camera. The overlap-volume frames preserve the same three pair-contact families with slightly reduced maximum penetration, and the selected motion-ghost frame makes the small distributed displacement legible. This evidence supports sustained descent; it does not support convergence or contact closure.
+Result: The exact trajectory is lawful and strictly descending, but it does not produce operator-visible packing motion after eight accepted steps. The solid start and selected frames are visually indistinguishable from the default camera. The largest boundary-node displacement is `0.0020580307` across a `237.3552438`-unit assembly diagonal (`8.67e-6` of the assembly scale, approximately `0.01` pixel at the captured framing). The overlap-volume frames preserve the same three pair-contact families with a slightly reduced maximum penetration. The selected motion-ghost frame superimposes nearly coincident surfaces and must not be interpreted as visually legible displacement. This evidence supports lawful local residual descent only; it does not support visible packing progress, convergence, or contact closure.
 
 Route:
 
@@ -28,7 +28,7 @@ Images:
 - `selected-solid.png`: selected carrier after eight accepted global steps with the identical camera and material state.
 - `start-overlaps.png`: start with exact intersecting tetrahedral-cell volumes highlighted.
 - `selected-overlaps.png`: selected carrier with exact intersecting volumes highlighted; the same three pair-contact families remain.
-- `selected-motion-ghost.png`: selected carrier with the global-search start ghosted, making the small distributed motion visible.
+- `selected-motion-ghost.png`: selected carrier with the global-search start ghosted. The surfaces are too nearly coincident to expose displacement at this framing; the frame verifies overlay/state binding, not visually meaningful motion.
 
 Receipts:
 
