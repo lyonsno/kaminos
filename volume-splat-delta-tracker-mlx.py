@@ -39,11 +39,13 @@ STENCIL_OFFSETS = np.array(
     [(dx, dy, dz) for dx in (-2, 0, 2) for dy in (-2, 0, 2) for dz in (-2, 0, 2)],
     dtype=np.float64,
 )
-FEATURE_DIM = 27 + 27 + 12
+LOCAL_FEATURE_DIM = 27 + 27 + 12
+FEATURE_DIM = LOCAL_FEATURE_DIM * 2  # local + population-pooled context
 OUTPUT_DIM = 3 + 6 + 3 + 1
 HIDDEN = 128
 CENTER_DELTA_SCALE_CELLS = 2.0   # max useful center move per frame, in cells
-RAW_DELTA_SCALE = 0.1            # scale for raw cholesky/emission/extinction deltas
+SHAPE_DELTA_SCALE = 0.1          # raw cholesky deltas
+APPEARANCE_DELTA_SCALE = 0.5     # raw emission/extinction deltas (v1's 0.1 capped the diffuse-body fix)
 TRIL_INDICES = np.tril_indices(3)
 
 
@@ -127,8 +129,13 @@ def splat_features(
         _lattice_lookup(lattice_a, grid_pos)[:, None] / scale,
         _lattice_lookup(lattice_b, grid_pos)[:, None] / scale,
     ]
-    features = np.concatenate(parts, axis=1)
-    assert features.shape == (n, FEATURE_DIM), features.shape
+    local = np.concatenate(parts, axis=1)
+    assert local.shape == (n, LOCAL_FEATURE_DIM), local.shape
+    # Population-pooled context: the diffuse low-frequency error the v1 local
+    # model left untouched is collective; give every splat a summary of the
+    # whole population's local observations.
+    pooled = np.broadcast_to(local.mean(axis=0, keepdims=True), local.shape)
+    features = np.concatenate([local, pooled], axis=1)
     return features
 
 
@@ -170,9 +177,9 @@ def _apply_deltas_mx(raw_params: dict, deltas, cell_world: float):
     import mlx.core as mx
 
     d_center = deltas[:, 0:3] * (CENTER_DELTA_SCALE_CELLS * cell_world)
-    d_chol_flat = deltas[:, 3:9] * RAW_DELTA_SCALE
-    d_emission = deltas[:, 9:12] * RAW_DELTA_SCALE
-    d_extinction = deltas[:, 12] * RAW_DELTA_SCALE
+    d_chol_flat = deltas[:, 3:9] * SHAPE_DELTA_SCALE
+    d_emission = deltas[:, 9:12] * APPEARANCE_DELTA_SCALE
+    d_extinction = deltas[:, 12] * APPEARANCE_DELTA_SCALE
     n = d_center.shape[0]
     chol_delta = mx.zeros((n, 3, 3))
     rows, cols = TRIL_INDICES
