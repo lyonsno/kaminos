@@ -110,6 +110,16 @@ export {
 } from './kernel-profile.js';
 
 export {
+  WEBGPU_INFERENCE_KIT_ADOPTION_PREFLIGHT_SCHEMA,
+  WEBGPU_INFERENCE_KIT_ADOPTION_RECEIPT_SCHEMA,
+  WEBGPU_INFERENCE_KIT_CAPABILITIES,
+  WEBGPU_INFERENCE_KIT_IDENTITY_SCHEMA,
+  assertWebGpuInferenceKitAdoption,
+  createWebGpuInferenceKitAdoptionReceipt,
+  createWebGpuInferenceKitIdentity,
+} from './effective-adoption.js';
+
+export {
   createWebGpuRuntimeProfile,
   createWebGpuRuntimeProfileInput,
   validateWebGpuRuntimeProfile,

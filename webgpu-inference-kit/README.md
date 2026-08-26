@@ -293,6 +293,72 @@ WGSL, execute model kernels, observe physical buffer destruction, prove
 numerical parity by itself, or claim foreground cadence. Those remain real
 adapter and product-route obligations.
 
+### Bind A Port To The Runtime It Loaded
+
+Reject stale installs before model work, then bind the completed route to the
+same package-owned identity:
+
+```js
+import {
+  WEBGPU_INFERENCE_KIT_CAPABILITIES,
+  WEBGPU_INFERENCE_KIT_VERSION,
+  assertWebGpuInferenceKitAdoption,
+  createWebGpuInferenceKitAdoptionReceipt,
+} from "@kaminos/webgpu-inference-kit";
+
+const preflight = assertWebGpuInferenceKitAdoption({
+  adoptionId: "sharp:browser-webgpu:current-kit",
+  requestedPackage: {
+    name: "@kaminos/webgpu-inference-kit",
+    version: WEBGPU_INFERENCE_KIT_VERSION,
+  },
+  consumer: {
+    consumerId: "sharp-webgpu",
+    sourceRevision: SHARP_SOURCE_REVISION,
+    routeId: "sharp.image-to-splat.webgpu-local.v0",
+    adapterId: "sharp.browser-webgpu.v0",
+  },
+  resolver: {
+    authority: "consumer-observed",
+    locatorKind: "bundle-url",
+    locator: import.meta.url,
+    packageName: "@kaminos/webgpu-inference-kit",
+    packageVersion: RESOLVED_KIT_VERSION,
+  },
+  requiredCapabilities: WEBGPU_INFERENCE_KIT_CAPABILITIES,
+  callerClaims: { kitVersion: configuredKitVersion },
+});
+
+const adoption = createWebGpuInferenceKitAdoptionReceipt({
+  preflight,
+  conformanceReport: conformance,
+  terminalSettlement: {
+    status: "succeeded",
+    routeId: preflight.consumer.routeId,
+    pendingRangeCount: 0,
+    activeWorkCount: 0,
+    outputIdentity: {
+      kind: "sha256",
+      value: canonicalOutputSha256,
+    },
+  },
+});
+```
+
+The package version and capability schemas in `packageIdentity` come from the
+code that executed. `resolver` records what the consumer's loader observed;
+its authority remains `consumer-observed`. A bundle URL stays a bundle URL and
+is never presented as an NPM installation path. Caller claims are retained for
+diagnosis but cannot override either identity.
+
+Preflight throws `WebGpuInferenceKitAdoptionError` before model work when the
+requested, loaded, or resolver-observed versions disagree, or when a required
+capability schema is stale. Terminal receipt construction re-runs that
+preflight and also requires matching route, adapter, package, source revision,
+conformance settlement, zero pending ranges, zero active work, and a concrete
+output identity. Every failure retains the immutable failed receipt at
+`error.receipt`.
+
 ## Build Runtime Primitives
 
 ```js
