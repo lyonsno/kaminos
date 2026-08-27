@@ -62,6 +62,11 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--iterations", type=int, default=1500)
     parser.add_argument("--holdout", type=int, default=3)
+    parser.add_argument(
+        "--holdout-states", default="",
+        help="comma-separated state ids whose OUTGOING pairs are held out "
+             "(overrides --holdout; keeps eval comparable across data scales)",
+    )
     parser.add_argument("--fit-width", type=int, default=96)
     parser.add_argument("--fit-samples-per-cell", type=int, default=3)
     parser.add_argument("--fit-cameras", type=int, default=4)
@@ -129,8 +134,15 @@ def main() -> int:
             med_a, _cam_a, lat_a = per_state[sid_a]
             med_b, _cam_b, lat_b = per_state[sid_b]
             pairs.append(TRACKER.TrainingPair(sid_a, sid_b, a, lat_a, lat_b, med_b))
-        train_pairs = pairs[: len(pairs) - args.holdout]
-        holdout_pairs = pairs[len(pairs) - args.holdout:]
+        if args.holdout_states:
+            held_ids = {v.strip() for v in args.holdout_states.split(",") if v.strip()}
+            holdout_pairs = [p for p in pairs if p.id_a in held_ids]
+            train_pairs = [p for p in pairs if p.id_a not in held_ids]
+            if len(holdout_pairs) != len(held_ids):
+                raise RuntimeError(f"holdout states unmatched: wanted {held_ids}, got {[p.id_a for p in holdout_pairs]}")
+        else:
+            train_pairs = pairs[: len(pairs) - args.holdout]
+            holdout_pairs = pairs[len(pairs) - args.holdout:]
         report["trainPairs"] = [(p.id_a, p.id_b) for p in train_pairs]
         report["holdoutPairs"] = [(p.id_a, p.id_b) for p in holdout_pairs]
         flush()

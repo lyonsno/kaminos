@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -124,6 +125,22 @@ def main():
         rows.append(row)
         print(f"[rollout] hop {hop} -> {sid_b}: tracker {row['trackerMae']:.4f} "
               f"frozen {row['frozenMae']:.4f} oracle {row['oracleMae']:.4f}", flush=True)
+        if os.environ.get("SAVE_FRAMES"):
+            from PIL import Image
+            med, cam, lat = per[sid_b]
+            def render_img(state):
+                latm = ORACLE.mixture_density_lattice(state, med, fine_grid=96)
+                img, _t, _r = TARGET.march_density_lattice(latm, med, cam, **RENDER)
+                return np.asarray(img, dtype=np.float64)
+            target_img, _a, _b = TARGET.march_density_lattice(lat, med, cam, **RENDER)
+            frames = {"target": np.asarray(target_img, dtype=np.float64),
+                      "tracker": render_img(tracked), "frozen": render_img(frozen),
+                      "oracle": render_img(fitted(sid_b))}
+            scale = max(frames["target"].max(), 1e-9)
+            fdir = OUT / "rollout-frames"; fdir.mkdir(exist_ok=True)
+            for arm, img in frames.items():
+                Image.fromarray((np.clip(img / scale, 0, 1) * 255).astype(np.uint8)).save(
+                    fdir / f"hop{hop:02d}-{arm}.png")
     (OUT / "rollout-eval.json").write_text(json.dumps(rows, indent=2))
 
 
