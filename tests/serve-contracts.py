@@ -24,6 +24,15 @@ def test_http_status_404_log_does_not_crash():
     )
 
 
+def test_app_shell_cache_is_disabled_without_disabling_mesh_cache():
+    assert serve.should_disable_browser_cache("/")
+    assert serve.should_disable_browser_cache("/?load=scratch%2Fmesh.glb")
+    assert serve.should_disable_browser_cache("/index.html?load=scratch%2Fmesh.glb")
+    assert serve.should_disable_browser_cache("/viewer.js?v=4")
+    assert not serve.should_disable_browser_cache("/scratch/mesh.glb")
+    assert not serve.should_disable_browser_cache("/textures/albedo.png")
+
+
 def test_volume_only_scene_save_name_uses_scene_fallback():
     data = {
         "schema": "kaminos.scene.v1",
@@ -356,6 +365,7 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
+    test_app_shell_cache_is_disabled_without_disabling_mesh_cache()
     test_volume_only_scene_save_name_uses_scene_fallback()
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()

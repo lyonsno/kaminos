@@ -492,6 +492,11 @@ def record_job_output_event(event):
         JOB_OUTPUT_EVENTS.append(event)
 
 
+def should_disable_browser_cache(raw_path):
+    request_path = urlparse(raw_path).path
+    return request_path in {"", "/"} or request_path.endswith((".html", ".js"))
+
+
 class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -998,6 +1003,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def end_headers(self):
+        if should_disable_browser_cache(self.path):
+            self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
 
