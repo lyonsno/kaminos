@@ -7,6 +7,7 @@ export const WEBGPU_COOPERATIVE_REPORT_VALIDATION_SCHEMA =
   'kaminos.webgpu-cooperative-report-validation.v0';
 
 const STATUS_VALUES = new Set(['succeeded', 'failed', 'cancelled']);
+const PHASE_STATUS_VALUES = new Set(['complete', 'failed', 'cancelled', 'active', 'pending']);
 const SCHEDULING_MODES = new Set(['cooperative', 'disabled']);
 const COMPLETION_POLICIES = new Set(['strict-prefix', 'bounded-prefix']);
 
@@ -90,6 +91,57 @@ function validateExpectedIdentity(errors, report, expected, field) {
   }
 }
 
+function validateProgressMeasure(errors, value, label) {
+  if (!isNonnegativeSafeInteger(value.completedItems)) {
+    errors.push(`${label}.completedItems must be a nonnegative safe integer`);
+  }
+  if (value.totalItems == null) {
+    if (value.progress != null || value.percent != null || value.completedWeight != null) {
+      errors.push(`${label} must not claim numeric progress without a totalItems denominator`);
+    }
+    return;
+  }
+  if (!isNonnegativeSafeInteger(value.totalItems)) {
+    errors.push(`${label}.totalItems must be null or a nonnegative safe integer`);
+    return;
+  }
+  if (
+    isNonnegativeSafeInteger(value.completedItems)
+    && value.completedItems > value.totalItems
+  ) {
+    errors.push(`${label}.completedItems must not exceed totalItems`);
+  }
+  if (!Number.isFinite(value.totalWeight) || value.totalWeight <= 0) {
+    errors.push(`${label}.totalWeight must be finite and positive`);
+  }
+  if (!isFiniteNonnegative(value.completedWeight)) {
+    errors.push(`${label}.completedWeight must be finite nonnegative`);
+  } else if (
+    Number.isFinite(value.totalWeight)
+    && value.completedWeight > value.totalWeight
+  ) {
+    errors.push(`${label}.completedWeight must not exceed totalWeight`);
+  }
+  if (!Number.isFinite(value.progress) || value.progress < 0 || value.progress > 1) {
+    errors.push(`${label}.progress must be finite and between 0 and 1`);
+  } else if (
+    isFiniteNonnegative(value.completedWeight)
+    && Number.isFinite(value.totalWeight)
+    && value.totalWeight > 0
+    && !sameDuration(value.progress, value.completedWeight / value.totalWeight)
+  ) {
+    errors.push(`${label}.progress must equal completedWeight / totalWeight`);
+  }
+  if (!Number.isFinite(value.percent) || value.percent < 0 || value.percent > 100) {
+    errors.push(`${label}.percent must be finite and between 0 and 100`);
+  } else if (
+    Number.isFinite(value.progress)
+    && !sameDuration(value.percent, value.progress * 100)
+  ) {
+    errors.push(`${label}.percent must equal progress * 100`);
+  }
+}
+
 function validateTerminalProgress(errors, report) {
   const progress = report.progress;
   if (!isPlainObject(progress)) {
@@ -106,6 +158,7 @@ function validateTerminalProgress(errors, report) {
   if (progress.status !== report.status) {
     errors.push(`progress.status must match terminal report status ${report.status}`);
   }
+  validateProgressMeasure(errors, progress, 'progress');
   if (
     report.status === 'succeeded'
     && (
@@ -122,18 +175,35 @@ function validateTerminalProgress(errors, report) {
     errors.push('progress.phases must be an array');
     return;
   }
-  if (report.status === 'succeeded') {
-    for (const [index, phase] of progress.phases.entries()) {
-      if (
-        !isPlainObject(phase)
-        || phase.status !== 'complete'
-        || !isNonnegativeSafeInteger(phase.totalItems)
+  const phaseIds = new Set();
+  for (const [index, phase] of progress.phases.entries()) {
+    const label = `progress.phases[${index}]`;
+    if (!isPlainObject(phase)) {
+      errors.push(`${label} must be an object`);
+      continue;
+    }
+    if (!isNonEmptyString(phase.phaseId) || phaseIds.has(phase.phaseId)) {
+      errors.push(`${label}.phaseId must be unique and non-empty`);
+    } else {
+      phaseIds.add(phase.phaseId);
+    }
+    if (!PHASE_STATUS_VALUES.has(phase.status) || phase.status === 'active') {
+      errors.push(`${label}.status must be terminal or untouched pending`);
+    }
+    validateProgressMeasure(errors, phase, label);
+    if (
+      phase.status === 'complete'
+      && (
+        !isNonnegativeSafeInteger(phase.totalItems)
         || phase.completedItems !== phase.totalItems
         || phase.progress !== 1
         || phase.percent !== 100
-      ) {
-        errors.push(`progress.phases[${index}] must prove terminal completion`);
-      }
+      )
+    ) {
+      errors.push(`${label} must prove phase completion`);
+    }
+    if (report.status === 'succeeded' && phase.status !== 'complete') {
+      errors.push(`${label} must prove terminal completion`);
     }
   }
 }
@@ -198,7 +268,7 @@ function hasPendingPlannerWork(planner) {
     || (Array.isArray(planner.pendingRangeIds) && planner.pendingRangeIds.length !== 0);
 }
 
-function validateNormalizedFailure(errors, failure, label) {
+function validateNormalizedFailure(errors, failure, label, { requireSecondaryFailures = true } = {}) {
   if (!isPlainObject(failure)) {
     errors.push(`${label} must be an object`);
     return;
@@ -214,8 +284,50 @@ function validateNormalizedFailure(errors, failure, label) {
       errors.push(`${label}.error.message must be a non-empty string`);
     }
   }
-  if (!Array.isArray(failure.secondaryFailures)) {
+  if (requireSecondaryFailures && !Array.isArray(failure.secondaryFailures)) {
     errors.push(`${label}.secondaryFailures must be an array`);
+  } else if (Array.isArray(failure.secondaryFailures)) {
+    for (const [index, secondaryFailure] of failure.secondaryFailures.entries()) {
+      validateNormalizedFailure(
+        errors,
+        secondaryFailure,
+        `${label}.secondaryFailures[${index}]`,
+        { requireSecondaryFailures: false },
+      );
+    }
+  }
+}
+
+function validateBoundaryProgress(errors, boundary, label) {
+  if (!isNonnegativeSafeInteger(boundary.completedItems)) {
+    errors.push(`${label}.completedItems must be a nonnegative safe integer`);
+  }
+  if (boundary.totalItems == null) {
+    if (boundary.progress != null) {
+      errors.push(`${label}.progress must be null without a totalItems denominator`);
+    }
+    return;
+  }
+  if (!isNonnegativeSafeInteger(boundary.totalItems)) {
+    errors.push(`${label}.totalItems must be null or a nonnegative safe integer`);
+    return;
+  }
+  if (
+    isNonnegativeSafeInteger(boundary.completedItems)
+    && boundary.completedItems > boundary.totalItems
+  ) {
+    errors.push(`${label}.completedItems must not exceed totalItems`);
+  }
+  const expectedProgress = boundary.totalItems === 0
+    ? 1
+    : boundary.completedItems / boundary.totalItems;
+  if (
+    !Number.isFinite(boundary.progress)
+    || boundary.progress < 0
+    || boundary.progress > 1
+    || !sameDuration(boundary.progress, expectedProgress)
+  ) {
+    errors.push(`${label}.progress must equal completedItems / totalItems`);
   }
 }
 
@@ -235,6 +347,7 @@ function validateBoundaries(errors, report) {
       errors.push(`${label}.boundaryId must be a non-empty string`);
     }
     if (!isNonEmptyString(boundary.kind)) errors.push(`${label}.kind must be a non-empty string`);
+    validateBoundaryProgress(errors, boundary, label);
     const requireComplete = boundary.status === 'complete';
     if (report.status === 'succeeded') {
       if (
@@ -262,6 +375,16 @@ function validateBoundaries(errors, report) {
         errors.push(`${label}.pending boundary must not contain ranges`);
       }
     }
+    if (
+      requireComplete
+      && (
+        !isNonnegativeSafeInteger(boundary.totalItems)
+        || boundary.completedItems !== boundary.totalItems
+        || boundary.progress !== 1
+      )
+    ) {
+      errors.push(`${label} must prove boundary completion`);
+    }
     if (hasPendingPlannerWork(boundary.planner)) {
       errors.push(`${label}.planner must have no pending ranges`);
     }
@@ -287,7 +410,35 @@ function validateBoundaries(errors, report) {
         report.lastTrustworthyBoundary.boundaryId !== lastBoundaryWithRanges.boundaryId
       ) {
         errors.push('lastTrustworthyBoundary must match the last boundary with range evidence');
+      } else {
+        for (const field of [
+          'phaseId',
+          'kind',
+          'unit',
+          'status',
+          'totalItems',
+          'completedItems',
+          'progressWeight',
+        ]) {
+          if (report.lastTrustworthyBoundary[field] !== lastBoundaryWithRanges[field]) {
+            errors.push(`lastTrustworthyBoundary.${field} must match the last ranged boundary`);
+          }
+        }
+        if (
+          JSON.stringify(report.lastTrustworthyBoundary.ranges)
+          !== JSON.stringify(lastBoundaryWithRanges.ranges)
+        ) {
+          errors.push('lastTrustworthyBoundary.ranges must preserve the last ranged boundary');
+        }
+        if (
+          JSON.stringify(report.lastTrustworthyBoundary.failure)
+          !== JSON.stringify(lastBoundaryWithRanges.failure)
+        ) {
+          errors.push('lastTrustworthyBoundary.failure must preserve the last ranged boundary');
+        }
       }
+    } else if (report.lastTrustworthyBoundary != null) {
+      errors.push('lastTrustworthyBoundary must be null without ranged boundary evidence');
     }
   }
 }
@@ -311,6 +462,16 @@ function validateCounts(errors, report, expectedGpuDutyCount) {
     errors.push('inFlightGpuDutyIds must be an array');
   }
   if (!Array.isArray(report.gpuDuties)) errors.push('gpuDuties must be an array');
+  if (Array.isArray(report.gpuDuties) && report.gpuDuties.length !== report.issuedGpuDutyCount) {
+    errors.push('gpuDuties length must equal issuedGpuDutyCount');
+  }
+  if (
+    isNonnegativeSafeInteger(report.retiredGpuDutyCount)
+    && isNonnegativeSafeInteger(report.issuedGpuDutyCount)
+    && report.retiredGpuDutyCount > report.issuedGpuDutyCount
+  ) {
+    errors.push('retiredGpuDutyCount must not exceed issuedGpuDutyCount');
+  }
   if (expectedGpuDutyCount != null) {
     const expectedCountFields = report.completionPolicy === 'bounded-prefix'
       ? report.status === 'succeeded'
@@ -329,6 +490,46 @@ function validateCounts(errors, report, expectedGpuDutyCount) {
   }
   if (report.unfencedSubmittedGpuDutyCount !== 0) {
     errors.push('unfencedSubmittedGpuDutyCount must be zero');
+  }
+}
+
+function validateRuntimeTelemetry(errors, report) {
+  if (report.runtimeTelemetry == null) return;
+  if (!isPlainObject(report.runtimeTelemetry)) {
+    errors.push('runtimeTelemetry must be an object when present');
+    return;
+  }
+  for (const [field, entriesFields] of [
+    ['commandDuties', ['duties', 'submissions']],
+    ['hostPhases', ['phases', 'intervals']],
+  ]) {
+    const snapshot = report.runtimeTelemetry[field];
+    if (snapshot == null) continue;
+    const label = `runtimeTelemetry.${field}`;
+    if (!isPlainObject(snapshot)) {
+      errors.push(`${label} must be an object when present`);
+      continue;
+    }
+    const claimedEntriesField = entriesFields.find(candidate => candidate in snapshot);
+    const claimsRecorderAuthority = 'schema' in snapshot
+      || 'retention' in snapshot
+      || claimedEntriesField != null;
+    if (!claimsRecorderAuthority) continue;
+    if (snapshot.retention !== 'uncapped') errors.push(`${label}.retention must be uncapped`);
+    if (claimedEntriesField == null) {
+      errors.push(`${label} must expose an uncapped telemetry entry array`);
+      continue;
+    }
+    if (!Array.isArray(snapshot[claimedEntriesField])) {
+      errors.push(`${label}.${claimedEntriesField} must be an array`);
+      continue;
+    }
+    if (
+      field === 'commandDuties'
+      && snapshot[claimedEntriesField].length !== report.submittedGpuDutyCount
+    ) {
+      errors.push(`${label}.${claimedEntriesField} length must equal submittedGpuDutyCount`);
+    }
   }
 }
 
@@ -551,6 +752,7 @@ export function validateWebGpuCooperativeExecutionReport(report, expectationInpu
   }
 
   validateCounts(errors, report, expected.expectedGpuDutyCount);
+  validateRuntimeTelemetry(errors, report);
   validateTerminalProgress(errors, report);
   validateBoundaries(errors, report);
   if (report.completionPolicy === 'bounded-prefix') {
