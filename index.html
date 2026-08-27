@@ -6998,35 +6998,44 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  // Load HDR environment first, then auto-load deep-linked splat if present
+  // Load HDR environment first, then auto-load the deep-linked asset if present
   loadEnvironment('studio').then(async () => {
     const params = new URLSearchParams(window.location.search);
-    const loadSplat = params.get('load');
-    if (loadSplat) {
-      // Deep-link: ?load=splat-inbox/evil_orb_trimmed_050.ply
+    const loadAsset = params.get('load');
+    if (loadAsset) {
+      // Deep-link: ?load=scratch/model.glb or ?load=splat-inbox/asset.ply
       // Format: root/path or root/subdir/path
-      const slashIdx = loadSplat.indexOf('/');
-      const root = slashIdx >= 0 ? loadSplat.slice(0, slashIdx) : 'splat-inbox';
-      const path = slashIdx >= 0 ? loadSplat.slice(slashIdx + 1) : loadSplat;
+      const slashIdx = loadAsset.indexOf('/');
+      const root = slashIdx >= 0 ? loadAsset.slice(0, slashIdx) : 'splat-inbox';
+      const path = slashIdx >= 0 ? loadAsset.slice(slashIdx + 1) : loadAsset;
       const url = `/api/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent(path)}`;
-      const fileName = path.split('/').pop() || 'splat.ply';
+      const fileName = path.split('/').pop() || 'asset';
+      const extension = fileName.split('.').pop()?.toLowerCase() || '';
       try {
-        await greenroomImportSplat(url, fileName, { title: fileName }, {
-          clear: true,
-          metadata: {
-            source: url,
-            fileName,
-            label: fileName,
-            splat: {
-              schema: 'kaminos.splat-asset.v0',
-              assetSource: url,
+        if (extension === 'glb' || extension === 'gltf') {
+          glbFileName = fileName;
+          await showGLB(url, {
+            clear: true,
+            metadata: greenroomMeshMetadata({ title: fileName }, fileName, url),
+          });
+        } else {
+          await greenroomImportSplat(url, fileName, { title: fileName }, {
+            clear: true,
+            metadata: {
+              source: url,
               fileName,
-              format: fileName.split('.').pop()?.toLowerCase() || 'ply',
-              root_id: root,
-              path,
+              label: fileName,
+              splat: {
+                schema: 'kaminos.splat-asset.v0',
+                assetSource: url,
+                fileName,
+                format: extension || 'ply',
+                root_id: root,
+                path,
+              },
             },
-          },
-        });
+          });
+        }
         setInfo(`Deep-link loaded: ${fileName}`);
       } catch (err) {
         console.error('Deep-link load failed:', err);

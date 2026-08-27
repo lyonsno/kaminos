@@ -144,6 +144,7 @@ assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'P
 assert.match(index, /previewKind:\s*'point-cloud'/, 'splat scene metadata records when the visible preview is a point cloud');
 assert.match(index, /previewKind:\s*'placeholder'/, 'splat scene metadata records placeholder fallback instead of hiding parse failures');
 assert.match(index, /async function greenroomImportSplat\(/, 'Greenroom PLY/SPZ rows expose an explicit Import Splat action');
+assert.match(index, /extension === 'glb' \|\| extension === 'gltf'[\s\S]*showGLB\(url,[\s\S]*clear:\s*true[\s\S]*else[\s\S]*greenroomImportSplat\(/, 'Deep links dispatch meshes through GLTFLoader instead of the splat placeholder route');
 assert.match(index, /function addGreenroomSplatActions\(/, 'Greenroom splat rows render through a dedicated action helper');
 assert.match(index, /type:\s*'splat'[\s\S]*renderHandoffSchema:\s*RENDER_HANDOFF_SCHEMA/, 'splat imports register as type=splat scene objects with handoff metadata');
 assert.match(index, /let greenroomPreviewState\s*=\s*null/, 'Greenroom View has explicit temporary preview state instead of mutating authored scene state');
