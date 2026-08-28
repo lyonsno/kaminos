@@ -12,6 +12,11 @@ import path from 'node:path';
 
 import { readBrowserArrayInChunks } from './lib/chunked-browser-array-reader.mjs';
 import {
+  COMPOSED_WORLD_EVIDENCE_SCHEMA,
+  createComposedWorldFireSharpEvidence,
+  renderComposedWorldFireSharpTraceHtml,
+} from './lib/composed-world-evidence-spine.mjs';
+import {
   decoderKernelTileEventsFromSchedulerEvents,
   validateDecoderKernelTileEvidence,
 } from './lib/decoder-kernel-tiling-evidence.mjs';
@@ -21,6 +26,7 @@ import {
 } from './lib/headless-browser-resolver.mjs';
 
 const args = new Map();
+const COMPOSED_WORLD_EVIDENCE_FAILURE_SCHEMA = 'kaminos.composed-world.fire-sharp-evidence-failure.v0';
 for (let i = 2; i < process.argv.length; i += 1) {
   const part = process.argv[i];
   if (!part.startsWith('--')) continue;
@@ -34,7 +40,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--fire-timeout-ms <caller-owned-milliseconds>] [--poll-evaluate-timeout-ms <milliseconds>] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <beginning.png>] [--in-flight-middle-out <middle.png>] [--in-flight-end-out <end.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <diagnostic-milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--fire-timeout-ms <caller-owned-milliseconds>] [--poll-evaluate-timeout-ms <milliseconds>] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <beginning.png>] [--in-flight-middle-out <middle.png>] [--in-flight-end-out <end.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <diagnostic-milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>] [--expected-kaminos-revision <sha>] [--composed-world-evidence-out <evidence.json>] [--composed-world-trace-out <trace.html>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -82,6 +88,12 @@ const fireTimeoutMs = args.has('fire-timeout-ms') ? Number(args.get('fire-timeou
 const pollEvaluateTimeoutMs = Number(args.get('poll-evaluate-timeout-ms') ?? 5000);
 const cdpOperationTimeoutMs = 20000;
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
+const expectedKaminosRevision = args.get('expected-kaminos-revision') || null;
+const composedWorldEvidenceOut = args.get('composed-world-evidence-out') || null;
+const composedWorldTraceOut = args.get('composed-world-trace-out')
+  || (composedWorldEvidenceOut
+    ? composedWorldEvidenceOut.replace(/\.json$/i, '') + '.html'
+    : null);
 const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
 const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
 const expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || sourceLockedWebgpuKitVersion;
@@ -103,6 +115,8 @@ let browserSocket = null;
 let successfulReportPayload = null;
 let terminalSummary = null;
 let terminalFailure = null;
+let composedWorldEvidenceWritten = false;
+let composedWorldEvidenceFailureWriteError = null;
 let browserCleanup = {
   profilePath: null,
   profileRemoved: false,
@@ -145,6 +159,11 @@ const requestedInvocation = {
   requireFrameStageLedger,
   requestedCdpPort,
   browserRequest,
+  ...(expectedKaminosRevision ? { expectedKaminosRevision } : {}),
+  ...(composedWorldEvidenceOut ? {
+    composedWorldEvidenceOut,
+    composedWorldTraceOut,
+  } : {}),
 };
 
 function bestKnownEffectiveIdentity() {
@@ -1333,6 +1352,9 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
     kilnFrameStageLedger: browserFiringEvidence.kilnFrameStageLedger || null,
+    fireActorProductReceipt: browserFiringEvidence.fireActorProductReceipt || null,
+    effectiveSource: browserFiringEvidence.effectiveSource || null,
+    sourceIdentityAfterFiring: browserFiringEvidence.sourceIdentityAfterFiring || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
     requestedFlameContinuity: browserFiringEvidence.requestedFlameContinuity || null,
@@ -1371,6 +1393,27 @@ try {
   }
   if (replayCastReportPath && fireFriendly) {
     throw new Error('--replay-cast-report cannot be combined with --fire-friendly');
+  }
+  if (composedWorldTraceOut && !composedWorldEvidenceOut) {
+    throw new Error('--composed-world-trace-out requires --composed-world-evidence-out');
+  }
+  if (composedWorldEvidenceOut) {
+    if (!fireFriendly) throw new Error('--composed-world-evidence-out requires --fire-friendly');
+    if (!expectedKaminosRevision || !/^[a-f0-9]{40}$/.test(expectedKaminosRevision)) {
+      throw new Error('--composed-world-evidence-out requires --expected-kaminos-revision with an exact commit');
+    }
+    if (!expectedSharpRevision || !/^[a-f0-9]{40}$/.test(expectedSharpRevision)) {
+      throw new Error('--composed-world-evidence-out requires --expected-sharp-revision with an exact commit');
+    }
+    if (!requestedSourceAssetId) {
+      throw new Error('--composed-world-evidence-out requires --source-asset-id');
+    }
+    if (requestedFirePresentation !== 'full-volume' || requestedFlameContinuity !== 'live-every-frame') {
+      throw new Error('composed-world evidence requires full-volume live-every-frame FireActor presentation');
+    }
+    if (captureInFlight) {
+      throw new Error('composed-world performance evidence cannot include observer-effect in-flight capture');
+    }
   }
   if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
     throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
@@ -1553,7 +1596,27 @@ try {
   if (state.sourceSelectionExercise.attempted && state.sourceSelectionExercise.effectiveAssetId !== state.sourceSelectionExercise.requestedAssetId) {
     throw new Error(`Crucible source selection did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
   }
-  lastTrustworthyEvidence = { ...lastTrustworthyEvidence, sourceSelectionExercise: state.sourceSelectionExercise };
+  phase = 'hashing-source-before-firing';
+  state.sourceIdentityBeforeFiring = await evaluate(ws, `(async () => {
+    const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
+    if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
+    const response = await fetch(source.source, { cache: 'no-store' });
+    if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    return { ...source, bytes: bytes.byteLength, sha256 };
+  })()`);
+  if (state.sourceIdentityBeforeFiring?.error
+    || state.sourceIdentityBeforeFiring?.assetId !== requestedSourceAssetId
+    || !state.sourceIdentityBeforeFiring?.sha256) {
+    throw new Error(`Crucible source bytes were not bound before firing: ${JSON.stringify(state.sourceIdentityBeforeFiring)}`);
+  }
+  lastTrustworthyEvidence = {
+    ...lastTrustworthyEvidence,
+    sourceSelectionExercise: state.sourceSelectionExercise,
+    sourceIdentityBeforeFiring: state.sourceIdentityBeforeFiring,
+  };
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
 
   if (replayCastEvidence) {
@@ -1936,6 +1999,8 @@ try {
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
       const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
+      const fireActorProductReceipt = routeState.result?.fireActorProductReceipt || fire?.fireActorProductReceipt || null;
+      const effectiveSource = window.kaminosCrucibleViewportDebugState?.()?.source || null;
       const kilnFrameStageLedger = routeState.result?.kilnFrameStageLedger || fire?.volumeDebugState?.kilnFrameStageLedger || null;
       const reportPath = routeState.result?.report?.path || null;
       const snapshotIdentity = {
@@ -1973,6 +2038,8 @@ try {
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
         sharpDutyCorrelation: sharpDutyCorrelationWitness,
         kilnFrameStageLedger: kilnFrameStageLedgerWitness,
+        fireActorProductReceipt: fireActorProductReceipt,
+        effectiveSource: effectiveSource,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
@@ -2099,6 +2166,20 @@ try {
         timeoutMs: cdpOperationTimeoutMs,
         label: 'kiln frame stage ledger events',
       });
+    }
+    phase = 'hashing-source-after-firing';
+    browserFiringEvidence.sourceIdentityAfterFiring = await evaluate(ws, `(async () => {
+      const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
+      if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
+      const response = await fetch(source.source, { cache: 'no-store' });
+      if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      return { ...source, bytes: bytes.byteLength, sha256 };
+    })()`);
+    if (browserFiringEvidence.sourceIdentityAfterFiring?.error) {
+      throw new Error(`Crucible source bytes were not bound after firing: ${JSON.stringify(browserFiringEvidence.sourceIdentityAfterFiring)}`);
     }
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
     state.fullRoute = projectFriendlyFiringEvidence({
@@ -2330,6 +2411,63 @@ try {
     if (!Number.isFinite(state.fullRoute.completedWorkroom.castScreenX)
       || state.fullRoute.completedWorkroom.castScreenX < state.fullRoute.completedWorkroom.stageRight + 24) throw new Error(`Completed Crucible cast remains behind the caddy: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
     if (state.fullRoute.completedWorkroom.stageTop < state.fullRoute.completedWorkroom.transformBarBottom + 8) throw new Error(`Completed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (composedWorldEvidenceOut) {
+      phase = 'composing-fire-sharp-evidence';
+      const sourceBefore = state.sourceIdentityBeforeFiring;
+      const sourceAfter = browserFiringEvidence.sourceIdentityAfterFiring;
+      const composedWorldEvidence = createComposedWorldFireSharpEvidence({
+        kaminosRevision: expectedKaminosRevision,
+        requestedInvocation,
+        browserIdentity: {
+          requested: browserResolution.request,
+          effective: {
+            executable: browserResolution.effective.realPath || browserResolution.effective.executable,
+            kind: browserResolution.effective.kind,
+            playwrightRevision: browserResolution.effective.playwrightRevision,
+            product: browserSession.attachedBrowserProduct,
+            protocolVersion: browserSession.attachedProtocolVersion,
+          },
+        },
+        sourceIdentity: {
+          requestedAssetId: requestedSourceAssetId,
+          effectiveAssetId: sourceAfter?.assetId || browserFiringEvidence.effectiveSource?.assetId || null,
+          source: sourceAfter?.source || browserFiringEvidence.effectiveSource?.source || null,
+          rootId: sourceAfter?.rootId || browserFiringEvidence.effectiveSource?.rootId || null,
+          path: sourceAfter?.path || browserFiringEvidence.effectiveSource?.path || null,
+          bytes: sourceBefore?.bytes ?? null,
+          sha256: sourceBefore?.sha256 || null,
+          postBytes: sourceAfter?.bytes ?? null,
+          postSha256: sourceAfter?.sha256 || null,
+        },
+        webgpuInferenceKit: state.webgpuInferenceKit,
+        fireActorProductReceipt: state.fullRoute.fireActorProductReceipt,
+        foregroundHeartbeat: state.fullRoute.foregroundKilnHeartbeat,
+        sharpDutyCorrelation: state.fullRoute.sharpDutyCorrelation,
+        pipelineReport,
+      });
+      ensureParent(composedWorldEvidenceOut);
+      writeFileSync(composedWorldEvidenceOut, JSON.stringify(composedWorldEvidence, null, 2));
+      ensureParent(composedWorldTraceOut);
+      writeFileSync(
+        composedWorldTraceOut,
+        renderComposedWorldFireSharpTraceHtml(composedWorldEvidence),
+      );
+      composedWorldEvidenceWritten = true;
+      state.composedWorldEvidence = {
+        schema: COMPOSED_WORLD_EVIDENCE_SCHEMA,
+        status: composedWorldEvidence.status,
+        path: composedWorldEvidenceOut,
+        tracePath: composedWorldTraceOut,
+        identity: composedWorldEvidence.identity,
+        terminalOutput: composedWorldEvidence.terminalOutput,
+        foregroundSampleCount: composedWorldEvidence.clockJoin.foreground.sampleCount,
+        foregroundDurationMs: composedWorldEvidence.clockJoin.foreground.durationMs,
+      };
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        composedWorldEvidence: state.composedWorldEvidence,
+      };
+    }
   }
 
   phase = 'capturing-screenshot';
@@ -2361,12 +2499,31 @@ if (browserCleanup.errors.length && !terminalFailure) {
 
 if (terminalFailure) {
   phase = terminalFailure.phase;
+  if (composedWorldEvidenceOut && !composedWorldEvidenceWritten) {
+    try {
+      ensureParent(composedWorldEvidenceOut);
+      writeFileSync(composedWorldEvidenceOut, JSON.stringify({
+        schema: COMPOSED_WORLD_EVIDENCE_FAILURE_SCHEMA,
+        status: 'failed',
+        phase,
+        error: terminalFailure.error.message || String(terminalFailure.error),
+        requestedInvocation,
+        lastTrustworthyEvidence: lastTrustworthyEvidence || {
+          status: 'none-observed',
+          phase,
+        },
+      }, null, 2));
+    } catch (error) {
+      composedWorldEvidenceFailureWriteError = error?.message || String(error);
+    }
+  }
   writeReport({
     ok: false,
     error: terminalFailure.error.message || String(terminalFailure.error),
     lastTrustworthyEvidence,
     runtimeExceptions,
     stderrTail: stderr.slice(-1000),
+    composedWorldEvidenceFailureWriteError,
   });
   console.error(
     terminalFailure.error.stack

@@ -333,6 +333,18 @@ def _sharp_inline_revision():
     return result.stdout.strip() or None
 
 
+def _sharp_inline_kit_source_locked_version():
+    try:
+        with (KAMINOS_SHARP_WEBGPU_REPO / "package-lock.json").open() as handle:
+            lock = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return None
+    packages = lock.get("packages") if isinstance(lock, dict) else None
+    package = packages.get("node_modules/@kaminos/webgpu-inference-kit") if isinstance(packages, dict) else None
+    version = package.get("version") if isinstance(package, dict) else None
+    return version.strip() if isinstance(version, str) and version.strip() else None
+
+
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -341,6 +353,7 @@ def runtime_config():
         or ""
     ).strip()
     sharp_revision = _sharp_inline_revision()
+    sharp_kit_source_locked_version = _sharp_inline_kit_source_locked_version()
     expected_sharp_revision = os.environ.get(
         KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION_ENV,
         "",
@@ -369,6 +382,7 @@ def runtime_config():
         "sharpInline": {
             "registered": (
                 bool(sharp_revision)
+                and bool(sharp_kit_source_locked_version)
                 and revision_contract_allows_registration
                 and module_exists
                 and weights_exist
@@ -379,6 +393,7 @@ def runtime_config():
             "revisionStatus": "resolved" if sharp_revision else "missing",
             "revisionMatchesExpectation": revision_matches_expectation,
             "revisionContractStatus": revision_contract_status,
+            "kitSourceLockedVersion": sharp_kit_source_locked_version,
             "modulePath": str(SHARP_INLINE_MODULE_PATH),
             "moduleExists": module_exists,
             "moduleUrl": "/sharp-inline/sharp-inline.js",

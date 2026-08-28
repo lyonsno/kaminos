@@ -625,6 +625,7 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 def test_runtime_config_enforces_optional_sharp_revision_contract():
     previous_expected = os.environ.get("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
     previous_revision_resolver = serve._sharp_inline_revision
+    previous_kit_resolver = serve._sharp_inline_kit_source_locked_version
     previous_module_path = serve.SHARP_INLINE_MODULE_PATH
     previous_weights_path = serve.SHARP_INLINE_WEIGHTS_PATH
     with TemporaryDirectory(dir="/tmp") as tmp:
@@ -636,6 +637,7 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
         serve.SHARP_INLINE_MODULE_PATH = module_path
         serve.SHARP_INLINE_WEIGHTS_PATH = weights_path
         try:
+            serve._sharp_inline_kit_source_locked_version = lambda: "0.1.38"
             os.environ["KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION"] = "expected-revision"
 
             serve._sharp_inline_revision = lambda: "stale-revision"
@@ -657,6 +659,13 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
             assert matched["registered"] is True
             assert matched["revisionMatchesExpectation"] is True
             assert matched["revisionContractStatus"] == "matched"
+            assert matched["kitSourceLockedVersion"] == "0.1.38"
+
+            serve._sharp_inline_kit_source_locked_version = lambda: None
+            missing_kit = serve.runtime_config()["sharpInline"]
+            assert missing_kit["registered"] is False
+            assert missing_kit["kitSourceLockedVersion"] is None
+            serve._sharp_inline_kit_source_locked_version = lambda: "0.1.38"
 
             os.environ.pop("KAMINOS_SHARP_WEBGPU_EXPECTED_REVISION")
             serve._sharp_inline_revision = lambda: "development-revision"
@@ -667,6 +676,7 @@ def test_runtime_config_enforces_optional_sharp_revision_contract():
             assert unpinned["revisionContractStatus"] == "unpinned"
         finally:
             serve._sharp_inline_revision = previous_revision_resolver
+            serve._sharp_inline_kit_source_locked_version = previous_kit_resolver
             serve.SHARP_INLINE_MODULE_PATH = previous_module_path
             serve.SHARP_INLINE_WEIGHTS_PATH = previous_weights_path
             if previous_expected is None:
