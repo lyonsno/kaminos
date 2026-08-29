@@ -1717,6 +1717,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     "base64-canonical-utf8-ndjson-v1",
                 }:
                     raise ValueError(f"Unsupported SHARP inline transport for {collection_id}")
+                if (
+                    collection_id == "scheduler-events"
+                    and transport != "base64-canonical-utf8-ndjson-v1"
+                ):
+                    raise ValueError(
+                        "SHARP scheduler-events requires "
+                        "base64-canonical-utf8-ndjson-v1 transport"
+                    )
                 source_archive_identity = None
                 if transport == "base64-canonical-utf8-ndjson-v1":
                     if collection_id != "scheduler-events":

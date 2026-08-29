@@ -5,6 +5,7 @@ import {
   appendFileSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
 } from 'node:fs';
@@ -52,40 +53,64 @@ try {
     bytes: Buffer.byteLength(producerSchedulerBytes),
     sha256: createHash('sha256').update(producerSchedulerBytes).digest('hex'),
   };
-  const start = await post('/api/sharp-inline-run-report/start', {
-    pipelineId: 'sharp-image-to-splat-live-v0',
-    firingId: 'integration-test',
-    document: {
-      schema: 'kaminos.sharp-inline-pipeline-report.v0',
-      status: 'real',
-      marker: 'compact-document',
-      authoritativeTrace: {
-        sharpRunDebug: {
-          route: {
-            receipt: {
-              metadataPayload: {
-                schedulerTrace: {
-                  archiveIdentity: producerSchedulerIdentity,
-                },
+  const sourceBearingDocument = {
+    schema: 'kaminos.sharp-inline-pipeline-report.v0',
+    status: 'real',
+    marker: 'compact-document',
+    authoritativeTrace: {
+      sharpRunDebug: {
+        route: {
+          receipt: {
+            metadataPayload: {
+              schedulerTrace: {
+                archiveIdentity: producerSchedulerIdentity,
               },
             },
           },
         },
       },
     },
+  };
+  const schedulerCollection = {
+    id: 'scheduler-events',
+    jsonPointer: producerSchedulerIdentity.jsonPointer,
+    expectedCount: producerSchedulerIdentity.eventCount,
+    retention: 'uncapped',
+    mediaType: 'application/x-ndjson',
+    sourceArchiveIdentity: producerSchedulerIdentity,
+  };
+  for (const [label, transport] of [
+    ['omitted', undefined],
+    ['empty', ''],
+    ['legacy', 'json-rows-v1'],
+  ]) {
+    const beforeEntries = existingRunEntries();
+    const collection = { ...schedulerCollection };
+    if (transport !== undefined) collection.transport = transport;
+    const downgrade = await post('/api/sharp-inline-run-report/start', {
+      pipelineId: 'sharp-image-to-splat-live-v0',
+      firingId: 'integration-test',
+      document: sourceBearingDocument,
+      collections: [collection],
+    });
+    assert.equal(downgrade.response.status, 400, `${label} scheduler transport must be rejected`);
+    assert.match(downgrade.body.error, /scheduler-events.*base64-canonical-utf8-ndjson-v1/);
+    assert.equal('sessionId' in downgrade.body, false);
+    assert.equal('outputRoot' in downgrade.body, false);
+    assert.deepEqual(existingRunEntries(), beforeEntries, `${label} downgrade must not create a session`);
+  }
+  const start = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'integration-test',
+    document: sourceBearingDocument,
     lastTrustworthyOutput: {
       path: '/tmp/already-ingested.ply',
       sha256: 'c'.repeat(64),
       bytes: 66060836,
     },
     collections: [{
-      id: 'scheduler-events',
-      jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
-      expectedCount: 3,
-      retention: 'uncapped',
-      mediaType: 'application/x-ndjson',
+      ...schedulerCollection,
       transport: 'base64-canonical-utf8-ndjson-v1',
-      sourceArchiveIdentity: producerSchedulerIdentity,
     }],
   });
   assert.equal(start.response.status, 200);
@@ -94,6 +119,30 @@ try {
   const statePath = path.join(runDirectory, 'sharp-inline-report-state.json');
   const tracePath = path.join(runDirectory, 'traces', 'scheduler-events.ndjson');
   assert.equal(JSON.parse(readFileSync(statePath, 'utf8')).status, 'receiving');
+  assert.equal(readFileSync(tracePath, 'utf8'), '');
+
+  const parsedSchedulerChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: start.body.sessionId,
+    collectionId: 'scheduler-events',
+    expectedStart: 0,
+    rows: [schedulerRows[0]],
+  });
+  assert.equal(parsedSchedulerChunk.response.status, 409);
+  assert.match(parsedSchedulerChunk.body.error, /scheduler byte chunk is invalid/);
+  assert.equal(JSON.parse(readFileSync(statePath, 'utf8')).collections['scheduler-events'].receivedCount, 0);
+  assert.equal(readFileSync(tracePath, 'utf8'), '');
+
+  const mixedSchedulerChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: start.body.sessionId,
+    collectionId: 'scheduler-events',
+    expectedStart: 0,
+    rows: [schedulerRows[0]],
+    rowCount: 1,
+    base64Ndjson: canonicalChunk([schedulerRows[0]]),
+  });
+  assert.equal(mixedSchedulerChunk.response.status, 409);
+  assert.match(mixedSchedulerChunk.body.error, /scheduler byte chunk is invalid/);
+  assert.equal(JSON.parse(readFileSync(statePath, 'utf8')).collections['scheduler-events'].receivedCount, 0);
   assert.equal(readFileSync(tracePath, 'utf8'), '');
 
   const outOfOrder = await post('/api/sharp-inline-run-report/chunk', {
@@ -259,6 +308,15 @@ try {
       mediaType: 'application/x-ndjson',
     }],
   });
+  assert.equal(abortStart.response.status, 200);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(
+      abortStart.body.outputRoot,
+      'sharp-inline-report-state.json',
+    ), 'utf8')).collections['progress-events'].transport,
+    'json-rows-v1',
+    'ordinary collections must retain omitted-transport legacy compatibility',
+  );
   const abort = await post('/api/sharp-inline-run-report/abort', {
     sessionId: abortStart.body.sessionId,
     phase: 'trace-chunk-upload',
@@ -307,6 +365,10 @@ async function post(route, body) {
 
 function canonicalChunk(rows) {
   return Buffer.from(`${rows.map(row => JSON.stringify(row)).join('\n')}\n`).toString('base64');
+}
+
+function existingRunEntries() {
+  return existsSync(pipelineRunsRoot) ? readdirSync(pipelineRunsRoot).sort() : [];
 }
 
 async function reservePort() {

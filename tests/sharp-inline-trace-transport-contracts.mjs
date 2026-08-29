@@ -180,6 +180,35 @@ assert.equal(
 assert.equal(correlationFailure.document.phase, 'foreground-heartbeat-correlation');
 assert.equal(correlationFailure.document.artifacts.splat.path, '/tmp/correlation-failure.ply');
 
+for (const [label, transport] of [
+  ['omitted', undefined],
+  ['empty', ''],
+  ['legacy', 'json-rows-v1'],
+]) {
+  let fetchAttempts = 0;
+  const schedulerCollection = {
+    id: 'scheduler-events',
+    jsonPointer: schedulerArchiveIdentity.jsonPointer,
+    values: events,
+  };
+  if (transport !== undefined) schedulerCollection.transport = transport;
+  await assert.rejects(
+    persistSharpInlineReportSession({
+      fetchImpl: async () => {
+        fetchAttempts += 1;
+        throw new Error('downgraded scheduler transport reached the server');
+      },
+      firingId: 'run-test',
+      document,
+      traceCollections: [schedulerCollection],
+      taskYield: async () => {},
+    }),
+    /scheduler-events.*base64-canonical-utf8-ndjson-v1/,
+    `${label} scheduler transport must be rejected before session creation`,
+  );
+  assert.equal(fetchAttempts, 0, `${label} scheduler transport must not issue a request`);
+}
+
 const scaleEvents = Array.from({ length: 189_000 }, (_, index) => ({ tMs: index }));
 const scaleCompacted = compactSharpInlineReportDocument({
   authoritativeTrace: {
