@@ -90,15 +90,15 @@ assert.match(
   /function runCrucibleViewportFiring\([\s\S]*firePresentationMode[\s\S]*flameContinuityMode[\s\S]*runKilnRouteBenchRoute\(route\.id,\s*profileId,\s*\{ firePresentationMode, flameContinuityMode \}\)/,
   'The central fire command must carry the effective route, profile, presentation, and flame continuity policy',
 );
-assert.match(
+assert.doesNotMatch(
   html,
-  />Keep the flame moving from recent frames</,
-  'bounded holdover must be offered in ordinary operator language',
+  /<option[^>]+value=["']bounded-history-holdover["'][^>]*>/,
+  'the broken bounded-history route must not remain selectable in the ordinary Crucible interface',
 );
 assert.match(
   html,
-  />Run every simulation frame</,
-  'the live-every-frame comparison must be offered in ordinary operator language',
+  /<option[^>]+value=["']live-every-frame["'][^>]*selected[^>]*>Run every simulation frame<\/option>/,
+  'the working live-every-frame route must be the selected ordinary Crucible default',
 );
 assert.match(
   html,

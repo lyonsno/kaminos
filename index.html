@@ -2688,8 +2688,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             </label>
             <label class="crucible-viewport-control-label">When the box is busy
               <select class="crucible-viewport-select" id="crucible-viewport-flame-continuity-select">
-                <option value="bounded-history-holdover" selected>Keep the flame moving from recent frames</option>
-                <option value="live-every-frame">Run every simulation frame</option>
+                <option value="live-every-frame" selected>Run every simulation frame</option>
               </select>
             </label>
             <button type="button" class="crucible-viewport-action" id="crucible-viewport-fire-button">Fire image</button>
@@ -13887,7 +13886,7 @@ let kilnRouteBenchState = {
 let sharpBreathingRoomRunningProfileId = null;
 let crucibleViewportProfileId = 'cooperative-spn-gaussian';
 let crucibleViewportPresentationMode = 'full-volume';
-let crucibleViewportFlameContinuityMode = 'bounded-history-holdover';
+let crucibleViewportFlameContinuityMode = 'live-every-frame';
 let crucibleViewportConsolePreference = 'auto';
 let crucibleViewportLastRoomPosture = 'bench';
 const CRUCIBLE_PROMOTED_BENCH_ID = 'promoted-bench-2026-07-15';
@@ -20123,9 +20122,8 @@ function initPipelineDock() {
     renderCrucibleViewportWorkspace();
   });
   document.getElementById('crucible-viewport-flame-continuity-select')?.addEventListener('change', event => {
-    crucibleViewportFlameContinuityMode = event.target.value === 'bounded-history-holdover'
-      ? 'bounded-history-holdover'
-      : 'live-every-frame';
+    crucibleViewportFlameContinuityMode = 'live-every-frame';
+    event.target.value = crucibleViewportFlameContinuityMode;
     renderCrucibleViewportWorkspace();
   });
   document.getElementById('crucible-viewport-fire-button')?.addEventListener('click', () => {
