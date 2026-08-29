@@ -256,7 +256,13 @@ function summarizeBoundaryProgress(boundaries) {
   };
 }
 
-function reconcileProgressWithBoundaries(errors, progress, boundaries, label = 'progress') {
+function reconcileProgressWithBoundaries(
+  errors,
+  progress,
+  boundaries,
+  label = 'progress',
+  { comparePhaseStatus = true } = {},
+) {
   if (!isPlainObject(progress) || !Array.isArray(boundaries)) return;
   const expected = summarizeBoundaryProgress(boundaries);
   if (!expected) return;
@@ -279,16 +285,17 @@ function reconcileProgressWithBoundaries(errors, progress, boundaries, label = '
     const actualPhase = progress.phases[index];
     const phaseLabel = `${label}.phases[${index}]`;
     if (!isPlainObject(actualPhase)) continue;
-    for (const field of [
+    const fields = [
       'phaseId',
-      'status',
       'completedItems',
       'totalItems',
       'progress',
       'percent',
       'completedWeight',
       'totalWeight',
-    ]) {
+    ];
+    if (comparePhaseStatus) fields.splice(1, 0, 'status');
+    for (const field of fields) {
       compareProgressValue(errors, actualPhase[field], expectedPhase[field], `${phaseLabel}.${field}`);
     }
   }
@@ -366,7 +373,13 @@ export function validateWebGpuCooperativeProgressEvents(report, progressEvents) 
     consumedByBoundary.set(boundaryState.boundaryId, consumed + 1);
     boundaryState.completedItems = range.itemEnd;
     boundaryState.status = boundaryState.totalItems === range.itemEnd ? 'complete' : 'active';
-    reconcileProgressWithBoundaries(errors, event, boundaryStates, label);
+    reconcileProgressWithBoundaries(
+      errors,
+      event,
+      boundaryStates,
+      label,
+      { comparePhaseStatus: false },
+    );
   }
   if (progressEvents.length !== expectedEventCount) {
     errors.push(
@@ -419,7 +432,7 @@ function validateProgressSnapshot(errors, progress, {
     }
     const statusAllowed = PHASE_STATUS_VALUES.has(phase.status)
       && (terminal || !new Set(['failed', 'cancelled']).has(phase.status));
-    if (!statusAllowed || terminal && phase.status === 'active') {
+    if (!statusAllowed || terminal && expectedStatus === 'succeeded' && phase.status === 'active') {
       errors.push(`${phaseLabel}.status must be ${terminal ? 'terminal or untouched pending' : 'active, complete, or untouched pending'}`);
     }
     validateProgressMeasure(errors, phase, phaseLabel);
@@ -650,8 +663,8 @@ function validateBoundaries(errors, report) {
       }
       if (boundary.failure != null) errors.push(`${label}.failure must be null on success`);
     } else {
-      if (!new Set(['complete', 'failed', 'cancelled', 'pending']).has(boundary.status)) {
-        errors.push(`${label}.status must be terminal or untouched pending`);
+      if (!new Set(['complete', 'failed', 'cancelled', 'active', 'pending']).has(boundary.status)) {
+        errors.push(`${label}.status must preserve terminal, interrupted, or untouched state`);
       }
       if (boundary.status === 'failed' || boundary.status === 'cancelled') {
         validateNormalizedFailure(errors, boundary.failure, `${label}.failure`);

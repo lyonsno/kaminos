@@ -180,6 +180,36 @@ assert.equal(reportValidation.ok, true);
 assert.deepEqual(reportValidation.errors, []);
 assert.ok(Object.isFrozen(reportValidation));
 
+const earlyStartedControllerReport = await runWebGpuCooperativeAdapterConformance(createInput({
+  conformanceId: 'sf3d:adapter:early-started-controller',
+  async runAdapter({ cooperative, scenario }) {
+    const encoder = cooperative.startBoundary('dino-window-tiles');
+    const materialization = cooperative.startBoundary('glb-compose');
+    for (let range = encoder.nextRange(); range; range = encoder.nextRange()) {
+      await encoder.runGpuDuty(range, {
+        encode({ range: exactRange }) {
+          return { rangeId: exactRange.rangeId };
+        },
+      });
+    }
+    for (let range = materialization.nextRange(); range; range = materialization.nextRange()) {
+      await materialization.runCpuDuty(range, { work() {} });
+    }
+    return {
+      outputFingerprint: 'sha256:sf3d-coherent-glb',
+      scenarioSeen: scenario,
+    };
+  },
+}));
+const earlyStartedControllerValidation = validateWebGpuCooperativeAdapterConformanceReport(
+  earlyStartedControllerReport,
+);
+assert.equal(
+  earlyStartedControllerValidation.ok,
+  true,
+  `starting a later controller must not invalidate authentic progress:\n${earlyStartedControllerValidation.errors.join('\n')}`,
+);
+
 const reorderedSummaryReport = JSON.parse(JSON.stringify(report));
 reorderedSummaryReport.summary = {
   failedCheckIds: [...report.summary.failedCheckIds],
