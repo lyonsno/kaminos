@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   mkdirSync,
   mkdtempSync,
@@ -94,9 +95,8 @@ const composedWorldTraceOut = args.get('composed-world-trace-out')
   || (composedWorldEvidenceOut
     ? composedWorldEvidenceOut.replace(/\.json$/i, '') + '.html'
     : null);
-const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
-const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
-const expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || sourceLockedWebgpuKitVersion;
+let sourceLockedWebgpuKitVersion = null;
+let expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || null;
 let userDataDir = null;
 const startedAt = new Date().toISOString();
 const openGenerateTabExpression = 'document.querySelector(\'[data-tab="generate"]\').click()';
@@ -109,6 +109,7 @@ let lastTrustworthyEvidence = null;
 let replayCastEvidence = null;
 let browserResolution = null;
 let browserSession = null;
+let kaminosHostIdentity = null;
 let browserSpawnError = null;
 let browserExit = null;
 let browserSocket = null;
@@ -433,6 +434,7 @@ async function waitForSpawnedBrowserCdp() {
         browserWebSocketUrl: version.webSocketDebuggerUrl,
         attachedBrowserProduct: version.Browser ?? null,
         attachedProtocolVersion: version['Protocol-Version'] ?? null,
+        browserContextId: `default-profile:${userDataDir}`,
       };
     } catch (error) {
       lastEndpointError = error;
@@ -443,6 +445,65 @@ async function waitForSpawnedBrowserCdp() {
     `Spawned browser DevTools endpoint did not become usable within 30000ms`
     + (lastEndpointError ? `: ${lastEndpointError.message}` : ''),
   );
+}
+
+async function loadKaminosHostIdentity({ baseUrl, expectedRevision, fetchImpl = fetch }) {
+  const runtimeConfigUrl = new URL('/api/runtime-config', baseUrl);
+  const response = await fetchImpl(runtimeConfigUrl);
+  if (!response.ok) {
+    throw new Error(`Kaminos runtime identity request failed with HTTP ${response.status}`);
+  }
+  const config = await response.json();
+  if (config?.schema !== 'kaminos.runtime-config.v0') {
+    throw new Error(`Kaminos runtime identity schema mismatch: ${config?.schema || 'missing'}`);
+  }
+  const effectiveRevision = config?.kaminosHost?.revision;
+  const sourceRoot = config?.kaminosHost?.sourceRoot;
+  if (!/^[a-f0-9]{40}$/.test(effectiveRevision || '') || !sourceRoot) {
+    throw new Error('Kaminos runtime identity is incomplete');
+  }
+  if (effectiveRevision !== expectedRevision) {
+    throw new Error(`Kaminos runtime identity mismatch: requested ${expectedRevision}, effective ${effectiveRevision}`);
+  }
+  return {
+    requestedRevision: expectedRevision,
+    effectiveRevision,
+    sourceRoot,
+    status: 'matched',
+  };
+}
+
+async function loadSchedulerArchiveEvidence({ baseUrl, artifact, fetchImpl = fetch }) {
+  if (artifact?.schema !== 'kaminos.sharp-inline-trace-artifact.v0'
+    || artifact?.mediaType !== 'application/x-ndjson'
+    || !artifact?.readUrl) {
+    throw new Error('scheduler archive artifact descriptor is missing or invalid');
+  }
+  const base = new URL(baseUrl);
+  const archiveUrl = new URL(artifact.readUrl, base);
+  if (archiveUrl.origin !== base.origin) {
+    throw new Error('scheduler archive read URL escaped the exercised Kaminos origin');
+  }
+  const response = await fetchImpl(archiveUrl);
+  if (!response.ok) {
+    throw new Error(`scheduler archive request failed with HTTP ${response.status}`);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const text = bytes.toString('utf8');
+  const rows = text.split(/\r?\n/).filter(Boolean).map((row, index) => {
+    try {
+      return JSON.parse(row);
+    } catch (error) {
+      throw new Error(`scheduler archive row ${index} is invalid JSON: ${error.message}`);
+    }
+  });
+  return {
+    artifact: structuredClone(artifact),
+    rawNdjson: text,
+    bytes: bytes.byteLength,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+    rows,
+  };
 }
 
 function connectWebSocket(wsUrl) {
@@ -1369,6 +1430,10 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
 }
 
 try {
+  phase = 'resolving-source-locked-webgpu-kit';
+  const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
+  sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
+  expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || sourceLockedWebgpuKitVersion;
   phase = 'validating-arguments';
   if (args.has('cdp-port')) {
     throw new Error('--cdp-port is retired; omit it so the spawned browser owns a unique dynamic CDP endpoint');
@@ -1426,6 +1491,14 @@ try {
   }
   if (!Number.isFinite(pollEvaluateTimeoutMs) || pollEvaluateTimeoutMs <= 0) {
     throw new Error('--poll-evaluate-timeout-ms must be a finite positive number');
+  }
+  if (composedWorldEvidenceOut) {
+    phase = 'resolving-kaminos-host-identity';
+    kaminosHostIdentity = await loadKaminosHostIdentity({
+      baseUrl: url,
+      expectedRevision: expectedKaminosRevision,
+    });
+    lastTrustworthyEvidence = { kaminosHostIdentity };
   }
   phase = 'resolving-headless-browser';
   browserResolution = resolveHeadlessBrowser({
@@ -1596,27 +1669,32 @@ try {
   if (state.sourceSelectionExercise.attempted && state.sourceSelectionExercise.effectiveAssetId !== state.sourceSelectionExercise.requestedAssetId) {
     throw new Error(`Crucible source selection did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
   }
-  phase = 'hashing-source-before-firing';
-  state.sourceIdentityBeforeFiring = await evaluate(ws, `(async () => {
-    const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
-    if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
-    const response = await fetch(source.source, { cache: 'no-store' });
-    if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    return { ...source, bytes: bytes.byteLength, sha256 };
-  })()`);
-  if (state.sourceIdentityBeforeFiring?.error
-    || state.sourceIdentityBeforeFiring?.assetId !== requestedSourceAssetId
-    || !state.sourceIdentityBeforeFiring?.sha256) {
-    throw new Error(`Crucible source bytes were not bound before firing: ${JSON.stringify(state.sourceIdentityBeforeFiring)}`);
-  }
   lastTrustworthyEvidence = {
     ...lastTrustworthyEvidence,
     sourceSelectionExercise: state.sourceSelectionExercise,
-    sourceIdentityBeforeFiring: state.sourceIdentityBeforeFiring,
   };
+  if (composedWorldEvidenceOut) {
+    phase = 'hashing-source-before-firing';
+    state.sourceIdentityBeforeFiring = await evaluate(ws, `(async () => {
+      const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
+      if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
+      const response = await fetch(source.source, { cache: 'no-store' });
+      if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      return { ...source, bytes: bytes.byteLength, sha256 };
+    })()`);
+    if (state.sourceIdentityBeforeFiring?.error
+      || state.sourceIdentityBeforeFiring?.assetId !== requestedSourceAssetId
+      || !state.sourceIdentityBeforeFiring?.sha256) {
+      throw new Error(`Crucible source bytes were not bound before firing: ${JSON.stringify(state.sourceIdentityBeforeFiring)}`);
+    }
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      sourceIdentityBeforeFiring: state.sourceIdentityBeforeFiring,
+    };
+  }
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
 
   if (replayCastEvidence) {
@@ -2167,21 +2245,31 @@ try {
         label: 'kiln frame stage ledger events',
       });
     }
-    phase = 'hashing-source-after-firing';
-    browserFiringEvidence.sourceIdentityAfterFiring = await evaluate(ws, `(async () => {
-      const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
-      if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
-      const response = await fetch(source.source, { cache: 'no-store' });
-      if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const digest = await crypto.subtle.digest('SHA-256', bytes);
-      const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-      return { ...source, bytes: bytes.byteLength, sha256 };
-    })()`);
-    if (browserFiringEvidence.sourceIdentityAfterFiring?.error) {
-      throw new Error(`Crucible source bytes were not bound after firing: ${JSON.stringify(browserFiringEvidence.sourceIdentityAfterFiring)}`);
+    if (composedWorldEvidenceOut) {
+      phase = 'hashing-source-after-firing';
+      browserFiringEvidence.sourceIdentityAfterFiring = await evaluate(ws, `(async () => {
+        const source = window.kaminosCrucibleViewportDebugState?.()?.source || null;
+        if (!source?.assetId || !source?.source) return { ...source, error: 'selected-source-identity-missing' };
+        const response = await fetch(source.source, { cache: 'no-store' });
+        if (!response.ok) return { ...source, error: 'selected-source-fetch-failed:' + response.status };
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const digest = await crypto.subtle.digest('SHA-256', bytes);
+        const sha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        return { ...source, bytes: bytes.byteLength, sha256 };
+      })()`);
+      if (browserFiringEvidence.sourceIdentityAfterFiring?.error) {
+        throw new Error(`Crucible source bytes were not bound after firing: ${JSON.stringify(browserFiringEvidence.sourceIdentityAfterFiring)}`);
+      }
     }
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
+    let schedulerArchive = null;
+    if (composedWorldEvidenceOut) {
+      phase = 'loading-scheduler-archive';
+      schedulerArchive = await loadSchedulerArchiveEvidence({
+        baseUrl: url,
+        artifact: pipelineReport.traceArtifacts?.['scheduler-events'],
+      });
+    }
     state.fullRoute = projectFriendlyFiringEvidence({
       browserFiringEvidence,
       pipelineReport,
@@ -2417,11 +2505,15 @@ try {
       const sourceAfter = browserFiringEvidence.sourceIdentityAfterFiring;
       const composedWorldEvidence = createComposedWorldFireSharpEvidence({
         kaminosRevision: expectedKaminosRevision,
+        kaminosHostIdentity,
         requestedInvocation,
         browserIdentity: {
+          resolution: browserResolution,
+          session: browserSession,
           requested: browserResolution.request,
           effective: {
-            executable: browserResolution.effective.realPath || browserResolution.effective.executable,
+            executable: browserResolution.effective.executable,
+            realPath: browserResolution.effective.realPath,
             kind: browserResolution.effective.kind,
             playwrightRevision: browserResolution.effective.playwrightRevision,
             product: browserSession.attachedBrowserProduct,
@@ -2443,6 +2535,7 @@ try {
         fireActorProductReceipt: state.fullRoute.fireActorProductReceipt,
         foregroundHeartbeat: state.fullRoute.foregroundKilnHeartbeat,
         sharpDutyCorrelation: state.fullRoute.sharpDutyCorrelation,
+        schedulerArchive,
         pipelineReport,
       });
       ensureParent(composedWorldEvidenceOut);

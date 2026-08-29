@@ -333,6 +333,20 @@ def _sharp_inline_revision():
     return result.stdout.strip() or None
 
 
+def _kaminos_revision():
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return result.stdout.strip() or None
+
+
 def _sharp_inline_kit_source_locked_version():
     try:
         with (KAMINOS_SHARP_WEBGPU_REPO / "package-lock.json").open() as handle:
@@ -376,9 +390,15 @@ def runtime_config():
     )
     module_exists = SHARP_INLINE_MODULE_PATH.is_file()
     weights_exist = SHARP_INLINE_WEIGHTS_PATH.is_file()
+    kaminos_revision = _kaminos_revision()
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "kaminosHost": {
+            "sourceRoot": str(ROOT),
+            "revision": kaminos_revision,
+            "revisionStatus": "resolved" if kaminos_revision else "missing",
+        },
         "sharpInline": {
             "registered": (
                 bool(sharp_revision)

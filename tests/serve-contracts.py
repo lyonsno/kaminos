@@ -3,6 +3,7 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
+import re
 import sys
 from tempfile import TemporaryDirectory
 import time
@@ -620,6 +621,9 @@ def test_runtime_config_exposes_hybrid_overlay_module_url_env():
 
     assert config["schema"] == "kaminos.runtime-config.v0"
     assert config["hybridSplatOverlayModuleUrl"] == "http://127.0.0.1:5174/src/splatOverlay.ts"
+    assert config["kaminosHost"]["sourceRoot"] == str(serve.ROOT)
+    assert re.fullmatch(r"[a-f0-9]{40}", config["kaminosHost"]["revision"])
+    assert config["kaminosHost"]["revisionStatus"] == "resolved"
 
 
 def test_runtime_config_enforces_optional_sharp_revision_contract():

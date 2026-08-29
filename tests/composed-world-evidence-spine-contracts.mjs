@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import {
   COMPOSED_WORLD_EVIDENCE_SCHEMA,
@@ -21,6 +21,41 @@ const scheduler = {
   yieldMs: 4,
   gaussianPhaseYieldMs: 4,
   routeTailYieldMs: 3,
+};
+
+const schedulerEvents = [
+  {
+    sequence: 0,
+    runId: firingId,
+    phase: 'spn-patch-chunk',
+    boundary: 'spn-patch-chunk',
+    kind: 'queue-work-done-start',
+    dutyId: `${firingId}:spn-patch-chunk:0`,
+    tMs: 105,
+    epochMs: 1105,
+  },
+  {
+    sequence: 1,
+    runId: firingId,
+    phase: 'spn-patch-chunk',
+    boundary: 'spn-patch-chunk',
+    kind: 'queue-work-done-end',
+    dutyId: `${firingId}:spn-patch-chunk:0`,
+    tMs: 140,
+    epochMs: 1140,
+  },
+];
+const schedulerNdjson = `${schedulerEvents.map(event => JSON.stringify(event)).join('\n')}\n`;
+const schedulerArtifact = {
+  schema: 'kaminos.sharp-inline-trace-artifact.v0',
+  path: '/durable/pipeline-runs/firing-composed-world-001/scheduler-events.ndjson',
+  readUrl: '/api/pipeline-runs/firing-composed-world-001/scheduler-events.ndjson',
+  mediaType: 'application/x-ndjson',
+  jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
+  count: schedulerEvents.length,
+  bytes: Buffer.byteLength(schedulerNdjson),
+  sha256: createHash('sha256').update(schedulerNdjson).digest('hex'),
+  retention: 'uncapped',
 };
 
 function sha256Json(value) {
@@ -59,14 +94,42 @@ const fixture = {
     sourceAssetId: 'image:evil-orb-sharp-splat-render',
     firePresentation: 'full-volume',
     flameContinuity: 'live-every-frame',
+    captureInFlight: false,
   },
   browserIdentity: {
-    requested: { source: 'default-candidate' },
+    requested: { source: 'cli', executable: '/opt/playwright/chrome-headless-shell' },
     effective: {
-      executable: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      product: 'Chrome/140.0.0.0',
-      userAgent: 'Mozilla/5.0 Chrome/140.0.0.0',
+      executable: '/opt/playwright/chrome-headless-shell',
+      realPath: '/opt/playwright/chrome-headless-shell',
+      kind: 'playwright-chromium-headless-shell',
+      playwrightRevision: 1234,
+      product: 'HeadlessChrome/140.0.0.0',
+      protocolVersion: '1.3',
     },
+    resolution: {
+      schema: 'kaminos.headless-browser-resolution.v0',
+      request: { source: 'cli', executable: '/opt/playwright/chrome-headless-shell' },
+      effective: {
+        executable: '/opt/playwright/chrome-headless-shell',
+        realPath: '/opt/playwright/chrome-headless-shell',
+        kind: 'playwright-chromium-headless-shell',
+        playwrightRevision: 1234,
+        installedStableChrome: false,
+      },
+      fallbackPolicy: 'explicit-override-or-fail',
+      rejectedCandidates: [],
+    },
+    session: {
+      attachedBrowserProduct: 'HeadlessChrome/140.0.0.0',
+      attachedProtocolVersion: '1.3',
+      browserContextId: 'context-composed-world-001',
+    },
+  },
+  kaminosHostIdentity: {
+    requestedRevision: 'f733cf63f3bef435194402fb97828098462db140',
+    effectiveRevision: 'f733cf63f3bef435194402fb97828098462db140',
+    sourceRoot: '/private/tmp/kaminos-wake-composed-world-evidence-0827',
+    status: 'matched',
   },
   sourceIdentity: {
     requestedAssetId: 'image:evil-orb-sharp-splat-render',
@@ -148,7 +211,7 @@ const fixture = {
       schema: 'kaminos.browser-epoch-monotonic-clock.v0',
       timingAuthority: 'performance-time-origin-plus-now',
       runId: firingId,
-      timeOriginEpochMs: 2000,
+      timeOriginEpochMs: 1000,
       inferenceWindowStartEpochMs: 1100,
       inferenceWindowEndEpochMs: 1150,
     },
@@ -163,6 +226,9 @@ const fixture = {
       routeAuthority: 'same-browser-product-realm-shared-device',
     },
     durationMs: 50,
+    traceArtifacts: {
+      'scheduler-events': schedulerArtifact,
+    },
     authoritativeTrace: {
       sharpRunDebug: {
         status: 'real',
@@ -178,7 +244,7 @@ const fixture = {
             clock: {
               schema: 'kaminos.browser-epoch-monotonic-clock.v0',
               timingAuthority: 'performance-time-origin-plus-now',
-              timeOriginEpochMs: 2000,
+              timeOriginEpochMs: 1000,
             },
             sequenceEnvelope: eventSequence,
           },
@@ -188,6 +254,7 @@ const fixture = {
             retention: 'uncapped',
             runId: firingId,
             eventCount: eventSequence.eventCount,
+            traceArtifactRef: '#/traceArtifacts/scheduler-events',
           },
         },
         route: {
@@ -253,7 +320,112 @@ const fixture = {
       },
     }],
   },
+  schedulerArchive: {
+    artifact: schedulerArtifact,
+    rawNdjson: schedulerNdjson,
+    bytes: Buffer.byteLength(schedulerNdjson),
+    sha256: schedulerArtifact.sha256,
+    rows: schedulerEvents,
+  },
 };
+
+const fireBudget = fixture.foregroundHeartbeat.requestedFireBudget;
+const fireHook = (status, phase, finishedAtMs = null) => ({
+  identity: 'foreground-kiln-fire-episode-hooks-v0',
+  firingId,
+  generation: 1,
+  phase,
+  status,
+  evidenceSource: 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0',
+  authority: 'renderer-simulator-hooks-for-wake-foreground-heartbeat',
+  routeIdentity: {
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    prototypeIdentity: 'wake-sharp-promoted-fire-volume-adapter-v1',
+    volumeScene: 'crucible-volume-scene',
+    flameRendererIdentity: 'fireactor-promoted-volume-v1',
+    learnedModelIdentity: 'fireactor-9b70310e',
+    fallbackReason: null,
+    compositionRequested: 'hybrid-smoke',
+    compositionEffective: 'hybrid-smoke',
+    compositionFallbackReason: null,
+  },
+  sampleCount: 3,
+  frameAdvanceCount: 2,
+  simStepAdvanceCount: 2,
+  startedAtMs: 100,
+  finishedAtMs,
+});
+fixture.foregroundHeartbeat.samples = fixture.foregroundHeartbeat.samples.map((sample, index) => ({
+  ...sample,
+  routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
+  prototypeIdentity: 'wake-sharp-promoted-fire-volume-adapter-v1',
+  frameCount: 10 + index,
+  simStepCount: 20 + index,
+  fireBudget,
+  firePresentation: { mode: 'learned-splat-flame-raymarched-smoke' },
+  fireEpisodeHooks: index === fixture.foregroundHeartbeat.samples.length - 1
+    ? fireHook('complete', 'complete', 150)
+    : fireHook('recording', 'recording'),
+}));
+Object.assign(fixture.foregroundHeartbeat, {
+  expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
+  requireExactFireEpisode: true,
+  effectiveFireEpisodeHooks: fireHook('complete', 'complete', 150),
+  startedAtEpochMs: 1100,
+  finishedAtEpochMs: 1150,
+  frameCountStart: 10,
+  frameCountEnd: 12,
+  frameCountDelta: 2,
+  simStepCountStart: 20,
+  simStepCountEnd: 22,
+  simStepCountDelta: 2,
+});
+fixture.sharpDutyCorrelation.foregroundGaps = [
+  {
+    sampleIndex: 1,
+    startEpochMs: 1100,
+    endEpochMs: 1116.5,
+    durationMs: 16.5,
+    attributedDurationMs: 11.5,
+    unattributedDurationMs: 5,
+    overlaps: [{
+      runId: firingId,
+      dutyId: `${firingId}:spn-patch-chunk:0`,
+      phase: 'spn-patch-chunk',
+      boundary: 'spn-patch-chunk',
+      startEpochMs: 1105,
+      endEpochMs: 1116.5,
+      overlapDurationMs: 11.5,
+    }],
+  },
+  {
+    sampleIndex: 2,
+    startEpochMs: 1116.5,
+    endEpochMs: 1150,
+    durationMs: 33.5,
+    attributedDurationMs: 23.5,
+    unattributedDurationMs: 10,
+    overlaps: [{
+      runId: firingId,
+      dutyId: `${firingId}:spn-patch-chunk:0`,
+      phase: 'spn-patch-chunk',
+      boundary: 'spn-patch-chunk',
+      startEpochMs: 1116.5,
+      endEpochMs: 1140,
+      overlapDurationMs: 23.5,
+    }],
+  },
+];
+Object.assign(fixture.sharpDutyCorrelation, {
+  phaseRankings: [{ phase: 'spn-patch-chunk', overlapDurationMs: 35 }],
+  boundaryRankings: [{ boundary: 'spn-patch-chunk', overlapDurationMs: 35 }],
+  totals: {
+    foregroundGapDurationMs: 50,
+    attributedDurationMs: 35,
+    unattributedDurationMs: 15,
+    attributedFraction: 0.7,
+  },
+});
 
 const evidence = createComposedWorldFireSharpEvidence(fixture);
 assert.equal(evidence.schema, COMPOSED_WORLD_EVIDENCE_SCHEMA);
@@ -263,17 +435,26 @@ assert.equal(evidence.identity.kaminosRevision, fixture.kaminosRevision);
 assert.equal(evidence.identity.sharpRevision, sharpRevision);
 assert.equal(evidence.identity.webgpuInferenceKitVersion, '0.1.38');
 assert.equal(evidence.clockJoin.foreground.sampleCount, samples.length);
-assert.deepEqual(evidence.clockJoin.foreground.samples, samples);
+assert.deepEqual(evidence.clockJoin.foreground.samples, fixture.foregroundHeartbeat.samples);
 assert.equal(evidence.terminalOutput.sha256, '6'.repeat(64));
 assert.equal(evidence.route.requestedScheduler.mode, 'cooperative');
 assert.match(evidence.claimCeiling, /exact named firing/i);
 assert.doesNotMatch(evidence.claimCeiling, /under one minute/i);
 
 const traceHtml = renderComposedWorldFireSharpTraceHtml(evidence);
+if (process.env.KAMINOS_COMPOSED_TRACE_OUT) {
+  writeFileSync(process.env.KAMINOS_COMPOSED_TRACE_OUT, traceHtml);
+}
 assert.match(traceHtml, /Composed Fire \+ SHARP shared-clock trace/);
 assert.match(traceHtml, new RegExp(firingId));
 assert.match(traceHtml, /canvas/);
 assert.match(traceHtml, /33\.5/);
+assert.match(traceHtml, /SHARP host-await overlap/);
+assert.match(traceHtml, /Unattributed remainder/);
+assert.match(traceHtml, /"attributedDurationMs":11\.5/);
+assert.match(traceHtml, /"unattributedDurationMs":5/);
+assert.match(traceHtml, /inferenceWindowStartEpochMs/);
+assert.match(traceHtml, /canvas\.clientWidth[\s\S]*devicePixelRatio/);
 assert.doesNotMatch(traceHtml, /undefined/);
 
 function rejects(name, mutate, pattern) {
@@ -357,6 +538,43 @@ rejects('spliced terminal PLY byte length', value => {
     runDebug.route.receipt.metadataPayload,
   );
 }, /PLY byte|terminal output/i);
+rejects('missing retained scheduler archive', value => {
+  delete value.pipelineReport.traceArtifacts['scheduler-events'];
+}, /scheduler archive|trace artifact/i);
+rejects('repaired-count scheduler archive deletion', value => {
+  value.schedulerArchive.rows.shift();
+  value.schedulerArchive.rows[0].sequence = 0;
+  value.schedulerArchive.artifact.count = 1;
+  value.schedulerArchive.bytes = Buffer.byteLength(`${JSON.stringify(value.schedulerArchive.rows[0])}\n`);
+  value.schedulerArchive.sha256 = createHash('sha256')
+    .update(`${JSON.stringify(value.schedulerArchive.rows[0])}\n`)
+    .digest('hex');
+}, /scheduler archive|event sequence|event count/i);
+rejects('all-inactive foreground samples', value => {
+  for (const sample of value.foregroundHeartbeat.samples) sample.active = false;
+}, /foreground.*active|FireActor.*live/i);
+rejects('forged FireActor hook authority', value => {
+  value.foregroundHeartbeat.samples[1].fireEpisodeHooks.authority = 'caller-asserted';
+}, /FireActor.*authority|hook.*authority/i);
+rejects('substituted FireActor hook route', value => {
+  value.foregroundHeartbeat.samples[1].fireEpisodeHooks.routeIdentity.effectiveRoute = 'fallback-volume-route';
+}, /FireActor.*route|hook.*route/i);
+rejects('non-exact FireActor episode', value => {
+  value.foregroundHeartbeat.requireExactFireEpisode = false;
+}, /exact FireActor|exact.*episode/i);
+rejects('fabricated SHARP correlation rows', value => {
+  value.sharpDutyCorrelation.foregroundGaps = [{ fabricated: true }, { fabricated: true }];
+}, /correlation|foreground gap/i);
+rejects('foreign effective Kaminos host', value => {
+  value.kaminosHostIdentity.effectiveRevision = '0'.repeat(40);
+}, /Kaminos.*revision|host identity/i);
+rejects('browser request/effective substitution', value => {
+  value.browserIdentity.resolution.effective.realPath = '/opt/substituted/chrome';
+  value.browserIdentity.resolution.effective.executable = '/opt/substituted/chrome';
+}, /browser.*request|browser.*effective|substitution/i);
+rejects('observer-effect capture enabled', value => {
+  value.requestedInvocation.captureInFlight = true;
+}, /capture|observer/i);
 
 assert.throws(
   () => createComposedWorldFireSharpEvidence({

@@ -5,8 +5,10 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -21,6 +23,133 @@ import {
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
+
+for (const packageLockCase of ['missing', 'malformed']) {
+  const root = mkdtempSync(join(tmpdir(), `kaminos-composed-lock-${packageLockCase}-`));
+  try {
+    const copiedWitness = join(root, 'crucible-viewport-witness.mjs');
+    const reportPath = join(root, 'witness.json');
+    const evidencePath = join(root, 'composed-world.json');
+    writeFileSync(copiedWitness, witness);
+    symlinkSync(new URL('../lib', import.meta.url), join(root, 'lib'));
+    if (packageLockCase === 'malformed') writeFileSync(join(root, 'package-lock.json'), '{ definitely not JSON');
+    const result = spawnSync(process.execPath, [
+      copiedWitness,
+      '--fire-friendly',
+      '--source-asset-id', 'image-inbox:source.png',
+      '--expected-kaminos-revision', 'a'.repeat(40),
+      '--expected-sharp-revision', 'b'.repeat(40),
+      '--composed-world-evidence-out', evidencePath,
+      '--report', reportPath,
+      '--out', join(root, 'should-not-exist.png'),
+    ], { encoding: 'utf8' });
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(reportPath), true, `${packageLockCase} package lock must still write the witness report`);
+    assert.equal(existsSync(evidencePath), true, `${packageLockCase} package lock must still write the composed failure envelope`);
+    const failure = JSON.parse(readFileSync(evidencePath, 'utf8'));
+    assert.equal(failure.status, 'failed');
+    assert.equal(failure.phase, 'resolving-source-locked-webgpu-kit');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+assert.match(
+  witness,
+  /if \(composedWorldEvidenceOut\) \{\s*phase = 'hashing-source-before-firing'/,
+  'ordinary and replay witness modes must not fetch or hash source bytes before firing',
+);
+assert.match(
+  witness,
+  /if \(composedWorldEvidenceOut\) \{\s*phase = 'hashing-source-after-firing'/,
+  'ordinary and replay witness modes must not fetch or hash source bytes after firing',
+);
+
+const hostIdentitySource = witness.match(
+  /async function loadKaminosHostIdentity\([\s\S]*?\n}\n(?=\nasync function )/,
+);
+assert.ok(hostIdentitySource, 'witness must expose a testable effective Kaminos host resolver');
+const loadKaminosHostIdentity = vm.runInNewContext(`(${hostIdentitySource[0]})`, { URL });
+const expectedKaminosRevision = 'a'.repeat(40);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(await loadKaminosHostIdentity({
+    baseUrl: 'http://127.0.0.1:8095/workbench',
+    expectedRevision: expectedKaminosRevision,
+    fetchImpl: async requestUrl => ({
+      ok: requestUrl.href === 'http://127.0.0.1:8095/api/runtime-config',
+      status: 200,
+      json: async () => ({
+        schema: 'kaminos.runtime-config.v0',
+        kaminosHost: {
+          sourceRoot: '/private/tmp/kaminos-exact',
+          revision: expectedKaminosRevision,
+        },
+      }),
+    }),
+  }))),
+  {
+    requestedRevision: expectedKaminosRevision,
+    effectiveRevision: expectedKaminosRevision,
+    sourceRoot: '/private/tmp/kaminos-exact',
+    status: 'matched',
+  },
+);
+await assert.rejects(
+  loadKaminosHostIdentity({
+    baseUrl: 'http://127.0.0.1:8095/',
+    expectedRevision: expectedKaminosRevision,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        schema: 'kaminos.runtime-config.v0',
+        kaminosHost: { sourceRoot: '/tmp/foreign', revision: 'b'.repeat(40) },
+      }),
+    }),
+  }),
+  /runtime identity mismatch/,
+);
+
+const schedulerArchiveLoaderSource = witness.match(
+  /async function loadSchedulerArchiveEvidence\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(schedulerArchiveLoaderSource, 'witness must expose a testable retained scheduler archive loader');
+const loadSchedulerArchiveEvidence = vm.runInNewContext(`(${schedulerArchiveLoaderSource[0]})`, {
+  Buffer,
+  URL,
+  createHash,
+  structuredClone,
+});
+const schedulerRows = [
+  { sequence: 0, kind: 'queue-work-done-start' },
+  { sequence: 1, kind: 'queue-work-done-end' },
+];
+const schedulerBytes = Buffer.from(`${schedulerRows.map(row => JSON.stringify(row)).join('\n')}\n`);
+const schedulerArtifact = {
+  schema: 'kaminos.sharp-inline-trace-artifact.v0',
+  mediaType: 'application/x-ndjson',
+  readUrl: '/api/read?root=pipeline-runs&path=run%2Fscheduler.ndjson',
+};
+const loadedSchedulerArchive = await loadSchedulerArchiveEvidence({
+  baseUrl: 'http://127.0.0.1:8095/',
+  artifact: schedulerArtifact,
+  fetchImpl: async requestUrl => ({
+    ok: requestUrl.origin === 'http://127.0.0.1:8095',
+    status: 200,
+    arrayBuffer: async () => schedulerBytes,
+  }),
+});
+assert.deepEqual(JSON.parse(JSON.stringify(loadedSchedulerArchive.rows)), schedulerRows);
+assert.equal(loadedSchedulerArchive.rawNdjson, schedulerBytes.toString('utf8'));
+assert.equal(loadedSchedulerArchive.bytes, schedulerBytes.byteLength);
+assert.equal(loadedSchedulerArchive.sha256, createHash('sha256').update(schedulerBytes).digest('hex'));
+await assert.rejects(
+  loadSchedulerArchiveEvidence({
+    baseUrl: 'http://127.0.0.1:8095/',
+    artifact: { ...schedulerArtifact, readUrl: 'https://foreign.invalid/scheduler.ndjson' },
+    fetchImpl: async () => { throw new Error('foreign fetch must not occur'); },
+  }),
+  /escaped the exercised Kaminos origin/,
+);
 assert.doesNotMatch(
   witness,
   /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
