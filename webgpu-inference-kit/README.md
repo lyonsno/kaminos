@@ -1,16 +1,55 @@
 # @kaminos/webgpu-inference-kit
 
-A composable browser-native WebGPU inference runtime for model ports that need direct control over execution, scheduling, tensors, buffers, shared devices, and memory residency.
+A composable browser-native WebGPU inference runtime for model ports that need direct control over kernels, scheduling, tensors, buffers, shared devices, and memory residency.
 
-Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same runtime shell again: device acquisition, shader and pipeline caching, typed tensors, buffer upload and readback, phase programs, background queues, multi-route scheduling, shared resource residency, progress, cancellation, and device-loss recovery boundaries.
+Build complete model ports with direct WebGPU compute while the runtime handles the machinery that every serious port otherwise has to rebuild: device acquisition, shader and pipeline caching, typed tensors, model loading, cooperative execution, background queues, multi-route scheduling, shared resource residency, progress, cancellation, and device-loss recovery.
 
-Strict route and run identity travels with the runtime so composed pipelines can distinguish live model output from stale, partial, cached, or fallback results.
+The result is a model runtime that can share a browser and GPU with a live renderer, move long inference through model-owned work boundaries, and keep enough control to optimize kernels and memory for the actual architecture.
 
 ## Install
 
 ```sh
 npm install @kaminos/webgpu-inference-kit
 ```
+
+## What It Makes Possible
+
+- **Direct browser-native execution.** Build tensors, buffers, uniforms, kernels, bind groups, phase programs, and readbacks on the browser's WebGPU device without routing model compute through a graph runtime.
+- **Cooperative long-running inference.** Declare real GPU and CPU work boundaries, adapt exact range sizes from completed queue time, service foreground work before the next inference encode, and choose strict or caller-bounded queue-prefix completion.
+- **Continuous background workflows.** Queue many jobs, admit work across several model routes, report denominator-bearing progress, cancel pending work, and preserve terminal failure state.
+- **Shared model resources.** Load authenticated whole-model bundles or bounded chunks, cache them in the browser, share one resident allocation across routes, and hold only the weights and scratch required by the current phase.
+- **Application-owned composition.** Reuse one WebGPU device for inference and rendering while the model adapter remains in control of numerical behavior, buffer lifetimes, dispatch geometry, and lawful split points.
+
+```text
+source + model weights
+          |
+          v
+model adapter -> tensors / kernels / phase programs
+          |
+          v
+declared GPU + CPU work boundaries
+          |
+          v
+cooperative execution <-> foreground renderer / application work
+          |
+          v
+shared WebGPU device -> depth / splat / mesh / motion outputs
+```
+
+## Running In Real Model Ports
+
+| Port | Browser-native route | Kit adoption |
+| --- | --- | --- |
+| [SHARP WebGPU](https://github.com/lyonsno/sharp-webgpu) | image to 1.18M Gaussian splats | cooperative orchestration, scheduling, shared-device foreground opportunities, route composition |
+| [SF3D WebGPU](https://github.com/lyonsno/sf3d-webgpu) | image to textured GLB mesh | cooperative orchestration and model-owned bounded work |
+| [MoGe WebGPU](https://github.com/lyonsno/moge-webgpu) | image to depth, normals, and point map | tensor, kernel, runtime, and route primitives |
+| [Kimodo WebGPU](https://github.com/lyonsno/kimodo-webgpu) | prompt to skeletal motion | runtime and route primitives around browser diffusion, with text embedding declared as an external backend |
+
+### One Exercised Shared-GPU Product Route
+
+On an M4 Max in Chrome, SHARP generated `1,179,648` Gaussian splats over `185.3s` while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across `21,818` foreground frame intervals, p95 and p99 were `9.3ms` and `10.0ms`; `40` intervals exceeded `33.3ms`.
+
+That route is the runtime's central product target: long local inference that remains useful inside an application that is still visibly alive.
 
 ## Start Here When Porting A Long Model
 
