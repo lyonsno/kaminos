@@ -384,6 +384,7 @@ function sharpDutyHeartbeat({
         {
           runId: intervalRunId,
           dutyId: 'spn-fusion:0',
+          sourceOnlyMarker: 'uncapped-source-duty-row',
           phase: 'spn-fusion',
           boundary: 'readback-lowres',
           kind: 'submitted-work-drain-interval',
@@ -972,6 +973,13 @@ assert.equal(correlatedReport.sharpDutyCorrelation.foregroundGaps.length, 3, 'al
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.foregroundGapDurationMs, 76);
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.attributedDurationMs, 30);
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.unattributedDurationMs, 46);
+assert.equal(correlatedReport.sharpHeartbeat.gpuDutyIntervals.count, 2);
+assert.equal(correlatedReport.sharpHeartbeat.gpuDutyIntervals.intervals, undefined);
+assert.equal(
+  JSON.stringify(correlatedReport).includes('uncapped-source-duty-row'),
+  false,
+  'the foreground report must retain derived correlation without republishing source duty rows',
+);
 assert.deepEqual(
   correlatedReport.sharpDutyCorrelation.phaseRankings.map(row => [row.phase, row.overlapDurationMs]),
   [['spn-fusion', 20], ['monodepth', 10]],

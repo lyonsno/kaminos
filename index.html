@@ -13453,7 +13453,15 @@ async function persistSharpInlineRunReport({
   });
 }
 
-async function runSharpInlineProductRoute({ source, profileId, firingId, pipeline, generator, onProgress } = {}) {
+async function runSharpInlineProductRoute({
+  source,
+  profileId,
+  firingId,
+  pipeline,
+  generator,
+  onProgress,
+  onBackgroundHeartbeat,
+} = {}) {
   const inline = await loadSharpInlineProductRuntime();
   const gpuContext = volumePrototype.foregroundGpuContext();
   if (!gpuContext?.device || gpuContext.queue !== gpuContext.device.queue) {
@@ -13600,6 +13608,7 @@ async function runSharpInlineProductRoute({ source, profileId, firingId, pipelin
     let backgroundHeartbeat;
     try {
       backgroundHeartbeat = createSharpInlineBackgroundHeartbeat(sharpResult.runDebug, foregroundSnapshot);
+      onBackgroundHeartbeat?.(backgroundHeartbeat);
     } catch (error) {
       const failureDocument = {
         schema: 'kaminos.sharp-inline-failure-report.v0',
@@ -19244,6 +19253,21 @@ function kilnRouteBenchBackgroundHeartbeat(result) {
   return null;
 }
 
+function createKilnRouteBenchCorrelationHeartbeatLatch() {
+  let capturedHeartbeat = null;
+  return Object.freeze({
+    capture(heartbeat) {
+      if (heartbeat?.schema === 'sharp-webgpu.background-heartbeat.v0') {
+        capturedHeartbeat = heartbeat;
+      }
+      return heartbeat;
+    },
+    resolve(result) {
+      return capturedHeartbeat || kilnRouteBenchBackgroundHeartbeat(result);
+    },
+  });
+}
+
 function kilnRouteBenchHeartbeatSummary(result) {
   const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(result);
   const gap = backgroundHeartbeat?.worstFrameGaps?.[0]
@@ -19425,6 +19449,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
     return failedRun;
   }
   let run = null;
+  const correlationHeartbeatLatch = createKilnRouteBenchCorrelationHeartbeatLatch();
   let kilnFireEnded = false;
   try {
     const generator = pipelineGeneratorForPipelineId(pipelineId);
@@ -19445,6 +19470,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
           pipeline,
           generator,
           onProgress,
+          onBackgroundHeartbeat: heartbeat => correlationHeartbeatLatch.capture(heartbeat),
         })
       : await runSelectedPipeline({
           sourceOverride: source,
@@ -19456,7 +19482,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
         });
     await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
       forceInactive: true,
-      sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+      sharpHeartbeat: correlationHeartbeatLatch.resolve(run),
       runResult: run,
     });
     kilnFireEnded = true;
@@ -19572,7 +19598,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
     if (!kilnFireEnded) {
       await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
         forceInactive: true,
-        sharpHeartbeat: kilnRouteBenchBackgroundHeartbeat(run),
+        sharpHeartbeat: correlationHeartbeatLatch.resolve(run),
         runResult: run,
       });
     }

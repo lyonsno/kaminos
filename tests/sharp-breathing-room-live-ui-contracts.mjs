@@ -562,6 +562,16 @@ assert.match(
 );
 assert.match(
   index,
+  /backgroundHeartbeat\s*=\s*createSharpInlineBackgroundHeartbeat\([\s\S]{0,300}onBackgroundHeartbeat\?\.\(backgroundHeartbeat\)/,
+  'SHARP must publish the full correlation heartbeat before report compaction or transport can fail',
+);
+assert.match(
+  index,
+  /const correlationHeartbeatLatch = createKilnRouteBenchCorrelationHeartbeatLatch\(\)[\s\S]*sharpHeartbeat:\s*correlationHeartbeatLatch\.resolve\(run\)[\s\S]*finally[\s\S]*sharpHeartbeat:\s*correlationHeartbeatLatch\.resolve\(run\)/,
+  'Normal and exceptional kiln completion must resolve the same route-local correlation heartbeat',
+);
+assert.match(
+  index,
   /volumePrototype\.endFireEpisode\(\{\s*firingId:\s*fireState\.firingId,\s*status:\s*phase,?\s*\}\)[\s\S]*foregroundHeartbeat\?\.finish\([\s\S]*confirmSharpBreathingRoomKilnFireReleased/,
   'Kiln completion must close the same exact fire episode before the final foreground sample and furnace release',
 );

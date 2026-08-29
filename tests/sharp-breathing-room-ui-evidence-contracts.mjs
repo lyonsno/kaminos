@@ -188,10 +188,69 @@ assert.equal(
 
 for (const fn of [
   'kilnRouteBenchBackgroundHeartbeat',
+  'createKilnRouteBenchCorrelationHeartbeatLatch',
   'kilnRouteBenchHeartbeatSummary',
 ]) {
   vm.runInContext(extractFunction(fn), context);
 }
+const compactHeartbeat = {
+  schema: 'sharp-webgpu.background-heartbeat.v0',
+  gpuDutyIntervals: {
+    schema: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+    count: 2,
+    intervalsRef: {
+      schema: 'kaminos.ndjson-collection-reference.v0',
+      collectionId: 'gpu-duty-intervals',
+      count: 2,
+    },
+  },
+};
+const fullCorrelationHeartbeat = {
+  schema: 'sharp-webgpu.background-heartbeat.v0',
+  gpuDutyIntervals: {
+    schema: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+    count: 2,
+    intervals: [
+      { dutyId: 'duty-a', phase: 'encode', startMs: 10, endMs: 11 },
+      { dutyId: 'duty-b', phase: 'submit', startMs: 12, endMs: 13 },
+    ],
+  },
+};
+const compactCorrelationRun = {
+  report: {
+    document: {
+      authoritativeTrace: { backgroundHeartbeat: compactHeartbeat },
+    },
+  },
+};
+const correlationLatch = context.createKilnRouteBenchCorrelationHeartbeatLatch();
+assert.equal(
+  correlationLatch.resolve(compactCorrelationRun),
+  compactHeartbeat,
+  'an unresolved latch must preserve the compact authoritative fallback',
+);
+correlationLatch.capture(fullCorrelationHeartbeat);
+assert.equal(
+  correlationLatch.resolve(compactCorrelationRun),
+  fullCorrelationHeartbeat,
+  'the route-local latch must preserve the full same-invocation heartbeat across report transport',
+);
+assert.equal(
+  JSON.stringify(compactCorrelationRun).includes('duty-a'),
+  false,
+  'the route-local latch must not attach uncapped duty rows to serialized run history',
+);
+assert.equal(
+  context.createKilnRouteBenchCorrelationHeartbeatLatch().resolve({
+    report: {
+      document: {
+        authoritativeTrace: { backgroundHeartbeat: compactHeartbeat },
+      },
+    },
+  }),
+  compactHeartbeat,
+  'non-SHARP and recovered runs must retain the compact authoritative fallback',
+);
 const compactOverlapMessage = context.kilnRouteBenchHeartbeatSummary({
   report: {
     document: {
