@@ -7906,6 +7906,7 @@ export function createKaminosVolumePrototype({
       throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
     }
     const computeStart = BOUNDARY_SPLAT_WGSL.indexOf('@compute @workgroup_size(4, 4, 4)\nfn compactBoundarySplats');
+    const computeHelpersStart = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatCellIndex');
     const archiveStart = BOUNDARY_SPLAT_WGSL.indexOf('@compute @workgroup_size(64)\nfn archiveBoundarySplatHistory');
     const archiveEnd = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatQuadCorner', archiveStart);
     const renderStart = BOUNDARY_SPLAT_WGSL.indexOf('fn boundarySplatQuadCorner');
@@ -7913,8 +7914,8 @@ export function createKaminosVolumePrototype({
       ? BOUNDARY_SPLAT_WGSL.slice(0, renderStart)
           .replace('@group(0) @binding(9) var<storage, read> boundarySplatHistoryForRender: array<BoundarySplat>;\n', '')
       : BOUNDARY_SPLAT_WGSL;
-    const boundarySplatRenderWgsl = computeStart >= 0 && archiveEnd > computeStart
-      ? `${BOUNDARY_SPLAT_WGSL.slice(0, computeStart)}${BOUNDARY_SPLAT_WGSL.slice(archiveEnd)}`
+    const boundarySplatRenderWgsl = computeHelpersStart >= 0 && computeStart > computeHelpersStart && archiveEnd > computeStart
+      ? `${BOUNDARY_SPLAT_WGSL.slice(0, computeHelpersStart)}${BOUNDARY_SPLAT_WGSL.slice(archiveEnd)}`
           .replace('@group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;\n', '')
           .replace('@group(0) @binding(1) var<storage, read> fluid: array<vec4<f32>>;\n', '')
           .replace('@group(0) @binding(2) var<storage, read_write> boundarySplats: array<BoundarySplat>;\n', '')
@@ -9511,7 +9512,11 @@ export function createKaminosVolumePrototype({
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
+    const flowKernelNeedsStructure = normalizeFlowKernelStrength(controlsSnapshot.flowKernelStrength) > 0;
+    const shouldBakeBoundarySidecar = sourceName !== 'live'
+      || sidecarViewName !== 'off'
+      || boundarySplatRequested()
+      || flowKernelNeedsStructure;
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||

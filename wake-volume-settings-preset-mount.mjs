@@ -4,6 +4,14 @@ import { validateVolumeSettingsPresetDocument } from './volume-settings-preset-c
 export const WAKE_FIRE_PRESET_ROUTE_PARAM = 'wake_fire_preset';
 export const WAKE_FIRE_PRESET_MOUNT_IDENTITY = 'kaminos.wake-fire-preset-mount.v1';
 export const WAKE_FIRE_PRESET_PRESENTATION = 'raymarch-only';
+export const WAKE_FIRE_PRESET_PROJECTION_IDENTITY = 'kaminos.wake-raymarch-preset-projection.v1';
+
+export const WAKE_FIRE_PRESET_CONSUMER_OVERRIDE_IDS = Object.freeze([
+  'volume-resolution',
+  'volume-render-scale',
+  'volume-adaptive-rays',
+  'volume-boundary-splat-mode',
+]);
 
 
 function controlValue(descriptor) {
@@ -52,18 +60,96 @@ function comparableControlValue(value) {
 }
 
 
+function wakeFirePresetConsumerOverrides(sourceReceipt, productBudget) {
+  const entriesById = new Map(wakeFirePresetControlEntries(sourceReceipt).map(entry => [entry.id, entry]));
+  const requestedBudget = productBudget?.requestedFireBudget || {};
+  const overrides = [
+    {
+      id: 'volume-resolution',
+      authority: 'wake-product-compute-policy',
+      effectiveValue: requestedBudget.resolution,
+    },
+    {
+      id: 'volume-render-scale',
+      authority: 'wake-product-compute-policy',
+      effectiveValue: requestedBudget.renderScale,
+    },
+    {
+      id: 'volume-adaptive-rays',
+      authority: 'wake-product-compute-policy',
+      effectiveValue: requestedBudget.adaptiveRays,
+    },
+    {
+      id: 'volume-boundary-splat-mode',
+      authority: 'wake-raymarch-only-presentation',
+      effectiveValue: 'off',
+    },
+  ];
+  return Object.freeze(overrides.map(override => Object.freeze({
+    ...override,
+    sourceValue: entriesById.get(override.id)?.requestedValue,
+  })));
+}
+
+
+function valuesNearlyEqual(left, right) {
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    return Math.abs(leftNumber - rightNumber) <= 1e-6;
+  }
+  return comparableControlValue(left) === comparableControlValue(right);
+}
+
+
+function assertRendererState(rendererState, productBudget, sourceReceipt) {
+  if (rendererState?.prototypeIdentity !== 'kaminos-volume-prototype-v0'
+    || rendererState?.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0'
+    || rendererState?.active !== true
+    || !rendererState?.backend
+    || rendererState.backend === 'unavailable') {
+    throw new Error('Wake renderer did not consume the mounted preset on the native active route');
+  }
+  const expectedBudget = productBudget?.requestedFireBudget || {};
+  if (Number(rendererState.simGrid) !== Number(expectedBudget.resolution)
+    || Number(rendererState.renderScale) !== Number(expectedBudget.renderScale)
+    || Number(rendererState.adaptiveRaymarch) !== Number(expectedBudget.adaptiveRays)) {
+    throw new Error('Wake renderer did not consume the product fire budget after preset mounting');
+  }
+  if (rendererState.boundarySplatMode !== 'off') {
+    throw new Error('Wake renderer did not consume the raymarch-only presentation');
+  }
+  const authoredRendererControls = sourceReceipt?.preset?.rendererControls || {};
+  const flowExpectations = [
+    ['volume-flow-kernel-strength', rendererState.flowKernelEffective?.strength],
+    ['volume-flow-kernel-radius', rendererState.flowKernelEffective?.radiusWorld],
+    ['volume-flow-kernel-coherence', rendererState.flowKernelEffective?.coherence],
+  ];
+  for (const [id, effectiveValue] of flowExpectations) {
+    const descriptor = authoredRendererControls[id];
+    if (!descriptor || !valuesNearlyEqual(controlValue(descriptor), effectiveValue)) {
+      throw new Error(`Wake renderer did not consume authored renderer control ${id}`);
+    }
+  }
+}
+
+
 export function createWakeFirePresetMountReceipt({
   requestedPresetRef,
   sourceReceipt,
   effectiveControlValues,
   productBudget,
-  presentation,
+  rendererState,
 }) {
   const entries = wakeFirePresetControlEntries(sourceReceipt);
+  const consumerOverrides = wakeFirePresetConsumerOverrides(sourceReceipt, productBudget);
+  const overridesById = new Map(consumerOverrides.map(entry => [entry.id, entry]));
   const effective = effectiveControlValues || {};
   const mismatches = entries.flatMap(entry => {
     if (!Object.hasOwn(effective, entry.id)) return [{ id: entry.id, reason: 'missing-effective-control' }];
-    const requestedValue = comparableControlValue(entry.requestedValue);
+    const requestedValue = comparableControlValue(
+      overridesById.has(entry.id) ? overridesById.get(entry.id).effectiveValue : entry.requestedValue,
+    );
     const effectiveValue = comparableControlValue(effective[entry.id]);
     return requestedValue === effectiveValue
       ? []
@@ -72,9 +158,7 @@ export function createWakeFirePresetMountReceipt({
   if (mismatches.length > 0) {
     throw new Error(`Wake fire preset mount is partial or substituted: ${mismatches[0].id}:${mismatches[0].reason}`);
   }
-  if (presentation?.boundarySplatMode !== 'off' || presentation?.effective !== WAKE_FIRE_PRESET_PRESENTATION) {
-    throw new Error('Wake fire preset presentation is not raymarch-only');
-  }
+  assertRendererState(rendererState, productBudget, sourceReceipt);
   if (
     Number(productBudget?.effectiveFireBudget?.resolution) !== Number(productBudget?.requestedFireBudget?.resolution)
     || Number(productBudget?.effectiveFireBudget?.renderScale) !== Number(productBudget?.requestedFireBudget?.renderScale)
@@ -84,6 +168,11 @@ export function createWakeFirePresetMountReceipt({
   }
   return Object.freeze({
     identity: WAKE_FIRE_PRESET_MOUNT_IDENTITY,
+    projection: Object.freeze({
+      identity: WAKE_FIRE_PRESET_PROJECTION_IDENTITY,
+      exactAuthoredControlIds: Object.freeze(entries.filter(entry => !overridesById.has(entry.id)).map(entry => entry.id)),
+      consumerOverrides,
+    }),
     requested: Object.freeze({
       presetRef: requestedPresetRef,
       presentation: WAKE_FIRE_PRESET_PRESENTATION,
@@ -99,10 +188,26 @@ export function createWakeFirePresetMountReceipt({
       storePath: sourceReceipt.storePath,
       basinControlCount: sourceReceipt.preset.controlCount,
       rendererControlCount: sourceReceipt.rendererControlCount,
-      mountedControlCount: entries.length,
+      sourceControlCount: entries.length,
+      exactAuthoredControlCount: entries.length - consumerOverrides.length,
+      consumerOverrideCount: consumerOverrides.length,
+      effectiveControlCount: entries.length,
       presentation: WAKE_FIRE_PRESET_PRESENTATION,
       boundarySplatMode: 'off',
       productBudget: Object.freeze({ ...productBudget.effectiveFireBudget }),
+      renderer: Object.freeze({
+        prototypeIdentity: rendererState.prototypeIdentity,
+        effectiveRoute: rendererState.effectiveRoute,
+        backend: rendererState.backend,
+        active: rendererState.active,
+        frameCount: rendererState.frameCount,
+        simGrid: rendererState.simGrid,
+        renderScale: rendererState.renderScale,
+        adaptiveRaymarch: rendererState.adaptiveRaymarch,
+        boundarySplatMode: rendererState.boundarySplatMode,
+        flowKernelIdentity: rendererState.flowKernelIdentity,
+        flowKernelEffective: rendererState.flowKernelEffective,
+      }),
     }),
   });
 }

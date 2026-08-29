@@ -70,6 +70,22 @@ assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'native-cell-unfiltered'/, 'runtime state makes unchanged splat admission authority explicit');
+assert.match(
+  core,
+  /computeHelpersStart = BOUNDARY_SPLAT_WGSL\.indexOf\('fn boundarySplatCellIndex'\)[\s\S]*BOUNDARY_SPLAT_WGSL\.slice\(0, computeHelpersStart\)/,
+  'the render-only splat module excludes compute-only reconstruction helpers before removing their storage bindings',
+);
+const sidecarBakePredicate = core.match(/const shouldBakeBoundarySidecar\s*=\s*([^;]+);/)?.[1] || '';
+assert.match(
+  core,
+  /const flowKernelNeedsStructure = normalizeFlowKernelStrength\(controlsSnapshot\.flowKernelStrength\) > 0/,
+  'the sidecar bake decision derives one normalized nonzero flow-kernel predicate',
+);
+assert.match(
+  sidecarBakePredicate,
+  /flowKernelNeedsStructure/,
+  'a nonzero flow kernel must build the structural sidecar even when live-source raymarch disables splats and sidecar diagnostics',
+);
 const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
 for (const [key] of expectedControls) {
   assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);

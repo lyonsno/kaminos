@@ -1665,7 +1665,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="24" max="160" step="4" value="96">
+      <input type="range" id="volume-steps" min="24" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
@@ -1804,6 +1804,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="slider-row">
         <span class="slider-label">Inspect</span>
         <select id="volume-shell-inspect-mode" class="select-input">
+          <option value="">default</option>
           <option value="shell" selected>shell</option>
           <option value="thermal">thermal</option>
           <option value="reaction">reaction</option>
@@ -2955,6 +2956,7 @@ import {
   createSharpSameDeviceKilnOpportunityHook,
 } from './lib/sharp-same-device-kiln-interlock.mjs';
 import {
+  WAKE_FIRE_PRESET_CONSUMER_OVERRIDE_IDS,
   WAKE_FIRE_PRESET_ROUTE_PARAM,
   createWakeFirePresetMountReceipt,
   loadWakeFirePreset,
@@ -12516,7 +12518,7 @@ function volumeDomControlParamFromId(id) {
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.type === 'checkbox') return Boolean(el.checked);
-  if (el.type === 'color' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
+  if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
   return Number.isFinite(numericValue) ? numericValue : el.value;
 }
@@ -14965,7 +14967,6 @@ function applyKilnContentionFireBudget() {
 }
 
 let activeWakeFirePresetSourceReceipt = null;
-let activeWakeFirePresetAuthoredControlValues = null;
 
 function requestedWakeFirePresetRef() {
   return new URLSearchParams(window.location.search).get(WAKE_FIRE_PRESET_ROUTE_PARAM);
@@ -14988,15 +14989,58 @@ function renderWakeFirePresetMountReceipt(receipt, error = null) {
   target.dataset.status = 'mounted';
 }
 
+function clearWakeFirePresetMountState(reason, error = null) {
+  activeWakeFirePresetSourceReceipt = null;
+  window.__kaminosWakeFirePresetMountReceipt = null;
+  window.__kaminosWakeFirePresetMountState = {
+    identity: 'kaminos.wake-fire-preset-mount-state.v1',
+    phase: error ? 'failed' : reason,
+    requestedPresetRef: requestedWakeFirePresetRef(),
+    error: error ? (error?.message || String(error)) : null,
+  };
+  if (error) {
+    renderWakeFirePresetMountReceipt(null, error);
+  } else if (reason === 'mount-started') {
+    const target = document.getElementById('crucible-viewport-fire-preset');
+    if (target) {
+      target.textContent = 'Mounting authored fire...';
+      target.dataset.status = 'mounting';
+    }
+  } else {
+    renderWakeFirePresetMountReceipt(null);
+  }
+}
+
+function wakeFirePresetEffectiveControlValues(sourceReceipt) {
+  return Object.fromEntries(wakeFirePresetControlEntries(sourceReceipt).map(entry => [
+    entry.id,
+    readVolumeDomControlValue(document.getElementById(entry.id)),
+  ]));
+}
+
+function applyWakeRaymarchPresentation() {
+  setVolumeControlValue('volume-boundary-splat-mode', 'off');
+  const presentationSelect = document.getElementById('crucible-viewport-presentation-select');
+  if (presentationSelect) presentationSelect.value = 'full-volume';
+}
+
+async function waitForWakeFirePresetRendererFrame(previousFrameCount) {
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  const rendererState = volumePrototype?.debugState?.();
+  if (rendererState?.active !== true || Number(rendererState.frameCount) <= Number(previousFrameCount || 0)) {
+    throw new Error('Wake renderer did not advance a frame after preset controls were applied');
+  }
+  return rendererState;
+}
+
 async function mountWakeFirePresetControls() {
   const requestedPresetRef = requestedWakeFirePresetRef();
   if (!requestedPresetRef) {
-    activeWakeFirePresetSourceReceipt = null;
-    activeWakeFirePresetAuthoredControlValues = null;
-    window.__kaminosWakeFirePresetMountReceipt = null;
-    renderWakeFirePresetMountReceipt(null);
+    clearWakeFirePresetMountState('unmounted');
     return null;
   }
+  clearWakeFirePresetMountState('mount-started');
   const sourceReceipt = await loadWakeFirePreset(requestedPresetRef);
   const entries = wakeFirePresetControlEntries(sourceReceipt);
   for (const entry of entries) {
@@ -15004,33 +15048,42 @@ async function mountWakeFirePresetControls() {
       throw new Error(`Wake fire preset control is unavailable: ${entry.id}`);
     }
   }
-  for (const entry of entries) setVolumeControlValue(entry.id, entry.requestedValue);
-  const effectiveControlValues = Object.fromEntries(entries.map(entry => [
-    entry.id,
-    readVolumeDomControlValue(document.getElementById(entry.id)),
-  ]));
+  const overrideIds = new Set(WAKE_FIRE_PRESET_CONSUMER_OVERRIDE_IDS);
+  for (const entry of entries) {
+    if (!overrideIds.has(entry.id)) setVolumeControlValue(entry.id, entry.requestedValue);
+  }
   activeWakeFirePresetSourceReceipt = sourceReceipt;
-  activeWakeFirePresetAuthoredControlValues = effectiveControlValues;
+  window.__kaminosWakeFirePresetMountState = {
+    identity: 'kaminos.wake-fire-preset-mount-state.v1',
+    phase: 'authored-controls-projected',
+    requestedPresetRef,
+    presetId: sourceReceipt.presetId,
+    error: null,
+  };
   return sourceReceipt;
 }
 
-function completeWakeFirePresetMount(productBudget) {
+function completeWakeFirePresetMount(productBudget, rendererState) {
   if (!activeWakeFirePresetSourceReceipt) return null;
-  setVolumeControlValue('volume-boundary-splat-mode', 'off');
-  const presentationSelect = document.getElementById('crucible-viewport-presentation-select');
-  if (presentationSelect) presentationSelect.value = 'full-volume';
+  const reconciledProductBudget = {
+    requestedFireBudget: productBudget.requestedFireBudget,
+    effectiveFireBudget: fireBudgetFromVolumeState(rendererState),
+  };
   const receipt = createWakeFirePresetMountReceipt({
     requestedPresetRef: requestedWakeFirePresetRef(),
     sourceReceipt: activeWakeFirePresetSourceReceipt,
-    effectiveControlValues: activeWakeFirePresetAuthoredControlValues,
-    productBudget,
-    presentation: {
-      requested: 'raymarch-only',
-      effective: 'raymarch-only',
-      boundarySplatMode: normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value),
-    },
+    effectiveControlValues: wakeFirePresetEffectiveControlValues(activeWakeFirePresetSourceReceipt),
+    productBudget: reconciledProductBudget,
+    rendererState,
   });
   window.__kaminosWakeFirePresetMountReceipt = receipt;
+  window.__kaminosWakeFirePresetMountState = {
+    identity: 'kaminos.wake-fire-preset-mount-state.v1',
+    phase: 'mounted',
+    requestedPresetRef: requestedWakeFirePresetRef(),
+    presetId: receipt.effective.presetId,
+    error: null,
+  };
   renderWakeFirePresetMountReceipt(receipt);
   return receipt;
 }
@@ -15038,9 +15091,15 @@ function completeWakeFirePresetMount(productBudget) {
 async function mountWakeFirePresetForKiln() {
   await mountWakeFirePresetControls();
   const productBudget = applyKilnContentionFireBudget();
-  const receipt = completeWakeFirePresetMount(productBudget);
+  applyWakeRaymarchPresentation();
   updateVolumeControlLabels();
+  const previousFrameCount = volumePrototype?.debugState?.().frameCount || 0;
   volumePrototype?.setControls(readVolumeControls());
+  const rendererState = await waitForWakeFirePresetRendererFrame(previousFrameCount);
+  const receipt = completeWakeFirePresetMount(productBudget, rendererState);
+  if (new URLSearchParams(window.location.search).get('crucible_workspace') === 'operational') {
+    setActiveTab('generate');
+  }
   return { receipt, productBudget };
 }
 
@@ -15076,18 +15135,23 @@ async function beginSharpBreathingRoomKilnFire({
     const mountedPreset = await mountWakeFirePresetControls();
     if (!mountedPreset) applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
     const fireBudget = applyKilnContentionFireBudget();
-    const firePresetMountReceipt = completeWakeFirePresetMount(fireBudget);
-    const hybridPresentationRequested = !firePresetMountReceipt && firePresentationMode === 'hybrid-smoke-preview';
+    const hybridPresentationRequested = !mountedPreset && firePresentationMode === 'hybrid-smoke-preview';
+    if (mountedPreset) applyWakeRaymarchPresentation();
     setVolumeControlValue('volume-boundary-splat-mode', hybridPresentationRequested ? 'learned' : 'off');
     setVolumeControlValue('volume-boundary-splat-composition', hybridPresentationRequested ? 'hybrid-smoke' : 'splat-only');
     updateVolumeControlLabels();
+    const previousMountedFrameCount = volumePrototype.debugState().frameCount || 0;
     volumePrototype.setControls({
       ...readVolumeControls(),
       flameContinuityMode,
     });
-    fireState.firePresetMountReceipt = firePresetMountReceipt;
     frameVolumeCamera();
     await volumePrototype.setActive(true);
+    const mountedRendererState = await waitForWakeFirePresetRendererFrame(previousMountedFrameCount);
+    const firePresetMountReceipt = mountedPreset
+      ? completeWakeFirePresetMount(fireBudget, mountedRendererState)
+      : null;
+    fireState.firePresetMountReceipt = firePresetMountReceipt;
     const fireEpisodeHooks = volumePrototype.beginFireEpisode({ firingId });
     if (fireEpisodeHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
       || fireEpisodeHooks?.firingId !== firingId
@@ -15138,6 +15202,7 @@ async function beginSharpBreathingRoomKilnFire({
     refreshVolumeReadout();
     return fireState;
   } catch (err) {
+    if (requestedWakeFirePresetRef()) clearWakeFirePresetMountState('kiln-fire-start-failed', err);
     fireState.phase = 'failed';
     fireState.error = err?.message || String(err);
     window.__kaminosSharpBreathingRoomKilnFireState = fireState;
@@ -24389,6 +24454,7 @@ initScene().then(() => {
         console.error('Crucible composition route failed:', err);
       });
   } else {
+    if (openOperationalCrucible) setActiveTab('generate');
     // Load HDR environment first, then auto-load a deep-linked splat if present.
     loadEnvironment('studio').then(async () => {
     const loadSplat = params.get('load');
@@ -24430,8 +24496,7 @@ initScene().then(() => {
     kaminosVolumeRouteInitPromise
       .then(() => mountWakeFirePresetForKiln())
       .catch(error => {
-        window.__kaminosWakeFirePresetMountReceipt = null;
-        renderWakeFirePresetMountReceipt(null, error);
+        clearWakeFirePresetMountState('route-mount-failed', error);
         console.error('Wake fire preset route failed:', error);
         setInfo(`Wake fire preset route failed: ${error?.message || error}`);
       });
@@ -24446,9 +24511,20 @@ initScene().then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(err => {
-    console.error('volume route init failed after scene init failure:', err);
-  });
+  kaminosVolumeRouteInitPromise = initKaminosVolumeRoute();
+  if (new URLSearchParams(window.location.search).get(WAKE_FIRE_PRESET_ROUTE_PARAM)) {
+    kaminosVolumeRouteInitPromise
+      .then(() => mountWakeFirePresetForKiln())
+      .catch(error => {
+        clearWakeFirePresetMountState('scene-fallback-mount-failed', error);
+        console.error('Wake fire preset route failed after scene init failure:', error);
+        setInfo(`Wake fire preset route failed: ${error?.message || error}`);
+      });
+  } else {
+    kaminosVolumeRouteInitPromise.catch(error => {
+      console.error('volume route init failed after scene init failure:', error);
+    });
+  }
   initWorldChambersRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
