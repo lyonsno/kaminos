@@ -148,9 +148,17 @@ const core = {
       effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
       frameCount: encodedFrames,
       simStepCount: encodedFrames,
+      volumeScene: 'crucible-volume-scene',
       boundarySplatMode: 'kernel_moment_covariance',
+      boundarySplatRendererIdentity: 'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0',
+      boundarySplatAttributeModelIdentity: 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+      boundarySplatCompositionRequested: 'hybrid-smoke',
+      boundarySplatCompositionEffective: 'hybrid-smoke',
+      boundarySplatCompositionFallbackReason: null,
+      boundarySplatFallbackReason: null,
       boundarySplatGpuProfile: sampledProfile,
       raymarchSmokePresentationModeEffective: 'on',
+      raymarchSmokePresentationModeFallbackReason: null,
       error: null,
     };
   },
@@ -212,6 +220,18 @@ assert.equal(opened.status, 'recording');
 assert.equal(opened.firingId, 'firing-adapter-001');
 assert.equal(opened.routeIdentity.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
 assert.equal(opened.routeIdentity.prototypeIdentity, 'kaminos-volume-prototype-v0');
+assert.equal(opened.routeIdentity.volumeScene, 'crucible-volume-scene');
+assert.equal(
+  opened.routeIdentity.flameRendererIdentity,
+  'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0',
+);
+assert.equal(
+  opened.routeIdentity.learnedModelIdentity,
+  'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+);
+assert.equal(opened.routeIdentity.compositionRequested, 'hybrid-smoke');
+assert.equal(opened.routeIdentity.compositionEffective, 'hybrid-smoke');
+assert.equal(opened.routeIdentity.fallbackReason, null);
 assert.doesNotThrow(
   () => adapter.recordMainPageKilnRaf(1000, { frameGapMs: 16.7 }),
   'Wake heartbeat samples must feed the promoted episode without a telemetry-name mismatch',

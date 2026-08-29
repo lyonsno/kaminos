@@ -33,7 +33,7 @@ const expected = {
     },
     carrier: {
       identity: 'kaminos.wake-sharp-promoted-fire-volume-adapter.v1',
-      effectiveSha256: '9654565c662782d22a3d2d3917cbec139715eeafccff3c1b4050d6f80797ba6d',
+      effectiveSha256: '4b3e12c6a5877443960faa03093cc1c3ad8998d64533935cb8b6df91aef31367',
     },
     sharp: {
       requestedRevision: 'd86691338df56df56b7f3942702c7c8648e9d0f2',

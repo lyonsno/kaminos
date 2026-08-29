@@ -26,7 +26,7 @@ const EXPECTED = Object.freeze({
   packageSha256: 'f90c67f4f87eeffeb08aa21f467cecfafeb9181394c2aef196015c2aedd576bc',
   engineSha256: 'ab0af0ee9abe11a2495e880a9986179727a6027217ce9768299ec3e43114b7ab',
   carrierIdentity: 'kaminos.wake-sharp-promoted-fire-volume-adapter.v1',
-  carrierSha256: '9654565c662782d22a3d2d3917cbec139715eeafccff3c1b4050d6f80797ba6d',
+  carrierSha256: '4b3e12c6a5877443960faa03093cc1c3ad8998d64533935cb8b6df91aef31367',
   routeId: 'sharp-image-to-splat-live-v0',
   routeAuthority: 'same-browser-product-realm-shared-device',
   splatMode: 'kernel_moment_covariance',

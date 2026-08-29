@@ -349,6 +349,13 @@ export function createWakeSharpPromotedFireVolumeAdapter({
         return {
           effectiveRoute: state.effectiveRoute || state.routeIdentity || null,
           prototypeIdentity: state.prototypeIdentity || null,
+          volumeScene: state.volumeScene || null,
+          flameRendererIdentity: state.boundarySplatRendererIdentity || null,
+          learnedModelIdentity: state.boundarySplatAttributeModelIdentity || null,
+          fallbackReason: state.error
+            || state.boundarySplatPresentationModeFallbackReason
+            || state.raymarchSmokePresentationModeFallbackReason
+            || null,
           compositionRequested: state.boundarySplatCompositionRequested || null,
           compositionEffective: state.boundarySplatCompositionEffective || null,
           compositionFallbackReason: state.boundarySplatCompositionFallbackReason
