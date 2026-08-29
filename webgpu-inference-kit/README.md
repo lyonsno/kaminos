@@ -12,7 +12,7 @@ The same runtime can host several model routes on one WebGPU device and coordina
 npm install @kaminos/webgpu-inference-kit
 ```
 
-The package is ESM and requires a browser with WebGPU. Model ports may request their own required features and limits or borrow an application-owned `GPUDevice`.
+The package is ESM and requires a browser with WebGPU. The current lower-level session accepts caller-selected device request options or a borrowed application-owned `GPUDevice`. The Model Port target makes requirements part of the port definition so an owned device can be requested from the union of known ports and a borrowed device can be validated before model loading begins.
 
 ## Start A Browser-Native Route
 
@@ -65,6 +65,10 @@ WebGpuInferenceSession -- device, resources, scheduling, memory, telemetry
 ```
 
 Current ports compose these layers from the package's runtime primitives. The next public layer adds `loadModelPort()` to the existing shared inference session and turns that repeated composition into one first-class `defineWebGpuModelPort` contract without taking kernel, layout, dispatch, or optimization authority away from the porter.
+
+Before an owned device is acquired, the session preflights every initially declared Model Port and resolves their combined requirements. Once the session device exists, `loadModelPort()` validates against that fixed capability profile; it never replaces the device behind the application. A borrowed device always remains caller-owned.
+
+`LoadedModel.start()` returns a public `ModelRun` with replayable progress, cancellation, coded terminal failure, and a result that settles only after submitted GPU work and invocation cleanup settle. `LoadedModel.close()` rejects new work, cancels work that has not been submitted, drains active runs, and releases model-owned resources. The existing strict `session.close()` remains the final fail-loud release of session-owned resources after models and routes are drained.
 
 The [Model Port design contract](docs/model-port.md) defines that API target. The [minimal Model Port contract](docs/minimal-model-port.md) defines the first complete runnable example that must prove it.
 
