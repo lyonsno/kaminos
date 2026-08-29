@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Kaminos dev server with directory browsing API."""
 
+import base64
+import binascii
 import http.server
 import json
 import math
@@ -1473,6 +1475,73 @@ def _inspect_ndjson_file(path):
     }
 
 
+def _sharp_scheduler_archive_identity(document):
+    identities = []
+    for run_debug in (
+        ((document.get("authoritativeTrace") or {}).get("sharpRunDebug") or {}),
+        (document.get("sharpRunDebug") or {}),
+    ):
+        identity = (
+            (((run_debug.get("route") or {}).get("receipt") or {})
+             .get("metadataPayload") or {})
+            .get("schedulerTrace", {})
+            .get("archiveIdentity")
+        )
+        if identity is not None:
+            identities.append(identity)
+    if not identities:
+        raise ValueError("SHARP scheduler byte transport requires a producer archive identity")
+    if any(identity != identities[0] for identity in identities[1:]):
+        raise ValueError("SHARP scheduler producer archive identities are contradictory")
+    identity = identities[0]
+    if (
+        not isinstance(identity, dict)
+        or identity.get("schema") != "sharp.webgpu.scheduler-event-archive-identity.v0"
+        or identity.get("canonicalization") != "json-stringify-rows-utf8-ndjson-v1"
+        or identity.get("encoding") != "utf-8"
+        or not isinstance(identity.get("eventCount"), int)
+        or isinstance(identity.get("eventCount"), bool)
+        or not isinstance(identity.get("bytes"), int)
+        or isinstance(identity.get("bytes"), bool)
+        or identity.get("bytes") <= 0
+        or not re.fullmatch(r"[0-9a-f]{64}", str(identity.get("sha256") or ""))
+    ):
+        raise ValueError("SHARP scheduler producer archive identity is invalid")
+    return identity
+
+
+def _write_sharp_inline_report_failure(run_dir, state, phase, error):
+    failure_path = run_dir / "sharp-inline-report-failure.json"
+    failed_at = _utc_timestamp()
+    durable_counts = {
+        collection_id: collection.get("receivedCount")
+        for collection_id, collection in state.get("collections", {}).items()
+    }
+    failure_document = {
+        "schema": "kaminos.sharp-inline-pipeline-report-failure.v0",
+        "status": "failed",
+        "phase": phase,
+        "pipelineId": state.get("pipelineId"),
+        "firingId": state.get("firingId"),
+        "sessionId": state.get("sessionId"),
+        "error": str(error),
+        "lastTrustworthyOutput": state.get("lastTrustworthyOutput"),
+        "lastTrustworthyCounts": durable_counts,
+        "failedAt": failed_at,
+        "statePath": str(run_dir / "sharp-inline-report-state.json"),
+    }
+    _atomic_write_json(failure_path, failure_document)
+    state.update({
+        "status": "failed",
+        "phase": phase,
+        "error": str(error),
+        "failedAt": failed_at,
+        "failureReportPath": str(failure_path),
+    })
+    write_sharp_inline_report_state(run_dir, state)
+    return failure_path
+
+
 def _sharp_inline_complete_receipt(run_dir, state):
     report_path = run_dir / "sharp-inline-report.json"
     return {
@@ -1642,6 +1711,25 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     raise ValueError(f"Invalid expectedCount for {collection_id}")
                 if raw_collection.get("retention") != "uncapped":
                     raise ValueError(f"Collection {collection_id} must declare uncapped retention")
+                transport = raw_collection.get("transport") or "json-rows-v1"
+                if transport not in {
+                    "json-rows-v1",
+                    "base64-canonical-utf8-ndjson-v1",
+                }:
+                    raise ValueError(f"Unsupported SHARP inline transport for {collection_id}")
+                source_archive_identity = None
+                if transport == "base64-canonical-utf8-ndjson-v1":
+                    if collection_id != "scheduler-events":
+                        raise ValueError("Canonical scheduler byte transport is restricted to scheduler-events")
+                    source_archive_identity = _sharp_scheduler_archive_identity(document)
+                    if raw_collection.get("sourceArchiveIdentity") != source_archive_identity:
+                        raise ValueError("SHARP scheduler source archive identity mismatch")
+                    if (
+                        source_archive_identity.get("runId") != payload.get("firingId")
+                        or source_archive_identity.get("jsonPointer") != raw_collection.get("jsonPointer")
+                        or source_archive_identity.get("eventCount") != expected_count
+                    ):
+                        raise ValueError("SHARP scheduler source archive route identity mismatch")
                 collections[collection_id] = {
                     "jsonPointer": raw_collection.get("jsonPointer"),
                     "expectedCount": expected_count,
@@ -1650,6 +1738,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     "retention": "uncapped",
                     "mediaType": "application/x-ndjson",
                     "relativePath": f"traces/{collection_id}.ndjson",
+                    "transport": transport,
+                    "sourceArchiveIdentity": source_archive_identity,
                 }
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
@@ -1727,11 +1817,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             session_id = str(payload.get("sessionId") or "")
             collection_id = str(payload.get("collectionId") or "")
             expected_start = payload.get("expectedStart")
-            rows = payload.get("rows")
             if not isinstance(expected_start, int) or isinstance(expected_start, bool):
                 raise ValueError("SHARP inline trace expectedStart must be an integer")
-            if not isinstance(rows, list):
-                raise ValueError("SHARP inline trace rows must be an array")
             with SHARP_INLINE_REPORT_LOCK:
                 run_dir, state = load_sharp_inline_report_state(session_id)
                 if state.get("status") != "receiving":
@@ -1742,12 +1829,43 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 received_count = collection.get("receivedCount")
                 expected_count = collection.get("expectedCount")
                 committed_bytes = collection.get("committedBytes", 0)
+                transport = collection.get("transport") or "json-rows-v1"
+                if transport == "base64-canonical-utf8-ndjson-v1":
+                    row_count = payload.get("rowCount")
+                    encoded_ndjson = payload.get("base64Ndjson")
+                    if (
+                        not isinstance(row_count, int)
+                        or isinstance(row_count, bool)
+                        or row_count <= 0
+                        or not isinstance(encoded_ndjson, str)
+                        or "rows" in payload
+                    ):
+                        raise ValueError("SHARP scheduler byte chunk is invalid")
+                    try:
+                        chunk_bytes = base64.b64decode(encoded_ndjson, validate=True)
+                    except (ValueError, binascii.Error) as error:
+                        raise ValueError(f"SHARP scheduler byte chunk is not valid base64: {error}") from error
+                    if not chunk_bytes.endswith(b"\n") or chunk_bytes.count(b"\n") != row_count:
+                        raise ValueError("SHARP scheduler byte chunk row framing mismatch")
+                    try:
+                        for raw_row in chunk_bytes.splitlines():
+                            json.loads(raw_row)
+                    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                        raise ValueError(f"SHARP scheduler byte chunk contains invalid NDJSON: {error}") from error
+                else:
+                    rows = payload.get("rows")
+                    if not isinstance(rows, list) or "base64Ndjson" in payload or "rowCount" in payload:
+                        raise ValueError("SHARP inline trace rows must be an unambiguous array")
+                    row_count = len(rows)
+                    chunk_bytes = "".join(
+                        f"{json.dumps(row, separators=(',', ':'))}\n" for row in rows
+                    ).encode("utf-8")
                 if expected_start != received_count:
                     raise ValueError(
                         f"Non-contiguous SHARP inline chunk for {collection_id}: "
                         f"expectedStart {expected_start}, receivedCount {received_count}"
                     )
-                if received_count + len(rows) > expected_count:
+                if received_count + row_count > expected_count:
                     raise ValueError(
                         f"SHARP inline chunk exceeds expectedCount for {collection_id}"
                     )
@@ -1765,14 +1883,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         stream.truncate(committed_bytes)
                         stream.flush()
                         os.fsync(stream.fileno())
-                chunk_bytes = "".join(
-                    f"{json.dumps(row, separators=(',', ':'))}\n" for row in rows
-                ).encode("utf-8")
                 with trace_path.open("ab") as stream:
                     stream.write(chunk_bytes)
                     stream.flush()
                     os.fsync(stream.fileno())
-                collection["receivedCount"] = received_count + len(rows)
+                collection["receivedCount"] = received_count + row_count
                 collection["committedBytes"] = committed_bytes + len(chunk_bytes)
                 state["phase"] = "trace-chunk-upload"
                 state["updatedAt"] = _utc_timestamp()
@@ -1828,6 +1943,27 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                                 f"SHARP inline trace row count mismatch for {collection_id}: "
                                 f"{trace_inspection['rows']} != {collection.get('expectedCount')}"
                             )
+                        source_archive_identity = collection.get("sourceArchiveIdentity")
+                        if source_archive_identity and (
+                            trace_inspection["rows"] != source_archive_identity.get("eventCount")
+                            or trace_inspection["bytes"] != source_archive_identity.get("bytes")
+                            or trace_inspection["sha256"] != source_archive_identity.get("sha256")
+                        ):
+                            error = (
+                                "SHARP scheduler persisted bytes do not match the producer archive identity"
+                            )
+                            failure_path = _write_sharp_inline_report_failure(
+                                run_dir,
+                                state,
+                                "scheduler-archive-identity",
+                                error,
+                            )
+                            self.send_json({
+                                "error": error,
+                                "failureReportPath": str(failure_path),
+                                "failureReadUrl": _pipeline_run_read_url(failure_path),
+                            }, 409)
+                            return
                         trace_artifacts[collection_id] = {
                             "schema": "kaminos.sharp-inline-trace-artifact.v0",
                             "path": str(trace_path),

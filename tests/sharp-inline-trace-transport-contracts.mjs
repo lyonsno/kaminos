@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 
 import {
   compactSharpInlineReportDocument,
@@ -10,13 +11,13 @@ const events = [
     kind: 'spn-fusion',
     phase: 'spn-fusion',
     tMs: 10,
-    details: { block: 'fuse-lowres' },
+    details: { block: 'fuse-lowres', ratio: 1e-7, label: 'phase-café' },
   },
   {
     kind: 'monodepth-phase',
     boundary: 'monodepth-phase',
     tMs: 25,
-    details: { phase: 'project-feature' },
+    details: { phase: 'project-feature', label: 'phase-π' },
   },
   ...Array.from({ length: 5 }, (_, index) => ({
     kind: `event-${index + 2}`,
@@ -24,11 +25,31 @@ const events = [
     tMs: 40 + index,
   })),
 ];
+const schedulerNdjson = `${events.map(event => JSON.stringify(event)).join('\n')}\n`;
+const schedulerArchiveIdentity = {
+  schema: 'sharp.webgpu.scheduler-event-archive-identity.v0',
+  runId: 'run-test',
+  jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
+  canonicalization: 'json-stringify-rows-utf8-ndjson-v1',
+  encoding: 'utf-8',
+  eventCount: events.length,
+  bytes: Buffer.byteLength(schedulerNdjson),
+  sha256: createHash('sha256').update(schedulerNdjson).digest('hex'),
+};
 const document = {
   schema: 'kaminos.sharp-inline-pipeline-report.v0',
   status: 'real',
   authoritativeTrace: {
     sharpRunDebug: {
+      route: {
+        receipt: {
+          metadataPayload: {
+            schedulerTrace: {
+              archiveIdentity: schedulerArchiveIdentity,
+            },
+          },
+        },
+      },
       progressEvents: [{ progress: 0.5, marker: 'progress-row' }],
       schedulerTelemetry: {
         events,
@@ -76,6 +97,11 @@ assert.equal(
   compacted.collections.find(collection => collection.id === 'scheduler-events')?.values,
   schedulerTelemetryArchive.events,
   'the exact sealed scheduler archive array must be transported without copying',
+);
+assert.equal(
+  compacted.collections.find(collection => collection.id === 'scheduler-events')?.transport,
+  'base64-canonical-utf8-ndjson-v1',
+  'the scheduler collection must preserve producer-canonical bytes across the browser/server boundary',
 );
 assert.equal(
   compacted.document.authoritativeTrace.sharpRunDebug.schedulerTelemetry.eventsRef.collectionId,
@@ -180,30 +206,47 @@ const fetchImpl = async (url, options) => {
   const payload = JSON.parse(options.body);
   requests.push({ url, payload });
   if (url.endsWith('/start')) {
-    for (const collection of payload.collections) received.set(collection.id, []);
+    for (const collection of payload.collections) received.set(collection.id, {
+      rows: [],
+      rawNdjson: '',
+    });
     return response({
       schema: 'kaminos.sharp-inline-run-report-session.v0',
       sessionId: 'session-test',
     });
   }
   if (url.endsWith('/chunk')) {
-    const values = received.get(payload.collectionId);
-    assert.equal(payload.expectedStart, values.length, 'each chunk must start at the next exact row');
-    values.push(...payload.rows);
+    const stored = received.get(payload.collectionId);
+    assert.equal(payload.expectedStart, stored.rows.length, 'each chunk must start at the next exact row');
+    if (payload.collectionId === 'scheduler-events') {
+      assert.equal('rows' in payload, false, 'scheduler chunks must not send parsed rows for server reserialization');
+      const rawNdjson = Buffer.from(payload.base64Ndjson, 'base64').toString('utf8');
+      const rows = rawNdjson.trimEnd().split('\n').map(line => JSON.parse(line));
+      assert.equal(payload.rowCount, rows.length);
+      stored.rawNdjson += rawNdjson;
+      stored.rows.push(...rows);
+    } else {
+      stored.rows.push(...payload.rows);
+    }
     return response({
       schema: 'kaminos.sharp-inline-run-report-chunk-receipt.v0',
       collectionId: payload.collectionId,
-      receivedCount: values.length,
+      receivedCount: stored.rows.length,
     });
   }
   if (url.endsWith('/finish')) {
     for (const collection of compacted.collections) {
       assert.equal(
-        received.get(collection.id).length,
+        received.get(collection.id).rows.length,
         collection.values.length,
         `finish must observe every ${collection.id} row`,
       );
     }
+    assert.equal(
+      received.get('scheduler-events').rawNdjson,
+      schedulerNdjson,
+      'the server-facing transport must reconstruct the exact producer-authenticated scheduler bytes',
+    );
     return response({
       schema: 'kaminos.sharp-inline-run-report-receipt.v0',
       path: '/tmp/run/sharp-inline-report.json',
@@ -255,6 +298,11 @@ assert.doesNotMatch(
   /event-6|progress-row/,
   'session start must not contain externalized trace rows',
 );
+const schedulerStartDescriptor = requests
+  .find(request => request.url.endsWith('/start'))
+  ?.payload.collections.find(collection => collection.id === 'scheduler-events');
+assert.equal(schedulerStartDescriptor.transport, 'base64-canonical-utf8-ndjson-v1');
+assert.deepEqual(schedulerStartDescriptor.sourceArchiveIdentity, schedulerArchiveIdentity);
 assert.deepEqual(
   requests.find(request => request.url.endsWith('/start'))?.payload.lastTrustworthyOutput,
   {

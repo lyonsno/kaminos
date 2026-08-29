@@ -32,8 +32,16 @@ server.stderr.on('data', chunk => {
 
 try {
   await waitForServer(`http://127.0.0.1:${port}/api/runtime-config`);
-  const schedulerRows = [{ ordinal: 0 }, { ordinal: 1 }, { ordinal: 2 }];
+  const schedulerRows = [
+    { ordinal: 0, ratio: 1e-7, label: 'phase-café' },
+    { ordinal: 1, large: 100000000000000000000, label: 'phase-π' },
+    { ordinal: 2, negativeZero: -0, label: 'phase-final' },
+  ];
   const producerSchedulerBytes = `${schedulerRows.map(row => JSON.stringify(row)).join('\n')}\n`;
+  const canonicalSchedulerRows = producerSchedulerBytes
+    .trimEnd()
+    .split('\n')
+    .map(line => JSON.parse(line));
   const producerSchedulerIdentity = {
     schema: 'sharp.webgpu.scheduler-event-archive-identity.v0',
     runId: 'integration-test',
@@ -76,6 +84,8 @@ try {
       expectedCount: 3,
       retention: 'uncapped',
       mediaType: 'application/x-ndjson',
+      transport: 'base64-canonical-utf8-ndjson-v1',
+      sourceArchiveIdentity: producerSchedulerIdentity,
     }],
   });
   assert.equal(start.response.status, 200);
@@ -90,7 +100,8 @@ try {
     sessionId: start.body.sessionId,
     collectionId: 'scheduler-events',
     expectedStart: 1,
-    rows: [{ ordinal: 1 }],
+    rowCount: 1,
+    base64Ndjson: canonicalChunk([schedulerRows[1]]),
   });
   assert.equal(outOfOrder.response.status, 409);
   assert.match(outOfOrder.body.error, /Non-contiguous/);
@@ -100,7 +111,8 @@ try {
     sessionId: start.body.sessionId,
     collectionId: 'scheduler-events',
     expectedStart: 0,
-    rows: schedulerRows.slice(0, 2),
+    rowCount: 2,
+    base64Ndjson: canonicalChunk(schedulerRows.slice(0, 2)),
   });
   assert.equal(firstChunk.response.status, 200);
   assert.equal(firstChunk.body.receivedCount, 2);
@@ -121,7 +133,8 @@ try {
     sessionId: start.body.sessionId,
     collectionId: 'scheduler-events',
     expectedStart: 2,
-    rows: schedulerRows.slice(2),
+    rowCount: 1,
+    base64Ndjson: canonicalChunk(schedulerRows.slice(2)),
   });
   assert.equal(finalChunk.response.status, 200);
   const finish = await post('/api/sharp-inline-run-report/finish', {
@@ -136,7 +149,7 @@ try {
   assert.equal(readFileSync(tracePath, 'utf8'), producerSchedulerBytes);
   assert.deepEqual(
     readFileSync(tracePath, 'utf8').trim().split('\n').map(line => JSON.parse(line)),
-    schedulerRows,
+    canonicalSchedulerRows,
   );
   const report = JSON.parse(readFileSync(finish.body.path, 'utf8'));
   assert.equal(report.marker, 'compact-document');
@@ -165,6 +178,69 @@ try {
   assert.equal(lateAbort.response.status, 200);
   assert.equal(lateAbort.body.status, 'complete');
   assert.equal(JSON.parse(readFileSync(statePath, 'utf8')).status, 'complete');
+
+  const mismatchStart = await post('/api/sharp-inline-run-report/start', {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'integration-test',
+    document: {
+      schema: 'kaminos.sharp-inline-pipeline-report.v0',
+      authoritativeTrace: {
+        sharpRunDebug: {
+          route: {
+            receipt: {
+              metadataPayload: {
+                schedulerTrace: {
+                  archiveIdentity: producerSchedulerIdentity,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    collections: [{
+      id: 'scheduler-events',
+      jsonPointer: producerSchedulerIdentity.jsonPointer,
+      expectedCount: producerSchedulerIdentity.eventCount,
+      retention: 'uncapped',
+      mediaType: 'application/x-ndjson',
+      transport: 'base64-canonical-utf8-ndjson-v1',
+      sourceArchiveIdentity: producerSchedulerIdentity,
+    }],
+  });
+  assert.equal(mismatchStart.response.status, 200);
+  const alteredSchedulerRows = canonicalSchedulerRows.map((row, index) => (
+    index === 1 ? { ...row, label: 'phase-rewritten' } : row
+  ));
+  const mismatchChunk = await post('/api/sharp-inline-run-report/chunk', {
+    sessionId: mismatchStart.body.sessionId,
+    collectionId: 'scheduler-events',
+    expectedStart: 0,
+    rowCount: alteredSchedulerRows.length,
+    base64Ndjson: canonicalChunk(alteredSchedulerRows),
+  });
+  assert.equal(mismatchChunk.response.status, 200);
+  const mismatchFinish = await post('/api/sharp-inline-run-report/finish', {
+    sessionId: mismatchStart.body.sessionId,
+  });
+  assert.equal(mismatchFinish.response.status, 409);
+  assert.match(mismatchFinish.body.error, /producer archive identity/);
+  assert.ok(mismatchFinish.body.failureReportPath);
+  const mismatchFailure = JSON.parse(readFileSync(mismatchFinish.body.failureReportPath, 'utf8'));
+  assert.equal(mismatchFailure.status, 'failed');
+  assert.equal(mismatchFailure.phase, 'scheduler-archive-identity');
+  assert.equal(
+    JSON.parse(readFileSync(path.join(
+      mismatchStart.body.outputRoot,
+      'sharp-inline-report-state.json',
+    ), 'utf8')).status,
+    'failed',
+  );
+  assert.equal(
+    existsSync(path.join(mismatchStart.body.outputRoot, 'sharp-inline-report.json')),
+    false,
+    'a producer-digest mismatch must not create the primary report',
+  );
 
   const abortStart = await post('/api/sharp-inline-run-report/start', {
     pipelineId: 'sharp-image-to-splat-live-v0',
@@ -227,6 +303,10 @@ async function post(route, body) {
     body: JSON.stringify(body),
   });
   return { response, body: await response.json() };
+}
+
+function canonicalChunk(rows) {
+  return Buffer.from(`${rows.map(row => JSON.stringify(row)).join('\n')}\n`).toString('base64');
 }
 
 async function reservePort() {
