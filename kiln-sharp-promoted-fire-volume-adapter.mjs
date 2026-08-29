@@ -346,6 +346,16 @@ export function createWakeSharpPromotedFireVolumeAdapter({
       readQueueProxy: () => ({ completionSequence: submissionSequence }),
       readRouteIdentity: () => {
         const state = core.debugState();
+        const compositionRequested = state.selectiveHeadLiveCompositionRequested || null;
+        const productFrameInitialized = state.productFrameReceipt?.status === 'initialized'
+          && state.productFrameReceipt.identity === state.productFrameIdentity
+          && !state.productFrameReceipt.fallbackReason
+          && !state.selectiveHeadLiveCompositionFallbackReason;
+        const compositionEffective = state.selectiveHeadLiveCompositionEffective !== 'off'
+          ? state.selectiveHeadLiveCompositionEffective || null
+          : productFrameInitialized
+            ? compositionRequested
+            : null;
         return {
           effectiveRoute: state.effectiveRoute || state.routeIdentity || null,
           prototypeIdentity: state.prototypeIdentity || null,
@@ -356,9 +366,9 @@ export function createWakeSharpPromotedFireVolumeAdapter({
             || state.boundarySplatPresentationModeFallbackReason
             || state.raymarchSmokePresentationModeFallbackReason
             || null,
-          compositionRequested: state.boundarySplatCompositionRequested || null,
-          compositionEffective: state.boundarySplatCompositionEffective || null,
-          compositionFallbackReason: state.boundarySplatCompositionFallbackReason
+          compositionRequested,
+          compositionEffective,
+          compositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason
             || state.boundarySplatFallbackReason
             || null,
           adapterIdentity: WAKE_SHARP_PROMOTED_FIRE_VOLUME_ADAPTER_IDENTITY,

@@ -152,9 +152,15 @@ const core = {
       boundarySplatMode: 'kernel_moment_covariance',
       boundarySplatRendererIdentity: 'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0',
       boundarySplatAttributeModelIdentity: 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
-      boundarySplatCompositionRequested: 'hybrid-smoke',
-      boundarySplatCompositionEffective: 'hybrid-smoke',
-      boundarySplatCompositionFallbackReason: null,
+      selectiveHeadLiveCompositionRequested: 'smoke-raymarch-under-splats-v0',
+      selectiveHeadLiveCompositionEffective: 'off',
+      selectiveHeadLiveCompositionFallbackReason: null,
+      productFrameIdentity: 'product-frame-smoke-raymarch-under-splats-v0',
+      productFrameReceipt: {
+        identity: 'product-frame-smoke-raymarch-under-splats-v0',
+        status: 'initialized',
+        fallbackReason: null,
+      },
       boundarySplatFallbackReason: null,
       boundarySplatGpuProfile: sampledProfile,
       raymarchSmokePresentationModeEffective: 'on',
@@ -229,8 +235,8 @@ assert.equal(
   opened.routeIdentity.learnedModelIdentity,
   'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
 );
-assert.equal(opened.routeIdentity.compositionRequested, 'hybrid-smoke');
-assert.equal(opened.routeIdentity.compositionEffective, 'hybrid-smoke');
+assert.equal(opened.routeIdentity.compositionRequested, 'smoke-raymarch-under-splats-v0');
+assert.equal(opened.routeIdentity.compositionEffective, 'smoke-raymarch-under-splats-v0');
 assert.equal(opened.routeIdentity.fallbackReason, null);
 assert.doesNotThrow(
   () => adapter.recordMainPageKilnRaf(1000, { frameGapMs: 16.7 }),
