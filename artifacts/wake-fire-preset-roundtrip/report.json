@@ -1,0 +1,43 @@
+{
+  "identity": "kaminos.wake-fire-preset-roundtrip-report.v1",
+  "status": "passed",
+  "requested": {
+    "baseUrl": "http://127.0.0.1:18402/",
+    "stableHandle": "flamebowl-blockout-130r"
+  },
+  "effective": {
+    "presetId": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+    "contentHash": "sha256:0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+    "packagePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets/presets/vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c.json",
+    "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+    "sourceAuthority": "shared-volume-settings-preset-v2"
+  },
+  "mountReceipt": {
+    "identity": "kaminos.wake-fire-preset-mount.v1",
+    "requested": {
+      "presetRef": "flamebowl-blockout-130r",
+      "presentation": "raymarch-only",
+      "sourceAuthority": "shared-volume-settings-preset-v2"
+    },
+    "effective": {
+      "alias": "flamebowl-blockout-130r",
+      "label": "Flamebowl Blockout 130r",
+      "presetId": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+      "contentHash": "sha256:0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+      "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
+      "sourceAuthority": "shared-volume-settings-preset-v2",
+      "storePath": "/Users/noahlyons/.local/share/kaminos/volume-settings-presets",
+      "basinControlCount": 186,
+      "rendererControlCount": 3,
+      "mountedControlCount": 189,
+      "presentation": "raymarch-only",
+      "boundarySplatMode": "off",
+      "productBudget": {
+        "identity": "kaminos.kiln-contention-fire-budget.v0",
+        "resolution": 90,
+        "renderScale": 0.4,
+        "adaptiveRays": 1
+      }
+    }
+  }
+}

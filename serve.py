@@ -17,9 +17,16 @@ import time
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
+from volume_settings_preset_store import read_volume_settings_preset
+
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 and str(sys.argv[1]).isdigit() else 8090
 ROOT = Path(__file__).parent.resolve()
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
+VOLUME_SETTINGS_PRESET_SCHEMA_PATH = ROOT / "volume-settings-preset-schema-v2.json"
+VOLUME_SETTINGS_STORE = Path(os.environ.get(
+    "KAMINOS_VOLUME_SETTINGS_STORE",
+    os.path.expanduser("~/.local/share/kaminos/volume-settings-presets"),
+)).expanduser().resolve()
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -1474,6 +1481,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-captures":
             self.handle_volume_captures()
+        elif parsed.path == "/api/volume-settings-preset":
+            self.handle_volume_settings_preset_get(parse_qs(parsed.query))
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -1490,6 +1499,29 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_sharp_inline_file(parsed.path)
         else:
             super().do_GET()
+
+    def handle_volume_settings_preset_get(self, query):
+        preset_ref = (query.get("id") or query.get("preset") or [""])[0]
+        try:
+            schema = json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+            document = read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_ref, schema)
+        except FileNotFoundError as error:
+            self.send_json({
+                "error": str(error),
+                "requestedPresetRef": preset_ref,
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-read",
+            }, 404)
+            return
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedPresetRef": preset_ref,
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "shared-preset-read",
+            }, 400)
+            return
+        self.send_json(document)
 
     def do_POST(self):
         parsed = urlparse(self.path)
