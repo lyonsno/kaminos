@@ -10,27 +10,30 @@ The goal is the shortest honest path from model architecture, weights, and WGSL 
 
 The contract has three ownership levels:
 
-1. **`WebGpuRuntime`** owns the adapter, device, shared queue coordination, capability profile, resource cache, and cross-model scheduling.
-2. **`ModelSession`** owns one loaded model's weights, compiled pipelines, persistent tensors, scratch plans, and reusable state.
+1. **`WebGpuInferenceSession`** owns the adapter, device, shared queue coordination, capability profile, resource cache, and cross-model scheduling.
+2. **`LoadedModel`** owns one loaded model's weights, compiled pipelines, persistent tensors, scratch plans, and reusable state.
 3. **`ModelRun`** owns one invocation's inputs, temporary buffers, progress, cancellation, scheduling state, and outputs.
 
 ```text
-ModelPort --load--> ModelSession --run--> ModelRun
-                    |                   |
-                    |                   +-- invocation temporaries and output
-                    +-- persistent weights, pipelines, and tensors
+ModelPort --loadModelPort--> LoadedModel --run--> ModelRun
+                             |                  |
+                             |                  +-- invocation temporaries and output
+                             +-- persistent weights, pipelines, and tensors
 
-WebGpuRuntime owns the shared device and composes every session and run.
+WebGpuInferenceSession owns the shared device and composes every loaded model and run.
 ```
 
-Successful, cancelled, and failed invocations release their temporary resources. Closing a session releases its persistent model resources. Closing the runtime releases resources it owns and leaves borrowed application resources under caller ownership.
+Successful, cancelled, and failed invocations release their temporary resources. Disposing a `LoadedModel` releases its persistent model resources. Closing the inference session releases resources it owns and leaves borrowed application resources under caller ownership.
 
 ## Golden Path
 
 ```ts
-const runtime = await createWebGpuRuntime();
+const session = await createWebGpuInferenceSession({
+  sessionId: crypto.randomUUID(),
+  gpu: navigator.gpu,
+});
 
-const model = await runtime.load(myModelPort, {
+const model = await session.loadModelPort(myModelPort, {
   resources: modelResources,
 });
 
@@ -39,6 +42,8 @@ const output = await model.run(input, {
   onProgress,
 });
 ```
+
+`WebGpuInferenceSession` is the package's existing application-level shared-device owner. `loadModelPort()` is the first-class layer added to that object; the design does not introduce another neighboring runtime constructor.
 
 `run()` is the concise promise-based path. Applications that manage queues, background work, or richer UI state use `start()`:
 
@@ -53,6 +58,22 @@ try {
 }
 ```
 
+## Current Runtime Composition
+
+`loadModelPort(port, options)` composes the package's current lower-level APIs:
+
+```text
+loadModelPort
+    |
+    +-- registerRoute
+    +-- load model resources
+    +-- establish persistent resource ownership
+    +-- compile and cache kernels and pipelines
+    +-- return LoadedModel
+```
+
+`registerRoute()` remains available to advanced adapters and incremental migrations. `createWebGpuInferenceRuntime()` remains the route-scoped runtime primitive used beneath a registered route. Model Port supplies one public model lifecycle over those layers rather than duplicating them.
+
 ## Definition
 
 ```ts
@@ -65,7 +86,7 @@ export const myModelPort = defineWebGpuModelPort({
     weights: binaryResource("model.weights"),
   },
 
-  async createSession(ctx) {
+  async load(ctx) {
     const weights = await loadWeights(ctx);
     const kernels = compileKernels(ctx);
 
@@ -87,11 +108,11 @@ The definition requires:
 - a stable `id` and version;
 - declared public inputs and outputs;
 - declared external model resources;
-- `createSession(ctx)`, which creates device-bound reusable state;
-- a session `run(input, context)` implementation;
-- deterministic session disposal.
+- `load(ctx)`, which creates device-bound reusable state;
+- a loaded-model `run(input, context)` implementation;
+- deterministic loaded-model disposal.
 
-Port definitions are device-independent. Device-bound work begins in `createSession`.
+Port definitions are device-independent. Device-bound work begins in `load`.
 
 ## Port Authority
 
@@ -111,7 +132,7 @@ Raw WebGPU access flows through runtime contexts that register submitted work wi
 
 The runtime context exposes the package's existing resource, tensor, kernel, phase-program, scratch-arena, and worker-phase primitives through one model-scoped ownership boundary.
 
-Resource declarations identify external bytes. A session decides how those bytes become persistent GPU resources. A run allocates invocation-local tensors and may borrow declared persistent state. Ownership and disposal remain explicit at every transition.
+Resource declarations identify external bytes. A loaded model decides how those bytes become persistent GPU resources. A run allocates invocation-local tensors and may borrow declared persistent state. Ownership and disposal remain explicit at every transition.
 
 The runtime may cache immutable shader modules and pipelines across compatible sessions. It may share a resident model allocation only when the resource identity and sharing policy admit it.
 
@@ -188,7 +209,7 @@ Progress, timings, profiles, scheduler telemetry, route identity, and execution 
 
 ## Composition
 
-Several Model Ports may load into one `WebGpuRuntime`. The runtime coordinates route admission, shared resources, foreground opportunities, and device loss while each port preserves its own model semantics.
+Several Model Ports may load into one `WebGpuInferenceSession`. The session coordinates route admission, shared resources, foreground opportunities, and device loss while each port preserves its own model semantics.
 
 Applications may compose model outputs into pipelines without forcing every port into one graph representation. A later pipeline layer can schedule Model Runs and connect typed outputs while Model Port remains the unit of model ownership.
 
@@ -197,7 +218,7 @@ Applications may compose model outputs into pipelines without forcing every port
 The first implementation is admitted only when:
 
 - the minimal example runs from a clean install and produces its declared output;
-- repeated runs reuse session-owned weights and pipelines;
+- repeated runs reuse `LoadedModel` weights and pipelines;
 - success, cancellation, failure, and disposal are deterministic;
 - progress always carries phase and overall denominators;
 - a port can use raw WGSL and explicit dispatch geometry;

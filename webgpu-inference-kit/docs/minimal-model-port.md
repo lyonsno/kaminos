@@ -13,7 +13,7 @@ The example is a tiny weighted image model:
 - input: one `ImageBitmap`;
 - model: two small WGSL compute stages with a bundled deterministic weight file;
 - output: a transformed image rendered to a canvas;
-- lifecycle: one runtime, one loaded model session, and repeatable invocations;
+- lifecycle: one shared inference session, one `LoadedModel`, and repeatable invocations;
 - UI behavior: visible progress and cancellation.
 
 The output should be visually legible and numerically deterministic enough for automated contract coverage. The model may be deliberately small, but its weights, tensor flow, dispatches, and output must be real.
@@ -66,12 +66,15 @@ The example must:
 
 ```ts
 import {
-  createWebGpuRuntime,
+  createWebGpuInferenceSession,
 } from "@kaminos/webgpu-inference-kit";
 import { tinyImagePort } from "./tiny-image-port";
 
-const runtime = await createWebGpuRuntime();
-const model = await runtime.load(tinyImagePort, {
+const session = await createWebGpuInferenceSession({
+  sessionId: crypto.randomUUID(),
+  gpu: navigator.gpu,
+});
+const model = await session.loadModelPort(tinyImagePort, {
   resources: {
     weights: new URL("./tiny-image.weights", import.meta.url),
   },
@@ -126,4 +129,4 @@ The guide ends by mapping each tiny example element to the larger runtime:
 - one run to background queues and multi-route admission;
 - one canvas output to application-specific depth, splat, mesh, motion, segmentation, or generated-image products.
 
-The reader should be able to grow the example into a substantial port without replacing its runtime, session, invocation, progress, cancellation, or disposal model.
+The reader should be able to grow the example into a substantial port without replacing its inference-session, loaded-model, invocation, progress, cancellation, or disposal model.

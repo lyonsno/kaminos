@@ -55,16 +55,16 @@ A **Model Port** is the complete browser-native definition of how one model is l
 Model Port definition
         |
         v
-loaded model session ---- persistent weights, pipelines, tensors
+LoadedModel ------------ persistent weights, pipelines, tensors
         |
         v
-model invocation -------- inputs, phases, progress, cancellation, output
+ModelRun --------------- inputs, phases, progress, cancellation, output
         |
         v
-shared WebGPU runtime --- device, resources, scheduling, memory, telemetry
+WebGpuInferenceSession -- device, resources, scheduling, memory, telemetry
 ```
 
-Current ports compose these layers from the package's runtime primitives. The next public layer turns that repeated composition into one first-class `defineWebGpuModelPort` contract without taking kernel, layout, dispatch, or optimization authority away from the porter.
+Current ports compose these layers from the package's runtime primitives. The next public layer adds `loadModelPort()` to the existing shared inference session and turns that repeated composition into one first-class `defineWebGpuModelPort` contract without taking kernel, layout, dispatch, or optimization authority away from the porter.
 
 The [Model Port design contract](docs/model-port.md) defines that API target. The [minimal Model Port contract](docs/minimal-model-port.md) defines the first complete runnable example that must prove it.
 

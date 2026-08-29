@@ -39,8 +39,9 @@ if (!indexSource.includes('defineWebGpuModelPort')) {
 
 const modelPortContract = await read('docs/model-port.md');
 assert.match(modelPortContract, /Status:\*\* Design target/);
-assert.match(modelPortContract, /WebGpuRuntime/);
-assert.match(modelPortContract, /ModelSession/);
+assert.match(modelPortContract, /WebGpuInferenceSession/);
+assert.match(modelPortContract, /LoadedModel/);
 assert.match(modelPortContract, /ModelRun/);
+assert.doesNotMatch(modelPortContract, /createWebGpuRuntime|ModelSession/);
 
 console.log('public documentation contracts passed');
