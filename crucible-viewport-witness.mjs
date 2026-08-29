@@ -473,7 +473,12 @@ async function loadKaminosHostIdentity({ baseUrl, expectedRevision, fetchImpl = 
   };
 }
 
-async function loadSchedulerArchiveEvidence({ baseUrl, artifact, fetchImpl = fetch }) {
+async function loadSchedulerArchiveEvidence({
+  baseUrl,
+  artifact,
+  fetchImpl = fetch,
+  onRawEvidence = () => {},
+}) {
   if (artifact?.schema !== 'kaminos.sharp-inline-trace-artifact.v0'
     || artifact?.mediaType !== 'application/x-ndjson'
     || !artifact?.readUrl) {
@@ -489,6 +494,12 @@ async function loadSchedulerArchiveEvidence({ baseUrl, artifact, fetchImpl = fet
     throw new Error(`scheduler archive request failed with HTTP ${response.status}`);
   }
   const bytes = Buffer.from(await response.arrayBuffer());
+  const rawEvidence = {
+    artifact: structuredClone(artifact),
+    bytes: bytes.byteLength,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+  onRawEvidence(structuredClone(rawEvidence));
   const text = bytes.toString('utf8');
   const rows = text.split(/\r?\n/).filter(Boolean).map((row, index) => {
     try {
@@ -500,8 +511,8 @@ async function loadSchedulerArchiveEvidence({ baseUrl, artifact, fetchImpl = fet
   return {
     artifact: structuredClone(artifact),
     rawNdjson: text,
-    bytes: bytes.byteLength,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
+    bytes: rawEvidence.bytes,
+    sha256: rawEvidence.sha256,
     rows,
   };
 }
@@ -1415,7 +1426,6 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     kilnFrameStageLedger: browserFiringEvidence.kilnFrameStageLedger || null,
     fireActorProductReceipt: browserFiringEvidence.fireActorProductReceipt || null,
     effectiveSource: browserFiringEvidence.effectiveSource || null,
-    sourceIdentityAfterFiring: browserFiringEvidence.sourceIdentityAfterFiring || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
     requestedFlameContinuity: browserFiringEvidence.requestedFlameContinuity || null,
@@ -2268,6 +2278,12 @@ try {
       schedulerArchive = await loadSchedulerArchiveEvidence({
         baseUrl: url,
         artifact: pipelineReport.traceArtifacts?.['scheduler-events'],
+        onRawEvidence: rawEvidence => {
+          lastTrustworthyEvidence = {
+            ...lastTrustworthyEvidence,
+            schedulerArchiveRawEvidence: rawEvidence,
+          };
+        },
       });
     }
     state.fullRoute = projectFriendlyFiringEvidence({

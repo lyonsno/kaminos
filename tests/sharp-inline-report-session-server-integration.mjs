@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
@@ -31,6 +32,18 @@ server.stderr.on('data', chunk => {
 
 try {
   await waitForServer(`http://127.0.0.1:${port}/api/runtime-config`);
+  const schedulerRows = [{ ordinal: 0 }, { ordinal: 1 }, { ordinal: 2 }];
+  const producerSchedulerBytes = `${schedulerRows.map(row => JSON.stringify(row)).join('\n')}\n`;
+  const producerSchedulerIdentity = {
+    schema: 'sharp.webgpu.scheduler-event-archive-identity.v0',
+    runId: 'integration-test',
+    jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
+    canonicalization: 'json-stringify-rows-utf8-ndjson-v1',
+    encoding: 'utf-8',
+    eventCount: schedulerRows.length,
+    bytes: Buffer.byteLength(producerSchedulerBytes),
+    sha256: createHash('sha256').update(producerSchedulerBytes).digest('hex'),
+  };
   const start = await post('/api/sharp-inline-run-report/start', {
     pipelineId: 'sharp-image-to-splat-live-v0',
     firingId: 'integration-test',
@@ -38,6 +51,19 @@ try {
       schema: 'kaminos.sharp-inline-pipeline-report.v0',
       status: 'real',
       marker: 'compact-document',
+      authoritativeTrace: {
+        sharpRunDebug: {
+          route: {
+            receipt: {
+              metadataPayload: {
+                schedulerTrace: {
+                  archiveIdentity: producerSchedulerIdentity,
+                },
+              },
+            },
+          },
+        },
+      },
     },
     lastTrustworthyOutput: {
       path: '/tmp/already-ingested.ply',
@@ -74,7 +100,7 @@ try {
     sessionId: start.body.sessionId,
     collectionId: 'scheduler-events',
     expectedStart: 0,
-    rows: [{ ordinal: 0 }, { ordinal: 1 }],
+    rows: schedulerRows.slice(0, 2),
   });
   assert.equal(firstChunk.response.status, 200);
   assert.equal(firstChunk.body.receivedCount, 2);
@@ -95,7 +121,7 @@ try {
     sessionId: start.body.sessionId,
     collectionId: 'scheduler-events',
     expectedStart: 2,
-    rows: [{ ordinal: 2 }],
+    rows: schedulerRows.slice(2),
   });
   assert.equal(finalChunk.response.status, 200);
   const finish = await post('/api/sharp-inline-run-report/finish', {
@@ -105,23 +131,27 @@ try {
   assert.equal(finish.body.status, 'complete');
   assert.equal('document' in finish.body, false, 'the server receipt must stay compact');
   assert.equal(finish.body.traceArtifacts['scheduler-events'].count, 3);
-  assert.ok(finish.body.traceArtifacts['scheduler-events'].bytes > 0);
-  assert.match(finish.body.traceArtifacts['scheduler-events'].sha256, /^[a-f0-9]{64}$/);
+  assert.equal(finish.body.traceArtifacts['scheduler-events'].bytes, producerSchedulerIdentity.bytes);
+  assert.equal(finish.body.traceArtifacts['scheduler-events'].sha256, producerSchedulerIdentity.sha256);
+  assert.equal(readFileSync(tracePath, 'utf8'), producerSchedulerBytes);
   assert.deepEqual(
     readFileSync(tracePath, 'utf8').trim().split('\n').map(line => JSON.parse(line)),
-    [{ ordinal: 0 }, { ordinal: 1 }, { ordinal: 2 }],
+    schedulerRows,
   );
   const report = JSON.parse(readFileSync(finish.body.path, 'utf8'));
   assert.equal(report.marker, 'compact-document');
   assert.equal(report.traceArtifacts['scheduler-events'].count, 3);
+  assert.deepEqual(
+    report.authoritativeTrace.sharpRunDebug.route.receipt.metadataPayload.schedulerTrace.archiveIdentity,
+    producerSchedulerIdentity,
+    'the persisted report must retain the producer-authenticated archive identity beside the server descriptor',
+  );
   assert.equal(JSON.parse(readFileSync(statePath, 'utf8')).status, 'complete');
   const traceResponse = await fetch(`http://127.0.0.1:${port}${finish.body.traceArtifacts['scheduler-events'].readUrl}`);
   assert.match(traceResponse.headers.get('content-type') || '', /^application\/x-ndjson/);
-  assert.deepEqual(
-    (await traceResponse.text()).trim().split('\n').map(line => JSON.parse(line)),
-    [{ ordinal: 0 }, { ordinal: 1 }, { ordinal: 2 }],
-    'the advertised NDJSON URL must serve the exact reconciled rows directly',
-  );
+  const servedTrace = await traceResponse.text();
+  assert.equal(servedTrace, producerSchedulerBytes);
+  assert.equal(createHash('sha256').update(servedTrace).digest('hex'), producerSchedulerIdentity.sha256);
   const repeatedFinish = await post('/api/sharp-inline-run-report/finish', {
     sessionId: start.body.sessionId,
   });

@@ -71,6 +71,7 @@ try {
     source: 'independent-default',
     executable: null,
   });
+  assert.equal(defaultResolution.requestedRealPath, null);
   assert.equal(defaultResolution.effective.executable, newestTesting);
   assert.equal(defaultResolution.effective.realPath, realpathSync(newestTesting));
   assert.equal(defaultResolution.effective.kind, 'playwright-chrome-for-testing');
@@ -87,15 +88,21 @@ try {
     source: 'cli',
     executable: cliBrowser,
   });
-  assert.equal(resolveHeadlessBrowser({
+  const cliResolution = resolveHeadlessBrowser({
     cliExecutable: cliBrowser,
     envExecutable: envBrowser,
     candidates,
-  }).effective.executable, cliBrowser);
-  assert.equal(resolveHeadlessBrowser({
+  });
+  assert.equal(cliResolution.effective.executable, cliBrowser);
+  assert.equal(cliResolution.requestedRealPath, realpathSync(cliBrowser));
+  assert.equal(cliResolution.requestedRealPath, cliResolution.effective.realPath);
+  const environmentResolution = resolveHeadlessBrowser({
     envExecutable: envBrowser,
     candidates,
-  }).effective.executable, envBrowser);
+  });
+  assert.equal(environmentResolution.effective.executable, envBrowser);
+  assert.equal(environmentResolution.requestedRealPath, realpathSync(envBrowser));
+  assert.equal(environmentResolution.requestedRealPath, environmentResolution.effective.realPath);
 
   assert.throws(
     () => resolveHeadlessBrowser({

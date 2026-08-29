@@ -102,6 +102,28 @@ const sharpMount = {
 };
 const firingId = 'firing-promoted-product-001';
 
+function rendererEpisode(status, exactFiringId = firingId) {
+  return {
+    identity: 'foreground-kiln-fire-episode-hooks-v0',
+    evidenceSource: 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0',
+    authority: 'renderer-simulator-hooks-for-wake-foreground-heartbeat',
+    firingId: exactFiringId,
+    generation: 1,
+    status,
+    routeIdentity: {
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      prototypeIdentity: 'wake-sharp-promoted-fire-volume-adapter-v1',
+      volumeScene: 'crucible-volume-scene',
+      flameRendererIdentity: 'fireactor-promoted-volume-v1',
+      learnedModelIdentity: 'fireactor-9b70310e',
+      fallbackReason: null,
+      compositionRequested: 'hybrid-smoke',
+      compositionEffective: 'hybrid-smoke',
+      compositionFallbackReason: null,
+    },
+  };
+}
+
 const episode = beginWakeSharpFireActorProductEpisode({
   selection,
   loaded,
@@ -111,11 +133,7 @@ const episode = beginWakeSharpFireActorProductEpisode({
   sharpMount,
   firingId,
   requireSharpDutyCorrelation: true,
-  rendererEpisode: {
-    identity: 'foreground-kiln-fire-episode-hooks-v0',
-    firingId,
-    status: 'recording',
-  },
+  rendererEpisode: rendererEpisode('recording'),
 });
 assert.equal(episode.schema, WAKE_SHARP_FIRE_ACTOR_PRODUCT_EPISODE_SCHEMA);
 assert.equal(episode.status, 'recording');
@@ -133,16 +151,19 @@ assert.equal(episode.activation.mode, 'product-route');
 assert.equal(episode.activation.inferenceRequired, true);
 assert.equal(episode.activation.routeId, selection.productRoute.routeId);
 assert.equal(episode.evidenceRequirements.sharpDutyCorrelation, true);
+assert.deepEqual(episode.foregroundHookIdentity, {
+  identity: rendererEpisode('recording').identity,
+  evidenceSource: rendererEpisode('recording').evidenceSource,
+  authority: rendererEpisode('recording').authority,
+  generation: 1,
+  routeIdentity: rendererEpisode('recording').routeIdentity,
+});
 
 const completed = completeWakeSharpFireActorProductEpisode({
   selection,
   loaded,
   episode,
-  rendererEpisode: {
-    identity: 'foreground-kiln-fire-episode-hooks-v0',
-    firingId,
-    status: 'complete',
-  },
+  rendererEpisode: rendererEpisode('complete'),
   foregroundHeartbeat: {
     schema: 'kaminos.foreground-kiln-heartbeat.v0',
     status: 'verified',
@@ -187,21 +208,13 @@ const baselineEpisode = beginWakeSharpFireActorProductEpisode({
   sharpMount,
   firingId: 'firing-promoted-baseline-001',
   requireSharpDutyCorrelation: false,
-  rendererEpisode: {
-    identity: 'foreground-kiln-fire-episode-hooks-v0',
-    firingId: 'firing-promoted-baseline-001',
-    status: 'recording',
-  },
+  rendererEpisode: rendererEpisode('recording', 'firing-promoted-baseline-001'),
 });
 const baselineCompleted = completeWakeSharpFireActorProductEpisode({
   selection,
   loaded,
   episode: baselineEpisode,
-  rendererEpisode: {
-    identity: 'foreground-kiln-fire-episode-hooks-v0',
-    firingId: baselineEpisode.firingId,
-    status: 'complete',
-  },
+  rendererEpisode: rendererEpisode('complete', baselineEpisode.firingId),
   foregroundHeartbeat: {
     schema: 'kaminos.foreground-kiln-heartbeat.v0',
     status: 'verified',
@@ -239,11 +252,7 @@ assert.throws(
     sharpMount,
     firingId,
     requireSharpDutyCorrelation: true,
-    rendererEpisode: {
-      identity: 'foreground-kiln-fire-episode-hooks-v0',
-      firingId,
-      status: 'recording',
-    },
+    rendererEpisode: rendererEpisode('recording'),
   }),
   /selected mount identity mismatch/,
   'a self-consistent but unselected actor mount must not enter the product route',
@@ -258,11 +267,7 @@ assert.throws(
     sharpMount,
     firingId,
     requireSharpDutyCorrelation: true,
-    rendererEpisode: {
-      identity: 'foreground-kiln-fire-episode-hooks-v0',
-      firingId,
-      status: 'recording',
-    },
+    rendererEpisode: rendererEpisode('recording'),
   }),
   /promoted engine identity mismatch/,
   'a different renderer source must not impersonate the selected product actor',
@@ -277,11 +282,7 @@ assert.throws(
     sharpMount,
     firingId,
     requireSharpDutyCorrelation: true,
-    rendererEpisode: {
-      identity: 'foreground-kiln-fire-episode-hooks-v0',
-      firingId,
-      status: 'recording',
-    },
+    rendererEpisode: rendererEpisode('recording'),
   }),
   /promoted carrier identity mismatch/,
   'a substituted product carrier must not impersonate the selected mounted route',
@@ -301,11 +302,7 @@ assert.throws(
     },
     firingId,
     requireSharpDutyCorrelation: true,
-    rendererEpisode: {
-      identity: 'foreground-kiln-fire-episode-hooks-v0',
-      firingId,
-      status: 'recording',
-    },
+    rendererEpisode: rendererEpisode('recording'),
   }),
   /SHARP revision contract mismatch/,
   'the product episode must not convert an unpinned runtime fallback into exact evidence',
@@ -315,11 +312,7 @@ assert.throws(
     selection,
     loaded,
     episode,
-    rendererEpisode: {
-      identity: 'foreground-kiln-fire-episode-hooks-v0',
-      firingId: 'firing-from-another-run',
-      status: 'complete',
-    },
+    rendererEpisode: rendererEpisode('complete', 'firing-from-another-run'),
     foregroundHeartbeat: {
       schema: 'kaminos.foreground-kiln-heartbeat.v0',
       status: 'verified',

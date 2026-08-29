@@ -48,8 +48,8 @@ const schedulerEvents = [
 const schedulerNdjson = `${schedulerEvents.map(event => JSON.stringify(event)).join('\n')}\n`;
 const schedulerArtifact = {
   schema: 'kaminos.sharp-inline-trace-artifact.v0',
-  path: '/durable/pipeline-runs/firing-composed-world-001/scheduler-events.ndjson',
-  readUrl: '/api/pipeline-runs/firing-composed-world-001/scheduler-events.ndjson',
+  path: '/durable/pipeline-runs/firing-composed-world-001/traces/scheduler-events.ndjson',
+  readUrl: '/api/read?root=pipeline-runs&path=firing-composed-world-001%2Ftraces%2Fscheduler-events.ndjson',
   mediaType: 'application/x-ndjson',
   jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
   count: schedulerEvents.length,
@@ -81,6 +81,16 @@ const routeMetadata = {
   schedulerTrace: {
     runId: firingId,
     eventSequence,
+    archiveIdentity: {
+      schema: 'sharp.webgpu.scheduler-event-archive-identity.v0',
+      runId: firingId,
+      jsonPointer: '#/authoritativeTrace/sharpRunDebug/schedulerTelemetry/eventTrace/events',
+      canonicalization: 'json-stringify-rows-utf8-ndjson-v1',
+      encoding: 'utf-8',
+      eventCount: schedulerEvents.length,
+      bytes: Buffer.byteLength(schedulerNdjson),
+      sha256: schedulerArtifact.sha256,
+    },
   },
   routeId: 'sharp.image-to-splat.webgpu-local.v0',
 };
@@ -109,6 +119,7 @@ const fixture = {
     resolution: {
       schema: 'kaminos.headless-browser-resolution.v0',
       request: { source: 'cli', executable: '/opt/playwright/chrome-headless-shell' },
+      requestedRealPath: '/opt/playwright/chrome-headless-shell',
       effective: {
         executable: '/opt/playwright/chrome-headless-shell',
         realPath: '/opt/playwright/chrome-headless-shell',
@@ -226,6 +237,8 @@ const fixture = {
       routeAuthority: 'same-browser-product-realm-shared-device',
     },
     durationMs: 50,
+    outputRoot: '/durable/pipeline-runs/firing-composed-world-001',
+    reportPath: '/durable/pipeline-runs/firing-composed-world-001/sharp-inline-report.json',
     traceArtifacts: {
       'scheduler-events': schedulerArtifact,
     },
@@ -367,6 +380,13 @@ fixture.foregroundHeartbeat.samples = fixture.foregroundHeartbeat.samples.map((s
     ? fireHook('complete', 'complete', 150)
     : fireHook('recording', 'recording'),
 }));
+fixture.fireActorProductReceipt.foregroundHookIdentity = {
+  identity: 'foreground-kiln-fire-episode-hooks-v0',
+  evidenceSource: 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0',
+  authority: 'renderer-simulator-hooks-for-wake-foreground-heartbeat',
+  generation: 1,
+  routeIdentity: structuredClone(fireHook('recording', 'recording').routeIdentity),
+};
 Object.assign(fixture.foregroundHeartbeat, {
   expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
   requireExactFireEpisode: true,
@@ -467,6 +487,24 @@ function rejects(name, mutate, pattern) {
   );
 }
 
+function replaceSchedulerRows(value, rows) {
+  const rawNdjson = `${rows.map(row => JSON.stringify(row)).join('\n')}\n`;
+  const descriptor = {
+    ...value.pipelineReport.traceArtifacts['scheduler-events'],
+    count: rows.length,
+    bytes: Buffer.byteLength(rawNdjson),
+    sha256: createHash('sha256').update(rawNdjson).digest('hex'),
+  };
+  value.schedulerArchive = {
+    artifact: structuredClone(descriptor),
+    rawNdjson,
+    bytes: descriptor.bytes,
+    sha256: descriptor.sha256,
+    rows: structuredClone(rows),
+  };
+  value.pipelineReport.traceArtifacts['scheduler-events'] = structuredClone(descriptor);
+}
+
 rejects('capped foreground samples', value => {
   value.foregroundHeartbeat.sampleRetention = 'top-100';
 }, /uncapped foreground samples/);
@@ -550,6 +588,30 @@ rejects('repaired-count scheduler archive deletion', value => {
     .update(`${JSON.stringify(value.schedulerArchive.rows[0])}\n`)
     .digest('hex');
 }, /scheduler archive|event sequence|event count/i);
+rejects('fully rehashed scheduler phase rewrite', value => {
+  replaceSchedulerRows(value, value.schedulerArchive.rows.map(row => ({
+    ...row,
+    phase: 'forged-phase',
+    boundary: 'forged-boundary',
+  })));
+  for (const gap of value.sharpDutyCorrelation.foregroundGaps) {
+    for (const overlap of gap.overlaps) {
+      overlap.phase = 'forged-phase';
+      overlap.boundary = 'forged-boundary';
+    }
+  }
+  value.sharpDutyCorrelation.phaseRankings = [{ phase: 'forged-phase', overlapDurationMs: 35 }];
+  value.sharpDutyCorrelation.boundaryRankings = [{ boundary: 'forged-boundary', overlapDurationMs: 35 }];
+}, /scheduler archive.*identity|authenticated scheduler|source-owned scheduler/i);
+rejects('foreign same-origin scheduler artifact path', value => {
+  const foreign = {
+    ...value.pipelineReport.traceArtifacts['scheduler-events'],
+    path: '/durable/pipeline-runs/foreign-run/traces/scheduler-events.ndjson',
+    readUrl: '/api/read?root=pipeline-runs&path=foreign-run%2Ftraces%2Fscheduler-events.ndjson',
+  };
+  value.pipelineReport.traceArtifacts['scheduler-events'] = structuredClone(foreign);
+  value.schedulerArchive.artifact = structuredClone(foreign);
+}, /scheduler.*path|scheduler.*run|artifact.*identity/i);
 rejects('all-inactive foreground samples', value => {
   for (const sample of value.foregroundHeartbeat.samples) sample.active = false;
 }, /foreground.*active|FireActor.*live/i);
@@ -559,6 +621,23 @@ rejects('forged FireActor hook authority', value => {
 rejects('substituted FireActor hook route', value => {
   value.foregroundHeartbeat.samples[1].fireEpisodeHooks.routeIdentity.effectiveRoute = 'fallback-volume-route';
 }, /FireActor.*route|hook.*route/i);
+rejects('self-consistent fallback FireActor prototype', value => {
+  for (const sample of value.foregroundHeartbeat.samples) {
+    sample.prototypeIdentity = 'fallback-prototype';
+    sample.fireEpisodeHooks.routeIdentity.prototypeIdentity = 'fallback-prototype';
+  }
+  value.foregroundHeartbeat.effectiveFireEpisodeHooks.routeIdentity.prototypeIdentity = 'fallback-prototype';
+}, /FireActor.*prototype|promoted.*hook/i);
+rejects('missing FireActor hook composition authority', value => {
+  for (const sample of value.foregroundHeartbeat.samples) {
+    delete sample.fireEpisodeHooks.routeIdentity.compositionRequested;
+    delete sample.fireEpisodeHooks.routeIdentity.compositionEffective;
+  }
+  delete value.foregroundHeartbeat.effectiveFireEpisodeHooks.routeIdentity.compositionRequested;
+  delete value.foregroundHeartbeat.effectiveFireEpisodeHooks.routeIdentity.compositionEffective;
+  delete value.fireActorProductReceipt.foregroundHookIdentity.routeIdentity.compositionRequested;
+  delete value.fireActorProductReceipt.foregroundHookIdentity.routeIdentity.compositionEffective;
+}, /FireActor.*composition|hook.*composition/i);
 rejects('non-exact FireActor episode', value => {
   value.foregroundHeartbeat.requireExactFireEpisode = false;
 }, /exact FireActor|exact.*episode/i);
@@ -572,6 +651,10 @@ rejects('browser request/effective substitution', value => {
   value.browserIdentity.resolution.effective.realPath = '/opt/substituted/chrome';
   value.browserIdentity.resolution.effective.executable = '/opt/substituted/chrome';
 }, /browser.*request|browser.*effective|substitution/i);
+rejects('browser effective real-path substitution', value => {
+  value.browserIdentity.resolution.effective.realPath = '/opt/substituted/chrome';
+  value.browserIdentity.effective.realPath = '/opt/substituted/chrome';
+}, /browser.*real path|browser.*substitution/i);
 rejects('observer-effect capture enabled', value => {
   value.requestedInvocation.captureInFlight = true;
 }, /capture|observer/i);

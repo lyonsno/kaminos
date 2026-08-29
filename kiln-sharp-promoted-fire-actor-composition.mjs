@@ -19,6 +19,41 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) throw new Error(`${label} mismatch`);
 }
 
+function exactObjectMatch(actual, expected, label) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label} mismatch`);
+  }
+}
+
+function foregroundHookIdentity(rendererEpisode) {
+  const routeIdentity = rendererEpisode?.routeIdentity;
+  for (const [value, label] of [
+    [rendererEpisode?.evidenceSource, 'renderer episode evidence source'],
+    [rendererEpisode?.authority, 'renderer episode authority'],
+    [routeIdentity?.effectiveRoute, 'renderer route'],
+    [routeIdentity?.prototypeIdentity, 'renderer prototype'],
+    [routeIdentity?.flameRendererIdentity, 'renderer flame identity'],
+    [routeIdentity?.learnedModelIdentity, 'renderer learned-model identity'],
+    [routeIdentity?.compositionRequested, 'renderer requested composition'],
+    [routeIdentity?.compositionEffective, 'renderer effective composition'],
+  ]) requireString(value, label);
+  if (!Number.isSafeInteger(rendererEpisode?.generation) || rendererEpisode.generation <= 0) {
+    throw new Error('renderer episode generation is required');
+  }
+  if (routeIdentity.compositionRequested !== routeIdentity.compositionEffective
+    || routeIdentity.fallbackReason
+    || routeIdentity.compositionFallbackReason) {
+    throw new Error('renderer episode composition identity mismatch');
+  }
+  return {
+    identity: rendererEpisode.identity,
+    evidenceSource: rendererEpisode.evidenceSource,
+    authority: rendererEpisode.authority,
+    generation: rendererEpisode.generation,
+    routeIdentity: structuredClone(routeIdentity),
+  };
+}
+
 function validateSelection(selection) {
   assertEqual(selection?.schema, SELECTION_SCHEMA, 'FireActor selection schema');
   assertEqual(selection?.status, 'selected', 'FireActor selection status');
@@ -117,6 +152,7 @@ export function beginWakeSharpFireActorProductEpisode({
   validateSharpMount(sharpMount);
   const exactFiringId = requireString(firingId, 'Wake SHARP firing id');
   validateRendererEpisode(rendererEpisode, exactFiringId, 'recording', 'renderer episode');
+  const exactForegroundHookIdentity = foregroundHookIdentity(rendererEpisode);
 
   return {
     schema: WAKE_SHARP_FIRE_ACTOR_PRODUCT_EPISODE_SCHEMA,
@@ -158,6 +194,7 @@ export function beginWakeSharpFireActorProductEpisode({
     },
     requestedApplication: structuredClone(application),
     rendererEpisodeIdentity: rendererEpisode.identity,
+    foregroundHookIdentity: exactForegroundHookIdentity,
   };
 }
 
@@ -210,6 +247,11 @@ export function completeWakeSharpFireActorProductEpisode({
   validateLoadedSelection(selection, loaded);
   validateRecordingEpisode(selection, loaded, episode);
   validateRendererEpisode(rendererEpisode, episode.firingId, 'complete', 'renderer completion');
+  exactObjectMatch(
+    foregroundHookIdentity(rendererEpisode),
+    episode.foregroundHookIdentity,
+    'renderer completion hook identity',
+  );
   if (foregroundHeartbeat?.schema !== FOREGROUND_HEARTBEAT_SCHEMA
     || foregroundHeartbeat.status !== 'verified'
     || foregroundHeartbeat.firingId !== episode.firingId) {

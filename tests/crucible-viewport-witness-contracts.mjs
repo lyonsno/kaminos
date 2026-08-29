@@ -142,6 +142,30 @@ assert.deepEqual(JSON.parse(JSON.stringify(loadedSchedulerArchive.rows)), schedu
 assert.equal(loadedSchedulerArchive.rawNdjson, schedulerBytes.toString('utf8'));
 assert.equal(loadedSchedulerArchive.bytes, schedulerBytes.byteLength);
 assert.equal(loadedSchedulerArchive.sha256, createHash('sha256').update(schedulerBytes).digest('hex'));
+let malformedRawEvidence = null;
+const malformedSchedulerBytes = Buffer.from('{"sequence":0}\n{"sequence":oops}\n');
+await assert.rejects(
+  loadSchedulerArchiveEvidence({
+    baseUrl: 'http://127.0.0.1:8095/',
+    artifact: schedulerArtifact,
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => malformedSchedulerBytes,
+    }),
+    onRawEvidence: evidence => { malformedRawEvidence = evidence; },
+  }),
+  /invalid JSON/,
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(malformedRawEvidence)),
+  {
+    artifact: schedulerArtifact,
+    bytes: malformedSchedulerBytes.byteLength,
+    sha256: createHash('sha256').update(malformedSchedulerBytes).digest('hex'),
+  },
+  'raw scheduler digest and descriptor must survive before malformed NDJSON parsing',
+);
 await assert.rejects(
   loadSchedulerArchiveEvidence({
     baseUrl: 'http://127.0.0.1:8095/',
@@ -1190,6 +1214,11 @@ assert.equal(projectedEvidence.output.sha256, 'abc');
 assert.equal(projectedEvidence.foregroundKilnHeartbeat.sampleRetention, 'uncapped');
 assert.equal(projectedEvidence.sharpDutyCorrelation.status, 'verified');
 assert.equal(projectedEvidence.volumeReleased, true);
+assert.equal(
+  Object.hasOwn(projectedEvidence, 'sourceIdentityAfterFiring'),
+  false,
+  'ordinary Friendly evidence must not acquire composed-only source identity fields',
+);
 
 const hostGapCorrelationSource = witness.match(
   /function correlateForegroundGapsWithHostEvents\([\s\S]*?\n}\n(?=\nfunction )/,
