@@ -2,7 +2,11 @@ import {
   WEBGPU_COOPERATIVE_BOUNDARY_MANIFEST_SCHEMA,
 } from './cooperative-boundary-manifest.js';
 import { createWebGpuCooperativeExecution } from './cooperative-execution.js';
-import { validateWebGpuCooperativeExecutionReport } from './cooperative-report-validation.js';
+import {
+  semanticEqual,
+  validateWebGpuCooperativeExecutionReport,
+  validateWebGpuCooperativeProgressEvents,
+} from './cooperative-report-validation.js';
 import { WEBGPU_INFERENCE_KIT_VERSION } from './kernel-profile.js';
 
 export const WEBGPU_COOPERATIVE_ADAPTER_CONFORMANCE_REPORT_SCHEMA =
@@ -320,12 +324,6 @@ function terminalSettlement(scenario) {
   };
 }
 
-function sameNumber(actual, expected) {
-  if (!Number.isFinite(actual) || !Number.isFinite(expected)) return false;
-  const tolerance = Number.EPSILON * Math.max(1, Math.abs(actual), Math.abs(expected)) * 4;
-  return Math.abs(actual - expected) <= tolerance;
-}
-
 function validateNegativeScenarioEvidence(errors, scenario) {
   if (scenario.expectedStatus === 'succeeded') return;
   const label = scenario.scenario;
@@ -346,69 +344,6 @@ function validateNegativeScenarioEvidence(errors, scenario) {
   }
   if (scenario.outputFingerprint != null) {
     errors.push(`${label}.outputFingerprint must be null for ${scenario.expectedStatus} scenarios`);
-  }
-  if (!Array.isArray(scenario.progressEvents)) {
-    errors.push(`${label}.progressEvents must be an array`);
-    return;
-  }
-  let previousCompletedItems = 0;
-  let previousProgress = 0;
-  for (const [index, event] of scenario.progressEvents.entries()) {
-    const eventLabel = `${label}.progressEvents[${index}]`;
-    if (!isPlainObject(event)) {
-      errors.push(`${eventLabel} must be an object`);
-      continue;
-    }
-    if (event.schema !== report?.progress?.schema) {
-      errors.push(`${eventLabel}.schema must match executionReport.progress.schema`);
-    }
-    if (event.routeId !== report?.routeId) {
-      errors.push(`${eventLabel}.routeId must match executionReport.routeId`);
-    }
-    if (event.invocationId !== report?.invocationId) {
-      errors.push(`${eventLabel}.invocationId must match executionReport.invocationId`);
-    }
-    if (event.status !== 'running') errors.push(`${eventLabel}.status must be running`);
-    if (!Number.isSafeInteger(event.completedItems) || event.completedItems < 0) {
-      errors.push(`${eventLabel}.completedItems must be a nonnegative safe integer`);
-    } else {
-      if (event.completedItems < previousCompletedItems) {
-        errors.push(`${eventLabel}.completedItems must not regress`);
-      }
-      if (
-        Number.isSafeInteger(report?.progress?.completedItems)
-        && event.completedItems > report.progress.completedItems
-      ) {
-        errors.push(`${eventLabel}.completedItems must not exceed terminal progress`);
-      }
-      previousCompletedItems = event.completedItems;
-    }
-    if (event.totalItems !== report?.progress?.totalItems) {
-      errors.push(`${eventLabel}.totalItems must match terminal progress`);
-    }
-    if (event.totalItems == null) {
-      if (event.progress != null || event.percent != null) {
-        errors.push(`${eventLabel} must not claim numeric progress without totalItems`);
-      }
-      continue;
-    }
-    if (!Number.isFinite(event.progress) || event.progress < 0 || event.progress > 1) {
-      errors.push(`${eventLabel}.progress must be finite and between 0 and 1`);
-    } else {
-      if (event.progress < previousProgress) {
-        errors.push(`${eventLabel}.progress must not regress`);
-      }
-      if (
-        Number.isFinite(report?.progress?.progress)
-        && event.progress > report.progress.progress
-      ) {
-        errors.push(`${eventLabel}.progress must not exceed terminal progress`);
-      }
-      previousProgress = event.progress;
-    }
-    if (!sameNumber(event.percent, event.progress * 100)) {
-      errors.push(`${eventLabel}.percent must equal progress * 100`);
-    }
   }
 }
 
@@ -826,23 +761,6 @@ function compareCanonicalValue(errors, label, actual, expected) {
   }
 }
 
-function semanticEqual(left, right) {
-  if (Object.is(left, right)) return true;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return Array.isArray(left)
-      && Array.isArray(right)
-      && left.length === right.length
-      && left.every((value, index) => semanticEqual(value, right[index]));
-  }
-  if (!isPlainObject(left) || !isPlainObject(right)) return false;
-  const leftKeys = Object.keys(left).sort();
-  const rightKeys = Object.keys(right).sort();
-  return leftKeys.length === rightKeys.length
-    && leftKeys.every((key, index) => (
-      key === rightKeys[index] && semanticEqual(left[key], right[key])
-    ));
-}
-
 export function validateWebGpuCooperativeAdapterConformanceReport(
   report,
   expectations = {},
@@ -980,6 +898,16 @@ export function validateWebGpuCooperativeAdapterConformanceReport(
       scenarioReportsValid = false;
       errors.push(...executionValidation.errors.map(
         error => `${scenario.scenario}.executionReport: ${error}`,
+      ));
+    }
+    const progressEventValidation = validateWebGpuCooperativeProgressEvents(
+      scenario.executionReport,
+      scenario.progressEvents,
+    );
+    if (!progressEventValidation.ok) {
+      scenarioReportsValid = false;
+      errors.push(...progressEventValidation.errors.map(
+        error => `${scenario.scenario}.${error}`,
       ));
     }
     validateNegativeScenarioEvidence(errors, scenario);

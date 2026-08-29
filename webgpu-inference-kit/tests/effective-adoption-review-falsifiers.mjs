@@ -363,3 +363,42 @@ test('negative conformance scenarios reject erased errors, output, and contradic
     'conformance-report',
   );
 });
+
+test('negative conformance scenarios reject impossible retained progress snapshots', () => {
+  const report = structuredClone(actualConformance);
+  const scenario = report.scenarios.find(candidate => candidate.scenario === 'cancellation');
+  const event = scenario.progressEvents[0];
+  assert.ok(event, 'cancellation fixture must retain a progress event');
+  event.completedWeight = 999;
+  event.totalWeight = 1;
+  event.phases[0].completedItems = 999;
+  event.phases[0].completedWeight = 999;
+  event.phases[0].totalWeight = 1;
+
+  const executionValidation = validateNegativeExecutionScenario(report, 'cancellation');
+  assert.equal(executionValidation.ok, true, executionValidation.errors.join('\n'));
+  const conformanceValidation = validateWebGpuCooperativeAdapterConformanceReport(report);
+  assert.equal(
+    conformanceValidation.ok,
+    false,
+    'retained progress event passed with impossible phase and weight evidence',
+  );
+  assert.match(conformanceValidation.errors.join('\n'), /progressEvents\[0\]/);
+});
+
+test('negative conformance scenarios reject erased retained progress history', () => {
+  const report = structuredClone(actualConformance);
+  const scenario = report.scenarios.find(candidate => candidate.scenario === 'cancellation');
+  assert.ok(scenario.progressEvents.length > 0, 'cancellation fixture must retain progress history');
+  scenario.progressEvents = [];
+
+  const executionValidation = validateNegativeExecutionScenario(report, 'cancellation');
+  assert.equal(executionValidation.ok, true, executionValidation.errors.join('\n'));
+  const conformanceValidation = validateWebGpuCooperativeAdapterConformanceReport(report);
+  assert.equal(
+    conformanceValidation.ok,
+    false,
+    'negative scenario passed after deleting authentic progress history',
+  );
+  assert.match(conformanceValidation.errors.join('\n'), /progressEvents length.*completed range/);
+});

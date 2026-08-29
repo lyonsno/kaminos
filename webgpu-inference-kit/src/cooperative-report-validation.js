@@ -27,6 +27,23 @@ function isFiniteNonnegative(value) {
   return Number.isFinite(value) && value >= 0;
 }
 
+export function semanticEqual(left, right) {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => semanticEqual(value, right[index]));
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => (
+      key === rightKeys[index] && semanticEqual(left[key], right[key])
+    ));
+}
+
 function requireOptionalIdentity(name, value) {
   if (value == null) return null;
   if (!isNonEmptyString(value)) throw new TypeError(`${name} must be a non-empty string`);
@@ -95,6 +112,9 @@ function validateProgressMeasure(errors, value, label) {
   if (!isNonnegativeSafeInteger(value.completedItems)) {
     errors.push(`${label}.completedItems must be a nonnegative safe integer`);
   }
+  if (!Number.isFinite(value.totalWeight) || value.totalWeight <= 0) {
+    errors.push(`${label}.totalWeight must be finite and positive`);
+  }
   if (value.totalItems == null) {
     if (value.progress != null || value.percent != null || value.completedWeight != null) {
       errors.push(`${label} must not claim numeric progress without a totalItems denominator`);
@@ -110,9 +130,6 @@ function validateProgressMeasure(errors, value, label) {
     && value.completedItems > value.totalItems
   ) {
     errors.push(`${label}.completedItems must not exceed totalItems`);
-  }
-  if (!Number.isFinite(value.totalWeight) || value.totalWeight <= 0) {
-    errors.push(`${label}.totalWeight must be finite and positive`);
   }
   if (!isFiniteNonnegative(value.completedWeight)) {
     errors.push(`${label}.completedWeight must be finite nonnegative`);
@@ -142,23 +159,294 @@ function validateProgressMeasure(errors, value, label) {
   }
 }
 
-function validateTerminalProgress(errors, report) {
-  const progress = report.progress;
+function compareProgressValue(errors, actual, expected, label) {
+  if (actual == null || expected == null) {
+    if (actual !== expected) errors.push(`${label} must match completed boundary work`);
+    return;
+  }
+  if (typeof actual === 'number' || typeof expected === 'number') {
+    if (!sameDuration(actual, expected)) {
+      errors.push(`${label} must match completed boundary work`);
+    }
+    return;
+  }
+  if (actual !== expected) errors.push(`${label} must match completed boundary work`);
+}
+
+function summarizeBoundaryProgress(boundaries) {
+  const phaseOrder = [];
+  const phases = new Map();
+  for (const boundary of boundaries) {
+    if (!isPlainObject(boundary) || !isNonEmptyString(boundary.phaseId)) return null;
+    if (!phases.has(boundary.phaseId)) {
+      phaseOrder.push(boundary.phaseId);
+      phases.set(boundary.phaseId, []);
+    }
+    phases.get(boundary.phaseId).push(boundary);
+  }
+
+  const phaseSummaries = phaseOrder.map(phaseId => {
+    const phaseBoundaries = phases.get(phaseId);
+    const allTotalsKnown = phaseBoundaries.every(boundary => (
+      isNonnegativeSafeInteger(boundary.totalItems)
+    ));
+    const completedItems = phaseBoundaries.reduce(
+      (sum, boundary) => sum + (isNonnegativeSafeInteger(boundary.completedItems)
+        ? boundary.completedItems
+        : 0),
+      0,
+    );
+    const totalItems = allTotalsKnown
+      ? phaseBoundaries.reduce((sum, boundary) => sum + boundary.totalItems, 0)
+      : null;
+    const totalWeight = phaseBoundaries.reduce(
+      (sum, boundary) => sum + (Number.isFinite(boundary.progressWeight)
+        ? boundary.progressWeight
+        : 0),
+      0,
+    );
+    const completedWeight = allTotalsKnown
+      ? phaseBoundaries.reduce((sum, boundary) => {
+          const fraction = boundary.totalItems === 0
+            ? 1
+            : boundary.completedItems / boundary.totalItems;
+          return sum + boundary.progressWeight * fraction;
+        }, 0)
+      : null;
+    const progress = completedWeight == null ? null : completedWeight / totalWeight;
+    const statuses = new Set(phaseBoundaries.map(boundary => boundary.status));
+    const status = statuses.has('failed')
+      ? 'failed'
+      : statuses.has('cancelled')
+        ? 'cancelled'
+        : phaseBoundaries.every(boundary => boundary.status === 'complete')
+          ? 'complete'
+          : phaseBoundaries.some(boundary => boundary.status === 'active')
+            ? 'active'
+            : 'pending';
+    return {
+      phaseId,
+      status,
+      completedItems,
+      totalItems,
+      progress,
+      percent: progress == null ? null : progress * 100,
+      completedWeight,
+      totalWeight,
+    };
+  });
+  const allTotalsKnown = phaseSummaries.every(phase => phase.totalItems != null);
+  const completedItems = phaseSummaries.reduce((sum, phase) => sum + phase.completedItems, 0);
+  const totalItems = allTotalsKnown
+    ? phaseSummaries.reduce((sum, phase) => sum + phase.totalItems, 0)
+    : null;
+  const totalWeight = phaseSummaries.reduce((sum, phase) => sum + phase.totalWeight, 0);
+  const completedWeight = allTotalsKnown
+    ? phaseSummaries.reduce((sum, phase) => sum + phase.completedWeight, 0)
+    : null;
+  const progress = completedWeight == null ? null : completedWeight / totalWeight;
+  return {
+    completedItems,
+    totalItems,
+    progress,
+    percent: progress == null ? null : progress * 100,
+    completedWeight,
+    totalWeight,
+    phases: phaseSummaries,
+  };
+}
+
+function reconcileProgressWithBoundaries(errors, progress, boundaries, label = 'progress') {
+  if (!isPlainObject(progress) || !Array.isArray(boundaries)) return;
+  const expected = summarizeBoundaryProgress(boundaries);
+  if (!expected) return;
+  for (const field of [
+    'completedItems',
+    'totalItems',
+    'progress',
+    'percent',
+    'completedWeight',
+    'totalWeight',
+  ]) {
+    compareProgressValue(errors, progress[field], expected[field], `${label}.${field}`);
+  }
+  if (!Array.isArray(progress.phases)) return;
+  if (progress.phases.length !== expected.phases.length) {
+    errors.push(`${label}.phases must match completed boundary work`);
+    return;
+  }
+  for (const [index, expectedPhase] of expected.phases.entries()) {
+    const actualPhase = progress.phases[index];
+    const phaseLabel = `${label}.phases[${index}]`;
+    if (!isPlainObject(actualPhase)) continue;
+    for (const field of [
+      'phaseId',
+      'status',
+      'completedItems',
+      'totalItems',
+      'progress',
+      'percent',
+      'completedWeight',
+      'totalWeight',
+    ]) {
+      compareProgressValue(errors, actualPhase[field], expectedPhase[field], `${phaseLabel}.${field}`);
+    }
+  }
+}
+
+function completedRangesForProgress(boundary) {
+  const completedStatuses = new Set(['complete', 'completed', 'observed']);
+  return (Array.isArray(boundary?.ranges) ? boundary.ranges : []).filter(range => (
+    isPlainObject(range)
+    && completedStatuses.has(range.status)
+    && Number.isSafeInteger(range.itemEnd)
+    && isNonnegativeSafeInteger(boundary.completedItems)
+    && range.itemEnd <= boundary.completedItems
+  ));
+}
+
+export function validateWebGpuCooperativeProgressEvents(report, progressEvents) {
+  const errors = [];
+  if (!isPlainObject(report)) {
+    errors.push('executionReport must be an object');
+  }
+  if (!Array.isArray(progressEvents)) {
+    errors.push('progressEvents must be an array');
+  }
+  if (isPlainObject(report) && !Array.isArray(report.boundaries)) {
+    errors.push('executionReport.boundaries must be an array');
+  }
+  if (errors.length > 0) {
+    return Object.freeze({ ok: false, errors: Object.freeze(errors) });
+  }
+
+  const boundaryStates = report.boundaries.map(boundary => ({
+    ...boundary,
+    status: 'pending',
+    completedItems: 0,
+  }));
+  const stateByBoundaryId = new Map(boundaryStates.map(boundary => [
+    boundary.boundaryId,
+    boundary,
+  ]));
+  const completedRanges = new Map(report.boundaries.map(boundary => [
+    boundary.boundaryId,
+    completedRangesForProgress(boundary),
+  ]));
+  const consumedByBoundary = new Map();
+  const expectedEventCount = [...completedRanges.values()].reduce(
+    (sum, ranges) => sum + ranges.length,
+    0,
+  );
+
+  for (const [index, event] of progressEvents.entries()) {
+    const label = `progressEvents[${index}]`;
+    validateProgressSnapshot(errors, event, {
+      label,
+      routeId: report.routeId,
+      invocationId: report.invocationId,
+      expectedStatus: 'running',
+      terminal: false,
+    });
+    if (!isPlainObject(event)) continue;
+    const boundaryState = stateByBoundaryId.get(event.currentBoundaryId);
+    if (!boundaryState) {
+      errors.push(`${label}.currentBoundaryId must identify completed boundary work`);
+      continue;
+    }
+    if (event.currentPhaseId !== boundaryState.phaseId) {
+      errors.push(`${label}.currentPhaseId must match currentBoundaryId`);
+    }
+    const consumed = consumedByBoundary.get(boundaryState.boundaryId) || 0;
+    const range = completedRanges.get(boundaryState.boundaryId)?.[consumed];
+    if (!range) {
+      errors.push(`${label} must correspond to one unclaimed completed range`);
+      continue;
+    }
+    consumedByBoundary.set(boundaryState.boundaryId, consumed + 1);
+    boundaryState.completedItems = range.itemEnd;
+    boundaryState.status = boundaryState.totalItems === range.itemEnd ? 'complete' : 'active';
+    reconcileProgressWithBoundaries(errors, event, boundaryStates, label);
+  }
+  if (progressEvents.length !== expectedEventCount) {
+    errors.push(
+      `progressEvents length must equal completed range count ${expectedEventCount}`,
+    );
+  }
+  return Object.freeze({
+    ok: errors.length === 0,
+    errors: Object.freeze(errors),
+  });
+}
+
+function validateProgressSnapshot(errors, progress, {
+  label,
+  routeId,
+  invocationId,
+  expectedStatus,
+  terminal,
+}) {
   if (!isPlainObject(progress)) {
-    errors.push('progress must be an object');
+    errors.push(`${label} must be an object`);
     return;
   }
   if (progress.schema !== WEBGPU_COOPERATIVE_PROGRESS_SCHEMA) {
-    errors.push(`progress.schema must be ${WEBGPU_COOPERATIVE_PROGRESS_SCHEMA}`);
+    errors.push(`${label}.schema must be ${WEBGPU_COOPERATIVE_PROGRESS_SCHEMA}`);
   }
-  if (progress.routeId !== report.routeId) errors.push('progress.routeId must match routeId');
-  if (progress.invocationId !== report.invocationId) {
-    errors.push('progress.invocationId must match invocationId');
+  if (progress.routeId !== routeId) errors.push(`${label}.routeId must match routeId`);
+  if (progress.invocationId !== invocationId) {
+    errors.push(`${label}.invocationId must match invocationId`);
   }
-  if (progress.status !== report.status) {
-    errors.push(`progress.status must match terminal report status ${report.status}`);
+  if (progress.status !== expectedStatus) {
+    errors.push(`${label}.status must match ${terminal ? 'terminal report status' : 'retained event status'} ${expectedStatus}`);
   }
-  validateProgressMeasure(errors, progress, 'progress');
+  validateProgressMeasure(errors, progress, label);
+  if (!Array.isArray(progress.phases)) {
+    errors.push(`${label}.phases must be an array`);
+    return;
+  }
+  const phaseIds = new Set();
+  for (const [index, phase] of progress.phases.entries()) {
+    const phaseLabel = `${label}.phases[${index}]`;
+    if (!isPlainObject(phase)) {
+      errors.push(`${phaseLabel} must be an object`);
+      continue;
+    }
+    if (!isNonEmptyString(phase.phaseId) || phaseIds.has(phase.phaseId)) {
+      errors.push(`${phaseLabel}.phaseId must be unique and non-empty`);
+    } else {
+      phaseIds.add(phase.phaseId);
+    }
+    const statusAllowed = PHASE_STATUS_VALUES.has(phase.status)
+      && (terminal || !new Set(['failed', 'cancelled']).has(phase.status));
+    if (!statusAllowed || terminal && phase.status === 'active') {
+      errors.push(`${phaseLabel}.status must be ${terminal ? 'terminal or untouched pending' : 'active, complete, or untouched pending'}`);
+    }
+    validateProgressMeasure(errors, phase, phaseLabel);
+    if (
+      phase.status === 'complete'
+      && (
+        !isNonnegativeSafeInteger(phase.totalItems)
+        || phase.completedItems !== phase.totalItems
+        || phase.progress !== 1
+        || phase.percent !== 100
+      )
+    ) {
+      errors.push(`${phaseLabel} must prove phase completion`);
+    }
+  }
+}
+
+function validateTerminalProgress(errors, report) {
+  const progress = report.progress;
+  validateProgressSnapshot(errors, progress, {
+    label: 'progress',
+    routeId: report.routeId,
+    invocationId: report.invocationId,
+    expectedStatus: report.status,
+    terminal: true,
+  });
+  if (!isPlainObject(progress)) return;
   if (
     report.status === 'succeeded'
     && (
@@ -171,39 +459,11 @@ function validateTerminalProgress(errors, report) {
   ) {
     errors.push('progress must prove terminal completion');
   }
-  if (!Array.isArray(progress.phases)) {
-    errors.push('progress.phases must be an array');
-    return;
-  }
-  const phaseIds = new Set();
-  for (const [index, phase] of progress.phases.entries()) {
-    const label = `progress.phases[${index}]`;
-    if (!isPlainObject(phase)) {
-      errors.push(`${label} must be an object`);
-      continue;
-    }
-    if (!isNonEmptyString(phase.phaseId) || phaseIds.has(phase.phaseId)) {
-      errors.push(`${label}.phaseId must be unique and non-empty`);
-    } else {
-      phaseIds.add(phase.phaseId);
-    }
-    if (!PHASE_STATUS_VALUES.has(phase.status) || phase.status === 'active') {
-      errors.push(`${label}.status must be terminal or untouched pending`);
-    }
-    validateProgressMeasure(errors, phase, label);
-    if (
-      phase.status === 'complete'
-      && (
-        !isNonnegativeSafeInteger(phase.totalItems)
-        || phase.completedItems !== phase.totalItems
-        || phase.progress !== 1
-        || phase.percent !== 100
-      )
-    ) {
-      errors.push(`${label} must prove phase completion`);
-    }
-    if (report.status === 'succeeded' && phase.status !== 'complete') {
-      errors.push(`${label} must prove terminal completion`);
+  if (report.status === 'succeeded' && Array.isArray(progress.phases)) {
+    for (const [index, phase] of progress.phases.entries()) {
+      if (phase?.status !== 'complete') {
+        errors.push(`progress.phases[${index}] must prove terminal completion`);
+      }
     }
   }
 }
@@ -227,6 +487,15 @@ function validateBoundaryRanges(errors, boundary, index, { requireComplete }) {
   }
   const rangeIds = new Set();
   let coveredItems = 0;
+  let completedItems = 0;
+  let incompleteRangeSeen = false;
+  const completedStatuses = new Set(['complete', 'completed', 'observed']);
+  const allowedStatuses = new Set([
+    ...completedStatuses,
+    'pending-completion',
+    'pending-observation',
+    'failed',
+  ]);
   for (const [rangeIndex, range] of boundary.ranges.entries()) {
     const rangeLabel = `${label}.ranges[${rangeIndex}]`;
     if (!isPlainObject(range)) {
@@ -238,19 +507,40 @@ function validateBoundaryRanges(errors, boundary, index, { requireComplete }) {
     } else {
       rangeIds.add(range.rangeId);
     }
+    if (!allowedStatuses.has(range.status)) {
+      errors.push(`${rangeLabel}.status must preserve planner range state`);
+    }
     if (range.rangeIndex !== rangeIndex) {
       errors.push(`${rangeLabel}.rangeIndex must equal ${rangeIndex}`);
     }
-    if (requireComplete && (
+    const rangeShapeValid = (
       !isNonnegativeSafeInteger(range.itemStart)
       || !Number.isSafeInteger(range.itemCount)
       || range.itemCount <= 0
       || range.itemEnd !== range.itemStart + range.itemCount
       || range.itemStart !== coveredItems
-    )) {
+    );
+    if (rangeShapeValid) {
       errors.push(`${rangeLabel} must provide contiguous positive item coverage`);
     }
     if (Number.isSafeInteger(range.itemEnd)) coveredItems = range.itemEnd;
+    const completed = completedStatuses.has(range.status);
+    if (completed) {
+      if (incompleteRangeSeen || range.itemStart !== completedItems) {
+        errors.push(`${rangeLabel} completed evidence must form one contiguous prefix`);
+      } else if (Number.isSafeInteger(range.itemEnd)) {
+        completedItems = range.itemEnd;
+      }
+    } else {
+      incompleteRangeSeen = true;
+      if (requireComplete) errors.push(`${rangeLabel}.status must prove range completion`);
+    }
+  }
+  if (
+    isNonnegativeSafeInteger(boundary.completedItems)
+    && boundary.completedItems !== completedItems
+  ) {
+    errors.push(`${label}.completedItems must equal completed range coverage`);
   }
   if (
     requireComplete
@@ -425,14 +715,12 @@ function validateBoundaries(errors, report) {
           }
         }
         if (
-          JSON.stringify(report.lastTrustworthyBoundary.ranges)
-          !== JSON.stringify(lastBoundaryWithRanges.ranges)
+          !semanticEqual(report.lastTrustworthyBoundary.ranges, lastBoundaryWithRanges.ranges)
         ) {
           errors.push('lastTrustworthyBoundary.ranges must preserve the last ranged boundary');
         }
         if (
-          JSON.stringify(report.lastTrustworthyBoundary.failure)
-          !== JSON.stringify(lastBoundaryWithRanges.failure)
+          !semanticEqual(report.lastTrustworthyBoundary.failure, lastBoundaryWithRanges.failure)
         ) {
           errors.push('lastTrustworthyBoundary.failure must preserve the last ranged boundary');
         }
@@ -530,6 +818,37 @@ function validateRuntimeTelemetry(errors, report) {
     ) {
       errors.push(`${label}.${claimedEntriesField} length must equal submittedGpuDutyCount`);
     }
+    if (field === 'commandDuties') {
+      const gpuRanges = collectGpuRangeEntries(report);
+      const rangeByIdentity = new Map(gpuRanges.map(range => [
+        JSON.stringify([range.boundaryId, range.rangeId]),
+        range,
+      ]));
+      const observed = new Set();
+      for (const [index, entry] of snapshot[claimedEntriesField].entries()) {
+        const entryLabel = `${label}.${claimedEntriesField}[${index}]`;
+        if (!isPlainObject(entry)) {
+          errors.push(`${entryLabel} must be an object`);
+          continue;
+        }
+        const identity = isPlainObject(entry.descriptor?.metadata)
+          ? entry.descriptor.metadata
+          : entry;
+        const key = JSON.stringify([identity.boundaryId, identity.rangeId]);
+        const range = rangeByIdentity.get(key);
+        if (!range) {
+          errors.push(`${entryLabel} must match a retained GPU-command range`);
+          continue;
+        }
+        if (observed.has(key)) {
+          errors.push(`${entryLabel} must not duplicate a GPU-command range`);
+        }
+        observed.add(key);
+        if (identity.rangeIndex != null && identity.rangeIndex !== range.rangeIndex) {
+          errors.push(`${entryLabel}.rangeIndex must match retained GPU-command range`);
+        }
+      }
+    }
   }
 }
 
@@ -551,6 +870,91 @@ function collectGpuRangeEntries(report) {
 
 function gpuRangeKey(value) {
   return JSON.stringify([value.boundaryId, value.rangeId, value.rangeIndex]);
+}
+
+function validateGpuDutyEvidence(errors, report) {
+  const gpuRangeEntries = collectGpuRangeEntries(report);
+  const gpuRangesByKey = new Map(gpuRangeEntries.map(entry => [gpuRangeKey(entry), entry]));
+  if (
+    report.status === 'succeeded'
+    && report.submittedGpuDutyCount !== gpuRangeEntries.length
+  ) {
+    errors.push('submittedGpuDutyCount must equal completed GPU-command ranges');
+  } else if (
+    report.status !== 'succeeded'
+    && isNonnegativeSafeInteger(report.submittedGpuDutyCount)
+    && report.submittedGpuDutyCount > gpuRangeEntries.length
+  ) {
+    errors.push('submittedGpuDutyCount must not exceed retained GPU-command ranges');
+  }
+  if (!Array.isArray(report.gpuDuties)) return;
+  const retiredRows = report.gpuDuties.filter(duty => duty?.status === 'retired').length;
+  if (report.retiredGpuDutyCount !== retiredRows) {
+    errors.push('retiredGpuDutyCount must equal retired gpuDuties rows');
+  }
+  const dutyCountByRangeKey = new Map();
+  const dutyIds = new Set();
+  for (const [index, duty] of report.gpuDuties.entries()) {
+    const label = `gpuDuties[${index}]`;
+    if (!isPlainObject(duty)) {
+      errors.push(`${label} must be an object`);
+      continue;
+    }
+    if (!isNonEmptyString(duty.dutyId) || dutyIds.has(duty.dutyId)) {
+      errors.push(`${label}.dutyId must be unique and non-empty`);
+    } else {
+      dutyIds.add(duty.dutyId);
+    }
+    const rangeKey = gpuRangeKey(duty);
+    if (!gpuRangesByKey.has(rangeKey)) {
+      errors.push(`${label} must match a retained GPU-command range`);
+    } else {
+      dutyCountByRangeKey.set(rangeKey, (dutyCountByRangeKey.get(rangeKey) || 0) + 1);
+    }
+    const allowedStatuses = report.status === 'succeeded'
+      ? new Set(['retired'])
+      : new Set(['retired', 'retired-after-failure', 'failed']);
+    if (!allowedStatuses.has(duty.status)) {
+      errors.push(`${label}.status must be terminal for report status ${report.status}`);
+    }
+    if (!Number.isFinite(duty.submittedAtMs)) {
+      errors.push(`${label}.submittedAtMs must be finite`);
+    }
+    if (!Number.isFinite(duty.retiredAtMs) || duty.retiredAtMs < duty.submittedAtMs) {
+      errors.push(`${label}.retiredAtMs must be finite and not precede submittedAtMs`);
+    }
+    if (!isFiniteNonnegative(duty.rawQueueDurationMs)) {
+      errors.push(`${label}.rawQueueDurationMs must be finite nonnegative`);
+    } else if (
+      Number.isFinite(duty.submittedAtMs)
+      && Number.isFinite(duty.retiredAtMs)
+      && !sameDuration(duty.rawQueueDurationMs, duty.retiredAtMs - duty.submittedAtMs)
+    ) {
+      errors.push(`${label}.rawQueueDurationMs must equal retiredAtMs - submittedAtMs`);
+    }
+    const allowedTimingAuthorities = duty.status === 'failed'
+      ? new Set(['queue-work-done-prefix-fence-rejected'])
+      : new Set(['queue-work-done']);
+    if (!allowedTimingAuthorities.has(duty.timingAuthority)) {
+      errors.push(`${label}.timingAuthority must be queue-work-done terminal authority`);
+    }
+    if (report.status === 'succeeded' && duty.failure != null) {
+      errors.push(`${label}.failure must be null on success`);
+    }
+  }
+  if (report.completionPolicy === 'bounded-prefix' && report.status === 'succeeded') {
+    if (report.gpuDuties.length !== gpuRangeEntries.length) {
+      errors.push('gpuDuties length must equal completed GPU-command ranges');
+    }
+    for (const entry of gpuRangeEntries) {
+      if (dutyCountByRangeKey.get(gpuRangeKey(entry)) !== 1) {
+        errors.push(
+          `completed GPU-command range ${entry.boundaryId}/${entry.rangeId} `
+          + 'must have exactly one gpuDuty',
+        );
+      }
+    }
+  }
 }
 
 function validateBoundedDuties(errors, report, expected) {
@@ -603,75 +1007,6 @@ function validateBoundedDuties(errors, report, expected) {
     }
     if (report.retiredGpuDutyCount !== report.issuedGpuDutyCount) {
       errors.push('retiredGpuDutyCount must equal issuedGpuDutyCount');
-    }
-  }
-  if (!Array.isArray(report.gpuDuties)) return;
-  const gpuRangeEntries = collectGpuRangeEntries(report);
-  const gpuRangesByKey = new Map(gpuRangeEntries.map(entry => [gpuRangeKey(entry), entry]));
-  const dutyCountByRangeKey = new Map();
-  if (
-    report.status === 'succeeded'
-    && report.gpuDuties.length !== gpuRangeEntries.length
-  ) {
-    errors.push('gpuDuties length must equal completed GPU-command ranges');
-  }
-  const dutyIds = new Set();
-  for (const [index, duty] of report.gpuDuties.entries()) {
-    const label = `gpuDuties[${index}]`;
-    if (!isPlainObject(duty)) {
-      errors.push(`${label} must be an object`);
-      continue;
-    }
-    if (!isNonEmptyString(duty.dutyId) || dutyIds.has(duty.dutyId)) {
-      errors.push(`${label}.dutyId must be unique and non-empty`);
-    } else {
-      dutyIds.add(duty.dutyId);
-    }
-    const rangeKey = gpuRangeKey(duty);
-    if (!gpuRangesByKey.has(rangeKey)) {
-      errors.push(`${label} must match a completed GPU-command range`);
-    } else {
-      dutyCountByRangeKey.set(rangeKey, (dutyCountByRangeKey.get(rangeKey) || 0) + 1);
-    }
-    const allowedStatuses = report.status === 'succeeded'
-      ? new Set(['retired'])
-      : new Set(['retired', 'retired-after-failure', 'failed']);
-    if (!allowedStatuses.has(duty.status)) {
-      errors.push(`${label}.status must be terminal for report status ${report.status}`);
-    }
-    if (!Number.isFinite(duty.submittedAtMs)) {
-      errors.push(`${label}.submittedAtMs must be finite`);
-    }
-    if (!Number.isFinite(duty.retiredAtMs) || duty.retiredAtMs < duty.submittedAtMs) {
-      errors.push(`${label}.retiredAtMs must be finite and not precede submittedAtMs`);
-    }
-    if (!isFiniteNonnegative(duty.rawQueueDurationMs)) {
-      errors.push(`${label}.rawQueueDurationMs must be finite nonnegative`);
-    } else if (
-      Number.isFinite(duty.submittedAtMs)
-      && Number.isFinite(duty.retiredAtMs)
-      && !sameDuration(duty.rawQueueDurationMs, duty.retiredAtMs - duty.submittedAtMs)
-    ) {
-      errors.push(`${label}.rawQueueDurationMs must equal retiredAtMs - submittedAtMs`);
-    }
-    const allowedTimingAuthorities = duty.status === 'failed'
-      ? new Set(['queue-work-done-prefix-fence-rejected'])
-      : new Set(['queue-work-done']);
-    if (!allowedTimingAuthorities.has(duty.timingAuthority)) {
-      errors.push(`${label}.timingAuthority must be queue-work-done terminal authority`);
-    }
-    if (report.status === 'succeeded' && duty.failure != null) {
-      errors.push(`${label}.failure must be null on success`);
-    }
-  }
-  if (report.status === 'succeeded') {
-    for (const entry of gpuRangeEntries) {
-      if (dutyCountByRangeKey.get(gpuRangeKey(entry)) !== 1) {
-        errors.push(
-          `completed GPU-command range ${entry.boundaryId}/${entry.rangeId} `
-          + 'must have exactly one gpuDuty',
-        );
-      }
     }
   }
 }
@@ -755,6 +1090,8 @@ export function validateWebGpuCooperativeExecutionReport(report, expectationInpu
   validateRuntimeTelemetry(errors, report);
   validateTerminalProgress(errors, report);
   validateBoundaries(errors, report);
+  reconcileProgressWithBoundaries(errors, report.progress, report.boundaries);
+  validateGpuDutyEvidence(errors, report);
   if (report.completionPolicy === 'bounded-prefix') {
     validateBoundedDuties(errors, report, expected);
   }
