@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 
 const TARGET_IDENTITY = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
 const REPORT_IDENTITY = 'kaminos.volume.intrinsic-presentation-witness.v0';
-const FLAMEBOWL_PRESET_ID = 'vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2';
+const FLAMEBOWL_PRESET_ID = 'vsp-03789085b9ba0d8b3fe7c0ba6183583b4ea1cb31e8d00d044634baa935fc0836';
 const FLAMEBOWL_PRESET_LABEL = 'big_raymarch_hero_flamebowl';
 const REQUIRED_BEAUTY_ROUTE = 'role=truthHigh&composition=raymarch-only-v0';
 const RESTORATION_MAX_CHANNEL_DELTA = 1;
@@ -146,7 +146,7 @@ try {
   assert.ok(admitted.backend?.startsWith('WebGPU'), 'effective backend substituted away from WebGPU');
   assert.equal(admitted.sourceSettingsPreset?.sourcePresetAuthority, 'shared-volume-settings-preset-v2', 'shared preset authority missing');
   assert.equal(admitted.sourceSettingsPreset?.presetId, route.searchParams.get('settings_preset'), 'effective preset id does not match requested preset');
-  assert.equal(admitted.sourceSettingsPreset?.controlCount, 189, 'complete 189-control preset identity was not preserved');
+  assert.equal(admitted.sourceSettingsPreset?.controlCount, 192, 'complete 192-control preset identity was not preserved');
   await delay(settleMs);
 
   failurePhase = 'same-state-capture';

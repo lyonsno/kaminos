@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import serve
+import volume_settings_preset_migrate as migrate
 
 
 REMOVED_PERSISTENCE_CONTROLS = {
@@ -36,7 +37,7 @@ def v2_fixture():
     assert schema_path.exists(), "schema v2 must exclude removed persistence widgets"
     schema = json.loads(schema_path.read_text())
     assert schema["identity"] == "kaminos-volume-settings-preset-schema-v2"
-    assert schema["controlCount"] == 189
+    assert schema["controlCount"] == 192
     assert not REMOVED_PERSISTENCE_CONTROLS.intersection(entry["key"] for entry in schema["controls"])
 
     legacy_document = json.loads((
@@ -61,7 +62,7 @@ def v2_fixture():
         for key, value in parse_qsl(route.query, keep_blank_values=True)
         if key in accepted_params or key in {"kaminos_volume_smoke", "volume_quality_reason"}
     ]
-    return {
+    legacy_payload = {
         "identity": "kaminos-volume-settings-preset-v2",
         "kind": "settings-preset",
         "schemaIdentity": schema["identity"],
@@ -71,7 +72,10 @@ def v2_fixture():
         "controlCount": len(controls),
         "stateExclusions": legacy["exclusions"],
         "note": "settings only",
-    }, schema
+    }
+    migrated, profile = migrate.migrate_volume_settings_preset_payload(legacy_payload, schema)
+    assert profile == "historical-186-to-192"
+    return migrated, schema
 
 
 def set_control(payload, key, value):
@@ -98,7 +102,7 @@ def main():
         assert first["requested"]["label"] == "Operator Basin"
         assert first["effective"]["storePath"] == str(store.resolve())
         assert first["effective"]["schemaIdentity"] == schema["identity"]
-        assert first["effective"]["controlCount"] == 189
+        assert first["effective"]["controlCount"] == 192
         assert first["effective"]["idempotent"] is False
         assert first["effective"]["presetId"].startswith("vsp-")
 
@@ -143,7 +147,7 @@ def main():
         by_id = serve.read_volume_settings_preset(store, first["effective"]["presetId"], schema)
         assert by_alias["presetId"] == by_id["presetId"]
         assert by_alias["label"] == "Operator Basin"
-        assert by_alias["preset"]["controlCount"] == 189
+        assert by_alias["preset"]["controlCount"] == 192
         assert by_alias["source"]["repoRoot"] == source_a["repoRoot"]
 
         changed = set_control(payload, "volume-density", 5.25)
@@ -159,7 +163,7 @@ def main():
         try:
             serve.write_volume_settings_preset(store, "Partial", partial, source_a, schema)
         except ValueError as error:
-            assert "189" in str(error) or "inventory" in str(error)
+            assert "192" in str(error) or "inventory" in str(error)
         else:
             raise AssertionError("shared store accepted a partial preset")
         assert sorted(path.relative_to(store) for path in store.rglob("*.json")) == before

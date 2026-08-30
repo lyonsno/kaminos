@@ -380,10 +380,10 @@ try {
     assert.equal(cockpitVisibility.anchorGeometry?.visible, true, `cockpit screenshot anchor is outside the visible viewport: ${cockpitAnchor}`);
   }
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
-  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 192, 'cockpit layout omitted basin or renderer controls');
-  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 189, 'canonical basin control count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 195, 'cockpit layout omitted basin or renderer controls');
+  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 192, 'canonical basin control count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, 3, 'renderer control axis is incomplete');
-  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 191, 'primary root count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 194, 'primary root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
   assert.equal(cockpitVisibility.assayViewportGeometry?.activeTab, 'volume', 'assay route did not admit the Volume tab');
@@ -592,7 +592,7 @@ try {
   assert.equal(presetDocument.presetId, sourcePresetId);
   assert.equal(presetDocument.preset?.identity, 'kaminos-volume-settings-preset-v2');
   assert.equal(presetDocument.preset?.kind, 'settings-preset');
-  assert.equal(presetDocument.preset?.controlCount, 189);
+  assert.equal(presetDocument.preset?.controlCount, 192);
   assert.equal(presetDocument.preset?.rendererControlCount, 3);
   for (const field of ['fluidField', 'frontField', 'boundarySidecar', 'splatInstances', 'historyBuffers', 'pressureState', 'replayState', 'volumeDebugState', 'camera', 'viewport']) {
     assert.equal(Object.hasOwn(presetDocument.preset, field), false, `settings preset persisted forbidden state field ${field}`);

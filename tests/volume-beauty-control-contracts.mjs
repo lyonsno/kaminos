@@ -58,7 +58,7 @@ assert.match(index, /field\.continuous\s*\?\s*String\(clampedValue\)\s*:\s*clamp
 assert.match(core, /const resolveEntries = \[[\s\S]*if \(options\.includePresentationControls === true\)[\s\S]*resolveEntries\.push\([\s\S]*binding: 1/, 'optical resolves add presentation binding 1 only for pipelines that declare it');
 assert.match(core, /includePresentationControls: options\.opticalDepthOrderDiagnostic !== true/, 'matched optical presentation binds exposure while the depth-order diagnostic keeps its one-binding layout');
 
-assert.equal(settingsSchema.controlCount, 189, 'the canonical preset inventory includes all three new beauty controls');
+assert.equal(settingsSchema.controlCount, 192, 'the canonical preset inventory includes beauty, emitter, and motion controls');
 for (const expected of [
   ['volume-exposure', 'volume_exposure', 'range'],
   ['volume-reaction-boundary-fire-clean-color', 'volume_reaction_boundary_fire_clean_color', 'color'],

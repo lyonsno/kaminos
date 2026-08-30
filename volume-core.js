@@ -1795,6 +1795,7 @@ struct Uniforms {
   analytic_emitter_support_radius: vec4<f32>,
   analytic_emitter_geometry: vec4<f32>,
   analytic_emitter_chemistry: vec4<f32>,
+  artistic_motion_controls: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -4200,6 +4201,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalMinimalFireHeat = canonicalMinimalFireBirth * (0.80 + canonicalBuoyancyLift * 0.30);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
+  let artisticSwirl = step(0.5, u.artistic_motion_controls.x);
+  let phasedSway = step(0.5, u.artistic_motion_controls.y);
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
   let fireLickBreakupEnabled = fireLickOperatorGain > 0.0005;
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
@@ -4279,7 +4282,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
-  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain;
+  vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
   vel = vel + oracleActivityCurlNoise;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
@@ -4326,8 +4329,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
-  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl;
-  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl;
+  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl * phasedSway;
+  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl * phasedSway;
   let bonfireNonWindLateralDampingTarget = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
   let bonfireNonWindLateralDamping = mix(1.0, bonfireNonWindLateralDampingTarget, bonfireLateralDampingAblation);
   vel.x = vel.x * bonfireNonWindLateralDamping;
@@ -7592,7 +7595,7 @@ export function createKaminosVolumePrototype({
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(380);
+  const uniforms = new Float32Array(384);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let volumePresentationModeRequestedRaw = 'beauty';
@@ -11873,9 +11876,13 @@ export function createKaminosVolumePrototype({
       LEGACY_BOUNDARY_FIRE_SOOT_ENDPOINT,
     );
     writeAnalyticEmitterUniform(uniforms, 344, analyticEmitterDescriptor);
+    uniforms[364] = controlsSnapshot.artisticSwirl === false ? 0 : 1;
+    uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
+    uniforms[366] = 0;
+    uniforms[367] = 0;
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
-    uniforms.set(previousViewProj.elements, 364);
+    uniforms.set(previousViewProj.elements, 368);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -11930,6 +11937,8 @@ export function createKaminosVolumePrototype({
       };
     }
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    state.artisticSwirl = uniforms[364] >= 0.5;
+    state.phasedSway = uniforms[365] >= 0.5;
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -21218,6 +21227,8 @@ export function createKaminosVolumePrototype({
       state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);
       state.pyroCompareMode = normalizePyroCompareMode(controlsSnapshot.pyroCompareMode);
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+      state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
+      state.phasedSway = controlsSnapshot.phasedSway !== false;
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;

@@ -72,8 +72,8 @@ assert.match(
   'the short preset loader delegates admission to the shared behavioral contract',
 );
 assert.equal(settingsPresetSchema.identity, 'kaminos-volume-settings-preset-schema-v2');
-assert.equal(settingsPresetSchema.controlCount, 189, 'canonical schema fixes the actual volume-control count');
-assert.equal(settingsPresetSchema.controls.length, 189, 'canonical schema enumerates every actual volume control');
+assert.equal(settingsPresetSchema.controlCount, 192, 'canonical schema fixes the actual volume-control count');
+assert.equal(settingsPresetSchema.controls.length, 192, 'canonical schema enumerates every actual volume control');
 assert.match(settingsPresetContract, /schema\.forbiddenPresetFields[\s\S]*settings preset contains forbidden runtime or replay state/, 'shared admission rejects forbidden replay/runtime payload fields');
 assert.match(
   settingsPresetContract,
@@ -1358,7 +1358,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*364\)/, 'previous view-projection matrix shifts after the compact analytic emitter descriptor uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*368\)/, 'previous view-projection matrix shifts after analytic emitter and artistic-motion uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');

@@ -621,7 +621,7 @@ async function startServer() {
         return sendJson(response, 200, {
           identity: 'kaminos-volume-settings-preset-index-v1',
           schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
-          controlCount: 189,
+          controlCount: 192,
           rendererControlCount: 3,
           storePath: 'witness-read-only-empty-preset-index',
           entries: [],

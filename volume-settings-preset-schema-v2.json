@@ -1,12 +1,30 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 189,
+  "controlCount": 192,
   "controls": [
     {
       "key": "volume-scene",
       "param": "volume_scene",
       "tagName": "SELECT",
       "type": "select-one"
+    },
+    {
+      "key": "emitter-assay-family",
+      "param": "volume_emitter_family",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "key": "volume-artistic-swirl",
+      "param": "volume_artistic_swirl",
+      "tagName": "INPUT",
+      "type": "checkbox"
+    },
+    {
+      "key": "volume-phased-sway",
+      "param": "volume_phased_sway",
+      "tagName": "INPUT",
+      "type": "checkbox"
     },
     {
       "key": "volume-pyro-compare",

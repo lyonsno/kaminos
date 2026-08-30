@@ -144,7 +144,7 @@ assert.match(
 assert.doesNotMatch(
   index,
   /data-volume-presentation-mode[^\n]+(?:input|select|textarea)/,
-  'presentation state cannot enter the 189-control settings preset',
+  'presentation state cannot enter the 192-control settings preset',
 );
 assert.match(
   selectiveWrapper,
