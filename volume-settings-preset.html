@@ -12,25 +12,16 @@
     strong { display: block; font-size: 18px; }
     #status { margin-top: 8px; color: #9eb0b5; font: 13px/1.5 "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
     #status.failed { color: #ff9d8d; }
-    #view-commands { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-    #view-commands[hidden] { display: none; }
-    button { border: 1px solid #48616b; border-radius: 4px; padding: 9px 12px; background: #121a1e; color: #edf4f5; cursor: pointer; }
-    button:hover { background: #1b282d; }
   </style>
 </head>
 <body>
   <main>
     <strong id="preset-title">Loading volume settings preset</strong>
     <div id="status">Validating exact controls...</div>
-    <div id="view-commands" hidden>
-      <button type="button" data-view="splat-only">Splat only</button>
-      <button type="button" data-view="raymarch-only">Raymarch only</button>
-      <button type="button" data-view="smoke-hybrid">Smoke hybrid</button>
-      <button type="button" data-view="full-hybrid-diagnostic">Full hybrid diagnostic</button>
-    </div>
   </main>
   <script type="module">
     import {
+      buildVolumeSettingsPresetTarget,
       buildVolumeSettingsPresetVisualTarget,
       validateVolumeSettingsPresetDocument,
     } from './volume-settings-preset-contract.mjs';
@@ -40,15 +31,6 @@
     const params = new URLSearchParams(location.search);
     const presetId = params.get('preset');
     const view = params.get('view');
-    const viewCommands = document.getElementById('view-commands');
-    for (const button of viewCommands.querySelectorAll('[data-view]')) {
-      button.addEventListener('click', () => {
-        const target = new URL(location.href);
-        target.searchParams.set('view', button.dataset.view);
-        location.assign(target);
-      });
-    }
-
     async function loadPreset() {
       if (!presetId) throw new Error('settings preset id is required');
       const [response, schemaResponse] = await Promise.all([
@@ -61,8 +43,9 @@
       const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
       presetTitle.textContent = 'Volume settings preset';
       if (!view) {
-        status.textContent = `${receipt.label || presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin settings + ${receipt.rendererControlCount} renderer controls`;
-        viewCommands.hidden = false;
+        const target = buildVolumeSettingsPresetTarget(receipt, location.origin);
+        status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | entering live cockpit`;
+        location.replace(target);
         return;
       }
       const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);

@@ -297,13 +297,11 @@ assert.match(
 );
 assert.match(
   settingsLoader,
-  /const view = params\.get\('view'\);[\s\S]*if \(!view\)[\s\S]*viewCommands\.hidden = false/,
-  'a viewless loader exposes explicit composition commands instead of silently choosing a renderer',
+  /const view = params\.get\('view'\);[\s\S]*if \(!view\)[\s\S]*buildVolumeSettingsPresetTarget[\s\S]*location\.replace\(target\)/,
+  'a viewless loader validates and enters the ordinary live cockpit without choosing a renderer assay',
 );
-assert.match(settingsLoader, /id="view-commands"[\s\S]*data-view="raymarch-only"/, 'the viewless loader presents an explicit raymarch command');
-assert.match(settingsLoader, /id="preset-title"[\s\S]*presetTitle\.textContent = 'Volume settings preset'/, 'the validated chooser does not retain a stale loading claim');
+assert.match(settingsLoader, /buildVolumeSettingsPresetTarget/, 'the settings loader imports the canonical ordinary cockpit target builder');
 assert.doesNotMatch(settingsLoader, /params\.get\('view'\)\s*\|\|\s*['"]splat-only['"]/, 'a viewless preset never silently substitutes splat-only');
 assert.doesNotMatch(settingsLoader, /data-view="ordinary-live"|view === 'ordinary-live'/, 'the visual loader has no renderer-off side door');
-assert.doesNotMatch(settingsLoader, /buildVolumeSettingsPresetTarget/, 'the visual loader cannot escape to a renderer-unreceipted ordinary route');
 
 console.log('volume settings preset contracts passed');

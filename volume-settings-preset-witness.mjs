@@ -62,8 +62,15 @@ const label = String(args.get('--label') || 'Automated settings witness').trim()
 const cockpitAnchor = String(args.get('--cockpit-anchor') || '').trim();
 const promotionRoot = String(args.get('--promotion-root') || '').trim();
 const promotionHandle = String(args.get('--promotion-handle') || '').trim();
-const liveDebugExpression = `(() => {
+const selectiveDebugExpression = `(() => {
   return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
+})()`;
+const ordinaryDebugExpression = `(() => {
+  return {
+    state: window.__kaminosVolumePrototype?.debugState?.() || null,
+    presetReceipt: window.__kaminosVolumeSettingsPresetReceipt || null,
+    activeTab: window.__kaminosActiveTab?.() || null,
+  };
 })()`;
 
 function assertSelectiveCompositionState(state, phase, expectedPresetId = null) {
@@ -92,6 +99,20 @@ function assertSelectiveCompositionState(state, phase, expectedPresetId = null) 
   assert.equal(receipt?.raymarchAuthority, expectedPassTuple.raymarchAuthority, `${phase}: raymarch authority mismatch`);
   assert.equal(receipt?.raymarchFireAuthority, expectedPassTuple.raymarchFireAuthority, `${phase}: raymarch fire authority mismatch`);
   assert.equal(receipt?.fallbackReason, null, `${phase}: pass receipt reported fallback`);
+}
+
+function assertOrdinaryCockpitState(observation, phase, expectedPresetId) {
+  assert.equal(observation?.state?.active, true, `${phase}: ordinary volume renderer is not active`);
+  assert.equal(observation?.state?.error, null, `${phase}: ordinary volume renderer reported an error`);
+  assert.match(String(observation?.state?.backend || ''), /^WebGPU:/, `${phase}: ordinary volume renderer backend is not WebGPU`);
+  assert.equal(observation?.presetReceipt?.presetId, expectedPresetId, `${phase}: wrong immutable settings preset`);
+  assert.equal(
+    observation?.presetReceipt?.sourcePresetAuthority,
+    'shared-volume-settings-preset-v2',
+    `${phase}: settings preset authority is missing`,
+  );
+  assert.ok(observation?.presetReceipt?.storePath, `${phase}: shared settings store path is missing`);
+  assert.equal(observation?.activeTab, 'volume', `${phase}: reopened cockpit is not on the Volume tab`);
 }
 
 function operatorContext(body) {
@@ -184,7 +205,7 @@ try {
 
   failurePhase = 'source-live-settle';
   const initialState = await waitForValue(initialSocket, `(() => {
-    const state = ${liveDebugExpression};
+    const state = ${selectiveDebugExpression};
     if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
     return state;
   })()`, timeoutMs);
@@ -534,7 +555,9 @@ try {
   if (navigation.exceptionDetails) throw new Error(navigation.exceptionDetails.text || 'settings preset navigation threw');
   assert.ok(navigation.result?.value, 'Open Fresh did not return its requested loader route');
   const requestedNavigation = new URL(navigation.result.value, url);
-  assert.equal(requestedNavigation.searchParams.get('view'), requestedView, 'Open Fresh changed the current renderer view');
+  assert.equal(requestedNavigation.pathname, '/volume-settings-preset.html', 'Open Fresh bypassed the exact preset loader');
+  assert.equal(requestedNavigation.searchParams.get('preset'), commandResult.effective.presetId, 'Open Fresh changed the selected immutable preset');
+  assert.equal(requestedNavigation.searchParams.has('view'), false, 'Cockpit loading leaked a renderer inspection view');
 
   failurePhase = 'effective-live-target';
   const liveTarget = await waitForTarget(target => (
@@ -547,22 +570,20 @@ try {
   const sourcePresetAuthority = liveUrl.searchParams.get('settings_preset_authority');
   assert.equal(sourcePresetId, commandResult.effective.presetId);
   assert.equal(sourcePresetAuthority, 'shared-volume-settings-preset-v2');
-  assert.equal(liveUrl.searchParams.get('role'), 'truthHigh');
-  assert.equal(liveUrl.searchParams.get('composition'), expectedComposition);
-  assert.equal(liveUrl.searchParams.get('warmup_steps'), '0');
-  for (const forbidden of ['basin_capture', 'basin_source_authority']) {
-    assert.equal(liveUrl.searchParams.has(forbidden), false, `live settings target invented renderer parameter ${forbidden}`);
+  assert.equal(liveUrl.pathname, '/', 'saved basin did not reopen in the ordinary cockpit');
+  for (const forbiddenRendererParam of ['view', 'role', 'composition', 'warmup_steps', 'basin_capture', 'basin_source_authority']) {
+    assert.equal(liveUrl.searchParams.has(forbiddenRendererParam), false, `live cockpit target invented renderer parameter ${forbiddenRendererParam}`);
   }
 
   const liveSocket = await connect(liveTarget);
   await liveSocket.call('Page.enable');
   await liveSocket.call('Runtime.enable');
   const startState = await waitForValue(liveSocket, `(() => {
-    const state = ${liveDebugExpression};
-    if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
-    return state;
+    const observation = ${ordinaryDebugExpression};
+    if (!observation?.state?.active || Number(observation.state.frameCount) < 2 || !observation.presetReceipt) return null;
+    return observation;
   })()`, timeoutMs);
-  assertSelectiveCompositionState(startState, 'reopened live target', sourcePresetId);
+  assertOrdinaryCockpitState(startState, 'reopened live target', sourcePresetId);
 
   failurePhase = 'preset-artifact-verification';
   const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(sourcePresetId)}`, url));
@@ -586,12 +607,42 @@ try {
     .map(([key]) => key);
   assert.deepEqual(liveVolumeKeys, savedVolumeKeys, 'effective live route added or omitted volume settings');
 
+  failurePhase = 'continued-cockpit-tuning';
+  const steerabilityReceipt = await evaluate(liveSocket, `(() => {
+    const input = document.getElementById('volume-density');
+    const loadButton = document.getElementById('settings-preset-load-here');
+    if (!input || !loadButton) return null;
+    const before = Number(input.value);
+    const step = Number(input.step) || 0.05;
+    const max = Number(input.max);
+    const requested = before + step <= max ? before + step : before - step;
+    input.value = String(requested);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const changed = Number(window.__kaminosVolumePrototype?.debugState?.()?.controls?.density);
+    input.value = String(before);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const restored = Number(window.__kaminosVolumePrototype?.debugState?.()?.controls?.density);
+    return {
+      loadCommandWired: loadButton.dataset.commandWired || null,
+      before,
+      requested,
+      changed,
+      restored,
+    };
+  })()`);
+  assert.equal(steerabilityReceipt?.loadCommandWired, 'true', 'reopened cockpit load command is not wired');
+  assert.equal(steerabilityReceipt?.changed, steerabilityReceipt?.requested, 'reopened cockpit rejected a tuning change');
+  assert.equal(steerabilityReceipt?.restored, steerabilityReceipt?.before, 'reopened cockpit did not restore the saved tuning value');
+  lastTrustworthyEvidence.steerabilityReceipt = steerabilityReceipt;
+
   failurePhase = 'continuous-observation';
   await delay(5000);
-  const endState = await evaluate(liveSocket, liveDebugExpression);
-  assertSelectiveCompositionState(endState, 'reopened live target after observation', sourcePresetId);
-  const continuousFrameDelta = Number(endState.frameCount) - Number(startState.frameCount);
-  const continuousSimStepDelta = Number(endState.simStepCount) - Number(startState.simStepCount);
+  const endState = await evaluate(liveSocket, ordinaryDebugExpression);
+  assertOrdinaryCockpitState(endState, 'reopened live target after observation', sourcePresetId);
+  const continuousFrameDelta = Number(endState.state.frameCount) - Number(startState.state.frameCount);
+  const continuousSimStepDelta = Number(endState.state.simStepCount) - Number(startState.state.simStepCount);
   assert.ok(continuousFrameDelta >= 2, 'live render frames did not advance');
   assert.ok(continuousSimStepDelta >= 2, 'live simulation steps did not advance');
 
@@ -618,6 +669,7 @@ try {
     storePath: commandResult.effective.storePath,
     continuousFrameDelta,
     continuousSimStepDelta,
+    steerabilityReceipt,
     cockpitAnchor: cockpitVisibility.anchorId || null,
     cockpitVisibility,
     promotionReceipt,

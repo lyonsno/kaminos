@@ -1058,15 +1058,17 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         </select>
       </div>
       <div class="volume-actions">
+        <button class="btn" id="settings-preset-load-here">Load Here</button>
+        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
+      </div>
+      <div class="volume-actions">
         <select id="settings-preset-view" class="select-input" aria-label="Preset renderer view">
-          <option value="current" selected>Current renderer view</option>
           <option value="splat-only">Splat only</option>
-          <option value="raymarch-only">Raymarch only</option>
+          <option value="raymarch-only" selected>Raymarch only</option>
           <option value="smoke-hybrid">Smoke hybrid</option>
           <option value="full-hybrid-diagnostic">Full hybrid diagnostic</option>
         </select>
-        <button class="btn" id="settings-preset-load-here">Load Here</button>
-        <button class="btn" id="settings-preset-open-fresh">Open Fresh</button>
+        <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
       <div class="volume-actions">
         <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
@@ -12474,24 +12476,50 @@ function currentVolumeSettingsPresetRendererState() {
 }
 
 function selectedVolumeSettingsPresetView() {
-  const selected = document.getElementById('settings-preset-view')?.value || 'current';
-  return resolveVolumeSettingsPresetVisualView(selected, currentVolumeSettingsPresetRendererState());
+  const selected = document.getElementById('settings-preset-view')?.value || 'raymarch-only';
+  return resolveVolumeSettingsPresetVisualView(selected);
 }
 
-function selectedVolumeSettingsPresetUrl() {
+function selectedVolumeSettingsPresetEntry() {
   const presetId = document.getElementById('settings-preset-select')?.value;
   const entry = volumeSettingsPresetIndex?.entries?.find(candidate => candidate.presetId === presetId);
   if (!entry) throw new Error('select a saved volume settings preset');
+  return entry;
+}
+
+function selectedVolumeSettingsPresetUrl() {
+  const entry = selectedVolumeSettingsPresetEntry();
+  return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}`;
+}
+
+function selectedVolumeSettingsPresetInspectionUrl() {
+  const entry = selectedVolumeSettingsPresetEntry();
   const view = selectedVolumeSettingsPresetView();
   return `/volume-settings-preset.html?preset=${encodeURIComponent(entry.presetId)}&view=${encodeURIComponent(view)}`;
 }
 
+function openSelectedVolumeSettingsPresetInspection() {
+  try {
+    const target = selectedVolumeSettingsPresetInspectionUrl();
+    const opened = window.open(target, '_blank');
+    if (!opened) throw new Error(`preset inspection window blocked; route: ${target}`);
+    return target;
+  } catch (error) {
+    volumeSettingsPresetStatus(`PRESET INSPECTION FAILED | ${error.message || error}`, true);
+    setInfo(`Volume settings preset inspection failed: ${error.message || error}`);
+    return null;
+  }
+}
+
 function navigateToSelectedVolumeSettingsPreset(openFresh = false) {
   try {
+    const entry = selectedVolumeSettingsPresetEntry();
     const target = selectedVolumeSettingsPresetUrl();
+    const destination = openFresh ? 'a fresh cockpit tab' : 'the current cockpit tab';
+    volumeSettingsPresetStatus(`opening exact preset loader for ${entry.label} | ${entry.presetId} in ${destination}...`);
     if (openFresh) {
       const opened = window.open(target, '_blank');
-      if (!opened) throw new Error(`preset window blocked; route: ${target}`);
+      if (!opened) throw new Error(`preset cockpit window blocked; route: ${target}`);
     } else {
       location.assign(target);
     }
@@ -12507,10 +12535,12 @@ window.__kaminosSaveVolumeSettingsPreset = saveVolumeSettingsPreset;
 window.__kaminosExportBasinPromotionPackage = exportBasinPromotionPackage;
 window.__kaminosRefreshVolumeSettingsPresetList = refreshVolumeSettingsPresetList;
 window.__kaminosNavigateToSelectedVolumeSettingsPreset = navigateToSelectedVolumeSettingsPreset;
+window.__kaminosOpenSelectedVolumeSettingsPresetInspection = openSelectedVolumeSettingsPresetInspection;
 for (const [id, command] of [
   ['settings-preset-save', () => void saveVolumeSettingsPreset()],
   ['settings-preset-load-here', () => navigateToSelectedVolumeSettingsPreset(false)],
   ['settings-preset-open-fresh', () => navigateToSelectedVolumeSettingsPreset(true)],
+  ['settings-preset-inspect-fresh', () => openSelectedVolumeSettingsPresetInspection()],
   ['basin-promotion-export', () => void exportBasinPromotionPackage()],
 ]) {
   const button = document.getElementById(id);
