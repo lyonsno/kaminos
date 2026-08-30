@@ -45,6 +45,6 @@ assert.match(core, /boundaryFireCleanEndpoint = u\.boundary_fire_palette_clean\.
 assert.match(core, /volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 20\.0\)/, 'raymarch reads the volume-wide exposure uniform');
 assert.match(core, /exp\(-color \* \(0\.96 \* volumeExposure\)\)/, 'raymarch applies volume exposure before its shared tone curve');
 assert.match(core, /uniforms\[328\] = volumeExposure/, 'the gold-host raymarch uniform receives the effective exposure before the camera matrix');
-assert.match(core, /writePyroPaletteUniform\(uniforms, 332,[\s\S]*writePyroPaletteUniform\(uniforms, 336,/, 'the gold-host uniform block receives both authored Boundary Fire palette endpoints');
+assert.match(core, /writeBoundaryFirePaletteUniform\(\s*uniforms,\s*332,[\s\S]*writeBoundaryFirePaletteUniform\(\s*uniforms,\s*336,/, 'the gold-host uniform block receives both authored Boundary Fire palette endpoints');
 
 console.log('volume beauty controls: continuous ranges, palette, and gold-host raymarch exposure contracts pass');

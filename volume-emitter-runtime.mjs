@@ -3,7 +3,7 @@ import {
   compileVolumeEmitterFamily,
 } from './volume-emitter-basis.mjs';
 
-export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v0';
+export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v1';
 
 export const VOLUME_RUNTIME_EMITTER_FAMILIES = Object.freeze([
   'cluster',
@@ -13,6 +13,7 @@ export const VOLUME_RUNTIME_EMITTER_FAMILIES = Object.freeze([
 export const VOLUME_CORE_EMITTER_SOURCE_MODES = Object.freeze([
   'cluster',
   'external-only',
+  'analytic-only',
 ]);
 
 export function resolveVolumeCoreEmitterSource({
@@ -35,9 +36,12 @@ export function resolveVolumeCoreEmitterSource({
   }
   const requestedOwner = requestedPrimitiveFlowRate === null ? 'control' : 'volume-primitive';
   const requestedFlowRate = requestedPrimitiveFlowRate ?? requestedControlFlowRate;
-  const externalOnly = requestedMode === 'external-only';
+  const coreSuppressed = requestedMode !== 'cluster';
+  const effectiveOwner = requestedMode === 'analytic-only'
+    ? 'analytic-emitter'
+    : (requestedMode === 'external-only' ? 'external-emitter' : requestedOwner);
   return {
-    schema: 'kaminos.volume-core-emitter-source.v0',
+    schema: 'kaminos.volume-core-emitter-source.v1',
     requestedMode,
     effectiveMode: requestedMode,
     requestedControlFlowRate,
@@ -45,8 +49,8 @@ export function resolveVolumeCoreEmitterSource({
     primitiveId: requestedPrimitiveFlowRate === null ? null : String(primitiveId || ''),
     requestedOwner,
     requestedFlowRate,
-    effectiveOwner: externalOnly ? 'external-emitter' : requestedOwner,
-    effectiveFlowRate: externalOnly ? 0 : requestedFlowRate,
+    effectiveOwner,
+    effectiveFlowRate: coreSuppressed ? 0 : requestedFlowRate,
     fallbackUsed: false,
     failures: [],
   };
@@ -98,12 +102,30 @@ function verifyCarrierReceipt(requested, receipt) {
   }
 }
 
+function verifyAnalyticReceipt(descriptor, receipt) {
+  if (!receipt || typeof receipt !== 'object') {
+    throw new Error('analytic emitter source returned no receipt');
+  }
+  if (receipt.mode !== 'analytic-fixed') {
+    throw new Error(`analytic emitter mode mismatch: requested analytic-fixed, effective ${receipt.mode ?? 'missing'}`);
+  }
+  if (receipt.family !== descriptor.family) {
+    throw new Error(`analytic emitter family mismatch: requested ${descriptor.family}, effective ${receipt.family ?? 'missing'}`);
+  }
+  if (receipt.count !== 1) {
+    throw new Error(`analytic emitter source count mismatch: requested 1, effective ${receipt.count ?? 'missing'}`);
+  }
+  if (receipt.coordinateSpace !== 'volume-local') {
+    throw new Error(`analytic emitter coordinate space mismatch: requested volume-local, effective ${receipt.coordinateSpace ?? 'missing'}`);
+  }
+}
+
 function assayGeometry(family, inputRadius) {
   const radius = inputRadius * 0.2;
   if (family === 'wick') return { radius, length: inputRadius * 1.6 };
   if (family === 'nozzle') return { radius, length: inputRadius * 2.4 };
   if (family === 'ribbon') return { radius, length: inputRadius * 2.2 };
-  return { radius, length: inputRadius * 1.6, ringRadius: inputRadius, ringSegments: 12 };
+  return { radius, ringRadius: inputRadius };
 }
 
 export function applyVolumeEmitterFamilyRuntime({
@@ -116,7 +138,7 @@ export function applyVolumeEmitterFamilyRuntime({
 } = {}) {
   requiredMethod(prototype, 'setControls');
   requiredMethod(prototype, 'setCoreEmitterSourceMode');
-  requiredMethod(prototype, 'setExternalEmitters');
+  requiredMethod(prototype, 'setAnalyticEmitterDescriptor');
 
   const requestedFamily = String(family || '');
   if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(requestedFamily)) {
@@ -134,20 +156,25 @@ export function applyVolumeEmitterFamilyRuntime({
     throw new Error(`controls.flowRate ${requestedCoreFlowRate} must be within [0, 4]`);
   }
 
+  prototype.setControls(controls);
   let compilerReceipt = null;
-  let externalRequest;
-  let effectiveControls;
+  let sourceReceipt;
+  let carrierReceipt = null;
   let coreSourceMode;
   if (requestedFamily === 'cluster') {
-    effectiveControls = controls;
+    requiredMethod(prototype, 'setExternalEmitters');
     coreSourceMode = 'cluster';
-    externalRequest = requestedExternalRequest || {
+    sourceReceipt = prototype.setAnalyticEmitterDescriptor(null);
+    const externalRequest = requestedExternalRequest || {
       mode: 'off',
       frameId,
       timestampMs,
       coordinateSpace: 'volume-local',
       emitters: [],
     };
+    carrierReceipt = prototype.setExternalEmitters(externalRequest);
+    verifyCarrierReceipt(externalRequest, carrierReceipt);
+    sourceReceipt = carrierReceipt;
   } else {
     if (requestedExternalRequest !== null) {
       throw new Error(`externalRequest cannot compose with emitter family ${requestedFamily}`);
@@ -166,22 +193,22 @@ export function applyVolumeEmitterFamilyRuntime({
       timestampMs,
       frameId,
     });
-    effectiveControls = controls;
-    coreSourceMode = 'external-only';
-    externalRequest = compilerReceipt.carrier;
+    coreSourceMode = 'analytic-only';
+    sourceReceipt = prototype.setAnalyticEmitterDescriptor(compilerReceipt.descriptor);
+    verifyAnalyticReceipt(compilerReceipt.descriptor, sourceReceipt);
   }
 
-  prototype.setControls(effectiveControls);
   const coreSourceReceipt = prototype.setCoreEmitterSourceMode(coreSourceMode);
-  if (!coreSourceReceipt || coreSourceReceipt.requestedMode !== coreSourceMode || coreSourceReceipt.effectiveMode !== coreSourceMode) {
+  if (!coreSourceReceipt
+    || coreSourceReceipt.requestedMode !== coreSourceMode
+    || coreSourceReceipt.effectiveMode !== coreSourceMode) {
     throw new Error(`volume core emitter source mode mismatch: requested ${coreSourceMode}, effective ${coreSourceReceipt?.effectiveMode ?? 'missing'}`);
   }
-  if (coreSourceMode === 'external-only' && coreSourceReceipt.effectiveFlowRate !== 0) {
-    throw new Error(`external-only core source retained flow ${coreSourceReceipt.effectiveFlowRate}`);
+  if (coreSourceMode !== 'cluster' && coreSourceReceipt.effectiveFlowRate !== 0) {
+    throw new Error(`${coreSourceMode} core source retained flow ${coreSourceReceipt.effectiveFlowRate}`);
   }
-  const carrierReceipt = prototype.setExternalEmitters(externalRequest);
-  verifyCarrierReceipt(externalRequest, carrierReceipt);
 
+  const fixedAnalytic = requestedFamily !== 'cluster';
   return {
     schema: VOLUME_EMITTER_RUNTIME_SCHEMA,
     requested: {
@@ -194,13 +221,17 @@ export function applyVolumeEmitterFamilyRuntime({
     effective: {
       family: requestedFamily,
       coreFlowRate: coreSourceReceipt.effectiveFlowRate,
-      externalStrength: compilerReceipt?.effective.strength ?? 0,
-      externalEmitterCount: carrierReceipt.count,
-      externalEmitterMode: carrierReceipt.mode,
-      coordinateSpace: carrierReceipt.coordinateSpace,
+      sourceStrength: compilerReceipt?.effective.strength ?? 0,
+      sourceCount: sourceReceipt.count,
+      sourceMode: sourceReceipt.mode,
+      coordinateSpace: sourceReceipt.coordinateSpace,
+      externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
+      externalEmitterCount: sourceReceipt.count,
+      externalEmitterMode: sourceReceipt.mode,
     },
     compilerReceipt,
     coreSourceReceipt,
+    sourceReceipt,
     carrierReceipt,
     fallbackUsed: false,
     failures: [],

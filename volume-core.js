@@ -794,6 +794,118 @@ function writePyroPaletteUniform(uniforms, offset, value, fallback) {
   uniforms[offset + 3] = 1;
 }
 
+export const LEGACY_BOUNDARY_FIRE_CLEAN_ENDPOINT = Object.freeze([0.12, 0.42, 1.75]);
+export const LEGACY_BOUNDARY_FIRE_SOOT_ENDPOINT = Object.freeze([1.55, 0.86, 0.18]);
+const DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR = '#4a86ff';
+const DEFAULT_BOUNDARY_FIRE_SOOT_COLOR = '#ffc460';
+
+export function srgbChannelToLinear(channel) {
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function normalizeHexColor(value, fallback) {
+  const raw = String(value || fallback || '#ffffff').trim();
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  if (/^[0-9a-f]{6}$/i.test(raw)) return `#${raw.toLowerCase()}`;
+  return String(fallback || '#ffffff').toLowerCase();
+}
+
+export function boundaryFireSrgbEndpoint(value, fallback, legacyEndpoint) {
+  const hex = normalizeHexColor(value, fallback);
+  const normalizedFallback = normalizeHexColor(fallback, '#ffffff');
+  if (hex === normalizedFallback) return [...legacyEndpoint];
+  const linear = [1, 3, 5].map(offset => (
+    srgbChannelToLinear(parseInt(hex.slice(offset, offset + 2), 16) / 255)
+  ));
+  const peak = Math.max(...linear);
+  if (peak <= Number.EPSILON) return [...legacyEndpoint];
+  const legacyPeak = Math.max(...legacyEndpoint);
+  return linear.map(channel => channel / peak * legacyPeak);
+}
+
+function writeBoundaryFirePaletteUniform(uniforms, offset, value, fallback, legacyEndpoint) {
+  const rgb = boundaryFireSrgbEndpoint(value, fallback, legacyEndpoint);
+  uniforms[offset] = rgb[0];
+  uniforms[offset + 1] = rgb[1];
+  uniforms[offset + 2] = rgb[2];
+  uniforms[offset + 3] = 1;
+}
+
+const ANALYTIC_EMITTER_FAMILY_MODE = Object.freeze({
+  wick: 1,
+  nozzle: 2,
+  ribbon: 3,
+  ring: 4,
+});
+
+function analyticEmitterVec3(value, label) {
+  if (!Array.isArray(value) || value.length !== 3 || value.some(component => !Number.isFinite(Number(component)))) {
+    throw new Error(`${label} must be a finite vec3`);
+  }
+  return value.map(Number);
+}
+
+function normalizeAnalyticEmitterDescriptor(descriptor) {
+  if (descriptor === null || descriptor === undefined) return null;
+  if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) {
+    throw new Error('analytic emitter descriptor must be an object or null');
+  }
+  const family = String(descriptor.family || '');
+  if (!Object.hasOwn(ANALYTIC_EMITTER_FAMILY_MODE, family)) {
+    throw new Error(`unsupported analytic emitter family: ${family || 'missing-family'}`);
+  }
+  if (descriptor.coordinateSpace !== 'volume-local') {
+    throw new Error(`analytic emitter coordinate space must be volume-local, got ${descriptor.coordinateSpace || 'missing'}`);
+  }
+  const chemistry = descriptor.chemistry || {};
+  return {
+    ...descriptor,
+    family,
+    origin: analyticEmitterVec3(descriptor.origin, 'analytic emitter origin'),
+    axis: analyticEmitterVec3(descriptor.axis, 'analytic emitter axis'),
+    supportAxis: analyticEmitterVec3(descriptor.supportAxis, 'analytic emitter supportAxis'),
+    radius: clampFinite(descriptor.radius, 0.006, 0.18, 0.04),
+    extent: clampFinite(descriptor.extent, 0.012, 1.8, 0.32),
+    strength: clampFinite(descriptor.strength, 0, 4, 0),
+    velocitySpeed: clampFinite(descriptor.velocitySpeed, 0, 3, 0.22),
+    chemistry: {
+      smoke: clampFinite(chemistry.smoke, 0, 3, 0),
+      heat: clampFinite(chemistry.heat, 0, 4, 0),
+      fuel: clampFinite(chemistry.fuel, 0, 3, 0),
+      flame: clampFinite(chemistry.flame, 0, 4, 0),
+      detail: clampFinite(chemistry.detail, 0, 3, 0),
+    },
+  };
+}
+
+function writeAnalyticEmitterUniform(uniforms, offset, descriptor) {
+  uniforms.fill(0, offset, offset + 20);
+  if (!descriptor) return;
+  const familyMode = ANALYTIC_EMITTER_FAMILY_MODE[descriptor.family] || 0;
+  uniforms[offset] = descriptor.origin[0];
+  uniforms[offset + 1] = descriptor.origin[1];
+  uniforms[offset + 2] = descriptor.origin[2];
+  uniforms[offset + 3] = familyMode;
+  uniforms[offset + 4] = descriptor.axis[0];
+  uniforms[offset + 5] = descriptor.axis[1];
+  uniforms[offset + 6] = descriptor.axis[2];
+  uniforms[offset + 7] = descriptor.strength;
+  uniforms[offset + 8] = descriptor.supportAxis[0];
+  uniforms[offset + 9] = descriptor.supportAxis[1];
+  uniforms[offset + 10] = descriptor.supportAxis[2];
+  uniforms[offset + 11] = descriptor.radius;
+  uniforms[offset + 12] = descriptor.extent;
+  uniforms[offset + 13] = descriptor.velocitySpeed;
+  uniforms[offset + 14] = descriptor.chemistry.detail;
+  uniforms[offset + 15] = 1;
+  uniforms[offset + 16] = descriptor.chemistry.smoke;
+  uniforms[offset + 17] = descriptor.chemistry.heat;
+  uniforms[offset + 18] = descriptor.chemistry.fuel;
+  uniforms[offset + 19] = descriptor.chemistry.flame;
+}
+
 function normalizePyroDynamicDetailEnabled(value) {
   return clampFinite(value, 0, 1, 0) >= 0.5;
 }
@@ -1167,6 +1279,11 @@ struct Uniforms {
   volume_presentation_controls: vec4<f32>,
   boundary_fire_palette_clean: vec4<f32>,
   boundary_fire_palette_soot: vec4<f32>,
+  analytic_emitter_origin_mode: vec4<f32>,
+  analytic_emitter_axis_strength: vec4<f32>,
+  analytic_emitter_support_radius: vec4<f32>,
+  analytic_emitter_geometry: vec4<f32>,
+  analytic_emitter_chemistry: vec4<f32>,
   previousViewProj: mat4x4<f32>,
 };
 
@@ -2429,6 +2546,88 @@ fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence
   return result;
 }
 
+fn analyticCapsuleSignedDistance(p: vec3<f32>, start: vec3<f32>, end: vec3<f32>, radius: f32) -> f32 {
+  let segment = end - start;
+  let segmentLength2 = max(dot(segment, segment), 0.000001);
+  let t = clamp(dot(p - start, segment) / segmentLength2, 0.0, 1.0);
+  return length(p - (start + segment * t)) - radius;
+}
+
+fn analyticCylinderSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, radius: f32, lengthAlongAxis: f32) -> f32 {
+  let centered = p - (origin + axis * lengthAlongAxis * 0.5);
+  let axial = dot(centered, axis);
+  let radial = length(centered - axis * axial);
+  let d = vec2<f32>(radial - radius, abs(axial) - lengthAlongAxis * 0.5);
+  return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0)));
+}
+
+fn analyticRibbonSignedDistance(p: vec3<f32>, origin: vec3<f32>, injectionAxis: vec3<f32>, supportAxis: vec3<f32>, radius: f32, lengthAlongSupport: f32) -> f32 {
+  let secondaryAxis = normalize(cross(injectionAxis, supportAxis));
+  let relative = p - origin;
+  let local = abs(vec3<f32>(
+    dot(relative, supportAxis),
+    dot(relative, injectionAxis),
+    dot(relative, secondaryAxis)
+  ));
+  let d = local - vec3<f32>(lengthAlongSupport * 0.5, radius * 0.42, radius);
+  return length(max(d, vec3<f32>(0.0))) + min(max(d.x, max(d.y, d.z)), 0.0);
+}
+
+fn analyticTorusSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f32>, ringRadius: f32, tubeRadius: f32) -> f32 {
+  let q = p - origin;
+  let axial = dot(q, axis);
+  let planar = q - axis * axial;
+  let radialError = length(planar) - ringRadius;
+  return length(vec2<f32>(radialError, axial)) - tubeRadius;
+}
+
+fn analyticEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
+  var result: ExternalEmitterInfluence;
+  result.material = vec4<f32>(0.0);
+  result.fire = vec4<f32>(0.0);
+  result.micro = vec4<f32>(0.0);
+  result.velocity = vec4<f32>(0.0);
+  let familyMode = u32(max(0.0, floor(u.analytic_emitter_origin_mode.w + 0.5)));
+  if (familyMode == 0u) { return result; }
+  let origin = u.analytic_emitter_origin_mode.xyz;
+  let axis = normalize(u.analytic_emitter_axis_strength.xyz);
+  let supportAxis = normalize(u.analytic_emitter_support_radius.xyz);
+  let radius = max(0.006, u.analytic_emitter_support_radius.w);
+  let extent = max(0.012, u.analytic_emitter_geometry.x);
+  var signedDistance = 1.0;
+  if (familyMode == 1u) {
+    let halfSpan = axis * extent * 0.5;
+    signedDistance = analyticCapsuleSignedDistance(p, origin - halfSpan, origin + halfSpan, radius);
+  } else if (familyMode == 2u) {
+    signedDistance = analyticCylinderSignedDistance(p, origin, axis, radius, extent);
+  } else if (familyMode == 3u) {
+    signedDistance = analyticRibbonSignedDistance(p, origin, axis, supportAxis, radius, extent);
+  } else if (familyMode == 4u) {
+    signedDistance = analyticTorusSignedDistance(p, origin, axis, extent, radius);
+  }
+  let cellWidth = 2.0 / f32(GRID);
+  let support = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, signedDistance);
+  if (support <= 0.0) { return result; }
+  let coherentModulation = 0.94 + 0.06 * sin(time * 4.1 + dot(origin, vec3<f32>(5.3, 7.1, 3.7)));
+  let weight = support * max(0.0, u.analytic_emitter_axis_strength.w) * coherentModulation;
+  let chemistry = u.analytic_emitter_chemistry;
+  let detail = max(0.0, u.analytic_emitter_geometry.z);
+  result.material = vec4<f32>(chemistry.xyz * weight, detail * weight);
+  result.fire = vec4<f32>(chemistry.w * weight, chemistry.w * weight * 0.42, detail * weight * 0.82, 0.0);
+  result.micro = vec4<f32>(detail * weight * 0.72, detail * weight * 0.42 + chemistry.w * weight * 0.12, chemistry.w * weight * 0.60, chemistry.w * weight * 0.22);
+  result.velocity = vec4<f32>(axis * u.analytic_emitter_geometry.y * weight, weight);
+  return result;
+}
+
+fn mergeEmitterInfluence(a: ExternalEmitterInfluence, b: ExternalEmitterInfluence) -> ExternalEmitterInfluence {
+  var result: ExternalEmitterInfluence;
+  result.material = max(a.material, b.material);
+  result.fire = max(a.fire, b.fire);
+  result.micro = max(a.micro, b.micro);
+  result.velocity = vec4<f32>(a.velocity.xyz + b.velocity.xyz, max(a.velocity.w, b.velocity.w));
+  return result;
+}
+
 fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> ExternalEmitterInfluence {
   return influence;
 }
@@ -3380,7 +3579,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
   let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
   combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
-  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
+  let externalInjection = applyExternalEmitterInjection(mergeEmitterInfluence(
+    analyticEmitterInfluence(p, time),
+    externalEmitterInfluence(p, time)
+  ));
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
@@ -5777,7 +5979,7 @@ export function createKaminosVolumePrototype({
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(356);
+  const uniforms = new Float32Array(376);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5922,6 +6124,11 @@ export function createKaminosVolumePrototype({
     externalEmitterFrameId: null,
     coreEmitterSourceMode: 'cluster',
     coreEmitterSourceReceipt: null,
+    analyticEmitterMode: 'off',
+    analyticEmitterFamily: 'cluster',
+    analyticEmitterCoordinateSpace: 'none',
+    analyticEmitterCount: 0,
+    analyticEmitterFrameId: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -6490,6 +6697,8 @@ export function createKaminosVolumePrototype({
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
+  let analyticEmitterDescriptor = null;
+  let analyticEmitterDescriptorSignature = '';
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
@@ -6745,6 +6954,25 @@ export function createKaminosVolumePrototype({
     state.externalEmitterCount = externalEmitterState.count;
     state.externalEmitterFrameId = externalEmitterState.frameId;
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
+  }
+
+  function analyticEmitterReceipt() {
+    return {
+      mode: analyticEmitterDescriptor ? 'analytic-fixed' : 'off',
+      family: analyticEmitterDescriptor?.family || 'cluster',
+      coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
+      count: analyticEmitterDescriptor ? 1 : 0,
+      frameId: analyticEmitterDescriptor?.frameId || null,
+    };
+  }
+
+  function updateAnalyticEmitterDebug() {
+    const receipt = analyticEmitterReceipt();
+    state.analyticEmitterMode = receipt.mode;
+    state.analyticEmitterFamily = receipt.family;
+    state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
+    state.analyticEmitterCount = receipt.count;
+    state.analyticEmitterFrameId = receipt.frameId;
   }
 
   function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
@@ -8626,7 +8854,7 @@ export function createKaminosVolumePrototype({
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
     updateExternalEmitterDebug(now);
-    uniforms[51] = state.externalEmitterCount;
+    uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
     uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
     uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
@@ -8846,8 +9074,8 @@ export function createKaminosVolumePrototype({
       sootYellowing: Math.max(0, Math.min(0.4, boundaryFireControls.sootYellowing ?? controlsSnapshot.reactionBoundaryFireYellow ?? 0.28)),
       thermalWarmth: Math.max(0, Math.min(0.4, boundaryFireControls.thermalWarmth ?? controlsSnapshot.reactionBoundaryFireWarmth ?? 0.30)),
       fireLuma: Math.max(0, Math.min(20, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
-      cleanColor: boundaryFireControls.cleanColor ?? controlsSnapshot.reactionBoundaryFireCleanColor ?? '#1f6bff',
-      sootColor: boundaryFireControls.sootColor ?? controlsSnapshot.reactionBoundaryFireSootColor ?? '#ff8c2a',
+      cleanColor: boundaryFireControls.cleanColor ?? controlsSnapshot.reactionBoundaryFireCleanColor ?? DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR,
+      sootColor: boundaryFireControls.sootColor ?? controlsSnapshot.reactionBoundaryFireSootColor ?? DEFAULT_BOUNDARY_FIRE_SOOT_COLOR,
     };
     uniforms[276] = fireRenderModeValue(fireRenderModeName);
     uniforms[277] = shellInspectModeValue(shellInspectModeName);
@@ -8909,9 +9137,22 @@ export function createKaminosVolumePrototype({
     uniforms[329] = 0;
     uniforms[330] = 0;
     uniforms[331] = 0;
-    writePyroPaletteUniform(uniforms, 332, boundaryFireUniforms.cleanColor, '#1f6bff');
-    writePyroPaletteUniform(uniforms, 336, boundaryFireUniforms.sootColor, '#ff8c2a');
-    uniforms.set(previousViewProj.elements, 340);
+    writeBoundaryFirePaletteUniform(
+      uniforms,
+      332,
+      boundaryFireUniforms.cleanColor,
+      DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR,
+      LEGACY_BOUNDARY_FIRE_CLEAN_ENDPOINT,
+    );
+    writeBoundaryFirePaletteUniform(
+      uniforms,
+      336,
+      boundaryFireUniforms.sootColor,
+      DEFAULT_BOUNDARY_FIRE_SOOT_COLOR,
+      LEGACY_BOUNDARY_FIRE_SOOT_ENDPOINT,
+    );
+    writeAnalyticEmitterUniform(uniforms, 340, analyticEmitterDescriptor);
+    uniforms.set(previousViewProj.elements, 360);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -13909,8 +14150,25 @@ export function createKaminosVolumePrototype({
       if (device && previousMode !== state.coreEmitterSourceMode) {
         rebuildFluidState(gridSize, majorantGridSize, 'core-emitter-source-mode-change');
       }
-      emitStatus({ phase: 'core-emitter-source' });
+      if (previousMode !== state.coreEmitterSourceMode) emitStatus({ phase: 'core-emitter-source' });
       return { ...source.coreEmitterSourceReceipt };
+    },
+    setAnalyticEmitterDescriptor(descriptor = null) {
+      const normalized = normalizeAnalyticEmitterDescriptor(descriptor);
+      const signature = normalized ? JSON.stringify(normalized) : '';
+      if (signature === analyticEmitterDescriptorSignature) return analyticEmitterReceipt();
+      const previousFamily = analyticEmitterDescriptor?.family || null;
+      analyticEmitterDescriptor = normalized;
+      analyticEmitterDescriptorSignature = signature;
+      updateAnalyticEmitterDebug();
+      if (device
+        && state.coreEmitterSourceMode === 'analytic-only'
+        && previousFamily
+        && normalized?.family
+        && previousFamily !== normalized.family) {
+        rebuildFluidState(gridSize, majorantGridSize, 'analytic-emitter-family-change');
+      }
+      return analyticEmitterReceipt();
     },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);

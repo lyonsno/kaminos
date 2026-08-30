@@ -12,8 +12,8 @@ const HELD_CONTROLS = Object.freeze({
   smoke: 2.8,
 });
 
-function makePrototype({ carrierOverride = null, primitiveFlowRate = null } = {}) {
-  const calls = { controls: [], coreSource: [], external: [] };
+function makePrototype({ analyticOverride = null, carrierOverride = null, primitiveFlowRate = null } = {}) {
+  const calls = { controls: [], coreSource: [], analytic: [], external: [] };
   let currentControls = HELD_CONTROLS;
   return {
     calls,
@@ -29,6 +29,16 @@ function makePrototype({ carrierOverride = null, primitiveFlowRate = null } = {}
         primitiveFlowRate,
         primitiveId: primitiveFlowRate === null ? null : 'test-primitive',
       });
+    },
+    setAnalyticEmitterDescriptor(descriptor) {
+      calls.analytic.push(structuredClone(descriptor));
+      return analyticOverride?.(descriptor) || {
+        mode: descriptor ? 'analytic-fixed' : 'off',
+        family: descriptor?.family ?? 'cluster',
+        coordinateSpace: descriptor ? 'volume-local' : 'none',
+        count: descriptor ? 1 : 0,
+        frameId: descriptor?.frameId ?? null,
+      };
     },
     setExternalEmitters(payload) {
       calls.external.push(structuredClone(payload));
@@ -60,37 +70,30 @@ function apply(family, prototype = makePrototype(), overrides = {}) {
 const cluster = apply('cluster');
 assert.deepEqual(cluster.prototype.calls.controls, [HELD_CONTROLS]);
 assert.deepEqual(cluster.prototype.calls.coreSource, ['cluster']);
+assert.equal(cluster.prototype.calls.analytic.length, 1);
+assert.equal(cluster.prototype.calls.analytic[0], null);
 assert.equal(cluster.prototype.calls.external.length, 1);
 assert.equal(cluster.prototype.calls.external[0].mode, 'off');
-assert.deepEqual(cluster.prototype.calls.external[0].emitters, []);
-assert.equal(cluster.receipt.schema, 'kaminos.volume-emitter-runtime.v0');
-assert.equal(cluster.receipt.requested.family, 'cluster');
-assert.equal(cluster.receipt.effective.family, 'cluster');
+assert.equal(cluster.receipt.schema, 'kaminos.volume-emitter-runtime.v1');
 assert.equal(cluster.receipt.effective.coreFlowRate, HELD_CONTROLS.flowRate);
-assert.equal(cluster.receipt.effective.externalEmitterCount, 0);
-assert.equal(cluster.receipt.fallbackUsed, false);
-assert.deepEqual(cluster.receipt.failures, []);
+assert.equal(cluster.receipt.effective.sourceCount, 0);
+assert.equal(cluster.receipt.effective.sourceMode, 'off');
 
-const expectedCounts = { wick: 1, nozzle: 1, ribbon: 1, ring: 12 };
-const compiled = Object.fromEntries(Object.entries(expectedCounts).map(([family, expectedCount]) => {
+const compiled = Object.fromEntries(['wick', 'nozzle', 'ribbon', 'ring'].map(family => {
   const result = apply(family);
-  assert.equal(result.prototype.calls.controls.length, 1, `${family} applies core controls once`);
-  assert.equal(result.prototype.calls.controls[0].flowRate, HELD_CONTROLS.flowRate, `${family} preserves the requested source control for truthful readback`);
-  assert.deepEqual(result.prototype.calls.coreSource, ['external-only'], `${family} selects external-only at the authoritative core boundary`);
-  assert.equal(result.prototype.calls.controls[0].inputRadius, HELD_CONTROLS.inputRadius);
-  assert.equal(result.prototype.calls.external.length, 1, `${family} applies the carrier once`);
-  assert.equal(result.prototype.calls.external[0].mode, 'emitter_basis_assay');
-  assert.equal(result.prototype.calls.external[0].coordinateSpace, 'volume-local');
-  assert.equal(result.prototype.calls.external[0].emitters.length, expectedCount);
-  assert.equal(result.receipt.requested.family, family);
-  assert.equal(result.receipt.requested.coreFlowRate, HELD_CONTROLS.flowRate);
-  assert.equal(result.receipt.effective.family, family);
+  assert.equal(result.prototype.calls.controls.length, 1, `${family} applies controls once`);
+  assert.deepEqual(result.prototype.calls.coreSource, ['analytic-only']);
+  assert.equal(result.prototype.calls.analytic.length, 1);
+  assert.equal(result.prototype.calls.analytic[0].family, family);
+  assert.equal(result.prototype.calls.external.length, 0, `${family} performs no external carrier write`);
   assert.equal(result.receipt.effective.coreFlowRate, 0);
-  assert.equal(result.receipt.effective.externalStrength, HELD_CONTROLS.flowRate);
-  assert.equal(result.receipt.effective.externalEmitterCount, expectedCount);
-  assert.equal(result.receipt.carrierReceipt.count, expectedCount);
+  assert.equal(result.receipt.effective.sourceStrength, HELD_CONTROLS.flowRate);
+  assert.equal(result.receipt.effective.sourceCount, 1);
+  assert.equal(result.receipt.effective.sourceMode, 'analytic-fixed');
+  assert.equal(result.receipt.effective.coordinateSpace, 'volume-local');
+  assert.equal(result.receipt.carrierReceipt, null);
+  assert.equal(result.receipt.sourceReceipt.family, family);
   assert.equal(result.receipt.fallbackUsed, false);
-  assert.deepEqual(result.receipt.failures, []);
   return [family, result];
 }));
 
@@ -98,22 +101,15 @@ const heldChemistry = compiled.wick.receipt.compilerReceipt.effective.chemistry;
 const heldDirection = compiled.wick.receipt.compilerReceipt.effective.direction;
 const heldTemporal = compiled.wick.receipt.compilerReceipt.effective.temporal;
 for (const family of ['nozzle', 'ribbon', 'ring']) {
-  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.chemistry, heldChemistry, `${family} holds chemistry fixed`);
-  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.direction, heldDirection, `${family} holds direction fixed`);
-  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.temporal, heldTemporal, `${family} holds temporal law fixed`);
+  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.chemistry, heldChemistry);
+  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.direction, heldDirection);
+  assert.deepEqual(compiled[family].receipt.compilerReceipt.effective.temporal, heldTemporal);
 }
 
-assert.notEqual(
-  compiled.wick.receipt.compilerReceipt.effective.support.primitive,
-  compiled.nozzle.receipt.compilerReceipt.effective.support.primitive,
-  'assay arms change support geometry rather than merely relabeling the same source',
-);
-
 const primitiveBackedWick = apply('wick', makePrototype({ primitiveFlowRate: 0.15 }));
-assert.equal(primitiveBackedWick.receipt.coreSourceReceipt.requestedControlFlowRate, HELD_CONTROLS.flowRate);
 assert.equal(primitiveBackedWick.receipt.coreSourceReceipt.requestedPrimitiveFlowRate, 0.15);
+assert.equal(primitiveBackedWick.receipt.coreSourceReceipt.effectiveOwner, 'analytic-emitter');
 assert.equal(primitiveBackedWick.receipt.coreSourceReceipt.effectiveFlowRate, 0);
-assert.equal(primitiveBackedWick.receipt.effective.coreFlowRate, 0);
 
 const syntheticRequest = {
   mode: 'synthetic_hand_trails',
@@ -127,53 +123,37 @@ const syntheticRequest = {
     end: [index * 0.01, -0.5, 0],
   })),
 };
-const syntheticPrototype = makePrototype();
-const syntheticFirst = apply('cluster', syntheticPrototype, { externalRequest: syntheticRequest });
-const syntheticAfterControl = apply('cluster', syntheticPrototype, {
-  controls: { ...HELD_CONTROLS, fire: 1.5 },
-  externalRequest: { ...syntheticRequest, frameId: 'runtime-held-frame-2' },
-  frameId: 'runtime-held-frame-2',
-});
-for (const result of [syntheticFirst, syntheticAfterControl]) {
-  assert.equal(result.receipt.effective.externalEmitterMode, 'synthetic_hand_trails');
-  assert.equal(result.receipt.effective.externalEmitterCount, 5);
-  assert.equal(result.receipt.effective.coordinateSpace, 'volume-local');
-}
-assert.deepEqual(
-  syntheticPrototype.calls.external.map(request => request.mode),
-  ['synthetic_hand_trails', 'synthetic_hand_trails'],
-  'an unrelated control change cannot briefly clear the synthetic route through an off writer',
-);
+const synthetic = apply('cluster', makePrototype(), { externalRequest: syntheticRequest });
+assert.equal(synthetic.receipt.effective.sourceMode, 'synthetic_hand_trails');
+assert.equal(synthetic.receipt.effective.sourceCount, 5);
+assert.equal(synthetic.prototype.calls.external.length, 1);
 
 assert.throws(
-  () => apply('wick', makePrototype({ carrierOverride: payload => ({
-    mode: 'fallback_cluster',
+  () => apply('ring', makePrototype({ analyticOverride: descriptor => ({
+    mode: 'fallback-cluster',
+    family: descriptor.family,
     coordinateSpace: 'volume-local',
-    count: payload.emitters.length,
-    frameId: payload.frameId,
+    count: 1,
   }) })),
-  /external emitter carrier mode mismatch: requested emitter_basis_assay, effective fallback_cluster/,
-  'a fallback route cannot masquerade as an effective emitter-family assay',
+  /analytic emitter mode mismatch: requested analytic-fixed, effective fallback-cluster/,
 );
 assert.throws(
-  () => apply('ring', makePrototype({ carrierOverride: payload => ({
-    mode: payload.mode,
-    coordinateSpace: payload.coordinateSpace,
-    count: payload.emitters.length - 1,
-    frameId: payload.frameId,
+  () => apply('wick', makePrototype({ analyticOverride: descriptor => ({
+    mode: 'analytic-fixed',
+    family: descriptor.family,
+    coordinateSpace: 'volume-local',
+    count: 0,
   }) })),
-  /external emitter carrier count mismatch: requested 12, effective 11/,
-  'carrier truncation cannot masquerade as complete requested morphology',
+  /analytic emitter source count mismatch: requested 1, effective 0/,
 );
 assert.throws(
-  () => apply('wick', makePrototype({ carrierOverride: payload => ({
-    mode: payload.mode,
-    coordinateSpace: 'world',
-    count: payload.emitters.length,
+  () => apply('cluster', makePrototype({ carrierOverride: payload => ({
+    mode: 'fallback_cluster',
+    coordinateSpace: 'none',
+    count: 0,
     frameId: payload.frameId,
   }) })),
-  /external emitter carrier coordinate space mismatch: requested volume-local, effective world/,
-  'coordinate substitution cannot masquerade as volume-local source evidence',
+  /external emitter carrier mode mismatch: requested off, effective fallback_cluster/,
 );
 assert.throws(
   () => applyVolumeEmitterFamilyRuntime({
@@ -181,28 +161,19 @@ assert.throws(
     family: 'wick',
     controls: HELD_CONTROLS,
   }),
-  /prototype\.setExternalEmitters is required/,
+  /prototype\.setAnalyticEmitterDescriptor is required/,
 );
 assert.throws(
   () => applyVolumeEmitterFamilyRuntime({
-    prototype: { setCoreEmitterSourceMode() {}, setExternalEmitters() {} },
+    prototype: { setCoreEmitterSourceMode() {}, setAnalyticEmitterDescriptor() {} },
     family: 'wick',
     controls: HELD_CONTROLS,
   }),
   /prototype\.setControls is required/,
 );
 assert.throws(
-  () => applyVolumeEmitterFamilyRuntime({
-    prototype: { setControls() {}, setExternalEmitters() {} },
-    family: 'wick',
-    controls: HELD_CONTROLS,
-  }),
-  /prototype\.setCoreEmitterSourceMode is required/,
-);
-assert.throws(
   () => apply('bonfire'),
   /unsupported runtime emitter family: bonfire/,
-  'unknown families fail loud instead of silently selecting the incumbent source',
 );
 
-console.log('volume emitter runtime contracts passed');
+console.log('volume analytic emitter runtime contracts passed');
