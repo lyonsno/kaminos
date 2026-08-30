@@ -1279,7 +1279,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">Boundary contrast</span>
-        <input type="range" id="volume-reaction-boundary-contrast" min="0.25" max="5" step="0.05" value="1.35">
+        <input type="range" id="volume-reaction-boundary-contrast" min="0.25" max="1.5" step="any" value="1.35">
         <span class="slider-val" id="volume-reaction-boundary-contrast-val">1.35</span>
       </div>
       <div class="slider-row">
@@ -1436,18 +1436,28 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">Soot yellowing</span>
-        <input type="range" id="volume-reaction-boundary-fire-yellow" min="0" max="2" step="0.02" value="0.86">
-        <span class="slider-val" id="volume-reaction-boundary-fire-yellow-val">0.86</span>
+        <input type="range" id="volume-reaction-boundary-fire-yellow" min="0" max="0.4" step="any" value="0.28">
+        <span class="slider-val" id="volume-reaction-boundary-fire-yellow-val">0.28</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Thermal warmth</span>
-        <input type="range" id="volume-reaction-boundary-fire-warmth" min="0" max="2" step="0.02" value="0.92">
-        <span class="slider-val" id="volume-reaction-boundary-fire-warmth-val">0.92</span>
+        <input type="range" id="volume-reaction-boundary-fire-warmth" min="0" max="0.4" step="any" value="0.30">
+        <span class="slider-val" id="volume-reaction-boundary-fire-warmth-val">0.30</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Fire luma</span>
-        <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="5" step="0.05" value="1.05">
+        <input type="range" id="volume-reaction-boundary-fire-luma" min="0" max="20" step="any" value="1.05">
         <span class="slider-val" id="volume-reaction-boundary-fire-luma-val">1.05</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Clean fuel color</span>
+        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-clean-color" value="#1f6bff">
+        <span class="slider-val" id="volume-reaction-boundary-fire-clean-color-val">#1f6bff</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Soot-hot color</span>
+        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-soot-color" value="#ff8c2a">
+        <span class="slider-val" id="volume-reaction-boundary-fire-soot-color-val">#ff8c2a</span>
       </div>
       <div class="volume-control-section-title">Atlas capture</div>
       <div class="slider-row">
@@ -1576,6 +1586,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </select>
       <span class="slider-val" id="volume-emitter-family-val">cluster</span>
     </div>
+    <div class="slider-row" data-volume-visual-cost-knob="presentation-exposure">
+      <span class="slider-label">Exposure</span>
+      <input type="range" id="volume-exposure" min="0" max="20" step="any" value="1">
+      <span class="slider-val" id="volume-exposure-val">1.00</span>
+    </div>
+    <span class="slider-help">Top-level volume presentation exposure, shared by raymarch and matched splat resolves.</span>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Density</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
@@ -11098,8 +11114,8 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     reactionBoundaryFireErosion: 0.37,
     reactionBoundaryFireCleanBlue: 0.64,
     reactionBoundaryFireSoot: 0.64,
-    reactionBoundaryFireYellow: 1.02,
-    reactionBoundaryFireWarmth: 0.86,
+    reactionBoundaryFireYellow: 0.40,
+    reactionBoundaryFireWarmth: 0.40,
     reactionBoundaryFireLuma: 5.00,
     reactionHeatMin: 0.00,
     reactionHeatMax: 0.42,
@@ -12272,7 +12288,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryTopology', id: 'volume-reaction-boundary-topology', param: 'volume_reaction_boundary_topology', min: 0, max: 2.5, decimals: 2 },
   { key: 'reactionBoundaryCurl', id: 'volume-reaction-boundary-curl', param: 'volume_reaction_boundary_curl', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryDivergence', id: 'volume-reaction-boundary-divergence', param: 'volume_reaction_boundary_divergence', min: 0, max: 1, decimals: 2 },
-  { key: 'reactionBoundaryContrast', id: 'volume-reaction-boundary-contrast', param: 'volume_reaction_boundary_contrast', min: 0.25, max: 5, decimals: 2 },
+  { key: 'reactionBoundaryContrast', id: 'volume-reaction-boundary-contrast', param: 'volume_reaction_boundary_contrast', min: 0.25, max: 1.5, continuous: true, decimals: 2 },
   { key: 'reactionBoundaryGamma', id: 'volume-reaction-boundary-gamma', param: 'volume_reaction_boundary_gamma', min: 0.35, max: 3, decimals: 2 },
   { key: 'reactionBoundaryOpacity', id: 'volume-reaction-boundary-opacity', param: 'volume_reaction_boundary_opacity', min: 0, max: 3, decimals: 2 },
   { key: 'reactionBoundaryFireRidge', id: 'volume-reaction-boundary-fire-ridge', param: 'volume_reaction_boundary_fire_ridge', min: 0, max: 2, decimals: 2 },
@@ -12281,9 +12297,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireErosion', id: 'volume-reaction-boundary-fire-erosion', param: 'volume_reaction_boundary_fire_erosion', min: 0, max: 1, decimals: 2 },
   { key: 'reactionBoundaryFireCleanBlue', id: 'volume-reaction-boundary-fire-clean-blue', param: 'volume_reaction_boundary_fire_clean_blue', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireSoot', id: 'volume-reaction-boundary-fire-soot', param: 'volume_reaction_boundary_fire_soot', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
-  { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
+  { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 0.4, continuous: true, decimals: 2 },
+  { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 0.4, continuous: true, decimals: 2 },
+  { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 20, continuous: true, decimals: 2 },
   { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
   { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
   { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
@@ -12368,6 +12384,7 @@ function clampVolumeControlValue(value, field) {
 
 const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeScene', 'volume_scene'],
+  ['volumeExposure', 'volume_exposure'],
   ['density', 'volume_density'],
   ['fire', 'volume_fire'],
   ['radiance', 'volume_radiance'],
@@ -12428,6 +12445,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeResidualStrength', 'volume_residual_strength'],
   ['volumeResidualFeatureDebug', 'volume_residual_feature_debug'],
   ['lookFreeze', 'volume_look_freeze'],
+  ['reactionBoundaryFireCleanColor', 'volume_reaction_boundary_fire_clean_color'],
+  ['reactionBoundaryFireSootColor', 'volume_reaction_boundary_fire_soot_color'],
   ['pyroCompareMode', 'volume_pyro_compare'],
   ['pyroDynamicDetail', 'volume_pyro_detail'],
   ['pyroMaterialGain', 'volume_pyro_material_gain'],
@@ -20137,9 +20156,12 @@ function readVolumeControls() {
     sootYellowing: parseFloat(document.getElementById('volume-reaction-boundary-fire-yellow').value),
     thermalWarmth: parseFloat(document.getElementById('volume-reaction-boundary-fire-warmth').value),
     fireLuma: parseFloat(document.getElementById('volume-reaction-boundary-fire-luma').value),
+    cleanColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-clean-color').value, '#1f6bff'),
+    sootColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-soot-color').value, '#ff8c2a'),
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
     flameContinuityMode: crucibleViewportFlameContinuityMode,
     density: parseFloat(document.getElementById('volume-density').value),
     fire: parseFloat(document.getElementById('volume-fire').value),
@@ -20226,6 +20248,8 @@ function readVolumeControls() {
       sootYellowing: reactionBoundaryFireControls.sootYellowing,
       thermalWarmth: reactionBoundaryFireControls.thermalWarmth,
       fireLuma: reactionBoundaryFireControls.fireLuma,
+      cleanColor: reactionBoundaryFireControls.cleanColor,
+      sootColor: reactionBoundaryFireControls.sootColor,
     },
     reactionBoundaryGradient: reactionBoundaryControls.gradientGain,
     reactionBoundarySupportThermal: reactionBoundaryControls.supportThermal,
@@ -20250,6 +20274,8 @@ function readVolumeControls() {
     reactionBoundaryFireYellow: reactionBoundaryFireControls.sootYellowing,
     reactionBoundaryFireWarmth: reactionBoundaryFireControls.thermalWarmth,
     reactionBoundaryFireLuma: reactionBoundaryFireControls.fireLuma,
+    reactionBoundaryFireCleanColor: reactionBoundaryFireControls.cleanColor,
+    reactionBoundaryFireSootColor: reactionBoundaryFireControls.sootColor,
     boundarySidecarBlur: parseFloat(document.getElementById('volume-boundary-sidecar-blur').value),
     boundarySidecarWidth: parseFloat(document.getElementById('volume-boundary-sidecar-width').value),
     boundarySidecarRidge: parseFloat(document.getElementById('volume-boundary-sidecar-ridge').value),
@@ -20408,6 +20434,7 @@ function readVolumeControls() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
+  document.getElementById('volume-exposure-val').textContent = c.volumeExposure.toFixed(2);
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
   document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
   document.getElementById('volume-radiance-val').textContent = c.radiance.toFixed(2);
@@ -20443,6 +20470,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-input-radius-val').textContent = c.inputRadius.toFixed(2);
   document.getElementById('volume-flow-rate-val').textContent = c.flowRate.toFixed(2);
   document.getElementById('volume-emitter-family-val').textContent = document.getElementById('emitter-assay-family').value;
+  document.getElementById('volume-reaction-boundary-fire-clean-color-val').textContent = c.reactionBoundaryFireCleanColor;
+  document.getElementById('volume-reaction-boundary-fire-soot-color-val').textContent = c.reactionBoundaryFireSootColor;
   document.getElementById('volume-fire-render-mode-val').textContent = c.fireRenderMode;
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
@@ -21336,6 +21365,18 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_look_freeze') && Number.isFinite(routeLookFreeze)) {
     document.getElementById('volume-look-freeze').value = String(Math.max(0, Math.min(1, Math.round(routeLookFreeze))));
   }
+  const routeVolumeExposure = Number(params.get('volume_exposure'));
+  if (params.has('volume_exposure') && Number.isFinite(routeVolumeExposure)) {
+    document.getElementById('volume-exposure').value = String(Math.max(0, Math.min(20, routeVolumeExposure)));
+  }
+  const routeBoundaryFireCleanColor = params.get('volume_reaction_boundary_fire_clean_color');
+  if (routeBoundaryFireCleanColor) {
+    setVolumeColorControlValue('volume-reaction-boundary-fire-clean-color', routeBoundaryFireCleanColor, '#1f6bff');
+  }
+  const routeBoundaryFireSootColor = params.get('volume_reaction_boundary_fire_soot_color');
+  if (routeBoundaryFireSootColor) {
+    setVolumeColorControlValue('volume-reaction-boundary-fire-soot-color', routeBoundaryFireSootColor, '#ff8c2a');
+  }
   if (params.has('volume_reaction_live_view')) {
     document.getElementById('volume-reaction-live-view').value = normalizeReactionFrontLiveView(params.get('volume_reaction_live_view'));
   }
@@ -21471,6 +21512,10 @@ async function initKaminosVolumeRoute() {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);
+  }
+  for (const id of ['volume-exposure', 'volume-reaction-boundary-fire-clean-color', 'volume-reaction-boundary-fire-soot-color']) {
+    document.getElementById(id)?.addEventListener('input', syncControls);
+    document.getElementById(id)?.addEventListener('change', syncControls);
   }
   const applyBudgetControls = () => {
     updateVolumeControlLabels();
