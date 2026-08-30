@@ -17,7 +17,6 @@ const PRESET_VIEW_COMPOSITIONS = Object.freeze({
 });
 const TARGET_ONLY_VOLUME_PARAMS = new Set([
   'volume_presentation',
-  'volume_raymarch_smoke',
   'volume_appearance_decomposition',
   'volume_appearance_selection',
 ]);
@@ -62,6 +61,7 @@ const label = String(args.get('--label') || 'Automated settings witness').trim()
 const cockpitAnchor = String(args.get('--cockpit-anchor') || '').trim();
 const promotionRoot = String(args.get('--promotion-root') || '').trim();
 const promotionHandle = String(args.get('--promotion-handle') || '').trim();
+const requestedSmokePresentation = String(args.get('--smoke-presentation') || 'off').trim();
 const selectiveDebugExpression = `(() => {
   return window.__kaminosSelectiveHeadLive?.debugState?.() || null;
 })()`;
@@ -69,6 +69,9 @@ const ordinaryDebugExpression = `(() => {
   return {
     state: window.__kaminosVolumePrototype?.debugState?.() || null,
     presetReceipt: window.__kaminosVolumeSettingsPresetReceipt || null,
+    smokePresentationReceipt: window.__kaminosRaymarchSmokePresentationReceipt
+      || window.__kaminosVolumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt
+      || null,
     activeTab: window.__kaminosActiveTab?.() || null,
   };
 })()`;
@@ -101,7 +104,7 @@ function assertSelectiveCompositionState(state, phase, expectedPresetId = null) 
   assert.equal(receipt?.fallbackReason, null, `${phase}: pass receipt reported fallback`);
 }
 
-function assertOrdinaryCockpitState(observation, phase, expectedPresetId) {
+function assertOrdinaryCockpitState(observation, phase, expectedPresetId, expectedSmokePresentation) {
   assert.equal(observation?.state?.active, true, `${phase}: ordinary volume renderer is not active`);
   assert.equal(observation?.state?.error, null, `${phase}: ordinary volume renderer reported an error`);
   assert.match(String(observation?.state?.backend || ''), /^WebGPU:/, `${phase}: ordinary volume renderer backend is not WebGPU`);
@@ -112,6 +115,16 @@ function assertOrdinaryCockpitState(observation, phase, expectedPresetId) {
     `${phase}: settings preset authority is missing`,
   );
   assert.ok(observation?.presetReceipt?.storePath, `${phase}: shared settings store path is missing`);
+  assert.equal(
+    observation?.smokePresentationReceipt?.normalizedRequestedMode,
+    expectedSmokePresentation,
+    `${phase}: saved Smoke On/Off request was not restored`,
+  );
+  assert.equal(
+    observation?.smokePresentationReceipt?.effectiveMode,
+    expectedSmokePresentation,
+    `${phase}: saved Smoke On/Off state silently fell back`,
+  );
   assert.equal(observation?.activeTab, 'volume', `${phase}: reopened cockpit is not on the Volume tab`);
 }
 
@@ -138,6 +151,9 @@ let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let browser = null;
 const sockets = [];
+let expectedPresetControlCount = null;
+let expectedRendererControlCount = null;
+let expectedPresentationControlCount = null;
 
 class CdpSocket {
   constructor(webSocketUrl) {
@@ -186,6 +202,9 @@ class CdpSocket {
 try {
   if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
   if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
+  if (!['on', 'off'].includes(requestedSmokePresentation)) {
+    throw new Error(`unsupported --smoke-presentation: ${requestedSmokePresentation}`);
+  }
   if (Boolean(promotionRoot) !== Boolean(promotionHandle)) {
     throw new Error('settings preset witness promotion requires both --promotion-root and --promotion-handle');
   }
@@ -193,6 +212,22 @@ try {
   mkdirSync(dirname(cockpitOut), { recursive: true });
   mkdirSync(dirname(cockpitCollapsedOut), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
+
+  failurePhase = 'preset-index-contract';
+  const presetIndexResponse = await fetch(new URL('/api/volume-settings-presets', url));
+  const presetIndex = await presetIndexResponse.json();
+  assert.equal(presetIndexResponse.ok, true, 'settings preset index could not be read');
+  assert.equal(presetIndex.identity, 'kaminos-volume-settings-preset-index-v1', 'settings preset index identity mismatch');
+  expectedPresetControlCount = Number(presetIndex.controlCount);
+  expectedRendererControlCount = Number(presetIndex.rendererControlCount);
+  expectedPresentationControlCount = Number(presetIndex.presentationControlCount);
+  for (const [axis, count] of Object.entries({
+    basin: expectedPresetControlCount,
+    renderer: expectedRendererControlCount,
+    presentation: expectedPresentationControlCount,
+  })) {
+    assert.equal(Number.isSafeInteger(count) && count >= 0, true, `settings preset index ${axis} count is invalid`);
+  }
 
   failurePhase = 'browser-launch';
   browser = spawn(chromeExecutable(), [
@@ -238,7 +273,23 @@ try {
   })()`));
   assert.equal(labelState?.value, label, 'settings preset label input did not accept the requested label');
   assert.ok(labelState?.width > 0, 'settings preset label input was not visible');
-  lastTrustworthyEvidence = { initialState, button, labelState };
+  const smokePresentationReceipt = await evaluate(initialSocket, operatorContext(`(() => {
+    const button = operatorDocument.querySelector('[data-raymarch-smoke-presentation="${requestedSmokePresentation}"]');
+    if (!button) return null;
+    button.click();
+    return operatorWindow.__kaminosRaymarchSmokePresentationReceipt || null;
+  })()`));
+  assert.equal(
+    smokePresentationReceipt?.normalizedRequestedMode,
+    requestedSmokePresentation,
+    'source cockpit did not accept requested Smoke On/Off state',
+  );
+  assert.equal(
+    smokePresentationReceipt?.effectiveMode,
+    requestedSmokePresentation,
+    'source cockpit Smoke On/Off state silently fell back',
+  );
+  lastTrustworthyEvidence = { initialState, button, labelState, smokePresentationReceipt, presetIndex };
 
   const initialTargetIds = new Set((await targetList()).map(target => target.id));
   failurePhase = 'operator-command';
@@ -259,6 +310,9 @@ try {
   assert.ok(commandResult?.effective?.presetId, 'settings preset command completed without an immutable preset id');
   assert.ok(commandResult?.effective?.alias, 'settings preset command completed without a human alias');
   assert.ok(commandResult.presetUrl, 'settings preset command completed without a durable loader route');
+  assert.equal(commandResult.effective.controlCount, expectedPresetControlCount, 'write receipt basin inventory drifted');
+  assert.equal(commandResult.effective.rendererControlCount, expectedRendererControlCount, 'write receipt renderer inventory drifted');
+  assert.equal(commandResult.effective.presentationControlCount, expectedPresentationControlCount, 'write receipt presentation inventory drifted');
   assert.equal(commandResult.presetViewUrls?.[requestedView], `${commandResult.presetUrl}&view=${requestedView}`, 'settings preset command omitted the selected visual route');
   await delay(500);
   const cockpitVisibility = await evaluate(initialSocket, operatorContext(`(() => {
@@ -392,11 +446,18 @@ try {
     assert.equal(cockpitVisibility.anchorGeometry?.visible, true, `cockpit screenshot anchor is outside the visible viewport: ${cockpitAnchor}`);
   }
   assert.equal(cockpitVisibility.layoutReceipt?.identity, 'kaminos-volume-cockpit-layout-receipt-v0', 'cockpit layout receipt is missing');
-  assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 195, 'cockpit layout omitted basin or renderer controls');
-  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 192, 'canonical basin control count changed');
-  assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, 3, 'renderer control axis is incomplete');
-  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 194, 'primary root count changed');
-  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
+  assert.equal(
+    cockpitVisibility.layoutReceipt?.controlCount,
+    expectedPresetControlCount + expectedRendererControlCount,
+    'cockpit layout omitted basin or renderer controls',
+  );
+  assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, expectedPresetControlCount, 'canonical basin control count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, expectedRendererControlCount, 'renderer control axis is incomplete');
+  assert.equal(
+    Object.values(cockpitVisibility.layoutReceipt?.rootControlCounts || {}).reduce((sum, count) => sum + Number(count), 0),
+    expectedPresetControlCount + expectedRendererControlCount,
+    'cockpit root inventory does not compose to the schema-owned DOM control count',
+  );
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
   assert.equal(cockpitVisibility.assayViewportGeometry?.activeTab, 'volume', 'assay route did not admit the Volume tab');
   assert.equal(cockpitVisibility.assayViewportGeometry?.toolbarHidden, false, 'assay cockpit is hidden on the Volume tab');
@@ -595,7 +656,7 @@ try {
     if (!observation?.state?.active || Number(observation.state.frameCount) < 2 || !observation.presetReceipt) return null;
     return observation;
   })()`, timeoutMs);
-  assertOrdinaryCockpitState(startState, 'reopened live target', sourcePresetId);
+  assertOrdinaryCockpitState(startState, 'reopened live target', sourcePresetId, requestedSmokePresentation);
 
   failurePhase = 'preset-artifact-verification';
   const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(sourcePresetId)}`, url));
@@ -604,8 +665,14 @@ try {
   assert.equal(presetDocument.presetId, sourcePresetId);
   assert.equal(presetDocument.preset?.identity, 'kaminos-volume-settings-preset-v2');
   assert.equal(presetDocument.preset?.kind, 'settings-preset');
-  assert.equal(presetDocument.preset?.controlCount, 192);
-  assert.equal(presetDocument.preset?.rendererControlCount, 3);
+  assert.equal(presetDocument.preset?.controlCount, expectedPresetControlCount);
+  assert.equal(presetDocument.preset?.rendererControlCount, expectedRendererControlCount);
+  assert.equal(presetDocument.preset?.presentationControlCount, expectedPresentationControlCount);
+  assert.equal(
+    presetDocument.preset?.presentationControls?.['raymarch-smoke-presentation']?.value,
+    requestedSmokePresentation,
+    'saved preset did not author Smoke On/Off state',
+  );
   for (const field of ['fluidField', 'frontField', 'boundarySidecar', 'splatInstances', 'historyBuffers', 'pressureState', 'replayState', 'volumeDebugState', 'camera', 'viewport']) {
     assert.equal(Object.hasOwn(presetDocument.preset, field), false, `settings preset persisted forbidden state field ${field}`);
   }
@@ -652,7 +719,12 @@ try {
   failurePhase = 'continuous-observation';
   await delay(5000);
   const endState = await evaluate(liveSocket, ordinaryDebugExpression);
-  assertOrdinaryCockpitState(endState, 'reopened live target after observation', sourcePresetId);
+  assertOrdinaryCockpitState(
+    endState,
+    'reopened live target after observation',
+    sourcePresetId,
+    requestedSmokePresentation,
+  );
   const continuousFrameDelta = Number(endState.state.frameCount) - Number(startState.state.frameCount);
   const continuousSimStepDelta = Number(endState.state.simStepCount) - Number(startState.state.simStepCount);
   assert.ok(continuousFrameDelta >= 2, 'live render frames did not advance');
@@ -678,6 +750,8 @@ try {
     visualAuthority: 'not-evaluated-settings-persistence-only',
     controlCount: presetDocument.preset.controlCount,
     rendererControlCount: presetDocument.preset.rendererControlCount,
+    presentationControlCount: presetDocument.preset.presentationControlCount,
+    smokePresentation: requestedSmokePresentation,
     storePath: commandResult.effective.storePath,
     continuousFrameDelta,
     continuousSimStepDelta,

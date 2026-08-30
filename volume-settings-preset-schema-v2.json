@@ -12,19 +12,22 @@
       "key": "emitter-assay-family",
       "param": "volume_emitter_family",
       "tagName": "SELECT",
-      "type": "select-one"
+      "type": "select-one",
+      "additiveDefault": "cluster"
     },
     {
       "key": "volume-artistic-swirl",
       "param": "volume_artistic_swirl",
       "tagName": "INPUT",
-      "type": "checkbox"
+      "type": "checkbox",
+      "additiveDefault": true
     },
     {
       "key": "volume-phased-sway",
       "param": "volume_phased_sway",
       "tagName": "INPUT",
-      "type": "checkbox"
+      "type": "checkbox",
+      "additiveDefault": true
     },
     {
       "key": "volume-pyro-compare",
@@ -228,13 +231,15 @@
       "key": "volume-reaction-boundary-fire-clean-color",
       "param": "volume_reaction_boundary_fire_clean_color",
       "tagName": "INPUT",
-      "type": "color"
+      "type": "color",
+      "additiveDefault": "#4a86ff"
     },
     {
       "key": "volume-reaction-boundary-fire-soot-color",
       "param": "volume_reaction_boundary_fire_soot_color",
       "tagName": "INPUT",
-      "type": "color"
+      "type": "color",
+      "additiveDefault": "#ffc460"
     },
     {
       "key": "volume-reaction-heat-min",
@@ -366,7 +371,8 @@
       "key": "volume-exposure",
       "param": "volume_exposure",
       "tagName": "INPUT",
-      "type": "range"
+      "type": "range",
+      "additiveDefault": 1
     },
     {
       "key": "volume-density",
@@ -1175,6 +1181,19 @@
       "type": "range"
     }
   ],
+  "presentationControls": [
+    {
+      "key": "raymarch-smoke-presentation",
+      "param": "volume_raymarch_smoke",
+      "tagName": "BUTTON",
+      "type": "button-state",
+      "allowedValues": [
+        "on",
+        "off"
+      ],
+      "additiveDefault": "on"
+    }
+  ],
   "legacyUnroutedParams": [],
   "routeExtraParams": [
     "volume_quality_reason"
@@ -1217,6 +1236,8 @@
     "controlCount",
     "rendererControls",
     "rendererControlCount",
+    "presentationControls",
+    "presentationControlCount",
     "stateExclusions",
     "note",
     "name"

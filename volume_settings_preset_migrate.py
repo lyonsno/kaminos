@@ -6,25 +6,8 @@ import hashlib
 import json
 import time
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlparse
 
 import serve
-
-
-MIGRATION_DEFAULTS = {
-    "emitter-assay-family": "cluster",
-    "volume-exposure": 1,
-    "volume-reaction-boundary-fire-clean-color": "#4a86ff",
-    "volume-reaction-boundary-fire-soot-color": "#ffc460",
-    "volume-artistic-swirl": True,
-    "volume-phased-sway": True,
-}
-
-MIGRATION_PROFILES = {
-    frozenset(MIGRATION_DEFAULTS): "historical-186-to-192",
-    frozenset({"emitter-assay-family", "volume-artistic-swirl", "volume-phased-sway"}):
-        "emitter-and-motion-189-to-192",
-}
 
 
 def _read_object(path, role):
@@ -63,115 +46,30 @@ def _source_content_hash(payload):
             key: _control_value(descriptor)
             for key, descriptor in renderer_controls.items()
         }
+    presentation_controls = payload.get("presentationControls")
+    if presentation_controls:
+        canonical["presentationControls"] = {
+            key: _control_value(descriptor)
+            for key, descriptor in presentation_controls.items()
+        }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _validate_source_payload(payload, schema):
-    if payload.get("identity") != serve.VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
-        raise ValueError("settings preset migration source identity mismatch")
-    if payload.get("schemaIdentity") != schema.get("identity"):
-        raise ValueError("settings preset migration source schema identity mismatch")
-    allowed_fields = set(schema.get("allowedNativePresetFields") or [])
-    unexpected_fields = sorted(set(payload) - allowed_fields)
-    if unexpected_fields:
-        raise ValueError(f"settings preset migration source contains unsupported fields: {','.join(unexpected_fields)}")
-
-    controls = payload.get("domControls")
-    if not isinstance(controls, dict) or payload.get("controlCount") != len(controls):
-        raise ValueError("settings preset migration source control count mismatch")
-    expected_by_key = {descriptor["key"]: descriptor for descriptor in schema["controls"]}
-    unexpected_controls = sorted(set(controls) - set(expected_by_key))
-    if unexpected_controls:
-        raise ValueError(f"settings preset migration source contains unknown controls: {','.join(unexpected_controls)}")
-    missing = frozenset(set(expected_by_key) - set(controls))
-    profile = MIGRATION_PROFILES.get(missing)
-    if profile is None:
-        raise ValueError(
-            "unsupported migration profile; missing controls: "
-            + (",".join(sorted(missing)) if missing else "none")
-        )
-
-    expected_renderer = {descriptor["key"]: descriptor for descriptor in schema.get("rendererControls") or []}
-    renderer_controls = payload.get("rendererControls") or {}
-    if not isinstance(renderer_controls, dict):
-        raise ValueError("settings preset migration renderer controls are invalid")
-    if renderer_controls and set(renderer_controls) != set(expected_renderer):
-        raise ValueError("settings preset migration renderer control inventory mismatch")
-    if payload.get("rendererControlCount") not in (None, 0, len(expected_renderer)):
-        raise ValueError("settings preset migration renderer control count mismatch")
-
-    routed_values = {}
-    for key, descriptor in {**controls, **renderer_controls}.items():
-        expected = expected_by_key.get(key) or expected_renderer.get(key)
-        if not isinstance(descriptor, dict) or (
-            descriptor.get("param") != expected.get("param")
-            or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
-            or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
-        ):
-            raise ValueError(f"settings preset migration control descriptor mismatch for {key}")
-        routed_values[expected["param"]] = _route_value(_control_value(descriptor))
-
-    exclusions = payload.get("stateExclusions") or {}
-    if any(exclusions.get(field) is not True for field in schema.get("excludedStateFields") or []):
-        raise ValueError("settings preset migration source does not exclude runtime state")
-    if any(field in payload for field in schema.get("forbiddenPresetFields") or []):
-        raise ValueError("settings preset migration source contains forbidden runtime state")
-
-    route = payload.get("route")
-    if not isinstance(route, str) or not route:
-        raise ValueError("settings preset migration source route is missing")
-    route_entries = parse_qsl(urlparse(route).query, keep_blank_values=True)
-    route_values = {}
-    for key, value in route_entries:
-        if key in route_values:
-            raise ValueError(f"settings preset migration source route duplicates {key}")
-        route_values[key] = value
-    activation = schema.get("activationParam") or {}
-    if route_values.pop(activation.get("key"), None) != activation.get("value"):
-        raise ValueError("settings preset migration source route omitted activation")
-    for key, expected_value in routed_values.items():
-        if route_values.pop(key, None) != expected_value:
-            raise ValueError(f"settings preset migration source route/control mismatch for {key}")
-    for key in schema.get("routeExtraParams") or []:
-        if key not in route_values:
-            raise ValueError(f"settings preset migration source route omitted {key}")
-        route_values.pop(key)
-    if route_values:
-        raise ValueError(
-            "settings preset migration source route contains unexpected parameters: "
-            + ",".join(sorted(route_values))
-        )
-    return profile, missing
-
-
 def migrate_volume_settings_preset_payload(payload, schema=None):
     schema = schema or json.loads(serve.VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
-    profile, missing = _validate_source_payload(payload, schema)
-    migrated = json.loads(json.dumps(payload))
-    expected_by_key = {descriptor["key"]: descriptor for descriptor in schema["controls"]}
-    for descriptor in schema["controls"]:
-        key = descriptor["key"]
-        if key not in missing:
-            continue
-        value = MIGRATION_DEFAULTS[key]
-        migrated["domControls"][key] = {
-            "id": key,
-            "param": descriptor["param"],
-            "tagName": descriptor["tagName"],
-            "type": descriptor["type"],
-            "value": value,
-        }
-
-    parsed = urlparse(migrated["route"])
-    route_entries = parse_qsl(parsed.query, keep_blank_values=True)
-    for descriptor in schema["controls"]:
-        if descriptor["key"] in missing:
-            route_entries.append((descriptor["param"], _route_value(MIGRATION_DEFAULTS[descriptor["key"]])))
-    migrated["route"] = parsed._replace(query=urlencode(route_entries)).geturl()
-    migrated["controlCount"] = len(expected_by_key)
+    migrated, _projection = serve.normalize_volume_settings_preset_payload(payload, schema)
     serve.validate_volume_settings_preset_payload(migrated, schema)
-    return migrated, profile
+    return migrated, "schema-additive-defaults"
+
+
+def _defaults_applied(source_payload, migrated_payload):
+    defaults = []
+    for field in ("domControls", "rendererControls", "presentationControls"):
+        source_keys = set((source_payload.get(field) or {}).keys())
+        migrated_keys = set((migrated_payload.get(field) or {}).keys())
+        defaults.extend(sorted(migrated_keys - source_keys))
+    return defaults
 
 
 def _source_entries(source_store, schema):
@@ -207,6 +105,7 @@ def _source_entries(source_store, schema):
         if artifact.get("controlCount") != payload.get("controlCount"):
             raise ValueError(f"settings preset migration artifact control count mismatch: {preset_id}")
         migrated, profile = migrate_volume_settings_preset_payload(payload, schema)
+        defaults_applied = _defaults_applied(payload, migrated)
         label = alias_document.get("label")
         if not isinstance(label, str) or not label.strip():
             raise ValueError(f"settings preset migration alias label is invalid: {alias}")
@@ -215,6 +114,7 @@ def _source_entries(source_store, schema):
             "label": label,
             "presetId": preset_id,
             "profile": profile,
+            "defaultsApplied": defaults_applied,
             "payload": migrated,
             "source": alias_document.get("source") or artifact.get("source") or {},
             "sourceStore": str(source_store),
@@ -261,6 +161,7 @@ def migrate_volume_settings_preset_stores(source_stores, target_store, schema=No
             "sourceAlias": entry["alias"],
             "sourcePresetId": entry["presetId"],
             "profile": entry["profile"],
+            "defaultsApplied": entry["defaultsApplied"],
             "effectiveAlias": receipt["effective"]["alias"],
             "effectivePresetId": receipt["effective"]["presetId"],
             "idempotent": receipt["effective"]["idempotent"],

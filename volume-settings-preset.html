@@ -49,7 +49,7 @@
         return;
       }
       const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
-      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin settings + ${receipt.rendererControlCount} renderer controls | effective ${view} view`;
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin + ${receipt.rendererControlCount} renderer + ${receipt.presentationControlCount} presentation controls | effective ${view} view`;
       location.replace(target);
     }
 

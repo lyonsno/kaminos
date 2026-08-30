@@ -2,6 +2,7 @@
 """Kaminos dev server with directory browsing API."""
 
 import http.server
+import copy
 import fcntl
 import hashlib
 import json
@@ -40,10 +41,164 @@ def _settings_preset_route_value(value):
     return str(value)
 
 
-def validate_volume_settings_preset_payload(payload, schema=None):
-    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+def _settings_preset_descriptor_value(descriptor):
+    return descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
+
+
+def _settings_preset_descriptor_for_default(descriptor):
+    return {
+        "id": descriptor["key"],
+        "param": descriptor["param"],
+        "tagName": descriptor["tagName"],
+        "type": descriptor["type"],
+        "value": descriptor["additiveDefault"],
+    }
+
+
+def _validate_settings_preset_descriptor(key, descriptor, expected):
+    if not isinstance(descriptor, dict):
+        raise ValueError(f"settings preset control descriptor is invalid: {key}")
+    if (
+        descriptor.get("param") != expected.get("param")
+        or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
+        or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
+    ):
+        raise ValueError(f"settings preset control inventory mismatch for {key}")
+    allowed_values = expected.get("allowedValues")
+    if allowed_values is not None and _settings_preset_descriptor_value(descriptor) not in allowed_values:
+        raise ValueError(f"settings preset control has unsupported value for {key}")
+
+
+def _validate_settings_preset_schema(schema):
     if schema.get("identity") != VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY:
         raise ValueError("settings preset canonical schema identity mismatch")
+    controls = schema.get("controls") or []
+    if schema.get("controlCount") != len(controls):
+        raise ValueError("settings preset canonical schema control count mismatch")
+    axes = [controls, schema.get("rendererControls") or [], schema.get("presentationControls") or []]
+    all_controls = [descriptor for axis in axes for descriptor in axis]
+    if (
+        any(not isinstance(descriptor, dict) for descriptor in all_controls)
+        or len({descriptor.get("key") for descriptor in all_controls}) != len(all_controls)
+        or len({descriptor.get("param") for descriptor in all_controls}) != len(all_controls)
+    ):
+        raise ValueError("settings preset canonical schema inventory is invalid")
+    return schema
+
+
+def normalize_volume_settings_preset_payload(payload, schema=None):
+    """Project a compatible older payload through schema-owned additive defaults."""
+    schema = _validate_settings_preset_schema(
+        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    )
+    if not isinstance(payload, dict):
+        raise ValueError("settings preset additive projection source is invalid")
+    if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
+        raise ValueError("settings preset identity mismatch")
+    if payload.get("schemaIdentity") != schema.get("identity"):
+        raise ValueError("settings preset schema identity mismatch")
+    allowed_fields = set(schema.get("allowedNativePresetFields") or [])
+    unexpected_fields = sorted(set(payload) - allowed_fields)
+    if unexpected_fields:
+        raise ValueError(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
+
+    normalized = copy.deepcopy(payload)
+    defaults_applied = []
+    routed_source_values = {}
+    routed_default_values = {}
+    axis_specs = (
+        ("domControls", "controlCount", schema.get("controls") or [], True),
+        ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False),
+        ("presentationControls", "presentationControlCount", schema.get("presentationControls") or [], True),
+    )
+    for field, count_field, expected_descriptors, default_missing_axis in axis_specs:
+        source_controls = copy.deepcopy(payload.get(field))
+        axis_authored = source_controls is not None
+        if source_controls is None:
+            source_controls = {}
+        if not isinstance(source_controls, dict):
+            raise ValueError(f"settings preset {field} are invalid")
+        source_count = payload.get(count_field)
+        if source_count not in (None, len(source_controls)):
+            raise ValueError(f"settings preset {count_field} does not match its authored inventory")
+        expected_by_key = {descriptor["key"]: descriptor for descriptor in expected_descriptors}
+        unknown = sorted(set(source_controls) - set(expected_by_key))
+        if unknown:
+            raise ValueError(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+        for key, descriptor in source_controls.items():
+            expected = expected_by_key[key]
+            _validate_settings_preset_descriptor(key, descriptor, expected)
+            routed_source_values[expected["param"]] = _settings_preset_route_value(
+                _settings_preset_descriptor_value(descriptor)
+            )
+
+        missing = [descriptor for descriptor in expected_descriptors if descriptor["key"] not in source_controls]
+        if missing and (axis_authored or default_missing_axis):
+            for descriptor in missing:
+                if "additiveDefault" not in descriptor:
+                    raise ValueError(f"settings preset is missing non-additive control: {descriptor['key']}")
+                default_descriptor = _settings_preset_descriptor_for_default(descriptor)
+                source_controls[descriptor["key"]] = default_descriptor
+                routed_default_values[descriptor["param"]] = _settings_preset_route_value(
+                    descriptor["additiveDefault"]
+                )
+                defaults_applied.append(descriptor["key"])
+        if axis_authored or source_controls or (default_missing_axis and expected_descriptors):
+            normalized[field] = source_controls
+            normalized[count_field] = len(source_controls)
+        else:
+            normalized.pop(field, None)
+            normalized.pop(count_field, None)
+
+    exclusions = payload.get("stateExclusions") or {}
+    if any(exclusions.get(field) is not True for field in schema.get("excludedStateFields") or []):
+        raise ValueError("settings preset must explicitly exclude runtime and replay state")
+    if any(field in payload for field in schema.get("forbiddenPresetFields") or []):
+        raise ValueError("settings preset must not contain runtime, renderer, camera, or replay state")
+
+    route = payload.get("route")
+    if not isinstance(route, str) or not route:
+        raise ValueError("settings preset requires an exact control route")
+    parsed = urlparse(route)
+    route_entries = parse_qsl(parsed.query, keep_blank_values=True)
+    route_values = {}
+    for key, value in route_entries:
+        if key in route_values:
+            raise ValueError(f"settings preset route duplicates parameter {key}")
+        route_values[key] = value
+    activation = schema.get("activationParam") or {}
+    if route_values.pop(activation.get("key"), None) != activation.get("value"):
+        raise ValueError("settings preset route omitted the native volume activation gate")
+    for key, expected_value in routed_source_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset route/control mismatch for {key}")
+    for key, default_value in routed_default_values.items():
+        if key in route_values:
+            raise ValueError(f"settings preset route contains unowned additive parameter {key}")
+        route_entries.append((key, default_value))
+    for key in schema.get("routeExtraParams") or []:
+        if key not in route_values:
+            raise ValueError(f"settings preset route omitted metadata parameter {key}")
+        route_values.pop(key)
+    if route_values:
+        raise ValueError(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
+    normalized["route"] = parsed._replace(query=urlencode(route_entries)).geturl()
+    return normalized, {
+        "identity": "kaminos-volume-settings-schema-projection-v1",
+        "sourceControlCount": payload.get("controlCount"),
+        "effectiveControlCount": normalized.get("controlCount"),
+        "sourceRendererControlCount": payload.get("rendererControlCount", 0),
+        "effectiveRendererControlCount": normalized.get("rendererControlCount", 0),
+        "sourcePresentationControlCount": payload.get("presentationControlCount", 0),
+        "effectivePresentationControlCount": normalized.get("presentationControlCount", 0),
+        "defaultsApplied": defaults_applied,
+    }
+
+
+def validate_volume_settings_preset_payload(payload, schema=None):
+    schema = _validate_settings_preset_schema(
+        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    )
     if payload.get("identity") != VOLUME_SETTINGS_PRESET_IDENTITY or payload.get("kind") != "settings-preset":
         raise ValueError("settings preset identity mismatch")
     if payload.get("schemaIdentity") != schema.get("identity"):
@@ -80,19 +235,30 @@ def validate_volume_settings_preset_payload(payload, schema=None):
     if renderer_controls and set(renderer_controls) != set(expected_renderer_by_key):
         raise ValueError("settings preset renderer control inventory does not match the canonical schema")
 
+    expected_presentation_controls = schema.get("presentationControls") or []
+    presentation_controls = payload.get("presentationControls")
+    if presentation_controls is None and not expected_presentation_controls:
+        if payload.get("presentationControlCount") not in (None, 0):
+            raise ValueError("settings preset presentation control count is invalid")
+        presentation_controls = {}
+    elif (
+        not isinstance(presentation_controls, dict)
+        or payload.get("presentationControlCount") != len(expected_presentation_controls)
+        or len(presentation_controls) != len(expected_presentation_controls)
+    ):
+        raise ValueError(
+            f"settings preset requires exactly {len(expected_presentation_controls)} presentation controls"
+        )
+    expected_presentation_by_key = {entry["key"]: entry for entry in expected_presentation_controls}
+    if set(presentation_controls) != set(expected_presentation_by_key):
+        raise ValueError("settings preset presentation control inventory does not match the canonical schema")
+
     routed_values = {}
-    for key, descriptor in {**dom_controls, **renderer_controls}.items():
-        expected = expected_by_key.get(key) or expected_renderer_by_key.get(key)
-        if not isinstance(descriptor, dict):
-            raise ValueError(f"settings preset control descriptor is invalid: {key}")
-        if (
-            descriptor.get("param") != expected.get("param")
-            or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
-            or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
-        ):
-            raise ValueError(f"settings preset control inventory mismatch for {key}")
+    for key, descriptor in {**dom_controls, **renderer_controls, **presentation_controls}.items():
+        expected = expected_by_key.get(key) or expected_renderer_by_key.get(key) or expected_presentation_by_key.get(key)
+        _validate_settings_preset_descriptor(key, descriptor, expected)
         routed_values[expected["param"]] = _settings_preset_route_value(
-            descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
+            _settings_preset_descriptor_value(descriptor)
         )
 
     exclusions = payload.get("stateExclusions") or {}
@@ -136,12 +302,8 @@ def _volume_settings_alias_slug(label):
 
 def _volume_settings_control_values(payload, schema):
     return {
-        descriptor["key"]: (
-            payload["domControls"][descriptor["key"]].get("rawValue")
-            if "rawValue" in payload["domControls"][descriptor["key"]]
-            else payload["domControls"][descriptor["key"]].get("value")
-        )
-        for descriptor in schema["controls"]
+        key: _settings_preset_descriptor_value(descriptor)
+        for key, descriptor in (payload.get("domControls") or {}).items()
     }
 
 
@@ -150,12 +312,18 @@ def _volume_settings_renderer_control_values(payload, schema):
     if not controls:
         return None
     return {
-        descriptor["key"]: (
-            controls[descriptor["key"]].get("rawValue")
-            if "rawValue" in controls[descriptor["key"]]
-            else controls[descriptor["key"]].get("value")
-        )
-        for descriptor in schema.get("rendererControls") or []
+        key: _settings_preset_descriptor_value(descriptor)
+        for key, descriptor in controls.items()
+    }
+
+
+def _volume_settings_presentation_control_values(payload, schema):
+    controls = payload.get("presentationControls")
+    if not controls:
+        return None
+    return {
+        key: _settings_preset_descriptor_value(descriptor)
+        for key, descriptor in controls.items()
     }
 
 
@@ -167,6 +335,9 @@ def _volume_settings_content_hash(payload, schema):
     renderer_controls = _volume_settings_renderer_control_values(payload, schema)
     if renderer_controls is not None:
         canonical["rendererControls"] = renderer_controls
+    presentation_controls = _volume_settings_presentation_control_values(payload, schema)
+    if presentation_controls is not None:
+        canonical["presentationControls"] = presentation_controls
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
 
@@ -323,6 +494,7 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             "schemaIdentity": schema["identity"],
             "controlCount": schema["controlCount"],
             "rendererControlCount": len(payload.get("rendererControls") or {}),
+            "presentationControlCount": len(payload.get("presentationControls") or {}),
             "idempotent": idempotent,
         },
         "presetUrl": preset_url,
@@ -370,16 +542,27 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
         raise FileNotFoundError(f"volume settings preset not found: {preset_id}") from error
     if document.get("identity") != VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY or document.get("presetId") != preset_id:
         raise ValueError("volume settings preset artifact identity mismatch")
-    if document.get("schemaIdentity") != schema.get("identity") or document.get("controlCount") != schema.get("controlCount"):
+    raw_payload = document.get("preset") or {}
+    if (
+        document.get("schemaIdentity") != schema.get("identity")
+        or document.get("controlCount") != raw_payload.get("controlCount")
+    ):
         raise ValueError("volume settings preset artifact schema mismatch")
-    validate_volume_settings_preset_payload(document.get("preset") or {}, schema)
-    content_hash = _volume_settings_content_hash(document["preset"], schema)
+    content_hash = _volume_settings_content_hash(raw_payload, schema)
     if document.get("contentHash") != f"sha256:{content_hash}" or preset_id != f"vsp-{content_hash}":
         raise ValueError("volume settings preset artifact content hash mismatch")
     if alias_document and alias_document.get("contentHash") != document.get("contentHash"):
         raise ValueError("volume settings preset alias content hash mismatch")
+    normalized_payload, schema_projection = normalize_volume_settings_preset_payload(raw_payload, schema)
+    validate_volume_settings_preset_payload(normalized_payload, schema)
     return {
         **document,
+        "sourceControlCount": raw_payload.get("controlCount"),
+        "sourceRendererControlCount": raw_payload.get("rendererControlCount", 0),
+        "sourcePresentationControlCount": raw_payload.get("presentationControlCount", 0),
+        "controlCount": normalized_payload.get("controlCount"),
+        "preset": normalized_payload,
+        "schemaProjection": schema_projection,
         "requestedPresetRef": requested,
         "alias": alias_document.get("alias") if alias_document else None,
         "label": alias_document.get("label") if alias_document else document.get("initialLabel"),
@@ -410,6 +593,8 @@ def list_volume_settings_presets(store_path, schema=None):
             "schemaIdentity": document["schemaIdentity"],
             "controlCount": document["controlCount"],
             "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
+            "presentationControlCount": len((document.get("preset") or {}).get("presentationControls") or {}),
+            "defaultsApplied": (document.get("schemaProjection") or {}).get("defaultsApplied") or [],
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })
@@ -420,6 +605,7 @@ def list_volume_settings_presets(store_path, schema=None):
         "schemaIdentity": schema["identity"],
         "controlCount": schema["controlCount"],
         "rendererControlCount": len(schema.get("rendererControls") or []),
+        "presentationControlCount": len(schema.get("presentationControls") or []),
         "entries": entries,
     }
 

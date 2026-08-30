@@ -13,40 +13,26 @@ sys.path.insert(0, str(ROOT))
 
 
 schema = json.loads((ROOT / "volume-settings-preset-schema-v2.json").read_text())
-assert schema["controlCount"] == 192, "emitter family and macro-motion switches must enter the strict canonical preset inventory"
-assert {
-    "key": "emitter-assay-family",
-    "param": "volume_emitter_family",
-    "tagName": "SELECT",
-    "type": "select-one",
-} in schema["controls"]
-for expected in (
-    {
-        "key": "volume-artistic-swirl",
-        "param": "volume_artistic_swirl",
-        "tagName": "INPUT",
-        "type": "checkbox",
-    },
-    {
-        "key": "volume-phased-sway",
-        "param": "volume_phased_sway",
-        "tagName": "INPUT",
-        "type": "checkbox",
-    },
+assert schema["controlCount"] == len(schema["controls"])
+controls_by_key = {descriptor["key"]: descriptor for descriptor in schema["controls"]}
+for key, param, tag_name, control_type in (
+    ("emitter-assay-family", "volume_emitter_family", "SELECT", "select-one"),
+    ("volume-artistic-swirl", "volume_artistic_swirl", "INPUT", "checkbox"),
+    ("volume-phased-sway", "volume_phased_sway", "INPUT", "checkbox"),
 ):
-    assert expected in schema["controls"]
+    descriptor = controls_by_key[key]
+    assert (descriptor["param"], descriptor["tagName"], descriptor["type"]) == (
+        param, tag_name, control_type,
+    )
 
 import serve
 import volume_settings_preset_migrate as migrate
 
 
-MIGRATION_DEFAULTS = {
-    "emitter-assay-family": "cluster",
-    "volume-exposure": 1,
-    "volume-reaction-boundary-fire-clean-color": "#4a86ff",
-    "volume-reaction-boundary-fire-soot-color": "#ffc460",
-    "volume-artistic-swirl": True,
-    "volume-phased-sway": True,
+ADDITIVE_DEFAULTS = {
+    descriptor["key"]: descriptor["additiveDefault"]
+    for descriptor in schema["controls"]
+    if "additiveDefault" in descriptor
 }
 
 
@@ -63,7 +49,7 @@ def legacy_payload(missing_keys):
         key = descriptor["key"]
         if key in missing_keys:
             continue
-        value = "tall_plume" if key == "volume-scene" else MIGRATION_DEFAULTS.get(key, 0)
+        value = "tall_plume" if key == "volume-scene" else ADDITIVE_DEFAULTS.get(key, 0)
         controls[key] = {
             "id": key,
             "param": descriptor["param"],
@@ -148,7 +134,7 @@ def main():
             historical,
             "operator-basin",
             "Operator basin",
-            legacy_payload(set(MIGRATION_DEFAULTS)),
+            legacy_payload(set(ADDITIVE_DEFAULTS)),
         )
         write_legacy_store(
             current,
@@ -164,27 +150,28 @@ def main():
         assert receipt["identity"] == "kaminos-volume-settings-preset-migration-receipt-v1"
         assert receipt["sourceAliasCount"] == 2
         assert receipt["effectiveAliasCount"] == 2
-        assert {entry["profile"] for entry in receipt["entries"]} == {
-            "historical-186-to-192",
-            "emitter-and-motion-189-to-192",
-        }
+        assert {entry["profile"] for entry in receipt["entries"]} == {"schema-additive-defaults"}
+        assert all(entry["defaultsApplied"] for entry in receipt["entries"])
         assert source_digests == {path: tree_digest(path) for path in (historical, current)}, (
             "migration must not mutate content-addressed source stores"
         )
 
         index = serve.list_volume_settings_presets(target, schema)
-        assert index["controlCount"] == 192
+        assert index["controlCount"] == schema["controlCount"]
+        assert index["presentationControlCount"] == len(schema["presentationControls"])
         assert {entry["alias"] for entry in index["entries"]} == {"operator-basin", "flame-fan"}
         for alias in ("operator-basin", "flame-fan"):
             preset = serve.read_volume_settings_preset(target, alias, schema)["preset"]
-            assert preset["controlCount"] == 192
+            assert preset["controlCount"] == schema["controlCount"]
             assert preset["domControls"]["emitter-assay-family"]["value"] == "cluster"
             assert preset["domControls"]["volume-exposure"]["value"] == 1
             assert preset["domControls"]["volume-reaction-boundary-fire-clean-color"]["value"] == "#4a86ff"
             assert preset["domControls"]["volume-reaction-boundary-fire-soot-color"]["value"] == "#ffc460"
             assert preset["domControls"]["volume-artistic-swirl"]["value"] is True
             assert preset["domControls"]["volume-phased-sway"]["value"] is True
+            assert preset["presentationControls"]["raymarch-smoke-presentation"]["value"] == "on"
             assert "volume_emitter_family=cluster" in preset["route"]
+            assert "volume_raymarch_smoke=on" in preset["route"]
 
         repeated = migrate.migrate_volume_settings_preset_stores(
             [historical, current], target, schema=schema
@@ -203,10 +190,14 @@ def main():
         try:
             migrate.migrate_volume_settings_preset_stores([malformed], target, schema=schema)
         except ValueError as error:
-            assert "unsupported migration profile" in str(error)
+            assert "missing non-additive control" in str(error)
         else:
             raise AssertionError("migration default-filled a missing non-additive control")
         assert tree_digest(target) == before
+
+        migration_source = (ROOT / "volume_settings_preset_migrate.py").read_text()
+        assert "MIGRATION_DEFAULTS" not in migration_source
+        assert "MIGRATION_PROFILES" not in migration_source
 
     print("volume settings emitter-family migration contracts passed")
 

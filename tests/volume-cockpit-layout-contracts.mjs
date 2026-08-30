@@ -15,7 +15,7 @@ assert.match(
   'the primary viewer must load the explicit two-root cockpit contract',
 );
 assert.match(witness, /__kaminosVolumeCockpitLayoutReceipt[\s\S]*controlCount[\s\S]*rootControlCounts/, 'visual witness requires the validated complete layout receipt');
-assert.match(witness, /rootControlCounts\?\.\['volume-primary-control-root'\], 194/, 'visual witness requires all 194 current primary-root controls');
+assert.match(witness, /Object\.values\(cockpitVisibility\.layoutReceipt\?\.rootControlCounts[\s\S]*expectedPresetControlCount \+ expectedRendererControlCount/, 'visual witness derives the complete root inventory from the live schema');
 assert.match(witness, /volume-authored-mix-panel[\s\S]*volume-authored-mix-body[\s\S]*volume-authored-mix-toggle/, 'visual witness inspects the complete panel surface');
 assert.match(witness, /elementFromPoint[\s\S]*hitInsidePanel/, 'visual witness rejects a panel painted behind another surface');
 assert.match(
@@ -31,8 +31,13 @@ assert.match(
 assert.match(witness, /collapsedWidth[\s\S]*collapsedBodyDisplay[\s\S]*cockpitCollapsedScreenshot/, 'visual witness proves the compact rail state and preserves its pixels');
 assert.match(
   witness,
-  /TARGET_ONLY_VOLUME_PARAMS[\s\S]*volume_presentation[\s\S]*volume_raymarch_smoke[\s\S]*volume_appearance_decomposition[\s\S]*volume_appearance_selection[\s\S]*!TARGET_ONLY_VOLUME_PARAMS\.has\(key\)/,
+  /TARGET_ONLY_VOLUME_PARAMS[\s\S]*volume_presentation[\s\S]*volume_appearance_decomposition[\s\S]*volume_appearance_selection[\s\S]*!TARGET_ONLY_VOLUME_PARAMS\.has\(key\)/,
   'visual witness distinguishes target-only presentation identity from immutable basin settings',
+);
+assert.doesNotMatch(
+  witness.match(/const TARGET_ONLY_VOLUME_PARAMS[\s\S]*?\]\);/)?.[0] || '',
+  /volume_raymarch_smoke/,
+  'saved Smoke On/Off state is not discarded as target-only presentation identity',
 );
 assert.match(index, /id="volume-primary-control-root"[^>]+data-volume-control-root="primary"/, 'left controls have an explicit canonical root');
 assert.match(index, /id="volume-authored-mix-control-root"[^>]+data-volume-control-root="authored-mix"/, 'authored-mix controls have an explicit canonical root');
@@ -137,16 +142,16 @@ function schemaRecords() {
 
 const accepted = validateVolumeCockpitControlInventory({ schema, controlRecords: schemaRecords() });
 assert.equal(accepted.identity, 'kaminos-volume-cockpit-layout-receipt-v0');
-assert.equal(accepted.controlCount, 195);
-assert.equal(accepted.expectedControlCount, 195);
-assert.equal(accepted.presetControlCount, 192);
-assert.equal(accepted.rendererControlCount, 3);
+assert.equal(accepted.controlCount, schema.controls.length + schema.rendererControls.length);
+assert.equal(accepted.expectedControlCount, schema.controls.length + schema.rendererControls.length);
+assert.equal(accepted.presetControlCount, schema.controlCount);
+assert.equal(accepted.rendererControlCount, schema.rendererControls.length);
 assert.deepEqual(accepted.missingControlIds, []);
 assert.deepEqual(accepted.unexpectedControlIds, []);
 assert.deepEqual(accepted.duplicateControlIds, []);
 assert.deepEqual(accepted.rootControlCounts, {
-  'volume-primary-control-root': 194,
-  'volume-authored-mix-control-root': 1,
+  'volume-primary-control-root': schema.controls.length + schema.rendererControls.length - VOLUME_AUTHORED_MIX_CONTROL_IDS.length,
+  'volume-authored-mix-control-root': VOLUME_AUTHORED_MIX_CONTROL_IDS.length,
 });
 
 const missing = schemaRecords().filter(record => record.id !== 'volume-density');

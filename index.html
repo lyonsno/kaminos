@@ -12217,15 +12217,38 @@ function readVolumeRendererControls() {
   return readVolumeSettingsControls('renderer');
 }
 
+function readVolumeSettingsPresentationControls() {
+  const receipt = window.__kaminosRaymarchSmokePresentationReceipt
+    || volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt;
+  const value = receipt?.normalizedRequestedMode || receipt?.requestedMode || 'on';
+  if (!['on', 'off'].includes(value)) {
+    throw new Error(`unsupported raymarch smoke presentation state: ${value}`);
+  }
+  return {
+    'raymarch-smoke-presentation': {
+      id: 'raymarch-smoke-presentation',
+      param: 'volume_raymarch_smoke',
+      tagName: 'BUTTON',
+      type: 'button-state',
+      value,
+    },
+  };
+}
+
 function buildVolumeAgentCaptureRoute(
   domControls = readVolumeDomControls(),
   rendererControls = readVolumeRendererControls(),
+  presentationControls = readVolumeSettingsPresentationControls(),
 ) {
   const url = new URL(window.location.href);
   const sourceQualityReason = url.searchParams.get('volume_quality_reason') || 'agent-view-capture';
   url.search = '';
   url.searchParams.set('kaminos_volume_smoke', '1');
-  for (const entry of [...Object.values(domControls), ...Object.values(rendererControls)]) {
+  for (const entry of [
+    ...Object.values(domControls),
+    ...Object.values(rendererControls),
+    ...Object.values(presentationControls),
+  ]) {
     if (!entry?.param) continue;
     if (entry.value === undefined || entry.value === null) continue;
     url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
@@ -12237,16 +12260,19 @@ function buildVolumeAgentCaptureRoute(
 function buildVolumeSettingsPreset() {
   const domControls = readVolumeDomControls();
   const rendererControls = readVolumeRendererControls();
+  const presentationControls = readVolumeSettingsPresentationControls();
   return {
     identity: 'kaminos-volume-settings-preset-v2',
     kind: 'settings-preset',
     schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
     savedAt: new Date().toISOString(),
-    route: buildVolumeAgentCaptureRoute(domControls, rendererControls),
+    route: buildVolumeAgentCaptureRoute(domControls, rendererControls, presentationControls),
     domControls,
     controlCount: Object.keys(domControls).length,
     rendererControls,
     rendererControlCount: Object.keys(rendererControls).length,
+    presentationControls,
+    presentationControlCount: Object.keys(presentationControls).length,
     stateExclusions: {
       fluidField: true,
       frontField: true,
@@ -12256,7 +12282,7 @@ function buildVolumeSettingsPreset() {
       pressureState: true,
       replayState: true,
     },
-    note: 'Exact editable volume controls only; no simulation, renderer, camera, or replay state.',
+    note: 'Exact editable volume controls and explicit presentation state only; no simulation, camera, or replay state.',
   };
 }
 
@@ -12288,8 +12314,12 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
     if (index.identity !== 'kaminos-volume-settings-preset-index-v1'
       || index.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || Number(index.controlCount) !== 192
-      || Number(index.rendererControlCount) !== 3
+      || !Number.isSafeInteger(Number(index.controlCount))
+      || Number(index.controlCount) < 0
+      || !Number.isSafeInteger(Number(index.rendererControlCount))
+      || Number(index.rendererControlCount) < 0
+      || !Number.isSafeInteger(Number(index.presentationControlCount))
+      || Number(index.presentationControlCount) < 0
       || !Array.isArray(index.entries)) {
       throw new Error('preset index identity or schema mismatch');
     }
@@ -12308,7 +12338,9 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
     }
-    volumeSettingsPresetStatus(`${index.entries.length} presets | 192 basin controls + 3 renderer controls | ${index.storePath}`);
+    volumeSettingsPresetStatus(
+      `${index.entries.length} presets | ${index.controlCount} basin + ${index.rendererControlCount} renderer + ${index.presentationControlCount} presentation controls | ${index.storePath}`,
+    );
     return index;
   } catch (error) {
     volumeSettingsPresetIndex = null;
@@ -12335,13 +12367,16 @@ async function saveVolumeSettingsPreset() {
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
     if (result.identity !== 'kaminos-volume-settings-preset-write-receipt-v1'
       || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || Number(result.effective?.controlCount) !== 192
-      || Number(result.effective?.rendererControlCount) !== 3) {
+      || Number(result.effective?.controlCount) !== preset.controlCount
+      || Number(result.effective?.rendererControlCount) !== preset.rendererControlCount
+      || Number(result.effective?.presentationControlCount) !== preset.presentationControlCount) {
       throw new Error('preset write receipt identity or schema mismatch');
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput) labelInput.value = result.effective.label;
-    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 192 basin + 3 renderer controls | ${result.effective.storePath}`);
+    volumeSettingsPresetStatus(
+      `${result.effective.label} | ${result.effective.presetId} | ${result.effective.controlCount} basin + ${result.effective.rendererControlCount} renderer + ${result.effective.presentationControlCount} presentation controls | ${result.effective.storePath}`,
+    );
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Volume settings preset saved: ${result.effective.label}`);
     return result;

@@ -58,17 +58,19 @@ assert.match(index, /field\.continuous\s*\?\s*String\(clampedValue\)\s*:\s*clamp
 assert.match(core, /const resolveEntries = \[[\s\S]*if \(options\.includePresentationControls === true\)[\s\S]*resolveEntries\.push\([\s\S]*binding: 1/, 'optical resolves add presentation binding 1 only for pipelines that declare it');
 assert.match(core, /includePresentationControls: options\.opticalDepthOrderDiagnostic !== true/, 'matched optical presentation binds exposure while the depth-order diagnostic keeps its one-binding layout');
 
-assert.equal(settingsSchema.controlCount, 192, 'the canonical preset inventory includes beauty, emitter, and motion controls');
+assert.equal(settingsSchema.controlCount, settingsSchema.controls.length, 'the canonical preset inventory count matches its authored schema');
 for (const expected of [
   ['volume-exposure', 'volume_exposure', 'range'],
   ['volume-reaction-boundary-fire-clean-color', 'volume_reaction_boundary_fire_clean_color', 'color'],
   ['volume-reaction-boundary-fire-soot-color', 'volume_reaction_boundary_fire_soot_color', 'color'],
 ]) {
   const [key, param, type] = expected;
+  const control = settingsSchema.controls.find(candidate => candidate.key === key);
+  assert.ok(control, `${key} is a strict canonical settings-preset control`);
   assert.deepEqual(
-    settingsSchema.controls.find(control => control.key === key),
+    { key: control.key, param: control.param, tagName: control.tagName, type: control.type },
     { key, param, tagName: 'INPUT', type },
-    `${key} is a strict canonical settings-preset control`,
+    `${key} keeps its strict canonical settings-preset descriptor`,
   );
 }
 
