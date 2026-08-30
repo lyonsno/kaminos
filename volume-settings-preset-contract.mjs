@@ -147,6 +147,22 @@ export function buildVolumeSettingsPresetIndex(rawSchema, storePath, entries = [
   return index;
 }
 
+export function validateVolumeSettingsPresetSourceIdentity(requestedSource, effectiveSource) {
+  if (!requestedSource
+    || typeof requestedSource.repoRoot !== 'string'
+    || !requestedSource.repoRoot
+    || !/^[0-9a-f]{40}$/.test(String(requestedSource.commit || ''))) {
+    throw new Error('requested settings preset source identity is invalid');
+  }
+  if (!effectiveSource || effectiveSource.repoRoot !== requestedSource.repoRoot) {
+    throw new Error('saved preset came from the wrong server repo root');
+  }
+  if (effectiveSource.commit !== requestedSource.commit) {
+    throw new Error('saved preset came from the wrong server commit');
+  }
+  return true;
+}
+
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
   if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
@@ -203,13 +219,13 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
   if (rendererControls !== undefined && (!rendererControls || typeof rendererControls !== 'object' || Array.isArray(rendererControls))) {
     throw new Error('settings preset renderer controls are invalid');
   }
-  if (rendererControls === undefined) {
+  if (rendererControls === undefined && expectedRendererControls.length === 0) {
     if (preset.rendererControlCount !== undefined && Number(preset.rendererControlCount) !== 0) {
       throw new Error('settings preset renderer control count is invalid');
     }
   } else if (Number(preset.rendererControlCount) !== expectedRendererControls.length
     || rendererEntries.length !== expectedRendererControls.length) {
-    throw new Error(`settings preset requires exactly ${expectedRendererControls.length} renderer controls when that axis is authored`);
+    throw new Error(`settings preset requires exactly ${expectedRendererControls.length} renderer controls`);
   }
   const expectedPresentationControls = schema.presentationControls || [];
   const presentationControls = preset.presentationControls;

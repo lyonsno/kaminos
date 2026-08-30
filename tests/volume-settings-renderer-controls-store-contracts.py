@@ -18,9 +18,9 @@ SCHEMA = {
         {"key": "volume-scene", "param": "volume_scene", "tagName": "SELECT", "type": "select-one"},
     ],
     "rendererControls": [
-        {"key": "volume-flow-kernel-strength", "param": "volume_flow_kernel_strength", "tagName": "INPUT", "type": "range"},
-        {"key": "volume-flow-kernel-radius", "param": "volume_flow_kernel_radius", "tagName": "INPUT", "type": "range"},
-        {"key": "volume-flow-kernel-coherence", "param": "volume_flow_kernel_coherence", "tagName": "INPUT", "type": "range"},
+        {"key": "volume-flow-kernel-strength", "param": "volume_flow_kernel_strength", "tagName": "INPUT", "type": "range", "additiveDefault": 0},
+        {"key": "volume-flow-kernel-radius", "param": "volume_flow_kernel_radius", "tagName": "INPUT", "type": "range", "additiveDefault": 0.03},
+        {"key": "volume-flow-kernel-coherence", "param": "volume_flow_kernel_coherence", "tagName": "INPUT", "type": "range", "additiveDefault": 1},
     ],
     "routeExtraParams": ["volume_quality_reason"],
     "activationParam": {"key": "kaminos_volume_smoke", "value": "1"},
@@ -75,23 +75,23 @@ def composed_payload():
 def main():
     old_payload = base_payload()
     new_payload = composed_payload()
-    assert serve.validate_volume_settings_preset_payload(old_payload, SCHEMA) is True
+    try:
+        serve.validate_volume_settings_preset_payload(old_payload, SCHEMA)
+    except ValueError as error:
+        assert "requires exactly 3 renderer controls" in str(error)
+    else:
+        raise AssertionError("current writes admitted a missing renderer axis")
     assert serve.validate_volume_settings_preset_payload(new_payload, SCHEMA) is True
     assert serve._volume_settings_content_hash(old_payload, SCHEMA) != serve._volume_settings_content_hash(new_payload, SCHEMA)
 
     with tempfile.TemporaryDirectory() as temporary:
         store = Path(temporary)
-        old_receipt = serve.write_volume_settings_preset(store, "Legacy basin", old_payload, {}, SCHEMA)
         new_receipt = serve.write_volume_settings_preset(store, "Composed basin", new_payload, {}, SCHEMA)
-        assert old_receipt["effective"]["rendererControlCount"] == 0
         assert new_receipt["effective"]["rendererControlCount"] == 3
-        assert old_receipt["effective"]["presetId"] != new_receipt["effective"]["presetId"]
-        old_document = serve.read_volume_settings_preset(store, old_receipt["effective"]["presetId"], SCHEMA)
         new_document = serve.read_volume_settings_preset(store, new_receipt["effective"]["presetId"], SCHEMA)
-        assert "rendererControls" not in old_document["preset"]
         assert new_document["preset"]["rendererControls"]["volume-flow-kernel-radius"]["value"] == 0.03
         index = serve.list_volume_settings_presets(store, SCHEMA)
-        assert sorted(entry["rendererControlCount"] for entry in index["entries"]) == [0, 3]
+        assert [entry["rendererControlCount"] for entry in index["entries"]] == [3]
 
     print("volume settings renderer controls store contracts passed")
 

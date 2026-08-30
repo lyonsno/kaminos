@@ -179,6 +179,15 @@ def main():
     else:
         raise AssertionError("normalization silently invented a missing control without a schema default")
 
+    nonadditive_renderer_schema = copy.deepcopy(SCHEMA)
+    del nonadditive_renderer_schema["rendererControls"][0]["additiveDefault"]
+    try:
+        serve.normalize_volume_settings_preset_payload(source, nonadditive_renderer_schema)
+    except ValueError as error:
+        assert "missing non-additive control: volume-renderer-detail" in str(error)
+    else:
+        raise AssertionError("normalization silently admitted a missing non-additive renderer axis")
+
     unknown = copy.deepcopy(source)
     unknown["domControls"]["volume-unknown"] = {
         "id": "volume-unknown", "param": "volume_unknown", "tagName": "INPUT", "type": "range", "value": 1,

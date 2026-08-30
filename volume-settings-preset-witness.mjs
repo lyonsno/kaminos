@@ -4,13 +4,14 @@ import { randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { validateVolumeSettingsPresetSourceIdentity } from './volume-settings-preset-contract.mjs';
 
 const args = parseArgs(process.argv.slice(2));
-const url = required('--url');
-const expectedRepoRoot = requiredPath('--expected-repo-root');
-const expectedCommit = required('--expected-commit');
-const requestedUrl = new URL(url);
-const requestedView = requestedUrl.searchParams.get('view');
+const url = String(args.get('--url') || '');
+const expectedRepoRootArgument = String(args.get('--expected-repo-root') || '');
+const expectedRepoRoot = expectedRepoRootArgument ? resolve(expectedRepoRootArgument) : '';
+const expectedCommit = String(args.get('--expected-commit') || '');
+let requestedView = null;
 const PRESET_VIEW_COMPOSITIONS = Object.freeze({
   'splat-only': 'splat-only-v0',
   'raymarch-only': 'raymarch-only-v0',
@@ -22,7 +23,7 @@ const TARGET_ONLY_VOLUME_PARAMS = new Set([
   'volume_appearance_decomposition',
   'volume_appearance_selection',
 ]);
-const expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
+let expectedComposition = null;
 const PASS_TUPLES = Object.freeze({
   'splat-only-v0': Object.freeze({
     splatApplied: true,
@@ -204,6 +205,14 @@ class CdpSocket {
 }
 
 try {
+  mkdirSync(dirname(reportPath), { recursive: true });
+  if (!url) throw new Error('missing --url');
+  if (!expectedRepoRootArgument) throw new Error('missing --expected-repo-root');
+  if (!existsSync(expectedRepoRoot)) throw new Error(`missing --expected-repo-root path: ${expectedRepoRoot}`);
+  if (!expectedCommit) throw new Error('missing --expected-commit');
+  const requestedUrl = new URL(url);
+  requestedView = requestedUrl.searchParams.get('view');
+  expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
   if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
   if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
   if (!['on', 'off'].includes(requestedSmokePresentation)) {
@@ -218,7 +227,6 @@ try {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(cockpitOut), { recursive: true });
   mkdirSync(dirname(cockpitCollapsedOut), { recursive: true });
-  mkdirSync(dirname(reportPath), { recursive: true });
 
   failurePhase = 'preset-index-contract';
   const presetIndexResponse = await fetch(new URL('/api/volume-settings-presets', url));
@@ -676,17 +684,12 @@ try {
   assert.equal(presetDocument.preset?.rendererControlCount, expectedRendererControlCount);
   assert.equal(presetDocument.preset?.presentationControlCount, expectedPresentationControlCount);
   effectiveSource = {
-    repoRoot: String(presetDocument.source?.repoRoot || ''),
+    repoRoot: presetDocument.source?.repoRoot ? resolve(String(presetDocument.source.repoRoot)) : '',
     branch: String(presetDocument.source?.branch || ''),
     commit: String(presetDocument.source?.commit || ''),
   };
   lastTrustworthyEvidence.effectiveSource = effectiveSource;
-  assert.equal(
-    effectiveSource.repoRoot ? resolve(effectiveSource.repoRoot) : '',
-    expectedRepoRoot,
-    'saved preset came from the wrong server repo root',
-  );
-  assert.equal(effectiveSource.commit, expectedCommit, 'saved preset came from the wrong server commit');
+  validateVolumeSettingsPresetSourceIdentity(requestedSource, effectiveSource);
   assert.equal(
     presetDocument.preset?.presentationControls?.['raymarch-smoke-presentation']?.value,
     requestedSmokePresentation,
@@ -871,12 +874,6 @@ function parseArgs(argv) {
     else { values.set(key, next); index += 1; }
   }
   return values;
-}
-
-function required(name) {
-  const value = args.get(name);
-  if (!value || value === true) throw new Error(`missing ${name}`);
-  return String(value);
 }
 
 function writeReport(report) {

@@ -136,6 +136,13 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         missing_axis_is_fully_additive = bool(missing) and all(
             "additiveDefault" in descriptor for descriptor in missing
         )
+        if missing and not axis_authored and not default_missing_axis and not missing_axis_is_fully_additive:
+            missing_nonadditive = next(
+                descriptor for descriptor in missing if "additiveDefault" not in descriptor
+            )
+            raise ValueError(
+                f"settings preset is missing non-additive control: {missing_nonadditive['key']}"
+            )
         if missing and (axis_authored or default_missing_axis or missing_axis_is_fully_additive):
             for descriptor in missing:
                 if "additiveDefault" not in descriptor:
@@ -222,7 +229,7 @@ def validate_volume_settings_preset_payload(payload, schema=None):
 
     expected_renderer_controls = schema.get("rendererControls") or []
     renderer_controls = payload.get("rendererControls")
-    if renderer_controls is None:
+    if renderer_controls is None and not expected_renderer_controls:
         if payload.get("rendererControlCount") not in (None, 0):
             raise ValueError("settings preset renderer control count is invalid")
         renderer_controls = {}
@@ -232,7 +239,7 @@ def validate_volume_settings_preset_payload(payload, schema=None):
         or len(renderer_controls) != len(expected_renderer_controls)
     ):
         raise ValueError(
-            f"settings preset requires exactly {len(expected_renderer_controls)} renderer controls when that axis is authored"
+            f"settings preset requires exactly {len(expected_renderer_controls)} renderer controls"
         )
     expected_renderer_by_key = {entry["key"]: entry for entry in expected_renderer_controls}
     if renderer_controls and set(renderer_controls) != set(expected_renderer_by_key):

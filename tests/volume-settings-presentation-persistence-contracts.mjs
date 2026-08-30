@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   buildVolumeSettingsPresetTarget,
   buildVolumeSettingsPresetVisualTarget,
@@ -130,5 +132,27 @@ assert.throws(
   /unsupported value.*raymarch-smoke-presentation/,
   'presentation persistence rejects unsupported smoke states',
 );
+
+const failureRoot = mkdtempSync(join(tmpdir(), 'kaminos-volume-settings-witness-failure-'));
+try {
+  const failureReportPath = join(failureRoot, 'failure.json');
+  const expectedCommit = 'd'.repeat(40);
+  const failure = spawnSync(process.execPath, [
+    join(root, 'volume-settings-preset-witness.mjs'),
+    '--url', 'not-a-valid-url',
+    '--expected-repo-root', root,
+    '--expected-commit', expectedCommit,
+    '--report', failureReportPath,
+  ], { encoding: 'utf8' });
+  assert.notEqual(failure.status, 0, 'invalid source witness unexpectedly succeeded');
+  assert.equal(existsSync(failureReportPath), true, 'pre-browser witness failure did not write its report');
+  const failureReport = JSON.parse(readFileSync(failureReportPath, 'utf8'));
+  assert.equal(failureReport.status, 'failed');
+  assert.equal(failureReport.failurePhase, 'argument-validation');
+  assert.deepEqual(failureReport.requestedSource, { repoRoot: root, commit: expectedCommit });
+  assert.equal(failureReport.effectiveSource, null);
+} finally {
+  rmSync(failureRoot, { recursive: true, force: true });
+}
 
 console.log('volume settings presentation persistence contracts passed');
