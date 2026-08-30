@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
 const index = readFileSync(join(root, 'index.html'), 'utf8');
+const cockpitLayoutSource = readFileSync(join(root, 'volume-cockpit-layout.mjs'), 'utf8');
 const witness = readFileSync(join(root, 'volume-settings-preset-witness.mjs'), 'utf8');
 const selectiveLive = readFileSync(join(root, 'volume-selective-head-live.html'), 'utf8');
 const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v2.json'), 'utf8'));
@@ -117,6 +118,11 @@ assert.deepEqual(VOLUME_COCKPIT_CONTROL_ROOT_IDS, [
   'volume-authored-mix-control-root',
 ]);
 assert.deepEqual(VOLUME_AUTHORED_MIX_CONTROL_IDS, ['volume-reaction-boundary-support-thermal']);
+assert.match(
+  cockpitLayoutSource,
+  /select\[data-volume-assay-control="emitter-family"\]/,
+  'the canonical cockpit collector includes the emitter selector even though its durable id predates the volume-* convention',
+);
 
 function schemaRecords() {
   return [...schema.controls, ...schema.rendererControls].map(control => ({

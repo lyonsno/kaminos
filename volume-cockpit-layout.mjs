@@ -11,6 +11,7 @@ const VOLUME_CONTROL_SELECTOR = [
   'input[id^="volume-"]',
   'select[id^="volume-"]',
   'textarea[id^="volume-"]',
+  'select[data-volume-assay-control="emitter-family"]',
 ].join(', ');
 
 function sortedUnique(values) {
