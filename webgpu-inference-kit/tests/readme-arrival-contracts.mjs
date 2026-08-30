@@ -30,8 +30,9 @@ assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent 
 assert.doesNotMatch(readme, /\b(?:loadModelPort|LoadedModel|ModelRun)\b/);
 assert.doesNotMatch(readme, /^## Receipt And Evidence Layer$/m);
 
-assert.equal(packageJson.version, '0.1.44');
+assert.equal(packageJson.version, '0.1.45');
 assert.ok(packageJson.files.includes('docs'), 'published package must include linked documentation');
+assert.ok(packageJson.files.includes('examples'), 'published package must include the runnable example');
 
 const integrationReference = await readPackageFile('docs/integration-reference.md');
 assert.match(integrationReference, /^# @kaminos\/webgpu-inference-kit$/m);
@@ -42,6 +43,7 @@ const localLinks = [...readme.matchAll(/\]\(([^)]+)\)/g)]
   .map(match => match[1])
   .filter(target => !/^(?:[a-z]+:|#)/i.test(target));
 assert.ok(localLinks.includes('./docs/integration-reference.md'));
+assert.ok(localLinks.includes('./docs/getting-started.md'));
 for (const target of localLinks) {
   await access(fileURLToPath(new URL(target, new URL('README.md', packageRoot))));
 }

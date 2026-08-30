@@ -124,6 +124,7 @@ That firing demonstrates the runtime's central product target directly: long loc
 
 ## Continue Porting
 
+- Follow [Getting Started](./docs/getting-started.md) to run a complete minimal WebGPU model port with one reusable route and two queued invocations.
 - Read the [advanced integration reference](./docs/integration-reference.md) for the complete current API manual and scheduling contracts.
 - Inspect the public exports in [`src/index.js`](./src/index.js).
 - Start with one session, one registered route, one complete invocation, and direct model execution. Add cooperative boundaries where measurements show the application needs them.
