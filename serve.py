@@ -133,7 +133,10 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
             )
 
         missing = [descriptor for descriptor in expected_descriptors if descriptor["key"] not in source_controls]
-        if missing and (axis_authored or default_missing_axis):
+        missing_axis_is_fully_additive = bool(missing) and all(
+            "additiveDefault" in descriptor for descriptor in missing
+        )
+        if missing and (axis_authored or default_missing_axis or missing_axis_is_fully_additive):
             for descriptor in missing:
                 if "additiveDefault" not in descriptor:
                     raise ValueError(f"settings preset is missing non-additive control: {descriptor['key']}")

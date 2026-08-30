@@ -7,6 +7,8 @@ import { spawn } from 'node:child_process';
 
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
+const expectedRepoRoot = requiredPath('--expected-repo-root');
+const expectedCommit = required('--expected-commit');
 const requestedUrl = new URL(url);
 const requestedView = requestedUrl.searchParams.get('view');
 const PRESET_VIEW_COMPOSITIONS = Object.freeze({
@@ -154,6 +156,8 @@ const sockets = [];
 let expectedPresetControlCount = null;
 let expectedRendererControlCount = null;
 let expectedPresentationControlCount = null;
+const requestedSource = Object.freeze({ repoRoot: expectedRepoRoot, commit: expectedCommit });
+let effectiveSource = null;
 
 class CdpSocket {
   constructor(webSocketUrl) {
@@ -204,6 +208,9 @@ try {
   if (!expectedComposition) throw new Error(`unsupported settings preset witness view: ${requestedView}`);
   if (!['on', 'off'].includes(requestedSmokePresentation)) {
     throw new Error(`unsupported --smoke-presentation: ${requestedSmokePresentation}`);
+  }
+  if (!/^[0-9a-f]{40}$/.test(expectedCommit)) {
+    throw new Error('--expected-commit requires an exact 40-character lowercase Git commit');
   }
   if (Boolean(promotionRoot) !== Boolean(promotionHandle)) {
     throw new Error('settings preset witness promotion requires both --promotion-root and --promotion-handle');
@@ -668,6 +675,18 @@ try {
   assert.equal(presetDocument.preset?.controlCount, expectedPresetControlCount);
   assert.equal(presetDocument.preset?.rendererControlCount, expectedRendererControlCount);
   assert.equal(presetDocument.preset?.presentationControlCount, expectedPresentationControlCount);
+  effectiveSource = {
+    repoRoot: String(presetDocument.source?.repoRoot || ''),
+    branch: String(presetDocument.source?.branch || ''),
+    commit: String(presetDocument.source?.commit || ''),
+  };
+  lastTrustworthyEvidence.effectiveSource = effectiveSource;
+  assert.equal(
+    effectiveSource.repoRoot ? resolve(effectiveSource.repoRoot) : '',
+    expectedRepoRoot,
+    'saved preset came from the wrong server repo root',
+  );
+  assert.equal(effectiveSource.commit, expectedCommit, 'saved preset came from the wrong server commit');
   assert.equal(
     presetDocument.preset?.presentationControls?.['raymarch-smoke-presentation']?.value,
     requestedSmokePresentation,
@@ -742,6 +761,8 @@ try {
     failurePhase: null,
     requestedUrl: url,
     effectiveUrl: liveTarget.url,
+    requestedSource,
+    effectiveSource,
     sourcePresetId,
     sourcePresetAuthority,
     requestedView,
@@ -776,6 +797,8 @@ try {
     failurePhase,
     error: error?.stack || error?.message || String(error),
     requestedUrl: url,
+    requestedSource,
+    effectiveSource,
     lastTrustworthyEvidence,
   });
   console.error(JSON.stringify({ ok: false, report: reportPath, failurePhase, error: error?.message || String(error) }, null, 2));

@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
 import { deflateSync, inflateSync } from 'node:zlib';
+import { buildVolumeSettingsPresetIndex } from './volume-settings-preset-contract.mjs';
 
 const SCHEMA = 'kaminos.volume.layer-coefficient-live-union-witness.v0';
 const EFFECTIVE_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
@@ -87,6 +88,7 @@ class CdpSocket {
 
 const args = parseArgs(process.argv.slice(2));
 const repoRoot = resolve(String(args.get('--repo-root') || import.meta.dirname));
+const volumeSettingsPresetSchema = readJson(join(repoRoot, 'volume-settings-preset-schema-v2.json'));
 const sourceFieldManifestPath = requiredPath('--source-field-manifest');
 const sourceCaptureReportPath = requiredPath('--source-capture-report');
 const exactOverlayManifestPath = requiredPath('--exact-overlay-manifest');
@@ -618,14 +620,11 @@ async function startServer() {
     try {
       const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname);
       if (pathname === '/api/volume-settings-presets') {
-        return sendJson(response, 200, {
-          identity: 'kaminos-volume-settings-preset-index-v1',
-          schemaIdentity: 'kaminos-volume-settings-preset-schema-v2',
-          controlCount: 192,
-          rendererControlCount: 3,
-          storePath: 'witness-read-only-empty-preset-index',
-          entries: [],
-        });
+        return sendJson(response, 200, buildVolumeSettingsPresetIndex(
+          volumeSettingsPresetSchema,
+          'witness-read-only-empty-preset-index',
+          [],
+        ));
       }
       if (pathname === '/api/pipeline-manifest') {
         return sendJson(response, 200, {

@@ -27,7 +27,15 @@ SCHEMA = {
             "additiveDefault": 0.25,
         },
     ],
-    "rendererControls": [],
+    "rendererControls": [
+        {
+            "key": "volume-renderer-detail",
+            "param": "volume_renderer_detail",
+            "tagName": "INPUT",
+            "type": "range",
+            "additiveDefault": 0.5,
+        },
+    ],
     "presentationControls": [
         {
             "key": "raymarch-smoke-presentation",
@@ -145,11 +153,16 @@ def main():
     assert source["controlCount"] == 1, "normalization mutated the immutable source payload"
     assert normalized["controlCount"] == SCHEMA["controlCount"]
     assert normalized["domControls"]["volume-new-detail"]["value"] == 0.25
+    assert normalized["rendererControls"]["volume-renderer-detail"]["value"] == 0.5
+    assert normalized["rendererControlCount"] == 1
     assert normalized["presentationControls"]["raymarch-smoke-presentation"]["value"] == "on"
     assert normalized["presentationControlCount"] == 1
     assert "volume_new_detail=0.25" in normalized["route"]
+    assert "volume_renderer_detail=0.5" in normalized["route"]
     assert "volume_raymarch_smoke=on" in normalized["route"]
-    assert projection["defaultsApplied"] == ["volume-new-detail", "raymarch-smoke-presentation"]
+    assert projection["defaultsApplied"] == [
+        "volume-new-detail", "volume-renderer-detail", "raymarch-smoke-presentation",
+    ]
 
     incompatible_schema = copy.deepcopy(SCHEMA)
     incompatible_schema["controls"].append({
@@ -185,12 +198,16 @@ def main():
         assert document["presetId"] == source_preset_id
         assert document["sourceControlCount"] == 1
         assert document["controlCount"] == 2
+        assert document["sourceRendererControlCount"] == 0
+        assert document["preset"]["rendererControls"]["volume-renderer-detail"]["value"] == 0.5
+        assert document["preset"]["rendererControlCount"] == 1
         assert document["preset"]["presentationControls"]["raymarch-smoke-presentation"]["value"] == "on"
         assert document["schemaProjection"]["defaultsApplied"] == [
-            "volume-new-detail", "raymarch-smoke-presentation",
+            "volume-new-detail", "volume-renderer-detail", "raymarch-smoke-presentation",
         ]
         index = serve.list_volume_settings_presets(store, SCHEMA)
         assert index["entries"][0]["controlCount"] == 2
+        assert index["entries"][0]["rendererControlCount"] == 1
         assert index["entries"][0]["presentationControlCount"] == 1
 
         off_payload = copy.deepcopy(document["preset"])

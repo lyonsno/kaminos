@@ -116,6 +116,37 @@ function validatePresetSchema(schema) {
   return schema;
 }
 
+export function validateVolumeSettingsPresetIndex(index) {
+  if (!index
+    || index.identity !== 'kaminos-volume-settings-preset-index-v1'
+    || index.schemaIdentity !== VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY
+    || !Number.isSafeInteger(Number(index.controlCount))
+    || Number(index.controlCount) < 0
+    || !Number.isSafeInteger(Number(index.rendererControlCount))
+    || Number(index.rendererControlCount) < 0
+    || !Number.isSafeInteger(Number(index.presentationControlCount))
+    || Number(index.presentationControlCount) < 0
+    || !Array.isArray(index.entries)) {
+    throw new Error('preset index identity or schema mismatch');
+  }
+  return true;
+}
+
+export function buildVolumeSettingsPresetIndex(rawSchema, storePath, entries = []) {
+  const schema = validatePresetSchema(rawSchema);
+  const index = {
+    identity: 'kaminos-volume-settings-preset-index-v1',
+    schemaIdentity: schema.identity,
+    controlCount: schema.controls.length,
+    rendererControlCount: (schema.rendererControls || []).length,
+    presentationControlCount: (schema.presentationControls || []).length,
+    storePath: String(storePath || ''),
+    entries: [...entries],
+  };
+  validateVolumeSettingsPresetIndex(index);
+  return index;
+}
+
 export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
   if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
@@ -345,18 +376,21 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
   for (const key of ['role', 'composition', 'warmup_steps', 'settings_preset', 'settings_preset_authority']) {
     if (params.getAll(key).length !== 1) throw new Error(`visual target duplicates parameter: ${key}`);
   }
+  const visualOwnedVolumeParams = new Set([
+    'volume_presentation',
+    'volume_raymarch_smoke',
+    'volume_appearance_decomposition',
+    'volume_appearance_selection',
+  ]);
   const requestedVolumeEntries = [...params].filter(([key]) => (
-    key.startsWith('volume_')
-      && key !== 'volume_presentation'
-      && key !== 'volume_raymarch_smoke'
-      && key !== 'volume_appearance_decomposition'
-      && key !== 'volume_appearance_selection'
+    key.startsWith('volume_') && !visualOwnedVolumeParams.has(key)
   ));
-  if (requestedVolumeEntries.length !== receipt.routeVolumeEntries.length) {
+  const savedVolumeEntries = receipt.routeVolumeEntries.filter(([key]) => !visualOwnedVolumeParams.has(key));
+  if (requestedVolumeEntries.length !== savedVolumeEntries.length) {
     throw new Error('visual target volume route is partial or contains extra settings');
   }
   const requested = new URLSearchParams(requestedVolumeEntries);
-  for (const [key, value] of receipt.routeVolumeEntries) {
+  for (const [key, value] of savedVolumeEntries) {
     const values = requested.getAll(key);
     if (values.length !== 1 || values[0] !== value) throw new Error(`visual target settings route mismatch for ${key}`);
   }

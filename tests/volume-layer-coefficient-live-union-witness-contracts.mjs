@@ -1,8 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import {
+  buildVolumeSettingsPresetIndex,
+  validateVolumeSettingsPresetIndex,
+} from '../volume-settings-preset-contract.mjs';
 
 const witness = readFileSync(new URL('../volume-layer-coefficient-live-union-witness.mjs', import.meta.url), 'utf8');
+const presetSchema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
 
 assert.match(witness, /kaminos\.volume\.layer-coefficient-live-union-witness\.v0/, 'witness publishes a stable report schema');
 assert.equal((witness.match(/spawn\(chromeExecutable\(\)/g) || []).length, 1, 'witness owns exactly one Chrome process');
@@ -48,6 +53,19 @@ assert.match(witness, /duplicate-condition-image/, 'witness rejects a capture su
 assert.match(witness, /elapsedMs/, 'witness measures each condition instead of reporting integration cost from intuition');
 assert.match(witness, /same-state-drift/, 'witness rejects simulation movement between matched conditions');
 assert.match(witness, /\/api\/volume-settings-presets/, 'witness server supplies the renderer preset index API instead of allowing a page-level 404');
+assert.match(witness, /buildVolumeSettingsPresetIndex/, 'witness derives its synthetic preset index from the shared schema contract');
+assert.doesNotMatch(witness, /controlCount:\s*192|rendererControlCount:\s*3/, 'witness does not freeze preset-axis counts');
+const syntheticPresetIndex = buildVolumeSettingsPresetIndex(
+  presetSchema,
+  'witness-read-only-empty-preset-index',
+  [],
+);
+assert.equal(validateVolumeSettingsPresetIndex(syntheticPresetIndex), true, 'synthetic witness index passes cockpit admission semantics');
+assert.deepEqual(
+  [syntheticPresetIndex.controlCount, syntheticPresetIndex.rendererControlCount, syntheticPresetIndex.presentationControlCount],
+  [presetSchema.controls.length, presetSchema.rendererControls.length, presetSchema.presentationControls.length],
+  'synthetic witness index exposes every current schema axis',
+);
 assert.match(witness, /\/api\/pipeline-manifest/, 'witness server supplies the pipeline manifest API instead of allowing a page-level 404');
 assert.match(witness, /browser-event-audit/, 'witness names browser event admission as an explicit failure phase');
 assert.match(witness, /Runtime\.exceptionThrown/, 'witness rejects unhandled browser runtime exceptions');

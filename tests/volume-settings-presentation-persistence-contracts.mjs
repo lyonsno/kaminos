@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildVolumeSettingsPresetTarget,
+  buildVolumeSettingsPresetVisualTarget,
   validateVolumeSettingsPresetDocument,
+  validateVolumeSettingsPresetVisualTarget,
 } from '../volume-settings-preset-contract.mjs';
 
 const root = join(import.meta.dirname, '..');
@@ -39,6 +41,10 @@ assert.doesNotMatch(index, /Number\(index\.controlCount\) !== 192|Number\(index\
 assert.doesNotMatch(index, /Number\(result\.effective\?\.controlCount\) !== 192|Number\(result\.effective\?\.rendererControlCount\) !== 3/, 'preset write admission does not duplicate canonical schema counts');
 assert.match(witness, /expectedPresetControlCount[\s\S]*expectedRendererControlCount[\s\S]*expectedPresentationControlCount/, 'browser witness derives inventory counts from the live preset index');
 assert.doesNotMatch(witness, /presetControlCount, 192|rendererControlCount, 3/, 'browser witness does not freeze additive schema counts');
+assert.match(witness, /--expected-repo-root/, 'browser witness requires the reviewed repo root');
+assert.match(witness, /--expected-commit/, 'browser witness requires the reviewed commit');
+assert.match(witness, /presetDocument\.source/, 'browser witness binds the saved artifact to its effective server source');
+assert.match(witness, /requestedSource[\s\S]*effectiveSource/, 'browser witness preserves requested and effective source identity');
 
 const contractSchema = {
   identity: schema.identity,
@@ -90,6 +96,31 @@ const receipt = validateVolumeSettingsPresetDocument(artifact, artifact.presetId
 assert.equal(receipt.presentationControlCount, 1);
 const target = buildVolumeSettingsPresetTarget(receipt, 'http://127.0.0.1:18414');
 assert.equal(target.searchParams.get('volume_raymarch_smoke'), 'off', 'ordinary preset target restores Smoke Off');
+
+for (const view of ['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-diagnostic']) {
+  const visualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', view);
+  assert.equal(
+    validateVolumeSettingsPresetVisualTarget(receipt, visualTarget.searchParams),
+    true,
+    `${view} accepts a complete saved route with authored Smoke state`,
+  );
+}
+
+const partialVisualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', 'raymarch-only');
+partialVisualTarget.searchParams.delete('volume_scene');
+assert.throws(
+  () => validateVolumeSettingsPresetVisualTarget(receipt, partialVisualTarget.searchParams),
+  /partial|mismatch/,
+  'visual preset validation rejects partial basin state',
+);
+
+const duplicateVisualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', 'raymarch-only');
+duplicateVisualTarget.searchParams.append('volume_scene', 'duplicate');
+assert.throws(
+  () => validateVolumeSettingsPresetVisualTarget(receipt, duplicateVisualTarget.searchParams),
+  /partial|mismatch/,
+  'visual preset validation rejects duplicate basin state',
+);
 
 const invalid = structuredClone(artifact);
 invalid.preset.presentationControls['raymarch-smoke-presentation'].value = 'maybe';

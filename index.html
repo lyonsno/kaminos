@@ -2751,6 +2751,7 @@ import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontolog
 import {
   resolveVolumeSettingsPresetVisualView,
   validateVolumeSettingsPresetDocument,
+  validateVolumeSettingsPresetIndex,
   validateVolumeSettingsPresetTarget,
 } from './volume-settings-preset-contract.mjs';
 import {
@@ -12312,17 +12313,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     const response = await fetch('/api/volume-settings-presets', { cache: 'no-store' });
     const index = await response.json();
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
-    if (index.identity !== 'kaminos-volume-settings-preset-index-v1'
-      || index.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || !Number.isSafeInteger(Number(index.controlCount))
-      || Number(index.controlCount) < 0
-      || !Number.isSafeInteger(Number(index.rendererControlCount))
-      || Number(index.rendererControlCount) < 0
-      || !Number.isSafeInteger(Number(index.presentationControlCount))
-      || Number(index.presentationControlCount) < 0
-      || !Array.isArray(index.entries)) {
-      throw new Error('preset index identity or schema mismatch');
-    }
+    validateVolumeSettingsPresetIndex(index);
     volumeSettingsPresetIndex = index;
     if (select) {
       const previous = selectedPresetId || select.value;
