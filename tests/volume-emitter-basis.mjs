@@ -106,6 +106,18 @@ ring.carrier.emitters.forEach((emitter, index) => {
   assertVectorClose(emitter.end, next.start, `ring segment ${index} joins its successor`);
 });
 
+const downstreamGeometry = result => result.carrier.emitters.map(({ id, ...emitter }) => emitter);
+for (const left of VOLUME_EMITTER_FAMILIES) {
+  for (const right of VOLUME_EMITTER_FAMILIES) {
+    if (left >= right) continue;
+    assert.notDeepEqual(
+      downstreamGeometry(compile(left)),
+      downstreamGeometry(compile(right)),
+      `${left} and ${right} remain distinct after diagnostic-only ids are discarded`,
+    );
+  }
+}
+
 assert.throws(
   () => compileVolumeEmitterFamily({ ...HELD_REQUEST, family: 'cluster' }),
   /unsupported emitter family: cluster/,
@@ -142,12 +154,17 @@ assert.throws(
   'blank frame identity cannot masquerade as an assay receipt',
 );
 assert.doesNotThrow(
-  () => compile('wick', { radius: 0.18, ringRadius: 0.24, ringSegments: 2 }),
+  () => compile('wick', { radius: 0.18, ringRadius: 'malformed-ring-radius', ringSegments: 'malformed-ring-segments' }),
   'wick compilation does not reject irrelevant ring-only geometry controls',
 );
 assert.doesNotThrow(
-  () => compile('nozzle', { supportAxis: [0, 0, 0] }),
+  () => compile('nozzle', { supportAxis: [0, Number.NaN, 0] }),
   'nozzle compilation does not reject an irrelevant support axis',
+);
+assert.throws(
+  () => compile('ribbon', { supportAxis: [0, 1, 0] }),
+  /supportAxis projected perpendicular to direction must be a finite non-zero vec3/,
+  'ribbon rejects a support axis that would become the same downstream segment as wick',
 );
 
 console.log('volume emitter basis contracts passed');

@@ -17,6 +17,7 @@ import {
 import { createKilnFirePresentation } from './kiln-fire-presentation.mjs';
 import { createSingleFlameHistoryHoldoverDecision } from './kiln-flame-history-holdover.mjs';
 import { createKilnFrameStageLedger } from './lib/kiln-frame-stage-ledger.mjs';
+import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -5913,6 +5914,8 @@ export function createKaminosVolumePrototype({
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    coreEmitterSourceMode: 'cluster',
+    coreEmitterSourceReceipt: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -6903,20 +6906,23 @@ export function createKaminosVolumePrototype({
     }));
   }
 
-  function getPrimitiveSource() {
+  function getPrimitiveSource(coreEmitterSourceMode = state.coreEmitterSourceMode) {
     const primitive = volumePrimitives[0];
-    if (!primitive) {
-      const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
-      return {
-        position: [0, scene === 'bonfire_plume' ? 0.62 : -0.74, 0],
-        radius: Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
-        flowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
-      };
-    }
+    const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    const coreEmitterSourceReceipt = resolveVolumeCoreEmitterSource({
+      mode: coreEmitterSourceMode,
+      controlFlowRate: Math.max(0, controlsSnapshot.flowRate ?? 0.3),
+      primitiveFlowRate: primitive ? Math.max(0, primitive.simulation.flowRate) : null,
+      primitiveId: primitive?.id || null,
+    });
+    state.coreEmitterSourceReceipt = coreEmitterSourceReceipt;
     return {
-      position: primitive.transform.position,
-      radius: Math.max(0.04, primitive.simulation.sourceRadius),
-      flowRate: Math.max(0, primitive.simulation.flowRate),
+      position: primitive?.transform.position || [0, scene === 'bonfire_plume' ? 0.62 : -0.74, 0],
+      radius: primitive
+        ? Math.max(0.04, primitive.simulation.sourceRadius)
+        : Math.max(0.08, controlsSnapshot.inputRadius || 0.08),
+      flowRate: coreEmitterSourceReceipt.effectiveFlowRate,
+      coreEmitterSourceReceipt,
     };
   }
 
@@ -13868,6 +13874,7 @@ export function createKaminosVolumePrototype({
       state.pressureTierOverlayOpacity = normalizePressureTierControls(controlsSnapshot).overlay;
       state.simProfile = normalizeSimProfileFlag(controlsSnapshot.simProfile);
       state.scalarActivityReceiver = scalarActivityReceiverDebug();
+      getPrimitiveSource();
       updateSimCostLedger();
       pumpLookLabFrozenFrame();
     },
@@ -13875,7 +13882,19 @@ export function createKaminosVolumePrototype({
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
+      getPrimitiveSource();
       if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+    },
+    setCoreEmitterSourceMode(mode) {
+      const previousMode = state.coreEmitterSourceMode;
+      const requestedMode = String(mode || '');
+      const source = getPrimitiveSource(requestedMode);
+      state.coreEmitterSourceMode = requestedMode;
+      if (device && previousMode !== state.coreEmitterSourceMode) {
+        rebuildFluidState(gridSize, majorantGridSize, 'core-emitter-source-mode-change');
+      }
+      emitStatus({ phase: 'core-emitter-source' });
+      return { ...source.coreEmitterSourceReceipt };
     },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);
@@ -13975,6 +13994,7 @@ export function createKaminosVolumePrototype({
     debugState() {
       return {
         ...state,
+        coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),

@@ -21391,12 +21391,24 @@ async function initKaminosVolumeRoute() {
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
     }
+    const timestampMs = performance.now();
+    const frameId = `cockpit-${family}-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`;
+    const externalRequest = routeExternalEmitters === 'synthetic_hand_trails'
+      ? {
+          mode: 'synthetic_hand_trails',
+          frameId,
+          timestampMs,
+          coordinateSpace: 'volume-local',
+          emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
+        }
+      : null;
     const receipt = applyVolumeEmitterFamilyRuntime({
       prototype: volumePrototype,
       family,
       controls: controlsSnapshot,
-      timestampMs: performance.now(),
-      frameId: `cockpit-${family}-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`,
+      timestampMs,
+      frameId,
+      externalRequest,
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     renderVolumeEmitterReceipt(receipt);
@@ -21547,14 +21559,8 @@ async function initKaminosVolumeRoute() {
   let syntheticEmitterTimer = 0;
   const refreshSyntheticExternalEmitters = () => {
     if (routeExternalEmitters !== 'synthetic_hand_trails' || !volumePrototype) return;
-    const timestampMs = performance.now();
-    volumePrototype.setExternalEmitters({
-      mode: 'synthetic_hand_trails',
-      frameId: volumePrototype.debugState().frameCount,
-      timestampMs,
-      coordinateSpace: 'volume-local',
-      emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
-    });
+    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    refreshVolumeReadout();
   };
 
   if (params.get('kaminos_volume_smoke') === '1') {
