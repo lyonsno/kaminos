@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
+assert.match(index, /<select[^>]+id="emitter-assay-family"[^>]+data-volume-settings-param="volume_emitter_family"/, 'emitter selection declares its canonical basin route parameter');
+assert.match(index, /function volumeDomControlParamFromElement\(el\)[\s\S]*?el\.dataset\.volumeSettingsParam[\s\S]*?volumeDomControlParamFromId\(el\.id\)/, 'capture prefers explicit route identity and retains the volume-* fallback');
+
 assert.match(index, /id="volume-artistic-swirl"[^>]*type="checkbox"|type="checkbox"[^>]*id="volume-artistic-swirl"/, 'cockpit exposes the optional artistic swirl gate');
 assert.match(index, /id="volume-phased-sway"[^>]*type="checkbox"|type="checkbox"[^>]*id="volume-phased-sway"/, 'cockpit exposes the optional phased sway gate');
 assert.match(index, /\['artisticSwirl', 'volume_artistic_swirl'\]/, 'basin URLs preserve the artistic swirl choice');

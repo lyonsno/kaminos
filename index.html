@@ -1577,7 +1577,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="volume-control-section-title">Visual Tuning</div>
     <div class="slider-row" data-volume-visual-cost-knob="emitter-morphology">
       <span class="slider-label">Emitter</span>
-      <select id="emitter-assay-family" class="select-input">
+      <select id="emitter-assay-family" data-volume-settings-param="volume_emitter_family" class="select-input">
         <option value="cluster" selected>Cluster</option>
         <option value="wick">Wick</option>
         <option value="nozzle">Nozzle</option>
@@ -12569,6 +12569,10 @@ function volumeDomControlParamFromId(id) {
   return String(id || '').replaceAll('-', '_');
 }
 
+function volumeDomControlParamFromElement(el) {
+  return el.dataset.volumeSettingsParam || volumeDomControlParamFromId(el.id);
+}
+
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.type === 'checkbox') return Boolean(el.checked);
@@ -12579,12 +12583,12 @@ function readVolumeDomControlValue(el) {
 
 function readVolumeDomControls() {
   const controls = {};
-  const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
+  const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"], #sidebar [data-volume-settings-param]');
   for (const el of fields) {
     const key = volumeDomControlKeyFromId(el.id);
     controls[key] = {
       id: el.id,
-      param: volumeDomControlParamFromId(el.id),
+      param: volumeDomControlParamFromElement(el),
       tagName: el.tagName,
       type: el.type || el.tagName.toLowerCase(),
       value: readVolumeDomControlValue(el),
