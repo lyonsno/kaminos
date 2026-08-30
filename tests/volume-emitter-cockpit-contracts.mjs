@@ -61,5 +61,8 @@ assert.match(
   /applyVolumeEmitterFamilyRuntimeToCockpit\(readVolumeControls\(\)\)/,
   'initialization and interactive controls can share the same composition boundary',
 );
+const syntheticRefresh = cockpit.match(/const refreshSyntheticExternalEmitters = \(\) => \{[\s\S]*?\n  \};/)?.[0] || '';
+assert.match(syntheticRefresh, /applyVolumeEmitterFamilyRuntimeToCockpit/, 'synthetic trails refresh through the canonical emitter source arbiter');
+assert.doesNotMatch(syntheticRefresh, /setExternalEmitters/, 'synthetic trails have no competing direct carrier writer');
 
 console.log('volume emitter cockpit contracts passed');

@@ -168,24 +168,8 @@ export function compileVolumeEmitterFamily(request = {}) {
 
   const origin = vec3(request.origin, 'origin', [0, -0.76, 0]);
   const requestedDirection = vec3(request.direction, 'direction', [0, 1, 0]);
-  const requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
   const direction = normalize(requestedDirection, 'direction');
-  const supportAxis = ['ribbon', 'ring'].includes(family)
-    ? normalize(requestedSupportAxis, 'supportAxis')
-    : requestedSupportAxis;
   const radius = numberInRange(request.radius ?? 0.04, 'radius', 0.006, 0.18);
-  const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
-  const requestedRingRadius = finiteNumber(request.ringRadius ?? Math.max(0.24, radius * 1.5), 'ringRadius');
-  const ringRadius = family === 'ring'
-    ? numberInRange(requestedRingRadius, 'ringRadius', radius * 1.5, 0.9)
-    : requestedRingRadius;
-  const ringSegments = finiteNumber(request.ringSegments ?? 12, 'ringSegments');
-  if (family === 'ring' && (!Number.isInteger(ringSegments) || ringSegments < 3)) {
-    throw new Error(`ring segment count ${ringSegments} must be an integer >= 3`);
-  }
-  if (family === 'ring' && ringSegments > VOLUME_EXTERNAL_EMITTER_CAPACITY) {
-    throw new Error(`ring segment count ${ringSegments} exceeds external emitter capacity ${VOLUME_EXTERNAL_EMITTER_CAPACITY}`);
-  }
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
   const lifetime = numberInRange(request.lifetime ?? 0.55, 'lifetime', 0.016, 8);
@@ -199,8 +183,11 @@ export function compileVolumeEmitterFamily(request = {}) {
 
   let support;
   let emitters;
+  let familyRequested;
   if (family === 'wick') {
+    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
     const halfSpan = scale(direction, length * 0.5);
+    familyRequested = { length };
     support = {
       primitive: 'ellipsoid-capsule',
       origin,
@@ -221,6 +208,8 @@ export function compileVolumeEmitterFamily(request = {}) {
       lifetime,
     })];
   } else if (family === 'nozzle') {
+    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
+    familyRequested = { length };
     support = {
       primitive: 'oriented-capsule',
       origin,
@@ -241,7 +230,11 @@ export function compileVolumeEmitterFamily(request = {}) {
       lifetime,
     })];
   } else if (family === 'ribbon') {
+    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
+    const requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
+    const supportAxis = orthogonalSupportAxis(direction, requestedSupportAxis);
     const halfSpan = scale(supportAxis, length * 0.5);
+    familyRequested = { supportAxis: requestedSupportAxis, length };
     support = {
       primitive: 'finite-line-capsule',
       origin,
@@ -263,7 +256,22 @@ export function compileVolumeEmitterFamily(request = {}) {
       lifetime,
     })];
   } else {
-    const ringAxisA = orthogonalSupportAxis(direction, supportAxis);
+    const requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
+    const ringRadius = numberInRange(
+      request.ringRadius ?? Math.max(0.24, radius * 1.5),
+      'ringRadius',
+      radius * 1.5,
+      0.9,
+    );
+    const ringSegments = finiteNumber(request.ringSegments ?? 12, 'ringSegments');
+    if (!Number.isInteger(ringSegments) || ringSegments < 3) {
+      throw new Error(`ring segment count ${ringSegments} must be an integer >= 3`);
+    }
+    if (ringSegments > VOLUME_EXTERNAL_EMITTER_CAPACITY) {
+      throw new Error(`ring segment count ${ringSegments} exceeds external emitter capacity ${VOLUME_EXTERNAL_EMITTER_CAPACITY}`);
+    }
+    familyRequested = { supportAxis: requestedSupportAxis, ringRadius, ringSegments };
+    const ringAxisA = orthogonalSupportAxis(direction, requestedSupportAxis);
     const ringAxisB = normalize(cross(direction, ringAxisA), 'ring secondary axis');
     const points = Array.from({ length: ringSegments }, (_, index) => {
       const angle = index / ringSegments * Math.PI * 2;
@@ -301,11 +309,8 @@ export function compileVolumeEmitterFamily(request = {}) {
     family,
     origin,
     direction: requestedDirection,
-    supportAxis: requestedSupportAxis,
     radius,
-    length,
-    ringRadius,
-    ringSegments,
+    ...familyRequested,
     strength,
     velocitySpeed,
     chemistry,
