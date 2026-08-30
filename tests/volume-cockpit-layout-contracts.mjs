@@ -130,15 +130,15 @@ function schemaRecords() {
 
 const accepted = validateVolumeCockpitControlInventory({ schema, controlRecords: schemaRecords() });
 assert.equal(accepted.identity, 'kaminos-volume-cockpit-layout-receipt-v0');
-assert.equal(accepted.controlCount, 189);
-assert.equal(accepted.expectedControlCount, 189);
-assert.equal(accepted.presetControlCount, 186);
+assert.equal(accepted.controlCount, 192);
+assert.equal(accepted.expectedControlCount, 192);
+assert.equal(accepted.presetControlCount, 189);
 assert.equal(accepted.rendererControlCount, 3);
 assert.deepEqual(accepted.missingControlIds, []);
 assert.deepEqual(accepted.unexpectedControlIds, []);
 assert.deepEqual(accepted.duplicateControlIds, []);
 assert.deepEqual(accepted.rootControlCounts, {
-  'volume-primary-control-root': 188,
+  'volume-primary-control-root': 191,
   'volume-authored-mix-control-root': 1,
 });
 

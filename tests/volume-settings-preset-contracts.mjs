@@ -129,10 +129,10 @@ fakeControls.route = fakeRoute.toString();
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(fakeControls), 'legacy-contract-fixture', schema),
   /schema|canonical|control.*param|inventory/i,
-  'a self-consistent 186-entry fake control inventory cannot default-fill the real UI',
+  'a self-consistent 189-entry fake control inventory cannot default-fill the real UI',
 );
 
-assert.equal(schema.controlCount, 186);
+assert.equal(schema.controlCount, 189);
 for (const key of removedPersistenceControls) {
   assert.equal(schema.controls.some(entry => entry.key === key), false, `schema v2 excludes persistence widget ${key}`);
 }
@@ -258,16 +258,16 @@ truncated.controlCount = 1;
 truncated.domControls = { [schema.controls[0].key]: truncated.domControls[schema.controls[0].key] };
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(truncated), 'legacy-contract-fixture', schema),
-  /186|control/i,
+  /189|control/i,
   'loader rejects truncated presets instead of filling omitted settings from defaults',
 );
 
 const mismatchedCount = nativeCapture();
-mismatchedCount.controlCount = 186;
+mismatchedCount.controlCount = 189;
 delete mismatchedCount.domControls[schema.controls[0].key];
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(mismatchedCount), 'legacy-contract-fixture', schema),
-  /186|control/i,
+  /189|control/i,
   'loader rejects a declared count that does not match the saved DOM-control population',
 );
 

@@ -11714,6 +11714,7 @@ function formatVolumePresetControlValue(key, value) {
   }
   if (typeof value !== 'number') return value;
   const field = REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.find(candidate => candidate.key === key);
+  if (field?.continuous) return String(value);
   return value.toFixed(field?.decimals ?? 2);
 }
 
@@ -11870,6 +11871,7 @@ function volumeSceneControlId(key) {
     pyroDynamicDetail: 'volume-pyro-detail',
     pyroCompareMode: 'volume-pyro-compare',
     lookFreeze: 'volume-look-freeze',
+    volumeExposure: 'volume-exposure',
     volumeResidualMode: 'volume-residual-mode',
     volumeResidualModelUrl: 'volume-residual-model-url',
     volumeResidualStrength: 'volume-residual-strength',
@@ -12262,7 +12264,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
     if (!response.ok) throw new Error(index.error || `preset index failed: ${response.status}`);
     if (index.identity !== 'kaminos-volume-settings-preset-index-v1'
       || index.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || Number(index.controlCount) !== 186
+      || Number(index.controlCount) !== 189
       || Number(index.rendererControlCount) !== 3
       || !Array.isArray(index.entries)) {
       throw new Error('preset index identity or schema mismatch');
@@ -12282,7 +12284,7 @@ async function refreshVolumeSettingsPresetList(selectedPresetId = null) {
         select.value = index.entries.some(entry => entry.presetId === previous) ? previous : index.entries[0].presetId;
       }
     }
-    volumeSettingsPresetStatus(`${index.entries.length} presets | 186 basin controls + 3 renderer controls | ${index.storePath}`);
+    volumeSettingsPresetStatus(`${index.entries.length} presets | 189 basin controls + 3 renderer controls | ${index.storePath}`);
     return index;
   } catch (error) {
     volumeSettingsPresetIndex = null;
@@ -12309,13 +12311,13 @@ async function saveVolumeSettingsPreset() {
     if (!response.ok || !result.ok) throw new Error(result.error || `preset save failed: ${response.status}`);
     if (result.identity !== 'kaminos-volume-settings-preset-write-receipt-v1'
       || result.effective?.schemaIdentity !== 'kaminos-volume-settings-preset-schema-v2'
-      || Number(result.effective?.controlCount) !== 186
+      || Number(result.effective?.controlCount) !== 189
       || Number(result.effective?.rendererControlCount) !== 3) {
       throw new Error('preset write receipt identity or schema mismatch');
     }
     await refreshVolumeSettingsPresetList(result.effective.presetId);
     if (labelInput) labelInput.value = result.effective.label;
-    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 186 basin + 3 renderer controls | ${result.effective.storePath}`);
+    volumeSettingsPresetStatus(`${result.effective.label} | ${result.effective.presetId} | 189 basin + 3 renderer controls | ${result.effective.storePath}`);
     console.log(JSON.stringify(result, null, 2));
     setInfo(`Volume settings preset saved: ${result.effective.label}`);
     return result;
@@ -17902,7 +17904,10 @@ async function initKaminosVolumeRoute() {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
-    document.getElementById(field.id).value = clampVolumeControlValue(routeValue, field).toFixed(field.decimals);
+    const clampedValue = clampVolumeControlValue(routeValue, field);
+    document.getElementById(field.id).value = field.continuous
+      ? String(clampedValue)
+      : clampedValue.toFixed(field.decimals);
   }
   const routePyroCompare = params.get('volume_pyro_compare');
   if (['live', 'base'].includes(routePyroCompare)) {
@@ -18033,7 +18038,7 @@ async function initKaminosVolumeRoute() {
           : String(requested) === String(effective);
         return equal ? [] : [{ id: control.id, requested, effective }];
       });
-      if (basinControls.length !== 186 || rendererControls.length !== 3 || substitutions.length) {
+      if (basinControls.length !== 189 || rendererControls.length !== 3 || substitutions.length) {
         throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
       }
       return {

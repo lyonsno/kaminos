@@ -45,7 +45,7 @@ const receipt = {
   actor: structuredClone(descriptor.actor),
   viewport: { cssWidth: 960, cssHeight: 720, backingWidth: 1920, backingHeight: 1440, dpr: 2 },
   presentation: { arm: 'composite', smoke: 'on', splats: 'on', composition: 'smoke-raymarch-under-splats-v0' },
-  controls: { basin: 186, renderer: 3 },
+  controls: { basin: 189, renderer: 3 },
   fallbackReason: null,
   gpuStageTiming: {
     identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',

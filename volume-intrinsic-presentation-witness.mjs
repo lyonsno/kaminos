@@ -146,7 +146,7 @@ try {
   assert.ok(admitted.backend?.startsWith('WebGPU'), 'effective backend substituted away from WebGPU');
   assert.equal(admitted.sourceSettingsPreset?.sourcePresetAuthority, 'shared-volume-settings-preset-v2', 'shared preset authority missing');
   assert.equal(admitted.sourceSettingsPreset?.presetId, route.searchParams.get('settings_preset'), 'effective preset id does not match requested preset');
-  assert.equal(admitted.sourceSettingsPreset?.controlCount, 186, 'complete 186-control preset identity was not preserved');
+  assert.equal(admitted.sourceSettingsPreset?.controlCount, 189, 'complete 189-control preset identity was not preserved');
   await delay(settleMs);
 
   failurePhase = 'same-state-capture';

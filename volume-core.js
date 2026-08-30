@@ -7127,8 +7127,7 @@ fn boundarySplatBilinearOpticalFs(in: BoundarySplatVertexOut) -> @location(0) ve
 
 const BOUNDARY_SPLAT_PRESENTATION_WGSL = `
 struct VolumePresentationControls {
-  exposure: f32,
-  _padding: vec3<f32>,
+  exposure: vec4<f32>,
 };
 
 struct BoundarySplatPresentationVertexOut {
@@ -7161,7 +7160,7 @@ fn boundarySplatPresentationFs(in: BoundarySplatPresentationVertexOut) -> @locat
   let color = max(textureLoad(boundarySplatHdr, pixel, 0).rgb, vec3<f32>(0.0));
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
-  let volumeExposure = clamp(presentationControls.exposure, 0.0, 20.0);
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 20.0);
   let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   let grade = exposed * (0.80 + 0.18 * vignette);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
@@ -7171,8 +7170,7 @@ fn boundarySplatPresentationFs(in: BoundarySplatPresentationVertexOut) -> @locat
 
 const BOUNDARY_SPLAT_OPTICAL_PRESENTATION_WGSL = `
 struct VolumePresentationControls {
-  exposure: f32,
-  _padding: vec3<f32>,
+  exposure: vec4<f32>,
 };
 
 struct BoundarySplatOpticalPresentationVertexOut {
@@ -7212,7 +7210,7 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
   }
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
-  let volumeExposure = clamp(presentationControls.exposure, 0.0, 20.0);
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 20.0);
   let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   let grade = exposed * (0.80 + 0.18 * vignette);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
@@ -13188,20 +13186,24 @@ export function createKaminosVolumePrototype({
 
   function encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, options = {}) {
     if (!targetPipeline || !boundarySplatOpticalTexture) return false;
+    const resolveEntries = [{
+      binding: 0,
+      resource: boundarySplatOpticalTexture.createView({
+        dimension: '2d-array',
+        baseArrayLayer: 0,
+        arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
+      }),
+    }];
+    if (options.includePresentationControls === true) {
+      resolveEntries.push({
+        binding: 1,
+        resource: { buffer: volumePresentationControlsBuffer },
+      });
+    }
     const resolveBindGroup = device.createBindGroup({
       label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} bind group`,
       layout: targetPipeline.getBindGroupLayout(0),
-      entries: [{
-        binding: 0,
-        resource: boundarySplatOpticalTexture.createView({
-          dimension: '2d-array',
-          baseArrayLayer: 0,
-          arrayLayerCount: BOUNDARY_SPLAT_OPTICAL_DEPTH_BINS,
-        }),
-      }, {
-        binding: 1,
-        resource: { buffer: volumePresentationControlsBuffer },
-      }],
+      entries: resolveEntries,
     });
     const resolvePass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY} pass`,
@@ -13247,12 +13249,15 @@ export function createKaminosVolumePrototype({
       state.boundarySplatPresentationModeFallbackReason = boundarySplatPresentationModeFallbackReason;
       return false;
     }
-    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, options.timestampWrites?.querySet ? {
-      timestampWrites: {
-        querySet: options.timestampWrites.querySet,
-        endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
-      },
-    } : {})) return false;
+    if (!encodeBoundarySplatOpticalResolve(encoder, targetView, targetPipeline, {
+      includePresentationControls: options.opticalDepthOrderDiagnostic !== true,
+      ...(options.timestampWrites?.querySet ? {
+        timestampWrites: {
+          querySet: options.timestampWrites.querySet,
+          endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex,
+        },
+      } : {}),
+    })) return false;
     state.boundarySplatFrameCount += 1;
     state.volumeReconstructionStyle = `${state.boundarySplatRendererIdentity}+${BOUNDARY_SPLAT_OPTICAL_TRANSPORT_IDENTITY}`;
     boundarySplatPresentationModeFallbackReason = null;

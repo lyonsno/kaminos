@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 186,
+  "controlCount": 189,
   "controls": [
     {
       "key": "volume-scene",
@@ -207,6 +207,18 @@
       "type": "range"
     },
     {
+      "key": "volume-reaction-boundary-fire-clean-color",
+      "param": "volume_reaction_boundary_fire_clean_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
+      "key": "volume-reaction-boundary-fire-soot-color",
+      "param": "volume_reaction_boundary_fire_soot_color",
+      "tagName": "INPUT",
+      "type": "color"
+    },
+    {
       "key": "volume-reaction-heat-min",
       "param": "volume_reaction_heat_min",
       "tagName": "INPUT",
@@ -329,6 +341,12 @@
     {
       "key": "volume-reaction-shell-contrast",
       "param": "volume_reaction_shell_contrast",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "key": "volume-exposure",
+      "param": "volume_exposure",
       "tagName": "INPUT",
       "type": "range"
     },

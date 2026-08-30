@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const settingsSchema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
 
 function rangeControl(id) {
   const match = index.match(new RegExp(`<input[^>]+id="${id}"[^>]*>`));
@@ -44,9 +45,31 @@ assert.match(core, /boundaryFireCleanEndpoint = u\.boundary_fire_palette_clean\.
 
 assert.match(core, /volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 20\.0\)/, 'raymarch reads the volume-wide exposure uniform');
 assert.match(core, /exp\(-color \* \(0\.96 \* volumeExposure\)\)/, 'raymarch applies volume exposure before its shared tone curve');
-assert.match(core, /struct VolumePresentationControls[\s\S]*exposure:[\s\S]*@group\(0\) @binding\(1\) var<uniform> presentationControls/, 'splat presentation has a first-class exposure uniform');
+assert.match(core, /struct VolumePresentationControls\s*\{\s*exposure: vec4<f32>,\s*\};/, 'the 16-byte host presentation buffer has an exact 16-byte WGSL layout');
+assert.match(core, /@group\(0\) @binding\(1\) var<uniform> presentationControls/, 'splat presentation has a first-class exposure uniform');
+assert.match(core, /presentationControls\.exposure\.x/, 'matched splat presentation reads exposure from the aligned vec4 component');
 assert.match(core, /entries:[\s\S]*binding: 0,[\s\S]*boundarySplatHdrTexture[\s\S]*binding: 1,[\s\S]*volumePresentationControlsBuffer/, 'matched splat resolve binds the same top-level exposure control');
 assert.match(core, /uniforms\[332\] = volumeExposure/, 'the main raymarch uniform receives the effective exposure');
 assert.match(core, /volumePresentationControls\[0\] = volumeExposure[\s\S]*writeBuffer\(volumePresentationControlsBuffer/, 'the splat presentation uniform receives the same effective exposure');
+
+assert.match(index, /volumeExposure: 'volume-exposure'/, 'snapshot hydration maps volumeExposure to the authored top-level control');
+assert.match(index, /if \(field\?\.continuous\) return String\(value\);/, 'continuous snapshot values bypass display-only decimal formatting');
+assert.match(index, /field\.continuous\s*\?\s*String\(clampedValue\)\s*:\s*clampedValue\.toFixed\(field\.decimals\)/, 'continuous URL-route hydration preserves the clamped numeric value without decimal quantization');
+assert.match(core, /const resolveEntries = \[[\s\S]*if \(options\.includePresentationControls === true\)[\s\S]*resolveEntries\.push\([\s\S]*binding: 1/, 'optical resolves add presentation binding 1 only for pipelines that declare it');
+assert.match(core, /includePresentationControls: options\.opticalDepthOrderDiagnostic !== true/, 'matched optical presentation binds exposure while the depth-order diagnostic keeps its one-binding layout');
+
+assert.equal(settingsSchema.controlCount, 189, 'the canonical preset inventory includes all three new beauty controls');
+for (const expected of [
+  ['volume-exposure', 'volume_exposure', 'range'],
+  ['volume-reaction-boundary-fire-clean-color', 'volume_reaction_boundary_fire_clean_color', 'color'],
+  ['volume-reaction-boundary-fire-soot-color', 'volume_reaction_boundary_fire_soot_color', 'color'],
+]) {
+  const [key, param, type] = expected;
+  assert.deepEqual(
+    settingsSchema.controls.find(control => control.key === key),
+    { key, param, tagName: 'INPUT', type },
+    `${key} is a strict canonical settings-preset control`,
+  );
+}
 
 console.log('volume beauty controls: continuous ranges, palette, and shared exposure contracts pass');

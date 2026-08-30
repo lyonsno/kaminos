@@ -72,8 +72,8 @@ assert.match(
   'the short preset loader delegates admission to the shared behavioral contract',
 );
 assert.equal(settingsPresetSchema.identity, 'kaminos-volume-settings-preset-schema-v2');
-assert.equal(settingsPresetSchema.controlCount, 186, 'canonical schema fixes the actual volume-control count');
-assert.equal(settingsPresetSchema.controls.length, 186, 'canonical schema enumerates every actual volume control');
+assert.equal(settingsPresetSchema.controlCount, 189, 'canonical schema fixes the actual volume-control count');
+assert.equal(settingsPresetSchema.controls.length, 189, 'canonical schema enumerates every actual volume control');
 assert.match(settingsPresetContract, /schema\.forbiddenPresetFields[\s\S]*settings preset contains forbidden runtime or replay state/, 'shared admission rejects forbidden replay/runtime payload fields');
 assert.match(
   settingsPresetContract,

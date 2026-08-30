@@ -81,7 +81,7 @@ function parityBasis() {
       toneMap: 'shared-contribution-sum-then-global-exponential-v0',
       displayTransfer: 'global-exposure-vignette-gamma-temporal-resolve-v0',
     },
-    controls: { basin: 186, renderer: 3 },
+    controls: { basin: 189, renderer: 3 },
   };
 }
 
