@@ -1024,7 +1024,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
       <div class="field"><span class="field-key">Emitter requested</span><span class="field-val" id="volume-emitter-requested">cluster</span></div>
       <div class="field"><span class="field-key">Emitter effective</span><span class="field-val" id="volume-emitter-effective">cluster</span></div>
-      <div class="field"><span class="field-key">Emitter carrier</span><span class="field-val" id="volume-emitter-carrier">off / 0</span></div>
+      <div class="field"><span class="field-key">Emitter source</span><span class="field-val" id="volume-emitter-carrier">off / 0</span></div>
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
       <div class="field"><span class="field-key">Promotion</span><span class="field-val" id="volume-basin-promotion-state" role="status" aria-live="polite">idle</span></div>
@@ -1321,13 +1321,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       </div>
       <div class="slider-row">
         <span class="slider-label">Clean fuel color</span>
-        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-clean-color" value="#1f6bff">
-        <span class="slider-val" id="volume-reaction-boundary-fire-clean-color-val">#1f6bff</span>
+        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-clean-color" value="#4a86ff">
+        <span class="slider-val" id="volume-reaction-boundary-fire-clean-color-val">#4a86ff</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Soot-hot color</span>
-        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-soot-color" value="#ff8c2a">
-        <span class="slider-val" id="volume-reaction-boundary-fire-soot-color-val">#ff8c2a</span>
+        <input type="color" class="volume-color-swatch" id="volume-reaction-boundary-fire-soot-color" value="#ffc460">
+        <span class="slider-val" id="volume-reaction-boundary-fire-soot-color-val">#ffc460</span>
       </div>
       <div class="volume-retired-control-state" data-volume-retired-control-state="atlas-capture" hidden>
       <div class="volume-control-section-title">Atlas capture</div>
@@ -16596,8 +16596,8 @@ function readVolumeControls() {
     sootYellowing: parseFloat(document.getElementById('volume-reaction-boundary-fire-yellow').value),
     thermalWarmth: parseFloat(document.getElementById('volume-reaction-boundary-fire-warmth').value),
     fireLuma: parseFloat(document.getElementById('volume-reaction-boundary-fire-luma').value),
-    cleanColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-clean-color').value, '#1f6bff'),
-    sootColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-soot-color').value, '#ff8c2a'),
+    cleanColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-clean-color').value, '#4a86ff'),
+    sootColor: normalizeVolumeHexColor(document.getElementById('volume-reaction-boundary-fire-soot-color').value, '#ffc460'),
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
@@ -17141,7 +17141,7 @@ function renderVolumeEmitterReceipt(receipt) {
   if (!receipt) return;
   document.getElementById('volume-emitter-requested').textContent = receipt.requested.family;
   document.getElementById('volume-emitter-effective').textContent = receipt.effective.family;
-  document.getElementById('volume-emitter-carrier').textContent = `${receipt.effective.externalEmitterMode} / ${receipt.effective.externalEmitterCount} / ${receipt.effective.coordinateSpace}`;
+  document.getElementById('volume-emitter-carrier').textContent = `${receipt.effective.sourceMode} / ${receipt.effective.sourceCount} / ${receipt.effective.coordinateSpace}`;
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
 
@@ -17913,11 +17913,11 @@ async function initKaminosVolumeRoute() {
   }
   const routeBoundaryFireCleanColor = params.get('volume_reaction_boundary_fire_clean_color');
   if (routeBoundaryFireCleanColor) {
-    setVolumeColorControlValue('volume-reaction-boundary-fire-clean-color', routeBoundaryFireCleanColor, '#1f6bff');
+    setVolumeColorControlValue('volume-reaction-boundary-fire-clean-color', routeBoundaryFireCleanColor, '#4a86ff');
   }
   const routeBoundaryFireSootColor = params.get('volume_reaction_boundary_fire_soot_color');
   if (routeBoundaryFireSootColor) {
-    setVolumeColorControlValue('volume-reaction-boundary-fire-soot-color', routeBoundaryFireSootColor, '#ff8c2a');
+    setVolumeColorControlValue('volume-reaction-boundary-fire-soot-color', routeBoundaryFireSootColor, '#ffc460');
   }
   if (params.has('volume_reaction_live_view')) {
     document.getElementById('volume-reaction-live-view').value = normalizeReactionFrontLiveView(params.get('volume_reaction_live_view'));
@@ -18144,6 +18144,7 @@ async function initKaminosVolumeRoute() {
     'volume-radiance',
     'volume-absorption',
   ]);
+  const emitterMorphologyControls = new Set(['emitter-assay-family', 'volume-input-radius', 'volume-flow-rate']);
   const syncControls = event => {
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
@@ -18155,7 +18156,16 @@ async function initKaminosVolumeRoute() {
       routedVolumeRayBudgetPreset = '';
     }
     updateVolumeControlLabels();
-    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    const controlsSnapshot = readVolumeControls();
+    const selectedEmitterFamily = document.getElementById('emitter-assay-family').value;
+    if (emitterMorphologyControls.has(event?.target?.id)
+      && (event?.target?.id === 'emitter-assay-family' || selectedEmitterFamily !== 'cluster')) {
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else if (event?.target?.id === 'volume-scene' && selectedEmitterFamily !== 'cluster') {
+      applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot);
+    } else {
+      volumePrototype.setControls(controlsSnapshot);
+    }
     refreshVolumeReadout();
   };
   moveVolumePyroFreezeIntoCarrierWorkbench();
@@ -19119,7 +19129,32 @@ async function initKaminosVolumeRoute() {
   let syntheticEmitterTimer = 0;
   const refreshSyntheticExternalEmitters = () => {
     if (routeExternalEmitters !== 'synthetic_hand_trails' || !volumePrototype) return;
-    applyVolumeEmitterFamilyRuntimeToCockpit(readVolumeControls());
+    const timestampMs = performance.now();
+    const frameId = `cockpit-cluster-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`;
+    const externalRequest = {
+      mode: 'synthetic_hand_trails',
+      frameId,
+      timestampMs,
+      coordinateSpace: 'volume-local',
+      emitters: volumePrototype.syntheticHandTrailEmitters(timestampMs),
+    };
+    const carrierReceipt = volumePrototype.setExternalEmitters(externalRequest);
+    const previousReceipt = window.__kaminosVolumeEmitterReceipt;
+    if (previousReceipt) {
+      window.__kaminosVolumeEmitterReceipt = {
+        ...previousReceipt,
+        effective: {
+          ...previousReceipt.effective,
+          sourceCount: carrierReceipt.count,
+          sourceMode: carrierReceipt.mode,
+          coordinateSpace: carrierReceipt.coordinateSpace,
+          externalEmitterCount: carrierReceipt.count,
+          externalEmitterMode: carrierReceipt.mode,
+        },
+        sourceReceipt: carrierReceipt,
+        carrierReceipt,
+      };
+    }
     refreshVolumeReadout();
   };
 

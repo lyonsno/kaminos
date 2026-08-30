@@ -1,8 +1,6 @@
-export const VOLUME_EMITTER_BASIS_SCHEMA = 'kaminos.volume-emitter-basis.v0';
+export const VOLUME_EMITTER_BASIS_SCHEMA = 'kaminos.volume-emitter-basis.v1';
 
-export const VOLUME_EMITTER_BASIS_IDENTITY = 'kaminos-volume-emitter-basis-v0';
-
-export const VOLUME_EXTERNAL_EMITTER_CAPACITY = 32;
+export const VOLUME_EMITTER_BASIS_IDENTITY = 'kaminos-volume-analytic-emitter-basis-v1';
 
 export const VOLUME_EMITTER_FAMILIES = Object.freeze([
   'wick',
@@ -45,8 +43,7 @@ function vec3(value, label, fallback) {
   if (!Array.isArray(source) || source.length !== 3) {
     throw new Error(`${label} must be a finite vec3`);
   }
-  const vector = source.map((component, index) => finiteNumber(component, `${label}[${index}]`));
-  return vector;
+  return source.map((component, index) => finiteNumber(component, `${label}[${index}]`));
 }
 
 function add(a, b) {
@@ -65,20 +62,17 @@ function dot(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-function cross(a, b) {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-}
-
 function normalize(vector, label) {
   const length = Math.sqrt(dot(vector, vector));
   if (!Number.isFinite(length) || length <= 1e-9) {
     throw new Error(`${label} must be a finite non-zero vec3`);
   }
   return scale(vector, 1 / length);
+}
+
+function orthogonalSupportAxis(direction, supportAxis) {
+  const projected = subtract(supportAxis, scale(direction, dot(supportAxis, direction)));
+  return normalize(projected, 'supportAxis projected perpendicular to direction');
 }
 
 function normalizeChemistry(value = {}) {
@@ -116,48 +110,63 @@ function temporalStrengthMultiplier(temporal, timestampMs) {
   return phase01 < temporal.dutyCycle ? 1 : 0;
 }
 
-function assertEmitterCarrierBounds(emitters) {
-  const outsideCarrier = emitters.some(emitter => (
-    [...emitter.start, ...emitter.end].some(component => component < -1.5 || component > 1.5)
-  ));
-  if (outsideCarrier) {
-    throw new Error('generated emitter support exceeds volume-local carrier bounds [-1.5, 1.5]');
+function assertPointWithRadius(point, radius) {
+  if (point.some(component => component - radius < -1.5 || component + radius > 1.5)) {
+    throw new Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
   }
 }
 
-function emitterRecord({
-  family,
-  index,
-  start,
-  end,
-  direction,
-  radius,
-  strength,
-  velocitySpeed,
-  chemistry,
-  lifetime,
-}) {
-  return {
-    id: `emitter-basis-${family}-${index}`,
-    active: true,
-    start,
-    end,
-    velocity: scale(direction, velocitySpeed),
-    radius,
-    strength,
-    ageSeconds: 0,
-    smoke: chemistry.smoke,
-    heat: chemistry.heat,
-    fuel: chemistry.fuel,
-    flame: chemistry.flame,
-    detail: chemistry.detail,
-    lifetime,
-  };
+function assertAnalyticBounds({ family, origin, axis, supportAxis, radius, extent }) {
+  if (family === 'nozzle') {
+    assertPointWithRadius(origin, radius);
+    assertPointWithRadius(add(origin, scale(axis, extent)), radius);
+    return;
+  }
+  if (family === 'wick') {
+    const halfSpan = scale(axis, extent * 0.5);
+    assertPointWithRadius(subtract(origin, halfSpan), radius);
+    assertPointWithRadius(add(origin, halfSpan), radius);
+    return;
+  }
+  if (family === 'ribbon') {
+    const halfSpan = scale(supportAxis, extent * 0.5);
+    assertPointWithRadius(subtract(origin, halfSpan), radius);
+    assertPointWithRadius(add(origin, halfSpan), radius);
+    return;
+  }
+  for (let component = 0; component < 3; component += 1) {
+    const planarExtent = extent * Math.sqrt(Math.max(0, 1 - axis[component] * axis[component]));
+    if (origin[component] - planarExtent - radius < -1.5
+      || origin[component] + planarExtent + radius > 1.5) {
+      throw new Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
+    }
+  }
 }
 
-function orthogonalSupportAxis(direction, supportAxis) {
-  const projected = subtract(supportAxis, scale(direction, dot(supportAxis, direction)));
-  return normalize(projected, 'supportAxis projected perpendicular to direction');
+function supportFor({ family, origin, axis, supportAxis, radius, extent }) {
+  if (family === 'wick') {
+    return { primitive: 'analytic-capsule', origin, axis, radius, length: extent };
+  }
+  if (family === 'nozzle') {
+    return { primitive: 'analytic-nozzle', origin, axis, radius, length: extent };
+  }
+  if (family === 'ribbon') {
+    return {
+      primitive: 'analytic-ribbon',
+      origin,
+      axis: supportAxis,
+      injectionDirection: axis,
+      radius,
+      length: extent,
+    };
+  }
+  return {
+    primitive: 'analytic-annulus',
+    origin,
+    axis,
+    radius: extent,
+    tubeRadius: radius,
+  };
 }
 
 export function compileVolumeEmitterFamily(request = {}) {
@@ -168,7 +177,7 @@ export function compileVolumeEmitterFamily(request = {}) {
 
   const origin = vec3(request.origin, 'origin', [0, -0.76, 0]);
   const requestedDirection = vec3(request.direction, 'direction', [0, 1, 0]);
-  const direction = normalize(requestedDirection, 'direction');
+  const axis = normalize(requestedDirection, 'direction');
   const radius = numberInRange(request.radius ?? 0.04, 'radius', 0.006, 0.18);
   const strength = numberInRange(request.strength ?? 1, 'strength', 0, 4);
   const velocitySpeed = numberInRange(request.velocitySpeed ?? 0.22, 'velocitySpeed', 0, 3);
@@ -181,130 +190,33 @@ export function compileVolumeEmitterFamily(request = {}) {
   const strengthMultiplier = temporalStrengthMultiplier(temporal, timestampMs);
   const effectiveStrength = strength * strengthMultiplier;
 
-  let support;
-  let emitters;
+  let requestedSupportAxis = [1, 0, 0];
+  let supportAxis = [1, 0, 0];
+  let extent;
   let familyRequested;
-  if (family === 'wick') {
-    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
-    const halfSpan = scale(direction, length * 0.5);
-    familyRequested = { length };
-    support = {
-      primitive: 'ellipsoid-capsule',
-      origin,
-      axis: direction,
-      radius,
-      length,
-    };
-    emitters = [emitterRecord({
-      family,
-      index: 0,
-      start: subtract(origin, halfSpan),
-      end: add(origin, halfSpan),
-      direction,
-      radius,
-      strength: effectiveStrength,
-      velocitySpeed,
-      chemistry,
-      lifetime,
-    })];
-  } else if (family === 'nozzle') {
-    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
-    familyRequested = { length };
-    support = {
-      primitive: 'oriented-capsule',
-      origin,
-      axis: direction,
-      radius,
-      length,
-    };
-    emitters = [emitterRecord({
-      family,
-      index: 0,
-      start: origin,
-      end: add(origin, scale(direction, length)),
-      direction,
-      radius,
-      strength: effectiveStrength,
-      velocitySpeed,
-      chemistry,
-      lifetime,
-    })];
-  } else if (family === 'ribbon') {
-    const length = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
-    const requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
-    const supportAxis = orthogonalSupportAxis(direction, requestedSupportAxis);
-    const halfSpan = scale(supportAxis, length * 0.5);
-    familyRequested = { supportAxis: requestedSupportAxis, length };
-    support = {
-      primitive: 'finite-line-capsule',
-      origin,
-      axis: supportAxis,
-      injectionDirection: direction,
-      radius,
-      length,
-    };
-    emitters = [emitterRecord({
-      family,
-      index: 0,
-      start: subtract(origin, halfSpan),
-      end: add(origin, halfSpan),
-      direction,
-      radius,
-      strength: effectiveStrength,
-      velocitySpeed,
-      chemistry,
-      lifetime,
-    })];
-  } else {
-    const requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
-    const ringRadius = numberInRange(
+  if (family === 'ring') {
+    requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
+    supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
+    extent = numberInRange(
       request.ringRadius ?? Math.max(0.24, radius * 1.5),
       'ringRadius',
       radius * 1.5,
       0.9,
     );
-    const ringSegments = finiteNumber(request.ringSegments ?? 12, 'ringSegments');
-    if (!Number.isInteger(ringSegments) || ringSegments < 3) {
-      throw new Error(`ring segment count ${ringSegments} must be an integer >= 3`);
+    familyRequested = { supportAxis: requestedSupportAxis, ringRadius: extent };
+  } else {
+    extent = numberInRange(request.length ?? 0.32, 'length', 0.012, 1.8);
+    if (family === 'ribbon') {
+      requestedSupportAxis = vec3(request.supportAxis, 'supportAxis', [1, 0, 0]);
+      supportAxis = orthogonalSupportAxis(axis, requestedSupportAxis);
+      familyRequested = { supportAxis: requestedSupportAxis, length: extent };
+    } else {
+      familyRequested = { length: extent };
     }
-    if (ringSegments > VOLUME_EXTERNAL_EMITTER_CAPACITY) {
-      throw new Error(`ring segment count ${ringSegments} exceeds external emitter capacity ${VOLUME_EXTERNAL_EMITTER_CAPACITY}`);
-    }
-    familyRequested = { supportAxis: requestedSupportAxis, ringRadius, ringSegments };
-    const ringAxisA = orthogonalSupportAxis(direction, requestedSupportAxis);
-    const ringAxisB = normalize(cross(direction, ringAxisA), 'ring secondary axis');
-    const points = Array.from({ length: ringSegments }, (_, index) => {
-      const angle = index / ringSegments * Math.PI * 2;
-      return add(origin, add(
-        scale(ringAxisA, Math.cos(angle) * ringRadius),
-        scale(ringAxisB, Math.sin(angle) * ringRadius),
-      ));
-    });
-    support = {
-      primitive: 'segmented-annulus',
-      origin,
-      axis: direction,
-      supportAxis: ringAxisA,
-      secondaryAxis: ringAxisB,
-      radius: ringRadius,
-      tubeRadius: radius,
-      segmentCount: ringSegments,
-    };
-    emitters = points.map((start, index) => emitterRecord({
-      family,
-      index,
-      start,
-      end: points[(index + 1) % points.length],
-      direction,
-      radius,
-      strength: effectiveStrength,
-      velocitySpeed,
-      chemistry,
-      lifetime,
-    }));
   }
-  assertEmitterCarrierBounds(emitters);
 
+  assertAnalyticBounds({ family, origin, axis, supportAxis, radius, extent });
+  const support = supportFor({ family, origin, axis, supportAxis, radius, extent });
   const requested = {
     family,
     origin,
@@ -319,18 +231,29 @@ export function compileVolumeEmitterFamily(request = {}) {
     frameId,
     timestampMs,
   };
-  const effective = {
+  const effectiveTemporal = { ...temporal, strengthMultiplier };
+  const descriptor = {
+    schema: 'kaminos.volume-analytic-emitter-descriptor.v0',
+    mode: 'analytic-fixed',
     family,
-    direction,
-    support,
+    coordinateSpace: 'volume-local',
+    frameId,
+    timestampMs,
+    origin,
+    axis,
+    supportAxis,
+    radius,
+    extent,
     strength: effectiveStrength,
     velocitySpeed,
     chemistry,
-    temporal: {
-      ...temporal,
-      strengthMultiplier,
+    temporal: effectiveTemporal,
+    support,
+    compactSupport: {
+      interior: 'full',
+      transition: 'one-grid-cell-smoothstep',
+      exterior: 'zero',
     },
-    emitterCount: emitters.length,
   };
 
   return {
@@ -338,16 +261,18 @@ export function compileVolumeEmitterFamily(request = {}) {
     identity: VOLUME_EMITTER_BASIS_IDENTITY,
     family,
     requested,
-    effective,
+    effective: {
+      family,
+      direction: axis,
+      support,
+      strength: effectiveStrength,
+      velocitySpeed,
+      chemistry,
+      temporal: effectiveTemporal,
+      sourceCount: 1,
+    },
+    descriptor,
     fallbackUsed: false,
     failures: [],
-    carrier: {
-      mode: 'emitter_basis_assay',
-      frameId,
-      timestampMs,
-      coordinateSpace: 'volume-local',
-      sourceIdentity: `${VOLUME_EMITTER_BASIS_IDENTITY}:${family}`,
-      emitters,
-    },
   };
 }

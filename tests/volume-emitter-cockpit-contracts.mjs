@@ -35,7 +35,7 @@ assert.match(
 assert.match(
   cockpit,
   /function applyVolumeEmitterFamilyRuntimeToCockpit\(/,
-  'cockpit has one named runtime composition boundary for controls and external carrier state',
+  'cockpit has one named runtime composition boundary for controls and emitter morphology',
 );
 assert.match(
   cockpit,
@@ -45,6 +45,7 @@ assert.match(
 assert.match(cockpit, /id="volume-emitter-requested"/, 'requested family is human-visible');
 assert.match(cockpit, /id="volume-emitter-effective"/, 'effective family is human-visible');
 assert.match(cockpit, /id="volume-emitter-carrier"/, 'effective carrier mode/count are human-visible');
+assert.match(cockpit, /receipt\.effective\.sourceMode}[\s\S]*receipt\.effective\.sourceCount}/, 'the human-visible source receipt names analytic morphology without pretending it is an external carrier');
 assert.match(cockpit, /id="volume-emitter-fallback"/, 'fallback status is human-visible');
 assert.match(
   cockpit,
@@ -53,8 +54,8 @@ assert.match(
 );
 assert.match(
   cockpit,
-  /'emitter-assay-family'/,
-  'emitter selection participates in the normal cockpit input/change sync path',
+  /const emitterMorphologyControls = new Set\(\['emitter-assay-family', 'volume-input-radius', 'volume-flow-rate'\]\)/,
+  'only morphology-bearing controls enter the analytic descriptor path',
 );
 assert.match(
   cockpit,
@@ -62,7 +63,7 @@ assert.match(
   'initialization and interactive controls can share the same composition boundary',
 );
 const syntheticRefresh = cockpit.match(/const refreshSyntheticExternalEmitters = \(\) => \{[\s\S]*?\n  \};/)?.[0] || '';
-assert.match(syntheticRefresh, /applyVolumeEmitterFamilyRuntimeToCockpit/, 'synthetic trails refresh through the canonical emitter source arbiter');
-assert.doesNotMatch(syntheticRefresh, /setExternalEmitters/, 'synthetic trails have no competing direct carrier writer');
+assert.doesNotMatch(syntheticRefresh, /applyVolumeEmitterFamilyRuntimeToCockpit/, 'dynamic trail refresh does not reapply controls or fixed morphology');
+assert.match(syntheticRefresh, /setExternalEmitters/, 'the generic carrier remains the direct dynamic-trail transport');
 
 console.log('volume emitter cockpit contracts passed');
