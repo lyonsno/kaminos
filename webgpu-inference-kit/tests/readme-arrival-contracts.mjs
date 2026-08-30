@@ -18,6 +18,14 @@ assert.match(readme, /registerRoute/);
 assert.match(readme, /route\.enqueue/);
 assert.match(readme, /job\.completion/);
 assert.match(readme, /completion\.status === ['"]succeeded['"]/);
+assert.match(readme, /Current kit adoption/);
+assert.match(readme, /Ports can adopt a common application-facing shape/);
+assert.match(readme, /tensor, kernel, runtime, and route primitives/i);
+assert.match(readme, /runtime and route primitives around browser diffusion, with external text embedding/i);
+assert.match(readme, /cooperative orchestration and model-owned bounded work/i);
+assert.match(readme, /cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition/i);
+assert.doesNotMatch(readme, /These ports share a common application-facing shape/);
+assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent model resources/);
 
 assert.doesNotMatch(readme, /\b(?:loadModelPort|LoadedModel|ModelRun)\b/);
 assert.doesNotMatch(readme, /^## Receipt And Evidence Layer$/m);

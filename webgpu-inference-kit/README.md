@@ -86,16 +86,16 @@ Kaminos separates common runtime machinery from model implementation and product
 
 ## One Runtime, Different Models
 
-The same runtime structure supports substantially different browser-native inference workloads:
+Kaminos is already used across substantially different browser-native inference workloads:
 
-| Port | Execution shape | Reusable route state | Useful work boundaries | Output |
-| --- | --- | --- | --- | --- |
-| [MoGe](https://github.com/lyonsno/moge-webgpu) | Feed-forward image inference | Weights, pipelines, reusable tensors | Encoder, decoder, output phases | Depth, normals, and point map |
-| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Iterative motion generation | Model weights and diffusion resources | Diffusion steps and major phases | Skeletal motion |
-| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone, postprocessor, decoder, texture baking | Textured GLB mesh |
-| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Long image-to-splat inference | Image encoder, depth, Gaussian decoder, and output resources | Encoder blocks, depth phases, decoder ranges, output batches | Gaussian splat scene |
+| Port | Execution shape | Reusable route state | Useful work boundaries | Output | Current kit adoption |
+| --- | --- | --- | --- | --- | --- |
+| [MoGe](https://github.com/lyonsno/moge-webgpu) | Feed-forward image inference | Weights, pipelines, reusable tensors | Encoder, decoder, output phases | Depth, normals, and point map | Tensor, kernel, runtime, and route primitives |
+| [Kimodo](https://github.com/lyonsno/kimodo-webgpu) | Iterative motion generation | Model weights and diffusion resources | Diffusion steps and major phases | Skeletal motion | Runtime and route primitives around browser diffusion, with external text embedding |
+| [Stable Fast 3D](https://github.com/lyonsno/sf3d-webgpu) | Multi-stage image-to-geometry inference | Vision, reconstruction, decoding, and baking resources | Backbone, postprocessor, decoder, texture baking | Textured GLB mesh | Cooperative orchestration and model-owned bounded work |
+| [SHARP](https://github.com/lyonsno/sharp-webgpu) | Long image-to-splat inference | Image encoder, depth, Gaussian decoder, and output resources | Encoder blocks, depth phases, decoder ranges, output batches | Gaussian splat scene | Cooperative orchestration, scheduling, shared-device foreground opportunities, and route composition |
 
-These ports share a common application-facing shape:
+Ports can adopt a common application-facing shape:
 
 ```text
 shared session
@@ -120,7 +120,7 @@ Ports can begin with direct execution and introduce cooperative boundaries where
 
 In one measured product firing on an M4 Max in Chrome, SHARP generated `1,179,648` Gaussian splats over `185.3s` while a full Kaminos fire volume continued to simulate on every frame in the same browser and on the same GPU. Across `21,818` foreground frame intervals, p95 and p99 were `9.3ms` and `10.0ms`; `40` intervals exceeded `33.3ms`.
 
-That firing exercises the architecture inside a real interactive WebGPU application: persistent model resources, queued invocation, cooperative GPU and CPU execution, progress reporting, output construction, and resource retirement.
+That firing demonstrates the runtime's central product target directly: long local inference sharing one browser and GPU with a continuously rendering application, while producing the complete model output and preserving measured foreground cadence.
 
 ## Continue Porting
 
