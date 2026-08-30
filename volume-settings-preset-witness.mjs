@@ -115,6 +115,18 @@ function assertOrdinaryCockpitState(observation, phase, expectedPresetId) {
   assert.equal(observation?.activeTab, 'volume', `${phase}: reopened cockpit is not on the Volume tab`);
 }
 
+function assertNumericEquivalent(actual, expected, message) {
+  const actualNumber = Number(actual);
+  const expectedNumber = Number(expected);
+  const tolerance = Number.EPSILON * 16 * Math.max(1, Math.abs(actualNumber), Math.abs(expectedNumber));
+  assert.ok(
+    Number.isFinite(actualNumber)
+      && Number.isFinite(expectedNumber)
+      && Math.abs(actualNumber - expectedNumber) <= tolerance,
+    `${message}: ${actualNumber} != ${expectedNumber} within ${tolerance}`,
+  );
+}
+
 function operatorContext(body) {
   return `(() => {
     const operatorWindow = document.querySelector('#basin')?.contentWindow || window;
@@ -633,8 +645,8 @@ try {
     };
   })()`);
   assert.equal(steerabilityReceipt?.loadCommandWired, 'true', 'reopened cockpit load command is not wired');
-  assert.equal(steerabilityReceipt?.changed, steerabilityReceipt?.requested, 'reopened cockpit rejected a tuning change');
-  assert.equal(steerabilityReceipt?.restored, steerabilityReceipt?.before, 'reopened cockpit did not restore the saved tuning value');
+  assertNumericEquivalent(steerabilityReceipt?.changed, steerabilityReceipt?.requested, 'reopened cockpit rejected a tuning change');
+  assertNumericEquivalent(steerabilityReceipt?.restored, steerabilityReceipt?.before, 'reopened cockpit did not restore the saved tuning value');
   lastTrustworthyEvidence.steerabilityReceipt = steerabilityReceipt;
 
   failurePhase = 'continuous-observation';

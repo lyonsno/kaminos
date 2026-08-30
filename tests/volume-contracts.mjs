@@ -200,6 +200,11 @@ assert.match(settingsPresetWitness, /awaitPromise:\s*true/, 'Settings witness wa
 assert.match(settingsPresetWitness, /commandResult\.presetUrl/, 'Settings witness rejects command completion without a durable live route');
 assert.match(settingsPresetWitness, /liveUrl\.pathname[\s\S]*'\/'[\s\S]*forbiddenRendererParam/, 'Settings witness rejects a renderer-assay route masquerading as the reopened cockpit');
 assert.match(settingsPresetWitness, /steerabilityReceipt[\s\S]*settings-preset-load-here[\s\S]*restored/, 'Settings witness proves one reversible control change in the reopened cockpit');
+assert.match(
+  settingsPresetWitness,
+  /function assertNumericEquivalent[\s\S]*Number\.EPSILON[\s\S]*assertNumericEquivalent\(steerabilityReceipt\?\.changed, steerabilityReceipt\?\.requested/,
+  'Settings witness accepts floating-point-equivalent browser range values without accepting material tuning substitution',
+);
 assert.match(settingsPresetWitness, /commandDiagnostic[\s\S]*volume-settings-preset-state/, 'Settings witness preserves the operator-visible save failure when the command returns no artifact');
 assert.match(settingsPresetWitness, /'volumeDebugState'[\s\S]*Object\.hasOwn\(presetDocument\.preset, field\)/, 'Settings witness verifies runtime debug state is absent from the durable preset');
 assert.match(settingsPresetWitness, /status:\s*'failed'/, 'Settings witness writes a durable report when it fails before output');
