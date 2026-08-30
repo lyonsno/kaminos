@@ -45,6 +45,11 @@ assert.match(
   'the actual Crucible product surface must show which stable handle and immutable revision it mounted',
 );
 assert.match(
+  source,
+  /#crucible-viewport-fire-preset\s*\{[^}]*overflow-wrap:\s*anywhere[^}]*\}/,
+  'the complete immutable revision must wrap visibly inside the Wake firing mouth',
+);
+assert.match(
   mountContract,
   /kaminos\.wake-raymarch-preset-projection\.v1/,
   'Wake must name the projection that separates authored basin state from product-owned compute and presentation policy',

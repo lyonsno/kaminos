@@ -340,6 +340,42 @@ def _sharp_inline_revision():
     return result.stdout.strip() or None
 
 
+def _runtime_source_identity():
+    def git(*args):
+        result = subprocess.run(
+            ["git", "-C", str(ROOT), *args],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=2,
+        )
+        return result.stdout.strip()
+
+    try:
+        revision = git("rev-parse", "HEAD")
+        tree = git("rev-parse", "HEAD^{tree}")
+        branch = git("branch", "--show-current") or None
+        status = git("status", "--porcelain", "--untracked-files=normal")
+    except (OSError, subprocess.SubprocessError) as error:
+        return {
+            "schema": "kaminos.runtime-source.v1",
+            "status": "unavailable",
+            "repoRoot": str(ROOT),
+            "processId": os.getpid(),
+            "error": str(error),
+        }
+    return {
+        "schema": "kaminos.runtime-source.v1",
+        "status": "resolved",
+        "repoRoot": str(ROOT),
+        "revision": revision,
+        "tree": tree,
+        "branch": branch,
+        "dirty": bool(status),
+        "processId": os.getpid(),
+    }
+
+
 def runtime_config():
     """Return runtime-only browser defaults for this dev server instance."""
     module_url = (
@@ -372,6 +408,7 @@ def runtime_config():
     weights_exist = SHARP_INLINE_WEIGHTS_PATH.is_file()
     return {
         "schema": "kaminos.runtime-config.v0",
+        "source": _runtime_source_identity(),
         "hybridSplatOverlayModuleUrl": module_url or None,
         "sharpInline": {
             "registered": (

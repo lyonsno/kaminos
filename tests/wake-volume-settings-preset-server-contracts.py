@@ -66,5 +66,38 @@ def test_missing_shared_preset_fails_as_json_from_the_consumer_api():
             process.wait(timeout=5)
 
 
+def test_runtime_config_binds_the_served_checkout():
+    port = _free_port()
+    process = subprocess.Popen(
+        [sys.executable, "serve.py", str(port)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        _wait_for_server(port, process)
+        with urlopen(f"http://127.0.0.1:{port}/api/runtime-config", timeout=2) as response:
+            config = json.load(response)
+        source = config["source"]
+        expected_revision = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+        expected_tree = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD^{tree}"],
+            text=True,
+        ).strip()
+        assert source["schema"] == "kaminos.runtime-source.v1"
+        assert source["repoRoot"] == str(ROOT)
+        assert source["revision"] == expected_revision
+        assert source["tree"] == expected_tree
+        assert source["processId"] == process.pid
+        assert source["dirty"] is True
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
+
+
 if __name__ == "__main__":
     test_missing_shared_preset_fails_as_json_from_the_consumer_api()
+    test_runtime_config_binds_the_served_checkout()
