@@ -362,7 +362,7 @@ try {
   assert.equal(cockpitVisibility.layoutReceipt?.controlCount, 192, 'cockpit layout omitted basin or renderer controls');
   assert.equal(cockpitVisibility.layoutReceipt?.presetControlCount, 189, 'canonical basin control count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rendererControlCount, 3, 'renderer control axis is incomplete');
-  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 188, 'primary root count changed');
+  assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-primary-control-root'], 191, 'primary root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.rootControlCounts?.['volume-authored-mix-control-root'], 1, 'authored-mix root count changed');
   assert.equal(cockpitVisibility.layoutReceipt?.fallbackApplied, false, 'cockpit layout silently fell back');
   assert.equal(cockpitVisibility.assayViewportGeometry?.activeTab, 'volume', 'assay route did not admit the Volume tab');

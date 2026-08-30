@@ -53,7 +53,7 @@ assert.match(core, /uniforms\[332\] = volumeExposure/, 'the main raymarch unifor
 assert.match(core, /volumePresentationControls\[0\] = volumeExposure[\s\S]*writeBuffer\(volumePresentationControlsBuffer/, 'the splat presentation uniform receives the same effective exposure');
 
 assert.match(index, /volumeExposure: 'volume-exposure'/, 'snapshot hydration maps volumeExposure to the authored top-level control');
-assert.match(index, /if \(field\?\.continuous\) return String\(value\);/, 'continuous snapshot values bypass display-only decimal formatting');
+assert.match(index, /if \(key === 'volumeExposure' \|\| field\?\.continuous\) return String\(value\);/, 'continuous snapshot values, including top-level exposure, bypass display-only decimal formatting');
 assert.match(index, /field\.continuous\s*\?\s*String\(clampedValue\)\s*:\s*clampedValue\.toFixed\(field\.decimals\)/, 'continuous URL-route hydration preserves the clamped numeric value without decimal quantization');
 assert.match(core, /const resolveEntries = \[[\s\S]*if \(options\.includePresentationControls === true\)[\s\S]*resolveEntries\.push\([\s\S]*binding: 1/, 'optical resolves add presentation binding 1 only for pipelines that declare it');
 assert.match(core, /includePresentationControls: options\.opticalDepthOrderDiagnostic !== true/, 'matched optical presentation binds exposure while the depth-order diagnostic keeps its one-binding layout');

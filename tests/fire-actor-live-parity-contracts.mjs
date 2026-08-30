@@ -24,6 +24,14 @@ assert.equal(descriptor.state.pauseAuthority, 'renderer-internal-exact-sim-step-
 assert.deepEqual(descriptor.camera.position, [1.65, 0.42, 3.15]);
 assert.deepEqual(descriptor.camera.target, [0, 0.08, 0]);
 assert.deepEqual(descriptor.actor.transform, { translate: [0, 0, 0], scale: 1 });
+const pinnedPackage = JSON.parse(readFileSync(join(
+  root,
+  'artifacts/basin-promotions/big-raymarch-hero-flamebowl-cotangent-covariance/revisions/basinrev-8e84371fad44c961a68b5d3f8f302c78e564e32263f28719c4d3e062d622db95/package.json',
+), 'utf8'));
+assert.deepEqual(descriptor.controls, {
+  basin: Object.keys(pinnedPackage.settingsPreset.artifact.preset.domControls).length,
+  renderer: Object.keys(pinnedPackage.settingsPreset.artifact.preset.rendererControls).length,
+}, 'the parity descriptor preserves the exact immutable package inventory instead of borrowing the current cockpit schema count');
 
 const receipt = {
   schema: 'kaminos.fire-actor-live-parity-receipt.v1',
@@ -45,7 +53,7 @@ const receipt = {
   actor: structuredClone(descriptor.actor),
   viewport: { cssWidth: 960, cssHeight: 720, backingWidth: 1920, backingHeight: 1440, dpr: 2 },
   presentation: { arm: 'composite', smoke: 'on', splats: 'on', composition: 'smoke-raymarch-under-splats-v0' },
-  controls: { basin: 189, renderer: 3 },
+  controls: structuredClone(descriptor.controls),
   fallbackReason: null,
   gpuStageTiming: {
     identity: 'selective-head-live-arm-gpu-timestamp-profile-v0',

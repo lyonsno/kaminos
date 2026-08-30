@@ -14,6 +14,7 @@ assert.match(
   'the primary viewer must load the explicit two-root cockpit contract',
 );
 assert.match(witness, /__kaminosVolumeCockpitLayoutReceipt[\s\S]*controlCount[\s\S]*rootControlCounts/, 'visual witness requires the validated complete layout receipt');
+assert.match(witness, /rootControlCounts\?\.\['volume-primary-control-root'\], 191/, 'visual witness requires all 191 current primary-root controls');
 assert.match(witness, /volume-authored-mix-panel[\s\S]*volume-authored-mix-body[\s\S]*volume-authored-mix-toggle/, 'visual witness inspects the complete panel surface');
 assert.match(witness, /elementFromPoint[\s\S]*hitInsidePanel/, 'visual witness rejects a panel painted behind another surface');
 assert.match(

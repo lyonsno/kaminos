@@ -11714,7 +11714,7 @@ function formatVolumePresetControlValue(key, value) {
   }
   if (typeof value !== 'number') return value;
   const field = REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.find(candidate => candidate.key === key);
-  if (field?.continuous) return String(value);
+  if (key === 'volumeExposure' || field?.continuous) return String(value);
   return value.toFixed(field?.decimals ?? 2);
 }
 
@@ -18038,7 +18038,7 @@ async function initKaminosVolumeRoute() {
           : String(requested) === String(effective);
         return equal ? [] : [{ id: control.id, requested, effective }];
       });
-      if (basinControls.length !== 189 || rendererControls.length !== 3 || substitutions.length) {
+      if (basinControls.length !== 186 || rendererControls.length !== 3 || substitutions.length) {
         throw new Error(`cockpit live parity control mismatch: ${JSON.stringify(substitutions.slice(0, 8))}`);
       }
       return {
