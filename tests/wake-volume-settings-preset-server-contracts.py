@@ -87,12 +87,16 @@ def test_runtime_config_binds_the_served_checkout():
             ["git", "-C", str(ROOT), "rev-parse", "HEAD^{tree}"],
             text=True,
         ).strip()
+        expected_dirty = bool(subprocess.check_output(
+            ["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=normal"],
+            text=True,
+        ).strip())
         assert source["schema"] == "kaminos.runtime-source.v1"
         assert source["repoRoot"] == str(ROOT)
         assert source["revision"] == expected_revision
         assert source["tree"] == expected_tree
         assert source["processId"] == process.pid
-        assert source["dirty"] is True
+        assert source["dirty"] is expected_dirty
     finally:
         process.terminate()
         process.wait(timeout=5)
