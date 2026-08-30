@@ -5,6 +5,15 @@
     "route": "http://127.0.0.1:18402/?kaminos_volume_smoke=1&crucible_workspace=operational&wake_fire_preset=flamebowl-blockout-130r",
     "stableHandle": "flamebowl-blockout-130r",
     "callerDeadlineMs": 120000,
+    "repoRoot": "/private/tmp/kaminos-handy-wake-raymarch-preset-mount-0829",
+    "source": {
+      "schema": "kaminos.runtime-source.v1",
+      "repoRoot": "/private/tmp/kaminos-handy-wake-raymarch-preset-mount-0829",
+      "revision": "07f5ab1c43f3e3d157f8f565f21625ab9cce7d21",
+      "tree": "4135955a5c284606176cb9c44dccbfd012c7520d",
+      "branch": "cc/handy-wake-raymarch-preset-mount-0829",
+      "dirty": false
+    },
     "browser": {
       "schema": "kaminos.headless-browser-resolution.v0",
       "request": {
@@ -22,8 +31,8 @@
       "rejectedCandidates": []
     }
   },
-  "startedAt": "2026-08-29T23:48:59.443Z",
-  "completedAt": "2026-08-29T23:49:01.710Z",
+  "startedAt": "2026-08-30T00:06:05.348Z",
+  "completedAt": "2026-08-30T00:06:07.621Z",
   "failurePhase": null,
   "screenshot": "/private/tmp/kaminos-handy-wake-raymarch-preset-mount-0829/artifacts/wake-fire-preset-browser-roundtrip/wake-mounted.png",
   "runtimeExceptions": [],
@@ -37,6 +46,22 @@
   "lastTrustworthyEvidence": {
     "mountStatus": "mounted",
     "mountText": "Fire Flamebowl Blockout 130r | flamebowl-blockout-130r -> vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+    "mountVisibility": {
+      "overflowWrap": "anywhere",
+      "textBounds": {
+        "left": 1107.203125,
+        "top": 509.8728942871094,
+        "right": 1324.224853515625,
+        "bottom": 560.766357421875
+      },
+      "zoneBounds": {
+        "left": 1088.009033203125,
+        "top": 241.5149688720703,
+        "right": 1345.317138671875,
+        "bottom": 577.4865264892578
+      },
+      "fullyVisible": true
+    },
     "activeTab": "generate",
     "operationalWorkspaceVisible": true,
     "receipt": {
@@ -364,16 +389,16 @@
         "authority": "off"
       },
       "volumeScene": "tall_plume",
-      "frameCount": 9,
-      "simStepCount": 7,
+      "frameCount": 7,
+      "simStepCount": 5,
       "lookFreeze": 0,
       "lookFreezeFrame": null,
       "lookFreezeTimeSeconds": null,
       "lookFreezeRenderTimeMs": null,
       "lookFreezeRenderFrame": null,
       "lookFreezeSkippedFrames": 0,
-      "renderPhaseTimeMs": 989.2,
-      "renderPhaseFrame": 8,
+      "renderPhaseTimeMs": 838.8,
+      "renderPhaseFrame": 6,
       "renderPhaseAuthority": "live-render-phase",
       "pyroCompareMode": "base",
       "pyroCompareMuted": true,
@@ -424,7 +449,7 @@
       "flameContinuityRequested": "live-every-frame",
       "flameContinuityEffective": "live-every-frame",
       "flameContinuityEffectiveReason": "operator-requested-live-every-frame",
-      "flameContinuityPresentationOrdinal": 9,
+      "flameContinuityPresentationOrdinal": 7,
       "flameContinuityDecision": {
         "schema": "kaminos.single-flame-bounded-history-holdover.v0",
         "mode": "live",
@@ -440,7 +465,7 @@
         "fallbackReason": "simulator-not-starved",
         "refusedSlots": [],
         "counts": {
-          "live": 9,
+          "live": 7,
           "holdover": 0,
           "fallback": 0
         }
@@ -452,26 +477,26 @@
         "requested": "live-every-frame",
         "effective": "live-every-frame",
         "effectiveReason": "operator-requested-live-every-frame",
-        "presentationOrdinal": 9,
+        "presentationOrdinal": 7,
         "mode": "live",
-        "sourceGeneration": 7,
+        "sourceGeneration": 5,
         "selectedHistorySlot": null,
-        "simulatorStep": 7,
+        "simulatorStep": 5,
         "holdoverOrdinal": 0,
         "repeatedSlotCount": 0,
         "fallbackReason": "simulator-not-starved",
         "counts": {
-          "live": 9,
+          "live": 7,
           "holdover": 0,
           "fallback": 0
         },
         "renderFrameCountBefore": 0,
         "renderFrameCount": 0,
         "renderFrameAdvanced": false,
-        "sourceRenderFrameCountBefore": 8,
-        "sourceRenderFrameCount": 9,
+        "sourceRenderFrameCountBefore": 6,
+        "sourceRenderFrameCount": 7,
         "sourceRenderFrameAdvanced": true,
-        "simulatorStepBefore": 6,
+        "simulatorStepBefore": 4,
         "simulatorStepAdvanced": true
       },
       "tallPlumeReactionCadenceDebug": "source-reaction-cadence-v0",
@@ -535,14 +560,14 @@
         "uploadedAtMs": null
       },
       "temporalAccumEffective": 0,
-      "temporalReprojectionConfidence": 0.3083123636363636,
+      "temporalReprojectionConfidence": 0.20554157575757573,
       "temporalHistoryWeight": 0,
       "temporalRejectedHistory": 1,
       "temporalSmokeHistoryTrust": 0.013640624999999998,
       "temporalFireHistoryProtect": 0.750909090909091,
       "temporalInterfaceHistoryProtect": 1,
       "temporalEvidenceSource": "cpu-estimate-control-proxy",
-      "temporalHistoryFrames": 7,
+      "temporalHistoryFrames": 5,
       "temporalHistoryResetCount": 6,
       "temporalHistoryResetReason": "history-resized",
       "temporalHistoryValid": true,
@@ -550,10 +575,10 @@
       "fluidStateResetReason": "grid-rebuilt",
       "majorantGrid": 24,
       "majorantBuilt": true,
-      "majorantFrameCount": 7,
+      "majorantFrameCount": 5,
       "majorantCadence": 1,
       "majorantBuiltThisFrame": true,
-      "majorantLastBuiltFrame": 8,
+      "majorantLastBuiltFrame": 6,
       "majorantSkippedFrameCount": 0,
       "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
       "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
@@ -561,8 +586,8 @@
       "boundarySidecarSource": "baked",
       "boundarySidecarBuilt": true,
       "boundarySidecarBuiltThisFrame": true,
-      "boundarySidecarFrameCount": 7,
-      "boundarySidecarLastBuiltFrame": 8,
+      "boundarySidecarFrameCount": 5,
+      "boundarySidecarLastBuiltFrame": 6,
       "boundaryStructureSource": "baked",
       "boundarySidecarView": "off",
       "boundarySidecarDebug": {
@@ -587,8 +612,8 @@
         "bytes": 11664000,
         "built": true,
         "builtThisFrame": true,
-        "frameCount": 7,
-        "lastBuiltFrame": 8
+        "frameCount": 5,
+        "lastBuiltFrame": 6
       },
       "boundarySplatMode": "off",
       "boundarySplatCompositionRequested": "splat-only",
@@ -903,14 +928,14 @@
         "majorantBuiltThisFrame": true,
         "majorantCellVisitsThisFrame": 13824,
         "majorantEstimatedCellVisitsPerFrame": 13824,
-        "majorantLastBuiltFrame": 8,
+        "majorantLastBuiltFrame": 6,
         "majorantSkippedFrameCount": 0,
         "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
         "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
         "boundarySidecarSource": "baked",
         "boundarySidecarBuiltThisFrame": true,
         "boundarySidecarCellVisitsThisFrame": 729000,
-        "boundarySidecarLastBuiltFrame": 8,
+        "boundarySidecarLastBuiltFrame": 6,
         "pressureProjectionEnabled": true,
         "pressureIterationDefault": 2,
         "pressureIterationRequested": 3,
@@ -925,11 +950,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 9.225092250922511,
-          "frameDeltaMs": 108.39999999999998,
-          "frameP95Ms": 108.39999999999998,
-          "cpuFrameMs": 0.30000001192092896,
-          "cpuFrameP95Ms": 2.700000047683716,
+          "rafFps": 17.152658662092637,
+          "frameDeltaMs": 8.299999999999955,
+          "frameP95Ms": 58.299999999999955,
+          "cpuFrameMs": 0.3999999761581421,
+          "cpuFrameP95Ms": 2.899999976158142,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -1134,12 +1159,12 @@
         "liveFireAuthority": 0,
         "smokeAuthority": 0.028000000000000004,
         "stateEnergy": 0,
-        "statePhase": 0.061440000000000036,
+        "statePhase": 0.05321600000000003,
         "resetGate": true,
         "resetReasons": [
           "disabled"
         ],
-        "lastUpdateFrame": 8,
+        "lastUpdateFrame": 6,
         "lastInputAgeMs": 0,
         "lastReadbackFrame": -1,
         "lastReadbackAgeMs": null,
@@ -1336,15 +1361,15 @@
           "energyMean": 0
         }
       },
-      "lastFrameEnergy": 0.987,
+      "lastFrameEnergy": 0.985,
       "timing": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-        "rafFps": 9.225092250922511,
-        "frameDeltaMs": 58.30000000000007,
-        "frameP95Ms": 108.39999999999998,
-        "cpuFrameMs": 0.3999999761581421,
-        "cpuFrameP95Ms": 2.700000047683716,
+        "rafFps": 10,
+        "frameDeltaMs": 100,
+        "frameP95Ms": 100,
+        "cpuFrameMs": 0.5,
+        "cpuFrameP95Ms": 2.899999976158142,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": false,
@@ -1793,7 +1818,7 @@
         "clock": {
           "schema": "kaminos.browser-epoch-monotonic-clock.v0",
           "timingAuthority": "performance-time-origin-plus-now",
-          "timeOriginEpochMs": 1788047340022
+          "timeOriginEpochMs": 1788048366081.7
         },
         "startedAtMs": null,
         "endedAtMs": null,
@@ -2013,6 +2038,16 @@
   "effective": {
     "presetId": "vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
     "contentHash": "sha256:0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+    "source": {
+      "schema": "kaminos.runtime-source.v1",
+      "status": "resolved",
+      "repoRoot": "/private/tmp/kaminos-handy-wake-raymarch-preset-mount-0829",
+      "revision": "07f5ab1c43f3e3d157f8f565f21625ab9cce7d21",
+      "tree": "4135955a5c284606176cb9c44dccbfd012c7520d",
+      "branch": "cc/handy-wake-raymarch-preset-mount-0829",
+      "dirty": false,
+      "processId": 78933
+    },
     "mountReceipt": {
       "identity": "kaminos.wake-fire-preset-mount.v1",
       "projection": {
@@ -2338,16 +2373,16 @@
         "authority": "off"
       },
       "volumeScene": "tall_plume",
-      "frameCount": 9,
-      "simStepCount": 7,
+      "frameCount": 7,
+      "simStepCount": 5,
       "lookFreeze": 0,
       "lookFreezeFrame": null,
       "lookFreezeTimeSeconds": null,
       "lookFreezeRenderTimeMs": null,
       "lookFreezeRenderFrame": null,
       "lookFreezeSkippedFrames": 0,
-      "renderPhaseTimeMs": 989.2,
-      "renderPhaseFrame": 8,
+      "renderPhaseTimeMs": 838.8,
+      "renderPhaseFrame": 6,
       "renderPhaseAuthority": "live-render-phase",
       "pyroCompareMode": "base",
       "pyroCompareMuted": true,
@@ -2398,7 +2433,7 @@
       "flameContinuityRequested": "live-every-frame",
       "flameContinuityEffective": "live-every-frame",
       "flameContinuityEffectiveReason": "operator-requested-live-every-frame",
-      "flameContinuityPresentationOrdinal": 9,
+      "flameContinuityPresentationOrdinal": 7,
       "flameContinuityDecision": {
         "schema": "kaminos.single-flame-bounded-history-holdover.v0",
         "mode": "live",
@@ -2414,7 +2449,7 @@
         "fallbackReason": "simulator-not-starved",
         "refusedSlots": [],
         "counts": {
-          "live": 9,
+          "live": 7,
           "holdover": 0,
           "fallback": 0
         }
@@ -2426,26 +2461,26 @@
         "requested": "live-every-frame",
         "effective": "live-every-frame",
         "effectiveReason": "operator-requested-live-every-frame",
-        "presentationOrdinal": 9,
+        "presentationOrdinal": 7,
         "mode": "live",
-        "sourceGeneration": 7,
+        "sourceGeneration": 5,
         "selectedHistorySlot": null,
-        "simulatorStep": 7,
+        "simulatorStep": 5,
         "holdoverOrdinal": 0,
         "repeatedSlotCount": 0,
         "fallbackReason": "simulator-not-starved",
         "counts": {
-          "live": 9,
+          "live": 7,
           "holdover": 0,
           "fallback": 0
         },
         "renderFrameCountBefore": 0,
         "renderFrameCount": 0,
         "renderFrameAdvanced": false,
-        "sourceRenderFrameCountBefore": 8,
-        "sourceRenderFrameCount": 9,
+        "sourceRenderFrameCountBefore": 6,
+        "sourceRenderFrameCount": 7,
         "sourceRenderFrameAdvanced": true,
-        "simulatorStepBefore": 6,
+        "simulatorStepBefore": 4,
         "simulatorStepAdvanced": true
       },
       "tallPlumeReactionCadenceDebug": "source-reaction-cadence-v0",
@@ -2509,14 +2544,14 @@
         "uploadedAtMs": null
       },
       "temporalAccumEffective": 0,
-      "temporalReprojectionConfidence": 0.3083123636363636,
+      "temporalReprojectionConfidence": 0.20554157575757573,
       "temporalHistoryWeight": 0,
       "temporalRejectedHistory": 1,
       "temporalSmokeHistoryTrust": 0.013640624999999998,
       "temporalFireHistoryProtect": 0.750909090909091,
       "temporalInterfaceHistoryProtect": 1,
       "temporalEvidenceSource": "cpu-estimate-control-proxy",
-      "temporalHistoryFrames": 7,
+      "temporalHistoryFrames": 5,
       "temporalHistoryResetCount": 6,
       "temporalHistoryResetReason": "history-resized",
       "temporalHistoryValid": true,
@@ -2524,10 +2559,10 @@
       "fluidStateResetReason": "grid-rebuilt",
       "majorantGrid": 24,
       "majorantBuilt": true,
-      "majorantFrameCount": 7,
+      "majorantFrameCount": 5,
       "majorantCadence": 1,
       "majorantBuiltThisFrame": true,
-      "majorantLastBuiltFrame": 8,
+      "majorantLastBuiltFrame": 6,
       "majorantSkippedFrameCount": 0,
       "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
       "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
@@ -2535,8 +2570,8 @@
       "boundarySidecarSource": "baked",
       "boundarySidecarBuilt": true,
       "boundarySidecarBuiltThisFrame": true,
-      "boundarySidecarFrameCount": 7,
-      "boundarySidecarLastBuiltFrame": 8,
+      "boundarySidecarFrameCount": 5,
+      "boundarySidecarLastBuiltFrame": 6,
       "boundaryStructureSource": "baked",
       "boundarySidecarView": "off",
       "boundarySidecarDebug": {
@@ -2561,8 +2596,8 @@
         "bytes": 11664000,
         "built": true,
         "builtThisFrame": true,
-        "frameCount": 7,
-        "lastBuiltFrame": 8
+        "frameCount": 5,
+        "lastBuiltFrame": 6
       },
       "boundarySplatMode": "off",
       "boundarySplatCompositionRequested": "splat-only",
@@ -2877,14 +2912,14 @@
         "majorantBuiltThisFrame": true,
         "majorantCellVisitsThisFrame": 13824,
         "majorantEstimatedCellVisitsPerFrame": 13824,
-        "majorantLastBuiltFrame": 8,
+        "majorantLastBuiltFrame": 6,
         "majorantSkippedFrameCount": 0,
         "boundarySidecarIdentity": "baked-boundary-sidecar-v0",
         "boundarySidecarAuthority": "band-limited-support-coverage-ridge-proximity-footprint-v1",
         "boundarySidecarSource": "baked",
         "boundarySidecarBuiltThisFrame": true,
         "boundarySidecarCellVisitsThisFrame": 729000,
-        "boundarySidecarLastBuiltFrame": 8,
+        "boundarySidecarLastBuiltFrame": 6,
         "pressureProjectionEnabled": true,
         "pressureIterationDefault": 2,
         "pressureIterationRequested": 3,
@@ -2899,11 +2934,11 @@
         "timing": {
           "timingEvidenceSource": "raf-and-queue-proxy",
           "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-          "rafFps": 9.225092250922511,
-          "frameDeltaMs": 108.39999999999998,
-          "frameP95Ms": 108.39999999999998,
-          "cpuFrameMs": 0.30000001192092896,
-          "cpuFrameP95Ms": 2.700000047683716,
+          "rafFps": 17.152658662092637,
+          "frameDeltaMs": 8.299999999999955,
+          "frameP95Ms": 58.299999999999955,
+          "cpuFrameMs": 0.3999999761581421,
+          "cpuFrameP95Ms": 2.899999976158142,
           "queueDoneMs": null,
           "queueDoneP95Ms": null,
           "queueProbePending": false,
@@ -3108,12 +3143,12 @@
         "liveFireAuthority": 0,
         "smokeAuthority": 0.028000000000000004,
         "stateEnergy": 0,
-        "statePhase": 0.061440000000000036,
+        "statePhase": 0.05321600000000003,
         "resetGate": true,
         "resetReasons": [
           "disabled"
         ],
-        "lastUpdateFrame": 8,
+        "lastUpdateFrame": 6,
         "lastInputAgeMs": 0,
         "lastReadbackFrame": -1,
         "lastReadbackAgeMs": null,
@@ -3310,15 +3345,15 @@
           "energyMean": 0
         }
       },
-      "lastFrameEnergy": 0.987,
+      "lastFrameEnergy": 0.985,
       "timing": {
         "timingEvidenceSource": "raf-and-queue-proxy",
         "timingDisclaimer": "not-gpu-exclusive-or-present-latency",
-        "rafFps": 9.225092250922511,
-        "frameDeltaMs": 58.30000000000007,
-        "frameP95Ms": 108.39999999999998,
-        "cpuFrameMs": 0.3999999761581421,
-        "cpuFrameP95Ms": 2.700000047683716,
+        "rafFps": 10,
+        "frameDeltaMs": 100,
+        "frameP95Ms": 100,
+        "cpuFrameMs": 0.5,
+        "cpuFrameP95Ms": 2.899999976158142,
         "queueDoneMs": null,
         "queueDoneP95Ms": null,
         "queueProbePending": false,
@@ -3767,7 +3802,7 @@
         "clock": {
           "schema": "kaminos.browser-epoch-monotonic-clock.v0",
           "timingAuthority": "performance-time-origin-plus-now",
-          "timeOriginEpochMs": 1788047340022
+          "timeOriginEpochMs": 1788048366081.7
         },
         "startedAtMs": null,
         "endedAtMs": null,
@@ -3986,7 +4021,23 @@
     "visibility": {
       "activeTab": "generate",
       "operationalWorkspaceVisible": true,
-      "mountText": "Fire Flamebowl Blockout 130r | flamebowl-blockout-130r -> vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c"
+      "mountText": "Fire Flamebowl Blockout 130r | flamebowl-blockout-130r -> vsp-0654d9edacf7215f6eaaae4bab5599873a34c877c4bcd8a1eabeeeef31147d5c",
+      "mountVisibility": {
+        "overflowWrap": "anywhere",
+        "textBounds": {
+          "left": 1107.203125,
+          "top": 509.8728942871094,
+          "right": 1324.224853515625,
+          "bottom": 560.766357421875
+        },
+        "zoneBounds": {
+          "left": 1088.009033203125,
+          "top": 241.5149688720703,
+          "right": 1345.317138671875,
+          "bottom": 577.4865264892578
+        },
+        "fullyVisible": true
+      }
     }
   }
 }
