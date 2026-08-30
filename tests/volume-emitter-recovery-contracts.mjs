@@ -84,6 +84,11 @@ assert.match(analyticInfluence, /analyticTorusSignedDistance/, 'main simulation 
 assert.match(analyticInfluence, /smoothstep\([^\n]+cellWidth/, 'analytic support uses a grid-aware compact antialias transition');
 assert.match(analyticInfluence, /support <= 0\.0/, 'analytic support exits exactly outside the compact boundary');
 assert.doesNotMatch(analyticInfluence, /\bfor\s*\(/, 'fixed analytic morphology is O(1) per cell');
+assert.doesNotMatch(
+  analyticInfluence,
+  /normalize\s*\(/,
+  'the analytic basis is normalized once at descriptor admission, not once per simulation cell',
+);
 assert.match(core, /fn externalEmitterInfluence\([\s\S]*?for \(var i:/, 'the generic segment carrier remains available for real arbitrary trails');
 
 const syncControls = cockpit.match(/const syncControls = event => \{[\s\S]*?\n  };/)?.[0] || '';

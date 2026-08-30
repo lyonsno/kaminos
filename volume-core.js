@@ -1338,6 +1338,22 @@ function analyticEmitterVec3(value, label) {
   return value.map(Number);
 }
 
+function normalizeAnalyticEmitterVec3(value, label) {
+  const vector = analyticEmitterVec3(value, label);
+  const length = Math.hypot(...vector);
+  if (length <= 1e-9) throw new Error(`${label} must be non-zero`);
+  return vector.map(component => component / length);
+}
+
+function orthonormalAnalyticEmitterSupportAxis(axis, value) {
+  const support = normalizeAnalyticEmitterVec3(value, 'analytic emitter supportAxis');
+  const projection = support[0] * axis[0] + support[1] * axis[1] + support[2] * axis[2];
+  const perpendicular = support.map((component, index) => component - axis[index] * projection);
+  const length = Math.hypot(...perpendicular);
+  if (length <= 1e-9) throw new Error('analytic emitter supportAxis must not be parallel to axis');
+  return perpendicular.map(component => component / length);
+}
+
 function normalizeAnalyticEmitterDescriptor(descriptor) {
   if (descriptor === null || descriptor === undefined) return null;
   if (!descriptor || typeof descriptor !== 'object' || Array.isArray(descriptor)) {
@@ -1351,12 +1367,14 @@ function normalizeAnalyticEmitterDescriptor(descriptor) {
     throw new Error(`analytic emitter coordinate space must be volume-local, got ${descriptor.coordinateSpace || 'missing'}`);
   }
   const chemistry = descriptor.chemistry || {};
+  const axis = normalizeAnalyticEmitterVec3(descriptor.axis, 'analytic emitter axis');
+  const supportAxis = orthonormalAnalyticEmitterSupportAxis(axis, descriptor.supportAxis);
   const normalized = {
     ...descriptor,
     family,
     origin: analyticEmitterVec3(descriptor.origin, 'analytic emitter origin'),
-    axis: analyticEmitterVec3(descriptor.axis, 'analytic emitter axis'),
-    supportAxis: analyticEmitterVec3(descriptor.supportAxis, 'analytic emitter supportAxis'),
+    axis,
+    supportAxis,
     radius: clampFinite(descriptor.radius, 0.006, 0.18, 0.04),
     extent: clampFinite(descriptor.extent, 0.012, 1.8, 0.32),
     strength: clampFinite(descriptor.strength, 0, 4, 0),
@@ -3184,7 +3202,7 @@ fn analyticCylinderSignedDistance(p: vec3<f32>, origin: vec3<f32>, axis: vec3<f3
 }
 
 fn analyticRibbonSignedDistance(p: vec3<f32>, origin: vec3<f32>, injectionAxis: vec3<f32>, supportAxis: vec3<f32>, radius: f32, lengthAlongSupport: f32) -> f32 {
-  let secondaryAxis = normalize(cross(injectionAxis, supportAxis));
+  let secondaryAxis = cross(injectionAxis, supportAxis);
   let relative = p - origin;
   let local = abs(vec3<f32>(
     dot(relative, supportAxis),
@@ -3212,8 +3230,8 @@ fn analyticEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence
   let familyMode = u32(max(0.0, floor(u.analytic_emitter_origin_mode.w + 0.5)));
   if (familyMode == 0u) { return result; }
   let origin = u.analytic_emitter_origin_mode.xyz;
-  let axis = normalize(u.analytic_emitter_axis_strength.xyz);
-  let supportAxis = normalize(u.analytic_emitter_support_radius.xyz);
+  let axis = u.analytic_emitter_axis_strength.xyz;
+  let supportAxis = u.analytic_emitter_support_radius.xyz;
   let radius = max(0.006, u.analytic_emitter_support_radius.w);
   let extent = max(0.012, u.analytic_emitter_geometry.x);
   var signedDistance = 1.0;
