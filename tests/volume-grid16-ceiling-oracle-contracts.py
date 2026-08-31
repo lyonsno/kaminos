@@ -195,5 +195,32 @@ class CeilingOracleContracts(unittest.TestCase):
             self.assertEqual(report["failurePhase"], "inputs")
 
 
+class CheckpointedRenderContracts(unittest.TestCase):
+    def test_checkpointed_gradients_match_full_tape(self) -> None:
+        # 2026-09-01: the full-image autodiff tape at rung-96 scale attempted
+        # ~157GB and took the box down. Render chunks are now wrapped in
+        # mx.checkpoint (recompute-in-backward): the loss and its gradients
+        # must be numerically equivalent to the full-tape path — memory
+        # containment must not change the science.
+        medium = synthetic_medium()
+        target = ORACLE.TARGET.build_gaussian_density_lattice(
+            medium, sigma_cells=0.6, fine_grid=16
+        )[0]
+        results = {}
+        for checkpointed in (False, True):
+            results[checkpointed] = ORACLE.fit_modes(
+                medium, target, [synthetic_camera()],
+                mode_count=3, iterations=8, fit_width=24, fit_samples_per_cell=3,
+                seed=11, init="analytical", learning_rate=0.05,
+                checkpoint_render=checkpointed,
+            )
+        a = results[False]["lossHistory"]
+        b = results[True]["lossHistory"]
+        self.assertEqual(len(a), len(b))
+        for la, lb in zip(a, b):
+            self.assertAlmostEqual(la, lb, places=4,
+                                   msg="checkpointed render diverged from full tape")
+
+
 if __name__ == "__main__":
     unittest.main()

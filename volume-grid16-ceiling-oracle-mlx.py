@@ -245,6 +245,7 @@ def fit_modes(
     checkpoint_path: Path | None = None,
     yield_pending_dir: Path | None = None,
     yield_min_seconds: float = 120.0,
+    checkpoint_render: bool = True,
 ) -> dict[str, Any]:
     import mlx.core as mx
     import mlx.nn as mlx_nn
@@ -409,6 +410,12 @@ def fit_modes(
         weighted = transmittance * source_scale * segment[:, None]
         return mx.sum(weighted[:, :, None] * emission_field, axis=1)
 
+    # Recompute-in-backward containment: the full-image tape at rung-96 scale
+    # attempted ~157GB (box-down 2026-09-01). Checkpointing stores only chunk
+    # boundaries and replays chunk internals during backward — peak memory
+    # becomes one chunk's tape, numerics unchanged.
+    chunk_render = mx.checkpoint(render_chunk) if checkpoint_render else render_chunk
+
     def loss_fn(params, points, segment, target):
         centers, precision, norm, (emission, extinction), trace = decode(params)
         predictions = []
@@ -416,7 +423,7 @@ def fit_modes(
         for start in range(0, ray_count, ray_chunk):
             stop = min(start + ray_chunk, ray_count)
             predictions.append(
-                render_chunk(
+                chunk_render(
                     points[start:stop],
                     segment[start:stop],
                     centers,
