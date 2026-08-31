@@ -82,6 +82,7 @@ def main() -> int:
     parser.add_argument("--yield-pending-dir", type=Path, default=None)
     parser.add_argument("--resubmit-cli", type=Path, default=None)
     parser.add_argument("--route-identity", default="")
+    parser.add_argument("--memory-limit-gb", type=float, default=48.0)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -108,6 +109,9 @@ def main() -> int:
         print(f"[tracker-driver] self-resubmitted rc={receipt.returncode}", flush=True)
 
     try:
+        import mlx.core as mx
+        mx.set_memory_limit(int(args.memory_limit_gb * (1024 ** 3)))
+        report["memoryLimitGb"] = args.memory_limit_gb
         report["failurePhase"] = "data-load"
         states = fitted_states()
         if len(states) < args.holdout + 3:

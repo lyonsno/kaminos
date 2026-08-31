@@ -157,6 +157,15 @@ class YieldingFitContracts(unittest.TestCase):
         self.assertIn("--seat-only", source)
         self.assertIn("seat-only", source.split("Phase 2")[0], "seat-only gate must precede the chain phase")
 
+    def test_memory_limit_guard_is_wired(self) -> None:
+        # 2026-09-01: an uncapped N=3200 rung-96 fit attempted ~157GB and
+        # brought the whole box down, killing fleet processes. Every pipeline
+        # run must set an explicit MLX memory limit so oversized graphs fail
+        # loudly inside the process instead of eating shared RAM.
+        source = (ROOT / "volume-longmotion-yielding-pipeline-mlx.py").read_text()
+        self.assertIn("--memory-limit-gb", source)
+        self.assertIn("set_memory_limit", source)
+
     def test_checkpoint_preserves_adam_moments(self) -> None:
         medium = synthetic_medium()
         lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)

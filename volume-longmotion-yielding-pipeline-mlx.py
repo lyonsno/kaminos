@@ -92,6 +92,12 @@ def self_resubmit(args: argparse.Namespace) -> None:
 
 def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
     report["failurePhase"] = "inputs"
+    # Hard memory cap: an uncapped N=3200 rung-96 fit attempted ~157GB and
+    # took the whole box down (2026-09-01). Oversized graphs must fail loudly
+    # INSIDE this process, never by exhausting shared RAM.
+    import mlx.core as mx
+    mx.set_memory_limit(int(args.memory_limit_gb * (1024 ** 3)))
+    report["memoryLimitGb"] = args.memory_limit_gb
     manifest_path = args.motion_manifest.expanduser().resolve()
     require(manifest_path.is_file(), f"motion manifest is missing: {manifest_path}")
     mode_path = args.mode_module.expanduser().resolve()
@@ -345,6 +351,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260727)
+    parser.add_argument("--memory-limit-gb", type=float, default=48.0,
+                        help="hard MLX memory cap; allocation beyond it fails the run loudly")
     parser.add_argument("--seat-only", action="store_true",
                         help="stop after the seat ladder: no chain, no witness renders")
     parser.add_argument(
