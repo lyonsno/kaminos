@@ -1,0 +1,15 @@
+{
+  "name": "",
+  "job_type": "command",
+  "job_id": "92372544afdd",
+  "input_path": "",
+  "input_name": "",
+  "params": {},
+  "output_files": [
+    "full-authored-raymarch.png",
+    "lean-stock-direct-cell-raymarch.png",
+    "report.json"
+  ],
+  "created_at": 1788217259.098187,
+  "duration_s": 11.0
+}
