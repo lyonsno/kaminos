@@ -456,7 +456,7 @@ class VolumeCockpitLayoutEditor {
     this.authorableControls = authorableControls;
     this.authorableControlIds = authorableControls.map(control => control.id);
     this.sourceDefault = sourceDefault;
-    this.fetch = fetchImpl;
+    this.fetch = (...requestArgs) => fetchImpl(...requestArgs);
     this.layout = null;
     this.editing = false;
     this.saveGeneration = 0;

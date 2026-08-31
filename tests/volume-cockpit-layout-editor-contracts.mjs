@@ -14,6 +14,49 @@ const executableLayoutSource = layoutSource.replace(
 assert.notEqual(executableLayoutSource, layoutSource, 'the exact layout editor implementation is exposed only inside this executable contract');
 const executableLayoutModule = await import(`data:text/javascript;base64,${Buffer.from(executableLayoutSource).toString('base64')}`);
 
+{
+  const Editor = executableLayoutModule.VolumeCockpitLayoutEditor;
+  const toolbarIds = [
+    'volume-cockpit-layout-toolbar',
+    'volume-cockpit-layout-select',
+    'volume-cockpit-layout-name',
+    'volume-cockpit-layout-new',
+    'volume-cockpit-layout-edit',
+    'volume-cockpit-layout-add-group',
+    'volume-cockpit-layout-reset',
+    'volume-cockpit-layout-status',
+  ];
+  const toolbarNodes = new Map(toolbarIds.map(id => [id, {
+    id,
+    addEventListener() {},
+    dataset: {},
+  }]));
+  const documentRef = {
+    getElementById(id) { return toolbarNodes.get(id) || null; },
+  };
+  const receiverSensitiveFetch = async function receiverSensitiveFetch() {
+    if (this !== undefined) throw new TypeError('receiver-sensitive-fetch-illegal-invocation');
+    return {
+      ok: true,
+      status: 200,
+      async json() { return { identity: 'receiver-sensitive-fetch-receipt.v1' }; },
+    };
+  };
+  const receiverEditor = new Editor({
+    documentRef,
+    schema: {},
+    authorableControls: [],
+    sourceDefault: {},
+    fetchImpl: receiverSensitiveFetch,
+  });
+  const receiverReceipt = await receiverEditor.requestJson('/api/receiver-sensitive-fetch');
+  assert.equal(
+    receiverReceipt.identity,
+    'receiver-sensitive-fetch-receipt.v1',
+    'an injected host fetch callable must not be rebound to the layout editor instance',
+  );
+}
+
 for (const exportName of [
   'VOLUME_COCKPIT_LAYOUT_IDENTITY',
   'validateVolumeCockpitLayoutDocument',
