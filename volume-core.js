@@ -1168,6 +1168,19 @@ function boundarySidecarBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
+const RAYMARCH_SUPPORT_BRICK_SIZE = 4;
+
+function raymarchSupportBrickGridSize(gridSize) {
+  return Math.ceil(gridSize / RAYMARCH_SUPPORT_BRICK_SIZE);
+}
+
+function raymarchSupportHierarchyBufferBytes(gridSize) {
+  const brickGridSize = raymarchSupportBrickGridSize(gridSize);
+  return (gridCellCount(gridSize) + gridCellCount(brickGridSize))
+    * 4
+    * Float32Array.BYTES_PER_ELEMENT;
+}
+
 function frontFieldBufferBytes(gridSize) {
   return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -1628,6 +1641,8 @@ export function leanStockRaymarchAdmission({
   pyroCompareMode = 'live',
   presentationMode = 'beauty',
   smokePresentationMode = 'on',
+  boundarySidecarSource = 'live',
+  boundarySidecarOverrideApplied = false,
   appearanceDecompositionActive = false,
   nonRidgeOpticalCaptureActive = false,
   nonRidgeSourceBasisCaptureActive = false,
@@ -1640,6 +1655,11 @@ export function leanStockRaymarchAdmission({
   if (normalizePyroCompareMode(pyroCompareMode) !== 'base') refusalReasons.push('pyro-compare-mode-not-base');
   if (presentationMode !== 'beauty') refusalReasons.push('presentation-mode-not-beauty');
   if (smokePresentationMode !== 'on') refusalReasons.push('smoke-presentation-not-on');
+  const normalizedBoundarySidecarSource = normalizeBoundarySidecarSource(boundarySidecarSource);
+  if (normalizedBoundarySidecarSource !== 'baked'
+    && !(normalizedBoundarySidecarSource === 'override' && boundarySidecarOverrideApplied)) {
+    refusalReasons.push('boundary-sidecar-source-not-buffer-backed');
+  }
   if (appearanceDecompositionActive) refusalReasons.push('appearance-decomposition-active');
   if (nonRidgeOpticalCaptureActive) refusalReasons.push('nonridge-optical-capture-active');
   if (nonRidgeSourceBasisCaptureActive) refusalReasons.push('nonridge-source-basis-capture-active');
@@ -1856,6 +1876,7 @@ const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
+const RAYMARCH_SUPPORT_BRICK_SIZE: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
 struct Uniforms {
@@ -1972,6 +1993,7 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
+@group(0) @binding(13) var<storage, read_write> raymarchSupportHierarchy: array<vec4<f32>>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -2336,28 +2358,152 @@ fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<
   return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
 
-fn directCellOpticalSupportAtCell(c: vec3<i32>) -> f32 {
-  return directCellOpticalSupportFromSlots(
-    readSlot(c, 0u),
-    readSlot(c, 1u),
-    readSlot(c, 2u),
-    readSlot(c, 3u),
-    readFrontField(c)
-  );
+struct DirectCellSample {
+  reconstructed: FlowReconstructionSample,
+  opticalSupport: f32,
+};
+
+fn trilinearDirectCellVec4(
+  c000: vec4<f32>, c100: vec4<f32>, c010: vec4<f32>, c110: vec4<f32>,
+  c001: vec4<f32>, c101: vec4<f32>, c011: vec4<f32>, c111: vec4<f32>,
+  f: vec3<f32>,
+) -> vec4<f32> {
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
 }
 
-fn directCellOpticalSupport(p: vec3<f32>) -> f32 {
+fn trilinearDirectCellF32(
+  c000: f32, c100: f32, c010: f32, c110: f32,
+  c001: f32, c101: f32, c011: f32, c111: f32,
+  f: vec3<f32>,
+) -> f32 {
+  let x00 = mix(c000, c100, f.x);
+  let x10 = mix(c010, c110, f.x);
+  let x01 = mix(c001, c101, f.x);
+  let x11 = mix(c011, c111, f.x);
+  let y0 = mix(x00, x10, f.y);
+  let y1 = mix(x01, x11, f.y);
+  return mix(y0, y1, f.z);
+}
+
+fn sampleDirectCell(p: vec3<f32>) -> DirectCellSample {
   let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let c = vec3<i32>(floor(q));
-  let z0 = max(
-    max(directCellOpticalSupportAtCell(c), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 0))),
-    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 0)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 0)))
+  let f = fract(q);
+  let c000 = c;
+  let c100 = c + vec3<i32>(1, 0, 0);
+  let c010 = c + vec3<i32>(0, 1, 0);
+  let c110 = c + vec3<i32>(1, 1, 0);
+  let c001 = c + vec3<i32>(0, 0, 1);
+  let c101 = c + vec3<i32>(1, 0, 1);
+  let c011 = c + vec3<i32>(0, 1, 1);
+  let c111 = c + vec3<i32>(1, 1, 1);
+
+  let v000 = readSlot(c000, 0u);
+  let v100 = readSlot(c100, 0u);
+  let v010 = readSlot(c010, 0u);
+  let v110 = readSlot(c110, 0u);
+  let v001 = readSlot(c001, 0u);
+  let v101 = readSlot(c101, 0u);
+  let v011 = readSlot(c011, 0u);
+  let v111 = readSlot(c111, 0u);
+  let velocityMagnitudeLo = vec4<f32>(length(v000.xyz), length(v100.xyz), length(v010.xyz), length(v110.xyz));
+  let velocityMagnitudeHi = vec4<f32>(length(v001.xyz), length(v101.xyz), length(v011.xyz), length(v111.xyz));
+  let velocityDensityLo = vec4<f32>(v000.w, v100.w, v010.w, v110.w);
+  let velocityDensityHi = vec4<f32>(v001.w, v101.w, v011.w, v111.w);
+
+  let m000 = readSlot(c000, 1u);
+  let m100 = readSlot(c100, 1u);
+  let m010 = readSlot(c010, 1u);
+  let m110 = readSlot(c110, 1u);
+  let m001 = readSlot(c001, 1u);
+  let m101 = readSlot(c101, 1u);
+  let m011 = readSlot(c011, 1u);
+  let m111 = readSlot(c111, 1u);
+  var smokeLo = vec4<f32>(m000.x, m100.x, m010.x, m110.x);
+  var smokeHi = vec4<f32>(m001.x, m101.x, m011.x, m111.x);
+  var fireLo = vec4<f32>(m000.y, m100.y, m010.y, m110.y) * 0.28;
+  var fireHi = vec4<f32>(m001.y, m101.y, m011.y, m111.y) * 0.28;
+  let densityFallbackLo = vec4<f32>(m000.y, m100.y, m010.y, m110.y) * 0.22
+    + vec4<f32>(m000.w, m100.w, m010.w, m110.w) * 0.18;
+  let densityFallbackHi = vec4<f32>(m001.y, m101.y, m011.y, m111.y) * 0.22
+    + vec4<f32>(m001.w, m101.w, m011.w, m111.w) * 0.18;
+  var extinctionLo = vec4<f32>(m000.w, m100.w, m010.w, m110.w) * 0.16;
+  var extinctionHi = vec4<f32>(m001.w, m101.w, m011.w, m111.w) * 0.16;
+
+  let l000 = readSlot(c000, 2u);
+  let l100 = readSlot(c100, 2u);
+  let l010 = readSlot(c010, 2u);
+  let l110 = readSlot(c110, 2u);
+  let l001 = readSlot(c001, 2u);
+  let l101 = readSlot(c101, 2u);
+  let l011 = readSlot(c011, 2u);
+  let l111 = readSlot(c111, 2u);
+  fireLo = fireLo
+    + vec4<f32>(l000.x, l100.x, l010.x, l110.x) * 1.25
+    + vec4<f32>(l000.y, l100.y, l010.y, l110.y) * 0.42
+    + vec4<f32>(l000.z, l100.z, l010.z, l110.z) * 0.55
+    + vec4<f32>(l000.w, l100.w, l010.w, l110.w) * 0.72;
+  fireHi = fireHi
+    + vec4<f32>(l001.x, l101.x, l011.x, l111.x) * 1.25
+    + vec4<f32>(l001.y, l101.y, l011.y, l111.y) * 0.42
+    + vec4<f32>(l001.z, l101.z, l011.z, l111.z) * 0.55
+    + vec4<f32>(l001.w, l101.w, l011.w, l111.w) * 0.72;
+
+  let d000 = readSlot(c000, 3u);
+  let d100 = readSlot(c100, 3u);
+  let d010 = readSlot(c010, 3u);
+  let d110 = readSlot(c110, 3u);
+  let d001 = readSlot(c001, 3u);
+  let d101 = readSlot(c101, 3u);
+  let d011 = readSlot(c011, 3u);
+  let d111 = readSlot(c111, 3u);
+  smokeLo = smokeLo
+    + vec4<f32>(d000.x, d100.x, d010.x, d110.x) * 0.52
+    + vec4<f32>(d000.y, d100.y, d010.y, d110.y) * 0.34;
+  smokeHi = smokeHi
+    + vec4<f32>(d001.x, d101.x, d011.x, d111.x) * 0.52
+    + vec4<f32>(d001.y, d101.y, d011.y, d111.y) * 0.34;
+  fireLo = fireLo + vec4<f32>(d000.z, d100.z, d010.z, d110.z) * 0.70;
+  fireHi = fireHi + vec4<f32>(d001.z, d101.z, d011.z, d111.z) * 0.70;
+  extinctionLo = extinctionLo + vec4<f32>(d000.y, d100.y, d010.y, d110.y) * 0.36;
+  extinctionHi = extinctionHi + vec4<f32>(d001.y, d101.y, d011.y, d111.y) * 0.36;
+
+  let front000 = readFrontField(c000);
+  let front100 = readFrontField(c100);
+  let front010 = readFrontField(c010);
+  let front110 = readFrontField(c110);
+  let front001 = readFrontField(c001);
+  let front101 = readFrontField(c101);
+  let front011 = readFrontField(c011);
+  let front111 = readFrontField(c111);
+  let frontLo = vec4<f32>(front000, front100, front010, front110);
+  let frontHi = vec4<f32>(front001, front101, front011, front111);
+  fireLo = fireLo + frontLo * 0.35;
+  fireHi = fireHi + frontHi * 0.35;
+
+  let densityLo = max(velocityDensityLo, smokeLo * 0.82 + densityFallbackLo);
+  let densityHi = max(velocityDensityHi, smokeHi * 0.82 + densityFallbackHi);
+  let supportLo = clamp(densityLo * 0.50 + extinctionLo * 0.40 + fireLo * 0.44 + frontLo * 0.12 + velocityMagnitudeLo * 0.36, vec4<f32>(0.0), vec4<f32>(3.0));
+  let supportHi = clamp(densityHi * 0.50 + extinctionHi * 0.40 + fireHi * 0.44 + frontHi * 0.12 + velocityMagnitudeHi * 0.36, vec4<f32>(0.0), vec4<f32>(3.0));
+
+  var sample: DirectCellSample;
+  sample.reconstructed.velocityDensity = trilinearDirectCellVec4(v000, v100, v010, v110, v001, v101, v011, v111, f);
+  sample.reconstructed.material = trilinearDirectCellVec4(m000, m100, m010, m110, m001, m101, m011, m111, f);
+  sample.reconstructed.fireLayer = trilinearDirectCellVec4(l000, l100, l010, l110, l001, l101, l011, l111, f);
+  sample.reconstructed.microLayer = trilinearDirectCellVec4(d000, d100, d010, d110, d001, d101, d011, d111, f);
+  sample.reconstructed.kernelTangentRadius = vec4<f32>(0.0);
+  sample.reconstructed.frontTopology = trilinearDirectCellF32(front000, front100, front010, front110, front001, front101, front011, front111, f);
+  sample.opticalSupport = max(
+    max(max(supportLo.x, supportLo.y), max(supportLo.z, supportLo.w)),
+    max(max(supportHi.x, supportHi.y), max(supportHi.z, supportHi.w))
   );
-  let z1 = max(
-    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 0, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 1))),
-    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 1)))
-  );
-  return max(z0, z1);
+  return sample;
 }
 
 fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
@@ -2380,6 +2526,61 @@ fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
     if (tz > 0.0001) { best = min(best, tz); }
   }
   return min(best, 0.20);
+}
+
+fn sampleRaymarchCellSupport(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let c = vec3<u32>(floor(q));
+  let c100 = min(c + vec3<u32>(1, 0, 0), vec3<u32>(GRID - 1u));
+  let c010 = min(c + vec3<u32>(0, 1, 0), vec3<u32>(GRID - 1u));
+  let c110 = min(c + vec3<u32>(1, 1, 0), vec3<u32>(GRID - 1u));
+  let c001 = min(c + vec3<u32>(0, 0, 1), vec3<u32>(GRID - 1u));
+  let c101 = min(c + vec3<u32>(1, 0, 1), vec3<u32>(GRID - 1u));
+  let c011 = min(c + vec3<u32>(0, 1, 1), vec3<u32>(GRID - 1u));
+  let c111 = min(c + vec3<u32>(1, 1, 1), vec3<u32>(GRID - 1u));
+  var supportMax = raymarchSupportHierarchy[raymarchSupportBaseIndex(c)];
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c100)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c010)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c110)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c001)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c101)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c011)]);
+  supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(c111)]);
+  return supportMax;
+}
+
+fn sampleRaymarchSupportBrick(p: vec3<f32>) -> vec4<f32> {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let cell = vec3<u32>(floor(q));
+  let brick = cell / vec3<u32>(RAYMARCH_SUPPORT_BRICK_SIZE);
+  return raymarchSupportHierarchy[raymarchSupportBrickIndex(brick)];
+}
+
+fn raymarchSupportOccupied(support: vec4<f32>) -> bool {
+  return max(support.x, max(support.y, support.z)) > 0.0001;
+}
+
+fn raymarchSupportBrickExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let dqdt = rd * (0.5 * f32(GRID));
+  let cell = vec3<u32>(floor(q));
+  let brick = cell / vec3<u32>(RAYMARCH_SUPPORT_BRICK_SIZE);
+  let brickLo = vec3<f32>(brick * vec3<u32>(RAYMARCH_SUPPORT_BRICK_SIZE));
+  let brickHi = brickLo + vec3<f32>(f32(RAYMARCH_SUPPORT_BRICK_SIZE));
+  var best = 1.0e6;
+  if (abs(dqdt.x) > 0.0001) {
+    let tx = (select(brickLo.x, brickHi.x, dqdt.x > 0.0) - q.x) / dqdt.x;
+    if (tx > 0.0001) { best = min(best, tx); }
+  }
+  if (abs(dqdt.y) > 0.0001) {
+    let ty = (select(brickLo.y, brickHi.y, dqdt.y > 0.0) - q.y) / dqdt.y;
+    if (ty > 0.0001) { best = min(best, ty); }
+  }
+  if (abs(dqdt.z) > 0.0001) {
+    let tz = (select(brickLo.z, brickHi.z, dqdt.z > 0.0) - q.z) / dqdt.z;
+    if (tz > 0.0001) { best = min(best, tz); }
+  }
+  return min(best, 0.40);
 }
 
 fn curlAtCell(c: vec3<i32>) -> vec3<f32> {
@@ -3356,6 +3557,60 @@ fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
   return boundarySupportFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c), supportWeights);
 }
 
+fn raymarchSupportBrickGrid() -> u32 {
+  return (GRID + RAYMARCH_SUPPORT_BRICK_SIZE - 1u) / RAYMARCH_SUPPORT_BRICK_SIZE;
+}
+
+fn raymarchSupportBaseIndex(c: vec3<u32>) -> u32 {
+  return c.x + c.y * GRID + c.z * GRID * GRID;
+}
+
+fn raymarchSupportBrickIndex(c: vec3<u32>) -> u32 {
+  let brickGrid = raymarchSupportBrickGrid();
+  return GRID * GRID * GRID + c.x + c.y * brickGrid + c.z * brickGrid * brickGrid;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csRaymarchSupportBase(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  let opticalSupport = directCellOpticalSupportFromSlots(
+    readSlot(c, 0u),
+    readSlot(c, 1u),
+    readSlot(c, 2u),
+    readSlot(c, 3u),
+    readFrontField(c)
+  );
+  let sidecar = boundarySidecar[index3(gid)];
+  raymarchSupportHierarchy[raymarchSupportBaseIndex(gid)] = vec4<f32>(
+    opticalSupport,
+    sidecar.y,
+    sidecar.z,
+    sidecar.w
+  );
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csRaymarchSupportBricks(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let brickGrid = raymarchSupportBrickGrid();
+  if (any(gid >= vec3<u32>(brickGrid))) {
+    return;
+  }
+  let brickBase = gid * RAYMARCH_SUPPORT_BRICK_SIZE;
+  var supportMax = vec4<f32>(0.0);
+  for (var z = 0u; z < RAYMARCH_SUPPORT_BRICK_SIZE + 1u; z = z + 1u) {
+    for (var y = 0u; y < RAYMARCH_SUPPORT_BRICK_SIZE + 1u; y = y + 1u) {
+      for (var x = 0u; x < RAYMARCH_SUPPORT_BRICK_SIZE + 1u; x = x + 1u) {
+        let cell = min(brickBase + vec3<u32>(x, y, z), vec3<u32>(GRID - 1u));
+        supportMax = max(supportMax, raymarchSupportHierarchy[raymarchSupportBaseIndex(cell)]);
+      }
+    }
+  }
+  raymarchSupportHierarchy[raymarchSupportBrickIndex(gid)] = supportMax;
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (any(gid >= vec3<u32>(GRID))) {
@@ -3368,7 +3623,19 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
     clamp(u.topology_shell_carriers.z, 0.0, 2.0),
     clamp(u.topology_shell_carriers.w, 0.0, 2.0)
   );
-  let center = boundarySupportAtCell(c, supportWeights);
+  let centerVelocityDensity = readSlot(c, 0u);
+  let centerMaterial = readSlot(c, 1u);
+  let centerFireLayer = readSlot(c, 2u);
+  let centerMicroLayer = readSlot(c, 3u);
+  let centerFrontTopology = readFrontField(c);
+  let center = boundarySupportFromSlots(
+    centerVelocityDensity,
+    centerMaterial,
+    centerFireLayer,
+    centerMicroLayer,
+    centerFrontTopology,
+    supportWeights
+  );
   let px = boundarySupportAtCell(c + vec3<i32>(1, 0, 0), supportWeights);
   let nx = boundarySupportAtCell(c + vec3<i32>(-1, 0, 0), supportWeights);
   let py = boundarySupportAtCell(c + vec3<i32>(0, 1, 0), supportWeights);
@@ -3400,11 +3667,25 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.06,
     1.65
   );
-  boundarySidecarDst[index3(gid)] = vec4<f32>(
+  let bakedSidecar = vec4<f32>(
     boundarySidecarSupport,
     boundarySidecarCoverage,
     boundarySidecarRidge,
     boundarySidecarFootprintWidth
+  );
+  boundarySidecarDst[index3(gid)] = bakedSidecar;
+  let opticalSupport = directCellOpticalSupportFromSlots(
+    centerVelocityDensity,
+    centerMaterial,
+    centerFireLayer,
+    centerMicroLayer,
+    centerFrontTopology
+  );
+  raymarchSupportHierarchy[raymarchSupportBaseIndex(gid)] = vec4<f32>(
+    opticalSupport,
+    bakedSidecar.y,
+    bakedSidecar.z,
+    bakedSidecar.w
   );
 }
 
@@ -4857,11 +5138,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = u32(ceil(steps));
-  let maxTraversalSteps = GRID * 3u + expensiveSampleBudget + 3u;
+  let ridgeMinimumDt = 0.5 / f32(GRID);
+  let maxIntegrationSamples = u32(ceil(max(0.0, endT - startT) / max(0.0001, min(dtBase, ridgeMinimumDt))));
+  let maxTraversalSteps = GRID * 3u + maxIntegrationSamples + 3u;
   var expensiveSamples = 0u;
   var traversalSteps = 0u;
   loop {
-    if (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps) { break; }
+    if (traversalSteps >= maxTraversalSteps) { break; }
+    if (fullGridCapture && expensiveSamples >= expensiveSampleBudget) { break; }
     if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -4870,14 +5154,40 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
-    let directSupport = select(directCellOpticalSupport(p), 1.0, flowKernelReconstructionActive);
-    if (!fullGridCapture && directSupport <= 0.0001) {
-      let cellExit = directCellExitDistance(p, rd);
-      t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
-      continue;
+    var reconstructed: FlowReconstructionSample;
+    var raymarchCellSupport = vec4<f32>(0.0);
+    if (flowKernelReconstructionActive) {
+      reconstructed = sampleWorldFlowReconstruction(p);
+    } else {
+      if (LEAN_STOCK_RAYMARCH && !fullGridCapture) {
+        let brickSupport = sampleRaymarchSupportBrick(p);
+        if (!raymarchSupportOccupied(brickSupport)) {
+          let brickExit = raymarchSupportBrickExitDistance(p, rd);
+          t = t + min(brickExit + 0.0001, max(0.0001, endT - t));
+          continue;
+        }
+        raymarchCellSupport = sampleRaymarchCellSupport(p);
+        if (!raymarchSupportOccupied(raymarchCellSupport)) {
+          let cellExit = directCellExitDistance(p, rd);
+          t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
+          continue;
+        }
+      }
+      let directSample = sampleDirectCell(p);
+      let directSupport = directSample.opticalSupport;
+      let directSupportWithRidge = select(
+        directSupport,
+        max(directSupport, max(raymarchCellSupport.y, raymarchCellSupport.z)),
+        LEAN_STOCK_RAYMARCH && raymarchSupportOccupied(raymarchCellSupport)
+      );
+      if (!fullGridCapture && directSupportWithRidge <= 0.0001) {
+        let cellExit = directCellExitDistance(p, rd);
+        t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
+        continue;
+      }
+      reconstructed = directSample.reconstructed;
     }
     expensiveSamples = expensiveSamples + 1u;
-    let reconstructed = sampleWorldFlowReconstruction(p);
     let state = reconstructed.velocityDensity;
     let material = reconstructed.material;
     let fireLayer = reconstructed.fireLayer;
@@ -4958,7 +5268,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
-    let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
+    let baseAdaptiveDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
+    let ridgeEnvelope = max(raymarchCellSupport.y, raymarchCellSupport.z);
+    let ridgeRefinementActive = LEAN_STOCK_RAYMARCH && !fullGridCapture && ridgeEnvelope > 0.0001;
+    let ridgeLocalDt = min(ridgeMinimumDt, max(0.0001, endT - t));
+    let localDt = select(baseAdaptiveDt, min(baseAdaptiveDt, ridgeLocalDt), ridgeRefinementActive);
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
       detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),
@@ -8114,6 +8428,8 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  let raymarchSupportBasePipeline = null;
+  let raymarchSupportBrickPipeline = null;
   let analyticEmitterInjectionPipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
@@ -8208,6 +8524,7 @@ export function createKaminosVolumePrototype({
   let analyticEmitterDispatch = analyticEmitterInjectionDispatch(null, gridSize);
   let volumePrimitives = [];
   let boundarySidecarBuffer = null;
+  let raymarchSupportHierarchyBuffer = null;
   let boundarySidecarOverrideUpload = null;
   let debugFullFieldImportUpload = null;
   let boundarySplatBuffer = null;
@@ -8751,6 +9068,7 @@ export function createKaminosVolumePrototype({
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
+    raymarchSupportHierarchyBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
     boundarySplatIndirectBuffer?.destroy();
@@ -8770,6 +9088,7 @@ export function createKaminosVolumePrototype({
     flowKernelDescriptorBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
+    raymarchSupportHierarchyBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
     boundarySplatIndirectBuffer = null;
@@ -8873,12 +9192,13 @@ export function createKaminosVolumePrototype({
         { binding: 10, resource: { buffer: boundarySidecarBuffer } },
         { binding: 11, resource: { buffer: nonRidgeOpticalCaptureHeaderBuffer } },
         { binding: 12, resource: { buffer: captureRows } },
+        { binding: 13, resource: { buffer: raymarchSupportHierarchyBuffer } },
       ],
     });
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !boundarySidecarBuffer) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !boundarySidecarBuffer || !raymarchSupportHierarchyBuffer) return;
     bindGroups = [
       createFluidRenderBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -8935,6 +9255,7 @@ export function createKaminosVolumePrototype({
       || !nonRidgeOpticalCaptureHeaderBuffer
       || !nonRidgeOpticalCaptureRowBuffer
       || !boundarySidecarBuffer
+      || !raymarchSupportHierarchyBuffer
       || !boundarySplatBuffer
       || !boundarySplatDrawBuffer
       || !boundarySplatBilinearIndirectBuffer
@@ -8985,6 +9306,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
+          { binding: 13, resource: { buffer: raymarchSupportHierarchyBuffer } },
         ],
       }),
       splat: device.createBindGroup({
@@ -9151,6 +9473,17 @@ export function createKaminosVolumePrototype({
         { binding: 0, resource: { buffer: boundarySidecarBuffer } },
       ],
     });
+  }
+
+  function ensureRaymarchSupportHierarchyBuffer() {
+    if (raymarchSupportHierarchyBuffer) return;
+    const byteLength = raymarchSupportHierarchyBufferBytes(gridSize);
+    raymarchSupportHierarchyBuffer = device.createBuffer({
+      label: `kaminos raymarch support hierarchy ${gridSize}^3`,
+      size: byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(raymarchSupportHierarchyBuffer, 0, new Uint8Array(byteLength));
   }
 
   function ensureBoundarySplatBuffers() {
@@ -9499,6 +9832,7 @@ export function createKaminosVolumePrototype({
     state.boundarySplatCapacity = boundarySplatCapacity;
     state.boundarySplatCapacityGrowth = null;
     ensureBoundarySidecarBuffer();
+    ensureRaymarchSupportHierarchyBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
@@ -9632,6 +9966,16 @@ export function createKaminosVolumePrototype({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
       compute: { module: shader, entryPoint: 'cs', constants: computePipelineConstants },
+    });
+    raymarchSupportBasePipeline = device.createComputePipeline({
+      label: `kaminos raymarch native-cell support ${gridSize}^3`,
+      layout: pipelineLayout,
+      compute: { module: shader, entryPoint: 'csRaymarchSupportBase', constants: computePipelineConstants },
+    });
+    raymarchSupportBrickPipeline = device.createComputePipeline({
+      label: `kaminos raymarch support brick reduction ${gridSize}^3`,
+      layout: pipelineLayout,
+      compute: { module: shader, entryPoint: 'csRaymarchSupportBricks', constants: computePipelineConstants },
     });
     analyticEmitterInjectionPipeline = device.createComputePipeline({
       label: `kaminos bounded analytic emitter injection ${gridSize}^3`,
@@ -9940,6 +10284,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
+          { binding: 13, resource: { buffer: raymarchSupportHierarchyBuffer } },
         ],
       }),
       device.createBindGroup({
@@ -9949,6 +10294,7 @@ export function createKaminosVolumePrototype({
           { binding: 0, resource: { buffer: uniformBuffer } },
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
+          { binding: 13, resource: { buffer: raymarchSupportHierarchyBuffer } },
         ],
       }),
     ];
@@ -10276,7 +10622,7 @@ export function createKaminosVolumePrototype({
         },
         {
           binding: 10,
-          visibility: GPUShaderStage.FRAGMENT,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
         },
         {
@@ -10287,6 +10633,11 @@ export function createKaminosVolumePrototype({
         {
           binding: 12,
           visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'storage' },
+        },
+        {
+          binding: 13,
+          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
           buffer: { type: 'storage' },
         },
       ],
@@ -10331,6 +10682,11 @@ export function createKaminosVolumePrototype({
           binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 13,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
         },
       ],
     });
@@ -11966,6 +12322,7 @@ export function createKaminosVolumePrototype({
     const frontBytes = frontFieldBufferBytes(gridSize);
     const pressureBytes = pressureBufferBytes(gridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
+    const raymarchSupportBytes = raymarchSupportHierarchyBufferBytes(gridSize);
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
@@ -12084,9 +12441,10 @@ export function createKaminosVolumePrototype({
       frontFieldBufferBytes: frontBytes,
       pressureBufferBytes: pressureBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
+      raymarchSupportHierarchyBufferBytes: raymarchSupportBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       analyticEmitterUniformBufferBytes: analyticEmitterInjectionUniformData.byteLength,
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + raymarchSupportBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -14623,6 +14981,8 @@ export function createKaminosVolumePrototype({
       pyroCompareMode: controlsSnapshot.pyroCompareMode,
       presentationMode: volumePresentationModeEffective,
       smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
       nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
@@ -14640,7 +15000,48 @@ export function createKaminosVolumePrototype({
     return effectivePipeline;
   }
 
+  function encodeRaymarchSupportHierarchy(encoder, bindGroup) {
+    if (!raymarchSupportBasePipeline || !raymarchSupportBrickPipeline || !raymarchSupportHierarchyBuffer || !bindGroup) {
+      throw new Error('raymarch-support-hierarchy-unavailable');
+    }
+    const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
+    if (sourceName === 'override') {
+      const basePass = encoder.beginComputePass({ label: 'kaminos external-sidecar raymarch native-cell support pass' });
+      basePass.setPipeline(raymarchSupportBasePipeline);
+      basePass.setBindGroup(0, bindGroup);
+      basePass.dispatchWorkgroups(Math.ceil(gridSize / 4), Math.ceil(gridSize / 4), Math.ceil(gridSize / 4));
+      basePass.end();
+    } else if (sourceName !== 'baked' || !state.boundarySidecarBuiltThisFrame) {
+      throw new Error(`raymarch-support-base-not-current:${sourceName}`);
+    }
+
+    const brickGridSize = raymarchSupportBrickGridSize(gridSize);
+    const brickPass = encoder.beginComputePass({ label: 'kaminos raymarch support brick reduction pass' });
+    brickPass.setPipeline(raymarchSupportBrickPipeline);
+    brickPass.setBindGroup(0, bindGroup);
+    brickPass.dispatchWorkgroups(
+      Math.ceil(brickGridSize / 4),
+      Math.ceil(brickGridSize / 4),
+      Math.ceil(brickGridSize / 4),
+    );
+    brickPass.end();
+    state.raymarchSupportHierarchy = {
+      identity: 'native-cell-plus-4-cubed-brick-raymarch-support-v0',
+      grid: gridSize,
+      brickSize: RAYMARCH_SUPPORT_BRICK_SIZE,
+      brickGrid: brickGridSize,
+      byteLength: raymarchSupportHierarchyBufferBytes(gridSize),
+      semanticChannels: ['optical-support', 'boundary-coverage', 'ridge-envelope', 'ridge-footprint-width'],
+      baseProducer: sourceName === 'override' ? 'standalone-external-sidecar-pass' : 'fused-baked-sidecar-pass',
+    };
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    const effectiveBindGroup = options.bindGroup || bindGroups[currentFluid];
+    const effectivePipeline = selectRaymarchPipeline(targetPipeline);
+    if (effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline) {
+      encodeRaymarchSupportHierarchy(encoder, effectiveBindGroup);
+    }
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -14651,8 +15052,8 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(selectRaymarchPipeline(targetPipeline));
-    pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
+    pass.setPipeline(effectivePipeline);
+    pass.setBindGroup(0, effectiveBindGroup);
     pass.draw(3);
     pass.end();
   }
@@ -14666,14 +15067,6 @@ export function createKaminosVolumePrototype({
       layout: productRaymarchDepthBindGroupLayout,
       entries: [{ binding: 1, resource: sceneDepthView }],
     });
-    const pass = encoder.beginRenderPass({
-      label: 'kaminos product caller-depth broad-smoke raymarch pass',
-      colorAttachments: [{
-        view: colorView,
-        loadOp: 'load',
-        storeOp: 'store',
-      }],
-    });
     const admission = leanStockRaymarchAdmission({
       legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
       fireRenderMode: controlsSnapshot.fireRenderMode,
@@ -14681,6 +15074,8 @@ export function createKaminosVolumePrototype({
       pyroCompareMode: controlsSnapshot.pyroCompareMode,
       presentationMode: volumePresentationModeEffective,
       smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
       nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
@@ -14694,8 +15089,20 @@ export function createKaminosVolumePrototype({
       ? 'lean-stock-direct-cell-raymarch-v0'
       : 'full-authored-raymarch-v0';
     state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
+    const effectiveBindGroup = bindGroup || bindGroups[currentFluid];
+    if (effectiveProductPipeline === leanStockProductRaymarchPipeline) {
+      encodeRaymarchSupportHierarchy(encoder, effectiveBindGroup);
+    }
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos product caller-depth broad-smoke raymarch pass',
+      colorAttachments: [{
+        view: colorView,
+        loadOp: 'load',
+        storeOp: 'store',
+      }],
+    });
     pass.setPipeline(effectiveProductPipeline);
-    pass.setBindGroup(0, bindGroup || bindGroups[currentFluid]);
+    pass.setBindGroup(0, effectiveBindGroup);
     pass.setBindGroup(1, depthBindGroup);
     pass.draw(3);
     pass.end();

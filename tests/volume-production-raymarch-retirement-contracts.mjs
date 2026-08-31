@@ -90,6 +90,7 @@ const leanStockRequest = {
   pyroCompareMode: 'base',
   presentationMode: 'beauty',
   smokePresentationMode: 'on',
+  boundarySidecarSource: 'baked',
   appearanceDecompositionActive: false,
   nonRidgeOpticalCaptureActive: false,
   nonRidgeSourceBasisCaptureActive: false,
@@ -107,6 +108,8 @@ for (const [field, value, reason] of [
   ['pyroCompareMode', 'live', 'pyro-compare-mode-not-base'],
   ['presentationMode', 'intrinsic', 'presentation-mode-not-beauty'],
   ['smokePresentationMode', 'off', 'smoke-presentation-not-on'],
+  ['boundarySidecarSource', 'live', 'boundary-sidecar-source-not-buffer-backed'],
+  ['boundarySidecarSource', 'mix', 'boundary-sidecar-source-not-buffer-backed'],
   ['appearanceDecompositionActive', true, 'appearance-decomposition-active'],
   ['nonRidgeOpticalCaptureActive', true, 'nonridge-optical-capture-active'],
   ['nonRidgeSourceBasisCaptureActive', true, 'nonridge-source-basis-capture-active'],
@@ -131,10 +134,13 @@ for (const schema of [schemaV1, schemaV2]) {
   assert.equal(JSON.stringify(schema).includes('raymarchShaderSpecialization'), false, 'diagnostic specialization selection is not persisted in basin schemas');
 }
 assert.match(core, /directCellOpticalSupportFromSlots/, 'marcher derives support directly from native-cell slots');
-assert.match(core, /directCellOpticalSupport[\s\S]*directCellOpticalSupportAtCell\(c \+ vec3<i32>\(1, 1, 1\)\)/, 'direct support conservatively covers every corner consumed by trilinear reconstruction');
+assert.match(core, /sampleDirectCell[\s\S]*let c111 = c \+ vec3<i32>\(1, 1, 1\)[\s\S]*sample\.opticalSupport = max/, 'direct support conservatively covers every corner consumed by trilinear reconstruction');
 assert.match(core, /directCellExitDistance[\s\S]*f32\(GRID\) - vec3<f32>\(0\.5\)/, 'cell-exit traversal uses the same half-cell lattice as trilinear reconstruction');
 assert.match(core, /reconstruction_kernel_controls\.x[\s\S]*directSupport/, 'empty-cell skipping refuses the narrow support claim while wider flow-kernel reconstruction is active');
 assert.match(core, /expensiveSamples\s*=\s*expensiveSamples\s*\+\s*1u/, 'occupied reconstruction spends the explicit expensive-sample budget');
+assert.match(core, /struct DirectCellSample[\s\S]*reconstructed:\s*FlowReconstructionSample[\s\S]*opticalSupport:\s*f32/, 'direct-cell sampling carries reconstruction and conservative support together');
+assert.match(core, /let directSample = sampleDirectCell\(p\)[\s\S]*directSample\.opticalSupport[\s\S]*reconstructed = directSample\.reconstructed/, 'the production marcher reuses one native-cell neighborhood for admission and occupied reconstruction');
+assert.doesNotMatch(core, /directCellOpticalSupport\(p\)/, 'occupied production steps do not refetch the native-cell neighborhood after admission');
 assert.match(core, /fn segmentOpacity\(opticalDepth:\s*f32,\s*maxOpacity:\s*f32\)/, 'variable segments preserve optical depth through exponential opacity');
 
 console.log('volume production raymarch retirement contracts passed');
