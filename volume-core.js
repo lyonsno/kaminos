@@ -86,6 +86,12 @@ const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-
 const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sidecar-plus-live-fluid-material-v0';
 const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
+const BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER = 'boundary-splat-gpu-profile';
+const BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER = 'boundary-splat-footprint-audit';
+const FOUR_ARM_HELD_STATE_LEDGER_CONSUMER = 'four-arm-held-state-ledger';
+const FULL_FIELD_DEBUG_EXPORT_SIDECAR_CONSUMER = 'full-field-debug-export-sidecar';
+const FULL_FIELD_DEBUG_EXPORT_SPLAT_CONSUMER = 'full-field-debug-export-splats';
+const NONRIDGE_OPTICAL_CAPTURE_SIDECAR_CONSUMER = 'nonridge-optical-capture-sidecar';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const FLOW_RECONSTRUCTION_KERNEL_IDENTITY = 'flow-tangent-positive-symmetric-trilinear-v0';
 const BOUNDARY_SPLAT_HDR_TARGET_FORMAT = 'rgba16float';
@@ -863,6 +869,27 @@ export function resolveBoundarySplatExecutionPlan({
     sidecarDispatch,
     sidecarConsumer,
   };
+}
+
+export function validateFullFieldDerivedBufferMaterialization(derivedBuffers = {}) {
+  if (derivedBuffers.boundarySidecarBuilt !== true) {
+    return {
+      ok: false,
+      failurePhase: 'derived-buffer-materialization',
+      reason: 'full-field-sidecar-not-built',
+    };
+  }
+  if (
+    normalizeBoundarySplatMode(derivedBuffers.boundarySplatMode) !== 'off'
+    && derivedBuffers.boundarySplatsEncoded !== true
+  ) {
+    return {
+      ok: false,
+      failurePhase: 'derived-buffer-materialization',
+      reason: 'full-field-splats-not-encoded',
+    };
+  }
+  return { ok: true, failurePhase: null, reason: null };
 }
 
 export function classifyBoundarySplatUnionCell({
@@ -13389,9 +13416,13 @@ export function createKaminosVolumePrototype({
     return encodeBoundarySplatDraw(encoder, targetView, additivePipeline, options);
   }
 
-  function encodeBoundarySplatTelemetry(encoder, force = false) {
+  function encodeBoundarySplatTelemetry(encoder, forceOrOptions = false) {
+    const options = typeof forceOrOptions === 'object' && forceOrOptions !== null
+      ? forceOrOptions
+      : { force: forceOrOptions };
+    const force = options.force === true;
     if (
-      !boundarySplatRequested()
+      !boundarySplatRequested({ explicitSplatConsumer: options.explicitSplatConsumer })
       || state.boundarySplatFallbackReason
       || (!force && state.frameCount % 12 !== 0)
       || boundarySplatTelemetryCopyPending
@@ -13427,7 +13458,7 @@ export function createKaminosVolumePrototype({
   }
 
   async function sampleBoundarySplatGpuProfile() {
-    if (!boundarySplatRequested()) {
+    if (!boundarySplatRequested({ explicitSplatConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER })) {
       return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
         timestampStatus: 'unsupported',
         reason: 'boundary-splat-route-not-requested',
@@ -13474,12 +13505,14 @@ export function createKaminosVolumePrototype({
         throw new Error('simulation-final-timestamp-unavailable');
       }
       encodeBoundarySidecar(encoder, {
+        explicitSidecarConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER,
         timestampWrites: {
           querySet,
           endOfPassWriteIndex: 2,
         },
       });
       const splatsEncoded = encodeBoundarySplats(encoder, {
+        explicitSplatConsumer: BOUNDARY_SPLAT_GPU_PROFILE_CONSUMER,
         compactTimestampWrites: {
           querySet,
           endOfPassWriteIndex: 3,
@@ -13925,10 +13958,33 @@ export function createKaminosVolumePrototype({
   }
 
   async function sampleBoundarySplatFootprintAudit(options = {}) {
-    if (!boundarySplatRequested() || !boundarySplatBuffer) {
+    if (
+      !boundarySplatRequested({ explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER })
+      || !boundarySplatBuffer
+    ) {
       return { ok: false, reason: 'boundary-splat-footprint-audit-unavailable' };
     }
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    updateUniforms(fixedNow);
+    const materializeEncoder = device.createCommandEncoder({
+      label: 'kaminos boundary splat footprint audit materialization',
+    });
+    encodeBoundarySidecar(materializeEncoder, {
+      explicitSidecarConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    const materialized = encodeBoundarySplats(materializeEncoder, {
+      explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    if (!materialized) {
+      throw new Error(`boundary-splat-footprint-audit-materialization-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
+    }
+    encodeBoundarySplatTelemetry(materializeEncoder, {
+      force: true,
+      explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+    });
+    device.queue.submit([materializeEncoder.finish()]);
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     let draw = await sampleBoundarySplatDrawState();
     if (!draw || draw.candidateCount <= 0 || draw.sourceCandidateCount <= 0 || draw.instanceCount <= 0) {
       throw new Error('boundary-splat-footprint-audit-blank-candidate-population');
@@ -13949,8 +14005,16 @@ export function createKaminosVolumePrototype({
       const retryEncoder = device.createCommandEncoder({
         label: 'kaminos boundary splat footprint audit capacity retry',
       });
-      encodeBoundarySplats(retryEncoder);
-      encodeBoundarySplatTelemetry(retryEncoder, true);
+      encodeBoundarySidecar(retryEncoder, {
+        explicitSidecarConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
+      encodeBoundarySplats(retryEncoder, {
+        explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
+      encodeBoundarySplatTelemetry(retryEncoder, {
+        force: true,
+        explicitSplatConsumer: BOUNDARY_SPLAT_FOOTPRINT_AUDIT_CONSUMER,
+      });
       device.queue.submit([retryEncoder.finish()]);
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -15145,8 +15209,12 @@ export function createKaminosVolumePrototype({
   async function materializeFullFieldDerivedBuffersForDebugExport(nowMs = performance.now()) {
     updateUniforms(nowMs);
     const encoder = device.createCommandEncoder({ label: 'kaminos full-field derived-buffer materialization' });
-    encodeBoundarySidecar(encoder);
-    const boundarySplatsEncoded = encodeBoundarySplats(encoder);
+    encodeBoundarySidecar(encoder, {
+      explicitSidecarConsumer: FULL_FIELD_DEBUG_EXPORT_SIDECAR_CONSUMER,
+    });
+    const boundarySplatsEncoded = encodeBoundarySplats(encoder, {
+      explicitSplatConsumer: FULL_FIELD_DEBUG_EXPORT_SPLAT_CONSUMER,
+    });
     device.queue.submit([encoder.finish()]);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     return {
@@ -15154,6 +15222,7 @@ export function createKaminosVolumePrototype({
       nowMs,
       boundarySidecarBuilt: state.boundarySidecarBuiltThisFrame,
       boundarySidecarAuthority: state.boundarySidecarAuthority,
+      boundarySidecarSource: state.boundarySidecarSource,
       boundarySplatsEncoded,
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
@@ -15169,6 +15238,10 @@ export function createKaminosVolumePrototype({
   }
 
   async function copyFullFieldBuffersForDebugExport(derivedBuffers) {
+    const materializationValidation = validateFullFieldDerivedBufferMaterialization(derivedBuffers);
+    if (!materializationValidation.ok) {
+      throw new Error(`${materializationValidation.failurePhase}:${materializationValidation.reason}`);
+    }
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const boundaryBytes = boundarySidecarBufferBytes(gridSize);
@@ -15303,7 +15376,7 @@ export function createKaminosVolumePrototype({
       boundarySidecar: {
         schema: 'kaminos.volume.boundary-sidecar-export.v0',
         identity: BOUNDARY_SIDECAR_IDENTITY,
-        authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        authority: session.derivedBuffers.boundarySidecarAuthority,
         routeIdentity: ROUTE_IDENTITY,
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: PROTOTYPE_IDENTITY,
@@ -15311,7 +15384,7 @@ export function createKaminosVolumePrototype({
         grid: session.grid,
         cellCount: session.cellCount,
         channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
-        boundarySidecarDebug: boundarySidecarDebug('baked'),
+        boundarySidecarDebug: boundarySidecarDebug(session.derivedBuffers.boundarySidecarSource),
         sidecars: {
           boundary: session.boundaryDescriptor,
         },
@@ -15824,7 +15897,10 @@ export function createKaminosVolumePrototype({
     });
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: `kaminos ${NONRIDGE_OPTICAL_CAPTURE_IDENTITY} ${label}` });
-    encodeBoundarySidecar(encoder, { readBindGroup: selectiveHeadLiveRoleGroups('sidecar') || null });
+    encodeBoundarySidecar(encoder, {
+      readBindGroup: selectiveHeadLiveRoleGroups('sidecar') || null,
+      explicitSidecarConsumer: NONRIDGE_OPTICAL_CAPTURE_SIDECAR_CONSUMER,
+    });
     encodeDraw(
       encoder,
       (fullGridDispatchTexture || frameTexture).createView(),
@@ -16831,6 +16907,29 @@ export function createKaminosVolumePrototype({
     const derivedBuffers = await materializeFullFieldDerivedBuffersForDebugExport(
       deterministicReplay?.finalTimeMs ?? performance.now(),
     );
+    const materializationValidation = validateFullFieldDerivedBufferMaterialization(derivedBuffers);
+    if (!materializationValidation.ok) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: materializationValidation.failurePhase,
+        reason: materializationValidation.reason,
+        lastTrustworthyEvidence: {
+          grid: gridSize,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          derivedBuffers,
+        },
+        deterministicReplay,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
+    }
     if (state.active) {
       state.active = false;
       canvas.classList.remove('active');
@@ -18246,7 +18345,9 @@ export function createKaminosVolumePrototype({
       const encoder = device.createCommandEncoder({ label: 'kaminos four-arm held-state frozen ledger encoder' });
       encodeBoundarySplatTimestampMarker(encoder, querySet, 0, 1, 'kaminos held-state selection precomputed marker');
       encodeBoundarySplatTimestampMarker(encoder, querySet, 2, 3, 'kaminos held-state compaction precomputed marker');
-      const splatsEncoded = encodeBoundarySplats(encoder);
+      const splatsEncoded = encodeBoundarySplats(encoder, {
+        explicitSplatConsumer: FOUR_ARM_HELD_STATE_LEDGER_CONSUMER,
+      });
       if (!splatsEncoded) {
         throw new Error(`splat-application-failed:${state.boundarySplatFallbackReason || 'unknown'}`);
       }
