@@ -16,6 +16,64 @@ export const VOLUME_CORE_EMITTER_SOURCE_MODES = Object.freeze([
   'analytic-only',
 ]);
 
+export const VOLUME_EXTERNAL_EMITTER_ROUTE_MODES = Object.freeze([
+  'off',
+  'synthetic_hand_trails',
+]);
+
+export function resolveVolumeEmitterRoute({
+  requestedFamily,
+  requestedExternalMode,
+} = {}) {
+  const legacyFamilyDefault = requestedFamily === undefined || requestedFamily === null || requestedFamily === '';
+  const legacyExternalDefault = requestedExternalMode === undefined || requestedExternalMode === null || requestedExternalMode === '';
+  const family = legacyFamilyDefault ? 'cluster' : String(requestedFamily);
+  const externalMode = legacyExternalDefault ? 'off' : String(requestedExternalMode);
+  if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(family)) {
+    throw new Error(`unsupported volume_emitter_family route: ${family || 'missing-family'}`);
+  }
+  if (!VOLUME_EXTERNAL_EMITTER_ROUTE_MODES.includes(externalMode)) {
+    throw new Error(`unsupported volume_external_emitters route: ${externalMode || 'missing-mode'}`);
+  }
+  if (externalMode !== 'off' && family !== 'cluster') {
+    throw new Error(`volume emitter source conflict: volume_external_emitters=${externalMode} cannot compose with volume_emitter_family=${family}`);
+  }
+  return {
+    requestedFamily: family,
+    effectiveFamily: family,
+    requestedExternalMode: externalMode,
+    effectiveExternalMode: externalMode,
+    sourceMode: family === 'cluster'
+      ? (externalMode === 'off' ? 'cluster' : 'external-only')
+      : 'analytic-only',
+    legacyFamilyDefault,
+    legacyExternalDefault,
+    fallbackUsed: false,
+    failures: [],
+  };
+}
+
+export function resolveVolumeEmitterActivity({
+  mode,
+  coreFlowRate = 0,
+  analyticCount = 0,
+  externalCount = 0,
+} = {}) {
+  const effectiveMode = String(mode || '');
+  if (!VOLUME_CORE_EMITTER_SOURCE_MODES.includes(effectiveMode)) {
+    throw new Error(`unsupported volume core emitter source mode: ${effectiveMode || 'missing-mode'}`);
+  }
+  return {
+    mode: effectiveMode,
+    coreFlowRate: effectiveMode === 'cluster' ? Math.max(0, Number(coreFlowRate) || 0) : 0,
+    analyticCount: effectiveMode === 'analytic-only' ? Math.max(0, Number(analyticCount) || 0) : 0,
+    externalCount: effectiveMode === 'external-only' ? Math.max(0, Number(externalCount) || 0) : 0,
+    effectiveOwner: effectiveMode === 'analytic-only'
+      ? 'analytic-emitter'
+      : (effectiveMode === 'external-only' ? 'external-emitter' : 'cluster'),
+  };
+}
+
 export function resolveVolumeCoreEmitterSource({
   mode = 'cluster',
   controlFlowRate,
@@ -163,7 +221,6 @@ export function applyVolumeEmitterFamilyRuntime({
   let coreSourceMode;
   if (requestedFamily === 'cluster') {
     requiredMethod(prototype, 'setExternalEmitters');
-    coreSourceMode = 'cluster';
     sourceReceipt = prototype.setAnalyticEmitterDescriptor(null);
     const externalRequest = requestedExternalRequest || {
       mode: 'off',
@@ -172,6 +229,7 @@ export function applyVolumeEmitterFamilyRuntime({
       coordinateSpace: 'volume-local',
       emitters: [],
     };
+    coreSourceMode = externalRequest.mode === 'off' ? 'cluster' : 'external-only';
     carrierReceipt = prototype.setExternalEmitters(externalRequest);
     verifyCarrierReceipt(externalRequest, carrierReceipt);
     sourceReceipt = carrierReceipt;
@@ -217,6 +275,7 @@ export function applyVolumeEmitterFamilyRuntime({
       inputRadius,
       frameId,
       timestampMs,
+      externalSourceMode: requestedExternalRequest?.mode || 'off',
     },
     effective: {
       family: requestedFamily,
@@ -228,6 +287,8 @@ export function applyVolumeEmitterFamilyRuntime({
       externalStrength: fixedAnalytic ? compilerReceipt.effective.strength : 0,
       externalEmitterCount: sourceReceipt.count,
       externalEmitterMode: sourceReceipt.mode,
+      externalSourceMode: carrierReceipt?.mode || 'off',
+      sourceOwner: coreSourceReceipt.effectiveOwner,
     },
     compilerReceipt,
     coreSourceReceipt,

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   applyVolumeEmitterFamilyRuntime,
   resolveVolumeCoreEmitterSource,
+  resolveVolumeEmitterActivity,
+  resolveVolumeEmitterRoute,
 } from '../volume-emitter-runtime.mjs';
 
 const HELD_CONTROLS = Object.freeze({
@@ -126,7 +128,50 @@ const syntheticRequest = {
 const synthetic = apply('cluster', makePrototype(), { externalRequest: syntheticRequest });
 assert.equal(synthetic.receipt.effective.sourceMode, 'synthetic_hand_trails');
 assert.equal(synthetic.receipt.effective.sourceCount, 5);
+assert.deepEqual(synthetic.prototype.calls.coreSource, ['external-only']);
+assert.equal(synthetic.receipt.coreSourceReceipt.effectiveOwner, 'external-emitter');
+assert.equal(synthetic.receipt.effective.coreFlowRate, 0);
+assert.equal(synthetic.receipt.requested.externalSourceMode, 'synthetic_hand_trails');
+assert.equal(synthetic.receipt.effective.externalSourceMode, 'synthetic_hand_trails');
 assert.equal(synthetic.prototype.calls.external.length, 1);
+
+for (const family of ['cluster', 'wick', 'nozzle', 'ribbon', 'ring']) {
+  const route = resolveVolumeEmitterRoute({ requestedFamily: family });
+  assert.equal(route.requestedFamily, family);
+  assert.equal(route.effectiveFamily, family);
+  assert.equal(route.requestedExternalMode, 'off');
+  assert.equal(route.effectiveExternalMode, 'off');
+  assert.equal(route.sourceMode, family === 'cluster' ? 'cluster' : 'analytic-only');
+  assert.equal(route.fallbackUsed, false);
+}
+const legacyRoute = resolveVolumeEmitterRoute();
+assert.equal(legacyRoute.requestedFamily, 'cluster');
+assert.equal(legacyRoute.legacyFamilyDefault, true);
+assert.equal(legacyRoute.legacyExternalDefault, true);
+const syntheticRoute = resolveVolumeEmitterRoute({
+  requestedFamily: 'cluster',
+  requestedExternalMode: 'synthetic_hand_trails',
+});
+assert.equal(syntheticRoute.sourceMode, 'external-only');
+assert.equal(syntheticRoute.effectiveExternalMode, 'synthetic_hand_trails');
+const staleSources = { coreFlowRate: 1.2, analyticCount: 1, externalCount: 5 };
+assert.deepEqual(resolveVolumeEmitterActivity({ mode: 'cluster', ...staleSources }), {
+  mode: 'cluster', coreFlowRate: 1.2, analyticCount: 0, externalCount: 0, effectiveOwner: 'cluster',
+});
+assert.deepEqual(resolveVolumeEmitterActivity({ mode: 'analytic-only', ...staleSources }), {
+  mode: 'analytic-only', coreFlowRate: 0, analyticCount: 1, externalCount: 0, effectiveOwner: 'analytic-emitter',
+});
+assert.deepEqual(resolveVolumeEmitterActivity({ mode: 'external-only', ...staleSources }), {
+  mode: 'external-only', coreFlowRate: 0, analyticCount: 0, externalCount: 5, effectiveOwner: 'external-emitter',
+});
+assert.throws(
+  () => resolveVolumeEmitterRoute({ requestedFamily: 'cluster', requestedExternalMode: 'synthetic_hand_trial' }),
+  /unsupported volume_external_emitters route: synthetic_hand_trial/,
+);
+assert.throws(
+  () => resolveVolumeEmitterRoute({ requestedFamily: 'ring', requestedExternalMode: 'synthetic_hand_trails' }),
+  /volume emitter source conflict/,
+);
 
 assert.throws(
   () => apply('ring', makePrototype({ analyticOverride: descriptor => ({

@@ -5,7 +5,7 @@ const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.match(
   cockpit,
-  /import \{ applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES \} from '\.\/volume-emitter-runtime\.mjs'/,
+  /import \{ applyVolumeEmitterFamilyRuntime, resolveVolumeEmitterRoute \} from '\.\/volume-emitter-runtime\.mjs'/,
   'cockpit consumes the tested emitter runtime adapter instead of reconstructing morphology inline',
 );
 assert.match(
@@ -24,13 +24,28 @@ for (const family of ['cluster', 'wick', 'nozzle', 'ribbon', 'ring']) {
 assert.match(cockpit, /params\.get\('volume_emitter_family'\)/, 'emitter family is reproducible by route');
 assert.match(
   cockpit,
-  /VOLUME_RUNTIME_EMITTER_FAMILIES\.includes\(requestedEmitterFamily\)/,
-  'explicit route families are validated against the runtime contract',
+  /\['emitterFamily', 'volume_emitter_family'\]/,
+  'copied and stored Basin identity includes the selected emitter family',
 );
 assert.match(
   cockpit,
-  /throw new Error\(`unsupported volume_emitter_family route:/,
-  'unknown explicit emitter routes fail loud rather than falling back to cluster',
+  /emitterFamily:\s*document\.getElementById\('emitter-assay-family'\)\.value/,
+  'the production controls snapshot records emitter family identity',
+);
+assert.match(
+  cockpit,
+  /restoreVolumeBasinSnapshot\(applyVolumeEmitterFamilyRuntimeToCockpit\)/,
+  'restoring the autosaved Basin passes through the emitter runtime composition boundary',
+);
+assert.match(
+  cockpit,
+  /restoreVolumeBasinSlot\(selectedVolumeBasinSlot\(\), applyVolumeEmitterFamilyRuntimeToCockpit\)/,
+  'restoring a named Basin slot passes through the emitter runtime composition boundary',
+);
+assert.match(
+  cockpit,
+  /resolveVolumeEmitterRoute\(\{[\s\S]*requestedFamily:[\s\S]*requestedExternalMode:/,
+  'family and external-source route identity share one executable admission contract',
 );
 assert.match(
   cockpit,
@@ -45,7 +60,13 @@ assert.match(
 assert.match(cockpit, /id="volume-emitter-requested"/, 'requested family is human-visible');
 assert.match(cockpit, /id="volume-emitter-effective"/, 'effective family is human-visible');
 assert.match(cockpit, /id="volume-emitter-carrier"/, 'effective carrier mode/count are human-visible');
-assert.match(cockpit, /receipt\.effective\.sourceMode}[\s\S]*receipt\.effective\.sourceCount}/, 'the human-visible source receipt names analytic morphology without pretending it is an external carrier');
+assert.match(cockpit, /id="volume-emitter-owner"/, 'effective source owner has its own non-truncated visible field');
+assert.match(cockpit, /id="volume-emitter-core-flow"/, 'effective core flow has its own visible field');
+assert.match(cockpit, /id="volume-emitter-external-requested"/, 'requested external source identity has its own visible field');
+assert.match(cockpit, /id="volume-emitter-external-effective"/, 'effective external source identity has its own visible field');
+assert.match(cockpit, /receipt\.coreSourceReceipt\.effectiveOwner/, 'the human-visible source receipt names the authoritative effective owner');
+assert.match(cockpit, /receipt\.coreSourceReceipt\.effectiveFlowRate/, 'the human-visible source receipt discloses effective core flow');
+assert.match(cockpit, /receipt\.requested\.externalSourceMode/, 'the human-visible source receipt preserves requested external-source identity');
 assert.match(cockpit, /id="volume-emitter-fallback"/, 'fallback status is human-visible');
 assert.match(
   cockpit,

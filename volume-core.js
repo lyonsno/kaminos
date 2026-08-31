@@ -17,7 +17,7 @@ import {
 import { createKilnFirePresentation } from './kiln-fire-presentation.mjs';
 import { createSingleFlameHistoryHoldoverDecision } from './kiln-flame-history-holdover.mjs';
 import { createKilnFrameStageLedger } from './lib/kiln-frame-stage-ledger.mjs';
-import { resolveVolumeCoreEmitterSource } from './volume-emitter-runtime.mjs';
+import { resolveVolumeCoreEmitterSource, resolveVolumeEmitterActivity } from './volume-emitter-runtime.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -6253,6 +6253,7 @@ export function createKaminosVolumePrototype({
     externalEmitterMode: 'off',
     externalEmitterCoordinateSpace: 'none',
     externalEmitterCount: 0,
+    externalEmitterDispatchActive: false,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
     coreEmitterSourceMode: 'cluster',
@@ -7101,6 +7102,7 @@ export function createKaminosVolumePrototype({
     state.externalEmitterMode = externalEmitterState.mode;
     state.externalEmitterCoordinateSpace = externalEmitterState.coordinateSpace;
     state.externalEmitterCount = externalEmitterState.count;
+    state.externalEmitterDispatchActive = state.coreEmitterSourceMode === 'external-only' && externalEmitterState.count > 0;
     state.externalEmitterFrameId = externalEmitterState.frameId;
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
   }
@@ -7112,6 +7114,7 @@ export function createKaminosVolumePrototype({
       coordinateSpace: analyticEmitterDescriptor ? 'volume-local' : 'none',
       count: analyticEmitterDescriptor ? 1 : 0,
       frameId: analyticEmitterDescriptor?.frameId || null,
+      effectiveActive: Boolean(analyticEmitterDescriptor) && state.coreEmitterSourceMode === 'analytic-only',
     };
   }
 
@@ -7123,12 +7126,13 @@ export function createKaminosVolumePrototype({
     state.analyticEmitterCoordinateSpace = receipt.coordinateSpace;
     state.analyticEmitterCount = receipt.count;
     state.analyticEmitterFrameId = receipt.frameId;
-    state.analyticEmitterDispatchActive = analyticEmitterDispatch.active;
+    const effectiveDispatchActive = state.coreEmitterSourceMode === 'analytic-only' && analyticEmitterDispatch.active;
+    state.analyticEmitterDispatchActive = effectiveDispatchActive;
     state.analyticEmitterDispatchCellMin = [...analyticEmitterDispatch.cellMin];
     state.analyticEmitterDispatchCellExtent = [...analyticEmitterDispatch.cellExtent];
     state.analyticEmitterDispatchWorkgroups = [...analyticEmitterDispatch.workgroups];
-    state.analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.cellCount;
-    state.analyticEmitterFullGridEquivalentPasses = analyticEmitterDispatch.cellCount / gridCellCount(gridSize);
+    state.analyticEmitterCellVisitsThisFrame = effectiveDispatchActive ? analyticEmitterDispatch.cellCount : 0;
+    state.analyticEmitterFullGridEquivalentPasses = state.analyticEmitterCellVisitsThisFrame / gridCellCount(gridSize);
   }
 
   function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
@@ -9067,7 +9071,12 @@ export function createKaminosVolumePrototype({
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
     updateExternalEmitterDebug(now);
-    uniforms[51] = state.coreEmitterSourceMode === 'analytic-only' ? 0 : state.externalEmitterCount;
+    uniforms[51] = resolveVolumeEmitterActivity({
+      mode: state.coreEmitterSourceMode,
+      coreFlowRate: sourcePrimitive.flowRate,
+      analyticCount: state.analyticEmitterCount,
+      externalCount: state.externalEmitterCount,
+    }).externalCount;
     uniforms[52] = volumeSceneMode(controlsSnapshot.volumeScene);
     uniforms[53] = normalizeWindStrength(controlsSnapshot.windStrength);
     uniforms[54] = normalizeWindAngle(controlsSnapshot.windAngle) * Math.PI / 180;
@@ -9722,7 +9731,11 @@ export function createKaminosVolumePrototype({
     const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
     const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
-    const analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.active
+    const analyticEmitterCellVisitsThisFrame = resolveVolumeEmitterActivity({
+      mode: state.coreEmitterSourceMode,
+      analyticCount: analyticEmitterDispatch.active ? 1 : 0,
+      externalCount: state.externalEmitterCount,
+    }).analyticCount > 0
       ? analyticEmitterDispatch.cellCount
       : 0;
     const analyticEmitterFullGridEquivalentPasses = analyticEmitterCellVisitsThisFrame / fullGridCells;
@@ -9870,7 +9883,12 @@ export function createKaminosVolumePrototype({
 
   function encodeAnalyticEmitterInjection(encoder) {
     const dispatch = analyticEmitterDispatch;
-    if (!dispatch.active) {
+    const activity = resolveVolumeEmitterActivity({
+      mode: state.coreEmitterSourceMode,
+      analyticCount: dispatch.active ? 1 : 0,
+      externalCount: state.externalEmitterCount,
+    });
+    if (activity.analyticCount === 0) {
       state.analyticEmitterCellVisitsThisFrame = 0;
       state.analyticEmitterFullGridEquivalentPasses = 0;
       return false;
@@ -14419,6 +14437,8 @@ export function createKaminosVolumePrototype({
       const requestedMode = String(mode || '');
       const source = getPrimitiveSource(requestedMode);
       state.coreEmitterSourceMode = requestedMode;
+      updateAnalyticEmitterDebug();
+      updateExternalEmitterDebug();
       if (device && previousMode !== state.coreEmitterSourceMode) {
         rebuildFluidState(gridSize, majorantGridSize, 'core-emitter-source-mode-change');
       }

@@ -1132,6 +1132,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Emitter requested</span><span class="field-val" id="volume-emitter-requested">cluster</span></div>
       <div class="field"><span class="field-key">Emitter effective</span><span class="field-val" id="volume-emitter-effective">cluster</span></div>
       <div class="field"><span class="field-key">Emitter source</span><span class="field-val" id="volume-emitter-carrier">off / 0 / none</span></div>
+      <div class="field"><span class="field-key">Emitter owner</span><span class="field-val" id="volume-emitter-owner">cluster</span></div>
+      <div class="field"><span class="field-key">Core flow</span><span class="field-val" id="volume-emitter-core-flow">0</span></div>
+      <div class="field"><span class="field-key">External requested</span><span class="field-val" id="volume-emitter-external-requested">off</span></div>
+      <div class="field"><span class="field-key">External effective</span><span class="field-val" id="volume-emitter-external-effective">off</span></div>
       <div class="field"><span class="field-key">Emitter fallback</span><span class="field-val" id="volume-emitter-fallback">no</span></div>
       <div class="field"><span class="field-key">Agent Capture</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
       <div class="volume-actions">
@@ -2991,7 +2995,7 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
-import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
+import { applyVolumeEmitterFamilyRuntime, resolveVolumeEmitterRoute } from './volume-emitter-runtime.mjs';
 import {
   createForegroundKilnHeartbeatEpisode,
   firePresentationMismatchReasons,
@@ -12247,6 +12251,7 @@ function syncCanonicalVolumeControlVisibility(volumeScene) {
 function volumeSceneControlId(key) {
   const explicit = {
     volumeScene: 'volume-scene',
+    emitterFamily: 'emitter-assay-family',
     raySteps: 'volume-steps',
     pyroDynamicDetail: 'volume-pyro-detail',
     pyroCompareMode: 'volume-pyro-compare',
@@ -12400,6 +12405,7 @@ function clampVolumeControlValue(value, field) {
 
 const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeScene', 'volume_scene'],
+  ['emitterFamily', 'volume_emitter_family'],
   ['artisticSwirl', 'volume_artistic_swirl'],
   ['phasedSway', 'volume_phased_sway'],
   ['volumeExposure', 'volume_exposure'],
@@ -12683,7 +12689,7 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   routedVolumeRayBudgetPreset = '';
 }
 
-function restoreVolumeBasinSnapshot() {
+function restoreVolumeBasinSnapshot(applyEmitterRuntime = null) {
   let snapshot = null;
   try {
     snapshot = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_BASIN_STORAGE_KEY));
@@ -12694,7 +12700,9 @@ function restoreVolumeBasinSnapshot() {
   }
   applyVolumeControlsSnapshot(snapshot.controls);
   updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
+  const restoredControls = readVolumeControls();
+  if (typeof applyEmitterRuntime === 'function') applyEmitterRuntime(restoredControls);
+  else volumePrototype?.setControls(restoredControls);
   refreshVolumeReadout();
   setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
   return true;
@@ -12749,7 +12757,7 @@ function saveVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
   return snapshot;
 }
 
-function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
+function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot(), applyEmitterRuntime = null) {
   let snapshot = null;
   try {
     snapshot = JSON.parse(localStorage.getItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`));
@@ -12760,7 +12768,9 @@ function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
   }
   applyVolumeControlsSnapshot(snapshot.controls);
   updateVolumeControlLabels();
-  volumePrototype?.setControls(readVolumeControls());
+  const restoredControls = readVolumeControls();
+  if (typeof applyEmitterRuntime === 'function') applyEmitterRuntime(restoredControls);
+  else volumePrototype?.setControls(restoredControls);
   refreshVolumeReadout();
   setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
   return true;
@@ -20183,6 +20193,7 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    emitterFamily: document.getElementById('emitter-assay-family').value,
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     volumeExposure: parseFloat(document.getElementById('volume-exposure').value),
@@ -20685,6 +20696,10 @@ function renderVolumeEmitterReceipt(receipt) {
   document.getElementById('volume-emitter-requested').textContent = receipt.requested.family;
   document.getElementById('volume-emitter-effective').textContent = receipt.effective.family;
   document.getElementById('volume-emitter-carrier').textContent = `${receipt.effective.sourceMode} / ${receipt.effective.sourceCount} / ${receipt.effective.coordinateSpace}`;
+  document.getElementById('volume-emitter-owner').textContent = receipt.coreSourceReceipt.effectiveOwner;
+  document.getElementById('volume-emitter-core-flow').textContent = String(receipt.coreSourceReceipt.effectiveFlowRate);
+  document.getElementById('volume-emitter-external-requested').textContent = receipt.requested.externalSourceMode;
+  document.getElementById('volume-emitter-external-effective').textContent = receipt.effective.externalSourceMode;
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
 
@@ -21430,14 +21445,12 @@ async function initKaminosVolumeRoute() {
   if (['live', 'base'].includes(routePyroCompare)) {
     document.getElementById('volume-pyro-compare').value = routePyroCompare;
   }
-  const routeExternalEmitters = params.get('volume_external_emitters') || '';
-  const requestedEmitterFamily = params.get('volume_emitter_family') || 'cluster';
-  if (!VOLUME_RUNTIME_EMITTER_FAMILIES.includes(requestedEmitterFamily)) {
-    throw new Error(`unsupported volume_emitter_family route: ${requestedEmitterFamily}`);
-  }
-  if (routeExternalEmitters && requestedEmitterFamily !== 'cluster') {
-    throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${requestedEmitterFamily}`);
-  }
+  const emitterRouteReceipt = resolveVolumeEmitterRoute({
+    requestedFamily: params.has('volume_emitter_family') ? params.get('volume_emitter_family') : undefined,
+    requestedExternalMode: params.has('volume_external_emitters') ? params.get('volume_external_emitters') : undefined,
+  });
+  const routeExternalEmitters = emitterRouteReceipt.effectiveExternalMode;
+  const requestedEmitterFamily = emitterRouteReceipt.effectiveFamily;
   document.getElementById('emitter-assay-family').value = requestedEmitterFamily;
   if (params.has('volume_artistic_swirl')) {
     setVolumeControlValue('volume-artistic-swirl', params.get('volume_artistic_swirl'));
@@ -21461,7 +21474,7 @@ async function initKaminosVolumeRoute() {
   let volumeEmitterRuntimeFrame = 0;
   function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot) {
     const family = document.getElementById('emitter-assay-family').value;
-    if (routeExternalEmitters && family !== 'cluster') {
+    if (routeExternalEmitters !== 'off' && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
     }
     const timestampMs = performance.now();
@@ -21483,6 +21496,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
     });
+    receipt.routeReceipt = emitterRouteReceipt;
     window.__kaminosVolumeEmitterReceipt = receipt;
     renderVolumeEmitterReceipt(receipt);
     return receipt;
@@ -21604,12 +21618,12 @@ async function initKaminosVolumeRoute() {
     });
   });
   document.getElementById('volume-basin-copy')?.addEventListener('click', () => void copyVolumeBasinUrl());
-  document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot());
+  document.getElementById('volume-basin-restore')?.addEventListener('click', () => restoreVolumeBasinSnapshot(applyVolumeEmitterFamilyRuntimeToCockpit));
   document.getElementById('volume-agent-camera-save')?.addEventListener('click', () => void saveVolumeAgentCapture('camera'));
   document.getElementById('volume-agent-view-save')?.addEventListener('click', () => void saveVolumeAgentCapture('view'));
   document.getElementById('volume-reaction-atlas-capture')?.addEventListener('click', () => void captureVolumeReactionAtlas());
   document.getElementById('volume-basin-slot-save')?.addEventListener('click', () => saveVolumeBasinSlot());
-  document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot());
+  document.getElementById('volume-basin-slot-load')?.addEventListener('click', () => restoreVolumeBasinSlot(selectedVolumeBasinSlot(), applyVolumeEmitterFamilyRuntimeToCockpit));
   document.getElementById('volume-look-library-kind')?.addEventListener('change', () => refreshVolumeLookLibraryList());
   document.getElementById('volume-look-library-entry')?.addEventListener('change', event => {
     const nameInput = document.getElementById('volume-look-library-name');
