@@ -329,7 +329,7 @@ export function buildVolumeSettingsPresetTarget(receipt, origin) {
   return target;
 }
 
-export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view) {
+export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view, { assayToolbar = false } = {}) {
   const viewSpec = VOLUME_SETTINGS_PRESET_VISUAL_VIEWS[view];
   if (!viewSpec) throw new Error(`unsupported settings preset visual view: ${view || 'missing'}`);
   const target = new URL('/volume-selective-head-live.html', origin);
@@ -341,6 +341,7 @@ export function buildVolumeSettingsPresetVisualTarget(receipt, origin, view) {
   target.searchParams.set('volume_raymarch_smoke', viewSpec.composition === 'splat-only-v0' ? 'off' : 'on');
   target.searchParams.set('settings_preset', receipt.presetId);
   target.searchParams.set('settings_preset_authority', receipt.sourcePresetAuthority);
+  if (assayToolbar) target.searchParams.set('assay_toolbar', '1');
   return target;
 }
 
@@ -373,6 +374,11 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     throw new Error(`visual target composition/smoke identity mismatch: ${viewSpec.composition} requires ${expectedSmokeForComposition}`);
   }
   validateAppearanceDecompositionTarget(params, 'visual ');
+  const requestedAssayToolbarModes = params.getAll('assay_toolbar');
+  if (requestedAssayToolbarModes.length > 1) throw new Error('visual target duplicates diagnostic toolbar identity');
+  if (requestedAssayToolbarModes.length === 1 && requestedAssayToolbarModes[0] !== '1') {
+    throw new Error(`unsupported visual target diagnostic toolbar mode: ${requestedAssayToolbarModes[0]}`);
+  }
   const allowed = new Set([
     ...receipt.routeVolumeEntries.map(([key]) => key),
     'role',
@@ -384,6 +390,7 @@ export function validateVolumeSettingsPresetVisualTarget(receipt, params) {
     'volume_raymarch_smoke',
     'volume_appearance_decomposition',
     'volume_appearance_selection',
+    'assay_toolbar',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) {

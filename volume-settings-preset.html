@@ -31,8 +31,13 @@
     const params = new URLSearchParams(location.search);
     const presetId = params.get('preset');
     const view = params.get('view');
+    const assayToolbarModes = params.getAll('assay_toolbar');
+    const assayToolbarRequested = assayToolbarModes.length === 1 && assayToolbarModes[0] === '1';
     async function loadPreset() {
       if (!presetId) throw new Error('settings preset id is required');
+      if (assayToolbarModes.length > 1 || (assayToolbarModes.length === 1 && !assayToolbarRequested)) {
+        throw new Error('diagnostic toolbar mode must be exactly 1 when requested');
+      }
       const [response, schemaResponse] = await Promise.all([
         fetch(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
         fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
@@ -48,7 +53,7 @@
         location.replace(target);
         return;
       }
-      const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view);
+      const target = buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view, { assayToolbar: assayToolbarRequested });
       status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.preset.controlCount} basin + ${receipt.rendererControlCount} renderer + ${receipt.presentationControlCount} presentation controls | effective ${view} view`;
       location.replace(target);
     }

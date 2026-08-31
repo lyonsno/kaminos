@@ -14,6 +14,7 @@ const root = join(import.meta.dirname, '..');
 const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v2.json'), 'utf8'));
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const witness = readFileSync(join(root, 'volume-settings-preset-witness.mjs'), 'utf8');
+const loader = readFileSync(join(root, 'volume-settings-preset.html'), 'utf8');
 
 assert.deepEqual(schema.presentationControls, [{
   key: 'raymarch-smoke-presentation',
@@ -107,6 +108,29 @@ for (const view of ['splat-only', 'raymarch-only', 'smoke-hybrid', 'full-hybrid-
     `${view} accepts a complete saved route with authored Smoke state`,
   );
 }
+
+const diagnosticVisualTarget = buildVolumeSettingsPresetVisualTarget(
+  receipt,
+  'http://127.0.0.1:18414',
+  'smoke-hybrid',
+  { assayToolbar: true },
+);
+assert.equal(diagnosticVisualTarget.searchParams.get('assay_toolbar'), '1');
+assert.equal(
+  validateVolumeSettingsPresetVisualTarget(receipt, diagnosticVisualTarget.searchParams),
+  true,
+  'the strict visual target admits the explicit diagnostic-toolbar route without weakening preset identity',
+);
+assert.match(
+  loader,
+  /buildVolumeSettingsPresetVisualTarget\(receipt, location\.origin, view, \{ assayToolbar: assayToolbarRequested \}\)/,
+  'the preset loader forwards diagnostic-toolbar intent through its rebuilt selective-head target',
+);
+assert.match(
+  witness,
+  /effectiveAssayUrl[\s\S]*assay_toolbar[\s\S]*diagnosticAssayUrl:/,
+  'the browser witness records the effective selective-head route after loader forwarding',
+);
 
 const partialVisualTarget = buildVolumeSettingsPresetVisualTarget(receipt, 'http://127.0.0.1:18414', 'raymarch-only');
 partialVisualTarget.searchParams.delete('volume_scene');

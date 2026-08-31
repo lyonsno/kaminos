@@ -273,6 +273,10 @@ try {
     if (state?.status !== 'running' || Number(state.frameCount) < 2) return null;
     return state;
   })()`, timeoutMs);
+  const effectiveAssayUrl = await evaluate(initialSocket, 'location.href');
+  const effectiveAssayTarget = new URL(effectiveAssayUrl);
+  assert.equal(effectiveAssayTarget.pathname, '/volume-selective-head-live.html', 'preset loader did not reach the selective-head witness route');
+  assert.equal(effectiveAssayTarget.searchParams.get('assay_toolbar'), '1', 'diagnostic toolbar request was dropped before the effective assay route');
   assertSelectiveCompositionState(initialState, 'source live target');
   const button = await evaluate(initialSocket, operatorContext(`(() => {
     const element = operatorDocument.getElementById('settings-preset-save');
@@ -306,7 +310,14 @@ try {
     requestedSmokePresentation,
     'source cockpit Smoke On/Off state silently fell back',
   );
-  lastTrustworthyEvidence = { initialState, button, labelState, smokePresentationReceipt, presetIndex };
+  lastTrustworthyEvidence = {
+    initialState,
+    button,
+    labelState,
+    smokePresentationReceipt,
+    presetIndex,
+    diagnosticAssayUrl: effectiveAssayUrl,
+  };
 
   const initialTargetIds = new Set((await targetList()).map(target => target.id));
   failurePhase = 'operator-command';
@@ -765,6 +776,7 @@ try {
     status: 'persisted-and-live',
     failurePhase: null,
     requestedUrl: url,
+    diagnosticAssayUrl: effectiveAssayUrl,
     effectiveUrl: liveTarget.url,
     requestedSource,
     effectiveSource,
