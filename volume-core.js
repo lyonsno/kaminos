@@ -375,7 +375,7 @@ const APPEARANCE_DECOMPOSITION_MODES = Object.freeze({
   },
 });
 const DEFAULT_GRID_SIZE = 96;
-const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 140, 160];
+const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 136, 140, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
 const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   off: 'off',
@@ -4976,14 +4976,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let boundaryFireRidgeCut = clamp(u.boundary_fire_structure.y, 0.0, 0.55);
   let boundaryFireTipBreakup = clamp(u.boundary_fire_structure.z, 0.0, 2.0);
   let boundaryFireTopologyErosion = clamp(u.boundary_fire_structure.w, 0.0, 1.0);
-  let boundaryFireCleanBlue = clamp(u.boundary_fire_color.x, 0.0, 2.0);
+  let boundaryFireCleanBlue = clamp(u.boundary_fire_color.x, 0.0, 1.0);
   let boundaryFireSootYield = clamp(u.boundary_fire_color.y, 0.0, 2.0);
   let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 0.4);
   let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 0.4);
-  let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 20.0);
+  let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 15.0);
   let boundaryFireCleanEndpoint = u.boundary_fire_palette_clean.rgb;
   let boundaryFireSootEndpoint = u.boundary_fire_palette_soot.rgb;
-  let volumeExposure = clamp(u.volume_presentation_controls.x, 0.0, 20.0);
+  let volumeExposure = clamp(u.volume_presentation_controls.x, 0.0, 3.0);
   let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
   let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
   let supervisionFireOnlyTarget = clamp(u.boundary_fire_display.y, 0.0, 1.0);
@@ -7504,7 +7504,7 @@ fn boundarySplatPresentationFs(in: BoundarySplatPresentationVertexOut) -> @locat
   let color = max(textureLoad(boundarySplatHdr, pixel, 0).rgb, vec3<f32>(0.0));
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
-  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 20.0);
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 3.0);
   let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   let grade = exposed * (0.80 + 0.18 * vignette);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
@@ -7554,7 +7554,7 @@ fn boundarySplatOpticalPresentationFs(in: BoundarySplatOpticalPresentationVertex
   }
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
-  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 20.0);
+  let volumeExposure = clamp(presentationControls.exposure.x, 0.0, 3.0);
   let exposed = vec3<f32>(1.0) - exp(-color * (0.96 * volumeExposure));
   let grade = exposed * (0.80 + 0.18 * vignette);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
@@ -11985,11 +11985,11 @@ export function createKaminosVolumePrototype({
       ridgeCut: Math.max(0, Math.min(0.55, boundaryFireControls.ridgeCut ?? controlsSnapshot.reactionBoundaryFireRidgeCut ?? 0.040)),
       tipBreakup: Math.max(0, Math.min(2, boundaryFireControls.tipBreakup ?? controlsSnapshot.reactionBoundaryFireTip ?? 1.80)),
       topologyErosion: Math.max(0, Math.min(1, boundaryFireControls.topologyErosion ?? controlsSnapshot.reactionBoundaryFireErosion ?? 0.55)),
-      cleanBlue: Math.max(0, Math.min(2, boundaryFireControls.cleanBlue ?? controlsSnapshot.reactionBoundaryFireCleanBlue ?? 0.90)),
+      cleanBlue: Math.max(0, Math.min(1, boundaryFireControls.cleanBlue ?? controlsSnapshot.reactionBoundaryFireCleanBlue ?? 0.90)),
       sootYield: Math.max(0, Math.min(2, boundaryFireControls.sootYield ?? controlsSnapshot.reactionBoundaryFireSoot ?? 0.72)),
       sootYellowing: Math.max(0, Math.min(0.4, boundaryFireControls.sootYellowing ?? controlsSnapshot.reactionBoundaryFireYellow ?? 0.28)),
       thermalWarmth: Math.max(0, Math.min(0.4, boundaryFireControls.thermalWarmth ?? controlsSnapshot.reactionBoundaryFireWarmth ?? 0.30)),
-      fireLuma: Math.max(0, Math.min(20, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
+      fireLuma: Math.max(0, Math.min(15, boundaryFireControls.fireLuma ?? controlsSnapshot.reactionBoundaryFireLuma ?? 1.05)),
       cleanColor: boundaryFireControls.cleanColor ?? controlsSnapshot.reactionBoundaryFireCleanColor ?? DEFAULT_BOUNDARY_FIRE_CLEAN_COLOR,
       sootColor: boundaryFireControls.sootColor ?? controlsSnapshot.reactionBoundaryFireSootColor ?? DEFAULT_BOUNDARY_FIRE_SOOT_COLOR,
     };
@@ -12053,7 +12053,7 @@ export function createKaminosVolumePrototype({
     uniforms[328] = effectiveFlowKernel.strength;
     uniforms[329] = effectiveFlowKernel.radiusWorld;
     uniforms[330] = effectiveFlowKernel.coherence;
-    const volumeExposure = clampFinite(controlsSnapshot.volumeExposure, 0, 20, 1);
+    const volumeExposure = clampFinite(controlsSnapshot.volumeExposure, 0, 3, 1);
     uniforms[331] = 0;
     uniforms[332] = volumeExposure;
     uniforms[333] = 0;

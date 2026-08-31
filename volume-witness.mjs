@@ -1496,7 +1496,7 @@ const expectedCanonicalBuoyancy = routeParams.has('volume_canonical_buoyancy') &
 const canonicalPassiveBottomNonRiseProof = expectsCanonicalPlumeProof && expectedCanonicalSourceMode === 'passive_bottom';
 const expectsCanonicalSmokeRise = expectsCanonicalPlumeProof && !canonicalPassiveBottomNonRiseProof;
 const requestedGrid = Number(routeParams.get('volume_resolution'));
-const expectedGrid = [32, 48, 64, 96, 128, 140, 160].includes(requestedGrid)
+const expectedGrid = [32, 48, 64, 96, 128, 136, 140, 160].includes(requestedGrid)
   ? requestedGrid
   : canonicalMacroPreset.resolution ?? scenePreset.resolution ?? 96;
 function quantizeFlowKernelControl(value, min, max, step, decimals) {

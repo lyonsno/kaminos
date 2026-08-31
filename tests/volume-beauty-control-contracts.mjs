@@ -18,16 +18,18 @@ function assertRange(id, { min, max, step = 'any' }) {
   assert.match(control, new RegExp(`\\bstep="${step}"`), `${id} is not quantized onto a coarse slider lattice`);
 }
 
-assertRange('volume-exposure', { min: '0', max: '20' });
+assertRange('volume-exposure', { min: '0', max: '3' });
 assertRange('volume-reaction-boundary-contrast', { min: '0.25', max: '1.5' });
 assertRange('volume-reaction-boundary-fire-yellow', { min: '0', max: '0.4' });
 assertRange('volume-reaction-boundary-fire-warmth', { min: '0', max: '0.4' });
-assertRange('volume-reaction-boundary-fire-luma', { min: '0', max: '20' });
+assertRange('volume-reaction-boundary-fire-luma', { min: '0', max: '15' });
+assertRange('volume-reaction-boundary-fire-clean-blue', { min: '0', max: '1' });
 
 assert.match(index, /key: 'reactionBoundaryContrast'[^\n]+max: 1\.5[^\n]+continuous: true/, 'Boundary contrast route metadata preserves the continuous 1.5 ceiling');
 assert.match(index, /key: 'reactionBoundaryFireYellow'[^\n]+max: 0\.4[^\n]+continuous: true/, 'Soot yellowing route metadata preserves the continuous 0.4 ceiling');
 assert.match(index, /key: 'reactionBoundaryFireWarmth'[^\n]+max: 0\.4[^\n]+continuous: true/, 'Thermal warmth route metadata preserves the continuous 0.4 ceiling');
-assert.match(index, /key: 'reactionBoundaryFireLuma'[^\n]+max: 20[^\n]+continuous: true/, 'Boundary Fire luma route metadata preserves the continuous 20 ceiling');
+assert.match(index, /key: 'reactionBoundaryFireCleanBlue'[^\n]+max: 1[^\n]+continuous: true/, 'Clean blue route metadata preserves the continuous 1 ceiling');
+assert.match(index, /key: 'reactionBoundaryFireLuma'[^\n]+max: 15[^\n]+continuous: true/, 'Boundary Fire luma route metadata preserves the continuous 15 ceiling');
 
 assert.match(index, /id="volume-reaction-boundary-fire-clean-color"[^>]+value="#[0-9a-f]{6}"/i, 'Boundary Fire exposes an authored clean-fuel color endpoint');
 assert.match(index, /id="volume-reaction-boundary-fire-soot-color"[^>]+value="#[0-9a-f]{6}"/i, 'Boundary Fire exposes an authored soot-hot color endpoint');
@@ -36,14 +38,16 @@ assert.match(index, /reactionBoundaryFireControls:[\s\S]*cleanColor:[\s\S]*sootC
 assert.match(core, /displayContrast: Math\.max\(0\.25, Math\.min\(1\.5,/, 'CPU Boundary contrast clamp agrees with the cockpit ceiling');
 assert.match(core, /sootYellowing: Math\.max\(0, Math\.min\(0\.4,/, 'CPU soot-yellowing clamp agrees with the cockpit ceiling');
 assert.match(core, /thermalWarmth: Math\.max\(0, Math\.min\(0\.4,/, 'CPU thermal-warmth clamp agrees with the cockpit ceiling');
-assert.match(core, /fireLuma: Math\.max\(0, Math\.min\(20,/, 'CPU Boundary Fire luma clamp agrees with the cockpit ceiling');
+assert.match(core, /cleanBlue: Math\.max\(0, Math\.min\(1,/, 'CPU Clean blue clamp agrees with the cockpit ceiling');
+assert.match(core, /fireLuma: Math\.max\(0, Math\.min\(15,/, 'CPU Boundary Fire luma clamp agrees with the cockpit ceiling');
 assert.match(core, /boundaryContrast = clamp\([^\n]+0\.25, 1\.5\)/, 'WGSL Boundary contrast clamp agrees with the cockpit ceiling');
 assert.match(core, /boundaryFireSootYellowing = clamp\([^\n]+0\.0, 0\.4\)/, 'WGSL soot-yellowing clamp agrees with the cockpit ceiling');
 assert.match(core, /boundaryFireThermalWarmth = clamp\([^\n]+0\.0, 0\.4\)/, 'WGSL thermal-warmth clamp agrees with the cockpit ceiling');
-assert.match(core, /boundaryFireLuma = clamp\([^\n]+0\.0, 20\.0\)/, 'WGSL Boundary Fire luma clamp agrees with the cockpit ceiling');
+assert.match(core, /boundaryFireCleanBlue = clamp\([^\n]+0\.0, 1\.0\)/, 'WGSL Clean blue clamp agrees with the cockpit ceiling');
+assert.match(core, /boundaryFireLuma = clamp\([^\n]+0\.0, 15\.0\)/, 'WGSL Boundary Fire luma clamp agrees with the cockpit ceiling');
 assert.match(core, /boundaryFireCleanEndpoint = u\.boundary_fire_palette_clean\.rgb[\s\S]*boundaryFireSootEndpoint = u\.boundary_fire_palette_soot\.rgb/, 'Boundary Fire consumes both dedicated authored palette endpoints');
 
-assert.match(core, /volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 20\.0\)/, 'raymarch reads the volume-wide exposure uniform');
+assert.match(core, /volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 3\.0\)/, 'raymarch reads the volume-wide exposure uniform');
 assert.match(core, /exp\(-color \* \(0\.96 \* volumeExposure\)\)/, 'raymarch applies volume exposure before its shared tone curve');
 assert.match(core, /struct VolumePresentationControls\s*\{\s*exposure: vec4<f32>,\s*\};/, 'the 16-byte host presentation buffer has an exact 16-byte WGSL layout');
 assert.match(core, /@group\(0\) @binding\(1\) var<uniform> presentationControls/, 'splat presentation has a first-class exposure uniform');
