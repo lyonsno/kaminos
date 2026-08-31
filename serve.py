@@ -261,6 +261,19 @@ def _validate_settings_preset_schema(schema):
         or len({descriptor.get("param") for descriptor in all_controls}) != len(all_controls)
     ):
         raise ValueError("settings preset canonical schema inventory is invalid")
+    retired_controls = schema.get("retiredControls") or []
+    if not isinstance(retired_controls, list) or any(
+        not isinstance(descriptor, dict)
+        or descriptor.get("axis") not in {"domControls", "rendererControls", "presentationControls"}
+        for descriptor in retired_controls
+    ):
+        raise ValueError("settings preset retired control inventory is invalid")
+    combined_controls = [*all_controls, *retired_controls]
+    if (
+        len({descriptor.get("key") for descriptor in combined_controls}) != len(combined_controls)
+        or len({descriptor.get("param") for descriptor in combined_controls}) != len(combined_controls)
+    ):
+        raise ValueError("settings preset retired controls overlap the canonical inventory")
     return schema
 
 
@@ -282,14 +295,23 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
 
     normalized = copy.deepcopy(payload)
     defaults_applied = []
+    retired_controls_stripped = []
     routed_source_values = {}
     routed_default_values = {}
+    routed_retired_values = {}
+    retired_by_axis = {
+        "domControls": {},
+        "rendererControls": {},
+        "presentationControls": {},
+    }
+    for descriptor in schema.get("retiredControls") or []:
+        retired_by_axis[descriptor["axis"]][descriptor["key"]] = descriptor
     axis_specs = (
-        ("domControls", "controlCount", schema.get("controls") or [], True),
-        ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False),
-        ("presentationControls", "presentationControlCount", schema.get("presentationControls") or [], True),
+        ("domControls", "controlCount", schema.get("controls") or [], True, "basin"),
+        ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False, "renderer"),
+        ("presentationControls", "presentationControlCount", schema.get("presentationControls") or [], True, "presentation"),
     )
-    for field, count_field, expected_descriptors, default_missing_axis in axis_specs:
+    for field, count_field, expected_descriptors, default_missing_axis, axis_name in axis_specs:
         source_controls = copy.deepcopy(payload.get(field))
         axis_authored = source_controls is not None
         if source_controls is None:
@@ -300,9 +322,22 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         if source_count not in (None, len(source_controls)):
             raise ValueError(f"settings preset {count_field} does not match its authored inventory")
         expected_by_key = {descriptor["key"]: descriptor for descriptor in expected_descriptors}
-        unknown = sorted(set(source_controls) - set(expected_by_key))
+        retired_by_key = retired_by_axis[field]
+        unknown = sorted(set(source_controls) - set(expected_by_key) - set(retired_by_key))
         if unknown:
             raise ValueError(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+        for key in sorted(set(source_controls) & set(retired_by_key)):
+            descriptor = source_controls.pop(key)
+            expected = retired_by_key[key]
+            _validate_settings_preset_descriptor(key, descriptor, expected)
+            value = _settings_preset_descriptor_value(descriptor)
+            routed_retired_values[expected["param"]] = _settings_preset_route_value(value)
+            retired_controls_stripped.append({
+                "axis": axis_name,
+                "id": key,
+                "param": expected["param"],
+                "value": value,
+            })
         for key, descriptor in source_controls.items():
             expected = expected_by_key[key]
             _validate_settings_preset_descriptor(key, descriptor, expected)
@@ -360,6 +395,14 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
     for key, expected_value in routed_source_values.items():
         if route_values.pop(key, None) != expected_value:
             raise ValueError(f"settings preset route/control mismatch for {key}")
+    for key, expected_value in routed_retired_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset retired route/control mismatch for {key}")
+    if routed_retired_values:
+        route_entries = [
+            (key, value) for key, value in route_entries
+            if key not in routed_retired_values
+        ]
     for key, default_value in routed_default_values.items():
         if key in route_values:
             raise ValueError(f"settings preset route contains unowned additive parameter {key}")
@@ -380,6 +423,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         "sourcePresentationControlCount": payload.get("presentationControlCount", 0),
         "effectivePresentationControlCount": normalized.get("presentationControlCount", 0),
         "defaultsApplied": defaults_applied,
+        "retiredControlsStripped": retired_controls_stripped,
     }
 
 
@@ -788,6 +832,7 @@ def list_volume_settings_presets(store_path, schema=None):
             "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
             "presentationControlCount": len((document.get("preset") or {}).get("presentationControls") or {}),
             "defaultsApplied": (document.get("schemaProjection") or {}).get("defaultsApplied") or [],
+            "retiredControlsStripped": (document.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })
