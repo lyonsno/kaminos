@@ -2931,18 +2931,32 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 const initialViewerParams = new URLSearchParams(window.location.search);
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
+const publishVolumeCockpitLayoutPhase = phase => {
+  window.__kaminosVolumeCockpitLayoutReceipt = {
+    identity: 'kaminos-volume-cockpit-layout-receipt-v0',
+    status: 'initializing',
+    phase,
+    fallbackApplied: false,
+  };
+};
+publishVolumeCockpitLayoutPhase('scheduled');
 const volumeCockpitLayoutReady = Promise.resolve().then(() => {
   moveVolumePyroFreezeIntoCarrierWorkbench();
   moveVolumePyroRadianceControlsBelowFlow();
   moveVolumePyroLegacyControlsBelowRadiance();
-  return initializeVolumeCockpitLayout({ documentRef: document });
+  return initializeVolumeCockpitLayout({
+    documentRef: document,
+    onPhase: publishVolumeCockpitLayoutPhase,
+  });
 });
 volumeCockpitLayoutReady.then(receipt => {
   window.__kaminosVolumeCockpitLayoutReceipt = receipt;
 }).catch(error => {
+  const phase = window.__kaminosVolumeCockpitLayoutReceipt?.phase || 'unknown';
   window.__kaminosVolumeCockpitLayoutReceipt = {
     identity: 'kaminos-volume-cockpit-layout-receipt-v0',
     status: 'failed',
+    phase,
     reason: error?.message || String(error),
     fallbackApplied: false,
   };

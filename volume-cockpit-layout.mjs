@@ -533,11 +533,13 @@ class VolumeCockpitLayoutEditor {
     return payload;
   }
 
-  async initialize() {
+  async initialize({ onPhase = () => {} } = {}) {
+    onPhase('editor-apply');
     this.layout = cloneDocument(this.sourceDefault);
     this.apply();
     let storedLayoutLoaded = false;
     try {
+      onPhase('store-index');
       this.index = await this.requestJson(LAYOUT_API, {}, { operation: 'index' });
       if (this.index.identity !== 'kaminos.volume.cockpit-layout-index.v1') {
         throw new Error('volume-cockpit-layout-index-identity-mismatch');
@@ -545,14 +547,18 @@ class VolumeCockpitLayoutEditor {
       this.syncIndex();
       storedLayoutLoaded = Boolean(this.index.activeLayoutId);
       if (storedLayoutLoaded) {
+        onPhase('store-active-layout');
         await this.loadLayout(this.index.activeLayoutId, { saveReconciliation: true });
       } else {
+        onPhase('store-source-default-save');
         await this.save();
       }
     } catch (error) {
       if (!(error instanceof VolumeCockpitLayoutAvailabilityError)) throw error;
+      onPhase('store-unavailable');
       return this.disablePersistence(error);
     }
+    onPhase('editor-effective');
     this.setEditing(false);
     return {
       identity: 'kaminos.volume.cockpit-layout-persistence.v1',
@@ -869,24 +875,31 @@ export async function initializeVolumeCockpitLayout({
   documentRef = document,
   fetchImpl = fetch,
   schemaUrl = '/volume-settings-preset-schema-v2.json',
+  onPhase = () => {},
 } = {}) {
+  onPhase('schema-fetch');
   const response = await fetchImpl(schemaUrl, { cache: 'no-store' });
   if (!response?.ok) throw new Error(`volume-cockpit-schema-fetch-failed:${response?.status || 'unknown'}`);
   const schema = await response.json();
+  onPhase('schema-parsed');
   for (const controlId of VOLUME_AUTHORED_MIX_CONTROL_IDS) moveAuthoredMixControl(documentRef, controlId);
   installPanelToggle(documentRef);
+  onPhase('source-layout-build');
   const allControls = collectVolumeCockpitControlElements(documentRef);
   const authorableControls = allControls.filter(isAuthorableControl);
   const sourceDefault = buildSourceDefaultLayout(authorableControls);
   const editor = new VolumeCockpitLayoutEditor({ documentRef, schema, authorableControls, sourceDefault, fetchImpl });
+  globalThis.__kaminosVolumeCockpitLayoutEditor = editor;
+  onPhase('inventory-validation');
   validateVolumeCockpitControlInventory({ schema, controlRecords: controlRecords(documentRef) });
-  const persistenceReceipt = await editor.initialize();
+  const persistenceReceipt = await editor.initialize({ onPhase });
+  onPhase('final-inventory-validation');
   const receipt = validateVolumeCockpitControlInventory({ schema, controlRecords: controlRecords(documentRef) });
   const panel = documentRef.getElementById('volume-authored-mix-panel');
   panel.dataset.cockpitStatus = 'validated';
   panel.dataset.layoutPersistence = persistenceReceipt.status;
   panel.dataset.controlCount = String(receipt.controlCount);
-  globalThis.__kaminosVolumeCockpitLayoutEditor = editor;
+  onPhase('complete');
   return {
     ...receipt,
     layoutIdentity: editor.layout.identity,

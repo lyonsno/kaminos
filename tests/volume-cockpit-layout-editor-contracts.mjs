@@ -272,9 +272,15 @@ function createExecutableEditor({ store, sourceDefault }) {
 const sourceDefaultLayout = layoutDocument('source-default', 'Source default', ['control-a', 'control-b']);
 const emptyStore = createLayoutStore();
 const emptyStoreEditor = createExecutableEditor({ store: emptyStore, sourceDefault: sourceDefaultLayout });
-const emptyStoreReceipt = await emptyStoreEditor.initialize();
+const emptyStorePhases = [];
+const emptyStoreReceipt = await emptyStoreEditor.initialize({ onPhase: phase => emptyStorePhases.push(phase) });
 assert.equal(emptyStoreReceipt.storedLayoutLoaded, false, 'an empty valid index resolves after persisting the source default');
 assert.equal(emptyStore.activeLayoutId, 'source-default', 'empty-store initialization activates the persisted source default');
+assert.deepEqual(
+  emptyStorePhases,
+  ['editor-apply', 'store-index', 'store-source-default-save', 'editor-effective'],
+  'healthy empty-store initialization preserves the exact pre-API and persistence phase sequence',
+);
 
 const layoutA = layoutDocument('layout-a', 'Layout A', ['control-a', 'control-b']);
 const layoutB = layoutDocument('layout-b', 'Layout B', ['control-b', 'control-a']);
