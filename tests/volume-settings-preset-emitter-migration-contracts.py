@@ -49,7 +49,20 @@ def legacy_payload(missing_keys):
         key = descriptor["key"]
         if key in missing_keys:
             continue
-        value = "tall_plume" if key == "volume-scene" else ADDITIVE_DEFAULTS.get(key, 0)
+        if key == "volume-scene":
+            value = "tall_plume"
+        elif key in ADDITIVE_DEFAULTS:
+            value = ADDITIVE_DEFAULTS[key]
+        elif descriptor["type"] == "checkbox":
+            value = False
+        elif descriptor["type"] == "select-one":
+            value = "live"
+        elif descriptor["type"] == "color":
+            value = "#000000"
+        elif descriptor["type"] in {"text", "button-state"}:
+            value = ""
+        else:
+            value = 0
         controls[key] = {
             "id": key,
             "param": descriptor["param"],

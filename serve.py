@@ -6,6 +6,7 @@ import copy
 import fcntl
 import hashlib
 import json
+import math
 import os
 import queue
 import re
@@ -241,14 +242,36 @@ def _settings_preset_descriptor_for_default(descriptor):
 def _validate_settings_preset_descriptor(key, descriptor, expected):
     if not isinstance(descriptor, dict):
         raise ValueError(f"settings preset control descriptor is invalid: {key}")
+    if descriptor.get("id") != key:
+        raise ValueError(f"settings preset control descriptor id mismatch for {key}")
     if (
         descriptor.get("param") != expected.get("param")
         or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
         or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
     ):
         raise ValueError(f"settings preset control inventory mismatch for {key}")
+    stored_value_fields = [field for field in ("value", "rawValue") if field in descriptor]
+    if len(stored_value_fields) != 1:
+        raise ValueError(f"settings preset control stored value is invalid for {key}")
+    value = descriptor[stored_value_fields[0]]
+    control_type = str(expected.get("type") or "").lower()
+    value_type_valid = True
+    if control_type == "range":
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            value_type_valid = False
+        else:
+            try:
+                value_type_valid = math.isfinite(float(value))
+            except (TypeError, ValueError):
+                value_type_valid = False
+    elif control_type == "checkbox":
+        value_type_valid = isinstance(value, bool)
+    elif control_type in {"color", "text", "select-one", "button-state"}:
+        value_type_valid = isinstance(value, str)
+    if not value_type_valid:
+        raise ValueError(f"settings preset control stored value type mismatch for {key}")
     allowed_values = expected.get("allowedValues")
-    if allowed_values is not None and _settings_preset_descriptor_value(descriptor) not in allowed_values:
+    if allowed_values is not None and value not in allowed_values:
         raise ValueError(f"settings preset control has unsupported value for {key}")
 
 
@@ -270,6 +293,18 @@ def _validate_settings_preset_schema(schema):
     if not isinstance(retired_controls, list) or any(
         not isinstance(descriptor, dict)
         or descriptor.get("axis") not in {"domControls", "rendererControls", "presentationControls"}
+        or any(
+            not isinstance(descriptor.get(field), str) or not descriptor[field].strip()
+            for field in ("key", "param", "tagName", "type")
+        )
+        or (
+            "allowedValues" in descriptor
+            and (
+                not isinstance(descriptor["allowedValues"], list)
+                or not descriptor["allowedValues"]
+                or len(set(map(str, descriptor["allowedValues"]))) != len(descriptor["allowedValues"])
+            )
+        )
         for descriptor in retired_controls
     ):
         raise ValueError("settings preset retired control inventory is invalid")
@@ -785,6 +820,35 @@ def write_volume_cockpit_layout(store_path, layout, activate=True, schema=None):
             "active": bool(activate),
         },
         "layoutUrl": f"/api/volume-cockpit-layout?id={normalized['layoutId']}",
+    }
+
+
+def activate_volume_cockpit_layout(store_path, layout_id, schema=None):
+    store = _volume_settings_store_path(store_path)
+    with _volume_settings_store_lock(store):
+        artifact = read_volume_cockpit_layout(store, layout_id, schema)
+        content_hash = artifact["contentHash"]
+        activated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        _atomic_write_json(store / "active.json", {
+            "identity": "kaminos.volume.cockpit-layout-active.v1",
+            "layoutId": layout_id,
+            "contentHash": content_hash,
+            "updatedAt": activated_at,
+        })
+    return {
+        "ok": True,
+        "identity": "kaminos.volume.cockpit-layout-activation-receipt.v1",
+        "requested": {
+            "storePath": str(store),
+            "layoutId": layout_id,
+        },
+        "effective": {
+            "storePath": str(store),
+            "layoutPath": artifact["layoutPath"],
+            "layoutId": layout_id,
+            "contentHash": content_hash,
+            "active": True,
+        },
     }
 
 
@@ -2166,6 +2230,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_basin_drive_sessions_post()
         elif parsed.path == "/api/volume-cockpit-layouts":
             self.handle_volume_cockpit_layouts_post()
+        elif parsed.path == "/api/volume-cockpit-layout-activation":
+            self.handle_volume_cockpit_layout_activation_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -2369,6 +2435,40 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 request.get("layout"),
                 activate=request["activate"],
             )
+        except OSError as error:
+            self.send_json({**failure, "error": str(error)}, 500)
+            return
+        except (ValueError, json.JSONDecodeError) as error:
+            self.send_json({**failure, "error": str(error)}, 400)
+            return
+        self.send_json(receipt)
+
+    def handle_volume_cockpit_layout_activation_post(self):
+        failure = {
+            "storePath": str(VOLUME_COCKPIT_LAYOUT_STORE),
+            "failurePhase": "cockpit-layout-activation",
+        }
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({**failure, "error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({**failure, "error": "Invalid JSON"}, 400)
+            return
+        if not isinstance(request, dict) or set(request) != {"layoutId"}:
+            self.send_json({**failure, "error": "cockpit layout activation requires exactly layoutId"}, 400)
+            return
+        try:
+            receipt = activate_volume_cockpit_layout(
+                VOLUME_COCKPIT_LAYOUT_STORE,
+                request.get("layoutId"),
+            )
+        except FileNotFoundError as error:
+            self.send_json({**failure, "error": str(error)}, 404)
+            return
         except OSError as error:
             self.send_json({**failure, "error": str(error)}, 500)
             return

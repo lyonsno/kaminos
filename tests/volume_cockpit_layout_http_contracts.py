@@ -42,12 +42,12 @@ def wait_for_server(url):
     raise AssertionError("cockpit layout HTTP server did not become available")
 
 
-def sample_layout(label="Operator Layout"):
+def sample_layout(label="Operator Layout", layout_id="operator-layout"):
     schema = json.loads((ROOT / "volume-settings-preset-schema-v2.json").read_text())
     control_ids = [entry["key"] for entry in [*schema["controls"], *schema["rendererControls"]]]
     return {
         "identity": "kaminos.volume.cockpit-layout.v1",
-        "layoutId": "operator-layout",
+        "layoutId": layout_id,
         "label": label,
         "groups": [{
             "id": "primary-controls",
@@ -117,6 +117,23 @@ def main():
             assert status == 200
             _, artifact = request_json(f"{base}/api/volume-cockpit-layout?id=operator-layout")
             assert artifact["layout"]["label"] == "Renamed Layout"
+
+            status, second = request_json(f"{base}/api/volume-cockpit-layouts", {
+                "layout": sample_layout("Second Layout", "second-layout"),
+                "activate": False,
+            })
+            assert status == 200
+            second_path = Path(second["effective"]["layoutPath"])
+            second_bytes = second_path.read_bytes()
+            status, activation = request_json(f"{base}/api/volume-cockpit-layout-activation", {
+                "layoutId": "second-layout",
+            })
+            assert status == 200
+            assert activation["identity"] == "kaminos.volume.cockpit-layout-activation-receipt.v1"
+            assert activation["effective"]["contentHash"] == second["effective"]["contentHash"]
+            assert second_path.read_bytes() == second_bytes, "HTTP activation rewrote layout content"
+            _, index = request_json(f"{base}/api/volume-cockpit-layouts")
+            assert index["activeLayoutId"] == "second-layout"
         finally:
             process.terminate()
             try:
@@ -149,11 +166,12 @@ def main():
             status, index = request_json(f"{rotated_base}/api/volume-cockpit-layouts")
             assert status == 200
             assert index["storePath"] == str(store.resolve())
-            assert index["activeLayoutId"] == "operator-layout"
-            assert index["entries"][0]["label"] == "Renamed Layout"
-            status, artifact = request_json(f"{rotated_base}/api/volume-cockpit-layout?id=operator-layout")
+            assert index["activeLayoutId"] == "second-layout"
+            second_entry = next(entry for entry in index["entries"] if entry["layoutId"] == "second-layout")
+            assert second_entry["label"] == "Second Layout"
+            status, artifact = request_json(f"{rotated_base}/api/volume-cockpit-layout?id=second-layout")
             assert status == 200
-            assert artifact["layout"]["label"] == "Renamed Layout"
+            assert artifact["layout"]["label"] == "Second Layout"
         finally:
             rotated.terminate()
             try:

@@ -1155,7 +1155,12 @@
       "key": "volume-majorant-grid",
       "param": "volume_majorant_grid",
       "tagName": "SELECT",
-      "type": "select-one"
+      "type": "select-one",
+      "allowedValues": [
+        "24",
+        "32",
+        "48"
+      ]
     }
   ],
   "legacyUnroutedParams": [

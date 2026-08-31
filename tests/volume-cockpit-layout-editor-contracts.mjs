@@ -255,6 +255,8 @@ function createLayoutStore({ layouts = [], activeLayoutId = null } = {}) {
   return {
     layouts: new Map(layouts.map(layout => [layout.layoutId, structuredClone(layout)])),
     activeLayoutId,
+    layoutWrites: [],
+    activations: [],
   };
 }
 
@@ -292,10 +294,22 @@ function createExecutableEditor({ store, sourceDefault }) {
         const body = JSON.parse(options.body);
         const layout = structuredClone(body.layout);
         store.layouts.set(layout.layoutId, layout);
+        store.layoutWrites.push(structuredClone(layout));
         if (body.activate) store.activeLayoutId = layout.layoutId;
         return {
           identity: 'kaminos.volume.cockpit-layout-write-receipt.v1',
           layoutId: layout.layoutId,
+          activeLayoutId: store.activeLayoutId,
+        };
+      }
+      if (url === '/api/volume-cockpit-layout-activation' && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        if (!store.layouts.has(body.layoutId)) throw new Error(`volume-cockpit-layout-not-found:${body.layoutId}`);
+        store.activeLayoutId = body.layoutId;
+        store.activations.push(body.layoutId);
+        return {
+          identity: 'kaminos.volume.cockpit-layout-activation-receipt.v1',
+          layoutId: body.layoutId,
           activeLayoutId: store.activeLayoutId,
         };
       }
@@ -332,14 +346,22 @@ const firstEditor = createExecutableEditor({ store: selectionStore, sourceDefaul
 const firstReceipt = await firstEditor.initialize();
 assert.equal(firstReceipt.storedLayoutLoaded, true, 'a valid active stored layout resolves as loaded');
 assert.equal(firstEditor.layout.layoutId, 'layout-a');
+assert.equal(selectionStore.layoutWrites.length, 0, 'loading the active stored layout cannot rewrite its source artifact');
 
 await firstEditor.loadLayout('layout-b', { activate: true });
 assert.equal(selectionStore.activeLayoutId, 'layout-b', 'selecting inactive B durably changes the store active pointer');
+assert.deepEqual(selectionStore.activations, ['layout-b'], 'selection uses the pointer-only activation contract');
+assert.equal(selectionStore.layoutWrites.length, 0, 'selecting inactive B cannot rewrite B as a side effect of activation');
 const freshEditor = createExecutableEditor({ store: selectionStore, sourceDefault: sourceDefaultLayout });
 const freshReceipt = await freshEditor.initialize();
 assert.equal(freshReceipt.storedLayoutLoaded, true);
 assert.equal(freshEditor.layout.layoutId, 'layout-b', 'fresh initialization loads the newly activated layout B');
 assert.deepEqual(freshEditor.layout.groups[0].controlIds, ['control-b', 'control-a']);
+
+firstEditor.layout.label = 'Layout B edited';
+await firstEditor.save();
+assert.equal(selectionStore.layoutWrites.length, 1, 'an explicit edit still persists the selected layout content');
+assert.equal(selectionStore.layouts.get('layout-b').label, 'Layout B edited');
 
 assert.match(
   index,

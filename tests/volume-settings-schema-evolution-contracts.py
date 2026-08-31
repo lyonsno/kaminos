@@ -194,6 +194,65 @@ def main():
         "value": 0.625,
     }]
 
+    wrong_retired_id = copy.deepcopy(retired)
+    wrong_retired_id["domControls"]["volume-retired-raymarch"]["id"] = "volume-wrong-id"
+    try:
+        serve.normalize_volume_settings_preset_payload(wrong_retired_id, SCHEMA)
+    except ValueError as error:
+        assert "descriptor id mismatch" in str(error)
+    else:
+        raise AssertionError("retirement projection laundered a descriptor with the wrong id")
+
+    missing_retired_value = copy.deepcopy(retired)
+    del missing_retired_value["domControls"]["volume-retired-raymarch"]["value"]
+    try:
+        serve.normalize_volume_settings_preset_payload(missing_retired_value, SCHEMA)
+    except ValueError as error:
+        assert "stored value" in str(error)
+    else:
+        raise AssertionError("retirement projection laundered a descriptor without a stored value")
+
+    for required_field in ("key", "param", "tagName", "type"):
+        incomplete_retirement_schema = copy.deepcopy(SCHEMA)
+        del incomplete_retirement_schema["retiredControls"][0][required_field]
+        try:
+            serve.normalize_volume_settings_preset_payload(source, incomplete_retirement_schema)
+        except ValueError as error:
+            assert "retired control inventory is invalid" in str(error)
+        else:
+            raise AssertionError(f"retired schema accepted missing {required_field}")
+
+    invalid_axis_schema = copy.deepcopy(SCHEMA)
+    invalid_axis_schema["retiredControls"][0]["axis"] = "invented-axis"
+    try:
+        serve.normalize_volume_settings_preset_payload(source, invalid_axis_schema)
+    except ValueError as error:
+        assert "retired control inventory is invalid" in str(error)
+    else:
+        raise AssertionError("retired schema accepted an invalid axis")
+
+    select_retirement_schema = copy.deepcopy(SCHEMA)
+    select_retirement_schema["retiredControls"][0].update({
+        "tagName": "SELECT",
+        "type": "select-one",
+        "allowedValues": ["24", "32", "48"],
+    })
+    unsupported_select = copy.deepcopy(retired)
+    unsupported_select["domControls"]["volume-retired-raymarch"].update({
+        "tagName": "SELECT",
+        "type": "select-one",
+        "value": "96",
+    })
+    unsupported_select["route"] = unsupported_select["route"].replace(
+        "volume_retired_raymarch=0.625", "volume_retired_raymarch=96",
+    )
+    try:
+        serve.normalize_volume_settings_preset_payload(unsupported_select, select_retirement_schema)
+    except ValueError as error:
+        assert "unsupported value" in str(error)
+    else:
+        raise AssertionError("retirement projection admitted an unsupported select value")
+
     mismatched_retired_route = copy.deepcopy(retired)
     mismatched_retired_route["route"] = mismatched_retired_route["route"].replace(
         "volume_retired_raymarch=0.625", "volume_retired_raymarch=0.5",
@@ -216,6 +275,15 @@ def main():
         assert "retired controls overlap" in str(error)
     else:
         raise AssertionError("schema admitted one control as both active and retired")
+
+    overlapping_retirement_param_schema = copy.deepcopy(SCHEMA)
+    overlapping_retirement_param_schema["retiredControls"][0]["param"] = SCHEMA["controls"][0]["param"]
+    try:
+        serve.normalize_volume_settings_preset_payload(source, overlapping_retirement_param_schema)
+    except ValueError as error:
+        assert "retired controls overlap" in str(error)
+    else:
+        raise AssertionError("schema admitted an active/retired parameter overlap")
 
     incompatible_schema = copy.deepcopy(SCHEMA)
     incompatible_schema["controls"].append({

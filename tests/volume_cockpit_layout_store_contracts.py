@@ -33,6 +33,7 @@ def main():
         "write_volume_cockpit_layout",
         "read_volume_cockpit_layout",
         "list_volume_cockpit_layouts",
+        "activate_volume_cockpit_layout",
     ):
         assert callable(getattr(serve, name, None)), f"volume cockpit layout store API is missing: {name}"
 
@@ -96,6 +97,7 @@ def main():
         }
         retired_path = layout_store / "layouts" / "retired-layout.json"
         retired_path.write_text(json.dumps(retired_artifact, indent=2) + "\n")
+        retired_bytes = retired_path.read_bytes()
         projected_retired = serve.read_volume_cockpit_layout(layout_store, "retired-layout")
         assert "volume-majorant-grid" not in projected_retired["layout"]["groups"][0]["controlIds"]
         assert projected_retired["schemaProjection"]["retiredControlsStripped"] == [
@@ -104,6 +106,19 @@ def main():
         assert "volume-majorant-grid" in json.loads(retired_path.read_text())["layout"]["groups"][0]["controlIds"], (
             "read-time projection mutated the immutable stored layout"
         )
+        activation = serve.activate_volume_cockpit_layout(layout_store, "retired-layout")
+        assert activation["identity"] == "kaminos.volume.cockpit-layout-activation-receipt.v1"
+        assert activation["effective"]["contentHash"] == retired_artifact["contentHash"]
+        assert retired_path.read_bytes() == retired_bytes, "activation rewrote the projected historical layout"
+        active = json.loads((layout_store / "active.json").read_text())
+        assert active["layoutId"] == "retired-layout"
+        assert active["contentHash"] == retired_artifact["contentHash"]
+
+        edited_projection = projected_retired["layout"]
+        edited_projection["label"] = "Retired Layout Explicitly Edited"
+        edited = serve.write_volume_cockpit_layout(layout_store, edited_projection, activate=True)
+        assert edited["effective"]["contentHash"] != retired_artifact["contentHash"]
+        assert retired_path.read_bytes() != retired_bytes, "an explicit edit failed to persist new layout content"
 
         bad = sample_layout()
         bad["groups"][0]["controlIds"].append("volume-not-in-schema")

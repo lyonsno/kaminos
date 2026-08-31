@@ -17,6 +17,7 @@ const VOLUME_CONTROL_SELECTOR = [
 ].join(', ');
 
 const LAYOUT_API = '/api/volume-cockpit-layouts';
+const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
 
@@ -844,9 +845,25 @@ class VolumeCockpitLayoutEditor {
     const reconciled = reconcileVolumeCockpitLayoutDocument({ document: artifact.layout, authorableControlIds: this.authorableControlIds });
     this.layout = reconciled.document;
     this.apply();
-    if ((saveReconciliation && reconciled.newControlIds.length) || activate) await this.save();
+    if (saveReconciliation && reconciled.newControlIds.length) await this.save();
+    else if (activate) await this.activateLayout(layoutId);
     else this.status(`${this.layout.label} loaded`);
     return this.layout;
+  }
+
+  async activateLayout(layoutId) {
+    const receipt = await this.requestJson(LAYOUT_ACTIVATION_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ layoutId }),
+    }, { operation: 'write' });
+    if (receipt.identity !== 'kaminos.volume.cockpit-layout-activation-receipt.v1') {
+      throw new Error('volume-cockpit-layout-activation-receipt-identity-mismatch');
+    }
+    this.index = await this.requestJson(LAYOUT_API, {}, { operation: 'index' });
+    this.syncIndex();
+    this.status(`${this.layout.label} loaded`);
+    return receipt;
   }
 
   renameLayout(label) {
