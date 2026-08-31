@@ -16,7 +16,7 @@ function sha256(relativePath) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-test("flame screening room media, hierarchy, and public claims agree", () => {
+test("generated-worlds README and flame screening room public claims agree", () => {
   const manifest = JSON.parse(read("docs/flame-atlas/capture-manifest.json"));
   const html = read("docs/flame-atlas/index.html");
   const rootReadme = read("README.md");
@@ -48,6 +48,13 @@ test("flame screening room media, hierarchy, and public claims agree", () => {
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/live-webgpu-combustion\.gif/);
   assert.match(rootReadme, /\[Live Combustion\]\(docs\/flame-atlas\/\)/);
+  assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
+  assert.match(rootReadme, /\*\*Generated beings\*\*/);
+  assert.match(rootReadme, /\*\*Live materials\*\*/);
+  assert.match(rootReadme, /\*\*Browser-native intelligence\*\*/);
+  assert.match(rootReadme, /\*\*A world kiln\*\*/);
+  assert.match(rootReadme, /Generated creatures can preserve deliberate morphology\s+through generative transformation and return to mechanical control\./);
+  assert.doesNotMatch(rootReadme, /Generated beings retain identity, structure, and handles after inference/i);
   assert.match(html, /<a href=["']\.\.\/\.\.\/["']>Kaminos<\/a>/);
   assert.doesNotMatch(html, /href=["']\.\.\/\.\.\/README\.md["']/);
   assert.match(atlasReadme, /capture-manifest\.json/);

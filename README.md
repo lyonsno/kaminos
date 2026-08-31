@@ -1,26 +1,39 @@
 # Kaminos
 
-> Kaminos builds the live experience that reveals what the product is, who
-> needs to own it, and where its value lives before it meets the world.
+> A browser-native workbench for making generated worlds live.
 
-Kaminos is a browser-native spatial workbench and world kiln, and the working
-surface of a technical invention studio. It turns difficult product bets across AI, graphics,
-simulation, spatial computing, and creative tooling into live experiences that
-people can see, steer, and decide around.
+Kaminos brings generated beings, live materials, local inference, motion, and
+spatial assets into one inspectable WebGPU workbench. It is where difficult
+technical systems become visible enough to steer, compose, and decide around
+while they are still alive.
 
-The repository is where that method becomes software: local-first WebGPU
-material systems, generated spatial assets, motion and world substrates,
-inspectable inference routes, and the workbench that lets them meet.
+The project spans four connected capabilities:
+
+- **Generated beings**. Generated creatures can preserve deliberate morphology
+  through generative transformation and return to mechanical control.
+- **Live materials**. Simulated structure, appearance, and motion remain
+  authorable while state advances.
+- **Browser-native intelligence**. Spatial models execute inside the same local
+  environment that inspects and consumes their outputs.
+- **A world kiln**. Images, meshes, splats, motion, material fields, simulation
+  state, and generated environments become composable world matter.
 
 [![Live WebGPU combustion moving through a chromatic material basin](docs/flame-atlas/assets/live-webgpu-combustion.gif)](docs/flame-atlas/)
 
+## Live Browser Combustion
+
 These films were captured directly from the live browser runtime while one
 stateful WebGPU combustion material was being authored, not prerendered.
+
+The material carries its history through control changes. Existing momentum
+continues through contraction, acceleration, chromatic transition, changing
+source geometry, and renewed expansion. A broad burner can gather into a jet,
+retain the structure already in flight, and rebuild into another morphology
+without resetting the simulation.
+
 [Live Combustion](docs/flame-atlas/) presents one complete composition, three
 authored transitions, and six compact studies of color, structure, width, and
 state history.
-
-##  Live Browser Combustion
 
 Kaminos currently carries a multi-field volumetric fire and smoke simulation
 that runs directly in the browser through WebGPU. Its current boundary-fire
@@ -40,6 +53,33 @@ The result is a live material process with:
 The fire began as an answer to a product question: how can a local AI
 experience remain alive while expensive inference occupies the machine? It is
 now becoming a material and rendering research program of its own.
+
+## Generated Beings
+
+Generated creatures can preserve deliberate morphology through generative
+transformation and return to mechanical control.
+
+Deliberate edits to a parameterized creature template have produced
+corresponding changes after image generation and image-to-3D reconstruction.
+Using recovered correspondence, one reconstruction was registered to a control
+rig and manually skinned for large articulated deformations; another was driven
+by synthesized terrain-following motion.
+
+That result reaches recovered structure and downstream mechanical consumption.
+The continuing research frontier is editable authority: returning distinctions
+authored by the generator as durable, named controls that can survive another
+generation and accumulate into later rounds of authorship.
+
+## Browser-Native Intelligence
+
+Spatial models execute inside the same browser environment that consumes their
+outputs. Local WebGPU inference, geometry, motion, and simulation can therefore
+remain part of one operating world rather than terminating at a model response
+or crossing into a disconnected application.
+
+The workbench preserves requested and effective route identity, model and
+backend lifecycle, generated assets, live state, and the inspection surfaces
+needed to decide what should happen next.
 
 ## The World Kiln
 
