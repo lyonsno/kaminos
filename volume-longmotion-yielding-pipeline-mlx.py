@@ -189,6 +189,14 @@ def run(args: argparse.Namespace, report: dict[str, Any]) -> dict[str, Any]:
         progress["phase"] = "chain"
         save_progress(progress_path, progress)
 
+    if args.seat_only:
+        # seat-only mode: memory pilots and seat probes stop here — no chain,
+        # no witness render tail (the unyieldable ~30-min GPU hold class).
+        report["status"] = "complete"
+        report["failurePhase"] = None
+        report["seatOnly"] = True
+        return report
+
     # ---------------- Phase 2: chained witness (hop-resumable) --------------
     report["failurePhase"] = "chain-setup"
     seat_state_file = checkpoints / f"seat-stage{len(rungs) - 1}-g{rungs[-1]}-state.json"
@@ -337,6 +345,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--render-width", type=int, default=320)
     parser.add_argument("--samples-per-cell", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260727)
+    parser.add_argument("--seat-only", action="store_true",
+                        help="stop after the seat ladder: no chain, no witness renders")
     parser.add_argument(
         "--setup-cache-dir", type=Path,
         default=Path.home() / ".local/state/gpu-greenroom/cache/state-setup",

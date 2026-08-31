@@ -148,6 +148,15 @@ class YieldingFitContracts(unittest.TestCase):
         self.assertIn("--setup-cache-dir", parser_source)
         self.assertIn("load_or_build", parser_source)
 
+    def test_seat_only_mode_exists(self) -> None:
+        # Memory pilots and seat probes have no use for chain hops or witness
+        # renders; the unyieldable render tail measured ~30 min of fleet-facing
+        # GPU hold (operator escalation 2026-08-31). Seat-only runs must stop
+        # after the ladder and report complete.
+        source = (ROOT / "volume-longmotion-yielding-pipeline-mlx.py").read_text()
+        self.assertIn("--seat-only", source)
+        self.assertIn("seat-only", source.split("Phase 2")[0], "seat-only gate must precede the chain phase")
+
     def test_checkpoint_preserves_adam_moments(self) -> None:
         medium = synthetic_medium()
         lattice, _ = CONTRACT_SPEC.build_gaussian_density_lattice(medium, sigma_cells=0.6, fine_grid=16)
