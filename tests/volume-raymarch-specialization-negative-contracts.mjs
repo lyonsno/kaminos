@@ -145,6 +145,7 @@ function runFailureCase(name, args, options = {}) {
 
 runFailureCase('missing-url', [], { failurePhase: 'argument-validation' });
 runFailureCase('invalid-number', ['--url', 'http://127.0.0.1:1/?role=truthHigh', '--samples', 'nope'], { failurePhase: 'argument-validation' });
+runFailureCase('invalid-pixel-contract', ['--url', 'http://127.0.0.1:1/?role=truthHigh', '--pixel-contract', 'anything-goes'], { failurePhase: 'argument-validation' });
 const nongit = mkdtempSync(join(tmpdir(), 'kaminos-raymarch-nongit-'));
 runFailureCase('git-provenance', ['--url', 'http://127.0.0.1:1/?role=truthHigh'], { cwd: nongit, failurePhase: 'source-provenance' });
 const missingProfileRoot = join(mkdtempSync(join(tmpdir(), 'kaminos-raymarch-profile-parent-')), 'missing');

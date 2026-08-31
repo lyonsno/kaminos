@@ -14996,6 +14996,7 @@ export function createKaminosVolumePrototype({
     const effective = effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline
       ? 'lean-stock-direct-cell-raymarch-v0'
       : 'full-authored-raymarch-v0';
+    if (effective === 'full-authored-raymarch-v0') state.raymarchSupportHierarchy = null;
     state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
     return effectivePipeline;
   }
@@ -15088,6 +15089,7 @@ export function createKaminosVolumePrototype({
     const effective = effectiveProductPipeline === leanStockProductRaymarchPipeline
       ? 'lean-stock-direct-cell-raymarch-v0'
       : 'full-authored-raymarch-v0';
+    if (effective === 'full-authored-raymarch-v0') state.raymarchSupportHierarchy = null;
     state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
     const effectiveBindGroup = bindGroup || bindGroups[currentFluid];
     if (effectiveProductPipeline === leanStockProductRaymarchPipeline) {
@@ -20432,6 +20434,9 @@ export function createKaminosVolumePrototype({
       gpuStageTiming,
       raymarchShaderSpecialization: state.raymarchShaderSpecialization
         ? { ...state.raymarchShaderSpecialization }
+        : null,
+      raymarchSupportHierarchy: state.raymarchSupportHierarchy
+        ? { ...state.raymarchSupportHierarchy }
         : null,
       renderPhaseTimeMs: state.renderPhaseTimeMs,
       renderPhaseFrame: state.renderPhaseFrame,

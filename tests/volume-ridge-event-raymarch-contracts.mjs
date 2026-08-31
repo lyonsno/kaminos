@@ -31,6 +31,7 @@ assert.match(core, /raymarchSupportBrickPipeline[\s\S]*entryPoint:\s*'csRaymarch
 assert.match(core, /function encodeRaymarchSupportHierarchy[\s\S]*raymarchSupportBasePipeline[\s\S]*raymarchSupportBrickPipeline/, 'one encoder path orders base production before brick reduction');
 assert.match(core, /function encodeRaymarchSupportHierarchy[\s\S]*sourceName === 'override'[\s\S]*raymarchSupportBasePipeline/, 'only an applied external sidecar pays the standalone native-support pass');
 assert.match(core, /const effectiveBindGroup = options\.bindGroup \|\| bindGroups\[currentFluid\][\s\S]*encodeRaymarchSupportHierarchy\(encoder, effectiveBindGroup\)[\s\S]*beginRenderPass/, 'ordinary raymarch builds support from the exact render source before drawing');
+assert.match(core, /captureSelectiveHeadLiveFrame[\s\S]*raymarchSupportHierarchy:\s*state\.raymarchSupportHierarchy/, 'external frozen captures disclose the effective hierarchy producer and dimensions');
 
 assert.match(raymarchLoop, /sampleRaymarchSupportBrick\(p\)[\s\S]*raymarchSupportBrickExitDistance\(p, rd\)[\s\S]*continue/, 'a conservatively empty brick advances directly to its exit before native-field reconstruction');
 assert.match(raymarchLoop, /sampleRaymarchCellSupport\(p\)[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*continue/, 'an empty native cell advances to its exit through compact support');

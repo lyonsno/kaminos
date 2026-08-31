@@ -31,7 +31,8 @@ assert.match(witness, /untimedFreezeWarmup[\s\S]*collectGpuTiming:\s*false[\s\S]
 assert.match(witness, /setDebugRaymarchShaderSpecialization\(arm === 'full' \? 'force-full' : 'auto'\)/, 'witness captures full and admitted lean specializations from one runtime');
 assert.doesNotMatch(witness, /force-lean/, 'witness cannot bypass semantic lean admission');
 assert.match(witness, /advanceSim:\s*false[\s\S]*collectGpuTiming:\s*true/, 'both arms use frozen-state GPU timestamp captures');
-assert.match(witness, /matchedRaymarchRaster/, 'acceptance uses the disjoint raymarch raster timestamp');
+assert.match(witness, /matchedRaymarchRaster/, 'report retains the disjoint raymarch raster timestamp');
+assert.match(witness, /totalGpuMs[\s\S]*stages\.total/, 'net comparison includes support production from sidecar start through raymarch completion');
 assert.match(witness, /sameStateIdentity[\s\S]*simStepCount[\s\S]*controlsHash[\s\S]*cameraHash[\s\S]*renderPhaseTimeMs[\s\S]*renderPhaseFrame/, 'comparison binds simulation, controls, camera, and render phase');
 assert.match(witness, /effectiveUrl[\s\S]*effectiveRoute[\s\S]*backend[\s\S]*sourceCommit/, 'report binds effective runtime and source identity');
 assert.match(witness, /effectiveRoute:\s*capture\.effectiveRoute/, 'sample evidence projects the capture renderer route rather than relabeling the wrapper route');
@@ -42,6 +43,9 @@ assert.match(witness, /sourceManifest[\s\S]*excludedPaths:\s*\[outDir, reportPat
 assert.match(witness, /raymarch-only-v0[\s\S]*raymarchApplied[\s\S]*splatApplied/, 'witness rejects pixels from the wrong composition');
 assert.match(witness, /eligible[\s\S]*refusalReasons[\s\S]*effective/, 'lean arm must carry successful semantic admission and effective specialization');
 assert.match(witness, /pixelDelta[\s\S]*maxChannelDelta[\s\S]*meanAbsChannelDelta[\s\S]*changedPixelRatio/, 'witness measures visual parity rather than assuming specialization DCE preserves pixels');
+assert.match(witness, /pixelContract[\s\S]*exact-parity[\s\S]*ridge-refinement/, 'caller selects an explicit exact-parity or intended-ridge-change visual contract');
+assert.match(witness, /assertPixelContract/, 'pixel acceptance is centralized and cannot silently inherit the wrong comparator semantics');
+assert.match(witness, /raymarchSupportHierarchy/, 'lean samples bind the effective support hierarchy identity and producer');
 assert.match(witness, /nonblank[\s\S]*pixelHash/, 'blank or missing output cannot become acceptance evidence');
 assert.match(witness, /Runtime\.exceptionThrown[\s\S]*Runtime\.consoleAPICalled/, 'browser exceptions and console errors fail loud');
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence[\s\S]*writeReport/, 'failure before images still writes the last trustworthy state');

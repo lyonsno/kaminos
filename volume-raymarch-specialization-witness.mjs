@@ -20,6 +20,7 @@ const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-raymarch-sp
 const reportPath = resolve(String(args.get('--report') || join(outDir, 'report.json')));
 let requestedUrl = null;
 let expectedRole = null;
+let pixelContract = null;
 let timeoutMs = null;
 let sampleCount = null;
 let port = null;
@@ -95,6 +96,7 @@ try {
   requestedUrl = required('--url');
   expectedRole = new URL(requestedUrl).searchParams.get('role');
   if (!expectedRole) throw new Error('missing role query in --url');
+  pixelContract = normalizePixelContract(args.get('--pixel-contract'));
   timeoutMs = positiveNumber('--timeout-ms', 240000);
   sampleCount = Math.max(1, Math.floor(positiveNumber('--samples', 3)));
   port = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -249,6 +251,7 @@ try {
         pixelHash: await digest(rgba),
         metrics: metrics(rgba),
         raymarchShaderSpecialization: capture.raymarchShaderSpecialization,
+        raymarchSupportHierarchy: capture.raymarchSupportHierarchy,
         gpuStageTiming: capture.gpuStageTiming,
         selectiveHeadLivePassReceipt: capture.selectiveHeadLivePassReceipt,
         effectiveRoute: capture.effectiveRoute,
@@ -296,7 +299,7 @@ try {
   assert.equal(evidence.compositionContract.identity, 'raymarch-only-v0', 'wrong render composition');
   assert.equal(evidence.compositionContract.raymarchApplied, true, 'raymarch pass absent');
   assert.equal(evidence.compositionContract.splatApplied, false, 'splat pass contaminated comparison');
-  assert.equal(evidence.pixelDelta.maxChannelDelta, 0, 'lean specialization changed pixels');
+  assertPixelContract(evidence.pixelDelta, pixelContract);
   for (const sample of evidence.samples.full) validateSample(sample, 'full');
   for (const sample of evidence.samples.lean) validateSample(sample, 'lean');
 
@@ -329,6 +332,7 @@ try {
     sourceDiffSha256,
     sourceManifest,
     sampleCount,
+    pixelContract,
     sameStateIdentity: evidence.sameStateIdentity,
     compositionContract: evidence.compositionContract,
     arms: {
@@ -406,6 +410,21 @@ function positiveNumber(name, fallback) {
   const value = Number(args.get(name) || fallback);
   if (!Number.isFinite(value) || value <= 0) throw new Error(`invalid ${name}`);
   return value;
+}
+
+function normalizePixelContract(value) {
+  const normalized = String(value || 'exact-parity');
+  if (normalized === 'exact-parity' || normalized === 'ridge-refinement') return normalized;
+  throw new Error(`invalid --pixel-contract: ${normalized}`);
+}
+
+function assertPixelContract(delta, contract) {
+  if (contract === 'exact-parity') {
+    assert.equal(delta.maxChannelDelta, 0, 'exact-parity specialization changed pixels');
+    return;
+  }
+  assert.ok(delta.maxChannelDelta > 0, 'ridge-refinement specialization did not change any channel');
+  assert.ok(delta.changedPixelRatio > 0, 'ridge-refinement specialization did not change any pixel');
 }
 
 function gitOutput(argv) {
@@ -502,20 +521,34 @@ function validateSample(sample, arm) {
   assert.deepEqual(specialization?.refusalReasons, [], `${arm} specialization had refusal reasons`);
   assert.equal(specialization?.effective, arm === 'lean' ? 'lean-stock-direct-cell-raymarch-v0' : 'full-authored-raymarch-v0', `${arm} effective specialization drift`);
   assert.equal(specialization?.debugOverride, arm === 'lean' ? 'auto' : 'force-full', `${arm} debug selection drift`);
+  if (arm === 'lean') {
+    assert.equal(sample.raymarchSupportHierarchy?.identity, 'native-cell-plus-4-cubed-brick-raymarch-support-v0', 'lean hierarchy identity drift');
+    assert.ok(['fused-baked-sidecar-pass', 'standalone-external-sidecar-pass'].includes(sample.raymarchSupportHierarchy?.baseProducer), 'lean hierarchy producer drift');
+  } else {
+    assert.equal(sample.raymarchSupportHierarchy, null, 'full arm retained a stale lean hierarchy receipt');
+  }
   const timing = sample.gpuStageTiming?.stages?.matchedRaymarchRaster;
   assert.equal(timing?.status, 'sampled', `${arm} raymarch timing unavailable`);
   assert.ok(Number.isFinite(timing?.ms) && timing.ms > 0, `${arm} raymarch timing invalid`);
+  const totalTiming = sample.gpuStageTiming?.stages?.total;
+  assert.equal(totalTiming?.status, 'sampled', `${arm} total GPU timing unavailable`);
+  assert.ok(Number.isFinite(totalTiming?.ms) && totalTiming.ms > 0, `${arm} total GPU timing invalid`);
 }
 
 function summarizeArm(samples) {
   const timings = samples.map(sample => sample.gpuStageTiming.stages.matchedRaymarchRaster.ms);
   const sorted = [...timings].sort((a, b) => a - b);
+  const totalGpuMs = samples.map(sample => sample.gpuStageTiming.stages.total.ms);
+  const sortedTotalGpuMs = [...totalGpuMs].sort((a, b) => a - b);
   return {
     specialization: samples[0].raymarchShaderSpecialization,
+    raymarchSupportHierarchy: samples[0].raymarchSupportHierarchy,
     pixelHash: samples[0].pixelHash,
     nonblank: samples[0].metrics.nonblank,
     matchedRaymarchRasterMs: timings,
     medianMatchedRaymarchRasterMs: sorted[Math.floor(sorted.length / 2)],
+    totalGpuMs,
+    medianTotalGpuMs: sortedTotalGpuMs[Math.floor(sortedTotalGpuMs.length / 2)],
     sampleRuntimeIdentities: samples.map(sample => ({
       index: sample.index,
       effectiveRoute: sample.effectiveRoute,
