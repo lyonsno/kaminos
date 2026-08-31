@@ -82,6 +82,11 @@ assert.doesNotMatch(
   'the ordinary full-grid fluid shader contains no fixed-emitter descriptor or SDF code',
 );
 assert.match(core, /const ANALYTIC_EMITTER_INJECTION_WGSL = \/\* wgsl \*\//, 'fixed morphology owns a separate shader');
+assert.doesNotMatch(
+  injectionShader,
+  /velocityDensity\.xyz\s*=/,
+  'bounded emitter WGSL does not assign through a non-assignable vector swizzle',
+);
 assert.match(
   injectionShader,
   /let injectedDensity = clamp\(max\([\s\S]*?material\.x \* 1\.08 \+ microLayer\.x \* 0\.08[\s\S]*?material\.y \* 0\.42[\s\S]*?material\.w \* 0\.18[\s\S]*?microLayer\.y \* 0\.20[\s\S]*?microLayer\.z \* 0\.05[\s\S]*?material\.z \* 0\.10[\s\S]*?0\.0, 2\.2\);/,
@@ -89,7 +94,7 @@ assert.match(
 );
 assert.match(
   injectionShader,
-  /fluid\[base\] = vec4<f32>\(velocityDensity\.xyz, injectedDensity\);/,
+  /let injectedVelocity = clamp\([\s\S]*?fluid\[base\] = vec4<f32>\(injectedVelocity, injectedDensity\);/,
   'pressure receives density from the same bounded source step as the updated channels',
 );
 assert.doesNotMatch(
