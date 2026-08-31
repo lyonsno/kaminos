@@ -30,7 +30,7 @@ assert.doesNotMatch(readme, /That firing exercises the architecture.*persistent 
 assert.doesNotMatch(readme, /\b(?:loadModelPort|LoadedModel|ModelRun)\b/);
 assert.doesNotMatch(readme, /^## Receipt And Evidence Layer$/m);
 
-assert.equal(packageJson.version, '0.1.45');
+assert.equal(packageJson.version, '0.1.46');
 assert.ok(packageJson.files.includes('docs'), 'published package must include linked documentation');
 assert.ok(packageJson.files.includes('examples'), 'published package must include the runnable example');
 

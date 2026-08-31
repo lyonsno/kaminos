@@ -2,6 +2,11 @@ export const WEBGPU_ADAPTIVE_COMMAND_DUTY_PLANNER_SCHEMA = 'kaminos.webgpu-adapt
 export const WEBGPU_ADAPTIVE_COMMAND_DUTY_RANGE_SCHEMA = 'kaminos.webgpu-adaptive-command-duty-range.v0';
 export const WEBGPU_ADAPTIVE_COMMAND_DUTY_OBSERVATION_SCHEMA = 'kaminos.webgpu-adaptive-command-duty-observation.v0';
 
+const ADAPTIVE_TIMING_AUTHORITIES = new Set([
+  'queue-work-done',
+  'gpu-timestamp-query',
+]);
+
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -216,11 +221,15 @@ export function createWebGpuAdaptiveCommandDutyPlanner(input = {}) {
     if (state.status !== 'active') throw new Error(`${state.status} planner cannot accept range observations`);
     if (!isPlainObject(observation)) throw new Error('range observation must be an object');
     const range = requirePendingRange(observation.rangeId);
-    if (observation.timingAuthority !== 'queue-work-done') {
-      throw new Error('timingAuthority must be queue-work-done');
+    if (!ADAPTIVE_TIMING_AUTHORITIES.has(observation.timingAuthority)) {
+      throw new Error('timingAuthority must be queue-work-done or gpu-timestamp-query');
     }
     if (!Number.isFinite(observation.observedDurationMs) || observation.observedDurationMs < 0) {
       throw new Error('observedDurationMs must be finite and non-negative');
+    }
+    if (observation.timingAuthority === 'gpu-timestamp-query'
+        && observation.observedDurationMs <= 0) {
+      throw new Error('gpu-timestamp-query observedDurationMs must be greater than zero');
     }
 
     state.completedItems = range.itemEnd;

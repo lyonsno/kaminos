@@ -118,7 +118,7 @@ assert.equal(report.status, 'passed');
 assert.equal(report.conformanceId, 'sf3d:adapter:contract');
 assert.equal(report.routeId, ROUTE_ID);
 assert.equal(report.manifestId, 'sf3d.adapter-conformance.v0');
-assert.equal(report.kitVersion, '0.1.45');
+assert.equal(report.kitVersion, '0.1.46');
 assert.equal(report.adapterIdentityAuthority, 'caller-declared');
 assert.equal(report.adapterIdentity.adapterId, 'sf3d.browser-webgpu.v0');
 assert.equal(report.adapterIdentity.packageName, '@kaminos/webgpu-inference-kit');
