@@ -358,6 +358,26 @@ assert.equal(freshReceipt.storedLayoutLoaded, true);
 assert.equal(freshEditor.layout.layoutId, 'layout-b', 'fresh initialization loads the newly activated layout B');
 assert.deepEqual(freshEditor.layout.groups[0].controlIds, ['control-b', 'control-a']);
 
+const historicalProjectedLayout = layoutDocument('historical-layout', 'Historical layout', ['control-a']);
+const historicalStore = createLayoutStore({ layouts: [historicalProjectedLayout], activeLayoutId: 'historical-layout' });
+const historicalEditor = createExecutableEditor({ store: historicalStore, sourceDefault: sourceDefaultLayout });
+const historicalReceipt = await historicalEditor.initialize();
+assert.equal(historicalReceipt.storedLayoutLoaded, true, 'ordinary startup loads the projected historical layout');
+assert.deepEqual(
+  historicalEditor.layout.groups.flatMap(group => group.controlIds),
+  ['control-a', 'control-b'],
+  'startup reconciliation exposes a newly authorable control in memory',
+);
+assert.equal(
+  historicalStore.layoutWrites.length,
+  0,
+  'startup reconciliation cannot persist over the historical source artifact',
+);
+assert.equal(historicalStore.activeLayoutId, 'historical-layout', 'startup preserves the raw historical active pointer');
+historicalEditor.layout.label = 'Historical layout explicitly edited';
+await historicalEditor.save();
+assert.equal(historicalStore.layoutWrites.length, 1, 'an explicit edit is the first historical-layout content write');
+
 firstEditor.layout.label = 'Layout B edited';
 await firstEditor.save();
 assert.equal(selectionStore.layoutWrites.length, 1, 'an explicit edit still persists the selected layout content');

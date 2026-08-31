@@ -565,7 +565,7 @@ class VolumeCockpitLayoutEditor {
       storedLayoutLoaded = Boolean(this.index.activeLayoutId);
       if (storedLayoutLoaded) {
         onPhase('store-active-layout');
-        await this.loadLayout(this.index.activeLayoutId, { saveReconciliation: true });
+        await this.loadLayout(this.index.activeLayoutId);
       } else {
         onPhase('store-source-default-save');
         await this.save();
