@@ -92,6 +92,7 @@ const leanStockRequest = {
   smokePresentationMode: 'on',
   boundarySidecarSource: 'baked',
   boundarySidecarBuiltThisFrame: true,
+  boundarySidecarEncodedBeforeDraw: true,
   flowKernelStrength: 0,
   appearanceDecompositionActive: false,
   nonRidgeOpticalCaptureActive: false,
@@ -113,6 +114,7 @@ for (const [field, value, reason] of [
   ['boundarySidecarSource', 'live', 'boundary-sidecar-source-not-buffer-backed'],
   ['boundarySidecarSource', 'mix', 'boundary-sidecar-source-not-buffer-backed'],
   ['boundarySidecarBuiltThisFrame', false, 'boundary-sidecar-not-current'],
+  ['boundarySidecarEncodedBeforeDraw', false, 'boundary-sidecar-not-current'],
   ['flowKernelStrength', 0.00001, 'flow-kernel-reconstruction-active'],
   ['appearanceDecompositionActive', true, 'appearance-decomposition-active'],
   ['nonRidgeOpticalCaptureActive', true, 'nonridge-optical-capture-active'],
@@ -142,6 +144,7 @@ assert.match(core, /sampleDirectCell[\s\S]*let c111 = c \+ vec3<i32>\(1, 1, 1\)[
 assert.match(core, /directCellExitDistance[\s\S]*f32\(GRID\) - vec3<f32>\(0\.5\)/, 'cell-exit traversal uses the same half-cell lattice as trilinear reconstruction');
 assert.match(core, /flowKernelStrength[\s\S]*flow-kernel-reconstruction-active/, 'authored flow reconstruction refuses the direct-cell specialization explicitly');
 assert.match(core, /boundarySidecarBuiltThisFrame[\s\S]*boundary-sidecar-not-current/, 'baked sidecar freshness is an admission invariant rather than an encode-time surprise');
+assert.match(core, /\(!LEAN_STOCK_RAYMARCH \|\| fullGridCapture\) && expensiveSamples >= expensiveSampleBudget/, 'full authored rendering retains the explicit expensive-sample ceiling while lean ridge refinement may spend bounded local work');
 assert.match(core, /expensiveSamples\s*=\s*expensiveSamples\s*\+\s*1u/, 'occupied reconstruction spends the explicit expensive-sample budget');
 assert.match(core, /struct DirectCellSample[\s\S]*reconstructed:\s*FlowReconstructionSample[\s\S]*opticalSupport:\s*f32/, 'direct-cell sampling carries reconstruction and conservative support together');
 assert.match(core, /let directSample = sampleDirectCell\(p\)[\s\S]*directSample\.opticalSupport[\s\S]*reconstructed = directSample\.reconstructed/, 'the production marcher reuses one native-cell neighborhood for admission and occupied reconstruction');

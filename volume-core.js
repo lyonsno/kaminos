@@ -1644,6 +1644,7 @@ export function leanStockRaymarchAdmission({
   boundarySidecarSource = 'live',
   boundarySidecarOverrideApplied = false,
   boundarySidecarBuiltThisFrame = false,
+  boundarySidecarEncodedBeforeDraw = false,
   flowKernelStrength = 0,
   appearanceDecompositionActive = false,
   nonRidgeOpticalCaptureActive = false,
@@ -1661,7 +1662,8 @@ export function leanStockRaymarchAdmission({
   if (normalizedBoundarySidecarSource !== 'baked'
     && !(normalizedBoundarySidecarSource === 'override' && boundarySidecarOverrideApplied)) {
     refusalReasons.push('boundary-sidecar-source-not-buffer-backed');
-  } else if (normalizedBoundarySidecarSource === 'baked' && boundarySidecarBuiltThisFrame !== true) {
+  } else if (normalizedBoundarySidecarSource === 'baked'
+    && (boundarySidecarBuiltThisFrame !== true || boundarySidecarEncodedBeforeDraw !== true)) {
     refusalReasons.push('boundary-sidecar-not-current');
   }
   if (normalizeFlowKernelStrength(flowKernelStrength) > 0) refusalReasons.push('flow-kernel-reconstruction-active');
@@ -5150,7 +5152,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   var traversalSteps = 0u;
   loop {
     if (traversalSteps >= maxTraversalSteps) { break; }
-    if (fullGridCapture && expensiveSamples >= expensiveSampleBudget) { break; }
+    if ((!LEAN_STOCK_RAYMARCH || fullGridCapture) && expensiveSamples >= expensiveSampleBudget) { break; }
     if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -8530,6 +8532,7 @@ export function createKaminosVolumePrototype({
   let volumePrimitives = [];
   let boundarySidecarBuffer = null;
   let raymarchSupportHierarchyBuffer = null;
+  const raymarchSupportBaseEncodedBeforeDraw = new WeakSet();
   let boundarySidecarOverrideUpload = null;
   let debugFullFieldImportUpload = null;
   let boundarySplatBuffer = null;
@@ -12651,6 +12654,7 @@ export function createKaminosVolumePrototype({
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     pass.end();
+    raymarchSupportBaseEncodedBeforeDraw.add(encoder);
     state.boundarySidecarBuilt = true;
     state.boundarySidecarBuiltThisFrame = true;
     state.boundarySidecarFrameCount += 1;
@@ -14978,7 +14982,7 @@ export function createKaminosVolumePrototype({
     };
   }
 
-  function selectRaymarchPipeline(targetPipeline) {
+  function selectRaymarchPipeline(encoder, targetPipeline) {
     const admission = leanStockRaymarchAdmission({
       legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
       fireRenderMode: controlsSnapshot.fireRenderMode,
@@ -14989,6 +14993,7 @@ export function createKaminosVolumePrototype({
       boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
       boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
       boundarySidecarBuiltThisFrame: state.boundarySidecarBuiltThisFrame,
+      boundarySidecarEncodedBeforeDraw: raymarchSupportBaseEncodedBeforeDraw.has(encoder),
       flowKernelStrength: controlsSnapshot.flowKernelStrength,
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
@@ -15046,7 +15051,7 @@ export function createKaminosVolumePrototype({
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const effectiveBindGroup = options.bindGroup || bindGroups[currentFluid];
-    const effectivePipeline = selectRaymarchPipeline(targetPipeline);
+    const effectivePipeline = selectRaymarchPipeline(encoder, targetPipeline);
     if (effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline) {
       encodeRaymarchSupportHierarchy(encoder, effectiveBindGroup);
     }
@@ -15085,6 +15090,7 @@ export function createKaminosVolumePrototype({
       boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
       boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
       boundarySidecarBuiltThisFrame: state.boundarySidecarBuiltThisFrame,
+      boundarySidecarEncodedBeforeDraw: raymarchSupportBaseEncodedBeforeDraw.has(encoder),
       flowKernelStrength: controlsSnapshot.flowKernelStrength,
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),

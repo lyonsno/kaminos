@@ -32,6 +32,8 @@ assert.match(core, /function encodeRaymarchSupportHierarchy[\s\S]*raymarchSuppor
 assert.match(core, /function encodeRaymarchSupportHierarchy[\s\S]*sourceName === 'override'[\s\S]*raymarchSupportBasePipeline/, 'only an applied external sidecar pays the standalone native-support pass');
 assert.match(core, /leanStockRaymarchAdmission\([\s\S]*boundarySidecarBuiltThisFrame[\s\S]*flowKernelStrength/, 'lean admission receives sidecar freshness and authored reconstruction state');
 assert.doesNotMatch(core, /sourceName !== 'baked' \|\| !state\.boundarySidecarBuiltThisFrame/, 'hierarchy encoding does not discover baked freshness after specialization admission');
+assert.match(core, /raymarchSupportBaseEncodedBeforeDraw\.add\(encoder\)/, 'the baked native-support producer binds completion order to the exact command encoder');
+assert.match(core, /raymarchSupportBaseEncodedBeforeDraw\.has\(encoder\)/, 'lean admission proves baked base production precedes brick reduction on the exact encoder');
 assert.match(core, /const effectiveBindGroup = options\.bindGroup \|\| bindGroups\[currentFluid\][\s\S]*encodeRaymarchSupportHierarchy\(encoder, effectiveBindGroup\)[\s\S]*beginRenderPass/, 'ordinary raymarch builds support from the exact render source before drawing');
 assert.match(core, /captureSelectiveHeadLiveFrame[\s\S]*raymarchSupportHierarchy:\s*state\.raymarchSupportHierarchy/, 'external frozen captures disclose the effective hierarchy producer and dimensions');
 
