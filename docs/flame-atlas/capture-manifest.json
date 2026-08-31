@@ -1,0 +1,88 @@
+{
+  "schema": "kaminos.live-combustion-atlas.v1",
+  "route": {
+    "runtime": "browser-native WebGPU",
+    "simulation_grid": 96,
+    "capture_kind": "operator screen capture",
+    "timing_policy": "source-timed; no retiming, interpolation, optical flow, cadence repair, or frame synthesis"
+  },
+  "media": [
+    {
+      "path": "assets/chromatic-combustion-column.mp4",
+      "role": "chromatic column",
+      "sha256": "bdbfc684349c55ea29a1e04206c915d8e46f07c62d4ad00c632f48f4911b7ed4",
+      "width": 960,
+      "height": 830,
+      "duration_seconds": 18,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/warm-width-cycle.mp4",
+      "role": "warm width cycle",
+      "sha256": "2562fab113e1b9782443cae6ba601125d012e4293e19ff6b8059c5ae36f1e5d5",
+      "width": 960,
+      "height": 820,
+      "duration_seconds": 18,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/blue-violet-width-cycle.mp4",
+      "role": "blue-violet width cycle",
+      "sha256": "af13046e2a8e31b473c220044307036f9154b49fc7aeabf41f037dadf2906695",
+      "width": 960,
+      "height": 820,
+      "duration_seconds": 18,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/violet-filament-drive.mp4",
+      "role": "violet filament drive",
+      "sha256": "fa925d6d9a7dc9de2ada024d9ebd672eaebda67fffa0086cfa2971af7b645333",
+      "width": 960,
+      "height": 830,
+      "duration_seconds": 19,
+      "stream_rate": "60/1",
+      "average_rate": "1139/19",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/live-contraction.mp4",
+      "role": "live contraction",
+      "sha256": "fdd001027dc6a2e41126f0ae1652a0284cc544fce2b4b0cf3512dbdcc0ef5a94",
+      "width": 960,
+      "height": 830,
+      "duration_seconds": 17,
+      "stream_rate": "60/1",
+      "average_rate": "1019/17",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/cool-oscillation.mp4",
+      "role": "cool oscillation",
+      "sha256": "c88a736e2e6918c82a6bc8052bfc736a751f7e5a5b5b1712f929cb7fa28a7540",
+      "width": 960,
+      "height": 820,
+      "duration_seconds": 17,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/live-webgpu-combustion.gif",
+      "role": "README lead",
+      "sha256": "cbf6dbd912299cf4e597c281b4f53a3f753632a15eb31e735312138c2a8bd3d7",
+      "width": 640,
+      "height": 554,
+      "duration_seconds": 9,
+      "stream_rate": "12/1",
+      "frame_count": 108
+    }
+  ],
+  "claim_boundary": "Recorded-media cadence is not a universal simulator-performance claim."
+}

@@ -12,6 +12,13 @@ The repository is where that method becomes software: local-first WebGPU
 material systems, generated spatial assets, motion and world substrates,
 inspectable inference routes, and the workbench that lets them meet.
 
+[![Live WebGPU combustion moving through a chromatic material basin](docs/flame-atlas/assets/live-webgpu-combustion.gif)](docs/flame-atlas/)
+
+This is a live `96^3` WebGPU combustion material under direct control, not a
+prerendered animation. The [Live Combustion Atlas](docs/flame-atlas/) preserves
+six source-timed captures across warm, blue-violet, filament-rich, and
+state-transition basins.
+
 ##  Live Browser Combustion
 
 Kaminos currently carries a multi-field volumetric fire and smoke simulation
