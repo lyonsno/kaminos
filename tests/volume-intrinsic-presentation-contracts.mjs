@@ -84,7 +84,7 @@ assert.match(core, /directFlameCandidateAlpha\s*=\s*segmentOpacity\(directFlameC
 assert.match(core, /directFlameSupervisionExtinction\s*=\s*clamp\(directFlameCandidateAlpha\s*\*\s*0\.54/, 'Intrinsic uses fixed direct-flame extinction');
 assert.match(core, /INTRINSIC_PRESENTATION_TARGET_IDENTITY[\s\S]*boundarySplatIntrinsicPresentationOverrides/, 'presentation receipt and override contract share the exact target identity');
 
-assert.match(core, /function boundarySplatRequested\(\)[\s\S]*volumePresentationModeEffective !== 'intrinsic'/, 'Intrinsic prevents splat encoding without changing the authored splat control');
+assert.match(core, /const presentationActive = normalizeVolumePresentationMode\(volumePresentationMode\)\.requested !== 'intrinsic'[\s\S]*const splatDispatch = presentationSplatConsumer \|\| diagnosticSplatConsumer/, 'Intrinsic prevents splat encoding through the shared consumer plan without changing the authored splat control');
 assert.match(core, /function browserResidualCanApply\(\)[\s\S]*volumePresentationModeEffective !== 'intrinsic'/, 'Intrinsic prevents residual application without changing the authored residual control');
 assert.match(core, /uniforms\[305\]\s*=\s*volumePresentationModeEffective === 'intrinsic'\s*\?\s*1\s*:\s*0/, 'Intrinsic activates the exact shader branch through the reserved uniform');
 assert.doesNotMatch(core, /temporalAccumulationForPresentation|encodeHistoryCopy/, 'Intrinsic and Beauty both render current state without a hidden history path');

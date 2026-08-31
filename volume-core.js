@@ -793,6 +793,78 @@ function normalizeBoundarySplatMode(value) {
     : 'off';
 }
 
+export function resolveBoundarySplatExecutionPlan({
+  boundarySplatMode = 'off',
+  renderComposition = SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+  boundarySidecarSource = 'live',
+  boundarySidecarView = 'off',
+  volumePresentationMode = 'beauty',
+  appearanceDecompositionMode = 'off',
+  boundarySplatFeatureCapture = false,
+  flowKernelDescriptorCapture = false,
+  boundarySplatInstanceConsumer = false,
+  explicitSplatConsumer = null,
+  explicitSidecarConsumer = null,
+} = {}) {
+  const mode = normalizeBoundarySplatMode(boundarySplatMode);
+  const compositionRequest = selectiveHeadLiveRenderCompositionRequest(renderComposition);
+  const source = normalizeBoundarySidecarSource(boundarySidecarSource);
+  const view = normalizeBoundarySidecarView(boundarySidecarView);
+  const presentationActive = normalizeVolumePresentationMode(volumePresentationMode).requested !== 'intrinsic'
+    && normalizeAppearanceDecompositionMode(appearanceDecompositionMode).requested === 'off';
+  const namedExplicitSplatConsumer = explicitSplatConsumer ? String(explicitSplatConsumer) : null;
+  const namedExplicitSidecarConsumer = explicitSidecarConsumer ? String(explicitSidecarConsumer) : null;
+  const instanceConsumerRequested = normalizeSimProfileFlag(boundarySplatInstanceConsumer);
+  const diagnosticSplatConsumer = presentationActive && mode !== 'off' && (
+    normalizeBoundarySplatFeatureCapture(boundarySplatFeatureCapture)
+    || normalizeFlowKernelDescriptorCapture(flowKernelDescriptorCapture)
+    || instanceConsumerRequested
+    || Boolean(namedExplicitSplatConsumer)
+  );
+  const presentationSplatConsumer = presentationActive
+    && mode !== 'off'
+    && compositionRequest.definition.splat;
+  const splatDispatch = presentationSplatConsumer || diagnosticSplatConsumer;
+  const raymarchStructureConsumer = presentationActive
+    && compositionRequest.definition.raymarch
+    && source !== 'live';
+  const sidecarViewConsumer = presentationActive && view !== 'off';
+  const explicitSidecarDispatch = presentationActive && Boolean(namedExplicitSidecarConsumer);
+  const sidecarDispatch = source !== 'override' && (
+    splatDispatch
+    || raymarchStructureConsumer
+    || sidecarViewConsumer
+    || explicitSidecarDispatch
+  );
+  const splatConsumer = presentationSplatConsumer
+    ? 'presentation'
+    : diagnosticSplatConsumer
+      ? (namedExplicitSplatConsumer || (instanceConsumerRequested ? 'instance-consumer' : 'diagnostic-capture'))
+      : 'off';
+  const sidecarConsumer = !sidecarDispatch
+    ? 'off'
+    : splatDispatch
+      ? 'splat-reconstruction'
+      : raymarchStructureConsumer
+        ? 'raymarch-structure'
+        : sidecarViewConsumer
+          ? 'sidecar-view'
+          : namedExplicitSidecarConsumer;
+  return {
+    identity: 'boundary-splat-consumer-execution-plan-v0',
+    presentationActive,
+    renderCompositionRequestedRaw: compositionRequest.raw,
+    renderComposition: compositionRequest.requested,
+    boundarySplatMode: mode,
+    boundarySidecarSource: source,
+    boundarySidecarView: view,
+    splatDispatch,
+    splatConsumer,
+    sidecarDispatch,
+    sidecarConsumer,
+  };
+}
+
 export function classifyBoundarySplatUnionCell({
   gradientGain = 0,
   fireEnergy = 0,
@@ -7741,6 +7813,15 @@ export function createKaminosVolumePrototype({
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
     boundarySidecarOverrideReceipt: null,
+    boundarySplatExecutionPlan: resolveBoundarySplatExecutionPlan({
+      boundarySplatMode: controlsSnapshot.boundarySplatMode,
+      renderComposition: controlsSnapshot.selectiveHeadLiveRenderComposition,
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarView: controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view,
+      boundarySplatFeatureCapture: controlsSnapshot.boundarySplatFeatureCapture,
+      flowKernelDescriptorCapture: controlsSnapshot.flowKernelDescriptorCapture,
+      boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
+    }),
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
@@ -12248,9 +12329,28 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  function boundarySplatExecutionPlan(options = {}) {
+    const plan = resolveBoundarySplatExecutionPlan({
+      boundarySplatMode: controlsSnapshot.boundarySplatMode,
+      renderComposition: controlsSnapshot.selectiveHeadLiveRenderComposition,
+      boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
+      boundarySidecarView: controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view,
+      volumePresentationMode: volumePresentationModeEffective,
+      appearanceDecompositionMode: appearanceDecompositionModeEffective,
+      boundarySplatFeatureCapture: controlsSnapshot.boundarySplatFeatureCapture,
+      flowKernelDescriptorCapture: controlsSnapshot.flowKernelDescriptorCapture,
+      boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
+      explicitSplatConsumer: options.explicitSplatConsumer,
+      explicitSidecarConsumer: options.explicitSidecarConsumer,
+    });
+    state.boundarySplatExecutionPlan = plan;
+    return plan;
+  }
+
   function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
+    const executionPlan = boundarySplatExecutionPlan(options);
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
@@ -12266,7 +12366,7 @@ export function createKaminosVolumePrototype({
       return;
     }
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
+    const shouldBakeBoundarySidecar = executionPlan.sidecarDispatch;
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -12296,10 +12396,8 @@ export function createKaminosVolumePrototype({
     updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
   }
 
-  function boundarySplatRequested() {
-    return volumePresentationModeEffective !== 'intrinsic'
-      && !appearanceDecompositionActive()
-      && normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
+  function boundarySplatRequested(options = {}) {
+    return boundarySplatExecutionPlan(options).splatDispatch;
   }
 
   function boundarySplatInstanceConsumerRequested() {
@@ -12869,7 +12967,7 @@ export function createKaminosVolumePrototype({
       front: frontBuffers[currentFront],
     };
     boundarySplatDescriptorSource = hooks.descriptorSource || (hooks.computeBindGroup ? null : defaultDescriptorSource);
-    if (!boundarySplatRequested()) {
+    if (!boundarySplatRequested({ explicitSplatConsumer: hooks.explicitSplatConsumer })) {
       if (normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'off') {
         boundarySplatCapacityAdmissionFailureReason = null;
         state.boundarySplatFallbackReason = null;

@@ -321,7 +321,7 @@ assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debu
 assert.match(core, /boundarySidecarDebug/, 'Debug state exposes boundary sidecar bake identity and controls');
 assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'proximity', 'footprint'\]/, 'Debug state reports sidecar channel semantics');
 assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
-assert.match(core, /sidecarViewName !== 'off'/, 'Sidecar channel debug views force a bake even when the live source remains selected');
+assert.match(core, /const sidecarViewConsumer = presentationActive && view !== 'off'/, 'Sidecar channel debug views remain an explicit sidecar-bake consumer even when the live source remains selected');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
