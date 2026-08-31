@@ -43,6 +43,8 @@ test("flame atlas media, public manifest, and README routes agree", () => {
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/live-webgpu-combustion\.gif/);
   assert.match(rootReadme, /\[Live Combustion Atlas\]\(docs\/flame-atlas\/\)/);
+  assert.match(html, /<a href=["']\.\.\/\.\.\/["']>Kaminos<\/a>/);
+  assert.doesNotMatch(html, /href=["']\.\.\/\.\.\/README\.md["']/);
   assert.match(atlasReadme, /capture-manifest\.json/);
   assert.match(manifest.claim_boundary, /not a universal simulator-performance claim/);
 });

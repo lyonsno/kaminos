@@ -27,8 +27,8 @@ repository with `python3 serve.py 8095`, then open
 
 ## Evidence Boundary
 
-The six MP4s are H.264, BT.709, source-timed derivatives with a `60 fps` media
-timescale. Their cadence identifies the media stream, not a universal
+The six MP4s are H.264, BT.709, source-timed derivatives with a nominal `60/1`
+video stream rate. Their cadence identifies the media stream, not a universal
 simulator-performance claim. The animated README lead is a nine-second,
 12-fps presentation derivative of the chromatic-column capture. Exact public
 derivative identities live in [`capture-manifest.json`](capture-manifest.json).
