@@ -91,7 +91,7 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-store-") as tempo
     settings_store = root / "settings"
     session_store = root / "drive-sessions"
     serve.volume_settings_server_source = lambda: dict(SOURCE)
-    port, effective_settings_store, effective_session_store = serve.parse_server_arguments([
+    port, effective_settings_store, effective_session_store, effective_layout_store = serve.parse_server_arguments([
         "18412",
         "--volume-settings-store", str(settings_store),
         "--volume-basin-session-store", str(session_store),
@@ -99,6 +99,7 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-store-") as tempo
     assert port == 18412
     assert effective_settings_store == settings_store.resolve()
     assert effective_session_store == session_store.resolve()
+    assert effective_layout_store == serve.VOLUME_COCKPIT_LAYOUT_STORE_DEFAULT
 
     receipt = serve.write_volume_basin_drive_session(session_store, session_document(session_store))
     assert receipt["identity"] == "kaminos.volume.basin-drive-session-write-receipt.v0"

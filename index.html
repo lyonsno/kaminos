@@ -174,6 +174,33 @@ canvas { display: block; }
 .volume-collapsible-group { margin: 8px 0; padding: 0 8px 7px; border: 1px solid #292929; border-radius: 6px; background: rgba(255,255,255,0.012); }
 .volume-collapsible-group > summary { margin: 0 -8px; padding: 7px 8px; color: #777; font-size: 10px; font-weight: 600; cursor: pointer; user-select: none; -webkit-user-select: none; }
 .volume-collapsible-group[open] > summary { margin-bottom: 4px; border-bottom: 1px solid #242424; color: #999; }
+.volume-cockpit-layout-toolbar { margin: 0 0 12px; padding: 9px; border: 1px solid #30373a; border-radius: 7px; background: rgba(25,31,33,0.72); }
+.volume-cockpit-layout-toolbar-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.volume-cockpit-layout-toolbar-row:first-child { margin-top: 0; }
+.volume-cockpit-layout-toolbar select, .volume-cockpit-layout-toolbar input { min-width: 0; flex: 1; height: 27px; padding: 4px 7px; border: 1px solid #374348; border-radius: 4px; background: #151a1c; color: #c4ced1; font-size: 10px; }
+.volume-cockpit-layout-toolbar button, .volume-layout-group-heading button, .volume-layout-control-grip { border: 1px solid #354146; border-radius: 4px; background: #20282b; color: #a7b4b8; font: 10px 'SF Mono', monospace; cursor: pointer; }
+.volume-cockpit-layout-toolbar button { min-height: 27px; padding: 4px 7px; }
+.volume-cockpit-layout-toolbar button:hover, .volume-layout-group-heading button:hover, .volume-layout-control-grip:hover { border-color: #557079; color: #eef6f8; }
+#volume-cockpit-layout-status { min-width: 0; flex: 1; color: #77878c; font: 9px 'SF Mono', monospace; overflow-wrap: anywhere; }
+#volume-cockpit-layout-status[data-status="effective"] { color: #86b996; }
+#volume-cockpit-layout-status[data-status="failed"] { color: #e28e82; }
+#volume-cockpit-layout-add-group, #volume-cockpit-layout-reset { display: none; }
+.volume-cockpit-layout-toolbar[data-editing="true"] #volume-cockpit-layout-add-group,
+.volume-cockpit-layout-toolbar[data-editing="true"] #volume-cockpit-layout-reset { display: inline-block; }
+.volume-layout-groups { display: flex; flex-direction: column; gap: 8px; }
+.volume-layout-group-shell { min-width: 0; padding: 0 7px 7px; border: 1px solid #292f31; border-radius: 6px; background: rgba(255,255,255,0.012); }
+.volume-layout-group-heading { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 4px; align-items: center; margin: 0 -7px 5px; padding: 5px 6px; border-bottom: 1px solid #252b2d; }
+.volume-layout-editing .volume-layout-group-heading { grid-template-columns: 22px 22px minmax(0,1fr) 42px 22px; }
+.volume-layout-group-heading button { height: 22px; padding: 0; }
+.volume-layout-group-label { min-width: 0; width: 100%; padding: 2px 4px; border: 1px solid transparent; background: transparent; color: #929da1; font-size: 10px; font-weight: 600; pointer-events: none; }
+.volume-layout-group-collapse { display: inline-block; }
+.volume-layout-group-grip, .volume-layout-group-surface, .volume-layout-group-remove, .volume-layout-control-grip { display: none; }
+.volume-layout-editing .volume-layout-group-grip, .volume-layout-editing .volume-layout-group-surface, .volume-layout-editing .volume-layout-group-remove, .volume-layout-editing .volume-layout-control-grip { display: inline-block; }
+.volume-layout-editing .volume-layout-group-label { border-color: #38464b; background: #161d1f; color: #d4dfe2; pointer-events: auto; }
+.volume-layout-control-grip { flex: 0 0 20px; width: 20px; height: 22px; padding: 0; touch-action: none; cursor: grab; }
+.volume-layout-group-grip { touch-action: none; cursor: grab !important; }
+.volume-layout-dragging { opacity: 0.46; outline: 1px dashed #5f8490; }
+.volume-layout-group-body[hidden] { display: none; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
 .slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }
@@ -1030,6 +1057,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
   <!-- Volume Tab -->
   <div class="tab-content" id="tab-volume">
     <div id="volume-primary-control-root" data-volume-control-root="primary">
+    <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
+      <div class="volume-cockpit-layout-toolbar-row">
+        <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
+        <button id="volume-cockpit-layout-new" type="button">New</button>
+        <button id="volume-cockpit-layout-edit" type="button" aria-pressed="false">Edit layout</button>
+      </div>
+      <div class="volume-cockpit-layout-toolbar-row">
+        <input id="volume-cockpit-layout-name" data-volume-layout-control type="text" value="Source default" aria-label="Cockpit layout name">
+        <button id="volume-cockpit-layout-add-group" type="button">Add group</button>
+        <button id="volume-cockpit-layout-reset" type="button">Restore default</button>
+      </div>
+      <div class="volume-cockpit-layout-toolbar-row">
+        <span id="volume-cockpit-layout-status" role="status" aria-live="polite">connecting…</span>
+      </div>
+    </div>
     <h2>Volume Renderer</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_volume_smoke=1</span></div>
@@ -2887,7 +2929,12 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 const initialViewerParams = new URLSearchParams(window.location.search);
 if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');
 
-const volumeCockpitLayoutReady = initializeVolumeCockpitLayout({ documentRef: document });
+const volumeCockpitLayoutReady = Promise.resolve().then(() => {
+  moveVolumePyroFreezeIntoCarrierWorkbench();
+  moveVolumePyroRadianceControlsBelowFlow();
+  moveVolumePyroLegacyControlsBelowRadiance();
+  return initializeVolumeCockpitLayout({ documentRef: document });
+});
 volumeCockpitLayoutReady.then(receipt => {
   window.__kaminosVolumeCockpitLayoutReceipt = receipt;
 }).catch(error => {
@@ -12700,6 +12747,7 @@ function volumeBasinDriveTarget(event, descriptors) {
 
 function observeVolumeBasinDriveCockpitEvent(event) {
   if (!activeVolumeBasinDriveRecorder || volumeBasinDriveReplaying) return;
+  if (event.target?.closest?.('[data-volume-basin-drive-ignore]')) return;
   if (['pointerdown', 'pointermove', 'keydown'].includes(event.type)
     && !event.target?.closest?.('#volume-ray-budget-gamut')) return;
   const generation = volumeBasinDriveGeneration;
@@ -18789,9 +18837,7 @@ async function initKaminosVolumeRoute() {
     }
     refreshVolumeReadout();
   };
-  moveVolumePyroFreezeIntoCarrierWorkbench();
-  moveVolumePyroRadianceControlsBelowFlow();
-  moveVolumePyroLegacyControlsBelowRadiance();
+  await volumeCockpitLayoutReady;
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
   document.getElementById('volume-render-scale-full')?.addEventListener('click', () => {
     const lowBandValue = Number(document.getElementById('volume-render-scale').value);

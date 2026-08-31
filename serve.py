@@ -32,6 +32,11 @@ VOLUME_BASIN_SESSION_STORE_DEFAULT = Path(os.environ.get(
     os.path.expanduser("~/.local/share/kaminos/volume-basin-drive-sessions"),
 )).expanduser().resolve()
 VOLUME_BASIN_SESSION_STORE = VOLUME_BASIN_SESSION_STORE_DEFAULT
+VOLUME_COCKPIT_LAYOUT_STORE_DEFAULT = Path(os.environ.get(
+    "KAMINOS_VOLUME_COCKPIT_LAYOUT_STORE",
+    os.path.expanduser("~/.local/share/kaminos/volume-cockpit-layouts"),
+)).expanduser().resolve()
+VOLUME_COCKPIT_LAYOUT_STORE = VOLUME_COCKPIT_LAYOUT_STORE_DEFAULT
 VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
 VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
 VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
@@ -601,6 +606,178 @@ def _read_json_object(path, role):
     return document
 
 
+def _normalize_volume_cockpit_layout(layout, schema=None):
+    if not isinstance(layout, dict):
+        raise ValueError("volume cockpit layout must be a JSON object")
+    if set(layout) != {"identity", "layoutId", "label", "groups"}:
+        raise ValueError("volume cockpit layout fields do not match the v1 contract")
+    if layout.get("identity") != "kaminos.volume.cockpit-layout.v1":
+        raise ValueError("volume cockpit layout identity mismatch")
+    layout_id = layout.get("layoutId")
+    if not isinstance(layout_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,95}", layout_id):
+        raise ValueError("volume cockpit layout id is invalid")
+    label = layout.get("label")
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError("volume cockpit layout label is required")
+    groups = layout.get("groups")
+    if not isinstance(groups, list) or not groups:
+        raise ValueError("volume cockpit layout groups are required")
+
+    schema = _validate_settings_preset_schema(
+        schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    )
+    known_control_ids = {
+        descriptor["key"]
+        for descriptor in [*schema.get("controls", []), *schema.get("rendererControls", [])]
+    }
+    group_ids = set()
+    placed_control_ids = set()
+    normalized_groups = []
+    for group in groups:
+        if not isinstance(group, dict) or set(group) != {"id", "label", "surface", "collapsed", "controlIds"}:
+            raise ValueError("volume cockpit layout group fields do not match the v1 contract")
+        group_id = group.get("id")
+        if not isinstance(group_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,95}", group_id):
+            raise ValueError("volume cockpit layout group id is invalid")
+        if group_id in group_ids:
+            raise ValueError(f"volume cockpit layout duplicate group: {group_id}")
+        group_ids.add(group_id)
+        group_label = group.get("label")
+        if not isinstance(group_label, str) or not group_label.strip():
+            raise ValueError(f"volume cockpit layout group label is required: {group_id}")
+        if group.get("surface") not in {"primary", "authored-mix"}:
+            raise ValueError(f"volume cockpit layout group surface is invalid: {group_id}")
+        if not isinstance(group.get("collapsed"), bool):
+            raise ValueError(f"volume cockpit layout group collapse state is invalid: {group_id}")
+        control_ids = group.get("controlIds")
+        if not isinstance(control_ids, list) or any(not isinstance(control_id, str) for control_id in control_ids):
+            raise ValueError(f"volume cockpit layout group control ids are invalid: {group_id}")
+        unknown = sorted(set(control_ids) - known_control_ids)
+        if unknown:
+            raise ValueError(f"volume cockpit layout contains unknown controls: {','.join(unknown)}")
+        duplicates = sorted(placed_control_ids.intersection(control_ids))
+        if duplicates or len(set(control_ids)) != len(control_ids):
+            duplicates = duplicates or sorted(control_id for control_id in set(control_ids) if control_ids.count(control_id) > 1)
+            raise ValueError(f"volume cockpit layout contains duplicate controls: {','.join(duplicates)}")
+        placed_control_ids.update(control_ids)
+        normalized_groups.append({
+            "id": group_id,
+            "label": group_label.strip(),
+            "surface": group["surface"],
+            "collapsed": group["collapsed"],
+            "controlIds": list(control_ids),
+        })
+    return {
+        "identity": "kaminos.volume.cockpit-layout.v1",
+        "layoutId": layout_id,
+        "label": label.strip(),
+        "groups": normalized_groups,
+    }
+
+
+def _volume_cockpit_layout_hash(layout):
+    canonical = json.dumps(layout, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def write_volume_cockpit_layout(store_path, layout, activate=True, schema=None):
+    store = _volume_settings_store_path(store_path)
+    normalized = _normalize_volume_cockpit_layout(layout, schema)
+    content_hash = _volume_cockpit_layout_hash(normalized)
+    layout_path = store / "layouts" / f"{normalized['layoutId']}.json"
+    written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    artifact = {
+        "identity": "kaminos.volume.cockpit-layout-artifact.v1",
+        "layoutId": normalized["layoutId"],
+        "contentHash": f"sha256:{content_hash}",
+        "writtenAt": written_at,
+        "source": volume_settings_server_source(),
+        "layout": normalized,
+    }
+    with _volume_settings_store_lock(store):
+        _atomic_write_json(layout_path, artifact)
+        if activate:
+            _atomic_write_json(store / "active.json", {
+                "identity": "kaminos.volume.cockpit-layout-active.v1",
+                "layoutId": normalized["layoutId"],
+                "contentHash": artifact["contentHash"],
+                "updatedAt": written_at,
+            })
+    return {
+        "ok": True,
+        "identity": "kaminos.volume.cockpit-layout-write-receipt.v1",
+        "requested": {
+            "storePath": str(store),
+            "layoutId": normalized["layoutId"],
+            "activate": bool(activate),
+        },
+        "effective": {
+            "storePath": str(store),
+            "layoutPath": str(layout_path),
+            "layoutId": normalized["layoutId"],
+            "label": normalized["label"],
+            "contentHash": artifact["contentHash"],
+            "active": bool(activate),
+        },
+        "layoutUrl": f"/api/volume-cockpit-layout?id={normalized['layoutId']}",
+    }
+
+
+def read_volume_cockpit_layout(store_path, layout_id, schema=None):
+    store = _volume_settings_store_path(store_path)
+    if not isinstance(layout_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,95}", layout_id):
+        raise ValueError("volume cockpit layout id is invalid")
+    layout_path = store / "layouts" / f"{layout_id}.json"
+    try:
+        artifact = _read_json_object(layout_path, "cockpit layout artifact")
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"volume cockpit layout not found: {layout_id}") from error
+    if artifact.get("identity") != "kaminos.volume.cockpit-layout-artifact.v1" or artifact.get("layoutId") != layout_id:
+        raise ValueError("volume cockpit layout artifact identity mismatch")
+    normalized = _normalize_volume_cockpit_layout(artifact.get("layout"), schema)
+    content_hash = f"sha256:{_volume_cockpit_layout_hash(normalized)}"
+    if artifact.get("contentHash") != content_hash:
+        raise ValueError("volume cockpit layout artifact content hash mismatch")
+    return {
+        **artifact,
+        "layout": normalized,
+        "layoutPath": str(layout_path),
+        "storePath": str(store),
+    }
+
+
+def list_volume_cockpit_layouts(store_path, schema=None):
+    store = _volume_settings_store_path(store_path)
+    layouts_dir = store / "layouts"
+    layouts_dir.mkdir(parents=True, exist_ok=True)
+    active_path = store / "active.json"
+    active_layout_id = None
+    if active_path.exists():
+        active = _read_json_object(active_path, "cockpit layout active pointer")
+        if active.get("identity") != "kaminos.volume.cockpit-layout-active.v1":
+            raise ValueError("volume cockpit layout active pointer identity mismatch")
+        active_layout_id = active.get("layoutId")
+    entries = []
+    for layout_path in layouts_dir.glob("*.json"):
+        artifact = read_volume_cockpit_layout(store, layout_path.stem, schema)
+        entries.append({
+            "layoutId": artifact["layoutId"],
+            "label": artifact["layout"]["label"],
+            "contentHash": artifact["contentHash"],
+            "writtenAt": artifact.get("writtenAt"),
+            "groupCount": len(artifact["layout"]["groups"]),
+        })
+    entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["layoutId"]), reverse=True)
+    if active_layout_id and active_layout_id not in {entry["layoutId"] for entry in entries}:
+        raise ValueError("volume cockpit layout active pointer names a missing layout")
+    return {
+        "identity": "kaminos.volume.cockpit-layout-index.v1",
+        "storePath": str(store),
+        "activeLayoutId": active_layout_id,
+        "entries": entries,
+    }
+
+
 def _volume_settings_alias_for_label(store, label):
     base = _volume_settings_alias_slug(label)
 
@@ -900,6 +1077,7 @@ def parse_server_arguments(argv):
     port = 8090
     store = VOLUME_SETTINGS_STORE_DEFAULT
     basin_session_store = VOLUME_BASIN_SESSION_STORE_DEFAULT
+    cockpit_layout_store = VOLUME_COCKPIT_LAYOUT_STORE_DEFAULT
     arguments = list(argv)
     if arguments and not arguments[0].startswith("-"):
         try:
@@ -908,14 +1086,20 @@ def parse_server_arguments(argv):
             raise ValueError("server port must be an integer") from error
     while arguments:
         argument = arguments.pop(0)
-        if argument not in {"--volume-settings-store", "--volume-basin-session-store"} or not arguments:
+        if argument not in {
+            "--volume-settings-store",
+            "--volume-basin-session-store",
+            "--volume-cockpit-layout-store",
+        } or not arguments:
             raise ValueError(f"unsupported server argument: {argument}")
         path = _volume_settings_store_path(arguments.pop(0))
         if argument == "--volume-settings-store":
             store = path
-        else:
+        elif argument == "--volume-basin-session-store":
             basin_session_store = path
-    return port, store, basin_session_store
+        else:
+            cockpit_layout_store = path
+    return port, store, basin_session_store, cockpit_layout_store
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -1030,6 +1214,7 @@ def runtime_config():
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
+        "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "source": volume_settings_server_source(),
     }
 
@@ -1861,6 +2046,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_basin_drive_session_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-basin-drive-sessions":
             self.handle_volume_basin_drive_sessions_get()
+        elif parsed.path == "/api/volume-cockpit-layout":
+            self.handle_volume_cockpit_layout_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-cockpit-layouts":
+            self.handle_volume_cockpit_layouts_get()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -1894,6 +2083,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_basin_promotions_post()
         elif parsed.path == "/api/volume-basin-drive-sessions":
             self.handle_volume_basin_drive_sessions_post()
+        elif parsed.path == "/api/volume-cockpit-layouts":
+            self.handle_volume_cockpit_layouts_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -2040,6 +2231,70 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "storePath": str(VOLUME_BASIN_SESSION_STORE),
                 "failurePhase": "basin-drive-session-index",
             }, 500)
+
+    def handle_volume_cockpit_layouts_get(self):
+        try:
+            self.send_json(list_volume_cockpit_layouts(VOLUME_COCKPIT_LAYOUT_STORE))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "storePath": str(VOLUME_COCKPIT_LAYOUT_STORE),
+                "failurePhase": "cockpit-layout-index",
+            }, 500)
+
+    def handle_volume_cockpit_layout_get(self, query):
+        layout_id = (query.get("id") or query.get("layout") or [""])[0]
+        try:
+            self.send_json(read_volume_cockpit_layout(VOLUME_COCKPIT_LAYOUT_STORE, layout_id))
+        except FileNotFoundError as error:
+            self.send_json({
+                "error": str(error),
+                "requestedLayoutId": layout_id,
+                "storePath": str(VOLUME_COCKPIT_LAYOUT_STORE),
+                "failurePhase": "cockpit-layout-read",
+            }, 404)
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedLayoutId": layout_id,
+                "storePath": str(VOLUME_COCKPIT_LAYOUT_STORE),
+                "failurePhase": "cockpit-layout-read",
+            }, 400)
+
+    def handle_volume_cockpit_layouts_post(self):
+        failure = {
+            "storePath": str(VOLUME_COCKPIT_LAYOUT_STORE),
+            "failurePhase": "cockpit-layout-write",
+        }
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({**failure, "error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({**failure, "error": "Invalid JSON"}, 400)
+            return
+        if not isinstance(request, dict) or set(request) != {"layout", "activate"}:
+            self.send_json({**failure, "error": "cockpit layout write requires exactly layout and activate inputs"}, 400)
+            return
+        if not isinstance(request.get("activate"), bool):
+            self.send_json({**failure, "error": "cockpit layout activate must be boolean"}, 400)
+            return
+        try:
+            receipt = write_volume_cockpit_layout(
+                VOLUME_COCKPIT_LAYOUT_STORE,
+                request.get("layout"),
+                activate=request["activate"],
+            )
+        except OSError as error:
+            self.send_json({**failure, "error": str(error)}, 500)
+            return
+        except (ValueError, json.JSONDecodeError) as error:
+            self.send_json({**failure, "error": str(error)}, 400)
+            return
+        self.send_json(receipt)
 
     def handle_volume_basin_drive_session_get(self, query):
         session_ref = (query.get("id") or query.get("session") or [""])[0]
@@ -2734,7 +2989,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     try:
-        PORT, VOLUME_SETTINGS_STORE, VOLUME_BASIN_SESSION_STORE = parse_server_arguments(sys.argv[1:])
+        PORT, VOLUME_SETTINGS_STORE, VOLUME_BASIN_SESSION_STORE, VOLUME_COCKPIT_LAYOUT_STORE = parse_server_arguments(sys.argv[1:])
     except ValueError as error:
         print(f"serve.py: {error}", file=sys.stderr)
         raise SystemExit(2)
@@ -2748,6 +3003,7 @@ if __name__ == "__main__":
     print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
     print(f"  Volume settings store: {VOLUME_SETTINGS_STORE}")
     print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
+    print(f"  Volume cockpit layout store: {VOLUME_COCKPIT_LAYOUT_STORE}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()
