@@ -871,7 +871,10 @@ export function resolveBoundarySplatExecutionPlan({
   };
 }
 
-export function validateFullFieldDerivedBufferMaterialization(derivedBuffers = {}) {
+export function validateFullFieldDerivedBufferMaterialization(
+  derivedBuffers = {},
+  { requireDrawState = false } = {},
+) {
   if (derivedBuffers.boundarySidecarBuilt !== true) {
     return {
       ok: false,
@@ -888,6 +891,23 @@ export function validateFullFieldDerivedBufferMaterialization(derivedBuffers = {
       failurePhase: 'derived-buffer-materialization',
       reason: 'full-field-splats-not-encoded',
     };
+  }
+  if (normalizeBoundarySplatMode(derivedBuffers.boundarySplatMode) !== 'off' && requireDrawState) {
+    const draw = derivedBuffers.boundarySplatDraw;
+    if (!draw || typeof draw !== 'object') {
+      return {
+        ok: false,
+        failurePhase: 'derived-buffer-materialization',
+        reason: 'full-field-splat-draw-state-missing',
+      };
+    }
+    if (Number(draw.instanceCount) <= 0 || Number(draw.candidateCount) <= 0) {
+      return {
+        ok: false,
+        failurePhase: 'derived-buffer-materialization',
+        reason: 'full-field-splat-population-empty',
+      };
+    }
   }
   return { ok: true, failurePhase: null, reason: null };
 }
@@ -16945,6 +16965,36 @@ export function createKaminosVolumePrototype({
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
       }
+    }
+    const capturedMaterialization = {
+      ...derivedBuffers,
+      boundarySplatDraw: captured.boundarySplatDraw,
+    };
+    const capturedMaterializationValidation = validateFullFieldDerivedBufferMaterialization(
+      capturedMaterialization,
+      { requireDrawState: true },
+    );
+    if (!capturedMaterializationValidation.ok) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: capturedMaterializationValidation.failurePhase,
+        reason: capturedMaterializationValidation.reason,
+        lastTrustworthyEvidence: {
+          grid: gridSize,
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          derivedBuffers: capturedMaterialization,
+        },
+        deterministicReplay,
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
     }
     const session = {
       status: 'captured',

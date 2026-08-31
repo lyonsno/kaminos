@@ -41,12 +41,35 @@ assert.deepEqual(
   'a non-off full-field splat export cannot silently publish an empty population',
 );
 
+const emptyNonOffPopulation = volumeCore.validateFullFieldDerivedBufferMaterialization({
+  boundarySidecarBuilt: true,
+  boundarySplatsEncoded: true,
+  boundarySplatMode: 'kernel_moment_covariance',
+  boundarySplatDraw: {
+    instanceCount: 0,
+    candidateCount: 0,
+  },
+}, { requireDrawState: true });
+assert.deepEqual(
+  emptyNonOffPopulation,
+  {
+    ok: false,
+    failurePhase: 'derived-buffer-materialization',
+    reason: 'full-field-splat-population-empty',
+  },
+  'successful pass encoding does not let a non-off zero-row splat population publish as captured',
+);
+
 assert.deepEqual(
   volumeCore.validateFullFieldDerivedBufferMaterialization({
     boundarySidecarBuilt: true,
     boundarySplatsEncoded: false,
     boundarySplatMode: 'off',
-  }),
+    boundarySplatDraw: {
+      instanceCount: 0,
+      candidateCount: 0,
+    },
+  }, { requireDrawState: true }),
   { ok: true, failurePhase: null, reason: null },
   'raymarch-only full-field export still requires a current sidecar but legitimately carries zero splat rows',
 );
@@ -56,7 +79,11 @@ assert.deepEqual(
     boundarySidecarBuilt: true,
     boundarySplatsEncoded: true,
     boundarySplatMode: 'kernel_moment_covariance',
-  }),
+    boundarySplatDraw: {
+      instanceCount: 4,
+      candidateCount: 6,
+    },
+  }, { requireDrawState: true }),
   { ok: true, failurePhase: null, reason: null },
   'a current sidecar and current non-off splat population admit the export',
 );
@@ -70,6 +97,11 @@ assert.match(
   source,
   /validateFullFieldDerivedBufferMaterialization\(derivedBuffers\)[\s\S]*?failurePhase: materializationValidation\.failurePhase[\s\S]*?return \{ ok: false, \.\.\.failed \};/,
   'beginDebugFullFieldExport fails before readback when current derived materialization is absent',
+);
+assert.match(
+  source,
+  /const capturedMaterialization = \{[\s\S]*?\.\.\.derivedBuffers,[\s\S]*?boundarySplatDraw: captured\.boundarySplatDraw,[\s\S]*?validateFullFieldDerivedBufferMaterialization\([\s\S]*?capturedMaterialization,[\s\S]*?\{ requireDrawState: true \},/,
+  'beginDebugFullFieldExport validates post-submit draw counts before publishing a captured population',
 );
 assert.match(
   source,
