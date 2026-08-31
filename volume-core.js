@@ -5454,7 +5454,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   var fireLayer = fluid[base + 2u];
   var microLayer = fluid[base + 3u];
   let velocity = axis * emitter.geometry.y * weight;
-  velocityDensity.xyz = clamp(
+  let injectedVelocity = clamp(
     velocityDensity.xyz + velocity * (0.18 + emitter.transport.x * 0.036),
     vec3<f32>(-0.34),
     vec3<f32>(0.52)
@@ -5481,7 +5481,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
       + microLayer.z * 0.05
       + material.z * 0.10
   ), 0.0, 2.2);
-  fluid[base] = vec4<f32>(velocityDensity.xyz, injectedDensity);
+  fluid[base] = vec4<f32>(injectedVelocity, injectedDensity);
   fluid[base + 1u] = material;
   fluid[base + 2u] = fireLayer;
   fluid[base + 3u] = microLayer;
