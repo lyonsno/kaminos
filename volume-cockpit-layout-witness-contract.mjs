@@ -15,10 +15,15 @@ export async function navigateWithBrowserDiagnostics(socket, url) {
   await socket.call('Page.navigate', { url });
 }
 
-export function summarizeBrowserEvent(event) {
+export function summarizeBrowserEvent(event, fallbackSequence = null) {
+  const witnessIdentity = {
+    sequence: event.witnessSequence ?? fallbackSequence,
+    phase: event.witnessPhase ?? null,
+  };
   if (event.method === 'Runtime.exceptionThrown') {
     const details = event.params?.exceptionDetails || {};
     return {
+      ...witnessIdentity,
       method: event.method,
       text: details.exception?.description || details.text || null,
       url: details.url || null,
@@ -28,6 +33,7 @@ export function summarizeBrowserEvent(event) {
   }
   if (event.method === 'Log.entryAdded') {
     return {
+      ...witnessIdentity,
       method: event.method,
       level: event.params?.entry?.level || null,
       text: event.params?.entry?.text || null,
@@ -35,6 +41,7 @@ export function summarizeBrowserEvent(event) {
     };
   }
   return {
+    ...witnessIdentity,
     method: event.method,
     type: event.params?.type || null,
     args: (event.params?.args || []).map(argument => argument.value ?? argument.description ?? null),
@@ -89,14 +96,34 @@ export function evaluateInitialLayoutAdmission(state, browserEvents) {
   return state;
 }
 
-export function auditBrowserEvents(events, { allowExpectedLayoutStoreBlock = false } = {}) {
-  const observed = events.map(summarizeBrowserEvent);
-  const allowed = allowExpectedLayoutStoreBlock ? observed.filter(event => (
+function isExpectedLayoutStoreBlock(event) {
+  return (
     event.method === 'Log.entryAdded'
     && event.level === 'error'
     && String(event.url || '').includes('/api/volume-cockpit-layouts')
     && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT')
-  )) : [];
+  );
+}
+
+export function expectedLayoutStoreBlockSequencesInSlice(events, {
+  startSequence,
+  endSequence,
+}) {
+  return events.map(summarizeBrowserEvent).filter(event => (
+    event.sequence >= startSequence
+    && event.sequence < endSequence
+    && isExpectedLayoutStoreBlock(event)
+  )).map(event => event.sequence);
+}
+
+export function auditBrowserEvents(events, {
+  allowedExpectedLayoutStoreBlockSequences = [],
+} = {}) {
+  const observed = events.map(summarizeBrowserEvent);
+  const allowedSequences = new Set(allowedExpectedLayoutStoreBlockSequences);
+  const allowed = observed.filter(event => (
+    allowedSequences.has(event.sequence) && isExpectedLayoutStoreBlock(event)
+  ));
   const rejected = observed.filter(event => (
     event.method === 'Runtime.exceptionThrown'
     || (event.method === 'Log.entryAdded' && event.level === 'error')
@@ -145,11 +172,9 @@ export function assertAuthoredLayoutRestored({ authored, reloaded }) {
   };
 }
 
-export function prepareScreenshotEvidence({ path, runId }) {
+export function initializeScreenshotEvidence({ path, runId }) {
   assert.ok(runId, 'screenshot evidence requires a run identity');
   const partialPath = `${path}.${runId}.partial`;
-  rmSync(path, { force: true });
-  rmSync(partialPath, { force: true });
   return {
     runId,
     path,
@@ -158,6 +183,15 @@ export function prepareScreenshotEvidence({ path, runId }) {
     published: false,
     admitted: false,
   };
+}
+
+export function prepareScreenshotEvidence(optionsOrEvidence) {
+  const evidence = optionsOrEvidence.partialPath
+    ? optionsOrEvidence
+    : initializeScreenshotEvidence(optionsOrEvidence);
+  rmSync(evidence.path, { force: true });
+  rmSync(evidence.partialPath, { force: true });
+  return evidence;
 }
 
 export function stageScreenshotEvidence(evidence, bytes) {

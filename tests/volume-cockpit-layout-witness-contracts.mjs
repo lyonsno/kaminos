@@ -40,13 +40,23 @@ assert.match(
 );
 assert.match(
   witness,
-  /const browserEventAudit\s*=\s*auditBrowserEvents\(socket\.browserEvents,[\s\S]*allowExpectedLayoutStoreBlock:\s*true[\s\S]*browserEventAudit[\s\S]*ok:\s*true/,
+  /const browserEventAudit\s*=\s*auditBrowserEvents\(socket\.browserEvents,[\s\S]*allowedExpectedLayoutStoreBlockSequences:\s*layoutStoreOutageEventWindow\.allowedSequences[\s\S]*browserEventAudit[\s\S]*ok:\s*true/,
   'a success report must reject browser errors observed after initial admission instead of merely recording them',
 );
 assert.match(
   witness,
-  /while\s*\(Date\.now\(\)\s*<\s*deadline\)[\s\S]*auditBrowserEvents\(socket\.browserEvents,[\s\S]*failurePhase\s*===\s*'layout-store-outage-isolation'[\s\S]*await callback\(\)/,
+  /while\s*\(Date\.now\(\)\s*<\s*deadline\)[\s\S]*auditBrowserEvents\(socket\.browserEvents,[\s\S]*allowedLayoutStoreBlockSequences\(\)[\s\S]*await callback\(\)/,
   'every wait phase must adjudicate retained browser errors before polling for success',
+);
+assert.match(
+  witness,
+  /witnessSequence:\s*this\.browserEvents\.length[\s\S]*witnessPhase:\s*this\.phaseProvider\(\)/,
+  'retained browser events must carry monotonic sequence and witness-phase custody',
+);
+assert.match(
+  witness,
+  /layoutStoreOutageEventWindow\s*=\s*\{[\s\S]*startSequence:\s*socket\.browserEvents\.length[\s\S]*Network\.setBlockedURLs[\s\S]*layout-store outage did not produce its expected browser event[\s\S]*endSequence\s*=\s*socket\.browserEvents\.length[\s\S]*expectedLayoutStoreBlockSequencesInSlice/,
+  'the layout-store exception must be frozen to the exact intentionally induced outage slice',
 );
 assert.match(
   witness,
@@ -70,8 +80,12 @@ assert.match(
 );
 assert.match(
   witness,
-  /prepareScreenshotEvidence\([\s\S]*runId[\s\S]*stageScreenshotEvidence[\s\S]*publishScreenshotEvidence[\s\S]*screenshotEvidence/,
+  /initializeScreenshotEvidence\(\{\s*path:\s*screenshotPath,\s*runId\s*\}\)[\s\S]*prepareScreenshotEvidence\(screenshotEvidence\)[\s\S]*stageScreenshotEvidence[\s\S]*publishScreenshotEvidence[\s\S]*screenshotEvidence/,
   'screenshot output must be generation-bound, staged, and published only after terminal admission',
+);
+assert.ok(
+  witness.indexOf('prepareScreenshotEvidence(screenshotEvidence)') < witness.indexOf("if (!url) throw new Error('missing --url')"),
+  'the advertised screenshot path must be rejected before fallible argument validation',
 );
 for (const phase of ['schema-fetch', 'source-layout-build', 'inventory-validation', 'editor-apply', 'store-index']) {
   assert.match(layout, new RegExp(`onPhase\\('${phase}'\\)`), `layout initialization must expose the ${phase} phase`);

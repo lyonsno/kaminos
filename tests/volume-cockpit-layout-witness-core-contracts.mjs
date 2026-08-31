@@ -69,6 +69,8 @@ assert.throws(
   'a browser error after admission must prevent a successful audit',
 );
 const expectedBlockedStoreEvent = {
+  witnessSequence: 17,
+  witnessPhase: 'layout-store-outage-isolation',
   method: 'Log.entryAdded',
   params: {
     entry: {
@@ -84,7 +86,9 @@ assert.throws(
   'the expected outage stimulus must not be admitted before the explicit outage phase',
 );
 assert.equal(
-  auditBrowserEvents([expectedBlockedStoreEvent], { allowExpectedLayoutStoreBlock: true })
+  auditBrowserEvents([expectedBlockedStoreEvent], {
+    allowedExpectedLayoutStoreBlockSequences: [17],
+  })
     .allowedExpectedFailureCount,
   1,
 );

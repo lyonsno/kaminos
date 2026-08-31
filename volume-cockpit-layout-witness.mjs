@@ -11,6 +11,8 @@ import {
   assertAuthoredLayoutRestored,
   auditBrowserEvents,
   evaluateInitialLayoutAdmission,
+  expectedLayoutStoreBlockSequencesInSlice,
+  initializeScreenshotEvidence,
   navigateWithBrowserDiagnostics,
   prepareScreenshotEvidence,
   publishScreenshotEvidence,
@@ -38,9 +40,10 @@ const runId = randomUUID();
 
 let browser = null;
 let socket = null;
-let screenshotEvidence = null;
+let screenshotEvidence = initializeScreenshotEvidence({ path: screenshotPath, runId });
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
+let layoutStoreOutageEventWindow = null;
 
 function chromeExecutable() {
   for (const candidate of [
@@ -59,7 +62,7 @@ async function waitUntil(callback, message, intervalMs = 100) {
   while (Date.now() < deadline) {
     try {
       if (socket) auditBrowserEvents(socket.browserEvents, {
-        allowExpectedLayoutStoreBlock: failurePhase === 'layout-store-outage-isolation',
+        allowedExpectedLayoutStoreBlockSequences: allowedLayoutStoreBlockSequences(),
       });
       const result = await callback();
       if (result) return result;
@@ -72,12 +75,25 @@ async function waitUntil(callback, message, intervalMs = 100) {
   throw new Error(`${message}${lastError ? `: ${lastError.message}` : ''}`);
 }
 
+function allowedLayoutStoreBlockSequences() {
+  if (!socket || !layoutStoreOutageEventWindow) return [];
+  if (layoutStoreOutageEventWindow.allowedSequences) {
+    return layoutStoreOutageEventWindow.allowedSequences;
+  }
+  if (failurePhase !== 'layout-store-outage-isolation') return [];
+  return expectedLayoutStoreBlockSequencesInSlice(socket.browserEvents, {
+    startSequence: layoutStoreOutageEventWindow.startSequence,
+    endSequence: socket.browserEvents.length,
+  });
+}
+
 class CdpSocket {
-  constructor(webSocketUrl) {
+  constructor(webSocketUrl, { phaseProvider = () => null } = {}) {
     this.webSocketUrl = webSocketUrl;
     this.nextId = 1;
     this.pending = new Map();
     this.browserEvents = [];
+    this.phaseProvider = phaseProvider;
   }
 
   open() {
@@ -90,7 +106,11 @@ class CdpSocket {
         const message = JSON.parse(event.data);
         if (!message.id) {
           if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
-            this.browserEvents.push(message);
+            this.browserEvents.push({
+              ...message,
+              witnessSequence: this.browserEvents.length,
+              witnessPhase: this.phaseProvider(),
+            });
           }
           return;
         }
@@ -250,11 +270,11 @@ async function setFieldAndChange(selector, value) {
 try {
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(screenshotPath), { recursive: true });
+  screenshotEvidence = prepareScreenshotEvidence(screenshotEvidence);
   if (!url) throw new Error('missing --url');
   if (!existsSync(expectedRepoRoot)) throw new Error('expected repo root does not exist');
   if (!/^[0-9a-f]{40}$/.test(expectedCommit)) throw new Error('expected commit must be a full lowercase SHA');
   if (!expectedLayoutStore || expectedLayoutStore === '/') throw new Error('missing safe expected layout store');
-  screenshotEvidence = prepareScreenshotEvidence({ path: screenshotPath, runId });
 
   failurePhase = 'http-source-preflight';
   const runtimeResponse = await fetch(new URL('/api/runtime-config', url));
@@ -285,7 +305,7 @@ try {
     const pages = await response.json();
     return pages.find(candidate => candidate.type === 'page');
   }, 'Chrome page did not register');
-  socket = new CdpSocket(page.webSocketDebuggerUrl);
+  socket = new CdpSocket(page.webSocketDebuggerUrl, { phaseProvider: () => failurePhase });
   await socket.open();
   await navigateWithBrowserDiagnostics(socket, url);
 
@@ -420,6 +440,11 @@ try {
 
   failurePhase = 'layout-store-outage-isolation';
   await socket.call('Network.enable');
+  layoutStoreOutageEventWindow = {
+    startSequence: socket.browserEvents.length,
+    endSequence: null,
+    allowedSequences: null,
+  };
   await socket.call('Network.setBlockedURLs', { urls: ['*api/volume-cockpit-layouts*'] });
   await socket.call('Page.reload', { ignoreCache: true });
   const outage = await waitUntil(async () => {
@@ -432,6 +457,16 @@ try {
   assert.equal(outage.receipt.storedLayoutLoaded, false, 'outage falsely reported a stored layout as loaded');
   assert.equal(outage.receipt.fallbackApplied, true, 'outage did not disclose the source-default fallback');
   assert.equal(outage.layoutEditDisabled, true, 'layout editing remained enabled without persistence');
+
+  await waitUntil(() => (
+    allowedLayoutStoreBlockSequences().length > 0 ? true : null
+  ), 'layout-store outage did not produce its expected browser event');
+  layoutStoreOutageEventWindow.endSequence = socket.browserEvents.length;
+  layoutStoreOutageEventWindow.allowedSequences = expectedLayoutStoreBlockSequencesInSlice(
+    socket.browserEvents,
+    layoutStoreOutageEventWindow,
+  );
+  failurePhase = 'layout-store-degraded-control-isolation';
 
   const densityBefore = Number(outage.renderer.controls?.density);
   const densityAfter = densityBefore === 3.75 ? 3.5 : 3.75;
@@ -461,7 +496,7 @@ try {
 
   failurePhase = 'browser-event-audit';
   const browserEventAudit = auditBrowserEvents(socket.browserEvents, {
-    allowExpectedLayoutStoreBlock: true,
+    allowedExpectedLayoutStoreBlockSequences: layoutStoreOutageEventWindow.allowedSequences,
   });
   failurePhase = 'screenshot-publication';
   screenshotEvidence = publishScreenshotEvidence(screenshotEvidence);
@@ -484,6 +519,7 @@ try {
       activeLayoutId: selectedIndex.activeLayoutId,
       canonicalControlCount: Object.keys(reloaded.controls).length,
       screenshotPath,
+      layoutStoreOutageEventWindow,
       storeOutageIsolation: lastTrustworthyEvidence.outage,
     },
     gesture: lastTrustworthyEvidence.authored,
