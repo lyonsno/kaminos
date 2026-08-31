@@ -10,7 +10,7 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
-#sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; }
+#sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; contain: layout paint; overscroll-behavior: contain; scrollbar-gutter: stable; isolation: isolate; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -1582,6 +1582,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-detail-scale" min="0.45" max="3.2" step="0.05" value="1.75">
       <span class="slider-val" id="volume-detail-scale-val">1.75</span>
     </div>
+    <span class="slider-help">Structure size, not render resolution: higher = finer breakup; lower = broader folds. Tall Plume limits the main frequency to 1.0 and the visible overlay to 35%.</span>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Plume Height</span>
       <input type="range" id="volume-plume-height" min="0.7" max="2.2" step="0.05" value="1.45">
@@ -1594,9 +1595,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Wind Angle</span>
-      <input type="range" id="volume-wind-angle" min="-180" max="180" step="5" value="0">
+      <input type="range" id="volume-wind-angle" min="-180" max="180" step="5" value="0" data-angle-domain="full-circle-signed">
       <span class="slider-val" id="volume-wind-angle-val">0°</span>
     </div>
+    <span class="slider-help">Full circle: −180° … +180°. 0° = +X; +90° = +Z.</span>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Wind Height</span>
       <input type="range" id="volume-wind-height" min="-0.8" max="0.8" step="0.05" value="0.15">
@@ -17457,6 +17459,11 @@ function readVolumeControls() {
   }));
 }
 
+function formatVolumeWindDirection(value) {
+  const degrees = Math.max(-180, Math.min(180, Math.round(Number(value) || 0)));
+  return `${degrees > 0 ? '+' : ''}${degrees}°`;
+}
+
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
@@ -17488,7 +17495,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
-  document.getElementById('volume-wind-angle-val').textContent = `${Math.round(c.windAngle)}°`;
+  document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
   document.getElementById('volume-wind-height-val').textContent = c.windHeight.toFixed(2);
   document.getElementById('volume-render-scale-val').textContent = `${(c.renderScale * 100).toFixed(1)}%`;
   document.getElementById('volume-residual-mode-val').textContent = c.volumeResidualMode === 'webgpu-direct-residual' ? 'direct' : 'off';
