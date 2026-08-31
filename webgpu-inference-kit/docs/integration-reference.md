@@ -159,7 +159,7 @@ const glb = await execution.run(async cooperative => {
 const cooperativeReport = execution.finish();
 ```
 
-For each cooperative GPU duty, Kaminos services pending foreground work before encoding, submits the exact model-owned command buffer, captures that inference prefix's queue fence immediately, adapts the next exact range from completed queue time or a positive in-command-buffer GPU timestamp range, and yields to the browser. The planner preserves `queue-work-done` and `gpu-timestamp-query` as distinct timing authorities; it does not allow wall-clock substitution. CPU duties use the same range and progress grammar with host-phase timing. Histories remain uncapped, and `actualRangeCount` becomes authoritative only when the boundary completes.
+For each cooperative GPU duty, Kaminos services pending foreground work before encoding, submits the exact model-owned command buffer, captures that inference prefix's queue fence immediately, adapts the next exact range from completed queue time, and yields to the browser. CPU duties use the same range and progress grammar with host-phase timing. Histories remain uncapped, and `actualRangeCount` becomes authoritative only when the boundary completes. Callers that use `createWebGpuAdaptiveCommandDutyPlanner` directly may instead supply a positive in-command-buffer GPU timestamp range as described in the adaptive planner reference below; the high-level cooperative execution path does not accept that authority.
 
 Fixed GPU boundaries can keep a caller-selected number of queue prefixes in flight instead of blocking the host after every submission:
 

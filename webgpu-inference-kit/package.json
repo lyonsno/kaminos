@@ -11,7 +11,8 @@
     "directory": "webgpu-inference-kit"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "sharp-gpu-timestamp-assay"
   },
   "files": [
     "README.md",
