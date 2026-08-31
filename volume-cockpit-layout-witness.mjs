@@ -1,10 +1,24 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+
+import {
+  TerminalWitnessError,
+  assertAuthoredLayoutRestored,
+  auditBrowserEvents,
+  evaluateInitialLayoutAdmission,
+  navigateWithBrowserDiagnostics,
+  prepareScreenshotEvidence,
+  publishScreenshotEvidence,
+  rejectScreenshotEvidence,
+  stageScreenshotEvidence,
+  summarizeBrowserEvent,
+  terminalLayoutReceiptFailure,
+} from './volume-cockpit-layout-witness-contract.mjs';
 
 
 const args = new Map();
@@ -20,18 +34,13 @@ const screenshotPath = resolve(String(args.get('--screenshot') || '/tmp/kaminos-
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const profilePath = resolve(String(args.get('--profile') || `/tmp/kaminos-layout-witness-chrome-${debugPort}`));
+const runId = randomUUID();
 
 let browser = null;
 let socket = null;
+let screenshotEvidence = null;
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
-
-class TerminalWitnessError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'TerminalWitnessError';
-  }
-}
 
 function chromeExecutable() {
   for (const candidate of [
@@ -49,6 +58,9 @@ async function waitUntil(callback, message, intervalMs = 100) {
   let lastError = null;
   while (Date.now() < deadline) {
     try {
+      if (socket) auditBrowserEvents(socket.browserEvents, {
+        allowExpectedLayoutStoreBlock: failurePhase === 'layout-store-outage-isolation',
+      });
       const result = await callback();
       if (result) return result;
     } catch (error) {
@@ -242,6 +254,7 @@ try {
   if (!existsSync(expectedRepoRoot)) throw new Error('expected repo root does not exist');
   if (!/^[0-9a-f]{40}$/.test(expectedCommit)) throw new Error('expected commit must be a full lowercase SHA');
   if (!expectedLayoutStore || expectedLayoutStore === '/') throw new Error('missing safe expected layout store');
+  screenshotEvidence = prepareScreenshotEvidence({ path: screenshotPath, runId });
 
   failurePhase = 'http-source-preflight';
   const runtimeResponse = await fetch(new URL('/api/runtime-config', url));
@@ -264,32 +277,27 @@ try {
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${profilePath}`,
     '--window-size=1720,1080',
-    url,
+    'about:blank',
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   const page = await waitUntil(async () => {
     const response = await fetch(`http://127.0.0.1:${debugPort}/json`);
     const pages = await response.json();
-    return pages.find(candidate => candidate.type === 'page' && candidate.url.startsWith(url.split('?')[0]));
+    return pages.find(candidate => candidate.type === 'page');
   }, 'Chrome page did not register');
   socket = new CdpSocket(page.webSocketDebuggerUrl);
   await socket.open();
-  await socket.call('Page.enable');
-  await socket.call('Runtime.enable');
-  await socket.call('Log.enable');
+  await navigateWithBrowserDiagnostics(socket, url);
 
   failurePhase = 'initial-layout-admission';
   const initialLayout = await waitUntil(async () => {
     const state = await cockpitState();
     lastTrustworthyEvidence.admissionProbe = state;
-    const browserFailure = firstBrowserFailure(socket.browserEvents);
-    if (browserFailure) throw new TerminalWitnessError(`browser initialization failed: ${JSON.stringify(browserFailure)}`);
-    if (state.receipt?.status === 'failed') {
-      throw new TerminalWitnessError(`layout receipt failed at ${state.receipt.phase || 'unknown'}: ${state.receipt.reason}`);
-    }
-    if (state.receipt?.layoutIdentity !== 'kaminos.volume.cockpit-layout.v1') return null;
-    if (!/saved|loaded/.test(state.status)) return null;
-    return state;
+    const receiptFailure = terminalLayoutReceiptFailure(state.receipt);
+    if (receiptFailure) throw new TerminalWitnessError(
+      `layout receipt failed at ${receiptFailure.phase}: ${receiptFailure.reason}`,
+    );
+    return evaluateInitialLayoutAdmission(state, socket.browserEvents);
   }, 'layout editor did not admit');
   assert.equal(initialLayout.receipt.fallbackApplied, false, 'layout receipt reported fallback');
   assert.equal(resolve(initialLayout.receipt.layoutStorePath || ''), expectedLayoutStore, 'browser layout store mismatch');
@@ -362,13 +370,42 @@ try {
     return effectiveGroup?.id === targetGroup.id && /saved/.test(state.status) ? state : null;
   }, 'trusted pointer drag did not move and save the original control node');
   assert.deepEqual(dragged.controls, initial.controls, 'layout edit changed canonical control values');
-  lastTrustworthyEvidence.authored = {
+  const authoredLayoutWitness = {
     layoutId: customLayout.layout.layoutId,
+    layoutLabel: 'Operator Layout Witness',
+    renamedGroupId: lockedGroup.id,
+    groupLabel: 'Operator Group Witness',
     movedControlId,
     sourceGroupId: sourceGroup.id,
     targetGroupId: targetGroup.id,
-    state: dragged,
+    controls: initial.controls,
   };
+  lastTrustworthyEvidence.authored = { ...authoredLayoutWitness, state: dragged };
+
+  failurePhase = 'reload-persistence';
+  await socket.call('Page.reload', { ignoreCache: true });
+  const reloaded = await waitUntil(async () => {
+    const state = await cockpitState();
+    const receiptFailure = terminalLayoutReceiptFailure(state.receipt);
+    if (receiptFailure) throw new TerminalWitnessError(
+      `reloaded layout receipt failed at ${receiptFailure.phase}: ${receiptFailure.reason}`,
+    );
+    if (state.layout?.layoutId !== authoredLayoutWitness.layoutId || !/saved|loaded/.test(state.status)) return null;
+    return state;
+  }, 'authored layout did not survive page reload');
+  const authoredReload = assertAuthoredLayoutRestored({ authored: authoredLayoutWitness, reloaded });
+  lastTrustworthyEvidence.reloaded = { ...authoredReload, state: reloaded };
+
+  failurePhase = 'visual-capture';
+  await trustedClick('#volume-cockpit-layout-edit');
+  await operatorValue(`(() => {
+    operatorDocument.querySelector('#sidebar')?.scrollTo(0, 0);
+    return true;
+  })()`);
+  const screenshot = await socket.call('Page.captureScreenshot', { format: 'png', fromSurface: true });
+  assert.ok(screenshot.data?.length > 10000, 'cockpit screenshot is blank or partial');
+  screenshotEvidence = stageScreenshotEvidence(screenshotEvidence, Buffer.from(screenshot.data, 'base64'));
+  await trustedClick('#volume-cockpit-layout-edit');
 
   failurePhase = 'named-layout-selection-persistence';
   await setFieldAndChange('#volume-cockpit-layout-select', initialLayoutId);
@@ -380,27 +417,6 @@ try {
   const selectedIndex = await selectedIndexResponse.json();
   assert.equal(selectedIndex.activeLayoutId, initialLayoutId, 'selected named layout was not persisted as active');
   assert.deepEqual(selected.controls, initial.controls, 'named-layout selection changed canonical control values');
-
-  failurePhase = 'reload-persistence';
-  await socket.call('Page.reload', { ignoreCache: true });
-  const reloaded = await waitUntil(async () => {
-    const state = await cockpitState();
-    if (state.receipt?.status === 'failed') throw new TerminalWitnessError(`reloaded layout receipt failed: ${state.receipt.reason}`);
-    if (state.layout?.layoutId !== initialLayoutId || !/saved|loaded/.test(state.status)) return null;
-    return state;
-  }, 'selected layout did not survive page reload');
-  assert.deepEqual(reloaded.controls, initial.controls, 'reload changed canonical control values');
-  lastTrustworthyEvidence.reloaded = reloaded;
-
-  failurePhase = 'visual-capture';
-  await trustedClick('#volume-cockpit-layout-edit');
-  await operatorValue(`(() => {
-    operatorDocument.querySelector('#sidebar')?.scrollTo(0, 0);
-    return true;
-  })()`);
-  const screenshot = await socket.call('Page.captureScreenshot', { format: 'png', fromSurface: true });
-  assert.ok(screenshot.data?.length > 10000, 'cockpit screenshot is blank or partial');
-  writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
 
   failurePhase = 'layout-store-outage-isolation';
   await socket.call('Network.enable');
@@ -444,10 +460,16 @@ try {
   };
 
   failurePhase = 'browser-event-audit';
-  const browserEventAudit = auditBrowserEvents(socket.browserEvents);
+  const browserEventAudit = auditBrowserEvents(socket.browserEvents, {
+    allowExpectedLayoutStoreBlock: true,
+  });
+  failurePhase = 'screenshot-publication';
+  screenshotEvidence = publishScreenshotEvidence(screenshotEvidence);
   const report = {
     identity: 'kaminos.volume.cockpit-layout-live-witness.v1',
+    runId,
     browserEventAudit,
+    screenshotEvidence,
     ok: true,
     requested: {
       url,
@@ -471,12 +493,15 @@ try {
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
+  screenshotEvidence = rejectScreenshotEvidence(screenshotEvidence);
   const failure = {
     identity: 'kaminos.volume.cockpit-layout-live-witness-failure.v1',
+    runId,
     ok: false,
     failurePhase,
     error: error?.stack || String(error),
     requested: { url, repoRoot: expectedRepoRoot, commit: expectedCommit, layoutStore: expectedLayoutStore },
+    screenshotEvidence,
     lastTrustworthyEvidence,
     browserEvents: (socket?.browserEvents || []).map(summarizeBrowserEvent),
   };
@@ -487,63 +512,4 @@ try {
 } finally {
   socket?.close();
   if (browser && browser.exitCode === null) browser.kill('SIGTERM');
-}
-
-function summarizeBrowserEvent(event) {
-  if (event.method === 'Runtime.exceptionThrown') {
-    const details = event.params?.exceptionDetails || {};
-    return {
-      method: event.method,
-      text: details.exception?.description || details.text || null,
-      url: details.url || null,
-      lineNumber: details.lineNumber ?? null,
-      columnNumber: details.columnNumber ?? null,
-    };
-  }
-  if (event.method === 'Log.entryAdded') {
-    return {
-      method: event.method,
-      level: event.params?.entry?.level || null,
-      text: event.params?.entry?.text || null,
-      url: event.params?.entry?.url || null,
-    };
-  }
-  return {
-    method: event.method,
-    type: event.params?.type || null,
-    args: (event.params?.args || []).map(argument => argument.value ?? argument.description ?? null),
-  };
-}
-
-function firstBrowserFailure(events) {
-  return events.map(summarizeBrowserEvent).find(event => (
-    event.method === 'Runtime.exceptionThrown'
-    || (event.method === 'Log.entryAdded' && event.level === 'error')
-    || (event.method === 'Runtime.consoleAPICalled' && event.type === 'error')
-  )) || null;
-}
-
-function auditBrowserEvents(events) {
-  const observed = events.map(summarizeBrowserEvent);
-  const allowed = observed.filter(event => (
-    event.method === 'Log.entryAdded'
-    && event.level === 'error'
-    && String(event.url || '').includes('/api/volume-cockpit-layouts')
-    && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT')
-  ));
-  const rejected = observed.filter(event => (
-    event.method === 'Runtime.exceptionThrown'
-    || (event.method === 'Log.entryAdded' && event.level === 'error')
-    || (event.method === 'Runtime.consoleAPICalled' && event.type === 'error')
-  ) && !allowed.includes(event));
-  if (rejected.length > 0) {
-    throw new TerminalWitnessError(`browser event audit failed: ${JSON.stringify(rejected)}`);
-  }
-  return {
-    observedEventCount: observed.length,
-    allowedExpectedFailureCount: allowed.length,
-    rejectedFailureCount: rejected.length,
-    allowed,
-    events: observed,
-  };
 }
