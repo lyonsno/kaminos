@@ -81,6 +81,30 @@ def main():
             raise AssertionError("layout index trusted an active pointer for different content")
         serve.write_volume_cockpit_layout(layout_store, changed, activate=True)
 
+        retired_layout = sample_layout()
+        retired_layout["layoutId"] = "retired-layout"
+        retired_layout["label"] = "Retired Layout"
+        retired_layout["groups"][0]["controlIds"].append("volume-majorant-grid")
+        retired_hash = serve._volume_cockpit_layout_hash(retired_layout)
+        retired_artifact = {
+            "identity": "kaminos.volume.cockpit-layout-artifact.v1",
+            "layoutId": "retired-layout",
+            "contentHash": f"sha256:{retired_hash}",
+            "writtenAt": "2026-08-31T21:00:00Z",
+            "source": {"kind": "contract"},
+            "layout": retired_layout,
+        }
+        retired_path = layout_store / "layouts" / "retired-layout.json"
+        retired_path.write_text(json.dumps(retired_artifact, indent=2) + "\n")
+        projected_retired = serve.read_volume_cockpit_layout(layout_store, "retired-layout")
+        assert "volume-majorant-grid" not in projected_retired["layout"]["groups"][0]["controlIds"]
+        assert projected_retired["schemaProjection"]["retiredControlsStripped"] == [
+            {"groupId": "primary-controls", "id": "volume-majorant-grid"},
+        ]
+        assert "volume-majorant-grid" in json.loads(retired_path.read_text())["layout"]["groups"][0]["controlIds"], (
+            "read-time projection mutated the immutable stored layout"
+        )
+
         bad = sample_layout()
         bad["groups"][0]["controlIds"].append("volume-not-in-schema")
         try:

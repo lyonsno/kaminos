@@ -266,6 +266,19 @@ def _validate_settings_preset_schema(schema):
         or len({descriptor.get("param") for descriptor in all_controls}) != len(all_controls)
     ):
         raise ValueError("settings preset canonical schema inventory is invalid")
+    retired_controls = schema.get("retiredControls") or []
+    if not isinstance(retired_controls, list) or any(
+        not isinstance(descriptor, dict)
+        or descriptor.get("axis") not in {"domControls", "rendererControls", "presentationControls"}
+        for descriptor in retired_controls
+    ):
+        raise ValueError("settings preset retired control inventory is invalid")
+    combined_controls = [*all_controls, *retired_controls]
+    if (
+        len({descriptor.get("key") for descriptor in combined_controls}) != len(combined_controls)
+        or len({descriptor.get("param") for descriptor in combined_controls}) != len(combined_controls)
+    ):
+        raise ValueError("settings preset retired controls overlap the canonical inventory")
     return schema
 
 
@@ -287,14 +300,23 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
 
     normalized = copy.deepcopy(payload)
     defaults_applied = []
+    retired_controls_stripped = []
     routed_source_values = {}
     routed_default_values = {}
+    routed_retired_values = {}
+    retired_by_axis = {
+        "domControls": {},
+        "rendererControls": {},
+        "presentationControls": {},
+    }
+    for descriptor in schema.get("retiredControls") or []:
+        retired_by_axis[descriptor["axis"]][descriptor["key"]] = descriptor
     axis_specs = (
-        ("domControls", "controlCount", schema.get("controls") or [], True),
-        ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False),
-        ("presentationControls", "presentationControlCount", schema.get("presentationControls") or [], True),
+        ("domControls", "controlCount", schema.get("controls") or [], True, "basin"),
+        ("rendererControls", "rendererControlCount", schema.get("rendererControls") or [], False, "renderer"),
+        ("presentationControls", "presentationControlCount", schema.get("presentationControls") or [], True, "presentation"),
     )
-    for field, count_field, expected_descriptors, default_missing_axis in axis_specs:
+    for field, count_field, expected_descriptors, default_missing_axis, axis_name in axis_specs:
         source_controls = copy.deepcopy(payload.get(field))
         axis_authored = source_controls is not None
         if source_controls is None:
@@ -305,9 +327,22 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         if source_count not in (None, len(source_controls)):
             raise ValueError(f"settings preset {count_field} does not match its authored inventory")
         expected_by_key = {descriptor["key"]: descriptor for descriptor in expected_descriptors}
-        unknown = sorted(set(source_controls) - set(expected_by_key))
+        retired_by_key = retired_by_axis[field]
+        unknown = sorted(set(source_controls) - set(expected_by_key) - set(retired_by_key))
         if unknown:
             raise ValueError(f"settings preset {field} contain unknown controls: {','.join(unknown)}")
+        for key in sorted(set(source_controls) & set(retired_by_key)):
+            descriptor = source_controls.pop(key)
+            expected = retired_by_key[key]
+            _validate_settings_preset_descriptor(key, descriptor, expected)
+            value = _settings_preset_descriptor_value(descriptor)
+            routed_retired_values[expected["param"]] = _settings_preset_route_value(value)
+            retired_controls_stripped.append({
+                "axis": axis_name,
+                "id": key,
+                "param": expected["param"],
+                "value": value,
+            })
         for key, descriptor in source_controls.items():
             expected = expected_by_key[key]
             _validate_settings_preset_descriptor(key, descriptor, expected)
@@ -365,6 +400,14 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
     for key, expected_value in routed_source_values.items():
         if route_values.pop(key, None) != expected_value:
             raise ValueError(f"settings preset route/control mismatch for {key}")
+    for key, expected_value in routed_retired_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset retired route/control mismatch for {key}")
+    if routed_retired_values:
+        route_entries = [
+            (key, value) for key, value in route_entries
+            if key not in routed_retired_values
+        ]
     for key, default_value in routed_default_values.items():
         if key in route_values:
             raise ValueError(f"settings preset route contains unowned additive parameter {key}")
@@ -385,6 +428,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None):
         "sourcePresentationControlCount": payload.get("presentationControlCount", 0),
         "effectivePresentationControlCount": normalized.get("presentationControlCount", 0),
         "defaultsApplied": defaults_applied,
+        "retiredControlsStripped": retired_controls_stripped,
     }
 
 
@@ -606,7 +650,7 @@ def _read_json_object(path, role):
     return document
 
 
-def _normalize_volume_cockpit_layout(layout, schema=None):
+def _project_volume_cockpit_layout(layout, schema=None, *, allow_declared_retired=False):
     if not isinstance(layout, dict):
         raise ValueError("volume cockpit layout must be a JSON object")
     if set(layout) != {"identity", "layoutId", "label", "groups"}:
@@ -630,9 +674,15 @@ def _normalize_volume_cockpit_layout(layout, schema=None):
         descriptor["key"]
         for descriptor in [*schema.get("controls", []), *schema.get("rendererControls", [])]
     }
+    retired_control_ids = {
+        descriptor["key"]
+        for descriptor in schema.get("retiredControls") or []
+        if descriptor.get("axis") in {"domControls", "rendererControls"}
+    }
     group_ids = set()
     placed_control_ids = set()
     normalized_groups = []
+    retired_controls_stripped = []
     for group in groups:
         if not isinstance(group, dict) or set(group) != {"id", "label", "surface", "collapsed", "controlIds"}:
             raise ValueError("volume cockpit layout group fields do not match the v1 contract")
@@ -652,7 +702,8 @@ def _normalize_volume_cockpit_layout(layout, schema=None):
         control_ids = group.get("controlIds")
         if not isinstance(control_ids, list) or any(not isinstance(control_id, str) for control_id in control_ids):
             raise ValueError(f"volume cockpit layout group control ids are invalid: {group_id}")
-        unknown = sorted(set(control_ids) - known_control_ids)
+        admitted_control_ids = known_control_ids | (retired_control_ids if allow_declared_retired else set())
+        unknown = sorted(set(control_ids) - admitted_control_ids)
         if unknown:
             raise ValueError(f"volume cockpit layout contains unknown controls: {','.join(unknown)}")
         duplicates = sorted(placed_control_ids.intersection(control_ids))
@@ -660,19 +711,33 @@ def _normalize_volume_cockpit_layout(layout, schema=None):
             duplicates = duplicates or sorted(control_id for control_id in set(control_ids) if control_ids.count(control_id) > 1)
             raise ValueError(f"volume cockpit layout contains duplicate controls: {','.join(duplicates)}")
         placed_control_ids.update(control_ids)
+        retained_control_ids = []
+        for control_id in control_ids:
+            if control_id in retired_control_ids:
+                retired_controls_stripped.append({"groupId": group_id, "id": control_id})
+            else:
+                retained_control_ids.append(control_id)
         normalized_groups.append({
             "id": group_id,
             "label": group_label.strip(),
             "surface": group["surface"],
             "collapsed": group["collapsed"],
-            "controlIds": list(control_ids),
+            "controlIds": retained_control_ids,
         })
     return {
         "identity": "kaminos.volume.cockpit-layout.v1",
         "layoutId": layout_id,
         "label": label.strip(),
         "groups": normalized_groups,
+    }, {
+        "identity": "kaminos.volume.cockpit-layout-schema-projection.v1",
+        "retiredControlsStripped": retired_controls_stripped,
     }
+
+
+def _normalize_volume_cockpit_layout(layout, schema=None):
+    normalized, _ = _project_volume_cockpit_layout(layout, schema)
+    return normalized
 
 
 def _volume_cockpit_layout_hash(layout):
@@ -734,13 +799,19 @@ def read_volume_cockpit_layout(store_path, layout_id, schema=None):
         raise FileNotFoundError(f"volume cockpit layout not found: {layout_id}") from error
     if artifact.get("identity") != "kaminos.volume.cockpit-layout-artifact.v1" or artifact.get("layoutId") != layout_id:
         raise ValueError("volume cockpit layout artifact identity mismatch")
-    normalized = _normalize_volume_cockpit_layout(artifact.get("layout"), schema)
-    content_hash = f"sha256:{_volume_cockpit_layout_hash(normalized)}"
+    source_layout = artifact.get("layout")
+    content_hash = f"sha256:{_volume_cockpit_layout_hash(source_layout)}"
     if artifact.get("contentHash") != content_hash:
         raise ValueError("volume cockpit layout artifact content hash mismatch")
+    normalized, schema_projection = _project_volume_cockpit_layout(
+        source_layout,
+        schema,
+        allow_declared_retired=True,
+    )
     return {
         **artifact,
         "layout": normalized,
+        "schemaProjection": schema_projection,
         "layoutPath": str(layout_path),
         "storePath": str(store),
     }
@@ -770,6 +841,7 @@ def list_volume_cockpit_layouts(store_path, schema=None):
             "contentHash": artifact["contentHash"],
             "writtenAt": artifact.get("writtenAt"),
             "groupCount": len(artifact["layout"]["groups"]),
+            "retiredControlsStripped": (artifact.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
         })
     entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["layoutId"]), reverse=True)
     if active_layout_id and active_layout_id not in {entry["layoutId"] for entry in entries}:
@@ -973,6 +1045,7 @@ def list_volume_settings_presets(store_path, schema=None):
             "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
             "presentationControlCount": len((document.get("preset") or {}).get("presentationControls") or {}),
             "defaultsApplied": (document.get("schemaProjection") or {}).get("defaultsApplied") or [],
+            "retiredControlsStripped": (document.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
             "updatedAt": alias_document.get("updatedAt"),
             "source": alias_document.get("source") or {},
         })

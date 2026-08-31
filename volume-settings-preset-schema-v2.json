@@ -1119,6 +1119,57 @@
       "type": "range"
     }
   ],
+  "retiredControls": [
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-skip",
+      "param": "volume_majorant_skip",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-smooth",
+      "param": "volume_majorant_smooth",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-guard",
+      "param": "volume_majorant_guard",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-temporal-accum",
+      "param": "volume_temporal_accum",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-temporal-jitter",
+      "param": "volume_temporal_jitter",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-history-clamp",
+      "param": "volume_history_clamp",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-majorant-grid",
+      "param": "volume_majorant_grid",
+      "tagName": "SELECT",
+      "type": "select-one"
+    }
+  ],
   "rendererControls": [
     {
       "key": "volume-flow-kernel-strength",

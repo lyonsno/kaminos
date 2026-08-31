@@ -46,6 +46,15 @@ SCHEMA = {
             "additiveDefault": "on",
         },
     ],
+    "retiredControls": [
+        {
+            "axis": "domControls",
+            "key": "volume-retired-raymarch",
+            "param": "volume_retired_raymarch",
+            "tagName": "INPUT",
+            "type": "range",
+        },
+    ],
     "routeExtraParams": ["volume_quality_reason"],
     "activationParam": {"key": "kaminos_volume_smoke", "value": "1"},
     "excludedStateFields": ["fluidField"],
@@ -163,6 +172,50 @@ def main():
     assert projection["defaultsApplied"] == [
         "volume-new-detail", "volume-renderer-detail", "raymarch-smoke-presentation",
     ]
+
+    retired = legacy_payload()
+    retired["domControls"]["volume-retired-raymarch"] = {
+        "id": "volume-retired-raymarch",
+        "param": "volume_retired_raymarch",
+        "tagName": "INPUT",
+        "type": "range",
+        "value": 0.625,
+    }
+    retired["controlCount"] = 2
+    retired["route"] += "&volume_retired_raymarch=0.625"
+    projected_retired, retirement = serve.normalize_volume_settings_preset_payload(retired, SCHEMA)
+    assert "volume-retired-raymarch" not in projected_retired["domControls"]
+    assert projected_retired["controlCount"] == SCHEMA["controlCount"]
+    assert "volume_retired_raymarch=" not in projected_retired["route"]
+    assert retirement["retiredControlsStripped"] == [{
+        "axis": "basin",
+        "id": "volume-retired-raymarch",
+        "param": "volume_retired_raymarch",
+        "value": 0.625,
+    }]
+
+    mismatched_retired_route = copy.deepcopy(retired)
+    mismatched_retired_route["route"] = mismatched_retired_route["route"].replace(
+        "volume_retired_raymarch=0.625", "volume_retired_raymarch=0.5",
+    )
+    try:
+        serve.normalize_volume_settings_preset_payload(mismatched_retired_route, SCHEMA)
+    except ValueError as error:
+        assert "retired route/control mismatch" in str(error)
+    else:
+        raise AssertionError("retirement projection accepted a route value that disagreed with the stored descriptor")
+
+    overlapping_retirement_schema = copy.deepcopy(SCHEMA)
+    overlapping_retirement_schema["retiredControls"].append({
+        "axis": "domControls",
+        **SCHEMA["controls"][0],
+    })
+    try:
+        serve.normalize_volume_settings_preset_payload(source, overlapping_retirement_schema)
+    except ValueError as error:
+        assert "retired controls overlap" in str(error)
+    else:
+        raise AssertionError("schema admitted one control as both active and retired")
 
     incompatible_schema = copy.deepcopy(SCHEMA)
     incompatible_schema["controls"].append({
