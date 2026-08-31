@@ -40,6 +40,18 @@ export function summarizeBrowserEvent(event, fallbackSequence = null) {
       url: event.params?.entry?.url || null,
     };
   }
+  if (event.method === 'Network.loadingFailed') {
+    return {
+      ...witnessIdentity,
+      method: event.method,
+      requestId: event.params?.requestId || null,
+      type: event.params?.type || null,
+      errorText: event.params?.errorText || null,
+      blockedReason: event.params?.blockedReason || null,
+      canceled: event.params?.canceled ?? null,
+      url: event.witnessRequestUrl || null,
+    };
+  }
   return {
     ...witnessIdentity,
     method: event.method,
@@ -97,12 +109,16 @@ export function evaluateInitialLayoutAdmission(state, browserEvents) {
 }
 
 function isExpectedLayoutStoreBlock(event) {
-  return (
-    event.method === 'Log.entryAdded'
-    && event.level === 'error'
-    && String(event.url || '').includes('/api/volume-cockpit-layouts')
-    && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT')
-  );
+  const storeUrl = String(event.url || '').includes('/api/volume-cockpit-layouts');
+  if (!storeUrl) return false;
+  if (event.method === 'Log.entryAdded') {
+    return event.level === 'error' && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT');
+  }
+  return event.method === 'Network.loadingFailed'
+    && (
+      String(event.errorText || '').includes('ERR_BLOCKED_BY_CLIENT')
+      || event.blockedReason === 'inspector'
+    );
 }
 
 export function expectedLayoutStoreBlockSequencesInSlice(events, {
@@ -128,6 +144,7 @@ export function auditBrowserEvents(events, {
     event.method === 'Runtime.exceptionThrown'
     || (event.method === 'Log.entryAdded' && event.level === 'error')
     || (event.method === 'Runtime.consoleAPICalled' && event.type === 'error')
+    || event.method === 'Network.loadingFailed'
   ) && !allowed.includes(event));
   if (rejected.length > 0) {
     throw new TerminalWitnessError(`browser event audit failed: ${JSON.stringify(rejected)}`);

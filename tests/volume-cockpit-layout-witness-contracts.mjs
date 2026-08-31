@@ -15,6 +15,11 @@ assert.match(
 );
 assert.match(
   witness,
+  /Network\.requestWillBeSent[\s\S]*networkRequestUrls\.set[\s\S]*Network\.loadingFailed[\s\S]*witnessRequestUrl/,
+  'the outage witness must retain Chrome blocked-request failures with their correlated request URL',
+);
+assert.match(
+  witness,
   /navigateWithBrowserDiagnostics\(socket,\s*url\)[\s\S]*initial-layout-admission/,
   'pre-navigation browser diagnostics must be established before layout admission is evaluated',
 );
@@ -77,6 +82,16 @@ assert.match(
   witness,
   /const authoredLayoutWitness\s*=\s*\{[\s\S]*layoutId:\s*customLayout\.layout\.layoutId[\s\S]*movedControlId[\s\S]*sourceGroupId[\s\S]*targetGroupId[\s\S]*assertAuthoredLayoutRestored\(\{\s*authored:\s*authoredLayoutWitness,\s*reloaded\s*\}\)/,
   'reload persistence must verify the authored layout identity and moved-control structure',
+);
+assert.match(
+  witness,
+  /lastTrustworthyEvidence\.dragProbe\s*=\s*await probeTrustedDrag\([\s\S]*trustedDrag\([\s\S]*lastTrustworthyEvidence\.dragObservation\s*=\s*state/,
+  'a failed trusted drag must preserve pre-gesture source, destination, viewport, scroll, and hit-target geometry plus its last observed layout state',
+);
+assert.match(
+  witness,
+  /draggableControls:[\s\S]*getClientRects\(\)\.length[\s\S]*>\s*0[\s\S]*findIndex\([\s\S]*draggableControls\.length[\s\S]*draggableControls\.at\(-1\)[\s\S]*drag source hit-test did not resolve to the selected control/,
+  'the trusted drag must select rendered grips from adjacent groups and reject a press coordinate that misses the selected source control',
 );
 assert.match(
   witness,

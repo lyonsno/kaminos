@@ -20,9 +20,26 @@ function blockedStoreEvent(sequence, phase, label) {
   };
 }
 
+function blockedStoreNetworkEvent(sequence, phase) {
+  return {
+    witnessSequence: sequence,
+    witnessPhase: phase,
+    witnessRequestUrl: 'http://example.test/api/volume-cockpit-layouts',
+    method: 'Network.loadingFailed',
+    params: {
+      requestId: 'blocked-layout-store-request',
+      type: 'Fetch',
+      errorText: 'net::ERR_BLOCKED_BY_CLIENT',
+      blockedReason: 'inspector',
+      canceled: false,
+    },
+  };
+}
+
 const preOutage = blockedStoreEvent(10, 'named-layout-selection-persistence', 'pre-outage');
 const intendedOutage = blockedStoreEvent(11, 'layout-store-outage-isolation', 'intended-outage');
 const postOutage = blockedStoreEvent(12, 'layout-store-degraded-control-isolation', 'post-outage');
+const liveChromeOutage = blockedStoreNetworkEvent(13, 'layout-store-outage-isolation');
 
 const admitted = auditBrowserEvents([intendedOutage], {
   allowedExpectedLayoutStoreBlockSequences: [11],
@@ -32,6 +49,13 @@ assert.deepEqual(
   admitted.allowed.map(event => ({ sequence: event.sequence, phase: event.phase })),
   [{ sequence: 11, phase: 'layout-store-outage-isolation' }],
   'the admitted outage stimulus must retain its exact event sequence and witness phase',
+);
+assert.equal(
+  auditBrowserEvents([liveChromeOutage], {
+    allowedExpectedLayoutStoreBlockSequences: [13],
+  }).allowedExpectedFailureCount,
+  1,
+  'the exact Chrome Network.loadingFailed form is an admissible store-block stimulus only inside the declared outage slice',
 );
 
 assert.throws(

@@ -93,6 +93,7 @@ class CdpSocket {
     this.nextId = 1;
     this.pending = new Map();
     this.browserEvents = [];
+    this.networkRequestUrls = new Map();
     this.phaseProvider = phaseProvider;
   }
 
@@ -105,6 +106,23 @@ class CdpSocket {
       this.socket.addEventListener('message', event => {
         const message = JSON.parse(event.data);
         if (!message.id) {
+          if (message.method === 'Network.requestWillBeSent') {
+            this.networkRequestUrls.set(message.params?.requestId, message.params?.request?.url || null);
+          }
+          if (
+            message.method === 'Network.loadingFailed'
+            && (
+              message.params?.blockedReason
+              || String(message.params?.errorText || '').includes('ERR_BLOCKED_BY_CLIENT')
+            )
+          ) {
+            this.browserEvents.push({
+              ...message,
+              witnessRequestUrl: this.networkRequestUrls.get(message.params?.requestId) || null,
+              witnessSequence: this.browserEvents.length,
+              witnessPhase: this.phaseProvider(),
+            });
+          }
           if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
             this.browserEvents.push({
               ...message,
@@ -202,6 +220,54 @@ async function trustedClick(selector) {
   });
 }
 
+async function probeTrustedDrag(fromSelector, toSelector) {
+  return operatorValue(`(() => {
+    const fromElement = operatorDocument.querySelector(${JSON.stringify(fromSelector)});
+    const toElement = operatorDocument.querySelector(${JSON.stringify(toSelector)});
+    if (!fromElement) throw new Error('witness drag source missing: ' + ${JSON.stringify(fromSelector)});
+    if (!toElement) throw new Error('witness drag destination missing: ' + ${JSON.stringify(toSelector)});
+    toElement.scrollIntoView({ block: 'center', inline: 'center' });
+    const describe = element => {
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = operatorDocument.elementFromPoint(x, y);
+      const scrollHost = element.closest('#sidebar, #volume-authored-mix-body');
+      const scrollRect = scrollHost?.getBoundingClientRect();
+      return {
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        center: { x, y },
+        intersectsViewport: rect.right > 0 && rect.bottom > 0
+          && rect.left < operatorWindow.innerWidth && rect.top < operatorWindow.innerHeight,
+        hit: hit ? {
+          tagName: hit.tagName,
+          id: hit.id || '',
+          className: typeof hit.className === 'string' ? hit.className : '',
+          controlId: hit.closest('[data-volume-cockpit-control-id]')?.dataset.volumeCockpitControlId || null,
+          groupId: hit.closest('[data-volume-layout-group-id]')?.dataset.volumeLayoutGroupId || null,
+        } : null,
+        scrollHost: scrollHost ? {
+          id: scrollHost.id || '',
+          scrollTop: scrollHost.scrollTop,
+          scrollHeight: scrollHost.scrollHeight,
+          clientHeight: scrollHost.clientHeight,
+          rect: scrollRect
+            ? { x: scrollRect.x, y: scrollRect.y, width: scrollRect.width, height: scrollRect.height }
+            : null,
+        } : null,
+      };
+    };
+    return {
+      fromSelector: ${JSON.stringify(fromSelector)},
+      toSelector: ${JSON.stringify(toSelector)},
+      viewport: { width: operatorWindow.innerWidth, height: operatorWindow.innerHeight },
+      editing: operatorWindow.__kaminosVolumeCockpitLayoutEditor?.editing ?? null,
+      from: describe(fromElement),
+      to: describe(toElement),
+    };
+  })()`);
+}
+
 async function trustedDrag(fromSelector, toSelector) {
   await pagePoint(toSelector);
   const from = await pagePoint(fromSelector, { scroll: false });
@@ -230,15 +296,20 @@ async function cockpitState() {
       'input[id^="volume-"], select[id^="volume-"], textarea[id^="volume-"], select[data-volume-assay-control="emitter-family"]'
     )].filter(control => !control.closest('[data-volume-cockpit-layout-ui]'))
       .map(control => [control.id, control.type === 'checkbox' ? control.checked : control.value]));
-    const groups = [...operatorDocument.querySelectorAll('.volume-layout-group-shell')].map(shell => ({
-      id: shell.dataset.volumeLayoutGroupId,
-      surface: shell.dataset.volumeLayoutSurface,
-      label: shell.querySelector('.volume-layout-group-label')?.value || '',
-      labelReadOnly: shell.querySelector('.volume-layout-group-label')?.readOnly ?? null,
-      labelTabIndex: shell.querySelector('.volume-layout-group-label')?.tabIndex ?? null,
-      controls: [...shell.querySelectorAll('.slider-row[data-volume-cockpit-control-id]')]
-        .map(row => row.dataset.volumeCockpitControlId),
-    }));
+    const groups = [...operatorDocument.querySelectorAll('.volume-layout-group-shell')].map(shell => {
+      const controlRows = [...shell.querySelectorAll('.slider-row[data-volume-cockpit-control-id]')];
+      return {
+        id: shell.dataset.volumeLayoutGroupId,
+        surface: shell.dataset.volumeLayoutSurface,
+        label: shell.querySelector('.volume-layout-group-label')?.value || '',
+        labelReadOnly: shell.querySelector('.volume-layout-group-label')?.readOnly ?? null,
+        labelTabIndex: shell.querySelector('.volume-layout-group-label')?.tabIndex ?? null,
+        controls: controlRows.map(row => row.dataset.volumeCockpitControlId),
+        draggableControls: controlRows
+          .filter(row => (row.querySelector(':scope > .volume-layout-control-grip')?.getClientRects().length || 0) > 0)
+          .map(row => row.dataset.volumeCockpitControlId),
+      };
+    });
     return {
       wrapperHref: window.location.href,
       framePresent: Boolean(frame),
@@ -375,17 +446,33 @@ try {
     return state.layout?.label === 'Operator Layout Witness' && /saved/.test(state.status) ? state : null;
   }, 'named layout rename was not saved');
 
-  const sourceGroup = renamed.groups.find(group => group.controls.length > 0);
-  const targetGroup = renamed.groups.find(group => group.id !== sourceGroup?.id && group.controls.length > 0);
-  assert.ok(sourceGroup && targetGroup, 'witness could not find two populated groups');
-  const movedControlId = sourceGroup.controls.at(-1);
-  const initialTargetControlId = targetGroup.controls[0];
-  await trustedDrag(
-    `[data-volume-cockpit-control-id="${movedControlId}"] > .volume-layout-control-grip`,
-    `[data-volume-cockpit-control-id="${initialTargetControlId}"]`,
+  const dragGroupIndex = renamed.groups.findIndex((group, index, groups) => (
+    group.draggableControls.length > 0
+      && groups[index + 1]?.surface === group.surface
+      && groups[index + 1].draggableControls.length > 0
+  ));
+  const sourceGroup = renamed.groups[dragGroupIndex];
+  const targetGroup = renamed.groups[dragGroupIndex + 1];
+  assert.ok(sourceGroup && targetGroup, 'witness could not find adjacent groups with rendered control grips');
+  const movedControlId = sourceGroup.draggableControls.at(-1);
+  const initialTargetControlId = targetGroup.draggableControls[0];
+  const dragFromSelector = `[data-volume-cockpit-control-id="${movedControlId}"] > .volume-layout-control-grip`;
+  const dragToSelector = `[data-volume-cockpit-control-id="${initialTargetControlId}"]`;
+  lastTrustworthyEvidence.dragProbe = await probeTrustedDrag(dragFromSelector, dragToSelector);
+  assert.equal(
+    lastTrustworthyEvidence.dragProbe.from.hit?.controlId,
+    movedControlId,
+    'drag source hit-test did not resolve to the selected control',
   );
+  assert.equal(
+    lastTrustworthyEvidence.dragProbe.to.hit?.controlId,
+    initialTargetControlId,
+    'drag destination hit-test did not resolve to the selected control',
+  );
+  await trustedDrag(dragFromSelector, dragToSelector);
   const dragged = await waitUntil(async () => {
     const state = await cockpitState();
+    lastTrustworthyEvidence.dragObservation = state;
     const effectiveGroup = state.groups.find(group => group.controls.includes(movedControlId));
     return effectiveGroup?.id === targetGroup.id && /saved/.test(state.status) ? state : null;
   }, 'trusted pointer drag did not move and save the original control node');
