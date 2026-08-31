@@ -1348,12 +1348,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input type="range" id="volume-boundary-sidecar-width" min="0" max="2" step="0.02" value="0.75">
         <span class="slider-val" id="volume-boundary-sidecar-width-val">0.75</span>
       </div>
+      </details>
       <div class="slider-row">
         <span class="slider-label">Baked ridge</span>
         <input type="range" id="volume-boundary-sidecar-ridge" min="0" max="2" step="0.02" value="1.00">
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
-      </details>
       <div class="slider-row">
         <span class="slider-label">Ridge select</span>
         <input type="range" id="volume-reaction-boundary-fire-ridge" min="0" max="2" step="0.02" value="1.76">
@@ -1626,7 +1626,6 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <input type="range" id="volume-detail-scale" min="0.45" max="3.2" step="0.05" value="1.75">
       <span class="slider-val" id="volume-detail-scale-val">1.75</span>
     </div>
-    <span class="slider-help">Structure size, not render resolution: higher = finer breakup; lower = broader folds. Tall Plume limits the main frequency to 1.0 and the visible overlay to 35%.</span>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Plume Height</span>
       <input type="range" id="volume-plume-height" min="0.7" max="2.2" step="0.05" value="1.45">
@@ -1638,11 +1637,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-val" id="volume-wind-strength-val">0.00</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Wind Angle</span>
+      <span class="slider-label">Wind Angle (°)</span>
       <input type="range" id="volume-wind-angle" min="-180" max="180" step="5" value="0" data-angle-domain="full-circle-signed">
       <span class="slider-val" id="volume-wind-angle-val">0°</span>
     </div>
-    <span class="slider-help">Full circle: −180° … +180°. 0° = +X; +90° = +Z.</span>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Wind Height</span>
       <input type="range" id="volume-wind-height" min="-0.8" max="0.8" step="0.05" value="0.15">

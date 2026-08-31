@@ -16,11 +16,7 @@ assert.doesNotMatch(
   /document\.addEventListener\(['"](?:wheel|scroll)['"],\s*observeVolumeBasinDriveCockpitEvent/,
   'Basin Atlas recording must not turn panel scrolling into control-state capture work',
 );
-assert.match(
-  index,
-  /Structure size, not render resolution:[^<]*higher = finer breakup; lower = broader folds\.[^<]*Tall Plume limits the main frequency to 1\.0 and the visible overlay to 35%\./,
-  'Detail Scale explains its spatial-frequency role and the current Tall Plume quarantine in the cockpit',
-);
+assert.doesNotMatch(index, /Structure size, not render resolution:/, 'Detail Scale does not add explanatory prose to the driving surface');
 assert.match(core, /let physicalDetailScale = mix\(detailScale, 1\.0, detailScaleArtifactQuarantine\);/);
 assert.match(core, /let visibleDetailOverlayGain = mix\(1\.0, 0\.35, detailScaleArtifactQuarantine\);/);
 
@@ -31,9 +27,10 @@ assert.match(
 );
 assert.match(
   index,
-  /Full circle:\s*−180°\s*…\s*\+180°\.\s*0°\s*=\s*\+X;\s*\+90°\s*=\s*\+Z\./,
-  'wind direction explains its signed full-circle basis in the cockpit',
+  /<span class="slider-label">Wind Angle \(°\)<\/span>/,
+  'wind direction marks its unit directly on the control label',
 );
+assert.doesNotMatch(index, /Full circle:\s*−180°/, 'wind direction does not add a prose definition below the control');
 assert.match(index, /function formatVolumeWindDirection\(/, 'wind direction has one honest signed readout formatter');
 assert.match(
   index,

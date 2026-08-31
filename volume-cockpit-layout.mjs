@@ -374,6 +374,22 @@ function ensureGroupHost(documentRef, surface) {
   return host;
 }
 
+export function setVolumeCockpitGroupCollapsedState({ shell, collapsed }) {
+  if (!shell) throw new Error('volume-cockpit-layout-group-shell-missing');
+  const body = shell.querySelector(':scope > .volume-layout-group-body');
+  const toggle = shell.querySelector(':scope > .volume-layout-group-heading > .volume-layout-group-collapse');
+  if (!body || !toggle) throw new Error('volume-cockpit-layout-group-collapse-controls-missing');
+  const effectiveCollapsed = Boolean(collapsed);
+  body.hidden = effectiveCollapsed;
+  toggle.textContent = effectiveCollapsed ? '▸' : '▾';
+  toggle.title = effectiveCollapsed ? 'Expand group' : 'Collapse group';
+  toggle.setAttribute('aria-expanded', String(!effectiveCollapsed));
+  return {
+    identity: 'kaminos.volume.cockpit-layout-group-collapse.v1',
+    collapsed: effectiveCollapsed,
+  };
+}
+
 function groupShell(documentRef, group, actions, editing) {
   const shell = documentRef.createElement('section');
   shell.className = 'volume-layout-group-shell';
@@ -413,8 +429,8 @@ function groupShell(documentRef, group, actions, editing) {
   const body = documentRef.createElement('div');
   body.className = 'volume-layout-group-body';
   body.dataset.volumeLayoutGroupId = group.id;
-  body.hidden = group.collapsed;
   shell.append(heading, body);
+  setVolumeCockpitGroupCollapsedState({ shell, collapsed: group.collapsed });
   collapse.addEventListener('click', () => actions.collapse(group.id));
   label.addEventListener('change', () => {
     if (!actions.rename(group.id, label.value)) label.value = group.label;
@@ -625,7 +641,7 @@ class VolumeCockpitLayoutEditor {
 
   actions() {
     return {
-      collapse: groupId => this.updateGroup(groupId, group => { group.collapsed = !group.collapsed; }),
+      collapse: groupId => this.collapseGroup(groupId),
       rename: (groupId, label) => {
         if (!this.editing) return false;
         this.updateGroup(groupId, group => { group.label = String(label).trim() || group.label; });
@@ -654,6 +670,16 @@ class VolumeCockpitLayoutEditor {
   updateGroup(groupId, mutation) {
     mutation(this.group(groupId));
     this.applyAndSave();
+  }
+
+  collapseGroup(groupId) {
+    const group = this.group(groupId);
+    group.collapsed = !group.collapsed;
+    const shell = this.document.querySelector(
+      `.volume-layout-group-shell[data-volume-layout-group-id="${CSS.escape(groupId)}"]`,
+    );
+    setVolumeCockpitGroupCollapsedState({ shell, collapsed: group.collapsed });
+    this.save().catch(error => this.status(`save failed: ${error.message || error}`, true));
   }
 
   apply() {

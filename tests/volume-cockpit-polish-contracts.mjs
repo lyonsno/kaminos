@@ -75,10 +75,10 @@ for (const id of [
   'volume-flow-kernel-coherence',
   'volume-boundary-sidecar-blur',
   'volume-boundary-sidecar-width',
-  'volume-boundary-sidecar-ridge',
 ]) {
   assert.match(splatGroup, new RegExp(`id="${id}"`), `${id} is collapsible with the splat settings`);
 }
+assert.doesNotMatch(splatGroup, /id="volume-boundary-sidecar-ridge"/, 'main baked-ridge intensity remains usable without opening Splat settings');
 assert.doesNotMatch(splatGroup, /id="volume-reaction-boundary-fire-ridge"/, 'fire shaping remains outside the splat disclosure');
 
 console.log('volume cockpit polish contracts passed');
