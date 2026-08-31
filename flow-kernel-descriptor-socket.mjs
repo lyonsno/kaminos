@@ -1,4 +1,4 @@
-export const FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY = 'flow-kernel-local-descriptor-socket-v0';
+export const FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY = 'flow-kernel-local-descriptor-socket-v1';
 export const FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS = 100;
 
 const CONSUMED_FIELDS = Object.freeze(['sidecar', 'material', 'fire', 'micro']);
@@ -13,8 +13,8 @@ export const FLOW_KERNEL_DESCRIPTOR_ORDER = Object.freeze([
   'structure.normal.x', 'structure.normal.y', 'structure.normal.z', 'structure.normalValid',
   'flow.tangent.x', 'flow.tangent.y', 'flow.tangent.z', 'flow.coherence',
   'flow.curl.x', 'flow.curl.y', 'flow.curl.z', 'flow.curlMagnitude',
-  'flow.divergence', 'flow.curlActivity', 'validity.strengthZeroIdentity', 'validity.conservativeMajorant',
-  'majorant.density', 'majorant.fire', 'majorant.extinction', 'majorant.importance',
+  'flow.divergence', 'flow.curlActivity', 'validity.strengthZeroIdentity', 'validity.directOpticalSupport',
+  'opticalSupport.density', 'opticalSupport.fire', 'opticalSupport.extinction', 'opticalSupport.importance',
   ...CONSUMED_FIELDS.flatMap(field => COMPONENTS.map(component => `value.${field}.${component}`)),
   ...CONSUMED_FIELDS.flatMap(field => AXES.flatMap(axis => COMPONENTS.map(component => `gradient.${field}.${component}.${axis}`))),
 ]);
@@ -74,7 +74,7 @@ function validateControls(controls, label) {
 }
 
 function validateSourceHashes(sourceHashes) {
-  const required = ['fluidSha256', 'frontSha256', 'boundarySidecarSha256', 'majorantSha256'];
+  const required = ['fluidSha256', 'frontSha256', 'boundarySidecarSha256'];
   const result = {};
   for (const key of required) {
     const value = sourceHashes?.[key];

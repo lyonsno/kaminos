@@ -75,12 +75,16 @@ assert.equal(live.volumeParams.volume_speed, 5.00);
 assert.equal(live.volumeParams.volume_steps, 160);
 assert.equal(live.volumeParams.volume_adaptive_rays, 0.00);
 assert.equal(live.volumeParams.volume_occupancy_skip, 0.00);
-assert.equal(live.volumeParams.volume_majorant_skip, 0.00);
-assert.equal(live.volumeParams.volume_majorant_smooth, 0.10);
-assert.equal(live.volumeParams.volume_majorant_guard, 0.30);
-assert.equal(live.volumeParams.volume_temporal_accum, 0.00);
-assert.equal(live.volumeParams.volume_temporal_jitter, 0.00);
-assert.equal(live.volumeParams.volume_history_clamp, 1.00);
+for (const retiredParam of [
+  'volume_majorant_skip',
+  'volume_majorant_smooth',
+  'volume_majorant_guard',
+  'volume_temporal_accum',
+  'volume_temporal_jitter',
+  'volume_history_clamp',
+]) {
+  assert.equal(Object.hasOwn(live.volumeParams, retiredParam), false, `${retiredParam} is absent from the product route`);
+}
 assert.equal(live.volumeParams.volume_fire_scale, 0.42);
 assert.equal(live.volumeParams.volume_detail_scale, 1.00);
 assert.equal(live.volumeParams.volume_plume_height, 0.70);

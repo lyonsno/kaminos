@@ -71,7 +71,6 @@ const sourceHashes = {
   fluidSha256: 'a'.repeat(64),
   frontSha256: 'b'.repeat(64),
   boundarySidecarSha256: 'c'.repeat(64),
-  majorantSha256: 'd'.repeat(64),
 };
 
 const baseOverlay = {
@@ -169,7 +168,7 @@ const rejectionCases = [
   ['identity-drift', (overlay) => { overlay.identity = 'forged'; }, 'prediction overlay identity differs'],
   ['dtype-drift', (overlay) => { overlay.coefficientArtifact.dtype = 'float16-le'; }, 'prediction coefficient dtype differs'],
   ['role-drift', (overlay) => { overlay.coefficientArtifact.semanticRole = 'wrong-role'; }, 'prediction coefficient semantic role differs'],
-  ['source-hash-shape-drift', (overlay) => { delete overlay.state.sourceHashes.majorantSha256; }, 'prediction overlay source hashes differ'],
+  ['source-hash-shape-drift', (overlay) => { delete overlay.state.sourceHashes.boundarySidecarSha256; }, 'prediction overlay source hashes differ'],
 ];
 for (const [name, mutate, expectedReason] of rejectionCases) {
   const rejected = runPackage(name, mutate);

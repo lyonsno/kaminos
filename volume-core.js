@@ -463,8 +463,6 @@ const BOUNDARY_SPLAT_CHANNELS = [
   'nonRidgeAdmitted',
   'nonRidgeScore',
 ];
-const DEFAULT_MAJORANT_GRID_SIZE = 48;
-const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 
@@ -536,7 +534,7 @@ function normalizeSelectiveHeadLiveRole(value) {
   return SELECTIVE_HEAD_LIVE_ROLES.has(role) ? role : 'off';
 }
 
-function selectiveHeadLiveRoleAuthority(role) {
+export function selectiveHeadLiveRoleAuthority(role) {
   return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
 }
 
@@ -609,16 +607,61 @@ function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE)
   return fallback;
 }
 
-function normalizeMajorantGridSize(value) {
-  const requested = Number(value);
-  if (SUPPORTED_MAJORANT_GRID_SIZES.includes(requested)) return requested;
-  return DEFAULT_MAJORANT_GRID_SIZE;
-}
-
 function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
   return Math.max(0.1, Math.min(1, requested));
+}
+
+const RETIRED_RAYMARCH_CONTROL_KEYS = Object.freeze([
+  'majorantSkip',
+  'majorantSmooth',
+  'majorantGuard',
+  'majorantGrid',
+  'majorantCadence',
+  'temporalAccum',
+  'temporalJitter',
+  'historyClamp',
+]);
+const RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME = 'volume-prototype-runtime-v0';
+
+export function stripRetiredRaymarchControls(controls = {}) {
+  const next = { ...controls };
+  const retiredRaymarchControls = [];
+  for (const key of RETIRED_RAYMARCH_CONTROL_KEYS) {
+    if (!Object.hasOwn(next, key)) continue;
+    retiredRaymarchControls.push({ key, value: next[key] });
+    delete next[key];
+  }
+  return { controls: next, retiredRaymarchControls };
+}
+
+export function updateRetiredRaymarchControlReceipt(previousReceipt = [], observedReceipt = []) {
+  const previousByKey = new Map(previousReceipt.map(row => [row.key, row]));
+  const observedByKey = new Map(observedReceipt.map(row => [row.key, row]));
+  return RETIRED_RAYMARCH_CONTROL_KEYS
+    .map(key => previousByKey.get(key) || observedByKey.get(key))
+    .filter(Boolean)
+    .map(row => ({ key: row.key, value: row.value }));
+}
+
+export function retiredRaymarchControlReceiptPayload(source = {}) {
+  if (!Object.hasOwn(source, 'retiredRaymarchControls')) {
+    throw new Error('missing-retired-raymarch-controls-receipt');
+  }
+  if (!Array.isArray(source.retiredRaymarchControls)) {
+    throw new Error('invalid-retired-raymarch-controls-receipt');
+  }
+  if (!Object.hasOwn(source, 'retiredRaymarchControlReceiptLifetime')) {
+    throw new Error('missing-retired-raymarch-control-receipt-lifetime');
+  }
+  if (source.retiredRaymarchControlReceiptLifetime !== RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME) {
+    throw new Error(`invalid-retired-raymarch-control-receipt-lifetime:${source.retiredRaymarchControlReceiptLifetime}`);
+  }
+  return {
+    retiredRaymarchControls: source.retiredRaymarchControls.map(row => ({ key: row.key, value: row.value })),
+    retiredRaymarchControlReceiptLifetime: source.retiredRaymarchControlReceiptLifetime,
+  };
 }
 
 function normalizeVolumePresentationMode(value) {
@@ -1004,15 +1047,11 @@ function applyRuntimeQualityControls(controls = {}) {
     cap('renderScale', 0.75);
     cap('raySteps', 96);
     floor('adaptiveRays', 0.45);
-    floor('majorantCadence', 2);
   } else if (effective === 'holdover') {
     cap('renderScale', 0.70);
     cap('raySteps', 72);
     floor('adaptiveRays', 0.65);
     floor('occupancySkip', 0.25);
-    floor('majorantSkip', 0.35);
-    floor('majorantCadence', 4);
-    floor('temporalAccum', 0.42);
     next.pressureStrategy = 'global';
     next.pressureIterations = Math.min(1, Number.isFinite(Number(next.pressureIterations)) ? Number(next.pressureIterations) : 1);
   } else if (effective === 'impostor') {
@@ -1020,9 +1059,6 @@ function applyRuntimeQualityControls(controls = {}) {
     cap('raySteps', 48);
     floor('adaptiveRays', 0.85);
     floor('occupancySkip', 0.45);
-    floor('majorantSkip', 0.55);
-    floor('majorantCadence', 8);
-    floor('temporalAccum', 0.65);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
   }
@@ -1045,9 +1081,6 @@ function runtimeQualityReceipt(controls = {}) {
       raySteps: clampFinite(controls.raySteps, 24, 160, 96),
       adaptiveRays: clampFinite(controls.adaptiveRays, 0, 1, 0.65),
       occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
-      majorantSkip: clampFinite(controls.majorantSkip, 0, 1, 0.70),
-      majorantCadence: normalizeMajorantBuildCadence(controls.majorantCadence),
-      temporalAccum: clampFinite(controls.temporalAccum, 0, 0.85, 0.25),
       pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
       pressureIterations: normalizePressureIterationCount(controls.pressureIterations, controls.volumeScene),
     },
@@ -1129,10 +1162,6 @@ function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
-}
-
-function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
-  return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function boundarySidecarBufferBytes(gridSize) {
@@ -1592,6 +1621,35 @@ function normalizePyroFireMode(value) {
   return 'hybrid';
 }
 
+export function leanStockRaymarchAdmission({
+  legacyPyroBackedOff = false,
+  fireRenderMode = 'shell',
+  pyroFireMode = 'hybrid',
+  pyroCompareMode = 'live',
+  presentationMode = 'beauty',
+  smokePresentationMode = 'on',
+  appearanceDecompositionActive = false,
+  nonRidgeOpticalCaptureActive = false,
+  nonRidgeSourceBasisCaptureActive = false,
+  liveCompleteFlameOpticalCoefficientsEnabled = false,
+} = {}) {
+  const refusalReasons = [];
+  if (legacyPyroBackedOff !== true) refusalReasons.push('pyro-not-explicitly-backed-off');
+  if (normalizeFireRenderMode(fireRenderMode) !== 'stock') refusalReasons.push('fire-render-mode-not-stock');
+  if (normalizePyroFireMode(pyroFireMode) !== 'stock') refusalReasons.push('pyro-fire-mode-not-stock');
+  if (normalizePyroCompareMode(pyroCompareMode) !== 'base') refusalReasons.push('pyro-compare-mode-not-base');
+  if (presentationMode !== 'beauty') refusalReasons.push('presentation-mode-not-beauty');
+  if (smokePresentationMode !== 'on') refusalReasons.push('smoke-presentation-not-on');
+  if (appearanceDecompositionActive) refusalReasons.push('appearance-decomposition-active');
+  if (nonRidgeOpticalCaptureActive) refusalReasons.push('nonridge-optical-capture-active');
+  if (nonRidgeSourceBasisCaptureActive) refusalReasons.push('nonridge-source-basis-capture-active');
+  if (liveCompleteFlameOpticalCoefficientsEnabled) refusalReasons.push('live-complete-flame-coefficients-active');
+  return {
+    eligible: refusalReasons.length === 0,
+    refusalReasons,
+  };
+}
+
 function pyroFireModeValue(value) {
   const mode = normalizePyroFireMode(value);
   if (mode === 'stock') return 0;
@@ -1602,12 +1660,6 @@ function pyroFireModeValue(value) {
 function fireLickOperatorGainFromAmount(value) {
   const amount = clampFinite(value, 0, 5, 0);
   return amount * (0.82 + amount * 0.110);
-}
-
-function normalizeMajorantBuildCadence(value) {
-  const requested = Math.round(Number(value));
-  if (!Number.isFinite(requested)) return 1;
-  return Math.max(1, Math.min(8, requested));
 }
 
 function defaultPressureIterationsForScene(value) {
@@ -1802,7 +1854,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
-override MAJORANT_GRID: u32 = 24u;
+override LEAN_STOCK_RAYMARCH: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -1815,7 +1867,7 @@ struct Uniforms {
   source_controls: vec4<f32>,
   radiance_controls: vec4<f32>,
   occupancy_controls: vec4<f32>,
-  temporal_controls: vec4<f32>,
+  reserved_render_controls: vec4<f32>,
   scale_controls: vec4<f32>,
   scene_controls: vec4<f32>,
   bonfire_ablation_controls: vec4<f32>,
@@ -1873,7 +1925,6 @@ struct Uniforms {
   reserved_source_extension_3: vec4<f32>,
   reserved_source_extension_4: vec4<f32>,
   artistic_motion_controls: vec4<f32>,
-  previousViewProj: mat4x4<f32>,
 };
 
 struct ExternalEmitter {
@@ -1914,9 +1965,6 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(0) var<uniform> u: Uniforms;
 @group(0) @binding(1) var<storage, read> fluidSrc: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> fluidDst: array<vec4<f32>>;
-@group(0) @binding(3) var<storage, read> majorantField: array<vec4<f32>>;
-@group(0) @binding(4) var historyTexture: texture_2d<f32>;
-@group(0) @binding(5) var historySampler: sampler;
 @group(0) @binding(6) var<storage, read> externalEmitters: array<ExternalEmitter>;
 @group(0) @binding(7) var<storage, read> frontSrc: array<f32>;
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
@@ -1924,7 +1972,6 @@ struct NonRidgeOpticalCaptureRow {
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
 @group(0) @binding(11) var<storage, read_write> nonRidgeOpticalCaptureHeader: NonRidgeOpticalCaptureHeader;
 @group(0) @binding(12) var<storage, read_write> nonRidgeOpticalCaptureRows: array<f32>;
-@group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -1952,174 +1999,6 @@ fn hash31(p: vec3<f32>) -> f32 {
   let q = fract(p * 0.1031);
   let r = q + dot(q, q.yzx + 33.33);
   return fract((r.x + r.y) * r.z);
-}
-
-fn sampleHistoryColor(uv: vec2<f32>) -> vec3<f32> {
-  return textureSampleLevel(historyTexture, historySampler, clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0)), 0.0).rgb;
-}
-
-fn temporalReprojectionUv(worldPos: vec3<f32>, velocity: vec3<f32>, confidence: f32) -> vec3<f32> {
-  let historyLag = mix(0.012, 0.042, clamp(confidence, 0.0, 1.0));
-  let previousWorld = worldPos - velocity * historyLag;
-  let clip = u.previousViewProj * vec4<f32>(previousWorld, 1.0);
-  let safeW = max(abs(clip.w), 0.0001);
-  let ndc = clip.xy / safeW;
-  let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
-  let validX = step(0.0, uv.x) * step(uv.x, 1.0);
-  let validY = step(0.0, uv.y) * step(uv.y, 1.0);
-  let validW = step(0.0001, clip.w);
-  return vec3<f32>(uv, validX * validY * validW);
-}
-
-fn temporalReprojectionConfidence(materialWeight: f32, majorantEdge: f32, reactiveSignal: f32) -> f32 {
-  let materialConfidence = smoothstep(0.012, 0.18, materialWeight);
-  let edgePenalty = 1.0 - smoothstep(0.05, 0.34, majorantEdge);
-  let reactivePenalty = 1.0 - smoothstep(0.18, 1.15, reactiveSignal);
-  return clamp(materialConfidence * edgePenalty * reactivePenalty, 0.0, 1.0);
-}
-
-fn temporalJitterOffset(uv: vec2<f32>, dtBase: f32) -> f32 {
-  let temporalJitter = clamp(u.temporal_controls.y, 0.0, 1.0);
-  let temporalFrame = u.temporal_controls.w;
-  let pixel = floor(uv * u.viewport_steps_density.xy);
-  let interleaved = hash31(vec3<f32>(pixel + vec2<f32>(temporalFrame * 17.0, temporalFrame * 29.0), temporalFrame));
-  let r2 = fract(temporalFrame * 0.754877666 + interleaved * 0.569840296);
-  return mix(0.5, r2, temporalJitter) * dtBase;
-}
-
-fn temporalHistoryClamp(history: vec3<f32>, current: vec3<f32>, clampStrength: f32) -> vec3<f32> {
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let energyDelta = abs(currentLuma - historyLuma);
-  let fireTighten = smoothstep(0.42, 0.92, max(current.r, current.g));
-  let radius = mix(vec3<f32>(0.26), vec3<f32>(0.045), clampStrength) + current * mix(0.10, 0.035, fireTighten) + vec3<f32>(energyDelta * 0.045);
-  return clamp(history, max(vec3<f32>(0.0), current - radius), current + radius);
-}
-
-fn cheapTemporalRamp(x: f32, lo: f32, hi: f32) -> f32 {
-  return clamp((x - lo) / max(hi - lo, 0.0001), 0.0, 1.0);
-}
-
-struct MaterialTemporalSignals {
-  lanes: vec4<f32>,
-  protectedDetail: f32,
-  sampleWeight: f32,
-  reactiveBoost: f32,
-};
-
-fn materialTemporalSignals(alpha: f32, smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32, trans: f32) -> MaterialTemporalSignals {
-  let fireHistoryProtect = clamp(
-    cheapTemporalRamp(fireAlpha, 0.010, 0.105)
-      + cheapTemporalRamp(temp, 0.40, 1.18) * 0.70
-      + cheapTemporalRamp(fireLick, 0.045, 0.36) * 0.36,
-    0.0,
-    1.0
-  );
-  let interfaceSignal = interfaceShred * 1.30 + fireLick * 0.34 + majorantEdge * 0.82;
-  let detailSignal = microTextureSignal + interest * 0.20;
-  let interfaceHistoryProtect = clamp(
-    cheapTemporalRamp(interfaceSignal, 0.035, 0.52)
-      + cheapTemporalRamp(detailSignal, 0.22, 1.20) * 0.30,
-    0.0,
-    1.0
-  );
-  let detailHistoryProtect = clamp(
-    cheapTemporalRamp(detailSignal, 0.24, 1.35) * 0.74
-      + interfaceHistoryProtect * 0.26,
-    0.0,
-    1.0
-  );
-  let smokeBody = cheapTemporalRamp(smokeAlpha, 0.012, 0.13) * (1.0 - cheapTemporalRamp(fireAlpha, 0.006, 0.075));
-  let smokeHistoryTrust = clamp(
-    smokeBody * (1.0 - fireHistoryProtect * 0.82) * (1.0 - interfaceHistoryProtect * 0.52)
-      + cheapTemporalRamp(smokeAlpha, 0.025, 0.22) * 0.12,
-    0.0,
-    1.0
-  );
-  let protectedDetail = max(fireHistoryProtect, max(interfaceHistoryProtect, detailHistoryProtect));
-  let smokeCarrier = smokeAlpha * (1.35 + smokeHistoryTrust * 0.68);
-  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
-  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
-  let sampleWeight = clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
-  let reactiveBoost = fireHistoryProtect * 0.36 + interfaceHistoryProtect * 0.22;
-  return MaterialTemporalSignals(vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect), protectedDetail, sampleWeight, reactiveBoost);
-}
-
-fn materialTemporalClassificationFromSignals(signals: MaterialTemporalSignals) -> vec4<f32> {
-  return signals.lanes;
-}
-
-fn materialTemporalClassification(smokeAlpha: f32, fireAlpha: f32, temp: f32, microTextureSignal: f32, interfaceShred: f32, fireLick: f32, majorantEdge: f32, interest: f32) -> vec4<f32> {
-  return materialTemporalClassificationFromSignals(materialTemporalSignals(smokeAlpha + fireAlpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, 1.0));
-}
-
-fn materialAwareImportanceWeightFromSignals(signals: MaterialTemporalSignals) -> f32 {
-  return signals.sampleWeight;
-}
-
-fn materialAwareImportanceWeight(alpha: f32, smokeAlpha: f32, fireAlpha: f32, interest: f32, materialTemporal: vec4<f32>, trans: f32) -> f32 {
-  let protectedDetail = max(materialTemporal.y, max(materialTemporal.z, materialTemporal.w));
-  let smokeCarrier = smokeAlpha * (1.35 + materialTemporal.x * 0.68);
-  let hotCarrier = fireAlpha * (3.10 + protectedDetail * 1.20);
-  let edgeCarrier = interest * (0.030 + protectedDetail * 0.040);
-  return clamp((alpha * 2.20 + smokeCarrier + hotCarrier + edgeCarrier) * trans, 0.0, 1.0);
-}
-
-fn materialAwareTemporalWeights(smokeHistoryTrustSum: f32, fireHistoryProtectSum: f32, interfaceHistoryProtectSum: f32, detailHistoryProtectSum: f32, materialWeight: f32) -> vec4<f32> {
-  let inv = 1.0 / max(materialWeight, 0.0001);
-  let fireHistoryProtect = clamp(fireHistoryProtectSum * inv, 0.0, 1.0);
-  let interfaceHistoryProtect = clamp(interfaceHistoryProtectSum * inv, 0.0, 1.0);
-  let detailHistoryProtect = clamp(detailHistoryProtectSum * inv, 0.0, 1.0);
-  let smokeHistoryTrust = clamp(smokeHistoryTrustSum * inv * (1.0 - fireHistoryProtect * 0.58) * (1.0 - interfaceHistoryProtect * 0.40), 0.0, 1.0);
-  return vec4<f32>(smokeHistoryTrust, fireHistoryProtect, interfaceHistoryProtect, detailHistoryProtect);
-}
-
-fn temporalReactiveMask(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> f32 {
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let currentHot = max(current.r, current.g);
-  let historyHot = max(history.r, history.g);
-  let smokeHistoryTrust = materialTemporalWeights.x;
-  let fireHistoryProtect = materialTemporalWeights.y;
-  let interfaceHistoryProtect = materialTemporalWeights.z;
-  let detailHistoryProtect = materialTemporalWeights.w;
-  let hotMismatch = smoothstep(0.055, 0.27, abs(historyHot - currentHot));
-  let colorMismatch = smoothstep(0.045, 0.24, length(history - current));
-  let fireReactive = smoothstep(0.22, 0.76, currentHot) * 0.78 + smoothstep(0.30, 1.10, reactiveSignal) * 0.82 + fireHistoryProtect * 0.76;
-  let smokeBodyLoss = smoothstep(0.025, 0.16, historyLuma - currentLuma) * (1.0 - smokeHistoryTrust * 0.42);
-  let edgeReactive = smoothstep(0.08, 0.34, majorantEdge) + interfaceHistoryProtect * 0.58 + detailHistoryProtect * 0.28;
-  let invalid = 1.0 - historyUvValid * step(0.03, confidence);
-  return clamp(max(max(hotMismatch, colorMismatch), max(fireReactive, max(smokeBodyLoss, edgeReactive))) + invalid, 0.0, 1.0);
-}
-
-fn temporalHistoryWeight(current: vec3<f32>, history: vec3<f32>, confidence: f32, reactiveMask: f32, materialTemporalWeights: vec4<f32>) -> f32 {
-  let temporalAccum = clamp(u.temporal_controls.x, 0.0, 0.90);
-  let currentLuma = dot(current, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let historyLuma = dot(history, vec3<f32>(0.2126, 0.7152, 0.0722));
-  let currentHot = max(current.r, current.g);
-  let historyHot = max(history.r, history.g);
-  let smokeHistoryTrust = materialTemporalWeights.x;
-  let fireHistoryProtect = materialTemporalWeights.y;
-  let interfaceHistoryProtect = materialTemporalWeights.z;
-  let detailHistoryProtect = materialTemporalWeights.w;
-  let fireProtect = max(smoothstep(0.38, 0.82, currentHot), fireHistoryProtect);
-  let hotMismatch = smoothstep(0.08, 0.34, abs(historyHot - currentHot));
-  let colorMismatch = smoothstep(0.05, 0.28, length(history - current));
-  let currentSupport = max(smoothstep(0.035, 0.18, currentLuma), smokeHistoryTrust * 0.26);
-  let fadingTrailReject = 1.0 - smoothstep(0.018, 0.12, historyLuma - currentLuma);
-  let smokeHistoryGain = mix(0.34, 1.08, smokeHistoryTrust);
-  let materialProtection = (1.0 - fireProtect * 0.90) * (1.0 - interfaceHistoryProtect * 0.68) * (1.0 - detailHistoryProtect * 0.34);
-  return temporalAccum * confidence * currentSupport * smokeHistoryGain * fadingTrailReject * (1.0 - reactiveMask) * materialProtection * (1.0 - hotMismatch * 0.82) * (1.0 - colorMismatch * 0.70);
-}
-
-fn temporalResolveColor(current: vec3<f32>, sameScreenUv: vec2<f32>, reprojectedUv: vec2<f32>, reprojectionConfidence: f32, reactiveSignal: f32, majorantEdge: f32, historyUvValid: f32, materialTemporalWeights: vec4<f32>) -> vec3<f32> {
-  let historyClampStrength = clamp(u.temporal_controls.z, 0.0, 1.0);
-  let uv = mix(sameScreenUv, reprojectedUv, smoothstep(0.04, 0.30, reprojectionConfidence) * historyUvValid);
-  let history = sampleHistoryColor(uv);
-  let clampedHistory = temporalHistoryClamp(history, current, historyClampStrength);
-  let reactiveMask = temporalReactiveMask(current, history, reprojectionConfidence, reactiveSignal, majorantEdge, historyUvValid, materialTemporalWeights);
-  let historyWeight = temporalHistoryWeight(current, history, reprojectionConfidence, reactiveMask, materialTemporalWeights);
-  return mix(current, clampedHistory, historyWeight);
 }
 
 fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
@@ -2448,79 +2327,42 @@ fn sampleWorldFlowReconstructedSidecar(p: vec3<f32>, reconstructed: FlowReconstr
   return max(vec4<f32>(0.0), mix(center, filtered, strength));
 }
 
-fn majorantIndex(c: vec3<u32>) -> u32 {
-  return c.x + c.y * MAJORANT_GRID + c.z * MAJORANT_GRID * MAJORANT_GRID;
-}
-
-fn materialMajorantFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> vec4<f32> {
+fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, combustionFrontTopology: f32) -> f32 {
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
   let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
-  let importance = clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
-  return vec4<f32>(density, fire, extinction, importance);
+  return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
 
-fn sampleWorldMajorant(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  return majorantField[majorantIndex(vec3<u32>(floor(q)))];
+fn directCellOpticalSupportAtCell(c: vec3<i32>) -> f32 {
+  return directCellOpticalSupportFromSlots(
+    readSlot(c, 0u),
+    readSlot(c, 1u),
+    readSlot(c, 2u),
+    readSlot(c, 3u),
+    readFrontField(c)
+  );
 }
 
-fn sampleMajorantCell(c: vec3<i32>) -> vec4<f32> {
-  let cell = vec3<u32>(clamp(c, vec3<i32>(0), vec3<i32>(i32(MAJORANT_GRID) - 1)));
-  return majorantField[majorantIndex(cell)];
-}
-
-fn sampleWorldMajorantLinear(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * (f32(MAJORANT_GRID) - 1.0), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 1.001));
-  let i0 = vec3<i32>(floor(q));
-  let f = fract(q);
-  let c000 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 0));
-  let c100 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 0));
-  let c010 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 0));
-  let c110 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 0));
-  let c001 = sampleMajorantCell(i0 + vec3<i32>(0, 0, 1));
-  let c101 = sampleMajorantCell(i0 + vec3<i32>(1, 0, 1));
-  let c011 = sampleMajorantCell(i0 + vec3<i32>(0, 1, 1));
-  let c111 = sampleMajorantCell(i0 + vec3<i32>(1, 1, 1));
-  let x00 = mix(c000, c100, f.x);
-  let x10 = mix(c010, c110, f.x);
-  let x01 = mix(c001, c101, f.x);
-  let x11 = mix(c011, c111, f.x);
-  let y0 = mix(x00, x10, f.y);
-  let y1 = mix(x01, x11, f.y);
-  return mix(y0, y1, f.z);
-}
-
-fn sampleWorldMajorantDilated(p: vec3<f32>) -> vec4<f32> {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
+fn directCellOpticalSupport(p: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
   let c = vec3<i32>(floor(q));
-  var m = sampleMajorantCell(c);
-  m = max(m, sampleMajorantCell(c + vec3<i32>(1, 0, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(-1, 0, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 1, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, -1, 0)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, 1)));
-  m = max(m, sampleMajorantCell(c + vec3<i32>(0, 0, -1)));
-  return m;
+  let z0 = max(
+    max(directCellOpticalSupportAtCell(c), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 0))),
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 0)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 0)))
+  );
+  let z1 = max(
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 0, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 0, 1))),
+    max(directCellOpticalSupportAtCell(c + vec3<i32>(0, 1, 1)), directCellOpticalSupportAtCell(c + vec3<i32>(1, 1, 1)))
+  );
+  return max(z0, z1);
 }
 
-fn majorantGradientSignal(p: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  let c = vec3<i32>(floor(q));
-  let x0 = sampleMajorantCell(c + vec3<i32>(-1, 0, 0)).w;
-  let x1 = sampleMajorantCell(c + vec3<i32>(1, 0, 0)).w;
-  let y0 = sampleMajorantCell(c + vec3<i32>(0, -1, 0)).w;
-  let y1 = sampleMajorantCell(c + vec3<i32>(0, 1, 0)).w;
-  let z0 = sampleMajorantCell(c + vec3<i32>(0, 0, -1)).w;
-  let z1 = sampleMajorantCell(c + vec3<i32>(0, 0, 1)).w;
-  return clamp(abs(x1 - x0) + abs(y1 - y0) + abs(z1 - z0), 0.0, 1.5);
-}
-
-fn majorantCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 0.001));
-  let dqdt = rd * (0.5 * f32(MAJORANT_GRID));
+fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
+  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let dqdt = rd * (0.5 * f32(GRID));
   var best = 1.0e6;
   if (abs(dqdt.x) > 0.0001) {
     let bx = select(floor(q.x), floor(q.x) + 1.0, dqdt.x > 0.0);
@@ -3448,8 +3290,12 @@ fn raymarchInterest(
 
 fn adaptiveRayStepScale(interest: f32, adaptiveRays: f32) -> f32 {
   let fine = smoothstep(0.035, 0.92, interest);
-  let adaptiveScale = mix(2.65, 0.68, fine);
+  let adaptiveScale = mix(2.65, 1.0, fine);
   return mix(1.0, adaptiveScale, clamp(adaptiveRays, 0.0, 1.0));
+}
+
+fn segmentOpacity(opticalDepth: f32, maxOpacity: f32) -> f32 {
+  return min(1.0 - exp(-max(0.0, opticalDepth)), maxOpacity);
 }
 
 fn raymarchOccupancySignal(
@@ -3560,26 +3406,6 @@ fn csBoundarySidecar(@builtin(global_invocation_id) gid: vec3<u32>) {
     boundarySidecarRidge,
     boundarySidecarFootprintWidth
   );
-}
-
-@compute @workgroup_size(4, 4, 4)
-fn csMajorant(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (any(gid >= vec3<u32>(MAJORANT_GRID))) {
-    return;
-  }
-  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * f32(GRID) / f32(MAJORANT_GRID)));
-  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * f32(GRID) / f32(MAJORANT_GRID))));
-  var majorant = vec4<f32>(0.0);
-  for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
-    for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
-      for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
-        let c = vec3<i32>(vec3<u32>(x, y, z));
-        let candidate = materialMajorantFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c));
-        majorant = max(majorant, candidate);
-      }
-    }
-  }
-  majorantDst[majorantIndex(gid)] = majorant;
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -4846,7 +4672,7 @@ fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
 }
 
 fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
-  let fullGridCapture = nonRidgeOpticalCaptureHeader.mode >= 3u;
+  let fullGridCapture = !LEAN_STOCK_RAYMARCH && nonRidgeOpticalCaptureHeader.mode >= 3u;
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -4885,14 +4711,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
-  let pyroMaterialGain = clamp(u.pyro_detail_controls.x, 0.0, 1.5);
+  let pyroMaterialGain = select(clamp(u.pyro_detail_controls.x, 0.0, 1.5), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroMaterialEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
   let pyroLiveAuthority = clamp(u.pyro_detail_controls.z, 0.0, 1.0);
   let pyroSmokeAuthority = clamp(u.pyro_detail_controls.w, 0.0, 1.0);
   let pyroInterfaceFocus = clamp(u.pyro_carrier_controls.x, 0.0, 1.0);
   let pyroEdgeBite = clamp(u.pyro_carrier_controls.y, 0.0, 1.0);
   let pyroSmokeFold = clamp(u.pyro_carrier_controls.z, 0.0, 1.0);
-  let pyroDiagnosticPaint = clamp(u.pyro_carrier_controls.w, 0.0, 1.0);
+  let pyroDiagnosticPaint = select(clamp(u.pyro_carrier_controls.w, 0.0, 1.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroCarrierViewMode = clamp(u.pyro_diagnostic_controls.x, 0.0, 7.0);
   let pyroCarrierOverdrive = clamp(u.pyro_diagnostic_controls.y, 1.0, 8.0);
   let pyroBiteBorderFocus = clamp(u.pyro_diagnostic_controls.z, 0.0, 1.0);
@@ -4900,8 +4726,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let pyroBiteTeeth = clamp(u.pyro_shape_controls.x, 0.0, 1.0);
   let pyroBiteWake = clamp(u.pyro_shape_controls.y, 0.0, 1.0);
   let pyroFoldWake = clamp(u.pyro_shape_controls.z, 0.0, 1.0);
-  let pyroFireMode = clamp(u.pyro_shape_controls.w, 0.0, 2.0);
-  let pyroContrastRadiance = clamp(u.pyro_light_controls.x, 0.0, 10.0);
+  let pyroFireMode = select(clamp(u.pyro_shape_controls.w, 0.0, 2.0), 0.0, LEAN_STOCK_RAYMARCH);
+  let pyroContrastRadiance = select(clamp(u.pyro_light_controls.x, 0.0, 10.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroRadianceGate = clamp(u.pyro_light_controls.y, 0.0, 1.0);
   let pyroRadianceSpill = clamp(u.pyro_light_controls.z, 0.0, 1.0);
   let pyroRadianceWarmth = clamp(u.pyro_light_controls.w, 0.0, 1.0);
@@ -4917,9 +4743,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let pyroRadianceHeight = clamp(u.pyro_radiance_route_controls.y, 0.0, 1.0);
   let pyroRadianceBorder = clamp(u.pyro_radiance_route_controls.z, 0.0, 1.0);
   let pyroRadianceTeeth = clamp(u.pyro_radiance_route_controls.w, 0.0, 1.0);
-  let pyroFlamePaint = clamp(u.pyro_luma_controls.x, 0.0, 3.0);
-  let pyroFlameLuma = clamp(u.pyro_luma_controls.y, 0.0, 3.0);
-  let pyroStockMix = clamp(u.pyro_luma_controls.z, 0.0, 1.0);
+  let pyroFlamePaint = select(clamp(u.pyro_luma_controls.x, 0.0, 3.0), 0.0, LEAN_STOCK_RAYMARCH);
+  let pyroFlameLuma = select(clamp(u.pyro_luma_controls.y, 0.0, 3.0), 1.0, LEAN_STOCK_RAYMARCH);
+  let pyroStockMix = select(clamp(u.pyro_luma_controls.z, 0.0, 1.0), 1.0, LEAN_STOCK_RAYMARCH);
   let pyroBiteLuma = clamp(u.pyro_luma_controls.w, 0.0, 3.0);
   let pyroWakeLuma = clamp(u.pyro_luma_controls2.x, 0.0, 3.0);
   let pyroRadianceLuma = clamp(u.pyro_luma_controls2.y, 0.0, 3.0);
@@ -4931,7 +4757,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let pyroBiteRimCut = clamp(u.pyro_bite_stack_controls.w, 0.0, 1.0);
   let pyroBiteAfter = clamp(u.pyro_bite_stack_controls2.x, 0.0, 1.0);
   let pyroBiteAfterCut = clamp(u.pyro_bite_stack_controls2.y, 0.0, 1.0);
-  let pyroFlowBite = clamp(u.pyro_flow_controls.x, 0.0, 3.0);
+  let pyroFlowBite = select(clamp(u.pyro_flow_controls.x, 0.0, 3.0), 0.0, LEAN_STOCK_RAYMARCH);
   let pyroFlowBorder = clamp(u.pyro_flow_controls.y, 0.0, 1.0);
   let pyroFlowTeeth = clamp(u.pyro_flow_controls.z, 0.0, 1.0);
   let pyroFlowRise = clamp(u.pyro_flow_controls.w, 0.0, 1.0);
@@ -4949,7 +4775,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let pyroRadianceWarmEndpoint = u.pyro_palette_radiance_warm.rgb;
   let pyroFlowCoolEndpoint = u.pyro_palette_flow.rgb;
   let pyroFlowHotEndpoint = u.pyro_palette_flow_hot.rgb;
-  let fireRenderMode = clamp(u.topology_shell_controls.x, 0.0, 3.0);
+  let fireRenderMode = select(clamp(u.topology_shell_controls.x, 0.0, 3.0), 3.0, LEAN_STOCK_RAYMARCH);
   let shellInspectMode = clamp(u.topology_shell_controls.y, 0.0, 9.0);
   let shellAmount = clamp(u.topology_shell_controls.z, 0.0, 2.0);
   let shellWidth = clamp(u.topology_shell_controls.w, 0.05, 2.0);
@@ -4986,9 +4812,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let volumeExposure = clamp(u.volume_presentation_controls.x, 0.0, 3.0);
   let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
   let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
-  let supervisionFireOnlyTarget = clamp(u.boundary_fire_display.y, 0.0, 1.0);
+  let supervisionFireOnlyTarget = select(clamp(u.boundary_fire_display.y, 0.0, 1.0), 0.0, LEAN_STOCK_RAYMARCH);
   let raymarchSmokeSuppressed = clamp(u.boundary_fire_display.z, 0.0, 1.0);
-  let appearanceDecompositionMode = u.boundary_fire_display.w;
+  let appearanceDecompositionMode = select(u.boundary_fire_display.w, 0.0, LEAN_STOCK_RAYMARCH);
   let appearanceAssayActive = step(0.5, appearanceDecompositionMode);
   let effectiveRaymarchSmokeSuppressed = max(raymarchSmokeSuppressed, appearanceAssayActive);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
@@ -4998,7 +4824,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let startT = select(max(hit.x, 0.0), 0.0, fullGridCapture);
   let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
-  let jitter = temporalJitterOffset(in.uv, dtBase);
+  let jitter = dtBase * 0.5;
   let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
@@ -5030,42 +4856,27 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
-  var temporalMaterialWeight = 0.0;
-  var temporalWorldSum = vec3<f32>(0.0);
-  var temporalVelocitySum = vec3<f32>(0.0);
-  var temporalReactiveSignal = 0.0;
-  var temporalMajorantEdge = 0.0;
-  var temporalSmokeHistoryTrustSum = 0.0;
-  var temporalFireHistoryProtectSum = 0.0;
-  var temporalInterfaceHistoryProtectSum = 0.0;
-  var temporalDetailHistoryProtectSum = 0.0;
-
-  for (var i = 0; i < 192; i = i + 1) {
-    if (f32(i) >= steps || (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT))) { break; }
+  let expensiveSampleBudget = u32(ceil(steps));
+  let maxTraversalSteps = GRID * 3u + expensiveSampleBudget + 3u;
+  var expensiveSamples = 0u;
+  var traversalSteps = 0u;
+  loop {
+    if (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps) { break; }
+    if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
+    traversalSteps = traversalSteps + 1u;
+    let sampleIndex = expensiveSamples;
     let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID))), GRID - 1u);
-    let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(i)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
+    let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
-    let majorantNearest = sampleWorldMajorant(p);
-    let majorantLinear = sampleWorldMajorantLinear(p);
-    let majorantDilated = sampleWorldMajorantDilated(p);
-    let majorantSkipStrength = clamp(u.occupancy_controls.y, 0.0, 1.0);
-    let majorantSmooth = clamp(u.occupancy_controls.z, 0.0, 1.0);
-    let majorantEdgeGuard = clamp(u.occupancy_controls.w, 0.0, 1.0);
-    let majorant = mix(majorantNearest, mix(majorantLinear, majorantDilated, 0.28 + majorantEdgeGuard * 0.42), majorantSmooth);
-    let majorantEdge = majorantGradientSignal(p);
-    let guardedImportance = max(majorant.w, majorantDilated.w * majorantEdgeGuard * (0.55 + majorantSmooth * 0.25));
-    let guardedThreshold = mix(0.050, 0.100, majorantEdgeGuard);
-    let majorantEmpty = 1.0 - smoothstep(0.004, guardedThreshold, guardedImportance + majorantEdge * majorantEdgeGuard * 0.24);
-    let edgeDamping = 1.0 - smoothstep(0.012, 0.16, majorantEdge * majorantEdgeGuard);
-    let majorantSkipGate = majorantEmpty * majorantSkipStrength * edgeDamping;
-    temporalMajorantEdge = max(temporalMajorantEdge, majorantEdge * (0.18 + majorantSkipGate));
-    if (!fullGridCapture && majorantSkipGate > 0.42) {
-      let cellExit = majorantCellExitDistance(p, rd);
-      let skipDt = min(cellExit + dtBase * 0.20, dtBase * (1.0 + majorantSkipGate * 6.0));
-      t = t + min(skipDt, max(0.0001, endT - t));
+    let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
+    let directSupport = select(directCellOpticalSupport(p), 1.0, flowKernelReconstructionActive);
+    if (!fullGridCapture && directSupport <= 0.0001) {
+      let cellExit = directCellExitDistance(p, rd);
+      t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
       continue;
     }
+    expensiveSamples = expensiveSamples + 1u;
     let reconstructed = sampleWorldFlowReconstruction(p);
     let state = reconstructed.velocityDensity;
     let material = reconstructed.material;
@@ -5174,8 +4985,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       bonfireRenderScene * smoothstep(0.030, 0.84, flame + flameDetail + fireLick)
     );
     var smokeAlpha = mix(
-      clamp((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.0, 0.16),
-      clamp(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.0, 0.16),
+      segmentOpacity((density * 1.08 + smoke * 0.40 + heat * 0.13 + materialDetail * 0.28 + microBodyContribution * 0.54) * rayStepOpacity * (0.86 + absorptionGain * 0.12) * bonfireCurtainBreakup, 0.16),
+      segmentOpacity(canonicalDebugSmokeDensity * rayStepOpacity * (0.86 + absorptionGain * 0.12), 0.16),
       canonicalSmokeOnlyRender
     );
     let fireAlphaMax = mix(0.20, 0.145, bonfireRenderScene);
@@ -5226,13 +5037,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let quenchedFlameDetail = flameDetail * (1.0 - quenchCoreCollapse * 0.66);
     let quenchedFireLick = fireLick * (1.0 - quenchCoreCollapse * 0.54);
     let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
-    let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
+    let vaporAlpha = segmentOpacity((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
     let visibleSmokeAuthority = 1.0 - max(supervisionFireOnlyTarget, effectiveRaymarchSmokeSuppressed);
     let visibleSmokeAlpha = smokeAlpha * (1.0 - raymarchSmokeSuppressed) * (1.0 - supervisionFireOnlyTarget) * (1.0 - appearanceAssayActive);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let stockFireAlpha = mix(
-      clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
+      segmentOpacity(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, fireAlphaMax),
       0.0,
       canonicalSmokeOnlyRender
     );
@@ -5262,14 +5073,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     ) * (1.0 - clamp(frontSupport * 0.54 + edgeSupport * 0.30 + curlActivity * 0.12, 0.0, 0.86));
     let shellMask = clamp(shellCarrier * mix(1.0, 1.0 - shellCoreBody * 0.82, shellCoreSuppress), 0.0, 1.35);
     let shellWrinkle = clamp(1.0 + shellBiteGain * (frontSupport * 0.26 + edgeSupport * 0.24 + curlActivity * 0.20), 0.0, 2.4);
-    let shellAlpha = clamp(
+    let shellAlpha = segmentOpacity(
       shellMask
         * fireVisualAuthority
         * rayStepOpacity
         * (0.050 + shellWidth * 0.070)
         * shellWrinkle
         * fireSnuffDamping,
-      0.0,
       fireAlphaMax
     );
     let inspectShellMask = 1.0 - step(0.5, abs(shellInspectMode - 0.0));
@@ -5400,21 +5210,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       + divSupport * inspectDivMask
       + boundaryCandidate * inspectBoundaryMask
       + boundaryCandidate * inspectBoundaryFireMask;
-    let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
+    let inspectAlpha = segmentOpacity(inspectSignal * rayStepOpacity * 0.55, 0.28);
     var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
     var alpha = clamp(visibleSmokeAlpha + fireAlpha, 0.0, 0.18);
-    let materialSignals = materialTemporalSignals(alpha, visibleSmokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
-    let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
-    let temporalSampleWeight = materialAwareImportanceWeightFromSignals(materialSignals);
-    temporalMaterialWeight = temporalMaterialWeight + temporalSampleWeight;
-    temporalWorldSum = temporalWorldSum + p * temporalSampleWeight;
-    temporalVelocitySum = temporalVelocitySum + state.xyz * temporalSampleWeight;
-    temporalSmokeHistoryTrustSum = temporalSmokeHistoryTrustSum + materialTemporal.x * temporalSampleWeight;
-    temporalFireHistoryProtectSum = temporalFireHistoryProtectSum + materialTemporal.y * temporalSampleWeight;
-    temporalInterfaceHistoryProtectSum = temporalInterfaceHistoryProtectSum + materialTemporal.z * temporalSampleWeight;
-    temporalDetailHistoryProtectSum = temporalDetailHistoryProtectSum + materialTemporal.w * temporalSampleWeight;
-    temporalReactiveSignal = max(temporalReactiveSignal, clamp(fireAlpha * 5.2 + renderTemp * 0.075 + quenchedFlameDetail * 0.45 + quenchedFireLick * 0.38 + interfaceShred * 0.16 + materialSignals.reactiveBoost, 0.0, 2.2));
     let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
     let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
     let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
@@ -5489,7 +5288,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
         * smoothstep(0.018, 0.16, directFlameCandidateFireSignal);
       directFlameCandidateSupport = directFlameCandidateStructuralSignal * step(0.11, directFlameCandidateStructuralSignal);
     }
-    let directFlameCandidateAlpha = clamp(directFlameCandidateSupport * rayStepOpacity * 0.55, 0.0, 0.28);
+    let directFlameCandidateAlpha = segmentOpacity(directFlameCandidateSupport * rayStepOpacity * 0.55, 0.28);
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -5991,7 +5790,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       max(max(completeFlameEmissionCoefficient.r, completeFlameEmissionCoefficient.g), max(completeFlameEmissionCoefficient.b, completeFlameExtinctionCoefficient))
     );
     if (fullGridCapture) {
-      let cellIndex = fullGridX + fullGridY * GRID + u32(i) * GRID * GRID;
+      let cellIndex = fullGridX + fullGridY * GRID + sampleIndex * GRID * GRID;
       let sourceBasisReaction = reactionSupport;
       let sourceBasisInterface = edgeSupport;
       let sourceBasisCurl = curlDebug;
@@ -6130,13 +5929,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
-  let temporalInvWeight = 1.0 / max(temporalMaterialWeight, 0.0001);
-  let temporalWorld = temporalWorldSum * temporalInvWeight;
-  let temporalVelocity = temporalVelocitySum * temporalInvWeight;
-  let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
-  let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
-  let materialTemporalWeights = materialAwareTemporalWeights(temporalSmokeHistoryTrustSum, temporalFireHistoryProtectSum, temporalInterfaceHistoryProtectSum, temporalDetailHistoryProtectSum, temporalMaterialWeight);
-  let resolvedColor = temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights);
   let residualFeature = vec4<f32>(
     clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
     clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
@@ -6144,7 +5936,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
   return makeRaymarchResult(
-    vec4<f32>(resolvedColor, 1.0),
+    vec4<f32>(current, 1.0),
     trans,
     residualFeature,
     vec4<f32>(sharedRidgeContribution, 0.0),
@@ -6437,7 +6229,6 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
 const BOUNDARY_SPLAT_WGSL = `
 override GRID: u32 = 64u;
-override MAJORANT_GRID: u32 = 24u;
 const SLOTS_PER_CELL: u32 = 4u;
 
 struct BoundarySplat {
@@ -6558,7 +6349,7 @@ struct FlowKernelDescriptorRow {
   tangentCoherence: vec4<f32>,
   curlMagnitude: vec4<f32>,
   validity: vec4<f32>,
-  majorant: vec4<f32>,
+  opticalSupport: vec4<f32>,
   sidecar: vec4<f32>,
   material: vec4<f32>,
   fire: vec4<f32>,
@@ -6586,7 +6377,6 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(4) var<uniform> boundarySplatCamera: BoundarySplatCamera;
 @group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
-@group(0) @binding(7) var<storage, read> boundarySplatMajorant: array<vec4<f32>>;
 @group(0) @binding(8) var<storage, read_write> flowKernelDescriptorRows: array<FlowKernelDescriptorRow>;
 @group(0) @binding(9) var<storage, read> flowKernelDescriptorRowsForRender: array<FlowKernelDescriptorRow>;
 @group(0) @binding(10) var<storage, read> boundarySplatLiveUnionCoefficients: array<vec4<f32>>;
@@ -6843,11 +6633,18 @@ fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstruct
   return boundarySplatFlowReconstructionWithFrame(world, boundarySplatFlowFrame(world), centerWeight, neighborWeight);
 }
 
-fn boundarySplatSampleMajorant(world: vec3<f32>) -> vec4<f32> {
-  let q = clamp((world * 0.5 + vec3<f32>(0.5)) * f32(MAJORANT_GRID), vec3<f32>(0.0), vec3<f32>(f32(MAJORANT_GRID) - 1.0));
-  let cell = vec3<u32>(floor(q));
-  let index = cell.x + cell.y * MAJORANT_GRID + cell.z * MAJORANT_GRID * MAJORANT_GRID;
-  return boundarySplatMajorant[index];
+fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
+  let density = max(reconstructed.velocityDensity.w, reconstructed.material.x);
+  let fire = reconstructed.fire.x * 1.25
+    + reconstructed.fire.z * 0.52
+    + reconstructed.fire.w * 0.86
+    + reconstructed.micro.z * 0.72
+    + reconstructed.material.y * 0.24;
+  let extinction = reconstructed.material.x * 0.62
+    + reconstructed.micro.y * 0.36
+    + reconstructed.material.w * 0.16;
+  let importance = density * 0.50 + extinction * 0.40 + fire * 0.44;
+  return max(vec4<f32>(density, fire, extinction, importance), vec4<f32>(0.0));
 }
 
 fn writeFlowKernelDescriptor(
@@ -6878,7 +6675,7 @@ fn writeFlowKernelDescriptor(
   flowKernelDescriptorRows[candidateIndex].tangentCoherence = vec4<f32>(tangent, frame.divergenceActivity.z);
   flowKernelDescriptorRows[candidateIndex].curlMagnitude = frame.curlMagnitude;
   flowKernelDescriptorRows[candidateIndex].validity = vec4<f32>(frame.divergenceActivity.x, frame.divergenceActivity.y, strengthZero, boundarySplatCamera.appearance.z);
-  flowKernelDescriptorRows[candidateIndex].majorant = boundarySplatSampleMajorant(world);
+  flowKernelDescriptorRows[candidateIndex].opticalSupport = boundarySplatOpticalSupport(reconstructed);
   flowKernelDescriptorRows[candidateIndex].sidecar = reconstructed.sidecar;
   flowKernelDescriptorRows[candidateIndex].material = reconstructed.material;
   flowKernelDescriptorRows[candidateIndex].fire = reconstructed.fire;
@@ -7714,10 +7511,10 @@ export function createKaminosVolumePrototype({
   const productModelMatrix = new THREE.Matrix4();
   const productViewProj = new THREE.Matrix4();
   const productLocalCameraPosition = new THREE.Vector3();
-  const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(384);
   const volumePresentationControls = new Float32Array([1, 0, 0, 0]);
-  let controlsSnapshot = applyRuntimeQualityControls(getControls());
+  const initialControlRetirement = stripRetiredRaymarchControls(getControls());
+  let controlsSnapshot = applyRuntimeQualityControls(initialControlRetirement.controls);
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
   let volumePresentationModeEffective = 'beauty';
@@ -7737,7 +7534,6 @@ export function createKaminosVolumePrototype({
   let fourArmHeldStateRuntimeState = null;
   let fourArmHeldStateResidualGrid = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
-  let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
   let oracleActivityCueBuffer = null;
   let oracleActivityCueSourceValues = null;
@@ -7807,6 +7603,8 @@ export function createKaminosVolumePrototype({
     selectiveHeadLiveExactPause: null,
     selectiveHeadLive: null,
     backend: 'inactive',
+    retiredRaymarchControls: initialControlRetirement.retiredRaymarchControls,
+    retiredRaymarchControlReceiptLifetime: RETIRED_RAYMARCH_CONTROL_RECEIPT_LIFETIME,
     active: false,
     width: 0,
     height: 0,
@@ -7878,12 +7676,6 @@ export function createKaminosVolumePrototype({
     gridOverlay: 0,
     adaptiveRaymarch: 0.65,
     occupancySkip: 0.35,
-    majorantSkip: 0.70,
-    majorantSmooth: 0.85,
-    majorantGuard: 0.75,
-    temporalAccum: 0.25,
-    temporalJitter: 0.85,
-    historyClamp: 0.70,
     fireScale: 0.86,
     detailScale: 1.75,
     detailScaleArtifactQuarantine: detailScaleArtifactQuarantine(controlsSnapshot.volumeScene),
@@ -7935,27 +7727,8 @@ export function createKaminosVolumePrototype({
     analyticEmitterCellVisitsThisFrame: 0,
     analyticEmitterFullGridEquivalentPasses: 0,
     scalarActivityReceiver: null,
-    temporalAccumEffective: 0,
-    temporalReprojectionConfidence: 0,
-    temporalHistoryWeight: 0,
-    temporalRejectedHistory: 1,
-    temporalSmokeHistoryTrust: 0,
-    temporalFireHistoryProtect: 0,
-    temporalInterfaceHistoryProtect: 0,
-    temporalEvidenceSource: 'cpu-estimate-control-proxy',
-    temporalHistoryFrames: 0,
-    temporalHistoryResetCount: 0,
-    temporalHistoryResetReason: 'initial',
-    temporalHistoryValid: false,
     fluidStateResetCount: 0,
     fluidStateResetReason: 'initial',
-    majorantGrid: majorantGridSize,
-    majorantBuilt: false,
-    majorantFrameCount: 0,
-    majorantCadence: normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence),
-    majorantBuiltThisFrame: false,
-    majorantLastBuiltFrame: -1,
-    majorantSkippedFrameCount: 0,
     boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
     boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
     boundarySidecarBytes: boundarySidecarBufferBytes(gridSize),
@@ -8321,7 +8094,11 @@ export function createKaminosVolumePrototype({
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let leanStockPipeline = null;
+  let leanStockReadbackPipeline = null;
   let productRaymarchPipeline = null;
+  let leanStockProductRaymarchPipeline = null;
+  let debugRaymarchShaderSpecialization = 'auto';
   let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
   let browserResidualSourcePipeline = null;
@@ -8344,7 +8121,6 @@ export function createKaminosVolumePrototype({
   let pressureJacobiTieredHeroPipeline = null;
   let pressureProjectPipeline = null;
   let pressureProjectTieredPipeline = null;
-  let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
   let boundarySplatCompactPipeline = null;
   let boundarySplatFinalizePipeline = null;
@@ -8383,12 +8159,11 @@ export function createKaminosVolumePrototype({
   let fourArmHeldStateResidualBindGroup = null;
   let bindGroups = [];
   let analyticEmitterInjectionBindGroups = [];
-  let majorantFrontBindGroups = [];
+  let fluidFrontReadBindGroups = [];
   let boundarySidecarReadBindGroups = [];
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
-  let majorantWriteBindGroup = null;
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
@@ -8396,8 +8171,7 @@ export function createKaminosVolumePrototype({
   let selectiveHeadLiveBindGroups = null;
   let bindGroupLayout = null;
   let analyticEmitterInjectionBindGroupLayout = null;
-  let majorantFluidBindGroupLayout = null;
-  let majorantWriteBindGroupLayout = null;
+  let fluidFrontReadBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
   let boundarySidecarWriteBindGroupLayout = null;
   let boundarySplatComputeBindGroupLayout = null;
@@ -8410,7 +8184,6 @@ export function createKaminosVolumePrototype({
   let analyticEmitterInjectionPipelineLayout = null;
   let productRaymarchDepthBindGroupLayout = null;
   let productRaymarchPipelineLayout = null;
-  let majorantPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
@@ -8434,7 +8207,6 @@ export function createKaminosVolumePrototype({
   let analyticEmitterDescriptorSignature = '';
   let analyticEmitterDispatch = analyticEmitterInjectionDispatch(null, gridSize);
   let volumePrimitives = [];
-  let majorantBuffer = null;
   let boundarySidecarBuffer = null;
   let boundarySidecarOverrideUpload = null;
   let debugFullFieldImportUpload = null;
@@ -8482,13 +8254,6 @@ export function createKaminosVolumePrototype({
   let frameTextureSize = '';
   let browserResidualFeatureTexture = null;
   let browserResidualFeatureTextureSize = '';
-  let historyTexture = null;
-  let historyTextureSize = '';
-  let historySampler = null;
-  let historyValid = false;
-  let previousViewProjReady = false;
-  let lastTemporalCameraSignature = '';
-  let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
   let selectiveHeadLiveCapturePaused = false;
@@ -9042,7 +8807,7 @@ export function createKaminosVolumePrototype({
     pressureBuffers = [];
     bindGroups = [];
     analyticEmitterInjectionBindGroups = [];
-    majorantFrontBindGroups = [];
+    fluidFrontReadBindGroups = [];
     boundarySidecarReadBindGroups = [];
     boundarySidecarWriteBindGroup = null;
     boundarySplatComputeBindGroups = [];
@@ -9050,135 +8815,6 @@ export function createKaminosVolumePrototype({
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
-  }
-
-  function destroyMajorantState() {
-    majorantBuffer?.destroy();
-    majorantBuffer = null;
-    majorantWriteBindGroup = null;
-  }
-
-  function resetTemporalHistory(reason = 'reset') {
-    historyValid = false;
-    previousViewProjReady = false;
-    state.temporalHistoryValid = false;
-    state.temporalHistoryFrames = 0;
-    state.temporalReprojectionConfidence = 0;
-    state.temporalHistoryWeight = 0;
-    state.temporalRejectedHistory = 1;
-    state.temporalSmokeHistoryTrust = 0;
-    state.temporalFireHistoryProtect = 0;
-    state.temporalInterfaceHistoryProtect = 0;
-    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
-    state.temporalHistoryResetCount += 1;
-    state.temporalHistoryResetReason = reason;
-  }
-
-  function commitPreviousViewProjection() {
-    previousViewProj.copy(productFrameOwner === 'caller' ? productViewProj : viewProj);
-    previousViewProjReady = true;
-  }
-
-  function destroyTemporalHistory() {
-    historyTexture?.destroy();
-    historyTexture = null;
-    historyTextureSize = '';
-    resetTemporalHistory('history-destroyed');
-  }
-
-  function ensureTemporalHistoryTexture() {
-    if (!device || !format) return;
-    const width = Math.max(1, state.width || 1);
-    const height = Math.max(1, state.height || 1);
-    const key = `${width}x${height}:${format}`;
-    if (historyTexture && historyTextureSize === key) return;
-    historyTexture?.destroy();
-    historyTexture = device.createTexture({
-      label: `kaminos temporal history texture ${width}x${height}`,
-      size: { width, height, depthOrArrayLayers: 1 },
-      format,
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    historyTextureSize = key;
-    resetTemporalHistory('history-resized');
-    rebuildFluidBindGroups();
-    rebuildSelectiveHeadLiveBindGroups();
-  }
-
-  function temporalCameraSignature() {
-    return [
-      camera.position.x.toFixed(4),
-      camera.position.y.toFixed(4),
-      camera.position.z.toFixed(4),
-      camera.quaternion.x.toFixed(4),
-      camera.quaternion.y.toFixed(4),
-      camera.quaternion.z.toFixed(4),
-      camera.quaternion.w.toFixed(4),
-      camera.projectionMatrix.elements.map(value => value.toFixed(4)).join(','),
-    ].join('|');
-  }
-
-  function temporalControlSignature(snapshot = controlsSnapshot) {
-    return [
-      snapshot.density,
-      snapshot.fire,
-      snapshot.radiance,
-      snapshot.absorption,
-      snapshot.glow,
-      snapshot.smoke,
-      snapshot.curl,
-      snapshot.microdetail,
-      snapshot.interfaceShred,
-      snapshot.fireLicks,
-      snapshot.projection,
-      snapshot.speed,
-      snapshot.raySteps,
-      snapshot.adaptiveRays,
-      snapshot.occupancySkip,
-      snapshot.majorantSkip,
-      snapshot.majorantSmooth,
-      snapshot.majorantGuard,
-      snapshot.renderScale,
-      snapshot.fireScale,
-      snapshot.detailScale,
-      snapshot.plumeHeight,
-      snapshot.windStrength,
-      snapshot.windAngle,
-      snapshot.windHeight,
-      snapshot.bonfireRecenter,
-      snapshot.bonfireLateralDamping,
-      snapshot.bonfireShear,
-      snapshot.bonfireDetailForces,
-      snapshot.bonfireDepinch,
-      snapshot.bonfireProjection,
-      snapshot.bonfireTemporal,
-      snapshot.bonfireInstabilityProbe,
-      normalizeLifecycleEffect(snapshot.lifecycleEffect),
-      snapshot.lifecycleT,
-      snapshot.quenchVapor,
-      snapshot.inputRadius,
-      snapshot.flowRate,
-      snapshot.resolution,
-      snapshot.majorantGrid,
-      snapshot.gridOverlay,
-      snapshot.flowDebug,
-      snapshot.flowKernelStrength,
-      snapshot.flowKernelRadius,
-      snapshot.flowKernelCoherence,
-      snapshot.oracleActivityCue,
-      snapshot.oracleActivityDisplay,
-      snapshot.oracleActivityCurlNoise,
-      snapshot.oracleActivityVorticity,
-      snapshot.oracleActivityMaterial,
-      normalizeLookFreeze(snapshot.lookFreeze),
-      normalizePyroCompareMode(snapshot.pyroCompareMode),
-      snapshot.pressureStrategy,
-      snapshot.pressureTierLowerMax,
-      snapshot.pressureTierHeroMin,
-      snapshot.pressureTierHeroMax,
-      normalizeVolumeScene(snapshot.volumeScene),
-      snapshot.rayBudgetPreset || '',
-    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
 
   function canonicalSourceControlSignature(snapshot = controlsSnapshot) {
@@ -9195,12 +8831,23 @@ export function createKaminosVolumePrototype({
     ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
   }
 
-  function maybeResetTemporalHistoryForCamera() {
-    const signature = temporalCameraSignature();
-    if (lastTemporalCameraSignature && lastTemporalCameraSignature !== signature) {
-      resetTemporalHistory('camera-change');
-    }
-    lastTemporalCameraSignature = signature;
+  function effectiveControlsSignature(snapshot = controlsSnapshot) {
+    return JSON.stringify(Object.fromEntries(
+      Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
+    ));
+  }
+
+  function cameraSignature() {
+    return [
+      camera.position.x.toFixed(4),
+      camera.position.y.toFixed(4),
+      camera.position.z.toFixed(4),
+      camera.quaternion.x.toFixed(4),
+      camera.quaternion.y.toFixed(4),
+      camera.quaternion.z.toFixed(4),
+      camera.quaternion.w.toFixed(4),
+      camera.projectionMatrix.elements.map(value => value.toFixed(4)).join(','),
+    ].join('|');
   }
 
   function createFluidRenderBindGroup({
@@ -9219,9 +8866,6 @@ export function createKaminosVolumePrototype({
         { binding: 0, resource: { buffer: uniformsBuffer } },
         { binding: 1, resource: { buffer: fluidRead } },
         { binding: 2, resource: { buffer: fluidWrite } },
-        { binding: 3, resource: { buffer: majorantBuffer } },
-        { binding: 4, resource: historyTexture.createView() },
-        { binding: 5, resource: historySampler },
         { binding: 6, resource: { buffer: externalEmitterBuffer } },
         { binding: 7, resource: { buffer: frontRead } },
         { binding: 8, resource: { buffer: frontWrite } },
@@ -9234,7 +8878,7 @@ export function createKaminosVolumePrototype({
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !boundarySidecarBuffer) return;
     bindGroups = [
       createFluidRenderBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -9282,13 +8926,10 @@ export function createKaminosVolumePrototype({
     if (
       !selectiveHeadLiveRuntime
       || !bindGroupLayout
-      || !majorantFluidBindGroupLayout
+      || !fluidFrontReadBindGroupLayout
       || !boundarySidecarReadBindGroupLayout
       || !boundarySplatComputeBindGroupLayout
       || !uniformBuffer
-      || !majorantBuffer
-      || !historyTexture
-      || !historySampler
       || !externalEmitterBuffer
       || !oracleActivityCueBuffer
       || !nonRidgeOpticalCaptureHeaderBuffer
@@ -9329,9 +8970,9 @@ export function createKaminosVolumePrototype({
             uniformsBuffer: liveCompleteFlameCoefficientUniformBuffer,
           })
         : null,
-      majorant: device.createBindGroup({
-        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} majorant`,
-        layout: majorantFluidBindGroupLayout,
+      fluidFrontRead: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} fluid/front read`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluid } },
           { binding: 7, resource: { buffer: front } },
@@ -9356,7 +8997,6 @@ export function createKaminosVolumePrototype({
           { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
           { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
           { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
-          { binding: 7, resource: { buffer: majorantBuffer } },
           { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
           { binding: 12, resource: { buffer: boundarySplatBilinearIndirectBuffer } },
           { binding: 14, resource: { buffer: boundarySplatInstanceSelectionBuffer } },
@@ -9459,7 +9099,7 @@ export function createKaminosVolumePrototype({
     if (effectiveFluidSha256 !== fluidSha256 || effectiveFrontSha256 !== frontSha256) {
       throw new Error(`selective-head replay anchor checksum mismatch: fluid=${effectiveFluidSha256} front=${effectiveFrontSha256}`);
     }
-    rebuildFluidState(gridSize, majorantGridSize, 'selective-head-live-replay-anchor');
+    rebuildFluidState(gridSize, 'selective-head-live-replay-anchor');
     const uploadInChunks = (buffer, bytes) => {
       const source = new Uint8Array(bytes);
       const chunkBytes = 8 * 1024 * 1024;
@@ -9494,23 +9134,6 @@ export function createKaminosVolumePrototype({
       modelIdentity: selectiveHeadLiveRuntime.modelIdentity,
     };
     return { ...state.selectiveHeadLiveReplayAnchor };
-  }
-
-  function ensureMajorantBuffer() {
-    if (majorantBuffer) return;
-    majorantBuffer = device.createBuffer({
-      label: `kaminos coarse majorant field ${majorantGridSize}^3`,
-      size: majorantBufferBytes(majorantGridSize),
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(majorantBuffer, 0, new Float32Array(majorantGridSize * majorantGridSize * majorantGridSize * 4));
-    majorantWriteBindGroup = device.createBindGroup({
-      label: `kaminos coarse majorant write bind group ${majorantGridSize}^3`,
-      layout: majorantWriteBindGroupLayout,
-      entries: [
-        { binding: 0, resource: { buffer: majorantBuffer } },
-      ],
-    });
   }
 
   function ensureBoundarySidecarBuffer() {
@@ -9629,7 +9252,6 @@ export function createKaminosVolumePrototype({
       || !boundarySplatLiveUnionCoefficientDummyBuffer
       || !boundarySplatLiveUnionLookupDummyBuffer
       || !flowKernelDescriptorBuffer
-      || !majorantBuffer
       || fluidBuffers.length !== 2
     ) return;
     boundarySplatComputeBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
@@ -9642,7 +9264,6 @@ export function createKaminosVolumePrototype({
         { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
-        { binding: 7, resource: { buffer: majorantBuffer } },
         { binding: 8, resource: { buffer: flowKernelDescriptorBuffer } },
         { binding: 12, resource: { buffer: boundarySplatBilinearIndirectBuffer } },
         { binding: 14, resource: { buffer: boundarySplatInstanceSelectionBuffer } },
@@ -9843,9 +9464,8 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
-  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
+  function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
-    majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     updateAnalyticEmitterDebug();
     if (boundarySplatLiveUnionOverlay) {
       state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
@@ -9878,8 +9498,6 @@ export function createKaminosVolumePrototype({
     }
     state.boundarySplatCapacity = boundarySplatCapacity;
     state.boundarySplatCapacityGrowth = null;
-    destroyMajorantState();
-    ensureMajorantBuffer();
     ensureBoundarySidecarBuffer();
     const nextBufferBytes = fluidBufferBytes(gridSize);
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
@@ -9925,27 +9543,37 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const computePipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const makePipeline = (targetFormat, label) => device.createRenderPipeline({
+    const renderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: false };
+    const leanStockRenderPipelineConstants = { GRID: gridSize, LEAN_STOCK_RAYMARCH: true };
+    const computePipelineConstants = { GRID: gridSize };
+    const makePipeline = (targetFormat, label, constants = renderPipelineConstants) => device.createRenderPipeline({
       label,
       layout: pipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
-      fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
+      fragment: { module: shader, entryPoint: 'fs', constants, targets: [{ format: targetFormat }] },
       primitive: { topology: 'triangle-list' },
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    leanStockPipeline = makePipeline(
+      format,
+      `kaminos volume canvas lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      leanStockRenderPipelineConstants,
+    );
+    leanStockReadbackPipeline = makePipeline(
+      'rgba8unorm',
+      `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+      leanStockRenderPipelineConstants,
+    );
     if (productFrameOwner === 'caller') {
-      productRaymarchPipeline = device.createRenderPipeline({
-        label: `kaminos product caller-depth broad-smoke raymarch ${gridSize}^3`,
+      const makeProductRaymarchPipeline = (label, constants) => device.createRenderPipeline({
+        label,
         layout: productRaymarchPipelineLayout,
         vertex: { module: shader, entryPoint: 'vs' },
         fragment: {
           module: shader,
           entryPoint: 'fsProduct',
-          constants: renderPipelineConstants,
+          constants,
           targets: [{
             format,
             blend: {
@@ -9956,6 +9584,14 @@ export function createKaminosVolumePrototype({
         },
         primitive: { topology: 'triangle-list' },
       });
+      productRaymarchPipeline = makeProductRaymarchPipeline(
+        `kaminos product caller-depth broad-smoke raymarch ${gridSize}^3`,
+        renderPipelineConstants,
+      );
+      leanStockProductRaymarchPipeline = makeProductRaymarchPipeline(
+        `kaminos product caller-depth lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
+        leanStockRenderPipelineConstants,
+      );
     }
     opticalTransportContributionPipeline = device.createRenderPipeline({
       label: `kaminos shared-transmittance pre-tone-map contribution readback ${gridSize}^3`,
@@ -10035,11 +9671,6 @@ export function createKaminosVolumePrototype({
       label: `kaminos velocity tiered pressure projection compute pipeline ${gridSize}^3`,
       layout: pressureProjectTieredPipelineLayout,
       compute: { module: shader, entryPoint: 'csProjectPressureTiered', constants: computePipelineConstants },
-    });
-    majorantComputePipeline = device.createComputePipeline({
-      label: `kaminos coarse majorant compute pipeline ${gridSize}^3 to ${majorantGridSize}^3`,
-      layout: majorantPipelineLayout,
-      compute: { module: shader, entryPoint: 'csMajorant', constants: majorantPipelineConstants },
     });
     boundarySidecarBuildPipeline = device.createComputePipeline({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} compute pipeline ${gridSize}^3`,
@@ -10274,7 +9905,6 @@ export function createKaminosVolumePrototype({
       };
     }
     ensureNonRidgeOpticalCaptureBuffers();
-    ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     analyticEmitterInjectionBindGroups = fluidBuffers.map((buffer, index) => device.createBindGroup({
       label: `kaminos bounded analytic emitter injection ${gridSize}^3 ${index}`,
@@ -10284,18 +9914,18 @@ export function createKaminosVolumePrototype({
         { binding: 1, resource: { buffer } },
       ],
     }));
-    majorantFrontBindGroups = [
+    fluidFrontReadBindGroups = [
       device.createBindGroup({
-        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 A`,
-        layout: majorantFluidBindGroupLayout,
+        label: `kaminos fluid-front read bind group ${gridSize}^3 A`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[0] } },
           { binding: 7, resource: { buffer: frontBuffers[0] } },
         ],
       }),
       device.createBindGroup({
-        label: `kaminos majorant fluid-front read bind group ${gridSize}^3 B`,
-        layout: majorantFluidBindGroupLayout,
+        label: `kaminos fluid-front read bind group ${gridSize}^3 B`,
+        layout: fluidFrontReadBindGroupLayout,
         entries: [
           { binding: 1, resource: { buffer: fluidBuffers[1] } },
           { binding: 7, resource: { buffer: frontBuffers[1] } },
@@ -10374,13 +10004,6 @@ export function createKaminosVolumePrototype({
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
-    state.majorantGrid = majorantGridSize;
-    state.majorantBuilt = false;
-    state.majorantFrameCount = 0;
-    state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
-    state.majorantBuiltThisFrame = false;
-    state.majorantLastBuiltFrame = -1;
-    state.majorantSkippedFrameCount = 0;
     state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
     state.boundarySidecarBytes = nextBoundarySidecarBufferBytes;
@@ -10400,7 +10023,6 @@ export function createKaminosVolumePrototype({
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
-    resetTemporalHistory(reason);
     updateSimCostLedger();
     emitStatus({ phase: reason });
   }
@@ -10508,13 +10130,6 @@ export function createKaminosVolumePrototype({
     });
     ensureExternalEmitterBuffer();
     ensureOracleActivityCueBuffer();
-    historySampler = device.createSampler({
-      label: 'kaminos temporal history sampler',
-      magFilter: 'linear',
-      minFilter: 'linear',
-      addressModeU: 'clamp-to-edge',
-      addressModeV: 'clamp-to-edge',
-    });
     browserResidualSampler = device.createSampler({
       label: 'kaminos browser direct residual source sampler',
       magFilter: 'linear',
@@ -10640,21 +10255,6 @@ export function createKaminosVolumePrototype({
           buffer: { type: 'storage' },
         },
         {
-          binding: 3,
-          visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: 'read-only-storage' },
-        },
-        {
-          binding: 4,
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: { sampleType: 'float' },
-        },
-        {
-          binding: 5,
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: { type: 'filtering' },
-        },
-        {
           binding: 6,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
@@ -10734,8 +10334,8 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
-    majorantFluidBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos majorant fluid-front read bind group layout',
+    fluidFrontReadBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos fluid-front read bind group layout',
       entries: [
         {
           binding: 1,
@@ -10746,16 +10346,6 @@ export function createKaminosVolumePrototype({
           binding: 7,
           visibility: GPUShaderStage.COMPUTE,
           buffer: { type: 'read-only-storage' },
-        },
-      ],
-    });
-    majorantWriteBindGroupLayout = device.createBindGroupLayout({
-      label: 'kaminos majorant write bind group layout',
-      entries: [
-        {
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' },
         },
       ],
     });
@@ -10778,7 +10368,6 @@ export function createKaminosVolumePrototype({
         { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
         { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 14, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
@@ -10878,10 +10467,6 @@ export function createKaminosVolumePrototype({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
     });
-    majorantPipelineLayout = device.createPipelineLayout({
-      label: 'kaminos coarse majorant pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, majorantWriteBindGroupLayout],
-    });
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
@@ -10896,11 +10481,11 @@ export function createKaminosVolumePrototype({
     });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
+      bindGroupLayouts: [fluidFrontReadBindGroupLayout, emptyBindGroupLayout, pressureWriteBindGroupLayout],
     });
     pressureJacobiPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure jacobi pipeline layout',
-      bindGroupLayouts: [majorantFluidBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
+      bindGroupLayouts: [fluidFrontReadBindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     pressureJacobiTieredPipelineLayout = device.createPipelineLayout({
       label: 'kaminos pressure tiered jacobi pipeline layout',
@@ -10915,7 +10500,7 @@ export function createKaminosVolumePrototype({
       bindGroupLayouts: [bindGroupLayout, emptyBindGroupLayout, pressureJacobiBindGroupLayout],
     });
     device.pushErrorScope('validation');
-    rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
+    rebuildFluidState(controlsSnapshot.resolution);
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
         device,
@@ -10949,9 +10534,6 @@ export function createKaminosVolumePrototype({
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
-    if (state.renderScale !== renderScale) {
-      resetTemporalHistory('render-scale-change');
-    }
     if (canvas.width !== renderWidth || canvas.height !== renderHeight || state.displayWidth !== displayWidth || state.displayHeight !== displayHeight) {
       canvas.width = renderWidth;
       canvas.height = renderHeight;
@@ -11224,7 +10806,7 @@ export function createKaminosVolumePrototype({
         sampleNowMs: captureContext?.sampleNow ?? null,
       },
       camera: {
-        signature: temporalCameraSignature(),
+        signature: cameraSignature(),
         position: [camera.position.x, camera.position.y, camera.position.z],
         quaternion: [camera.quaternion.x, camera.quaternion.y, camera.quaternion.z, camera.quaternion.w],
         projectionMatrix: Array.from(camera.projectionMatrix.elements),
@@ -11456,7 +11038,6 @@ export function createKaminosVolumePrototype({
     if (state.volumePresentationReceipt) {
       state.volumePresentationReceipt = {
         ...state.volumePresentationReceipt,
-        temporalHistoryContribution: effectiveMode === 'off' ? 'suppressed' : 'authored-control',
         passes: {
           ...state.volumePresentationReceipt.passes,
           smoke: effectiveMode === 'off' ? 'suppressed' : 'authored-control',
@@ -11483,7 +11064,6 @@ export function createKaminosVolumePrototype({
       fallbackReason: volumePresentationModeFallbackReason,
       targetIdentity,
       effectiveRayQuality,
-      temporalHistoryContribution: raymarchSmokePresentationEffectiveMode() === 'off' ? 'suppressed' : 'authored-control',
       authoredControlsMutated: false,
       simulationAdvanced: false,
       simulationReset: false,
@@ -11605,8 +11185,6 @@ export function createKaminosVolumePrototype({
   function updateUniforms(now) {
     resize();
     camera.updateMatrixWorld();
-    maybeResetTemporalHistoryForCamera();
-    ensureTemporalHistoryTexture();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
@@ -11627,10 +11205,6 @@ export function createKaminosVolumePrototype({
       invViewProj.copy(viewProj).invert();
       productLocalCameraPosition.copy(camera.position);
     }
-    if (!previousViewProjReady) {
-      previousViewProj.copy(productFrameOwner === 'caller' ? productViewProj : viewProj);
-      previousViewProjReady = true;
-    }
     const boundarySplatInstanceAllocation = writeBoundarySplatInstanceConsumerState();
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
@@ -11646,7 +11220,7 @@ export function createKaminosVolumePrototype({
       splatCamera.set([
         normalizeBoundarySplatRadianceGain(controlsSnapshot.boundarySplatRadianceGain),
         normalizeBoundarySplatOpacityGain(controlsSnapshot.boundarySplatOpacityGain),
-        state.majorantBuilt || state.flowKernelDescriptorCaptureEffective ? 1 : 0,
+        state.flowKernelDescriptorCaptureEffective ? 1 : 0,
         0,
       ], 28);
       const effectiveFlowKernel = flowKernelEffectiveControls(controlsSnapshot);
@@ -11743,21 +11317,8 @@ export function createKaminosVolumePrototype({
     uniforms[38] = controlsSnapshot.glow ?? 1.15;
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
-    uniforms[41] = controlsSnapshot.majorantSkip ?? 0.70;
-    uniforms[42] = controlsSnapshot.majorantSmooth ?? 0.85;
-    uniforms[43] = controlsSnapshot.majorantGuard ?? 0.75;
+    uniforms.fill(0, 41, 47);
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
-    const baseTemporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
-    const requestedTemporalAccum = Math.max(0, Math.min(0.85, baseTemporalAccum * bonfireAblation.temporal));
-    uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
-    const temporalAccumulationForPresentation = (
-      volumePresentationModeEffective === 'intrinsic'
-        || raymarchSmokePresentationEffectiveMode() === 'off'
-        || appearanceDecompositionActive()
-    ) ? 0 : uniforms[44];
-    uniforms[44] = temporalAccumulationForPresentation;
-    uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
-    uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
     uniforms[47] = renderPhaseFrame % 4096;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
@@ -12093,7 +11654,6 @@ export function createKaminosVolumePrototype({
     uniforms[367] = 0;
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
-    uniforms.set(previousViewProj.elements, 368);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -12155,12 +11715,6 @@ export function createKaminosVolumePrototype({
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];
     state.occupancySkip = uniforms[40];
-    state.majorantSkip = uniforms[41];
-    state.majorantSmooth = uniforms[42];
-    state.majorantGuard = uniforms[43];
-    state.temporalAccum = requestedTemporalAccum;
-    state.temporalJitter = uniforms[45];
-    state.historyClamp = uniforms[46];
     state.fireScale = Math.max(0.35, Math.min(1.3, uniforms[48]));
     state.detailScale = Math.max(0.45, Math.min(3.2, uniforms[49]));
     state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
@@ -12324,44 +11878,10 @@ export function createKaminosVolumePrototype({
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
-    state.temporalAccumEffective = uniforms[44];
-    const temporalSettled = historyValid ? Math.min(1, Math.max(0, state.temporalHistoryFrames / 12)) : 0;
-    const temporalMotionTrust = previousViewProjReady ? 1 : 0;
-    const temporalReactiveEstimate = Math.min(0.82,
-      0.18 * Math.max(0, Math.min(1, controlsSnapshot.majorantSkip ?? 0.70)) +
-      0.12 * Math.max(0, Math.min(1, controlsSnapshot.adaptiveRays ?? 0.65)) +
-      0.08 * Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.2)) +
-      0.06 * Math.max(0, Math.min(1, (controlsSnapshot.fireLicks ?? 1.65) / 5))
-    );
-    const smokeHistoryTrust = Math.max(0, Math.min(1,
-      ((controlsSnapshot.smoke ?? 2.8) / 3.2) *
-      (1 - Math.max(0, Math.min(1, (controlsSnapshot.fire ?? 1.4) / 2.4)) * 0.42) *
-      (1 - Math.max(0, Math.min(1, (controlsSnapshot.interfaceShred ?? 2.5) / 5)) * 0.28)
-    ));
-    const fireHistoryProtect = Math.max(0, Math.min(1,
-      (controlsSnapshot.fire ?? 1.4) / 2.2 * 0.48 +
-      (controlsSnapshot.radiance ?? 1.65) / 3.0 * 0.26 +
-      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.26
-    ));
-    const interfaceHistoryProtect = Math.max(0, Math.min(1,
-      (controlsSnapshot.interfaceShred ?? 2.5) / 5.0 * 0.52 +
-      (controlsSnapshot.fireLicks ?? 1.65) / 5.0 * 0.24 +
-      (controlsSnapshot.majorantGuard ?? 0.75) * 0.24
-    ));
-    const materialTemporalProtection = fireHistoryProtect * 0.46 + interfaceHistoryProtect * 0.34;
-    state.temporalSmokeHistoryTrust = smokeHistoryTrust;
-    state.temporalFireHistoryProtect = fireHistoryProtect;
-    state.temporalInterfaceHistoryProtect = interfaceHistoryProtect;
-    state.temporalEvidenceSource = 'cpu-estimate-control-proxy';
-    state.temporalReprojectionConfidence = temporalSettled * temporalMotionTrust * Math.max(0, 1 - temporalReactiveEstimate - materialTemporalProtection * 0.18);
-    state.temporalHistoryWeight = uniforms[44] * state.temporalReprojectionConfidence * (0.34 + smokeHistoryTrust * 0.66) * (1 - fireHistoryProtect * 0.55) * (1 - interfaceHistoryProtect * 0.36);
-    state.temporalRejectedHistory = Math.max(0, Math.min(1, 1 - (state.temporalHistoryWeight / Math.max(0.0001, uniforms[44]))));
-    state.temporalHistoryValid = historyValid;
   }
 
   function updateSimCostLedger(options = {}) {
     const scene = normalizeVolumeScene(controlsSnapshot.volumeScene);
-    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
     const pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, scene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, scene);
     const pressureTierControls = normalizePressureTierControls(controlsSnapshot);
@@ -12436,21 +11956,16 @@ export function createKaminosVolumePrototype({
       total: fullGridPassesPerFrame,
     };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 3;
-    const majorantWorkgroupsPerPass = Math.ceil(majorantGridSize / 4) ** 3;
-    const majorantBuiltThisFrame = options.majorantBuiltThisFrame ?? state.majorantBuiltThisFrame;
     const boundarySidecarBuiltThisFrame = options.boundarySidecarBuiltThisFrame ?? state.boundarySidecarBuiltThisFrame;
     const fullGridCells = gridCellCount(gridSize);
     const analyticEmitterCellVisitsThisFrame = analyticEmitterDispatch.active
       ? analyticEmitterDispatch.cellCount
       : 0;
     const analyticEmitterFullGridEquivalentPasses = analyticEmitterCellVisitsThisFrame / fullGridCells;
-    const majorantCells = majorantGridSize * majorantGridSize * majorantGridSize;
     const fluidBytes = fluidBufferBytes(gridSize);
     const frontBytes = frontFieldBufferBytes(gridSize);
     const pressureBytes = pressureBufferBytes(gridSize);
-    const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
-    state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
     state.pressureSourceStrategy = pressureSourceStrategy;
@@ -12503,10 +12018,8 @@ export function createKaminosVolumePrototype({
       effectiveRoute: state.effectiveRoute,
       volumeScene: scene,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass,
-      majorantWorkgroupsPerPass,
       simPassesPerFrame,
       pressureSourceStrategy,
       tallPlumePressureIterationStrategy: tallPlumePressureStrategy,
@@ -12557,12 +12070,6 @@ export function createKaminosVolumePrototype({
       analyticEmitterWorkgroups: [...analyticEmitterDispatch.workgroups],
       analyticEmitterCellVisitsThisFrame,
       analyticEmitterFullGridEquivalentPasses,
-      majorantBuildCadence,
-      majorantBuiltThisFrame,
-      majorantCellVisitsThisFrame: majorantBuiltThisFrame ? majorantCells : 0,
-      majorantEstimatedCellVisitsPerFrame: majorantCells / majorantBuildCadence,
-      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
       boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
       boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       boundarySidecarSource: state.boundarySidecarSource,
@@ -12576,11 +12083,10 @@ export function createKaminosVolumePrototype({
       fluidBufferBytes: fluidBytes,
       frontFieldBufferBytes: frontBytes,
       pressureBufferBytes: pressureBytes,
-      majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       analyticEmitterUniformBufferBytes: analyticEmitterInjectionUniformData.byteLength,
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -12642,7 +12148,7 @@ export function createKaminosVolumePrototype({
       (tierPlan.strategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY && (!pressureJacobiTieredLowerPipeline || !pressureJacobiTieredHeroPipeline || !pressureProjectTieredPipeline)) ||
       pressureJacobiBindGroups.length !== 2 ||
       pressureReadBindGroups.length !== 2 ||
-      majorantFrontBindGroups.length !== 2
+      fluidFrontReadBindGroups.length !== 2
     ) {
       state.pressureProjectionEnabled = false;
       state.pressureProjectionIterations = 0;
@@ -12660,7 +12166,7 @@ export function createKaminosVolumePrototype({
       return false;
     }
     const workgroups = Math.ceil(gridSize / 4);
-    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = majorantFrontBindGroups[currentFluid]) => {
+    const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = fluidFrontReadBindGroups[currentFluid]) => {
       const pass = encoder.beginComputePass({ label });
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, readBindGroup);
@@ -12714,7 +12220,7 @@ export function createKaminosVolumePrototype({
     for (let i = 0; i < pressureIterationCount; i += 1) {
       const pass = encoder.beginComputePass({ label: `kaminos pressure jacobi inline-divergence pass ${i + 1}` });
       pass.setPipeline(pressureJacobiPipeline);
-      pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+      pass.setBindGroup(0, fluidFrontReadBindGroups[currentFluid]);
       pass.setBindGroup(2, pressureJacobiBindGroups[pressureReadIndex]);
       pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
       pass.end();
@@ -12740,31 +12246,6 @@ export function createKaminosVolumePrototype({
     state.frontFieldProjectionPassthrough = true;
     updateSimCostLedger();
     return true;
-  }
-
-  function encodeMajorant(encoder, options = {}) {
-    const majorantBuildCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
-    state.majorantCadence = majorantBuildCadence;
-    const force = options.force === true;
-    const shouldBuild = force || !state.majorantBuilt || majorantBuildCadence <= 1 || state.frameCount % majorantBuildCadence === 0;
-    if (!shouldBuild) {
-      state.majorantBuiltThisFrame = false;
-      state.majorantSkippedFrameCount += 1;
-      updateSimCostLedger({ majorantBuiltThisFrame: false });
-      return;
-    }
-    const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
-    pass.setPipeline(majorantComputePipeline);
-    pass.setBindGroup(0, options.readBindGroup || majorantFrontBindGroups[currentFluid]);
-    pass.setBindGroup(1, majorantWriteBindGroup);
-    const workgroups = Math.ceil(majorantGridSize / 4);
-    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
-    pass.end();
-    state.majorantBuilt = true;
-    state.majorantBuiltThisFrame = true;
-    state.majorantLastBuiltFrame = state.frameCount;
-    state.majorantFrameCount += 1;
-    updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
   function encodeBoundarySidecar(encoder, options = {}) {
@@ -14890,8 +14371,8 @@ export function createKaminosVolumePrototype({
       || typeof importReceipt.frontSha256 !== 'string') {
       throw new Error('source-hash-audit-requires-checksum-validated-imported-fields');
     }
-    if (!state.majorantBuilt || !state.boundarySidecarBuilt) {
-      throw new Error('source-hash-audit-requires-current-sidecar-and-majorant');
+    if (!state.boundarySidecarBuilt) {
+      throw new Error('source-hash-audit-requires-current-boundary-sidecar');
     }
     const expectedSourceHashes = options.expectedSourceHashes
       || boundarySplatLiveUnionOverlay?.manifest?.source?.state?.sourceHashes
@@ -14920,18 +14401,13 @@ export function createKaminosVolumePrototype({
       boundarySidecarBufferBytes(gridSize),
       'kaminos live union source-hash boundary-sidecar readback',
     ));
-    sourceHashes.majorantSha256 = await sha256Bytes(await readStorageBufferBytes(
-      majorantBuffer,
-      majorantBufferBytes(majorantGridSize),
-      'kaminos live union source-hash majorant readback',
-    ));
     const mismatch = Object.keys(sourceHashes).find(
       key => sourceHashes[key] !== String(expectedSourceHashes[key] || '').toLowerCase(),
     ) || null;
     const receipt = {
       ok: mismatch === null,
       identity: 'boundary-splat-live-union-source-hash-audit-v0',
-      authority: 'effective-imported-fluid-front-plus-derived-sidecar-majorant-sha256-v0',
+      authority: 'effective-imported-fluid-front-plus-derived-sidecar-sha256-v1',
       status: mismatch === null ? 'matched' : 'failed',
       failurePhase: mismatch === null ? null : 'source-hash-comparison',
       reason: mismatch === null ? null : `source-hash-audit-mismatch:${mismatch}`,
@@ -14943,7 +14419,6 @@ export function createKaminosVolumePrototype({
       effectiveRoute: state.effectiveRoute,
       backend: state.backend,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
     };
@@ -14972,12 +14447,11 @@ export function createKaminosVolumePrototype({
       || typeof importReceipt.frontSha256 !== 'string') {
       throw new Error('flow-kernel-descriptor-capture-requires-checksum-validated-imported-fields');
     }
-    if (!state.majorantBuilt || !state.boundarySidecarBuilt) {
-      throw new Error('flow-kernel-descriptor-capture-requires-current-sidecar-and-majorant');
+    if (!state.boundarySidecarBuilt) {
+      throw new Error('flow-kernel-descriptor-capture-requires-current-boundary-sidecar');
     }
     const descriptorBytes = sourceCandidateCount * FLOW_KERNEL_DESCRIPTOR_STRIDE_BYTES;
     const boundaryBytes = boundarySidecarBufferBytes(gridSize);
-    const majorantBytes = majorantBufferBytes(majorantGridSize);
     const descriptorSourceFluidBuffer = boundarySplatDescriptorSource?.fluid || null;
     const descriptorSourceFrontBuffer = boundarySplatDescriptorSource?.front || null;
     if (!descriptorSourceFluidBuffer || !descriptorSourceFrontBuffer) {
@@ -14993,21 +14467,18 @@ export function createKaminosVolumePrototype({
       frontFieldBufferBytes(gridSize),
       `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} effective-front readback`,
     ));
-    const [descriptorData, boundaryData, majorantData] = await Promise.all([
+    const [descriptorData, boundaryData] = await Promise.all([
       readStorageBufferBytes(flowKernelDescriptorBuffer, descriptorBytes, `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} descriptor readback`),
       readStorageBufferBytes(boundarySidecarBuffer, boundaryBytes, `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} boundary-sidecar readback`),
-      readStorageBufferBytes(majorantBuffer, majorantBytes, `kaminos ${FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY} majorant readback`),
     ]);
-    const [descriptorSha256, boundarySidecarSha256, majorantSha256] = await Promise.all([
+    const [descriptorSha256, boundarySidecarSha256] = await Promise.all([
       sha256Bytes(descriptorData),
       sha256Bytes(boundaryData),
-      sha256Bytes(majorantData),
     ]);
     const sourceHashes = {
       fluidSha256,
       frontSha256,
       boundarySidecarSha256,
-      majorantSha256,
     };
     const descriptorValues = new Float32Array(
       descriptorData.buffer,
@@ -15061,13 +14532,10 @@ export function createKaminosVolumePrototype({
       effectiveRoute: state.effectiveRoute,
       backend: state.backend,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
-      majorantState: {
-        built: state.majorantBuilt,
-        builtThisFrame: state.majorantBuiltThisFrame,
-        lastBuiltFrame: state.majorantLastBuiltFrame,
-        cadence: state.majorantCadence,
-        conservativeValidity: true,
+      directOpticalSupport: {
+        identity: 'native-cell-fluid-front-derived-optical-support-v1',
+        sourceFields: ['fluid', 'front'],
+        conservativeValidity: false,
       },
       boundarySidecarState: {
         identity: state.boundarySidecarIdentity,
@@ -15128,6 +14596,50 @@ export function createKaminosVolumePrototype({
     return released;
   }
 
+  function raymarchShaderSpecializationReceipt({ admission, effective }) {
+    const debugForcedFull = debugRaymarchShaderSpecialization === 'force-full';
+    return {
+      identity: 'raymarch-shader-specialization-receipt-v0',
+      requested: controlsSnapshot.legacyPyroBackedOff === true
+        ? 'lean-stock-direct-cell-raymarch-v0'
+        : 'full-authored-raymarch-v0',
+      effective,
+      eligible: admission.eligible,
+      refusalReasons: admission.refusalReasons,
+      debugOverride: debugRaymarchShaderSpecialization,
+      fallbackReason: debugForcedFull && admission.eligible
+        ? 'debug-force-full'
+        : (controlsSnapshot.legacyPyroBackedOff === true && !admission.eligible
+          ? admission.refusalReasons[0]
+          : null),
+    };
+  }
+
+  function selectRaymarchPipeline(targetPipeline) {
+    const admission = leanStockRaymarchAdmission({
+      legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
+      fireRenderMode: controlsSnapshot.fireRenderMode,
+      pyroFireMode: controlsSnapshot.pyroFireMode,
+      pyroCompareMode: controlsSnapshot.pyroCompareMode,
+      presentationMode: volumePresentationModeEffective,
+      smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      appearanceDecompositionActive: appearanceDecompositionActive(),
+      nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
+      nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
+      liveCompleteFlameOpticalCoefficientsEnabled,
+    });
+    const leanStockEligible = admission.eligible;
+    let effectivePipeline = targetPipeline;
+    const selectLean = leanStockEligible && debugRaymarchShaderSpecialization !== 'force-full';
+    if (selectLean && targetPipeline === pipeline) effectivePipeline = leanStockPipeline;
+    if (selectLean && targetPipeline === readbackPipeline) effectivePipeline = leanStockReadbackPipeline;
+    const effective = effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline
+      ? 'lean-stock-direct-cell-raymarch-v0'
+      : 'full-authored-raymarch-v0';
+    state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
+    return effectivePipeline;
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
@@ -15139,7 +14651,7 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(targetPipeline);
+    pass.setPipeline(selectRaymarchPipeline(targetPipeline));
     pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
@@ -15162,7 +14674,27 @@ export function createKaminosVolumePrototype({
         storeOp: 'store',
       }],
     });
-    pass.setPipeline(productRaymarchPipeline);
+    const admission = leanStockRaymarchAdmission({
+      legacyPyroBackedOff: controlsSnapshot.legacyPyroBackedOff,
+      fireRenderMode: controlsSnapshot.fireRenderMode,
+      pyroFireMode: controlsSnapshot.pyroFireMode,
+      pyroCompareMode: controlsSnapshot.pyroCompareMode,
+      presentationMode: volumePresentationModeEffective,
+      smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
+      appearanceDecompositionActive: appearanceDecompositionActive(),
+      nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
+      nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
+      liveCompleteFlameOpticalCoefficientsEnabled,
+    });
+    const selectLean = admission.eligible && debugRaymarchShaderSpecialization !== 'force-full';
+    const effectiveProductPipeline = selectLean && leanStockProductRaymarchPipeline
+      ? leanStockProductRaymarchPipeline
+      : productRaymarchPipeline;
+    const effective = effectiveProductPipeline === leanStockProductRaymarchPipeline
+      ? 'lean-stock-direct-cell-raymarch-v0'
+      : 'full-authored-raymarch-v0';
+    state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
+    pass.setPipeline(effectiveProductPipeline);
     pass.setBindGroup(0, bindGroup || bindGroups[currentFluid]);
     pass.setBindGroup(1, depthBindGroup);
     pass.draw(3);
@@ -15243,18 +14775,6 @@ export function createKaminosVolumePrototype({
     return state.selectiveHeadLivePassReceipt;
   }
 
-  function encodeHistoryCopy(encoder, sourceTexture) {
-    if (!historyTexture || state.width < 1 || state.height < 1) return;
-    encoder.copyTextureToTexture(
-      { texture: sourceTexture },
-      { texture: historyTexture },
-      { width: state.width, height: state.height, depthOrArrayLayers: 1 }
-    );
-    historyValid = true;
-    state.temporalHistoryValid = true;
-    state.temporalHistoryFrames += 1;
-  }
-
   function render(now) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
@@ -15276,17 +14796,11 @@ export function createKaminosVolumePrototype({
       if (lookFreeze) {
         if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
         state.lookFreezeSkippedFrames += 1;
-        state.majorantBuiltThisFrame = false;
       } else {
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
         encodeSelectiveHeadLiveFields(encoder);
-        const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
-        encodeMajorant(encoder, {
-          readBindGroup: selectiveMajorant,
-          force: state.selectiveHeadLiveEffectiveRole !== 'off',
-        });
       }
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
@@ -15434,12 +14948,10 @@ export function createKaminosVolumePrototype({
         });
       }
       if (!appearanceDecompositionActive()) {
-        if (volumePresentationModeEffective !== 'intrinsic' && raymarchSmokePresentationEffectiveMode() === 'on') encodeHistoryCopy(encoder, currentTexture);
       }
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
-      commitPreviousViewProjection();
       state.frameCount += 1;
       if (selectiveHeadLiveExactPause) {
         const exactPause = selectiveHeadLiveExactPause;
@@ -15803,7 +15315,7 @@ export function createKaminosVolumePrototype({
     state.active = false;
     canvas.classList.remove('active');
     cancelAnimationFrame(raf);
-    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, majorantGridSize, 'full-field-import-grid-rebuild');
+    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, 'full-field-import-grid-rebuild');
     debugFullFieldImportUpload = {
       sessionId: `full-field-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
       status: 'receiving',
@@ -15929,16 +15441,12 @@ export function createKaminosVolumePrototype({
     state.simStepCount = upload.receiverInitialSimStepCount;
     state.frontFieldReadIndex = currentFront;
     state.frontFieldWriteIndex = 1 - currentFront;
-    state.majorantBuilt = false;
-    state.majorantBuiltThisFrame = false;
-    state.majorantLastBuiltFrame = -1;
     state.boundarySidecarBuilt = false;
     state.boundarySidecarBuiltThisFrame = false;
     state.boundarySidecarLastBuiltFrame = -1;
     state.boundarySidecarOverrideReceipt = null;
     boundarySidecarOverrideUpload = null;
     state.deterministicReplay = null;
-    resetTemporalHistory('full-field-import');
     const receipt = {
       schema: FULL_FIELD_IMPORT_IDENTITY,
       identity: 'checksum-addressed-fluid-front-import-v0',
@@ -15961,7 +15469,6 @@ export function createKaminosVolumePrototype({
       frontChunkCount: upload.front.chunkCount,
       pressureState: 'zeroed-before-first-receiver-step',
       pingPongState: 'both-read-write-buffers-identical',
-      temporalHistory: 'reset',
       renderLoopPaused: true,
       activeBeforeImport: upload.wasActive,
       routeIdentity: ROUTE_IDENTITY,
@@ -16038,7 +15545,6 @@ export function createKaminosVolumePrototype({
       updateUniforms(startTimeMs + step * timeStepMs);
       const encoder = device.createCommandEncoder({ label: `kaminos imported receiver step ${step + 1}/${requestedSteps}` });
       encodeSim(encoder);
-      if (step === requestedSteps - 1) encodeMajorant(encoder, { force: true });
       device.queue.submit([encoder.finish()]);
       state.frameCount += 1;
     }
@@ -16353,7 +15859,7 @@ export function createKaminosVolumePrototype({
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
         role: state.selectiveHeadLiveEffectiveRole,
-        controlsSignature: temporalControlSignature(controlsSnapshot),
+        controlsSignature: effectiveControlsSignature(controlsSnapshot),
         coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
       },
       cpuCoefficientReadbackApplied: false,
@@ -16536,7 +16042,7 @@ export function createKaminosVolumePrototype({
           routeIdentity: ROUTE_IDENTITY,
           frameCount: state.frameCount,
           simStepCount: state.simStepCount,
-          controlsSignature: temporalControlSignature(controlsSnapshot),
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
           coefficientTarget: APPEARANCE_DECOMPOSITION_MODES['complete-flame-emission'].targetIdentity,
         },
         producerPass: 'full-grid-raymarch-complete-flame-coefficient-write-v0',
@@ -16705,7 +16211,7 @@ export function createKaminosVolumePrototype({
           frameCount: state.frameCount,
           simStepCount: state.simStepCount,
           grid: gridSize,
-          controlsSignature: temporalControlSignature(controlsSnapshot),
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
           appearanceMode: 'non-ridge-emission',
           boundarySidecar: boundarySidecarDebug(),
         },
@@ -17077,7 +16583,7 @@ export function createKaminosVolumePrototype({
         sourceIdentity: {
           frameCount: state.frameCount,
           simStepCount: state.simStepCount,
-          controlsSignature: temporalControlSignature(controlsSnapshot),
+          controlsSignature: effectiveControlsSignature(controlsSnapshot),
           appearanceMode: 'non-ridge-emission',
           boundarySidecar: boundarySidecarDebug(),
         },
@@ -17220,7 +16726,6 @@ export function createKaminosVolumePrototype({
       frameCount: replaySample.frameCount,
       simStepCount: replaySample.simStepCount,
       grid: replaySample.grid,
-      majorantGrid: replaySample.majorantGrid,
       effectiveRoute: replaySample.effectiveRoute,
       prototypeIdentity: replaySample.prototypeIdentity,
       backend: replaySample.backend,
@@ -18446,63 +17951,6 @@ export function createKaminosVolumePrototype({
     };
   }
 
-  async function sampleMajorantReadback() {
-    const readback = device.createBuffer({
-      label: 'kaminos coarse majorant readback',
-      size: majorantBufferBytes(majorantGridSize),
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-    });
-    const encoder = device.createCommandEncoder({ label: 'kaminos coarse majorant readback encoder' });
-    encoder.copyBufferToBuffer(majorantBuffer, 0, readback, 0, majorantBufferBytes(majorantGridSize));
-    device.queue.submit([encoder.finish()]);
-    await readback.mapAsync(GPUMapMode.READ);
-    const data = new Float32Array(readback.getMappedRange());
-    let densitySum = 0;
-    let radianceSum = 0;
-    let extinctionSum = 0;
-    let importanceSum = 0;
-    let densityMax = 0;
-    let radianceMax = 0;
-    let extinctionMax = 0;
-    let importanceMax = 0;
-    let occupiedBricks = 0;
-    const bricks = majorantGridSize * majorantGridSize * majorantGridSize;
-    for (let i = 0; i < bricks; i += 1) {
-      const offset = i * 4;
-      const density = data[offset];
-      const radiance = data[offset + 1];
-      const extinction = data[offset + 2];
-      const importance = data[offset + 3];
-      densitySum += density;
-      radianceSum += radiance;
-      extinctionSum += extinction;
-      importanceSum += importance;
-      densityMax = Math.max(densityMax, density);
-      radianceMax = Math.max(radianceMax, radiance);
-      extinctionMax = Math.max(extinctionMax, extinction);
-      importanceMax = Math.max(importanceMax, importance);
-      if (importance > 0.015 || density > 0.01 || radiance > 0.01 || extinction > 0.01) occupiedBricks += 1;
-    }
-    readback.unmap();
-    readback.destroy();
-    const result = {
-      grid: majorantGridSize,
-      bricks,
-      occupiedBricks,
-      densityMean: densitySum / bricks,
-      densityMax,
-      radianceMean: radianceSum / bricks,
-      radianceMax,
-      extinctionMean: extinctionSum / bricks,
-      extinctionMax,
-      importanceMean: importanceSum / bricks,
-      importanceMax,
-    };
-    state.majorantOccupiedBricks = occupiedBricks;
-    state.majorantImportanceMax = importanceMax;
-    return result;
-  }
-
   async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = width * bytesPerPixel;
@@ -19322,7 +18770,7 @@ export function createKaminosVolumePrototype({
       frameCount: sample.frameCount,
       simStepCount: sample.simStepCount,
       camera: sample.volumePresentationApplication?.camera || null,
-      cameraSignature: temporalCameraSignature(),
+      cameraSignature: cameraSignature(),
       requestedDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
       effectiveDiagnostic: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
       depthIntervalIdentity: BOUNDARY_SPLAT_OPTICAL_DEPTH_DIAGNOSTIC_IDENTITY,
@@ -19365,25 +18813,19 @@ export function createKaminosVolumePrototype({
       encodeSim(encoder);
       encodeSelectiveHeadLiveFields(encoder);
       sampleSelectiveHeadLiveFields = {
-        majorant: selectiveHeadLiveRoleGroups('majorant'),
         sidecar: selectiveHeadLiveRoleGroups('sidecar'),
         splat: selectiveHeadLiveRoleGroups('splat'),
         render: selectiveHeadLiveRoleGroups('render'),
         descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
-      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
     } else if (!sampleLookFreeze) {
       encodeSelectiveHeadLiveFields(encoder);
       sampleSelectiveHeadLiveFields = {
-        majorant: selectiveHeadLiveRoleGroups('majorant'),
         sidecar: selectiveHeadLiveRoleGroups('sidecar'),
         splat: selectiveHeadLiveRoleGroups('splat'),
         render: selectiveHeadLiveRoleGroups('render'),
         descriptorSource: selectiveHeadLiveRoleDescriptorSource(),
       };
-      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
-    } else {
-      state.majorantBuiltThisFrame = false;
     }
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     if (sampleSelectiveHeadLiveFields?.splat) {
@@ -19528,12 +18970,6 @@ export function createKaminosVolumePrototype({
         gridOverlay: state.gridOverlay,
         adaptiveRaymarch: state.adaptiveRaymarch,
         occupancySkip: state.occupancySkip,
-        majorantSkip: state.majorantSkip,
-        majorantSmooth: state.majorantSmooth,
-        majorantGuard: state.majorantGuard,
-        temporalAccum: state.temporalAccum,
-        temporalJitter: state.temporalJitter,
-        historyClamp: state.historyClamp,
         fireScale: state.fireScale,
         detailScale: state.detailScale,
         detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -19567,18 +19003,6 @@ export function createKaminosVolumePrototype({
         volumePrimitiveCount: state.volumePrimitiveCount,
         volumePrimitiveIds: state.volumePrimitiveIds,
         volumePrimitives: state.volumePrimitives,
-        temporalAccumEffective: state.temporalAccumEffective,
-        temporalReprojectionConfidence: state.temporalReprojectionConfidence,
-        temporalHistoryWeight: state.temporalHistoryWeight,
-        temporalRejectedHistory: state.temporalRejectedHistory,
-        temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
-        temporalFireHistoryProtect: state.temporalFireHistoryProtect,
-        temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
-        temporalEvidenceSource: state.temporalEvidenceSource,
-        temporalHistoryFrames: state.temporalHistoryFrames,
-        temporalHistoryResetCount: state.temporalHistoryResetCount,
-        temporalHistoryResetReason: state.temporalHistoryResetReason,
-        temporalHistoryValid: state.temporalHistoryValid,
         pressureProjectionEnabled: state.pressureProjectionEnabled,
         pressureEffectiveLabel: state.pressureEffectiveLabel,
         pressureProjectionIterations: state.pressureProjectionIterations,
@@ -19622,12 +19046,6 @@ export function createKaminosVolumePrototype({
         pressureDivergencePasses: state.pressureDivergencePasses,
         pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
         fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
-        majorantGrid: state.majorantGrid,
-        majorantBuilt: state.majorantBuilt,
-        majorantCadence: state.majorantCadence,
-        majorantBuiltThisFrame: state.majorantBuiltThisFrame,
-        majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-        majorantSkippedFrameCount: state.majorantSkippedFrameCount,
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
@@ -19860,7 +19278,6 @@ export function createKaminosVolumePrototype({
     buffer.destroy();
     const simReadback = await sampleSimReadback();
     updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
-    const majorantReadback = await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
     const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
@@ -19914,12 +19331,7 @@ export function createKaminosVolumePrototype({
       gridOverlay: state.gridOverlay,
       adaptiveRaymarch: state.adaptiveRaymarch,
       occupancySkip: state.occupancySkip,
-      majorantSkip: state.majorantSkip,
-      majorantSmooth: state.majorantSmooth,
-      majorantGuard: state.majorantGuard,
-      temporalAccum: state.temporalAccum,
-      temporalJitter: state.temporalJitter,
-      historyClamp: state.historyClamp,
+      ...retiredRaymarchControlReceiptPayload(state),
       fireScale: state.fireScale,
       detailScale: state.detailScale,
       detailScaleArtifactQuarantine: state.detailScaleArtifactQuarantine,
@@ -19966,18 +19378,6 @@ export function createKaminosVolumePrototype({
       volumePrimitiveCount: state.volumePrimitiveCount,
       volumePrimitiveIds: state.volumePrimitiveIds,
       volumePrimitives: state.volumePrimitives,
-      temporalAccumEffective: state.temporalAccumEffective,
-      temporalReprojectionConfidence: state.temporalReprojectionConfidence,
-      temporalHistoryWeight: state.temporalHistoryWeight,
-      temporalRejectedHistory: state.temporalRejectedHistory,
-      temporalSmokeHistoryTrust: state.temporalSmokeHistoryTrust,
-      temporalFireHistoryProtect: state.temporalFireHistoryProtect,
-      temporalInterfaceHistoryProtect: state.temporalInterfaceHistoryProtect,
-      temporalEvidenceSource: state.temporalEvidenceSource,
-      temporalHistoryFrames: state.temporalHistoryFrames,
-      temporalHistoryResetCount: state.temporalHistoryResetCount,
-      temporalHistoryResetReason: state.temporalHistoryResetReason,
-      temporalHistoryValid: state.temporalHistoryValid,
       pressureProjectionEnabled: state.pressureProjectionEnabled,
       pressureEffectiveLabel: state.pressureEffectiveLabel,
       pressureProjectionIterations: state.pressureProjectionIterations,
@@ -20021,12 +19421,6 @@ export function createKaminosVolumePrototype({
       pressureDivergencePasses: state.pressureDivergencePasses,
       pressureJacobiInlineDivergencePasses: state.pressureJacobiInlineDivergencePasses,
       fullGridPassBreakdown: state.fullGridPassBreakdown ? { ...state.fullGridPassBreakdown } : null,
-      majorantGrid: state.majorantGrid,
-      majorantBuilt: state.majorantBuilt,
-      majorantCadence: state.majorantCadence,
-      majorantBuiltThisFrame: state.majorantBuiltThisFrame,
-      majorantLastBuiltFrame: state.majorantLastBuiltFrame,
-      majorantSkippedFrameCount: state.majorantSkippedFrameCount,
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
@@ -20111,7 +19505,6 @@ export function createKaminosVolumePrototype({
       volumePresentationApplication: presentationApplication ? { ...presentationApplication } : null,
       selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt ? { ...state.selectiveHeadLivePassReceipt } : null,
       simReadback,
-      majorantReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -20189,7 +19582,6 @@ export function createKaminosVolumePrototype({
       for (let index = 0; index < renderScales.length; index += 1) {
         const renderScale = renderScales[index];
         controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
-        resetTemporalHistory('same-state-render-scale-capture');
         const sample = await sampleFrame({
           advanceSim: false,
           includeRgba: options.includeRgba === true,
@@ -20207,7 +19599,6 @@ export function createKaminosVolumePrototype({
       }
     } finally {
       controlsSnapshot = controlsBefore;
-      resetTemporalHistory('same-state-render-scale-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -20324,7 +19715,7 @@ export function createKaminosVolumePrototype({
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
     const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
     const readback = presentToCanvas ? null : device.createBuffer({
-      label: 'kaminos selective-head-live-lean-frame-readback-v0',
+      label: 'kaminos selective-head-live-raymarch-specialization-frame-readback-v0',
       size: bytesPerRow * state.height,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
@@ -20374,11 +19765,9 @@ export function createKaminosVolumePrototype({
     const beforeSimStepCount = state.simStepCount;
     if (advanceSim) encodeSim(encoder);
     encodeSelectiveHeadLiveFields(encoder);
-    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
     const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
     const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
     const selectiveRender = selectiveHeadLiveRoleGroups('render');
-    encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
     encodeBoundarySidecar(encoder, {
       readBindGroup: selectiveSidecar,
       ...(timingQuerySet ? {
@@ -20544,7 +19933,7 @@ export function createKaminosVolumePrototype({
     if (validationError) {
       readback?.destroy();
       destroyTimingResources();
-      return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
+      return { ok: false, reason: `raymarch-specialization-frame-readback-validation:${validationError.message || String(validationError)}` };
     }
     let gpuStageTiming = null;
     if (timingReadbackBuffer) {
@@ -20614,7 +20003,7 @@ export function createKaminosVolumePrototype({
     return {
       ok: true,
       sequenceAuthority: advanceSim ? 'frame-locked-consecutive-simulation-steps-v0' : 'same-state-selective-render-composition-v0',
-      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-lean-frame-readback-v0',
+      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-raymarch-specialization-frame-readback-v0',
       advanceSim,
       presentToCanvas,
       frameIndex,
@@ -20634,6 +20023,12 @@ export function createKaminosVolumePrototype({
       selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
       selectiveHeadLivePassReceipt,
       gpuStageTiming,
+      raymarchShaderSpecialization: state.raymarchShaderSpecialization
+        ? { ...state.raymarchShaderSpecialization }
+        : null,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
@@ -20680,7 +20075,6 @@ export function createKaminosVolumePrototype({
       }
     } finally {
       controlsSnapshot = controlsBefore;
-      resetTemporalHistory('controlled-step-sequence-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
         raf = requestAnimationFrame(render);
@@ -20750,10 +20144,8 @@ export function createKaminosVolumePrototype({
     try {
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
       syncFlowKernelDescriptorCaptureBuffer();
-      resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
-      encodeMajorant(encoder, { force: true });
       encodeBoundarySidecar(encoder);
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
@@ -21075,7 +20467,6 @@ export function createKaminosVolumePrototype({
         state.flowKernelDescriptorCaptureRequested = flowKernelDescriptorCaptureRequested();
         state.flowKernelDescriptorCaptureEffective = state.flowKernelDescriptorCaptureRequested
           && flowKernelDescriptorBufferCapacity === boundarySplatCapacity;
-        resetTemporalHistory('same-state-render-scale-canvas-restore');
       }
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);
@@ -21099,10 +20490,8 @@ export function createKaminosVolumePrototype({
       boundarySidecarSource: 'live',
       boundarySplatMode: 'off',
       lookFreeze: 0,
-      temporalAccum: 0,
-      temporalJitter: 0,
     });
-    rebuildFluidState(gridSize, majorantGridSize, 'deterministic-replay-reset');
+    rebuildFluidState(gridSize, 'deterministic-replay-reset');
     state.frameCount = 0;
     state.lookFreezeFrame = null;
     state.lookFreezeRenderTimeMs = null;
@@ -21113,7 +20502,6 @@ export function createKaminosVolumePrototype({
       updateUniforms(now);
       const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${steps}` });
       encodeSim(encoder);
-      if (step === steps - 1) encodeMajorant(encoder, { force: true });
       device.queue.submit([encoder.finish()]);
       state.frameCount += 1;
     }
@@ -21141,11 +20529,10 @@ export function createKaminosVolumePrototype({
       timeStepMs,
       startTimeMs,
       finalTimeMs: startTimeMs + Math.max(0, steps - 1) * timeStepMs,
-      controlsSignature: temporalControlSignature(controlsSnapshot),
+      controlsSignature: canonicalSourceControlSignature(controlsSnapshot),
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
       grid: gridSize,
-      majorantGrid: majorantGridSize,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
@@ -21323,11 +20710,6 @@ export function createKaminosVolumePrototype({
     updateUniforms(now);
     encodeSim(commandEncoder);
     encodeSelectiveHeadLiveFields(commandEncoder);
-    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
-    encodeMajorant(commandEncoder, {
-      readBindGroup: selectiveMajorant,
-      force: state.selectiveHeadLiveEffectiveRole !== 'off',
-    });
     const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
     const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
     encodeBoundarySidecar(commandEncoder, { readBindGroup: selectiveSidecar });
@@ -21394,7 +20776,6 @@ export function createKaminosVolumePrototype({
       splatApplied: true,
       fallbackReason: state.productFrameReceipt.fallbackReason,
     });
-    commitPreviousViewProjection();
     state.frameCount += 1;
     emitStatus({ phase: 'product-frame-encoded', receipt: state.productFrameReceipt });
     return { ...state.productFrameReceipt };
@@ -21406,6 +20787,17 @@ export function createKaminosVolumePrototype({
     setRaymarchSmokePresentationMode,
     setAppearanceDecompositionMode,
     setBoundarySplatPresentationMode,
+    setDebugRaymarchShaderSpecialization(mode = 'auto') {
+      const requested = String(mode || 'auto').toLowerCase();
+      if (!['auto', 'force-full'].includes(requested)) {
+        throw new Error(`unsupported-debug-raymarch-shader-specialization:${requested}`);
+      }
+      debugRaymarchShaderSpecialization = requested;
+      return {
+        identity: 'debug-raymarch-shader-specialization-override-v0',
+        effective: debugRaymarchShaderSpecialization,
+      };
+    },
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
     clearPersistentSparseCohortGpuState,
@@ -21417,11 +20809,14 @@ export function createKaminosVolumePrototype({
     },
     setControls(next) {
       const previousGrid = gridSize;
-      const previousMajorantGrid = majorantGridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
-      const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
+      const controlRetirement = stripRetiredRaymarchControls({ ...controlsSnapshot, ...next });
+      controlsSnapshot = applyRuntimeQualityControls(controlRetirement.controls);
+      state.retiredRaymarchControls = updateRetiredRaymarchControlReceipt(
+        state.retiredRaymarchControls,
+        controlRetirement.retiredRaymarchControls,
+      );
       const nextBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       if (previousBoundarySplatTelemetryControlSignature !== nextBoundarySplatTelemetryControlSignature) {
         boundarySplatControlGeneration += 1;
@@ -21444,33 +20839,24 @@ export function createKaminosVolumePrototype({
           }
         }
       }
-      const nextControlSignature = temporalControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
-      if (previousControlSignature !== nextControlSignature) {
-        resetTemporalHistory('control-change');
-      }
-      lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
-      const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
-        && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid);
+      if (device && requestedGrid !== previousGrid) {
+        rebuildFluidState(requestedGrid);
       } else if (sourceStateResetNeeded) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
+        rebuildFluidState(requestedGrid, 'canonical-source-control-change');
       } else {
         gridSize = requestedGrid;
-        majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
         state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
         state.frontFieldIdentity = FRONT_FIELD_IDENTITY;
         state.frontFieldBytes = frontFieldBufferBytes(gridSize);
         state.frontFieldReadIndex = currentFront;
         state.frontFieldWriteIndex = 1 - currentFront;
-        state.majorantGrid = majorantGridSize;
       }
       state.gridOverlay = controlsSnapshot.gridOverlay || 0;
       state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);
@@ -21482,12 +20868,6 @@ export function createKaminosVolumePrototype({
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
       state.occupancySkip = controlsSnapshot.occupancySkip ?? 0.35;
-      state.majorantSkip = controlsSnapshot.majorantSkip ?? 0.70;
-      state.majorantSmooth = controlsSnapshot.majorantSmooth ?? 0.85;
-      state.majorantGuard = controlsSnapshot.majorantGuard ?? 0.75;
-      state.temporalAccum = Math.max(0, Math.min(0.85, controlsSnapshot.temporalAccum ?? 0.25));
-      state.temporalJitter = controlsSnapshot.temporalJitter ?? 0.85;
-      state.historyClamp = controlsSnapshot.historyClamp ?? 0.70;
       state.fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
       state.detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
       state.detailScaleArtifactQuarantine = detailScaleArtifactQuarantine(controlsSnapshot.volumeScene);
@@ -21553,8 +20933,6 @@ export function createKaminosVolumePrototype({
           : 'unconstrained-current-renderer-v0';
       if (device) syncFlowKernelDescriptorCaptureBuffer();
       if (device) void ensureBrowserResidualModel();
-      state.majorantGrid = majorantGridSize;
-      state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
       state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
       state.pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
@@ -21570,7 +20948,7 @@ export function createKaminosVolumePrototype({
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
       getPrimitiveSource();
-      if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      if (device) rebuildFluidState(gridSize, 'volume-primitive-change');
     },
     setCoreEmitterSourceMode(mode) {
       const previousMode = state.coreEmitterSourceMode;
@@ -21578,7 +20956,7 @@ export function createKaminosVolumePrototype({
       const source = getPrimitiveSource(requestedMode);
       state.coreEmitterSourceMode = requestedMode;
       if (device && previousMode !== state.coreEmitterSourceMode) {
-        rebuildFluidState(gridSize, majorantGridSize, 'core-emitter-source-mode-change');
+        rebuildFluidState(gridSize, 'core-emitter-source-mode-change');
       }
       if (previousMode !== state.coreEmitterSourceMode) emitStatus({ phase: 'core-emitter-source' });
       return { ...source.coreEmitterSourceReceipt };
@@ -21596,7 +20974,7 @@ export function createKaminosVolumePrototype({
         && previousFamily
         && normalized?.family
         && previousFamily !== normalized.family) {
-        rebuildFluidState(gridSize, majorantGridSize, 'analytic-emitter-family-change');
+        rebuildFluidState(gridSize, 'analytic-emitter-family-change');
       }
       return analyticEmitterReceipt();
     },
@@ -21617,7 +20995,6 @@ export function createKaminosVolumePrototype({
       const requestedRole = normalizeSelectiveHeadLiveRole(role);
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
       state.selectiveHeadLiveRole = requestedRole;
-      resetTemporalHistory('selective-head-live-role-change');
       return {
         requestedRole,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
@@ -21634,7 +21011,6 @@ export function createKaminosVolumePrototype({
       const compositionChanged = previousComposition !== request.requested;
       controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRenderComposition: request.requested };
       updateSelectiveHeadLiveCompositionState();
-      if (compositionChanged) resetTemporalHistory('selective-head-live-render-composition-change');
       return {
         requestedCompositionRaw: request.raw,
         requestedComposition: request.requested,
@@ -21844,7 +21220,7 @@ export function createKaminosVolumePrototype({
       return {
         ...state,
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
-        cameraSignature: temporalCameraSignature(),
+        cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
@@ -21911,9 +21287,7 @@ export function createKaminosVolumePrototype({
       volumePresentationControlsBuffer = null;
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;
-      destroyTemporalHistory();
       destroyFluidState();
-      destroyMajorantState();
       canvas.remove();
     },
   };

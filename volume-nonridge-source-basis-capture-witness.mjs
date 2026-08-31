@@ -200,7 +200,7 @@ try {
       || !prototype?.beginDebugFullFieldExport) {
       throw new Error('nonridge-source-basis-capture-api-missing');
     }
-    prototype.setControls({ raySteps: 160, adaptiveRays: 0, temporalAccum: 0, temporalJitter: 0 });
+    prototype.setControls({ raySteps: 160, adaptiveRays: 0 });
     prototype.setRaymarchSmokePresentationMode('off');
     prototype.setSelectiveHeadLiveCapturePaused(true);
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -229,8 +229,6 @@ try {
   assert.equal(frozenRuntime.grid, 128, 'first source-basis corpus requires the exact 128^3 source grid');
   assert.equal(frozenRuntime.controls.raySteps, 160, 'requested ray steps were substituted');
   assert.equal(frozenRuntime.controls.adaptiveRays, 0, 'adaptive rays were not disabled');
-  assert.equal(frozenRuntime.controls.temporalAccum, 0, 'temporal accumulation was not disabled');
-  assert.equal(frozenRuntime.controls.temporalJitter, 0, 'temporal jitter was not disabled');
   assert.equal(frozenRuntime.smokeEffective, 'off', 'smoke presentation did not become off');
 
   failurePhase = 'frozen-state-export';

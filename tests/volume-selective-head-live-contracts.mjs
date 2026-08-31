@@ -77,7 +77,7 @@ assert.match(core, /selectiveHeadLiveCompositionEffective/, 'live debug state re
 assert.match(core, /selectiveHeadLiveCompositionFallbackReason/, 'live route fails loud when renderer composition substitutes or falls back');
 assert.match(core, /selectiveHeadLivePassReceipt/, 'frame-locked samples preserve exact raymarch/splat pass receipts');
 assert.match(core, /selectiveRaymarchFireAuthority/, 'smoke-hybrid raymarch suppresses fire authority without changing simulation state');
-assert.match(core, /selective-head-live-lean-frame-readback-v0/, 'movie capture avoids unrelated full-grid telemetry readbacks');
+assert.match(core, /selective-head-live-raymarch-specialization-frame-readback-v0/, 'movie capture avoids unrelated full-grid telemetry readbacks without claiming a shader specialization');
 assert.match(core, /loadSelectiveHeadLiveReplayAnchor/, 'live route can load the checksum-bound exact training-horizon fields');
 assert.match(core, /setSelectiveHeadLiveCapturePaused/, 'live route exposes witness-owned pause and single-step release control');
 assert.match(core, /stepSelectiveHeadLiveCaptureFrame/, 'live route admits exactly one paused render and waits for GPU completion');

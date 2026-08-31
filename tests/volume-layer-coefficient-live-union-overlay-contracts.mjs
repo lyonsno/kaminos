@@ -44,10 +44,9 @@ const sourceHashes = {
   boundarySidecarSha256: '1'.repeat(64),
   fluidSha256: '2'.repeat(64),
   frontSha256: '3'.repeat(64),
-  majorantSha256: '4'.repeat(64),
 };
 const manifest = {
-  schema: 'kaminos.volume.layer-coefficient-live-union-overlay.v0',
+  schema: 'kaminos.volume.layer-coefficient-live-union-overlay.v1',
   status: 'complete',
   failurePhase: null,
   authority: 'exact-native-cell-identity-overlay-remap-v0',

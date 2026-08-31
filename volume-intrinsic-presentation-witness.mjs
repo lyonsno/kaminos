@@ -428,19 +428,15 @@ try {
         before: {
           frameCount: before.frameCount,
           simStepCount: before.simStepCount,
-          temporalHistoryResetCount: before.temporalHistoryResetCount,
           authoredSmokeControl: before.controls?.smoke,
           raySteps: before.controls?.raySteps,
           adaptiveRays: before.controls?.adaptiveRays,
-          temporalAccum: before.controls?.temporalAccum,
-          temporalJitter: before.controls?.temporalJitter,
           controlsHash,
           cameraHash,
         },
         after: {
           frameCount: afterPresentation.frameCount,
           simStepCount: afterPresentation.simStepCount,
-          temporalHistoryResetCount: afterPresentation.temporalHistoryResetCount,
           authoredSmokeControl: afterPresentation.controls?.smoke,
           controlsHash: await digest(afterPresentation.controls),
           cameraHash: await digest(basinWindow?.kaminosCameraDebugState?.() || null),
@@ -527,15 +523,12 @@ try {
   failurePhase = 'evidence-validation';
   assert.equal(evidence.before.simStepCount, evidence.after.simStepCount, 'presentation switching advanced simulation');
   assert.equal(evidence.before.frameCount, evidence.after.frameCount, 'presentation switching advanced presented frame state');
-  assert.equal(evidence.before.temporalHistoryResetCount, evidence.after.temporalHistoryResetCount, 'presentation switching reset temporal history');
   assert.equal(evidence.before.controlsHash, evidence.after.controlsHash, 'presentation switching mutated authored controls');
   assert.equal(evidence.before.cameraHash, evidence.after.cameraHash, 'presentation switching mutated camera state');
   assert.equal(evidence.sourceSettingsPreset.presetId, FLAMEBOWL_PRESET_ID, 'effective preset substituted away from Flamebowl');
   assert.equal(evidence.sourceSettingsPreset.label, FLAMEBOWL_PRESET_LABEL, 'effective preset label does not identify Flamebowl');
   assert.equal(evidence.before.raySteps, 160, 'Flamebowl witness did not preserve 160 ray steps');
   assert.equal(evidence.before.adaptiveRays, 0, 'Flamebowl witness did not disable adaptive rays');
-  assert.equal(evidence.before.temporalAccum, 0, 'Flamebowl witness did not disable temporal accumulation');
-  assert.equal(evidence.before.temporalJitter, 0, 'Flamebowl witness did not disable temporal jitter');
   assert.equal(evidence.before.authoredSmokeControl, evidence.after.authoredSmokeControl, 'Smoke Off mutated the authored smoke control');
   assert.equal(evidence.intrinsic.receipt.requestedMode, 'intrinsic');
   assert.equal(evidence.intrinsic.receipt.effectiveMode, 'intrinsic');

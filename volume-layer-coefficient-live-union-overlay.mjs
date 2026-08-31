@@ -1,4 +1,4 @@
-const RUNTIME_SCHEMA = 'kaminos.volume.layer-coefficient-live-union-overlay.v0';
+const RUNTIME_SCHEMA = 'kaminos.volume.layer-coefficient-live-union-overlay.v1';
 const RUNTIME_AUTHORITY = 'exact-native-cell-identity-overlay-remap-v0';
 const LOADER_AUTHORITY = 'checksum-bound-live-union-overlay-loader-v0';
 const SELECTOR_AUTHORITY = 'explicit-source-field-operator-v0';
@@ -13,7 +13,6 @@ const SOURCE_HASH_KEYS = [
   'fluidSha256',
   'frontSha256',
   'boundarySidecarSha256',
-  'majorantSha256',
 ];
 
 function requireContract(condition, message) {
@@ -213,7 +212,7 @@ export async function loadLayerCoefficientLiveUnionOverlay({ manifestUrl, fetchI
     nativeCellIndices,
     denseLookup,
     receipt: {
-      identity: 'layer-coefficient-live-union-overlay-load-receipt-v0',
+      identity: 'layer-coefficient-live-union-overlay-load-receipt-v1',
       status: 'complete',
       authority: LOADER_AUTHORITY,
       manifestUrl,

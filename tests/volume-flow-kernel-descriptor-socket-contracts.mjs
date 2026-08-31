@@ -15,14 +15,14 @@ const descriptorModule = readFileSync(new URL('../flow-kernel-descriptor-socket.
 const selectiveBindGroupStart = core.indexOf('function rebuildSelectiveHeadLiveBindGroups()');
 const selectiveBindGroupEnd = core.indexOf('function selectiveHeadLiveRequestedRole()', selectiveBindGroupStart);
 const selectiveBindGroupSource = core.slice(selectiveBindGroupStart, selectiveBindGroupEnd);
-const descriptorCaptureStart = core.indexOf('async function sampleBoundarySplatKernelDescriptorCapture(instanceCount)');
+const descriptorCaptureStart = core.indexOf('async function sampleBoundarySplatKernelDescriptorCapture(');
 const descriptorCaptureEnd = core.indexOf('function readFlowKernelDescriptorCaptureChunk', descriptorCaptureStart);
 const descriptorCaptureSource = core.slice(descriptorCaptureStart, descriptorCaptureEnd);
 const descriptorDrainStart = exporter.indexOf('async function drainFlowKernelDescriptorCapture');
 const descriptorDrainEnd = exporter.indexOf('function resolveInitialFieldManifest()', descriptorDrainStart);
 const descriptorDrainSource = exporter.slice(descriptorDrainStart, descriptorDrainEnd);
 
-assert.equal(FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY, 'flow-kernel-local-descriptor-socket-v0');
+assert.equal(FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY, 'flow-kernel-local-descriptor-socket-v1');
 assert.equal(FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS, 100);
 assert.equal(FLOW_KERNEL_DESCRIPTOR_ORDER.length, FLOW_KERNEL_DESCRIPTOR_STRIDE_FLOATS);
 assert.deepEqual(FLOW_KERNEL_DESCRIPTOR_ORDER.slice(0, 20), [
@@ -34,7 +34,8 @@ assert.deepEqual(FLOW_KERNEL_DESCRIPTOR_ORDER.slice(0, 20), [
 ]);
 assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('flow.divergence'), 'descriptor exposes divergence as a non-radiant scalar');
 assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('validity.strengthZeroIdentity'), 'descriptor exposes exact strength-zero identity');
-assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('majorant.importance'), 'descriptor exposes conservative local majorant state');
+assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('opticalSupport.importance'), 'descriptor exposes direct native-cell optical support');
+assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('validity.directOpticalSupport'), 'descriptor names the direct optical-support validity boundary');
 assert.ok(FLOW_KERNEL_DESCRIPTOR_ORDER.includes('gradient.micro.w.z'), 'descriptor exposes world gradients for every consumed channel');
 assert.ok(!FLOW_KERNEL_DESCRIPTOR_ORDER.some(name => name.includes('tap') || name.includes('weight')), 'literal taps and weights stay private');
 
@@ -72,7 +73,6 @@ const decoded = decodeFlowKernelDescriptorCapture(row, 1, 1, {
     fluidSha256: 'a'.repeat(64),
     frontSha256: 'b'.repeat(64),
     boundarySidecarSha256: 'c'.repeat(64),
-    majorantSha256: 'd'.repeat(64),
   },
 });
 assert.equal(decoded.identity, FLOW_KERNEL_DESCRIPTOR_SOCKET_IDENTITY);
@@ -91,7 +91,6 @@ assert.throws(() => decodeFlowKernelDescriptorCapture(malformedIdentityRow, 1, 1
     fluidSha256: 'a'.repeat(64),
     frontSha256: 'b'.repeat(64),
     boundarySidecarSha256: 'c'.repeat(64),
-    majorantSha256: 'd'.repeat(64),
   },
 }), /strength-zero identity/, 'socket refuses metadata-only identity when row moments and validity disagree');
 assert.throws(() => decodeFlowKernelDescriptorCapture(row, 1, 1, {
@@ -108,7 +107,7 @@ assert.match(core, /sampleBoundarySplatKernelDescriptorCapture/, 'runtime reads 
 assert.match(core, /readFlowKernelDescriptorCaptureChunk/, 'runtime exposes session-bound chunk reads instead of one giant CDP payload');
 assert.match(core, /releaseFlowKernelDescriptorCapture/, 'runtime releases retained descriptor snapshots explicitly');
 assert.ok(selectiveBindGroupStart >= 0 && selectiveBindGroupEnd > selectiveBindGroupStart, 'selective-head bind-group constructor is inspectable');
-assert.match(selectiveBindGroupSource, /splat:[\s\S]*binding:\s*7[^\n]*majorantBuffer/, 'selective-head splat route binds the shared conservative majorant ABI');
+assert.doesNotMatch(selectiveBindGroupSource, /majorantBuffer/, 'selective-head splat route does not retain the retired majorant ABI');
 assert.match(selectiveBindGroupSource, /splat:[\s\S]*binding:\s*8[^\n]*flowKernelDescriptorBuffer/, 'selective-head splat route binds the shared descriptor-output ABI');
 assert.ok(descriptorCaptureStart >= 0 && descriptorCaptureEnd > descriptorCaptureStart, 'descriptor capture function is inspectable');
 assert.match(descriptorCaptureSource, /descriptorSourceFluidBuffer/, 'capture names the effective fluid buffer that produced descriptor rows');
@@ -117,7 +116,8 @@ assert.match(descriptorCaptureSource, /readStorageBufferBytes\(\s*descriptorSour
 assert.match(descriptorCaptureSource, /readStorageBufferBytes\(\s*descriptorSourceFrontBuffer/, 'capture hashes the effective front state instead of only its imported ancestor');
 assert.doesNotMatch(descriptorCaptureSource, /fluidSha256:\s*importReceipt\.fluidSha256/, 'capture does not mislabel an advanced descriptor with its import-time fluid hash');
 assert.doesNotMatch(descriptorCaptureSource, /frontSha256:\s*importReceipt\.frontSha256/, 'capture does not mislabel an advanced descriptor with its import-time front hash');
-assert.match(core, /boundarySidecarSha256[\s\S]*majorantSha256/, 'capture hashes derived sidecar and majorant state');
+assert.match(descriptorCaptureSource, /boundarySidecarSha256/, 'capture hashes the derived boundary sidecar');
+assert.doesNotMatch(descriptorCaptureSource, /majorantSha256/, 'capture identity does not retain the retired majorant field');
 assert.match(core, /reconstructionControls\.w/, 'descriptor writes are debug-gated independently of rendering semantics');
 assert.match(core, /max\(vec4<f32>\(0\.0\), mix\(center\.sidecar/, 'descriptor path preserves nonnegative reconstructed extinction-bearing fields');
 assert.doesNotMatch(core, /divergence[\s\S]{0,160}(radiance|colorOpacity|fireSignal)/i, 'divergence is not direct radiance authority');
