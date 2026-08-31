@@ -90,6 +90,32 @@ assert.throws(
   'the deterministic fixture must not manufacture affine output for unrelated WGSL',
 );
 
+for (const role of ['input', 'output']) {
+  const missingStorageSurface = createMinimalWebGpuTestSurface({
+    omitStorageUsageFor: role,
+  });
+  await assert.rejects(
+    example.runMinimalModelPort({
+      gpu: missingStorageSurface.gpu,
+      sessionId: `getting-started-missing-${role}-storage`,
+    }),
+    /deterministic affine fixture rejected unexpected .* buffer usage/,
+    `the deterministic fixture must reject a ${role} buffer without STORAGE usage`,
+  );
+
+  const substitutedBufferSurface = createMinimalWebGpuTestSurface({
+    substituteBoundBufferFor: role,
+  });
+  await assert.rejects(
+    example.runMinimalModelPort({
+      gpu: substitutedBufferSurface.gpu,
+      sessionId: `getting-started-substituted-${role}-buffer`,
+    }),
+    /deterministic affine fixture rejected unexpected .* buffer identity/,
+    `the deterministic fixture must reject a same-labeled substitute ${role} buffer`,
+  );
+}
+
 const failingSurface = createMinimalWebGpuTestSurface({ failSubmissionAt: 1 });
 let injectedFailure;
 try {

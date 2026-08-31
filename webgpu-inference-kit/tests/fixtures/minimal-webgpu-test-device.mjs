@@ -24,9 +24,24 @@ function sourceBytes(data, dataOffset = 0, size = undefined) {
   return bytes.slice(dataOffset, end);
 }
 
-export function createMinimalWebGpuTestSurface({ failSubmissionAt = null } = {}) {
+const AFFINE_BUFFER_ROLES = new Set(['input', 'output']);
+const COPY_SOURCE_USAGE = 0x0004;
+const COPY_DESTINATION_USAGE = 0x0008;
+const STORAGE_USAGE = 0x0080;
+
+export function createMinimalWebGpuTestSurface({
+  failSubmissionAt = null,
+  omitStorageUsageFor = null,
+  substituteBoundBufferFor = null,
+} = {}) {
   if (failSubmissionAt != null && (!Number.isInteger(failSubmissionAt) || failSubmissionAt < 1)) {
     throw new Error('failSubmissionAt must be a positive integer or null');
+  }
+  if (omitStorageUsageFor != null && !AFFINE_BUFFER_ROLES.has(omitStorageUsageFor)) {
+    throw new Error('omitStorageUsageFor must be input, output, or null');
+  }
+  if (substituteBoundBufferFor != null && !AFFINE_BUFFER_ROLES.has(substituteBoundBufferFor)) {
+    throw new Error('substituteBoundBufferFor must be input, output, or null');
   }
   const calls = {
     bufferCreations: [],
@@ -45,11 +60,19 @@ export function createMinimalWebGpuTestSurface({ failSubmissionAt = null } = {})
   let affineShaderModule;
   let affineBindGroupLayout;
   let affinePipelineLayout;
+  let affineInputBuffer;
+  let affineOutputBuffer;
   let affineBindGroup;
   let affinePipeline;
   const lost = new Promise(resolve => { resolveLost = resolve; });
 
-  function createBuffer(descriptor) {
+  function createBuffer(requestedDescriptor) {
+    const role = requestedDescriptor.label === 'getting-started.input'
+      ? 'input'
+      : requestedDescriptor.label === 'getting-started.output' ? 'output' : null;
+    const descriptor = role === omitStorageUsageFor
+      ? { ...requestedDescriptor, usage: requestedDescriptor.usage & ~STORAGE_USAGE }
+      : requestedDescriptor;
     const data = new ArrayBuffer(descriptor.size);
     const buffer = {
       descriptor,
@@ -63,6 +86,8 @@ export function createMinimalWebGpuTestSurface({ failSubmissionAt = null } = {})
         calls.bufferDestructions.push(descriptor.label);
       },
     };
+    if (role === 'input' && affineInputBuffer == null) affineInputBuffer = buffer;
+    if (role === 'output' && affineOutputBuffer == null) affineOutputBuffer = buffer;
     calls.bufferCreations.push(descriptor.label);
     return buffer;
   }
@@ -154,19 +179,45 @@ export function createMinimalWebGpuTestSurface({ failSubmissionAt = null } = {})
       return affinePipelineLayout;
     },
     createBindGroup(descriptor) {
-      const entries = descriptor?.entries;
+      const entries = descriptor?.entries?.map(entry => {
+        const role = entry.binding === 0 ? 'input' : entry.binding === 1 ? 'output' : null;
+        if (role !== substituteBoundBufferFor) return entry;
+        const original = entry.resource?.buffer;
+        return {
+          ...entry,
+          resource: {
+            ...entry.resource,
+            buffer: {
+              ...original,
+              descriptor: { ...original.descriptor },
+              data: new ArrayBuffer(original.data.byteLength),
+            },
+          },
+        };
+      });
+      descriptor = { ...descriptor, entries };
       rejectUnexpected(descriptor?.label === 'getting-started.affine-f32.bind-group', 'bind-group label');
       rejectUnexpected(descriptor?.layout === affineBindGroupLayout, 'bind-group layout');
       rejectUnexpected(Array.isArray(entries) && entries.length === 2, 'bind-group entry count');
       rejectUnexpected(
         entries[0]?.binding === 0
-          && entries[0]?.resource?.buffer?.descriptor?.label === 'getting-started.input',
-        'input bind-group resource',
+          && entries[0]?.resource?.buffer === affineInputBuffer,
+        'input buffer identity',
       );
       rejectUnexpected(
         entries[1]?.binding === 1
-          && entries[1]?.resource?.buffer?.descriptor?.label === 'getting-started.output',
-        'output bind-group resource',
+          && entries[1]?.resource?.buffer === affineOutputBuffer,
+        'output buffer identity',
+      );
+      rejectUnexpected(
+        (affineInputBuffer?.descriptor?.usage & (STORAGE_USAGE | COPY_DESTINATION_USAGE))
+          === (STORAGE_USAGE | COPY_DESTINATION_USAGE),
+        'input buffer usage',
+      );
+      rejectUnexpected(
+        (affineOutputBuffer?.descriptor?.usage & (STORAGE_USAGE | COPY_SOURCE_USAGE))
+          === (STORAGE_USAGE | COPY_SOURCE_USAGE),
+        'output buffer usage',
       );
       calls.bindGroupCreations.push(descriptor);
       affineBindGroup = { descriptor };
