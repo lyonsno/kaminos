@@ -55,7 +55,7 @@ assert.match(raymarchLoop, /let leanExpensiveSampleBudget = expensiveSampleBudge
 assert.match(raymarchLoop, /let maxTraversalSteps = GRID \* 3u \+ leanExpensiveSampleBudget \+ 3u/, 'traversal safety is bounded by grid crossings plus the complete expensive-sample ceiling');
 assert.match(raymarchLoop, /LEAN_STOCK_RAYMARCH && !fullGridCapture && expensiveSamples >= leanExpensiveSampleBudget/, 'lean rendering cannot exceed the explicit nominal-plus-ridge sample budget');
 assert.match(raymarchLoop, /let ridgeEnvelope = raymarchCellSupport\.z/, 'local refinement is admitted by ridge support rather than broader boundary coverage');
-assert.match(raymarchLoop, /ridgeRefinementSamples < ridgeRefinementSampleBudget[\s\S]*ridgeRefinementSamples = ridgeRefinementSamples \+ select\(0u, 1u, ridgeRefinementActive\)/, 'only actual ridge-refined samples spend the bounded allowance');
+assert.match(raymarchLoop, /let ridgeRefinementApplied = ridgeRefinementActive && ridgeLocalDt < baseAdaptiveDt[\s\S]*ridgeRefinementSamples = ridgeRefinementSamples \+ select\(0u, 1u, ridgeRefinementApplied\)/, 'only samples whose segment was actually shortened spend the bounded allowance');
 assert.doesNotMatch(raymarchLoop, /maxIntegrationSamples/, 'the replacement bound cannot scale hidden expensive work with grid resolution');
 assert.match(raymarchLoop, /rayStepOpacity = localDt \* 3\.65/, 'refined segments continue to scale optical depth by their actual length');
 

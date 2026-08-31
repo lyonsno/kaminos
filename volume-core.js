@@ -5288,8 +5288,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       && ridgeEnvelope > 0.0001
       && ridgeRefinementSamples < ridgeRefinementSampleBudget;
     let ridgeLocalDt = min(ridgeMinimumDt, max(0.0001, endT - t));
+    let ridgeRefinementApplied = ridgeRefinementActive && ridgeLocalDt < baseAdaptiveDt;
     let localDt = select(baseAdaptiveDt, min(baseAdaptiveDt, ridgeLocalDt), ridgeRefinementActive);
-    ridgeRefinementSamples = ridgeRefinementSamples + select(0u, 1u, ridgeRefinementActive);
+    ridgeRefinementSamples = ridgeRefinementSamples + select(0u, 1u, ridgeRefinementApplied);
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
       detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),
