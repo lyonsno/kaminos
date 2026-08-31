@@ -27,10 +27,188 @@ VOLUME_SETTINGS_STORE_DEFAULT = Path(os.environ.get(
     os.path.expanduser("~/.local/share/kaminos/volume-settings-presets"),
 )).expanduser().resolve()
 VOLUME_SETTINGS_STORE = VOLUME_SETTINGS_STORE_DEFAULT
+VOLUME_BASIN_SESSION_STORE_DEFAULT = Path(os.environ.get(
+    "KAMINOS_VOLUME_BASIN_SESSION_STORE",
+    os.path.expanduser("~/.local/share/kaminos/volume-basin-drive-sessions"),
+)).expanduser().resolve()
+VOLUME_BASIN_SESSION_STORE = VOLUME_BASIN_SESSION_STORE_DEFAULT
 VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
 VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
 VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
 VOLUME_BASIN_PROMOTION_CLI = ROOT / "volume-basin-promotion-package.mjs"
+VOLUME_BASIN_DRIVE_SESSION_CLI = ROOT / "volume-basin-drive-session-cli.mjs"
+
+
+def write_volume_basin_drive_session(store_path, session):
+    store = _volume_settings_store_path(store_path)
+    normalized = _normalize_volume_basin_drive_session(session)
+    if normalized["runtime"]["effectiveStorePath"] != str(store):
+        raise ValueError("volume basin drive session effective store path mismatch")
+    content_hash = _volume_basin_drive_session_content_hash(normalized)
+    artifact_id = f"vds-{content_hash}"
+    written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    document = {
+        "identity": "kaminos.volume.basin-drive-session-artifact.v0",
+        "artifactId": artifact_id,
+        "contentHash": f"sha256:{content_hash}",
+        "writtenAt": written_at,
+        "source": volume_settings_server_source(),
+        "session": normalized,
+    }
+    artifact_path = store / "sessions" / f"{artifact_id}.json"
+    with _volume_settings_store_lock(store):
+        created = _atomic_create_json(artifact_path, document)
+        idempotent = not created
+        if idempotent:
+            existing = read_volume_basin_drive_session(store, artifact_id)
+            if existing.get("contentHash") != document["contentHash"]:
+                raise ValueError("volume basin drive session content identity collision")
+    return {
+        "ok": True,
+        "identity": "kaminos.volume.basin-drive-session-write-receipt.v0",
+        "requested": {
+            "storePath": str(store),
+            "sessionId": normalized["sessionId"],
+            "eventCount": normalized["eventCount"],
+            "sourceCommit": normalized["source"]["commit"],
+        },
+        "effective": {
+            "storePath": str(store),
+            "artifactPath": str(artifact_path),
+            "artifactId": artifact_id,
+            "contentHash": document["contentHash"],
+            "sessionId": normalized["sessionId"],
+            "eventCount": normalized["eventCount"],
+            "controlEventCount": normalized["controlEventCount"],
+            "markCount": normalized["markCount"],
+            "sourceCommit": normalized["source"]["commit"],
+            "idempotent": idempotent,
+        },
+        "sessionUrl": f"/api/volume-basin-drive-session?id={artifact_id}",
+    }
+
+
+def read_volume_basin_drive_session(store_path, session_ref):
+    store = _volume_settings_store_path(store_path)
+    artifact_id = str(session_ref or "").strip()
+    if not re.fullmatch(r"vds-[0-9a-f]{64}", artifact_id):
+        raise ValueError("volume basin drive session artifact id is invalid")
+    artifact_path = store / "sessions" / f"{artifact_id}.json"
+    try:
+        document = _read_json_object(artifact_path, "basin drive session artifact")
+    except FileNotFoundError as error:
+        raise FileNotFoundError(f"volume basin drive session not found: {artifact_id}") from error
+    if (
+        document.get("identity") != "kaminos.volume.basin-drive-session-artifact.v0"
+        or document.get("artifactId") != artifact_id
+    ):
+        raise ValueError("volume basin drive session artifact identity mismatch")
+    normalized = _normalize_volume_basin_drive_session(document.get("session"))
+    content_hash = _volume_basin_drive_session_content_hash(normalized)
+    if document.get("contentHash") != f"sha256:{content_hash}" or artifact_id != f"vds-{content_hash}":
+        raise ValueError("volume basin drive session artifact content hash mismatch")
+    return {
+        **document,
+        "session": normalized,
+        "artifactPath": str(artifact_path),
+        "storePath": str(store),
+    }
+
+
+def list_volume_basin_drive_sessions(store_path):
+    store = _volume_settings_store_path(store_path)
+    sessions_dir = store / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for artifact_path in sessions_dir.glob("vds-*.json"):
+        document = read_volume_basin_drive_session(store, artifact_path.stem)
+        session = document["session"]
+        entries.append({
+            "artifactId": document["artifactId"],
+            "contentHash": document["contentHash"],
+            "artifactPath": document["artifactPath"],
+            "sessionId": session["sessionId"],
+            "startedAt": session["startedAt"],
+            "endedAt": session["endedAt"],
+            "eventCount": session["eventCount"],
+            "controlEventCount": session["controlEventCount"],
+            "markCount": session["markCount"],
+            "sourceCommit": session["source"]["commit"],
+            "writtenAt": document.get("writtenAt"),
+        })
+    entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["artifactId"]), reverse=True)
+    return {
+        "identity": "kaminos.volume.basin-drive-session-index.v0",
+        "storePath": str(store),
+        "entries": entries,
+    }
+
+
+def _normalize_volume_basin_drive_session(session):
+    if not isinstance(session, dict):
+        raise ValueError("volume basin drive session must be a JSON object")
+    result = subprocess.run(
+        ["node", str(VOLUME_BASIN_DRIVE_SESSION_CLI), "normalize"],
+        cwd=ROOT,
+        text=True,
+        input=json.dumps(session, ensure_ascii=True),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).strip().splitlines()
+        detail = next((line.removeprefix("Error: ") for line in message if "Error:" in line), None)
+        raise ValueError(detail or "volume basin drive session validation failed")
+    try:
+        normalized = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"volume basin drive session validator returned invalid JSON: {error}") from error
+    if not isinstance(normalized, dict):
+        raise ValueError("volume basin drive session validator returned a non-object")
+    canonical_schema = _canonical_volume_basin_drive_control_schema()
+    authored_schema = normalized.get("controlSchema") or {}
+    for field in (
+        "identity", "sha256", "basinControlCount", "rendererControlCount",
+        "presentationControlCount", "inventory",
+    ):
+        if authored_schema.get(field) != canonical_schema.get(field):
+            raise ValueError(f"volume basin drive session canonical control schema mismatch: {field}")
+    server_source = volume_settings_server_source()
+    if server_source.get("dirty") is not False:
+        raise ValueError("volume basin drive session server source is dirty")
+    if normalized.get("source", {}).get("commit") != server_source.get("commit"):
+        raise ValueError("volume basin drive session source commit does not match the effective server")
+    return normalized
+
+
+def _canonical_volume_basin_drive_control_schema():
+    schema_bytes = VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_bytes()
+    schema = json.loads(schema_bytes)
+    inventory = []
+    for axis, field in (
+        ("basin", "controls"),
+        ("renderer", "rendererControls"),
+        ("presentation", "presentationControls"),
+    ):
+        inventory.extend({
+            "axis": axis,
+            "id": descriptor["key"],
+            "param": descriptor["param"],
+            "type": descriptor["type"],
+        } for descriptor in schema.get(field) or [])
+    return {
+        "identity": schema["identity"],
+        "sha256": hashlib.sha256(schema_bytes).hexdigest(),
+        "basinControlCount": len(schema.get("controls") or []),
+        "rendererControlCount": len(schema.get("rendererControls") or []),
+        "presentationControlCount": len(schema.get("presentationControls") or []),
+        "inventory": inventory,
+    }
+
+
+def _volume_basin_drive_session_content_hash(session):
+    canonical = json.dumps(session, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def _settings_preset_route_value(value):
@@ -385,6 +563,11 @@ def _atomic_create_json(path, document):
             os.link(temporary_path, path)
         except FileExistsError:
             return False
+        directory_descriptor = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
         return True
     finally:
         try:
@@ -630,6 +813,15 @@ def volume_settings_server_source():
             source[field] = subprocess.check_output(command, cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
         except (OSError, subprocess.SubprocessError):
             source[field] = "unavailable"
+    try:
+        source["dirty"] = bool(subprocess.check_output(
+            ["git", "status", "--porcelain", "--untracked-files=normal"],
+            cwd=ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip())
+    except (OSError, subprocess.SubprocessError):
+        source["dirty"] = None
     return source
 
 
@@ -707,6 +899,7 @@ def write_volume_basin_promotion_package(request):
 def parse_server_arguments(argv):
     port = 8090
     store = VOLUME_SETTINGS_STORE_DEFAULT
+    basin_session_store = VOLUME_BASIN_SESSION_STORE_DEFAULT
     arguments = list(argv)
     if arguments and not arguments[0].startswith("-"):
         try:
@@ -715,10 +908,14 @@ def parse_server_arguments(argv):
             raise ValueError("server port must be an integer") from error
     while arguments:
         argument = arguments.pop(0)
-        if argument != "--volume-settings-store" or not arguments:
+        if argument not in {"--volume-settings-store", "--volume-basin-session-store"} or not arguments:
             raise ValueError(f"unsupported server argument: {argument}")
-        store = _volume_settings_store_path(arguments.pop(0))
-    return port, store
+        path = _volume_settings_store_path(arguments.pop(0))
+        if argument == "--volume-settings-store":
+            store = path
+        else:
+            basin_session_store = path
+    return port, store, basin_session_store
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -832,6 +1029,8 @@ def runtime_config():
     return {
         "schema": "kaminos.runtime-config.v0",
         "hybridSplatOverlayModuleUrl": module_url or None,
+        "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
+        "source": volume_settings_server_source(),
     }
 
 
@@ -1658,6 +1857,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_settings_preset_get(parse_qs(parsed.query))
         elif parsed.path == "/api/volume-settings-presets":
             self.handle_volume_settings_presets_get()
+        elif parsed.path == "/api/volume-basin-drive-session":
+            self.handle_volume_basin_drive_session_get(parse_qs(parsed.query))
+        elif parsed.path == "/api/volume-basin-drive-sessions":
+            self.handle_volume_basin_drive_sessions_get()
         elif parsed.path == "/api/roots":
             self.handle_roots()
         elif parsed.path.startswith("/api/read"):
@@ -1689,6 +1892,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_settings_presets_post()
         elif parsed.path == "/api/volume-basin-promotions":
             self.handle_volume_basin_promotions_post()
+        elif parsed.path == "/api/volume-basin-drive-sessions":
+            self.handle_volume_basin_drive_sessions_post()
         else:
             self.send_json({"error": "Not found"}, 404)
 
@@ -1822,6 +2027,79 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "requestedLabel": request.get("label"),
                 "storePath": str(VOLUME_SETTINGS_STORE),
                 "failurePhase": "shared-preset-write",
+            }, 400)
+            return
+        self.send_json(receipt)
+
+    def handle_volume_basin_drive_sessions_get(self):
+        try:
+            self.send_json(list_volume_basin_drive_sessions(VOLUME_BASIN_SESSION_STORE))
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "storePath": str(VOLUME_BASIN_SESSION_STORE),
+                "failurePhase": "basin-drive-session-index",
+            }, 500)
+
+    def handle_volume_basin_drive_session_get(self, query):
+        session_ref = (query.get("id") or query.get("session") or [""])[0]
+        try:
+            document = read_volume_basin_drive_session(VOLUME_BASIN_SESSION_STORE, session_ref)
+        except FileNotFoundError as error:
+            self.send_json({
+                "error": str(error),
+                "requestedSessionRef": session_ref,
+                "storePath": str(VOLUME_BASIN_SESSION_STORE),
+                "failurePhase": "basin-drive-session-read",
+            }, 404)
+            return
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedSessionRef": session_ref,
+                "storePath": str(VOLUME_BASIN_SESSION_STORE),
+                "failurePhase": "basin-drive-session-read",
+            }, 400)
+            return
+        self.send_json(document)
+
+    def handle_volume_basin_drive_sessions_post(self):
+        failure_base = {
+            "storePath": str(VOLUME_BASIN_SESSION_STORE),
+            "failurePhase": "basin-drive-session-write",
+        }
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({**failure_base, "error": "Invalid Content-Length", "requestedSessionId": None}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({**failure_base, "error": "Invalid JSON", "requestedSessionId": None}, 400)
+            return
+        if not isinstance(request, dict) or set(request) != {"session"}:
+            self.send_json({
+                "error": "basin drive session write requires exactly session input",
+                **failure_base,
+            }, 400)
+            return
+        try:
+            receipt = write_volume_basin_drive_session(VOLUME_BASIN_SESSION_STORE, request.get("session"))
+        except OSError as error:
+            self.send_json({
+                **failure_base,
+                "error": str(error),
+                "requestedSessionId": (request.get("session") or {}).get("sessionId")
+                if isinstance(request.get("session"), dict) else None,
+            }, 500)
+            return
+        except (ValueError, json.JSONDecodeError, subprocess.SubprocessError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedSessionId": (request.get("session") or {}).get("sessionId")
+                if isinstance(request.get("session"), dict) else None,
+                **failure_base,
             }, 400)
             return
         self.send_json(receipt)
@@ -2456,7 +2734,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     try:
-        PORT, VOLUME_SETTINGS_STORE = parse_server_arguments(sys.argv[1:])
+        PORT, VOLUME_SETTINGS_STORE, VOLUME_BASIN_SESSION_STORE = parse_server_arguments(sys.argv[1:])
     except ValueError as error:
         print(f"serve.py: {error}", file=sys.stderr)
         raise SystemExit(2)
@@ -2469,6 +2747,7 @@ if __name__ == "__main__":
     print(f"  Splat inbox: {BROWSE_ROOTS['splat-inbox']}")
     print(f"  Production splats: {BROWSE_ROOTS['splat-production']}")
     print(f"  Volume settings store: {VOLUME_SETTINGS_STORE}")
+    print(f"  Volume basin session store: {VOLUME_BASIN_SESSION_STORE}")
     server = http.server.ThreadingHTTPServer(("", PORT), KaminosHandler)
     try:
         server.serve_forever()

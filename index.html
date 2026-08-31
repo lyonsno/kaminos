@@ -465,6 +465,21 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .volume-readout .field-key { white-space: nowrap; }
 .volume-readout .field-val { max-width: 220px; text-align: right; }
 #volume-settings-preset-state { max-width: none; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; user-select: text; text-align: left; }
+.basin-drive-recorder { display: grid; gap: 6px; margin-top: 9px; padding-top: 9px; border-top: 1px solid #2a2a2a; }
+.basin-drive-recorder-row { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 30px); gap: 5px; align-items: center; }
+.basin-drive-recorder-mark { display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; align-items: center; }
+.basin-drive-command { position: relative; width: 30px; height: 30px; min-width: 30px; padding: 0; margin: 0; }
+.basin-drive-command:disabled { cursor: not-allowed; opacity: 0.4; }
+.basin-drive-icon { position: absolute; inset: 50% auto auto 50%; width: 12px; height: 12px; transform: translate(-50%, -50%); }
+.basin-drive-icon-record { border-radius: 50%; background: #d94a4a; }
+.basin-drive-icon-stop { width: 11px; height: 11px; background: #cfcfcf; }
+.basin-drive-icon-mark::before, .basin-drive-icon-mark::after { content: ""; position: absolute; background: #cfcfcf; }
+.basin-drive-icon-mark::before { left: 5px; top: 0; width: 2px; height: 12px; }
+.basin-drive-icon-mark::after { left: 0; top: 5px; width: 12px; height: 2px; }
+.basin-drive-icon-replay { border: 2px solid #8fc7d6; border-left-color: transparent; border-radius: 50%; }
+.basin-drive-icon-replay::after { content: ""; position: absolute; left: -3px; top: -3px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-right: 5px solid #8fc7d6; transform: rotate(35deg); }
+#basin-drive-state { min-height: 28px; color: #8fc7d6; font: 9px 'SF Mono', monospace; line-height: 1.35; overflow-wrap: anywhere; user-select: text; }
+#basin-drive-state.failed { color: #e0a0a0; }
 .volume-pyro-atlas-wrap { margin-top: 8px; border-top: 1px solid #282828; padding-top: 8px; }
 #volume-pyro-dynamic-atlas { width: 100%; height: 54px; border: 1px solid #333; border-radius: 6px; background: #080808; }
 .volume-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
@@ -1074,6 +1089,20 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <input id="basin-promotion-handle" class="search-input" type="text" placeholder="Handle" aria-label="Basin promotion handle">
         <input id="basin-promotion-root" class="search-input" type="text" value="~/.local/share/kaminos/basin-promotions" aria-label="Basin promotion root">
         <button class="btn" id="basin-promotion-export">Export</button>
+      </div>
+      <div class="basin-drive-recorder" aria-label="Basin drive recorder">
+        <div class="basin-drive-recorder-row">
+          <input id="basin-drive-session-label" class="search-input" type="text" placeholder="Drive name" aria-label="Basin drive session name">
+          <button class="btn basin-drive-command" id="basin-drive-record" type="button" title="Record basin drive" aria-label="Record basin drive"><span class="basin-drive-icon basin-drive-icon-record" aria-hidden="true"></span></button>
+          <button class="btn basin-drive-command" id="basin-drive-stop" type="button" title="Stop and save basin drive" aria-label="Stop and save basin drive" disabled><span class="basin-drive-icon basin-drive-icon-stop" aria-hidden="true"></span></button>
+          <button class="btn basin-drive-command" id="basin-drive-replay" type="button" title="Replay last basin drive" aria-label="Replay last basin drive" disabled><span class="basin-drive-icon basin-drive-icon-replay" aria-hidden="true"></span></button>
+          <span aria-hidden="true"></span>
+        </div>
+        <div class="basin-drive-recorder-mark">
+          <input id="basin-drive-mark-label" class="search-input" type="text" placeholder="Mark name" aria-label="Basin drive mark name">
+          <button class="btn basin-drive-command" id="basin-drive-mark" type="button" title="Mark current basin state" aria-label="Mark current basin state" disabled><span class="basin-drive-icon basin-drive-icon-mark" aria-hidden="true"></span></button>
+        </div>
+        <div id="basin-drive-state" role="status" aria-live="polite">idle</div>
       </div>
     </div>
     <div class="slider-row">
@@ -2758,6 +2787,11 @@ import {
   collectVolumeCockpitControlElements,
   initializeVolumeCockpitLayout,
 } from './volume-cockpit-layout.mjs';
+import {
+  createVolumeBasinDriveSessionRecorder,
+  parseVolumeBasinDriveSession,
+  replayVolumeBasinDriveSession,
+} from './volume-basin-drive-session.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -12491,6 +12525,449 @@ async function exportBasinPromotionPackage() {
     throw error;
   }
 }
+
+let activeVolumeBasinDriveRecorder = null;
+let activeVolumeBasinDriveSessionId = null;
+let volumeBasinDrivePreviousDescriptors = null;
+let volumeBasinDriveGeneration = 0;
+let volumeBasinDriveStarting = false;
+let volumeBasinDriveSaving = false;
+let volumeBasinDriveReplaying = false;
+let pendingVolumeBasinDriveSession = null;
+let activeVolumeBasinDriveStorePath = null;
+let lastVolumeBasinDriveArtifactId = null;
+let lastVolumeBasinDriveArtifactPath = null;
+
+function volumeBasinDriveStatus(message, failed = false) {
+  const state = document.getElementById('basin-drive-state');
+  if (state) {
+    state.textContent = message;
+    state.title = message;
+    state.classList.toggle('failed', failed);
+  }
+}
+
+function syncVolumeBasinDriveCommands() {
+  const recording = activeVolumeBasinDriveRecorder !== null;
+  const persistencePending = pendingVolumeBasinDriveSession !== null;
+  const busy = volumeBasinDriveStarting || volumeBasinDriveSaving || volumeBasinDriveReplaying;
+  const record = document.getElementById('basin-drive-record');
+  const mark = document.getElementById('basin-drive-mark');
+  const stop = document.getElementById('basin-drive-stop');
+  const replay = document.getElementById('basin-drive-replay');
+  if (record) record.disabled = recording || persistencePending || busy;
+  if (mark) mark.disabled = !recording || busy;
+  if (stop) stop.disabled = (!recording && !persistencePending) || busy;
+  if (replay) replay.disabled = recording || persistencePending || busy || !lastVolumeBasinDriveArtifactId;
+}
+
+function captureVolumeBasinDriveDescriptors() {
+  const descriptors = {};
+  for (const [axis, controls] of [
+    ['basin', readVolumeDomControls()],
+    ['renderer', readVolumeRendererControls()],
+    ['presentation', readVolumeSettingsPresentationControls()],
+  ]) {
+    for (const descriptor of Object.values(controls)) {
+      const presentationReceipt = axis === 'presentation'
+        ? (window.__kaminosRaymarchSmokePresentationReceipt || volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt)
+        : null;
+      descriptors[`${axis}:${descriptor.id}`] = {
+        ...descriptor,
+        axis,
+        requestedValue: descriptor.value,
+        effectiveValue: presentationReceipt?.effectiveMode ?? descriptor.value,
+        fallbackReason: presentationReceipt?.fallbackReason ?? null,
+      };
+    }
+  }
+  return descriptors;
+}
+
+function volumeBasinDriveDescriptorFingerprint(descriptor) {
+  return JSON.stringify([
+    descriptor?.requestedValue,
+    descriptor?.effectiveValue,
+    descriptor?.fallbackReason ?? null,
+  ]);
+}
+
+function captureVolumeBasinDriveControlState() {
+  const basinControls = readVolumeDomControls();
+  const rendererControls = readVolumeRendererControls();
+  const presentationControls = readVolumeSettingsPresentationControls();
+  const values = controls => Object.fromEntries(
+    Object.values(controls).map(descriptor => [descriptor.id, descriptor.value]),
+  );
+  return {
+    schema: 'kaminos.volume.basin-drive-control-state.v0',
+    basin: values(basinControls),
+    renderer: values(rendererControls),
+    presentation: values(presentationControls),
+    effectivePresentation: {
+      'raymarch-smoke-presentation': {
+        effective: volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt?.effectiveMode || 'missing',
+        fallbackReason: volumePrototype?.debugState?.()?.raymarchSmokePresentationReceipt?.fallbackReason ?? null,
+      },
+    },
+    route: buildVolumeAgentCaptureRoute(basinControls, rendererControls, presentationControls),
+  };
+}
+
+function volumeBasinDriveTarget(event, descriptors) {
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target) return { descriptorKey: null, requested: null, targetId: 'unknown-target' };
+  if (target.dataset.raymarchSmokePresentation) {
+    return {
+      descriptorKey: 'presentation:raymarch-smoke-presentation',
+      requested: target.dataset.raymarchSmokePresentation,
+      targetId: 'raymarch-smoke-presentation',
+    };
+  }
+  const descriptorKey = Object.keys(descriptors).find(key => descriptors[key].id === target.id) || null;
+  return {
+    descriptorKey,
+    requested: descriptorKey ? readVolumeDomControlValue(target) : null,
+    targetId: target.id || target.dataset.volumeBudgetPreset || target.tagName.toLowerCase(),
+  };
+}
+
+function observeVolumeBasinDriveCockpitEvent(event) {
+  if (!activeVolumeBasinDriveRecorder || volumeBasinDriveReplaying) return;
+  if (['pointerdown', 'pointermove', 'keydown'].includes(event.type)
+    && !event.target?.closest?.('#volume-ray-budget-gamut')) return;
+  const generation = volumeBasinDriveGeneration;
+  const before = volumeBasinDrivePreviousDescriptors || captureVolumeBasinDriveDescriptors();
+  const direct = volumeBasinDriveTarget(event, before);
+  const eventType = event.type;
+  const trusted = event.isTrusted === true;
+  queueMicrotask(() => {
+    if (!activeVolumeBasinDriveRecorder || volumeBasinDriveReplaying || generation !== volumeBasinDriveGeneration) return;
+    const after = captureVolumeBasinDriveDescriptors();
+    const changed = [];
+    for (const key of Object.keys(after).sort()) {
+      const previous = before[key];
+      const effective = after[key];
+      if (!previous || volumeBasinDriveDescriptorFingerprint(previous) === volumeBasinDriveDescriptorFingerprint(effective)) continue;
+      const targeted = key === direct.descriptorKey;
+      changed.push({
+        axis: effective.axis,
+        controlId: effective.id,
+        param: effective.param,
+        inputType: effective.type,
+        requested: targeted ? direct.requested : effective.requestedValue,
+        effective: effective.effectiveValue,
+        gesture: {
+          eventType,
+          targetId: direct.targetId,
+          targeted,
+          trusted,
+          commandDriven: !targeted,
+        },
+      });
+    }
+    if (changed.length) {
+      activeVolumeBasinDriveRecorder.recordControls(changed, {
+        transactionId: `${activeVolumeBasinDriveSessionId}:${generation}:${activeVolumeBasinDriveRecorder.eventCount}`,
+      });
+    }
+    volumeBasinDrivePreviousDescriptors = after;
+    volumeBasinDriveStatus(`recording ${activeVolumeBasinDriveSessionId} | ${activeVolumeBasinDriveRecorder.eventCount} events`);
+  });
+}
+
+async function sha256Hex(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function startVolumeBasinDriveSession() {
+  if (activeVolumeBasinDriveRecorder || pendingVolumeBasinDriveSession || volumeBasinDriveStarting
+    || volumeBasinDriveSaving || volumeBasinDriveReplaying) {
+    throw new Error('basin drive recorder is not idle');
+  }
+  volumeBasinDriveStarting = true;
+  syncVolumeBasinDriveCommands();
+  volumeBasinDriveStatus('starting basin drive recorder...');
+  try {
+    await volumeCockpitLayoutReady;
+    const [runtimeResponse, schemaResponse] = await Promise.all([
+      fetch('/api/runtime-config', { cache: 'no-store' }),
+      fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
+    ]);
+    const runtimeConfig = await runtimeResponse.json();
+    const schemaText = await schemaResponse.text();
+    if (!runtimeResponse.ok) throw new Error(runtimeConfig.error || `runtime config failed: ${runtimeResponse.status}`);
+    if (!schemaResponse.ok) throw new Error(`volume control schema failed: ${schemaResponse.status}`);
+    const debug = volumePrototype?.debugState?.();
+    if (!debug || debug.active !== true || debug.error || !debug.backend || ['unknown', 'inactive'].includes(debug.backend)) {
+      throw new Error(`active fallback-free Volume runtime required: ${debug?.error || debug?.backend || 'missing runtime'}`);
+    }
+    if (runtimeConfig.source?.dirty !== false) throw new Error('clean exact Kaminos source is required for recording');
+    const presentationReceipt = debug.raymarchSmokePresentationReceipt;
+    if (!presentationReceipt || presentationReceipt.fallbackReason
+      || presentationReceipt.normalizedRequestedMode !== presentationReceipt.effectiveMode) {
+      throw new Error('fallback-free effective raymarch smoke presentation is required for recording');
+    }
+    const controlSchemaDocument = JSON.parse(schemaText);
+    const inventory = [
+      ...(controlSchemaDocument.controls || []).map(descriptor => ({ axis: 'basin', id: descriptor.key, param: descriptor.param, type: descriptor.type })),
+      ...(controlSchemaDocument.rendererControls || []).map(descriptor => ({ axis: 'renderer', id: descriptor.key, param: descriptor.param, type: descriptor.type })),
+      ...(controlSchemaDocument.presentationControls || []).map(descriptor => ({ axis: 'presentation', id: descriptor.key, param: descriptor.param, type: descriptor.type })),
+    ];
+    const label = String(document.getElementById('basin-drive-session-label')?.value || '').trim()
+      || `Basin drive ${new Date().toISOString()}`;
+    const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'basin-drive';
+    activeVolumeBasinDriveSessionId = `${slug}-${crypto.randomUUID()}`;
+    activeVolumeBasinDriveStorePath = runtimeConfig.volumeBasinSessionStore;
+    const initialState = captureVolumeBasinDriveControlState();
+    activeVolumeBasinDriveRecorder = createVolumeBasinDriveSessionRecorder({
+      sessionId: activeVolumeBasinDriveSessionId,
+      source: {
+        repository: 'kaminos',
+        commit: runtimeConfig.source.commit,
+        branch: runtimeConfig.source.branch,
+        dirty: false,
+      },
+      controlSchema: {
+        identity: controlSchemaDocument.identity,
+        sha256: await sha256Hex(schemaText),
+        basinControlCount: controlSchemaDocument.controlCount,
+        rendererControlCount: (controlSchemaDocument.rendererControls || []).length,
+        presentationControlCount: (controlSchemaDocument.presentationControls || []).length,
+        inventory,
+      },
+      runtime: {
+        requestedRoute: window.location.href,
+        effectiveRoute: initialState.route,
+        backend: debug.backend,
+        requestedStorePath: activeVolumeBasinDriveStorePath,
+        effectiveStorePath: activeVolumeBasinDriveStorePath,
+      },
+      initialState,
+      startedAt: new Date().toISOString(),
+      now: () => performance.now(),
+    });
+    volumeBasinDriveGeneration += 1;
+    volumeBasinDrivePreviousDescriptors = captureVolumeBasinDriveDescriptors();
+    volumeBasinDriveStatus(`recording ${activeVolumeBasinDriveSessionId} | 0 events | ${activeVolumeBasinDriveStorePath}`);
+    return { sessionId: activeVolumeBasinDriveSessionId, storePath: activeVolumeBasinDriveStorePath };
+  } catch (error) {
+    volumeBasinDriveStatus(`BASIN DRIVE START FAILED | ${error.message || error}`, true);
+    throw error;
+  } finally {
+    volumeBasinDriveStarting = false;
+    syncVolumeBasinDriveCommands();
+  }
+}
+
+function markVolumeBasinDriveSession() {
+  if (!activeVolumeBasinDriveRecorder) throw new Error('no basin drive session is recording');
+  const labelInput = document.getElementById('basin-drive-mark-label');
+  const label = String(labelInput?.value || '').trim() || `mark-${activeVolumeBasinDriveRecorder.eventCount + 1}`;
+  activeVolumeBasinDriveRecorder.mark({ label, state: captureVolumeBasinDriveControlState() });
+  if (labelInput) labelInput.value = '';
+  volumeBasinDriveStatus(`recording ${activeVolumeBasinDriveSessionId} | ${activeVolumeBasinDriveRecorder.eventCount} events | marked ${label}`);
+  return activeVolumeBasinDriveRecorder.eventCount;
+}
+
+async function stopVolumeBasinDriveSession() {
+  if (volumeBasinDriveStarting || volumeBasinDriveSaving || volumeBasinDriveReplaying) {
+    throw new Error('basin drive recorder is busy');
+  }
+  if (activeVolumeBasinDriveRecorder) {
+    const currentDescriptors = captureVolumeBasinDriveDescriptors();
+    const unexplained = Object.keys(currentDescriptors).filter(key => (
+      volumeBasinDriveDescriptorFingerprint(currentDescriptors[key])
+      !== volumeBasinDriveDescriptorFingerprint(volumeBasinDrivePreviousDescriptors?.[key])
+    ));
+    if (unexplained.length) throw new Error(`unrecorded final control delta: ${unexplained.join(',')}`);
+    volumeBasinDriveGeneration += 1;
+    pendingVolumeBasinDriveSession = activeVolumeBasinDriveRecorder.finish({
+      finalState: captureVolumeBasinDriveControlState(),
+      endedAt: new Date().toISOString(),
+    });
+    activeVolumeBasinDriveRecorder = null;
+    volumeBasinDrivePreviousDescriptors = null;
+  }
+  if (!pendingVolumeBasinDriveSession) throw new Error('no basin drive session is awaiting persistence');
+  const sessionToPersist = pendingVolumeBasinDriveSession;
+  volumeBasinDriveSaving = true;
+  syncVolumeBasinDriveCommands();
+  volumeBasinDriveStatus(`saving ${sessionToPersist.sessionId} | ${sessionToPersist.eventCount} events...`);
+  try {
+    const response = await fetch('/api/volume-basin-drive-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session: sessionToPersist }),
+    });
+    const receipt = await response.json();
+    if (!response.ok || !receipt.ok) throw new Error(receipt.error || `basin drive save failed: ${response.status}`);
+    if (receipt.identity !== 'kaminos.volume.basin-drive-session-write-receipt.v0'
+      || receipt.effective?.sessionId !== sessionToPersist.sessionId
+      || Number(receipt.effective?.eventCount) !== sessionToPersist.eventCount
+      || receipt.effective?.sourceCommit !== sessionToPersist.source.commit
+      || receipt.effective?.storePath !== sessionToPersist.runtime.effectiveStorePath
+      || !receipt.effective?.artifactPath) {
+      throw new Error('basin drive write receipt identity or effective state mismatch');
+    }
+    lastVolumeBasinDriveArtifactId = receipt.effective.artifactId;
+    lastVolumeBasinDriveArtifactPath = receipt.effective.artifactPath;
+    if (pendingVolumeBasinDriveSession === sessionToPersist) pendingVolumeBasinDriveSession = null;
+    volumeBasinDriveStatus(`${receipt.effective.sessionId} | ${receipt.effective.eventCount} events | ${receipt.effective.artifactPath}`);
+    return receipt;
+  } catch (error) {
+    volumeBasinDriveStatus(`BASIN DRIVE SAVE FAILED | ${error.message || error}`, true);
+    throw error;
+  } finally {
+    volumeBasinDriveSaving = false;
+    syncVolumeBasinDriveCommands();
+  }
+}
+
+async function applyVolumeBasinDriveControlEvent(event) {
+  if (event.axis === 'presentation' && event.controlId === 'raymarch-smoke-presentation') {
+    if (!volumePrototype?.setRaymarchSmokePresentationMode) throw new Error('live presentation setter is missing');
+    const receipt = volumePrototype.setRaymarchSmokePresentationMode(event.requested);
+    if (!receipt || receipt.fallbackReason || receipt.effectiveMode !== event.effective) {
+      throw new Error(`presentation effective mismatch: requested ${event.requested}, effective ${receipt?.effectiveMode || 'missing'}`);
+    }
+    window.__kaminosRaymarchSmokePresentationReceipt = receipt;
+    syncRaymarchSmokePresentationControls(receipt);
+  } else {
+    const element = document.getElementById(event.controlId);
+    if (!element) throw new Error(`replay control is missing: ${event.controlId}`);
+    setVolumeControlValue(event.controlId, event.requested);
+    const recordedType = event.gesture?.eventType;
+    const applicationType = event.gesture?.commandDriven || !['input', 'change'].includes(recordedType)
+      ? 'input'
+      : recordedType;
+    element.dispatchEvent(new Event(applicationType, { bubbles: true }));
+  }
+  await Promise.resolve();
+  const descriptor = captureVolumeBasinDriveDescriptors()[`${event.axis}:${event.controlId}`];
+  if (!descriptor) throw new Error(`replay effective control is missing: ${event.axis}:${event.controlId}`);
+  if (descriptor.fallbackReason) throw new Error(`replay control fallback: ${event.controlId} / ${descriptor.fallbackReason}`);
+  return descriptor.effectiveValue;
+}
+
+async function applyVolumeBasinDriveControlState(state) {
+  if (state?.schema !== 'kaminos.volume.basin-drive-control-state.v0') {
+    throw new Error(`unsupported basin drive control state: ${state?.schema}`);
+  }
+  for (const axis of ['basin', 'renderer']) {
+    for (const [controlId, value] of Object.entries(state[axis] || {})) {
+      const element = document.getElementById(controlId);
+      if (!element) throw new Error(`replay initial ${axis} control is missing: ${controlId}`);
+      setVolumeControlValue(controlId, value);
+      element.dispatchEvent(new Event(element.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+    }
+  }
+  const smokeMode = state.presentation?.['raymarch-smoke-presentation'];
+  if (smokeMode !== undefined) {
+    if (!volumePrototype?.setRaymarchSmokePresentationMode) throw new Error('live presentation setter is missing');
+    const receipt = volumePrototype.setRaymarchSmokePresentationMode(smokeMode);
+    if (!receipt || receipt.fallbackReason || receipt.effectiveMode !== smokeMode) {
+      throw new Error(`replay initial presentation mismatch: ${receipt?.effectiveMode || 'missing'}`);
+    }
+    window.__kaminosRaymarchSmokePresentationReceipt = receipt;
+    syncRaymarchSmokePresentationControls(receipt);
+  }
+  await Promise.resolve();
+  return captureVolumeBasinDriveControlState();
+}
+
+async function replayLastVolumeBasinDriveSession() {
+  if (!lastVolumeBasinDriveArtifactId || activeVolumeBasinDriveRecorder || pendingVolumeBasinDriveSession
+    || volumeBasinDriveStarting || volumeBasinDriveSaving || volumeBasinDriveReplaying) {
+    throw new Error('basin drive recorder is not available for replay');
+  }
+  const debug = volumePrototype?.debugState?.();
+  if (!debug || debug.active !== true || debug.error || !debug.backend || ['unknown', 'inactive'].includes(debug.backend)) {
+    throw new Error('active fallback-free Volume runtime required for replay');
+  }
+  volumeBasinDriveReplaying = true;
+  syncVolumeBasinDriveCommands();
+  volumeBasinDriveStatus(`loading ${lastVolumeBasinDriveArtifactId}...`);
+  try {
+    const response = await fetch(`/api/volume-basin-drive-session?id=${encodeURIComponent(lastVolumeBasinDriveArtifactId)}`, { cache: 'no-store' });
+    const artifact = await response.json();
+    if (!response.ok) throw new Error(artifact.error || `basin drive lookup failed: ${response.status}`);
+    if (artifact.identity !== 'kaminos.volume.basin-drive-session-artifact.v0'
+      || artifact.artifactId !== lastVolumeBasinDriveArtifactId
+      || artifact.artifactPath !== lastVolumeBasinDriveArtifactPath) {
+      throw new Error('basin drive artifact identity or effective path mismatch');
+    }
+    const session = parseVolumeBasinDriveSession(`${JSON.stringify(artifact.session)}\n`);
+    let replayStartedAt = null;
+    const receipt = await replayVolumeBasinDriveSession(session, {
+      async applyInitialState(state) {
+        const observed = await applyVolumeBasinDriveControlState(state);
+        replayStartedAt = performance.now();
+        return observed;
+      },
+      async waitUntilElapsed(elapsedMs) {
+        if (replayStartedAt === null) throw new Error('replay timing began before initial state was established');
+        const remainingMs = elapsedMs - (performance.now() - replayStartedAt);
+        if (remainingMs > 0) await new Promise(resolve => setTimeout(resolve, remainingMs));
+      },
+      applyControl: applyVolumeBasinDriveControlEvent,
+      captureState: captureVolumeBasinDriveControlState,
+    });
+    volumeBasinDriveStatus(`replayed ${receipt.sessionId} | ${receipt.eventCount} events | ${artifact.artifactPath}`);
+    return { ...receipt, artifactId: artifact.artifactId, artifactPath: artifact.artifactPath };
+  } catch (error) {
+    volumeBasinDriveStatus(`BASIN DRIVE REPLAY FAILED | ${error.message || error}`, true);
+    throw error;
+  } finally {
+    volumeBasinDriveReplaying = false;
+    syncVolumeBasinDriveCommands();
+  }
+}
+
+document.addEventListener('input', observeVolumeBasinDriveCockpitEvent, { capture: true });
+document.addEventListener('change', observeVolumeBasinDriveCockpitEvent, { capture: true });
+document.addEventListener('click', observeVolumeBasinDriveCockpitEvent, { capture: true });
+document.addEventListener('pointerdown', observeVolumeBasinDriveCockpitEvent, { capture: true });
+document.addEventListener('pointermove', observeVolumeBasinDriveCockpitEvent, { capture: true });
+document.addEventListener('keydown', observeVolumeBasinDriveCockpitEvent, { capture: true });
+
+window.__kaminosStartVolumeBasinDriveSession = startVolumeBasinDriveSession;
+window.__kaminosMarkVolumeBasinDriveSession = markVolumeBasinDriveSession;
+window.__kaminosStopVolumeBasinDriveSession = stopVolumeBasinDriveSession;
+window.__kaminosReplayLastVolumeBasinDriveSession = replayLastVolumeBasinDriveSession;
+window.__kaminosVolumeBasinDriveDebugState = () => ({
+  recording: Boolean(activeVolumeBasinDriveRecorder),
+  sessionId: activeVolumeBasinDriveSessionId,
+  eventCount: activeVolumeBasinDriveRecorder?.eventCount ?? pendingVolumeBasinDriveSession?.eventCount ?? null,
+  pendingPersistence: Boolean(pendingVolumeBasinDriveSession),
+  artifactId: lastVolumeBasinDriveArtifactId,
+  artifactPath: lastVolumeBasinDriveArtifactPath,
+  replaying: volumeBasinDriveReplaying,
+  starting: volumeBasinDriveStarting,
+  saving: volumeBasinDriveSaving,
+});
+function runVolumeBasinDriveCommand(command) {
+  try {
+    return Promise.resolve(command()).catch(error => {
+      volumeBasinDriveStatus(`BASIN DRIVE COMMAND FAILED | ${error.message || error}`, true);
+      console.error('Basin drive command failed:', error);
+    });
+  } catch (error) {
+    volumeBasinDriveStatus(`BASIN DRIVE COMMAND FAILED | ${error.message || error}`, true);
+    console.error('Basin drive command failed:', error);
+    return Promise.resolve();
+  }
+}
+for (const [id, command] of [
+  ['basin-drive-record', () => startVolumeBasinDriveSession()],
+  ['basin-drive-mark', () => markVolumeBasinDriveSession()],
+  ['basin-drive-stop', () => stopVolumeBasinDriveSession()],
+  ['basin-drive-replay', () => replayLastVolumeBasinDriveSession()],
+]) {
+  document.getElementById(id)?.addEventListener('click', () => void runVolumeBasinDriveCommand(command));
+}
+syncVolumeBasinDriveCommands();
 
 function currentVolumeSettingsPresetRendererState() {
   try {
