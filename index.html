@@ -201,6 +201,8 @@ canvas { display: block; }
 .volume-layout-group-grip { touch-action: none; cursor: grab !important; }
 .volume-layout-dragging { opacity: 0.46; outline: 1px dashed #5f8490; }
 .volume-layout-group-body[hidden] { display: none; }
+.volume-layout-editing .volume-layout-groups { min-height: 36px; }
+.volume-layout-editing .volume-layout-group-body:not([hidden]) { min-height: 24px; }
 .slider-label { font-size: 10px; color: #666; min-width: 60px; user-select: none; -webkit-user-select: none; }
 .slider-val { font-size: 10px; color: #888; font-family: 'SF Mono', monospace; min-width: 30px; user-select: none; -webkit-user-select: none; }
 .slider-help { display: block; margin: -2px 0 6px 68px; color: #4f6470; font-size: 9px; line-height: 1.25; user-select: none; -webkit-user-select: none; }

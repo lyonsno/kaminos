@@ -69,6 +69,18 @@ def main():
         assert second["effective"]["layoutId"] == "operator-layout"
         assert serve.read_volume_cockpit_layout(layout_store, "operator-layout")["layout"]["label"] == changed["label"]
 
+        active_path = layout_store / "active.json"
+        active = json.loads(active_path.read_text())
+        active["contentHash"] = "sha256:" + ("0" * 64)
+        active_path.write_text(json.dumps(active))
+        try:
+            serve.list_volume_cockpit_layouts(layout_store)
+        except ValueError as error:
+            assert "active pointer content hash mismatch" in str(error).lower()
+        else:
+            raise AssertionError("layout index trusted an active pointer for different content")
+        serve.write_volume_cockpit_layout(layout_store, changed, activate=True)
+
         bad = sample_layout()
         bad["groups"][0]["controlIds"].append("volume-not-in-schema")
         try:

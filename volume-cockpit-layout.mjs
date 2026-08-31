@@ -20,8 +20,42 @@ const LAYOUT_API = '/api/volume-cockpit-layouts';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
 
+class VolumeCockpitLayoutAvailabilityError extends Error {
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = 'VolumeCockpitLayoutAvailabilityError';
+  }
+}
+
+export function classifyVolumeCockpitLayoutStoreFailure({ status, networkFailure = false, operation = 'read' } = {}) {
+  const normalizedStatus = Number(status);
+  if (networkFailure
+    || normalizedStatus === 401
+    || normalizedStatus === 403
+    || normalizedStatus >= 500
+    || (normalizedStatus === 404 && (operation === 'index' || operation === 'write'))) {
+    return 'availability';
+  }
+  return 'structural';
+}
+
 function sortedUnique(values) {
   return [...new Set(values)].sort();
+}
+
+export function reorderVolumeCockpitLayoutIds({ orderedIds, itemId, beforeId }) {
+  if (!Array.isArray(orderedIds) || new Set(orderedIds).size !== orderedIds.length) {
+    throw new Error('volume-cockpit-layout-order-invalid');
+  }
+  if (typeof itemId !== 'string' || !itemId) throw new Error('volume-cockpit-layout-order-item-invalid');
+  if (beforeId === itemId) return [...orderedIds];
+  const reordered = orderedIds.filter(id => id !== itemId);
+  if (beforeId !== null && beforeId !== undefined && !reordered.includes(beforeId)) {
+    throw new Error(`volume-cockpit-layout-order-target-missing:${beforeId}`);
+  }
+  const index = beforeId === null || beforeId === undefined ? reordered.length : reordered.indexOf(beforeId);
+  reordered.splice(index, 0, itemId);
+  return reordered;
 }
 
 function cloneDocument(documentValue) {
@@ -129,6 +163,9 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
       };
       reconciled.groups.push(newControls);
     }
+    newControls.label = 'New controls';
+    newControls.surface = 'primary';
+    newControls.collapsed = false;
     newControls.controlIds.push(...receipt.missingControlIds);
   }
   const effectiveReceipt = validateVolumeCockpitLayoutDocument({
@@ -337,7 +374,7 @@ function ensureGroupHost(documentRef, surface) {
   return host;
 }
 
-function groupShell(documentRef, group, actions) {
+function groupShell(documentRef, group, actions, editing) {
   const shell = documentRef.createElement('section');
   shell.className = 'volume-layout-group-shell';
   shell.dataset.volumeLayoutGroupId = group.id;
@@ -358,6 +395,8 @@ function groupShell(documentRef, group, actions) {
   const label = documentRef.createElement('input');
   label.className = 'volume-layout-group-label';
   label.value = group.label;
+  label.readOnly = !editing;
+  label.tabIndex = editing ? 0 : -1;
   label.setAttribute('aria-label', 'Group name');
   const surface = documentRef.createElement('button');
   surface.type = 'button';
@@ -377,7 +416,9 @@ function groupShell(documentRef, group, actions) {
   body.hidden = group.collapsed;
   shell.append(heading, body);
   collapse.addEventListener('click', () => actions.collapse(group.id));
-  label.addEventListener('change', () => actions.rename(group.id, label.value));
+  label.addEventListener('change', () => {
+    if (!actions.rename(group.id, label.value)) label.value = group.label;
+  });
   surface.addEventListener('click', () => actions.toggleSurface(group.id));
   remove.addEventListener('click', () => actions.remove(group.id));
   actions.installGroupGrip(groupGrip, group.id);
@@ -419,8 +460,10 @@ class VolumeCockpitLayoutEditor {
     this.layout = null;
     this.editing = false;
     this.saveGeneration = 0;
+    this.loadGeneration = 0;
     this.saveQueue = Promise.resolve();
     this.index = null;
+    this.persistenceAvailable = true;
     this.toolbar = this.requireToolbar();
   }
 
@@ -441,7 +484,13 @@ class VolumeCockpitLayoutEditor {
     controls['volume-cockpit-layout-add-group'].addEventListener('click', () => this.addGroup());
     controls['volume-cockpit-layout-reset'].addEventListener('click', () => this.resetSourceDefault());
     controls['volume-cockpit-layout-new'].addEventListener('click', () => this.createLayout());
-    controls['volume-cockpit-layout-select'].addEventListener('change', event => this.loadLayout(event.target.value));
+    controls['volume-cockpit-layout-select'].addEventListener('change', event => {
+      this.loadLayout(event.target.value, { activate: true })
+        .catch(error => {
+          event.target.value = this.layout?.layoutId || '';
+          this.status(`load failed: ${error.message || error}`, true);
+        });
+    });
     controls['volume-cockpit-layout-name'].addEventListener('change', event => this.renameLayout(event.target.value));
     return { root: toolbar, ...controls };
   }
@@ -452,28 +501,94 @@ class VolumeCockpitLayoutEditor {
     node.dataset.status = failed ? 'failed' : 'effective';
   }
 
-  async requestJson(url, options = {}) {
-    const response = await this.fetch(url, { cache: 'no-store', ...options });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.error || `layout store request failed: ${response.status}`);
+  async requestJson(url, options = {}, { operation = 'read' } = {}) {
+    let response;
+    try {
+      response = await this.fetch(url, { cache: 'no-store', ...options });
+    } catch (error) {
+      throw new VolumeCockpitLayoutAvailabilityError(
+        `volume-cockpit-layout-store-network-failed:${error?.message || error}`,
+        { cause: error },
+      );
+    }
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      if (!response.ok && classifyVolumeCockpitLayoutStoreFailure({ status: response.status, operation }) === 'availability') {
+        throw new VolumeCockpitLayoutAvailabilityError(
+          `volume-cockpit-layout-store-unavailable:${response.status}`,
+          { cause: error },
+        );
+      }
+      throw new Error(`volume-cockpit-layout-store-response-invalid:${response.status}`);
+    }
+    if (!response.ok) {
+      const message = payload?.error || `layout store request failed: ${response.status}`;
+      if (classifyVolumeCockpitLayoutStoreFailure({ status: response.status, operation }) === 'availability') {
+        throw new VolumeCockpitLayoutAvailabilityError(message);
+      }
+      throw new Error(message);
+    }
     return payload;
   }
 
   async initialize() {
-    this.index = await this.requestJson(LAYOUT_API);
-    if (this.index.identity !== 'kaminos.volume.cockpit-layout-index.v1') {
-      throw new Error('volume-cockpit-layout-index-identity-mismatch');
-    }
-    this.syncIndex();
-    if (this.index.activeLayoutId) {
-      await this.loadLayout(this.index.activeLayoutId, { saveReconciliation: true });
-    } else {
-      this.layout = cloneDocument(this.sourceDefault);
-      this.apply();
-      await this.save();
+    this.layout = cloneDocument(this.sourceDefault);
+    this.apply();
+    try {
+      this.index = await this.requestJson(LAYOUT_API, {}, { operation: 'index' });
+      if (this.index.identity !== 'kaminos.volume.cockpit-layout-index.v1') {
+        throw new Error('volume-cockpit-layout-index-identity-mismatch');
+      }
+      this.syncIndex();
+      const storedLayoutLoaded = Boolean(this.index.activeLayoutId);
+      if (storedLayoutLoaded) {
+        await this.loadLayout(this.index.activeLayoutId, { saveReconciliation: true });
+      } else {
+        await this.save();
+      }
+    } catch (error) {
+      if (!(error instanceof VolumeCockpitLayoutAvailabilityError)) throw error;
+      return this.disablePersistence(error);
     }
     this.setEditing(false);
-    return this.layout;
+    return {
+      identity: 'kaminos.volume.cockpit-layout-persistence.v1',
+      status: 'effective',
+      persistenceAvailable: true,
+      storedLayoutLoaded,
+      fallbackApplied: false,
+      reason: null,
+    };
+  }
+
+  disablePersistence(error) {
+    this.persistenceAvailable = false;
+    this.layout = cloneDocument(this.sourceDefault);
+    this.apply();
+    this.index = {
+      identity: 'kaminos.volume.cockpit-layout-index.v1',
+      storePath: null,
+      activeLayoutId: null,
+      entries: [],
+    };
+    this.syncIndex();
+    this.setEditing(false);
+    for (const id of [
+      'volume-cockpit-layout-select', 'volume-cockpit-layout-name', 'volume-cockpit-layout-new',
+      'volume-cockpit-layout-edit', 'volume-cockpit-layout-add-group', 'volume-cockpit-layout-reset',
+    ]) this.toolbar[id].disabled = true;
+    const reason = error?.message || String(error);
+    this.status(`layout persistence unavailable: ${reason}`, true);
+    return {
+      identity: 'kaminos.volume.cockpit-layout-persistence.v1',
+      status: 'persistence-unavailable',
+      persistenceAvailable: false,
+      storedLayoutLoaded: false,
+      fallbackApplied: true,
+      reason,
+    };
   }
 
   syncIndex() {
@@ -489,18 +604,26 @@ class VolumeCockpitLayoutEditor {
   }
 
   setEditing(editing) {
-    this.editing = Boolean(editing);
+    this.editing = this.persistenceAvailable && Boolean(editing);
     this.toolbar.root.dataset.editing = String(this.editing);
     this.document.getElementById('tab-volume')?.classList.toggle('volume-layout-editing', this.editing);
     const button = this.toolbar['volume-cockpit-layout-edit'];
     button.textContent = this.editing ? 'Done' : 'Edit layout';
     button.setAttribute('aria-pressed', String(this.editing));
+    for (const label of this.document.querySelectorAll('.volume-layout-group-label')) {
+      label.readOnly = !this.editing;
+      label.tabIndex = this.editing ? 0 : -1;
+    }
   }
 
   actions() {
     return {
       collapse: groupId => this.updateGroup(groupId, group => { group.collapsed = !group.collapsed; }),
-      rename: (groupId, label) => this.updateGroup(groupId, group => { group.label = String(label).trim() || group.label; }),
+      rename: (groupId, label) => {
+        if (!this.editing) return false;
+        this.updateGroup(groupId, group => { group.label = String(label).trim() || group.label; });
+        return true;
+      },
       toggleSurface: groupId => this.updateGroup(groupId, group => {
         group.surface = group.surface === 'primary' ? 'authored-mix' : 'primary';
       }),
@@ -539,7 +662,7 @@ class VolumeCockpitLayoutEditor {
     };
     const actions = this.actions();
     for (const group of this.layout.groups) {
-      const { shell, body } = groupShell(this.document, group, actions);
+      const { shell, body } = groupShell(this.document, group, actions, this.editing);
       hosts[group.surface].append(shell);
       for (const controlId of group.controlIds) {
         const nodes = clusters.get(controlId);
@@ -575,44 +698,82 @@ class VolumeCockpitLayoutEditor {
         if (item.kind === 'control') {
           const row = pointed.closest('.slider-row[data-volume-cockpit-control-id]');
           const body = pointed.closest('.volume-layout-group-body');
-          if (body) target = { groupId: body.dataset.volumeLayoutGroupId, beforeId: row?.dataset.volumeCockpitControlId || null };
+          if (body) {
+            let beforeId = null;
+            if (row) {
+              const rows = [...body.querySelectorAll(':scope > .slider-row[data-volume-cockpit-control-id]')];
+              const rowIndex = rows.indexOf(row);
+              const after = moveEvent.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+              beforeId = after
+                ? rows[rowIndex + 1]?.dataset.volumeCockpitControlId || null
+                : row.dataset.volumeCockpitControlId;
+            }
+            target = { groupId: body.dataset.volumeLayoutGroupId, beforeId };
+          }
         } else {
           const shell = pointed.closest('.volume-layout-group-shell');
-          if (shell) target = { beforeGroupId: shell.dataset.volumeLayoutGroupId };
+          const host = pointed.closest('.volume-layout-groups');
+          if (shell) {
+            const shells = [...host.querySelectorAll(':scope > .volume-layout-group-shell')];
+            const shellIndex = shells.indexOf(shell);
+            const bounds = shell.getBoundingClientRect();
+            const after = moveEvent.clientY >= bounds.top + bounds.height / 2;
+            target = {
+              surface: host.dataset.volumeLayoutSurface,
+              beforeGroupId: after ? shells[shellIndex + 1]?.dataset.volumeLayoutGroupId || null : shell.dataset.volumeLayoutGroupId,
+            };
+          } else if (host) {
+            target = { surface: host.dataset.volumeLayoutSurface, beforeGroupId: null };
+          }
         }
       };
-      const finish = () => {
+      const cleanup = () => {
         grip.removeEventListener('pointermove', move);
         grip.removeEventListener('pointerup', finish);
-        grip.removeEventListener('pointercancel', finish);
+        grip.removeEventListener('pointercancel', cancel);
         dragged?.classList.remove('volume-layout-dragging');
+      };
+      const finish = () => {
+        cleanup();
         if (!target) return;
         if (item.kind === 'control') this.moveControl(item.id, target.groupId, target.beforeId);
-        else this.moveGroup(item.id, target.beforeGroupId);
+        else this.moveGroup(item.id, target.surface, target.beforeGroupId);
       };
+      const cancel = () => cleanup();
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', finish);
-      grip.addEventListener('pointercancel', finish);
+      grip.addEventListener('pointercancel', cancel);
     };
   }
 
   moveControl(controlId, targetGroupId, beforeId) {
-    for (const group of this.layout.groups) group.controlIds = group.controlIds.filter(id => id !== controlId);
     const target = this.group(targetGroupId);
-    const index = beforeId ? target.controlIds.indexOf(beforeId) : -1;
-    if (index >= 0) target.controlIds.splice(index, 0, controlId);
-    else target.controlIds.push(controlId);
+    const targetOrder = reorderVolumeCockpitLayoutIds({ orderedIds: target.controlIds, itemId: controlId, beforeId });
+    for (const group of this.layout.groups) group.controlIds = group.controlIds.filter(id => id !== controlId);
+    target.controlIds = targetOrder;
     this.applyAndSave();
   }
 
-  moveGroup(groupId, beforeGroupId) {
-    if (groupId === beforeGroupId) return;
+  moveGroup(groupId, surface, beforeGroupId) {
+    if (groupId === beforeGroupId && this.group(groupId).surface === surface) return;
     const group = this.group(groupId);
-    const before = this.group(beforeGroupId);
-    if (group.surface !== before.surface) group.surface = before.surface;
-    this.layout.groups = this.layout.groups.filter(candidate => candidate.id !== groupId);
-    const index = this.layout.groups.findIndex(candidate => candidate.id === beforeGroupId);
-    this.layout.groups.splice(index < 0 ? this.layout.groups.length : index, 0, group);
+    const remaining = this.layout.groups.filter(candidate => candidate.id !== groupId);
+    if (!LAYOUT_SURFACES.has(surface)) throw new Error(`volume-cockpit-layout-group-surface-invalid:${surface}`);
+    if (beforeGroupId !== null) {
+      const before = remaining.find(candidate => candidate.id === beforeGroupId);
+      if (!before || before.surface !== surface) {
+        throw new Error(`volume-cockpit-layout-group-order-target-invalid:${beforeGroupId}`);
+      }
+    }
+    group.surface = surface;
+    let index = beforeGroupId === null
+      ? remaining.findLastIndex(candidate => candidate.surface === surface) + 1
+      : remaining.findIndex(candidate => candidate.id === beforeGroupId);
+    if (beforeGroupId === null && index === 0 && !remaining.some(candidate => candidate.surface === surface)) {
+      index = remaining.length;
+    }
+    remaining.splice(index, 0, group);
+    this.layout.groups = remaining;
     this.applyAndSave();
   }
 
@@ -640,16 +801,19 @@ class VolumeCockpitLayoutEditor {
     this.toolbar['volume-cockpit-layout-name'].select();
   }
 
-  async loadLayout(layoutId, { saveReconciliation = false } = {}) {
+  async loadLayout(layoutId, { saveReconciliation = false, activate = false } = {}) {
     if (!layoutId) return;
+    const generation = ++this.loadGeneration;
     await this.saveQueue;
     this.status(`loading ${layoutId}…`);
     const artifact = await this.requestJson(`/api/volume-cockpit-layout?id=${encodeURIComponent(layoutId)}`);
+    if (generation !== this.loadGeneration) return null;
     const reconciled = reconcileVolumeCockpitLayoutDocument({ document: artifact.layout, authorableControlIds: this.authorableControlIds });
     this.layout = reconciled.document;
     this.apply();
-    if (saveReconciliation && reconciled.newControlIds.length) await this.save();
+    if ((saveReconciliation && reconciled.newControlIds.length) || activate) await this.save();
     else this.status(`${this.layout.label} loaded`);
+    return this.layout;
   }
 
   renameLayout(label) {
@@ -684,12 +848,12 @@ class VolumeCockpitLayoutEditor {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ layout, activate: true }),
-      });
+      }, { operation: 'write' });
       if (receipt.identity !== 'kaminos.volume.cockpit-layout-write-receipt.v1') {
         throw new Error('volume-cockpit-layout-write-receipt-identity-mismatch');
       }
       if (generation !== this.saveGeneration) return receipt;
-      this.index = await this.requestJson(LAYOUT_API);
+      this.index = await this.requestJson(LAYOUT_API, {}, { operation: 'index' });
       this.syncIndex();
       this.status(`${this.layout.label} saved`);
       return receipt;
@@ -714,10 +878,12 @@ export async function initializeVolumeCockpitLayout({
   const authorableControls = allControls.filter(isAuthorableControl);
   const sourceDefault = buildSourceDefaultLayout(authorableControls);
   const editor = new VolumeCockpitLayoutEditor({ documentRef, schema, authorableControls, sourceDefault, fetchImpl });
-  await editor.initialize();
+  validateVolumeCockpitControlInventory({ schema, controlRecords: controlRecords(documentRef) });
+  const persistenceReceipt = await editor.initialize();
   const receipt = validateVolumeCockpitControlInventory({ schema, controlRecords: controlRecords(documentRef) });
   const panel = documentRef.getElementById('volume-authored-mix-panel');
   panel.dataset.cockpitStatus = 'validated';
+  panel.dataset.layoutPersistence = persistenceReceipt.status;
   panel.dataset.controlCount = String(receipt.controlCount);
   globalThis.__kaminosVolumeCockpitLayoutEditor = editor;
   return {
@@ -726,6 +892,10 @@ export async function initializeVolumeCockpitLayout({
     layoutId: editor.layout.layoutId,
     layoutLabel: editor.layout.label,
     layoutStorePath: editor.index.storePath,
+    persistenceAvailable: persistenceReceipt.persistenceAvailable,
+    storedLayoutLoaded: persistenceReceipt.storedLayoutLoaded,
+    persistenceFailureReason: persistenceReceipt.reason,
+    fallbackApplied: persistenceReceipt.fallbackApplied,
     authorableControlCount: authorableControls.length,
   };
 }

@@ -752,11 +752,15 @@ def list_volume_cockpit_layouts(store_path, schema=None):
     layouts_dir.mkdir(parents=True, exist_ok=True)
     active_path = store / "active.json"
     active_layout_id = None
+    active_content_hash = None
     if active_path.exists():
         active = _read_json_object(active_path, "cockpit layout active pointer")
+        if set(active) != {"identity", "layoutId", "contentHash", "updatedAt"}:
+            raise ValueError("volume cockpit layout active pointer fields do not match the v1 contract")
         if active.get("identity") != "kaminos.volume.cockpit-layout-active.v1":
             raise ValueError("volume cockpit layout active pointer identity mismatch")
         active_layout_id = active.get("layoutId")
+        active_content_hash = active.get("contentHash")
     entries = []
     for layout_path in layouts_dir.glob("*.json"):
         artifact = read_volume_cockpit_layout(store, layout_path.stem, schema)
@@ -770,6 +774,10 @@ def list_volume_cockpit_layouts(store_path, schema=None):
     entries.sort(key=lambda entry: (entry.get("writtenAt") or "", entry["layoutId"]), reverse=True)
     if active_layout_id and active_layout_id not in {entry["layoutId"] for entry in entries}:
         raise ValueError("volume cockpit layout active pointer names a missing layout")
+    if active_layout_id:
+        active_entry = next(entry for entry in entries if entry["layoutId"] == active_layout_id)
+        if active_entry["contentHash"] != active_content_hash:
+            raise ValueError("volume cockpit layout active pointer content hash mismatch")
     return {
         "identity": "kaminos.volume.cockpit-layout-index.v1",
         "storePath": str(store),
