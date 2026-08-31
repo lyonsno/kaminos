@@ -39,6 +39,11 @@ assert.match(witness, /pixelDelta[\s\S]*maxChannelDelta[\s\S]*meanAbsChannelDelt
 assert.match(witness, /nonblank[\s\S]*pixelHash/, 'blank or missing output cannot become acceptance evidence');
 assert.match(witness, /Runtime\.exceptionThrown[\s\S]*Runtime\.consoleAPICalled/, 'browser exceptions and console errors fail loud');
 assert.match(witness, /failurePhase[\s\S]*lastTrustworthyEvidence[\s\S]*writeReport/, 'failure before images still writes the last trustworthy state');
+assert.match(
+  witness,
+  /lastTrustworthyEvidence = \{ phase: failurePhase, admitted, evidence: stripPngData\(evidence\) \}/,
+  'capture evidence retains the admitted runtime identity used to bind every full and lean sample',
+);
 assert.match(witness, /rmSync\(userDataDir,[\s\S]*maxRetries[\s\S]*retryDelay/, 'isolated browser profile cleanup tolerates Chrome exit races');
 assert.match(witness, /--timeout-ms/, 'the caller owns the witness deadline');
 assert.doesNotMatch(witness, /Math\.min\([^\n]*timeout|20000|20_000/, 'witness does not shadow the caller deadline with a hidden cap');

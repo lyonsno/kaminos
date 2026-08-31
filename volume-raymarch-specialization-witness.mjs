@@ -291,7 +291,7 @@ try {
       pixelDelta: pixelDelta(fullPixels, leanPixels),
     };
   })()`);
-  lastTrustworthyEvidence = { phase: failurePhase, evidence: stripPngData(evidence) };
+  lastTrustworthyEvidence = { phase: failurePhase, admitted, evidence: stripPngData(evidence) };
   assertSameState(evidence);
   assert.equal(evidence.compositionContract.identity, 'raymarch-only-v0', 'wrong render composition');
   assert.equal(evidence.compositionContract.raymarchApplied, true, 'raymarch pass absent');
