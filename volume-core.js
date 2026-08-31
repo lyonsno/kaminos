@@ -2514,25 +2514,28 @@ fn sampleDirectCell(p: vec3<f32>) -> DirectCellSample {
 }
 
 fn directCellExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5);
   let dqdt = rd * (0.5 * f32(GRID));
+  let cell = vec3<u32>(floor(clamp(q, vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001))));
+  let cellLo = vec3<f32>(cell);
+  let cellHi = cellLo + vec3<f32>(1.0);
   var best = 1.0e6;
   if (abs(dqdt.x) > 0.0001) {
-    let bx = select(floor(q.x), floor(q.x) + 1.0, dqdt.x > 0.0);
+    let bx = select(cellLo.x, cellHi.x, dqdt.x > 0.0);
     let tx = (bx - q.x) / dqdt.x;
     if (tx > 0.0001) { best = min(best, tx); }
   }
   if (abs(dqdt.y) > 0.0001) {
-    let by = select(floor(q.y), floor(q.y) + 1.0, dqdt.y > 0.0);
+    let by = select(cellLo.y, cellHi.y, dqdt.y > 0.0);
     let ty = (by - q.y) / dqdt.y;
     if (ty > 0.0001) { best = min(best, ty); }
   }
   if (abs(dqdt.z) > 0.0001) {
-    let bz = select(floor(q.z), floor(q.z) + 1.0, dqdt.z > 0.0);
+    let bz = select(cellLo.z, cellHi.z, dqdt.z > 0.0);
     let tz = (bz - q.z) / dqdt.z;
     if (tz > 0.0001) { best = min(best, tz); }
   }
-  return min(best, 0.20);
+  return best;
 }
 
 fn sampleRaymarchCellSupport(p: vec3<f32>) -> vec4<f32> {
@@ -2568,9 +2571,9 @@ fn raymarchSupportOccupied(support: vec4<f32>) -> bool {
 }
 
 fn raymarchSupportBrickExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
-  let q = clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001));
+  let q = (p * 0.5 + vec3<f32>(0.5)) * f32(GRID) - vec3<f32>(0.5);
   let dqdt = rd * (0.5 * f32(GRID));
-  let cell = vec3<u32>(floor(q));
+  let cell = vec3<u32>(floor(clamp(q, vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001))));
   let brick = cell / vec3<u32>(RAYMARCH_SUPPORT_BRICK_SIZE);
   let brickLo = vec3<f32>(brick * vec3<u32>(RAYMARCH_SUPPORT_BRICK_SIZE));
   let brickHi = brickLo + vec3<f32>(f32(RAYMARCH_SUPPORT_BRICK_SIZE));
@@ -2587,7 +2590,7 @@ fn raymarchSupportBrickExitDistance(p: vec3<f32>, rd: vec3<f32>) -> f32 {
     let tz = (select(brickLo.z, brickHi.z, dqdt.z > 0.0) - q.z) / dqdt.z;
     if (tz > 0.0001) { best = min(best, tz); }
   }
-  return min(best, 0.40);
+  return best;
 }
 
 fn curlAtCell(c: vec3<i32>) -> vec3<f32> {
@@ -5146,13 +5149,16 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = u32(ceil(steps));
   let ridgeMinimumDt = 0.5 / f32(GRID);
-  let maxIntegrationSamples = u32(ceil(max(0.0, endT - startT) / max(0.0001, min(dtBase, ridgeMinimumDt))));
-  let maxTraversalSteps = GRID * 3u + maxIntegrationSamples + 3u;
+  let ridgeRefinementSampleBudget = min(16u, max(4u, u32(ceil(steps * 0.10))));
+  let leanExpensiveSampleBudget = expensiveSampleBudget + ridgeRefinementSampleBudget;
+  let maxTraversalSteps = GRID * 3u + leanExpensiveSampleBudget + 3u;
   var expensiveSamples = 0u;
+  var ridgeRefinementSamples = 0u;
   var traversalSteps = 0u;
   loop {
     if (traversalSteps >= maxTraversalSteps) { break; }
     if ((!LEAN_STOCK_RAYMARCH || fullGridCapture) && expensiveSamples >= expensiveSampleBudget) { break; }
+    if (LEAN_STOCK_RAYMARCH && !fullGridCapture && expensiveSamples >= leanExpensiveSampleBudget) { break; }
     if (!fullGridCapture && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -5276,10 +5282,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let baseAdaptiveDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
-    let ridgeEnvelope = max(raymarchCellSupport.y, raymarchCellSupport.z);
-    let ridgeRefinementActive = LEAN_STOCK_RAYMARCH && !fullGridCapture && ridgeEnvelope > 0.0001;
+    let ridgeEnvelope = raymarchCellSupport.z;
+    let ridgeRefinementActive = LEAN_STOCK_RAYMARCH
+      && !fullGridCapture
+      && ridgeEnvelope > 0.0001
+      && ridgeRefinementSamples < ridgeRefinementSampleBudget;
     let ridgeLocalDt = min(ridgeMinimumDt, max(0.0001, endT - t));
     let localDt = select(baseAdaptiveDt, min(baseAdaptiveDt, ridgeLocalDt), ridgeRefinementActive);
+    ridgeRefinementSamples = ridgeRefinementSamples + select(0u, 1u, ridgeRefinementActive);
     let rayStepOpacity = localDt * 3.65;
     let curtainNoise = microFilamentNoise(
       detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),

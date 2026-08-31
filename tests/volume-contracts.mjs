@@ -1039,7 +1039,7 @@ assert.match(fieldSliceWitness, /fieldSliceBackend:\s*'cpu-fluid-buffer-readback
 assert.match(core, /directCellOpticalSupportFromSlots/, 'raymarch derives skip support from native simulation-cell records');
 assert.match(core, /directCellExitDistance/, 'raymarch crosses empty native cells at their geometric boundary');
 assert.match(core, /let expensiveSampleBudget = u32\(ceil\(steps\)\)/, 'ray setting defines a fixed expensive-sample budget');
-assert.match(core, /let maxIntegrationSamples[\s\S]*let maxTraversalSteps = GRID \* 3u \+ maxIntegrationSamples \+ 3u/, 'traversal safety derives from grid geometry plus the smallest admitted integration segment');
+assert.match(core, /let ridgeRefinementSampleBudget[\s\S]*let leanExpensiveSampleBudget = expensiveSampleBudget \+ ridgeRefinementSampleBudget[\s\S]*let maxTraversalSteps = GRID \* 3u \+ leanExpensiveSampleBudget \+ 3u/, 'traversal safety derives from grid crossings plus the explicit nominal-and-ridge integration budget');
 assert.match(core, /expensiveSamples = expensiveSamples \+ 1u/, 'occupied reconstruction spends exactly one expensive sample');
 assert.match(core, /let adaptiveScale = mix\(2\.65, 1\.0, fine\)/, 'ordinary adaptive marching never shrinks below its baseline segment');
 assert.match(core, /ridgeRefinementActive[\s\S]*min\(baseAdaptiveDt, ridgeLocalDt\)/, 'source-backed ridge admission owns the explicit local substep exception');

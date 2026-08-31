@@ -39,13 +39,29 @@ assert.match(core, /captureSelectiveHeadLiveFrame[\s\S]*raymarchSupportHierarchy
 
 assert.match(raymarchLoop, /sampleRaymarchSupportBrick\(p\)[\s\S]*raymarchSupportBrickExitDistance\(p, rd\)[\s\S]*continue/, 'a conservatively empty brick advances directly to its exit before native-field reconstruction');
 assert.match(raymarchLoop, /sampleRaymarchCellSupport\(p\)[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*continue/, 'an empty native cell advances to its exit through compact support');
+const cellExit = core.match(/fn directCellExitDistance[\s\S]*?(?=\nfn sampleRaymarchCellSupport)/)?.[0] || '';
+const brickExit = core.match(/fn raymarchSupportBrickExitDistance[\s\S]*?(?=\nfn curlAtCell)/)?.[0] || '';
+for (const [label, exitFunction] of [['native cell', cellExit], ['support brick', brickExit]]) {
+  assert.match(exitFunction, /let q = \(p \* 0\.5 \+ vec3<f32>\(0\.5\)\) \* f32\(GRID\) - vec3<f32>\(0\.5\)/, `${label} exit derives distance from unclamped ray geometry`);
+  assert.match(exitFunction, /let cell = vec3<u32>\(floor\(clamp\(q,/, `${label} exit clamps only the lookup identity`);
+  assert.doesNotMatch(exitFunction, /return min\(best, 0\.[24]0\)/, `${label} exit has no arbitrary distance cap`);
+}
 assert.match(core, /fn raymarchSupportOccupied[\s\S]*max\(support\.x, max\(support\.y, support\.z\)\)/, 'empty skipping requires macro support, boundary coverage, and ridge support all to be absent');
 assert.match(raymarchLoop, /directSupportWithRidge[\s\S]*raymarchSupportOccupied\(raymarchCellSupport\)/, 'the legacy direct-support check cannot discard an admitted ridge-only cell');
 assert.match(raymarchLoop, /sampleDirectCell\(p\)/, 'occupied cells retain the authoritative direct-cell reconstruction');
 
-assert.match(raymarchLoop, /ridgeEnvelope[\s\S]*ridgeRefinementActive[\s\S]*ridgeMinimumDt[\s\S]*localDt = select/, 'ridge refinement changes segment length only inside an admitted ridge envelope');
-assert.match(raymarchLoop, /maxIntegrationSamples[\s\S]*maxTraversalSteps/, 'the traversal bound derives from the actual minimum segment rather than the nominal ray count');
-assert.doesNotMatch(raymarchLoop, /expensiveSamples >= expensiveSampleBudget \|\|/, 'ridge refinement cannot truncate the ray merely by spending the nominal sample count');
+assert.match(raymarchLoop, /let ridgeRefinementSampleBudget = min\(16u, max\(4u, u32\(ceil\(steps \* 0\.10\)\)\)\)/, 'ridge refinement receives a small explicit allowance tied to the authored ray budget');
+assert.match(raymarchLoop, /let leanExpensiveSampleBudget = expensiveSampleBudget \+ ridgeRefinementSampleBudget/, 'lean traversal names its complete expensive-sample ceiling');
+assert.match(raymarchLoop, /let maxTraversalSteps = GRID \* 3u \+ leanExpensiveSampleBudget \+ 3u/, 'traversal safety is bounded by grid crossings plus the complete expensive-sample ceiling');
+assert.match(raymarchLoop, /LEAN_STOCK_RAYMARCH && !fullGridCapture && expensiveSamples >= leanExpensiveSampleBudget/, 'lean rendering cannot exceed the explicit nominal-plus-ridge sample budget');
+assert.match(raymarchLoop, /let ridgeEnvelope = raymarchCellSupport\.z/, 'local refinement is admitted by ridge support rather than broader boundary coverage');
+assert.match(raymarchLoop, /ridgeRefinementSamples < ridgeRefinementSampleBudget[\s\S]*ridgeRefinementSamples = ridgeRefinementSamples \+ select\(0u, 1u, ridgeRefinementActive\)/, 'only actual ridge-refined samples spend the bounded allowance');
+assert.doesNotMatch(raymarchLoop, /maxIntegrationSamples/, 'the replacement bound cannot scale hidden expensive work with grid resolution');
 assert.match(raymarchLoop, /rayStepOpacity = localDt \* 3\.65/, 'refined segments continue to scale optical depth by their actual length');
+
+const rawReconstruction = core.match(/fn sampleWorldFlowReconstructionRaw[\s\S]*?(?=\nfn flowReconstructionStructure)/)?.[0] || '';
+const directReconstruction = core.match(/fn sampleDirectCell[\s\S]*?(?=\nfn directCellExitDistance)/)?.[0] || '';
+assert.match(rawReconstruction, /sample\.kernelTangentRadius = vec4<f32>\(0\.0\)/, 'raw zero-kernel reconstruction owns a zero tangent-radius lane');
+assert.match(directReconstruction, /sample\.reconstructed\.kernelTangentRadius = vec4<f32>\(0\.0\)/, 'fused direct-cell reconstruction preserves the raw zero-kernel lane exactly');
 
 console.log('volume ridge event raymarch contracts passed');

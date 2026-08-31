@@ -144,7 +144,8 @@ assert.match(core, /sampleDirectCell[\s\S]*let c111 = c \+ vec3<i32>\(1, 1, 1\)[
 assert.match(core, /directCellExitDistance[\s\S]*f32\(GRID\) - vec3<f32>\(0\.5\)/, 'cell-exit traversal uses the same half-cell lattice as trilinear reconstruction');
 assert.match(core, /flowKernelStrength[\s\S]*flow-kernel-reconstruction-active/, 'authored flow reconstruction refuses the direct-cell specialization explicitly');
 assert.match(core, /boundarySidecarBuiltThisFrame[\s\S]*boundary-sidecar-not-current/, 'baked sidecar freshness is an admission invariant rather than an encode-time surprise');
-assert.match(core, /\(!LEAN_STOCK_RAYMARCH \|\| fullGridCapture\) && expensiveSamples >= expensiveSampleBudget/, 'full authored rendering retains the explicit expensive-sample ceiling while lean ridge refinement may spend bounded local work');
+assert.match(core, /\(!LEAN_STOCK_RAYMARCH \|\| fullGridCapture\) && expensiveSamples >= expensiveSampleBudget/, 'full authored rendering retains the explicit expensive-sample ceiling');
+assert.match(core, /LEAN_STOCK_RAYMARCH && !fullGridCapture && expensiveSamples >= leanExpensiveSampleBudget/, 'lean rendering has an explicit nominal-plus-ridge expensive-sample ceiling');
 assert.match(core, /expensiveSamples\s*=\s*expensiveSamples\s*\+\s*1u/, 'occupied reconstruction spends the explicit expensive-sample budget');
 assert.match(core, /struct DirectCellSample[\s\S]*reconstructed:\s*FlowReconstructionSample[\s\S]*opticalSupport:\s*f32/, 'direct-cell sampling carries reconstruction and conservative support together');
 assert.match(core, /let directSample = sampleDirectCell\(p\)[\s\S]*directSample\.opticalSupport[\s\S]*reconstructed = directSample\.reconstructed/, 'the production marcher reuses one native-cell neighborhood for admission and occupied reconstruction');
