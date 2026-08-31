@@ -69,7 +69,10 @@ const inFlightOut = args.get('in-flight-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
 const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
-const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
+const fireTimeoutMs = args.has('fire-timeout-ms')
+  ? Number(args.get('fire-timeout-ms'))
+  : null;
+const fireOperationTimeoutMs = fireTimeoutMs ?? 20000;
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
 const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
@@ -120,6 +123,9 @@ const requestedInvocation = {
   sourceAssetId: requestedSourceAssetId,
   firePresentation: requestedFirePresentation,
   flameContinuity: requestedFlameContinuity,
+  fireWaitPolicy: fireTimeoutMs === null
+    ? { mode: 'uncapped', timeoutMs: null }
+    : { mode: 'caller-deadline', timeoutMs: fireTimeoutMs },
   captureInFlight,
   requireFrameStageLedger,
   requestedCdpPort,
@@ -1287,6 +1293,9 @@ try {
   if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
     throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
   }
+  if (fireTimeoutMs !== null && (!Number.isFinite(fireTimeoutMs) || fireTimeoutMs <= 0)) {
+    throw new Error('--fire-timeout-ms must be a finite positive caller-owned deadline when supplied');
+  }
   phase = 'resolving-headless-browser';
   browserResolution = resolveHeadlessBrowser({
     cliExecutable: args.get('chrome'),
@@ -1507,7 +1516,7 @@ try {
           castScreenX: debug?.castScreenPoint?.screenX ?? null,
         },
       };
-    })()`, fireTimeoutMs);
+    })()`, fireOperationTimeoutMs);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, replayedCast: state.replayedCast };
     if (state.replayedCast.status !== 'real-output-replay-not-inference') throw new Error(`Replay authority changed: ${JSON.stringify(state.replayedCast)}`);
     if (state.replayedCast.receiptReportPath !== state.replayedCast.reportPath) throw new Error(`Replayed Crucible receipt lost source report identity: ${JSON.stringify(state.replayedCast)}`);
@@ -1605,10 +1614,10 @@ try {
       inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
     }
-    const deadline = Date.now() + fireTimeoutMs;
+    const fireDeadlineAtMs = fireTimeoutMs === null ? null : Date.now() + fireTimeoutMs;
     let observedRunning = false;
     let routeState = null;
-    while (Date.now() < deadline) {
+    while (fireDeadlineAtMs === null || Date.now() < fireDeadlineAtMs) {
       await sleep(1000);
       routeState = await evaluate(ws, `(() => {
         const liveVolume = window.__kaminosVolumePrototype?.debugState?.() || null;
@@ -1733,7 +1742,7 @@ try {
           phase = 'waiting-for-friendly-firing';
         }
       }
-      if (observedRunning && !routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
+      if (!routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
     }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       inFlightCapture = {
@@ -1746,7 +1755,8 @@ try {
     }
     if (!observedRunning) throw new Error(`Friendly firing never entered running state: ${JSON.stringify(routeState)}`);
     if (!routeState || routeState.runningProfileId || !['complete', 'error', 'evidence-only'].includes(routeState.status)) {
-      throw new Error(`Friendly firing did not finish within ${fireTimeoutMs}ms: ${JSON.stringify(routeState)}`);
+      const waitDescription = fireTimeoutMs === null ? 'the uncapped live-route wait' : `${fireTimeoutMs}ms`;
+      throw new Error(`Friendly firing did not finish within ${waitDescription}: ${JSON.stringify(routeState)}`);
     }
     phase = 'reading-friendly-firing-evidence';
     const browserFiringEvidence = await evaluate(ws, `(() => {
@@ -1795,7 +1805,7 @@ try {
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
-    })()`, fireTimeoutMs);
+    })()`, fireOperationTimeoutMs);
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       postFiringSummary: {
@@ -1877,7 +1887,7 @@ try {
       arrayKey: 'foregroundSamples',
       expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: fireOperationTimeoutMs,
       label: 'foreground heartbeat samples',
     });
     browserFiringEvidence.foregroundKilnHeartbeat.hostEvents = await readBrowserArrayInChunks({
@@ -1886,7 +1896,7 @@ try {
       arrayKey: 'hostEvents',
       expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.hostEventCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: fireOperationTimeoutMs,
       label: 'foreground host events',
     });
     browserFiringEvidence.sharpDutyCorrelation.foregroundGaps = await readBrowserArrayInChunks({
@@ -1895,7 +1905,7 @@ try {
       arrayKey: 'foregroundGaps',
       expectedCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
-      timeoutMs: fireTimeoutMs,
+      timeoutMs: fireOperationTimeoutMs,
       label: 'foreground SHARP duty correlation gaps',
     });
     if (browserFiringEvidence.kilnFrameStageLedger) {
@@ -1905,7 +1915,7 @@ try {
         arrayKey: 'kilnFrameStageFrames',
         expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.frameCount,
         expectedIdentity: browserFiringEvidence.snapshotIdentity,
-        timeoutMs: fireTimeoutMs,
+        timeoutMs: fireOperationTimeoutMs,
         label: 'kiln frame stage ledger frames',
       });
       browserFiringEvidence.kilnFrameStageLedger.events = await readBrowserArrayInChunks({
@@ -1914,7 +1924,7 @@ try {
         arrayKey: 'kilnFrameStageEvents',
         expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.eventCount,
         expectedIdentity: browserFiringEvidence.snapshotIdentity,
-        timeoutMs: fireTimeoutMs,
+        timeoutMs: fireOperationTimeoutMs,
         label: 'kiln frame stage ledger events',
       });
     }

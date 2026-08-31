@@ -23,6 +23,21 @@ const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
 assert.doesNotMatch(
   witness,
+  /args\.get\('fire-timeout-ms'\) \|\| 420000/,
+  'Live Friendly firing must not inherit a hidden seven-minute aggregate timeout',
+);
+assert.match(
+  witness,
+  /const fireTimeoutMs = args\.has\('fire-timeout-ms'\)[\s\S]*:\s*null/,
+  'The firing deadline must be absent unless the caller explicitly supplies one',
+);
+assert.match(
+  witness,
+  /const fireDeadlineAtMs = fireTimeoutMs === null[\s\S]*while \(fireDeadlineAtMs === null \|\| Date\.now\(\) < fireDeadlineAtMs\)/,
+  'The live route wait must continue without an aggregate deadline by default',
+);
+assert.doesNotMatch(
+  witness,
   /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
   'Crucible headless smoke must not default to the installed stable Chrome application',
 );
@@ -117,6 +132,7 @@ try {
     sourceAssetId: null,
     firePresentation: 'full-volume',
     flameContinuity: 'live-every-frame',
+    fireWaitPolicy: { mode: 'uncapped', timeoutMs: null },
     captureInFlight: false,
     requireFrameStageLedger: false,
     requestedCdpPort: null,
@@ -1323,7 +1339,7 @@ for (const [pattern, message] of [
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
-  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing browser evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
+  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireOperationTimeoutMs\)/, 'Post-firing browser evidence collection must use the caller deadline when supplied and a bounded per-operation timeout otherwise'],
   [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*const reportPath = routeState\.result\?\.report\?\.path[\s\S]*reportPath,/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
   [/JSON\.parse\(readFileSync\(browserFiringEvidence\.reportPath, 'utf8'\)\)/, 'Node witness must read the backend report from its durable filesystem path'],
   [/projectFriendlyFiringEvidence\(\{[\s\S]*browserFiringEvidence,[\s\S]*pipelineReport/, 'Node witness must join browser-owned firing evidence with filesystem-owned backend evidence outside CDP'],
