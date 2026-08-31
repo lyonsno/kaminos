@@ -5,7 +5,7 @@ Run substantial WebGPU models as responsive components of browser applications.
 Kaminos WebGPU Inference Kit gives model ports a shared session and device lifecycle, persistent model routes, queued invocations, cooperative scheduling, progress and terminal state, resource residency, and runtime telemetry. Ports retain ownership of their weights, kernels, tensor semantics, execution order, and output construction.
 
 ```sh
-npm install @kaminos/webgpu-inference-kit
+npm install @kaminos/webgpu-inference-kit@sharp-gpu-timestamp-assay
 ```
 
 ## Quick Look

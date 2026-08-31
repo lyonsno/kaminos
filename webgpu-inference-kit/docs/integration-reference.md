@@ -9,7 +9,7 @@ The result is a model runtime that can share a browser and GPU with a live rende
 ## Install
 
 ```sh
-npm install @kaminos/webgpu-inference-kit
+npm install @kaminos/webgpu-inference-kit@sharp-gpu-timestamp-assay
 ```
 
 ## What It Makes Possible

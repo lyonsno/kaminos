@@ -18,6 +18,11 @@ assert.match(readme, /registerRoute/);
 assert.match(readme, /route\.enqueue/);
 assert.match(readme, /job\.completion/);
 assert.match(readme, /completion\.status === ['"]succeeded['"]/);
+assert.match(
+  readme,
+  /npm install @kaminos\/webgpu-inference-kit@sharp-gpu-timestamp-assay/,
+  'the assay README must install the non-latest assay tag',
+);
 assert.match(readme, /Current kit adoption/);
 assert.match(readme, /Ports can adopt a common application-facing shape/);
 assert.match(readme, /tensor, kernel, runtime, and route primitives/i);
@@ -35,6 +40,11 @@ assert.ok(packageJson.files.includes('docs'), 'published package must include li
 
 const integrationReference = await readPackageFile('docs/integration-reference.md');
 assert.match(integrationReference, /^# @kaminos\/webgpu-inference-kit$/m);
+assert.match(
+  integrationReference,
+  /npm install @kaminos\/webgpu-inference-kit@sharp-gpu-timestamp-assay/,
+  'the assay integration reference must install the non-latest assay tag',
+);
 assert.match(integrationReference, /^## Start Here When Porting A Long Model$/m);
 assert.ok(readme.length < integrationReference.length, 'README must compress rather than duplicate the advanced manual');
 
