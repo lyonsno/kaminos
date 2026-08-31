@@ -10,6 +10,8 @@ import {
   TerminalWitnessError,
   assertAuthoredLayoutRestored,
   auditBrowserEvents,
+  buildPhaseQualifiedBackendEvidence,
+  buildSuccessfulGestureEvidence,
   evaluateInitialLayoutAdmission,
   expectedLayoutStoreBlockSequencesInSlice,
   initializeScreenshotEvidence,
@@ -17,6 +19,7 @@ import {
   prepareScreenshotEvidence,
   publishScreenshotEvidence,
   rejectScreenshotEvidence,
+  recordCdpBrowserEvent,
   stageScreenshotEvidence,
   summarizeBrowserEvent,
   terminalLayoutReceiptFailure,
@@ -44,6 +47,7 @@ let screenshotEvidence = initializeScreenshotEvidence({ path: screenshotPath, ru
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let layoutStoreOutageEventWindow = null;
+let expectedLayoutStoreUrl = null;
 
 function chromeExecutable() {
   for (const candidate of [
@@ -63,6 +67,7 @@ async function waitUntil(callback, message, intervalMs = 100) {
     try {
       if (socket) auditBrowserEvents(socket.browserEvents, {
         allowedExpectedLayoutStoreBlockSequences: allowedLayoutStoreBlockSequences(),
+        expectedStoreUrl: expectedLayoutStoreUrl,
       });
       const result = await callback();
       if (result) return result;
@@ -84,6 +89,7 @@ function allowedLayoutStoreBlockSequences() {
   return expectedLayoutStoreBlockSequencesInSlice(socket.browserEvents, {
     startSequence: layoutStoreOutageEventWindow.startSequence,
     endSequence: socket.browserEvents.length,
+    expectedStoreUrl: expectedLayoutStoreUrl,
   });
 }
 
@@ -106,30 +112,12 @@ class CdpSocket {
       this.socket.addEventListener('message', event => {
         const message = JSON.parse(event.data);
         if (!message.id) {
-          if (message.method === 'Network.requestWillBeSent') {
-            this.networkRequestUrls.set(message.params?.requestId, message.params?.request?.url || null);
-          }
-          if (
-            message.method === 'Network.loadingFailed'
-            && (
-              message.params?.blockedReason
-              || String(message.params?.errorText || '').includes('ERR_BLOCKED_BY_CLIENT')
-            )
-          ) {
-            this.browserEvents.push({
-              ...message,
-              witnessRequestUrl: this.networkRequestUrls.get(message.params?.requestId) || null,
-              witnessSequence: this.browserEvents.length,
-              witnessPhase: this.phaseProvider(),
-            });
-          }
-          if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
-            this.browserEvents.push({
-              ...message,
-              witnessSequence: this.browserEvents.length,
-              witnessPhase: this.phaseProvider(),
-            });
-          }
+          recordCdpBrowserEvent({
+            message,
+            browserEvents: this.browserEvents,
+            networkRequestUrls: this.networkRequestUrls,
+            phase: this.phaseProvider(),
+          });
           return;
         }
         const pending = this.pending.get(message.id);
@@ -346,6 +334,7 @@ try {
   if (!existsSync(expectedRepoRoot)) throw new Error('expected repo root does not exist');
   if (!/^[0-9a-f]{40}$/.test(expectedCommit)) throw new Error('expected commit must be a full lowercase SHA');
   if (!expectedLayoutStore || expectedLayoutStore === '/') throw new Error('missing safe expected layout store');
+  expectedLayoutStoreUrl = new URL('/api/volume-cockpit-layouts', url).href;
 
   failurePhase = 'http-source-preflight';
   const runtimeResponse = await fetch(new URL('/api/runtime-config', url));
@@ -498,6 +487,7 @@ try {
       `reloaded layout receipt failed at ${receiptFailure.phase}: ${receiptFailure.reason}`,
     );
     if (state.layout?.layoutId !== authoredLayoutWitness.layoutId || !/saved|loaded/.test(state.status)) return null;
+    if (!/^WebGPU:/.test(String(state.renderer?.backend || ''))) return null;
     return state;
   }, 'authored layout did not survive page reload');
   const authoredReload = assertAuthoredLayoutRestored({ authored: authoredLayoutWitness, reloaded });
@@ -532,7 +522,7 @@ try {
     endSequence: null,
     allowedSequences: null,
   };
-  await socket.call('Network.setBlockedURLs', { urls: ['*api/volume-cockpit-layouts*'] });
+  await socket.call('Network.setBlockedURLs', { urls: [expectedLayoutStoreUrl] });
   await socket.call('Page.reload', { ignoreCache: true });
   const outage = await waitUntil(async () => {
     const state = await cockpitState();
@@ -551,7 +541,7 @@ try {
   layoutStoreOutageEventWindow.endSequence = socket.browserEvents.length;
   layoutStoreOutageEventWindow.allowedSequences = expectedLayoutStoreBlockSequencesInSlice(
     socket.browserEvents,
-    layoutStoreOutageEventWindow,
+    { ...layoutStoreOutageEventWindow, expectedStoreUrl: expectedLayoutStoreUrl },
   );
   failurePhase = 'layout-store-degraded-control-isolation';
 
@@ -584,6 +574,13 @@ try {
   failurePhase = 'browser-event-audit';
   const browserEventAudit = auditBrowserEvents(socket.browserEvents, {
     allowedExpectedLayoutStoreBlockSequences: layoutStoreOutageEventWindow.allowedSequences,
+    expectedStoreUrl: expectedLayoutStoreUrl,
+  });
+  const backendByPhase = buildPhaseQualifiedBackendEvidence({
+    initialAdmission: initial.renderer.backend,
+    postReloadAdmission: reloaded.renderer.backend,
+    outageAdmission: outage.renderer.backend,
+    final: toggleApplied.renderer.backend,
   });
   failurePhase = 'screenshot-publication';
   screenshotEvidence = publishScreenshotEvidence(screenshotEvidence);
@@ -598,10 +595,12 @@ try {
       repoRoot: expectedRepoRoot,
       commit: expectedCommit,
       layoutStore: expectedLayoutStore,
+      layoutStoreUrl: expectedLayoutStoreUrl,
     },
     effective: {
       runtimeConfig,
-      backend: reloaded.renderer.backend,
+      backend: backendByPhase.final,
+      backendByPhase,
       layoutReceipt: reloaded.receipt,
       activeLayoutId: selectedIndex.activeLayoutId,
       canonicalControlCount: Object.keys(reloaded.controls).length,
@@ -609,7 +608,10 @@ try {
       layoutStoreOutageEventWindow,
       storeOutageIsolation: lastTrustworthyEvidence.outage,
     },
-    gesture: lastTrustworthyEvidence.authored,
+    gesture: buildSuccessfulGestureEvidence({
+      authored: lastTrustworthyEvidence.authored,
+      dragProbe: lastTrustworthyEvidence.dragProbe,
+    }),
     browserEvents: browserEventAudit.events,
     fallbackApplied: false,
   };
@@ -623,7 +625,13 @@ try {
     ok: false,
     failurePhase,
     error: error?.stack || String(error),
-    requested: { url, repoRoot: expectedRepoRoot, commit: expectedCommit, layoutStore: expectedLayoutStore },
+    requested: {
+      url,
+      repoRoot: expectedRepoRoot,
+      commit: expectedCommit,
+      layoutStore: expectedLayoutStore,
+      layoutStoreUrl: expectedLayoutStoreUrl,
+    },
     screenshotEvidence,
     lastTrustworthyEvidence,
     browserEvents: (socket?.browserEvents || []).map(summarizeBrowserEvent),

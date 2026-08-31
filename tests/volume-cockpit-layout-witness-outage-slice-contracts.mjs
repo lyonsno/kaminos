@@ -5,6 +5,8 @@ import {
   auditBrowserEvents,
 } from '../volume-cockpit-layout-witness-contract.mjs';
 
+const expectedStoreUrl = 'http://example.test/api/volume-cockpit-layouts';
+
 function blockedStoreEvent(sequence, phase, label) {
   return {
     witnessSequence: sequence,
@@ -43,6 +45,7 @@ const liveChromeOutage = blockedStoreNetworkEvent(13, 'layout-store-outage-isola
 
 const admitted = auditBrowserEvents([intendedOutage], {
   allowedExpectedLayoutStoreBlockSequences: [11],
+  expectedStoreUrl,
 });
 assert.equal(admitted.allowedExpectedFailureCount, 1);
 assert.deepEqual(
@@ -53,6 +56,7 @@ assert.deepEqual(
 assert.equal(
   auditBrowserEvents([liveChromeOutage], {
     allowedExpectedLayoutStoreBlockSequences: [13],
+    expectedStoreUrl,
   }).allowedExpectedFailureCount,
   1,
   'the exact Chrome Network.loadingFailed form is an admissible store-block stimulus only inside the declared outage slice',
@@ -61,6 +65,7 @@ assert.equal(
 assert.throws(
   () => auditBrowserEvents([preOutage, intendedOutage], {
     allowedExpectedLayoutStoreBlockSequences: [11],
+    expectedStoreUrl,
   }),
   error => error instanceof TerminalWitnessError && /pre-outage/.test(error.message),
   'an identical blocked-store error before the declared outage slice must remain terminal',
@@ -68,9 +73,31 @@ assert.throws(
 assert.throws(
   () => auditBrowserEvents([intendedOutage, postOutage], {
     allowedExpectedLayoutStoreBlockSequences: [11],
+    expectedStoreUrl,
   }),
   error => error instanceof TerminalWitnessError && /post-outage/.test(error.message),
   'an identical blocked-store error after the declared outage slice must remain terminal',
 );
+
+for (const [label, url] of [
+  ['different origin', 'http://other.test/api/volume-cockpit-layouts'],
+  ['suffix route', 'http://example.test/api/volume-cockpit-layouts-unrelated'],
+  ['child route', 'http://example.test/api/volume-cockpit-layouts/child'],
+  ['query-bearing substitute', 'http://example.test/api/volume-cockpit-layouts?alternate=1'],
+  ['missing correlated URL', null],
+]) {
+  const event = {
+    ...liveChromeOutage,
+    witnessRequestUrl: url,
+  };
+  assert.throws(
+    () => auditBrowserEvents([event], {
+      allowedExpectedLayoutStoreBlockSequences: [13],
+      expectedStoreUrl,
+    }),
+    TerminalWitnessError,
+    `${label} must not impersonate the exact intended layout-store outage`,
+  );
+}
 
 console.log('volume cockpit layout witness outage slice contracts passed');

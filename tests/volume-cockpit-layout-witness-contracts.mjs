@@ -9,12 +9,12 @@ const layout = readFileSync(join(root, 'volume-cockpit-layout.mjs'), 'utf8');
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 assert.match(
-  witness,
-  /this\.browserEvents\s*=\s*\[\][\s\S]*Runtime\.exceptionThrown[\s\S]*Runtime\.consoleAPICalled[\s\S]*Log\.entryAdded/,
+  witnessContract,
+  /recordCdpBrowserEvent[\s\S]*Network\.loadingFailed[\s\S]*Runtime\.exceptionThrown[\s\S]*Runtime\.consoleAPICalled[\s\S]*Log\.entryAdded/,
   'the reusable layout witness must retain browser exceptions, console calls, and log entries',
 );
 assert.match(
-  witness,
+  witnessContract,
   /Network\.requestWillBeSent[\s\S]*networkRequestUrls\.set[\s\S]*Network\.loadingFailed[\s\S]*witnessRequestUrl/,
   'the outage witness must retain Chrome blocked-request failures with their correlated request URL',
 );
@@ -54,14 +54,19 @@ assert.match(
   'every wait phase must adjudicate retained browser errors before polling for success',
 );
 assert.match(
-  witness,
-  /witnessSequence:\s*this\.browserEvents\.length[\s\S]*witnessPhase:\s*this\.phaseProvider\(\)/,
+  witnessContract,
+  /witnessSequence:\s*browserEvents\.length[\s\S]*witnessPhase:\s*phase/,
   'retained browser events must carry monotonic sequence and witness-phase custody',
 );
 assert.match(
   witness,
   /layoutStoreOutageEventWindow\s*=\s*\{[\s\S]*startSequence:\s*socket\.browserEvents\.length[\s\S]*Network\.setBlockedURLs[\s\S]*layout-store outage did not produce its expected browser event[\s\S]*endSequence\s*=\s*socket\.browserEvents\.length[\s\S]*expectedLayoutStoreBlockSequencesInSlice/,
   'the layout-store exception must be frozen to the exact intentionally induced outage slice',
+);
+assert.match(
+  witness,
+  /requested:\s*\{[\s\S]*layoutStoreUrl:\s*expectedLayoutStoreUrl/,
+  'the witness report must preserve the exact layout-store HTTP endpoint used for outage adjudication',
 );
 assert.match(
   witness,

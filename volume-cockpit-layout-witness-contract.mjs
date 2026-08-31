@@ -15,6 +15,36 @@ export async function navigateWithBrowserDiagnostics(socket, url) {
   await socket.call('Page.navigate', { url });
 }
 
+export function recordCdpBrowserEvent({
+  message,
+  browserEvents,
+  networkRequestUrls,
+  phase,
+}) {
+  if (message.method === 'Network.requestWillBeSent') {
+    networkRequestUrls.set(message.params?.requestId, message.params?.request?.url || null);
+    return false;
+  }
+  if (message.method === 'Network.loadingFailed') {
+    browserEvents.push({
+      ...message,
+      witnessRequestUrl: networkRequestUrls.get(message.params?.requestId) || null,
+      witnessSequence: browserEvents.length,
+      witnessPhase: phase,
+    });
+    return true;
+  }
+  if (['Runtime.exceptionThrown', 'Runtime.consoleAPICalled', 'Log.entryAdded'].includes(message.method)) {
+    browserEvents.push({
+      ...message,
+      witnessSequence: browserEvents.length,
+      witnessPhase: phase,
+    });
+    return true;
+  }
+  return false;
+}
+
 export function summarizeBrowserEvent(event, fallbackSequence = null) {
   const witnessIdentity = {
     sequence: event.witnessSequence ?? fallbackSequence,
@@ -108,9 +138,24 @@ export function evaluateInitialLayoutAdmission(state, browserEvents) {
   return state;
 }
 
-function isExpectedLayoutStoreBlock(event) {
-  const storeUrl = String(event.url || '').includes('/api/volume-cockpit-layouts');
-  if (!storeUrl) return false;
+function hasExactEndpointIdentity(actualHref, expectedHref) {
+  if (!actualHref || !expectedHref) return false;
+  try {
+    const actual = new URL(actualHref);
+    const expected = new URL(expectedHref);
+    return actual.origin === expected.origin
+      && actual.pathname === expected.pathname
+      && actual.search === ''
+      && actual.hash === ''
+      && expected.search === ''
+      && expected.hash === '';
+  } catch {
+    return false;
+  }
+}
+
+function isExpectedLayoutStoreBlock(event, expectedStoreUrl) {
+  if (!hasExactEndpointIdentity(event.url, expectedStoreUrl)) return false;
   if (event.method === 'Log.entryAdded') {
     return event.level === 'error' && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT');
   }
@@ -124,21 +169,23 @@ function isExpectedLayoutStoreBlock(event) {
 export function expectedLayoutStoreBlockSequencesInSlice(events, {
   startSequence,
   endSequence,
+  expectedStoreUrl,
 }) {
   return events.map(summarizeBrowserEvent).filter(event => (
     event.sequence >= startSequence
     && event.sequence < endSequence
-    && isExpectedLayoutStoreBlock(event)
+    && isExpectedLayoutStoreBlock(event, expectedStoreUrl)
   )).map(event => event.sequence);
 }
 
 export function auditBrowserEvents(events, {
   allowedExpectedLayoutStoreBlockSequences = [],
+  expectedStoreUrl = null,
 } = {}) {
   const observed = events.map(summarizeBrowserEvent);
   const allowedSequences = new Set(allowedExpectedLayoutStoreBlockSequences);
   const allowed = observed.filter(event => (
-    allowedSequences.has(event.sequence) && isExpectedLayoutStoreBlock(event)
+    allowedSequences.has(event.sequence) && isExpectedLayoutStoreBlock(event, expectedStoreUrl)
   ));
   const rejected = observed.filter(event => (
     event.method === 'Runtime.exceptionThrown'
@@ -156,6 +203,33 @@ export function auditBrowserEvents(events, {
     allowed,
     events: observed,
   };
+}
+
+export function buildSuccessfulGestureEvidence({ authored, dragProbe }) {
+  assert.ok(authored && typeof authored === 'object', 'successful gesture evidence requires authored state');
+  assert.ok(dragProbe && typeof dragProbe === 'object', 'successful gesture evidence requires a drag probe');
+  assert.ok(dragProbe.fromSelector, 'successful gesture evidence requires a source selector');
+  assert.ok(dragProbe.toSelector, 'successful gesture evidence requires a destination selector');
+  assert.ok(dragProbe.viewport && Number.isFinite(dragProbe.viewport.width) && Number.isFinite(dragProbe.viewport.height),
+    'successful gesture evidence requires viewport dimensions');
+  for (const [role, endpoint] of [['source', dragProbe.from], ['destination', dragProbe.to]]) {
+    assert.ok(endpoint?.rect && ['x', 'y', 'width', 'height'].every(key => Number.isFinite(endpoint.rect[key])),
+      `successful gesture evidence requires ${role} rectangle`);
+    assert.equal(endpoint.intersectsViewport, true,
+      `successful gesture evidence requires ${role} viewport intersection`);
+    assert.ok(endpoint.hit?.controlId, `successful gesture evidence requires ${role} hit target`);
+    assert.ok(endpoint.scrollHost && Number.isFinite(endpoint.scrollHost.scrollTop),
+      `successful gesture evidence requires ${role} scroll state`);
+  }
+  return { ...authored, dragProbe };
+}
+
+export function buildPhaseQualifiedBackendEvidence(backends) {
+  const phaseNames = ['initialAdmission', 'postReloadAdmission', 'outageAdmission', 'final'];
+  for (const phase of phaseNames) {
+    assert.match(String(backends?.[phase] || ''), /^WebGPU:/, `${phase} backend is not WebGPU-qualified`);
+  }
+  return Object.fromEntries(phaseNames.map(phase => [phase, backends[phase]]));
 }
 
 export function assertAuthoredLayoutRestored({ authored, reloaded }) {

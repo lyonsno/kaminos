@@ -80,6 +80,7 @@ const expectedBlockedStoreEvent = {
     },
   },
 };
+const expectedStoreUrl = 'http://example.test/api/volume-cockpit-layouts';
 assert.throws(
   () => auditBrowserEvents([expectedBlockedStoreEvent]),
   TerminalWitnessError,
@@ -88,6 +89,7 @@ assert.throws(
 assert.equal(
   auditBrowserEvents([expectedBlockedStoreEvent], {
     allowedExpectedLayoutStoreBlockSequences: [17],
+    expectedStoreUrl,
   })
     .allowedExpectedFailureCount,
   1,
