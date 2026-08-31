@@ -1643,6 +1643,8 @@ export function leanStockRaymarchAdmission({
   smokePresentationMode = 'on',
   boundarySidecarSource = 'live',
   boundarySidecarOverrideApplied = false,
+  boundarySidecarBuiltThisFrame = false,
+  flowKernelStrength = 0,
   appearanceDecompositionActive = false,
   nonRidgeOpticalCaptureActive = false,
   nonRidgeSourceBasisCaptureActive = false,
@@ -1659,7 +1661,10 @@ export function leanStockRaymarchAdmission({
   if (normalizedBoundarySidecarSource !== 'baked'
     && !(normalizedBoundarySidecarSource === 'override' && boundarySidecarOverrideApplied)) {
     refusalReasons.push('boundary-sidecar-source-not-buffer-backed');
+  } else if (normalizedBoundarySidecarSource === 'baked' && boundarySidecarBuiltThisFrame !== true) {
+    refusalReasons.push('boundary-sidecar-not-current');
   }
+  if (normalizeFlowKernelStrength(flowKernelStrength) > 0) refusalReasons.push('flow-kernel-reconstruction-active');
   if (appearanceDecompositionActive) refusalReasons.push('appearance-decomposition-active');
   if (nonRidgeOpticalCaptureActive) refusalReasons.push('nonridge-optical-capture-active');
   if (nonRidgeSourceBasisCaptureActive) refusalReasons.push('nonridge-source-basis-capture-active');
@@ -5153,7 +5158,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID))), GRID - 1u);
     let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
-    let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
+    let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0;
     var reconstructed: FlowReconstructionSample;
     var raymarchCellSupport = vec4<f32>(0.0);
     if (flowKernelReconstructionActive) {
@@ -14983,6 +14988,8 @@ export function createKaminosVolumePrototype({
       smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
       boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
       boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
+      boundarySidecarBuiltThisFrame: state.boundarySidecarBuiltThisFrame,
+      flowKernelStrength: controlsSnapshot.flowKernelStrength,
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
       nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),
@@ -15012,7 +15019,7 @@ export function createKaminosVolumePrototype({
       basePass.setBindGroup(0, bindGroup);
       basePass.dispatchWorkgroups(Math.ceil(gridSize / 4), Math.ceil(gridSize / 4), Math.ceil(gridSize / 4));
       basePass.end();
-    } else if (sourceName !== 'baked' || !state.boundarySidecarBuiltThisFrame) {
+    } else if (sourceName !== 'baked') {
       throw new Error(`raymarch-support-base-not-current:${sourceName}`);
     }
 
@@ -15077,6 +15084,8 @@ export function createKaminosVolumePrototype({
       smokePresentationMode: raymarchSmokePresentationEffectiveMode(),
       boundarySidecarSource: controlsSnapshot.boundarySidecarSource,
       boundarySidecarOverrideApplied: state.boundarySidecarOverrideReceipt?.status === 'applied',
+      boundarySidecarBuiltThisFrame: state.boundarySidecarBuiltThisFrame,
+      flowKernelStrength: controlsSnapshot.flowKernelStrength,
       appearanceDecompositionActive: appearanceDecompositionActive(),
       nonRidgeOpticalCaptureActive: Boolean(nonRidgeOpticalCaptureSession),
       nonRidgeSourceBasisCaptureActive: Boolean(nonRidgeSourceBasisCaptureSession),

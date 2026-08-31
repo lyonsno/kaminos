@@ -72,7 +72,8 @@ assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'structural-splat-candidates-v0'/, 'runtime state makes the unchanged post-structural-gate admission authority explicit');
-assert.match(raymarchLoop, /if \(flowKernelReconstructionActive\) \{[\s\S]*sampleWorldFlowReconstruction\(p\)[\s\S]*\} else \{[\s\S]*sampleDirectCell\(p\)[\s\S]*directSupportWithRidge <= 0\.0001/, 'wider authored reconstruction disables narrow empty-cell skipping instead of truncating its support');
+assert.match(raymarchLoop, /flowKernelReconstructionActive = u\.reconstruction_kernel_controls\.x > 0\.0/, 'reconstruction selection uses the exact identity boundary');
+assert.match(core, /flowKernelStrength[\s\S]*flow-kernel-reconstruction-active/, 'authored reconstruction refuses the direct-cell lean specialization before hierarchy encoding');
 assert.match(witness, /expectedFlowKernelStrength/, 'visual witness derives expected kernel strength from the requested route');
 assert.match(witness, /function quantizeFlowKernelControl/, 'visual witness models the declared HTML range steps instead of expecting impossible values');
 assert.match(witness, /state\.flowKernelIdentity[\s\S]*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'visual witness verifies effective kernel identity');
