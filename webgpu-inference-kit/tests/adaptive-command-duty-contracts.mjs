@@ -124,6 +124,32 @@ const zeroObservation = zeroDuration.observeRange({
 assert.equal(zeroObservation.nextChunkItems, 80);
 assert.equal(zeroObservation.boundApplication, 'maxChunkItems');
 
+const gpuTimestamp = planner();
+const gpuTimestampRange = gpuTimestamp.nextRange();
+const gpuTimestampObservation = gpuTimestamp.observeRange({
+  rangeId: gpuTimestampRange.rangeId,
+  observedDurationMs: 20,
+  timingAuthority: 'gpu-timestamp-query',
+});
+assert.equal(gpuTimestampObservation.status, 'range-observed');
+assert.equal(gpuTimestampObservation.timingAuthority, 'gpu-timestamp-query');
+assert.equal(gpuTimestampObservation.observedDurationMs, 20);
+assert.equal(gpuTimestampObservation.nextChunkItems, 10);
+assert.equal(gpuTimestamp.snapshot().ranges[0].timingAuthority, 'gpu-timestamp-query');
+
+const zeroGpuTimestamp = planner();
+const zeroGpuTimestampRange = zeroGpuTimestamp.nextRange();
+assert.throws(
+  () => zeroGpuTimestamp.observeRange({
+    rangeId: zeroGpuTimestampRange.rangeId,
+    observedDurationMs: 0,
+    timingAuthority: 'gpu-timestamp-query',
+  }),
+  /gpu-timestamp-query.*greater than zero|observedDurationMs.*greater than zero/,
+  'GPU timestamp observations must preserve a strictly positive ordered range',
+);
+assert.equal(zeroGpuTimestamp.snapshot().completedItems, 0);
+
 const minimumBound = planner({ totalItems: 200 });
 const minimumRange = minimumBound.nextRange();
 const minimumObservation = minimumBound.observeRange({
