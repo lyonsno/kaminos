@@ -12279,6 +12279,14 @@ function readVolumeDomControlValue(el) {
   return Number.isFinite(numericValue) ? numericValue : el.value;
 }
 
+function readVolumeBasinDriveDirectControlValue(el) {
+  if (el?.id === 'volume-render-scale') {
+    const numericValue = Number(el.value);
+    return Number.isFinite(numericValue) ? numericValue : el.value;
+  }
+  return readVolumeDomControlValue(el);
+}
+
 function readVolumeSettingsControls(role = 'basin') {
   const controls = {};
   const fields = collectVolumeCockpitControlElements(document);
@@ -12683,7 +12691,7 @@ function volumeBasinDriveTarget(event, descriptors) {
   const descriptorKey = Object.keys(descriptors).find(key => descriptors[key].id === target.id) || null;
   return {
     descriptorKey,
-    requested: descriptorKey ? readVolumeDomControlValue(target) : null,
+    requested: descriptorKey ? readVolumeBasinDriveDirectControlValue(target) : null,
     targetId: target.id || target.dataset.volumeBudgetPreset || target.tagName.toLowerCase(),
   };
 }
@@ -18751,7 +18759,7 @@ async function initKaminosVolumeRoute() {
   ]);
   const emitterMorphologyControls = new Set(['emitter-assay-family', 'volume-input-radius', 'volume-flow-rate']);
   const syncControls = event => {
-    if (event?.target?.id === 'volume-render-scale') adoptVolumeRenderScaleSliderValue();
+    if (event?.target?.id === 'volume-render-scale' && event.isTrusted === true) adoptVolumeRenderScaleSliderValue();
     if (event?.target?.id === 'volume-scene') {
       applyVolumeScenePreset(event.target.value);
     } else if (event?.target?.id) {

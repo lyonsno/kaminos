@@ -5,10 +5,10 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const core = readFileSync(join(root, 'volume-core.js'), 'utf8');
 
-assert.match(core, /let volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 20\.0\)[\s\S]*let exposed = vec3<f32>\(1\.0\) - exp\(-color \* \(0\.96 \* volumeExposure\)\)[\s\S]*let current = pow\(max\(grade, vec3<f32>\(0\.0\)\), vec3<f32>\(0\.84\)\)/, 'raymarch source retains the exponential and power-law grade with authored top-level exposure');
+assert.match(core, /let volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 3\.0\)[\s\S]*let exposed = vec3<f32>\(1\.0\) - exp\(-color \* \(0\.96 \* volumeExposure\)\)[\s\S]*let current = pow\(max\(grade, vec3<f32>\(0\.0\)\), vec3<f32>\(0\.84\)\)/, 'raymarch source retains the exponential and power-law grade with authored top-level exposure');
 assert.match(core, /BOUNDARY_SPLAT_HDR_TARGET_FORMAT\s*=\s*['"]rgba16float['"]/, 'splat radiance must accumulate in an unclipped rgba16float target');
 assert.match(core, /BOUNDARY_SPLAT_PRESENTATION_RESOLVE_IDENTITY\s*=\s*['"]raymarch-matched-exponential-power-grade-v0['"]/, 'matched splats must name the exact raymarch presentation resolve');
-assert.match(core, /fn boundarySplatPresentationFs[\s\S]*volumeExposure = clamp\(presentationControls\.exposure\.x, 0\.0, 20\.0\)[\s\S]*1\.0\) - exp\(-color \* \(0\.96 \* volumeExposure\)\)[\s\S]*0\.80 \+ 0\.18 \* vignette[\s\S]*pow\(max\(grade, vec3<f32>\(0\.0\)\), vec3<f32>\(0\.84\)\)/, 'matched splat resolve must apply the same authored exposure, vignette gain, and power grade as raymarch');
+assert.match(core, /fn boundarySplatPresentationFs[\s\S]*volumeExposure = clamp\(presentationControls\.exposure\.x, 0\.0, 3\.0\)[\s\S]*1\.0\) - exp\(-color \* \(0\.96 \* volumeExposure\)\)[\s\S]*0\.80 \+ 0\.18 \* vignette[\s\S]*pow\(max\(grade, vec3<f32>\(0\.0\)\), vec3<f32>\(0\.84\)\)/, 'matched splat resolve must apply the same authored exposure, vignette gain, and power grade as raymarch');
 assert.match(core, /let sampleUv = vec2<f32>\(in\.uv\.x, 1\.0 - in\.uv\.y\)[\s\S]*textureLoad\(boundarySplatHdr, pixel, 0\)/, 'matched splat resolve must preserve top-left image registration when sampling the WebGPU texture');
 assert.match(core, /boundarySplatHdrPipeline[\s\S]*BOUNDARY_SPLAT_HDR_TARGET_FORMAT/, 'matched splat raster must use the HDR accumulation pipeline');
 assert.match(core, /boundarySplatPresentationReceipt/, 'frame evidence must expose the effective splat target, curve, and blend identity');

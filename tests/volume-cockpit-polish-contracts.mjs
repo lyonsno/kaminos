@@ -40,6 +40,21 @@ assert.match(index, /renderScale: readVolumeRenderScaleControlValue\(\)/, 'runti
 assert.match(index, /volume-render-scale-val'\)\.textContent = `\$\{\(c\.renderScale \* 100\)\.toFixed\(1\)\}%`/, 'render scale is displayed with one decimal percentage place');
 assert.match(index, /volume-render-scale-full'[\s\S]*readVolumeRenderScaleControlValue\(\) === 1 \? lowBandValue : 1/, 'the Full endpoint toggles back to the low authoring band');
 assert.match(core, /return Math\.max\(0\.1, Math\.min\(1, requested\)\)/, 'the runtime still accepts exact full resolution and legacy preset values');
+assert.match(
+  index,
+  /function readVolumeBasinDriveDirectControlValue\(el\)[\s\S]*el\?\.id === 'volume-render-scale'[\s\S]*Number\(el\.value\)[\s\S]*return readVolumeDomControlValue\(el\)/,
+  'a direct render-scale gesture records the live thumb instead of the previous dataset-backed effective value',
+);
+assert.match(
+  index,
+  /function volumeBasinDriveTarget\(event, descriptors\)[\s\S]*requested: descriptorKey \? readVolumeBasinDriveDirectControlValue\(target\) : null/,
+  'basin-drive recording distinguishes the direct gesture value from stable snapshot state',
+);
+assert.match(
+  index,
+  /const syncControls = event => \{\s*if \(event\?\.target\?\.id === 'volume-render-scale' && event\.isTrusted === true\) adoptVolumeRenderScaleSliderValue\(\)/,
+  'only trusted slider gestures adopt the visible thumb so replay hydration preserves Full and legacy scales',
+);
 
 assert.match(index, /id="raymarch-smoke-presentation-control"[^>]+data-requested-mode="on"/, 'Smoke On/Off owns stable authored requested state');
 assert.match(index, /function readRaymarchSmokePresentationRequestedMode\(\)[\s\S]*dataset\.requestedMode/, 'preset capture reads authored Smoke state from the control surface');
