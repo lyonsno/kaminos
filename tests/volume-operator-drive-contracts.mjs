@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const selectiveHead = readFileSync(new URL('../volume-selective-head-live.html', import.meta.url), 'utf8');
+const presetWitness = readFileSync(new URL('../volume-settings-preset-witness.mjs', import.meta.url), 'utf8');
 
 assert.match(
   index,
@@ -40,5 +42,21 @@ assert.match(
 );
 assert.match(core, /function normalizeWindAngle\(value\)\s*\{\s*return clampFinite\(value, -180, 180, 0\);\s*\}/);
 assert.match(core, /let windDirection = vec3<f32>\(cos\(windAngle\), 0\.0, sin\(windAngle\)\);/);
+
+assert.match(
+  selectiveHead,
+  /const assayToolbarRequested = params\.get\('assay_toolbar'\) === '1';/,
+  'the selective-head diagnostic placard is opt-in rather than painted into the default beauty cockpit',
+);
+assert.match(
+  selectiveHead,
+  /const requestedVisible = assayToolbarRequested && activeTab === 'volume';/,
+  'default viewport placement keeps the diagnostic placard out of operator captures',
+);
+assert.match(
+  presetWitness,
+  /witnessUrl\.searchParams\.set\('assay_toolbar', '1'\)/,
+  'diagnostic witnesses explicitly opt into the placard they inspect',
+);
 
 console.log('volume operator drive contracts passed');

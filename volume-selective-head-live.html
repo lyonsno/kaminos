@@ -130,6 +130,7 @@
       selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
     });
     const params = new URLSearchParams(location.search);
+    const assayToolbarRequested = params.get('assay_toolbar') === '1';
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
     let legacyDiagnosticCompositionRequested = requestedComposition === 'full-raymarch-under-splats-diagnostic-v0';
@@ -206,8 +207,10 @@
         : viewportRect.right;
       const availableViewportWidth = Math.max(0, availableViewportRight - viewportRect.left);
       const inset = availableViewportWidth < 780 ? 8 : 12;
-      const requestedVisible = activeTab === 'volume';
-      let reason = requestedVisible ? null : 'non-volume-tab';
+      const requestedVisible = assayToolbarRequested && activeTab === 'volume';
+      let reason = requestedVisible
+        ? null
+        : (assayToolbarRequested ? 'non-volume-tab' : 'diagnostic-toolbar-not-requested');
       let visible = requestedVisible
         && availableViewportWidth >= 280
         && viewportRect.height >= 120;

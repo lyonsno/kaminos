@@ -211,6 +211,8 @@ try {
   if (!existsSync(expectedRepoRoot)) throw new Error(`missing --expected-repo-root path: ${expectedRepoRoot}`);
   if (!expectedCommit) throw new Error('missing --expected-commit');
   const requestedUrl = new URL(url);
+  const witnessUrl = new URL(requestedUrl);
+  witnessUrl.searchParams.set('assay_toolbar', '1');
   requestedView = requestedUrl.searchParams.get('view');
   expectedComposition = PRESET_VIEW_COMPOSITIONS[requestedView];
   if (!requestedView) throw new Error('settings preset witness requires an explicit renderer view');
@@ -263,7 +265,7 @@ try {
   const initialSocket = await connect(initialTarget);
   await initialSocket.call('Page.enable');
   await initialSocket.call('Runtime.enable');
-  await initialSocket.call('Page.navigate', { url });
+  await initialSocket.call('Page.navigate', { url: witnessUrl.href });
 
   failurePhase = 'source-live-settle';
   const initialState = await waitForValue(initialSocket, `(() => {
