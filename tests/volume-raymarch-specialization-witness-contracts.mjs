@@ -14,6 +14,11 @@ assert.match(
   'captured pixels disclose the effective raymarch shader specialization',
 );
 assert.match(core, /captureSelectiveHeadLiveFrame[\s\S]*renderPhaseTimeMs:\s*state\.renderPhaseTimeMs[\s\S]*renderPhaseFrame:\s*state\.renderPhaseFrame/, 'frozen captures disclose their shader time and frame identity');
+assert.match(
+  core,
+  /captureSelectiveHeadLiveFrame[\s\S]*routeIdentity:\s*SELECTIVE_HEAD_LIVE_ROUTE,[\s\S]*effectiveRoute:\s*state\.effectiveRoute,/,
+  'frozen captures distinguish the selective-head wrapper route from the effective renderer route',
+);
 
 assert.ok(existsSync(witnessPath), 'dedicated full-versus-lean raymarch witness exists');
 const witness = readFileSync(witnessPath, 'utf8');
@@ -29,6 +34,7 @@ assert.match(witness, /advanceSim:\s*false[\s\S]*collectGpuTiming:\s*true/, 'bot
 assert.match(witness, /matchedRaymarchRaster/, 'acceptance uses the disjoint raymarch raster timestamp');
 assert.match(witness, /sameStateIdentity[\s\S]*simStepCount[\s\S]*controlsHash[\s\S]*cameraHash[\s\S]*renderPhaseTimeMs[\s\S]*renderPhaseFrame/, 'comparison binds simulation, controls, camera, and render phase');
 assert.match(witness, /effectiveUrl[\s\S]*effectiveRoute[\s\S]*backend[\s\S]*sourceCommit/, 'report binds effective runtime and source identity');
+assert.match(witness, /effectiveRoute:\s*capture\.effectiveRoute/, 'sample evidence projects the capture renderer route rather than relabeling the wrapper route');
 assert.match(witness, /expectedRuntime:[\s\S]*wrapperRoute:[\s\S]*rendererRoute:[\s\S]*composition:[\s\S]*backendClass:[\s\S]*fallbackReason:/, 'report separates expected route contract from observed runtime identity');
 assert.match(witness, /expectedRole = new URL\(requestedUrl\)\.searchParams\.get\('role'\)/, 'caller role query is part of the admission contract');
 assert.match(witness, /sampleRuntimeIdentities:[\s\S]*effectiveRole:[\s\S]*roleAuthority:[\s\S]*fallbackReason:[\s\S]*wrapperRoute:[\s\S]*wrapperFallbackReason:/, 'report preserves per-sample role, fallback, and live wrapper identity');

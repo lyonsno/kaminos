@@ -251,7 +251,7 @@ try {
         raymarchShaderSpecialization: capture.raymarchShaderSpecialization,
         gpuStageTiming: capture.gpuStageTiming,
         selectiveHeadLivePassReceipt: capture.selectiveHeadLivePassReceipt,
-        effectiveRoute: capture.routeIdentity,
+        effectiveRoute: capture.effectiveRoute,
         backend: capture.backend,
         requestedRole: capture.requestedRole,
         effectiveRole: capture.effectiveRole,

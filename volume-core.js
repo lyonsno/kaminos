@@ -20031,6 +20031,7 @@ export function createKaminosVolumePrototype({
       renderPhaseAuthority: state.renderPhaseAuthority,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      effectiveRoute: state.effectiveRoute,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
       boundarySplatFallbackReason: state.boundarySplatFallbackReason,
       backend: state.backend,
