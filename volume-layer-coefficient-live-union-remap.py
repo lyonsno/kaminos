@@ -17,7 +17,7 @@ import numpy as np
 
 AUTHORITY = "exact-native-cell-identity-overlay-remap-v0"
 OVERLAY_SCHEMA = "kaminos.volume.layer-coefficient-prediction-overlay.v0"
-RUNTIME_SCHEMA = "kaminos.volume.layer-coefficient-live-union-overlay.v0"
+RUNTIME_SCHEMA = "kaminos.volume.layer-coefficient-live-union-overlay.v1"
 SELECTOR_AUTHORITY = "explicit-source-field-operator-v0"
 SELECTOR_RECIPE_SHA256 = "541836e6c45ef014ab0b8be23ebd8dce9898900a7639a0c4e21f38336daef8f9"
 COMPOSITION_IDENTITY = "separate-ridge-nonridge-shared-total-extinction-v0"
@@ -35,7 +35,6 @@ SOURCE_HASH_KEYS = {
     "fluidSha256",
     "frontSha256",
     "boundarySidecarSha256",
-    "majorantSha256",
 }
 
 

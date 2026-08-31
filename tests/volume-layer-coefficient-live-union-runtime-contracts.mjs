@@ -21,7 +21,8 @@ assert.match(core, /async function loadBoundarySplatLiveUnionCoefficientOverlay/
 assert.match(core, /live-union-overlay-manifest-identity-substitution/, 'runtime rejects a fetched manifest that differs from the requested package identity');
 assert.match(core, /async function auditBoundarySplatLiveUnionCoefficientOverlayPopulation/, 'runtime exposes an exact live-population activation gate');
 assert.match(core, /async function auditBoundarySplatLiveUnionSourceHashes/, 'runtime exposes a compact imported-field and derived-sidecar checksum gate');
-assert.match(core, /fluidSha256[\s\S]*frontSha256[\s\S]*boundarySidecarSha256[\s\S]*majorantSha256/, 'source checksum gate covers every field that determines the live union and coefficients');
+assert.match(core, /fluidSha256[\s\S]*frontSha256[\s\S]*boundarySidecarSha256/, 'source checksum gate covers every field that determines the live union and coefficients');
+assert.doesNotMatch(core, /majorantSha256/, 'source checksum authority does not retain the retired majorant field');
 assert.match(core, /source-hash-audit-mismatch/, 'source checksum gate fails loud instead of accepting a nearby imported state');
 assert.match(core, /stableNativeCellIdSha256[\s\S]*admissionIndexSha256[\s\S]*lookupMissCount[\s\S]*lookupExtraCount/, 'activation binds stable union identity and rejects missing or extra lookup rows');
 assert.match(core, /boundarySplatLiveUnionOverlayRequestedIdentity[\s\S]*boundarySplatLiveUnionOverlayEffectiveIdentity[\s\S]*boundarySplatLiveUnionOverlayFallbackReason/, 'debug state separates requested, effective, and failed overlay authority');

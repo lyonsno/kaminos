@@ -136,8 +136,6 @@ function makeFixtureReport(label) {
       smokeVisualRiseVelocity: broadSmoke ? 0.22 : 0.14,
       plumeFieldColumnCoherence: broadSmoke ? 0.72 : 0.68,
     },
-    temporalReprojectionConfidence: live ? 0.78 : 0.12,
-    temporalHistoryResetCount: snuff ? 1 : 0,
     volumeReconstructionStyle: 'fixture-no-render',
   };
 }

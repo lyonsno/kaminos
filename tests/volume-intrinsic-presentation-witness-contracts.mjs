@@ -30,10 +30,11 @@ assert.match(
   'witness captures frozen Beauty Smoke On, Beauty Smoke Off, Intrinsic, and restored Smoke On in order',
 );
 assert.match(witness, /big_raymarch_hero_flamebowl|vsp-5d9fedbab31583860d39a34751ff5cd847116cd6fe6eeee6b4379909ef4bb2a2/, 'first smoke-isolation witness is bound to the immutable Flamebowl basin');
-assert.match(witness, /raySteps[\s\S]*160[\s\S]*adaptiveRays[\s\S]*0[\s\S]*temporalAccum/, 'witness requires 160 rays with adaptive and temporal accumulation off');
+assert.match(witness, /raySteps[\s\S]*160[\s\S]*adaptiveRays[\s\S]*0/, 'witness requires 160 rays with adaptive sampling off');
+assert.doesNotMatch(witness, /temporalAccum|temporalHistoryResetCount|historyClamp/, 'witness cannot depend on retired temporal state');
 assert.match(witness, /authoredSmokeControl[\s\S]*controlsHash[\s\S]*cameraHash/, 'witness proves Smoke Off did not mutate authored smoke, controls, or camera');
 assert.match(witness, /beautySmokeOn[^\n]+pixelHash[\s\S]*beautySmokeOff[^\n]+pixelHash/, 'witness rejects smoke-on pixels silently reused for Smoke Off');
-assert.match(witness, /simStepCount[\s\S]*temporalHistoryResetCount[\s\S]*controlsHash[\s\S]*cameraHash/, 'witness rejects simulation, reset, authored-control, and camera mutation');
+assert.match(witness, /simStepCount[\s\S]*controlsHash[\s\S]*cameraHash/, 'witness rejects simulation, authored-control, and camera mutation');
 assert.match(witness, /beauty\.metrics\.nonblank[\s\S]*intrinsic\.metrics\.nonblank[\s\S]*beautyRestored\.metrics\.nonblank/, 'witness rejects blank output in every compared presentation');
 assert.match(witness, /RESTORATION_MAX_CHANNEL_DELTA\s*=\s*1/, 'restored Beauty cannot drift by more than one channel value');
 assert.match(witness, /RESTORATION_MAX_MEAN_ABS_CHANNEL_DELTA\s*=\s*1e-6/, 'restored Beauty mean channel drift remains tightly bounded');

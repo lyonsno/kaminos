@@ -70,8 +70,6 @@ try {
       boundarySplatInstanceConsumer: true,
       boundarySplatInstances: count,
       selectiveHeadLiveRenderComposition: 'splat-only-v0',
-      temporalAccum: 0,
-      temporalJitter: 0,
       lookFreeze: 1,
     });
   }, instanceCount);

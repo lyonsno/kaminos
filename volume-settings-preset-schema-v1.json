@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v1",
-  "controlCount": 191,
+  "controlCount": 184,
   "controls": [
     {
       "key": "volume-basin-slot",
@@ -501,42 +501,6 @@
       "type": "range"
     },
     {
-      "key": "volume-majorant-skip",
-      "param": "volume_majorant_skip",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-majorant-smooth",
-      "param": "volume_majorant_smooth",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-majorant-guard",
-      "param": "volume_majorant_guard",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-temporal-accum",
-      "param": "volume_temporal_accum",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-temporal-jitter",
-      "param": "volume_temporal_jitter",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-history-clamp",
-      "param": "volume_history_clamp",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-render-scale",
       "param": "volume_render_scale",
       "tagName": "INPUT",
@@ -569,12 +533,6 @@
     {
       "key": "volume-resolution",
       "param": "volume_resolution",
-      "tagName": "SELECT",
-      "type": "select-one"
-    },
-    {
-      "key": "volume-majorant-grid",
-      "param": "volume_majorant_grid",
       "tagName": "SELECT",
       "type": "select-one"
     },
@@ -1209,5 +1167,7 @@
     "route",
     "exclusions",
     "failurePhase"
-  ]
+  ],
+  "rendererControls": [],
+  "presentationControls": []
 }

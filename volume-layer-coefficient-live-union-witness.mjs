@@ -563,7 +563,6 @@ function validateInputs() {
     sourceFieldManifest.sidecars?.fluid?.path,
     sourceFieldManifest.sidecars?.front?.path,
     sourceFieldManifest.boundarySidecar?.sidecars?.boundary?.path,
-    sourceFieldManifest.sidecars?.majorant?.path,
   ]) assert.ok(path && existsSync(path), `source sidecar is missing: ${path}`);
 }
 
@@ -572,7 +571,6 @@ function sourceHashesFromManifest(manifest) {
     fluidSha256: manifest.sidecars.fluid.sha256,
     frontSha256: manifest.sidecars.front.sha256,
     boundarySidecarSha256: manifest.boundarySidecar.sidecars.boundary.sha256,
-    majorantSha256: manifest.sidecars.majorant.sha256,
   };
 }
 

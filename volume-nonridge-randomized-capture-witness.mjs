@@ -178,8 +178,6 @@ try {
       rayIdentity: {
         raySteps: state.controls?.raySteps,
         adaptiveRays: state.controls?.adaptiveRays,
-        temporalAccum: state.controls?.temporalAccum,
-        temporalJitter: state.controls?.temporalJitter,
         runtimeQualityRequested: state.runtimeQualityRequested,
         runtimeQualityEffective: state.runtimeQualityEffective,
       },

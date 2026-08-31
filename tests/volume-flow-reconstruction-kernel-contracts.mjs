@@ -53,7 +53,9 @@ const reconstructedSidecarFunction = core.match(/fn sampleWorldFlowReconstructed
 assert.match(reconstructedSidecarFunction, /let center = sampleWorldBoundarySidecar\(p\)/, 'sidecar reconstruction stays lazy at its semantic consumer');
 assert.match(reconstructedSidecarFunction, /if \(strength <= 0\.0\) \{ return center; \}/, 'kernel-off sidecar sampling returns before neighbor taps');
 
-const raymarchLoop = core.match(/for \(var i = 0; i < 192; i = i \+ 1\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+const raymarchLoopStart = core.indexOf('let expensiveSampleBudget');
+const raymarchLoopEnd = core.indexOf('let exposed =', raymarchLoopStart);
+const raymarchLoop = core.slice(raymarchLoopStart, raymarchLoopEnd);
 assert.match(raymarchLoop, /let reconstructed = sampleWorldFlowReconstruction\(p\)/, 'raymarch consumes the reconstructed semantic bundle');
 assert.match(raymarchLoop, /reconstructed\.velocityDensity[\s\S]*reconstructed\.material[\s\S]*reconstructed\.fireLayer[\s\S]*reconstructed\.microLayer[\s\S]*reconstructed\.frontTopology/, 'raymarch consumes every reconstructed field lane together');
 
@@ -70,10 +72,7 @@ assert.match(core, /flowKernelIdentity:\s*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 
 assert.match(core, /flowKernelRequested:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records requested authoring values');
 assert.match(core, /flowKernelEffective:[\s\S]*strength:[\s\S]*radiusWorld:[\s\S]*coherence:/, 'runtime state records normalized effective values');
 assert.match(core, /flowKernelCandidateAdmissionAuthority:\s*'structural-splat-candidates-v0'/, 'runtime state makes the unchanged post-structural-gate admission authority explicit');
-const temporalControlSignature = core.match(/function temporalControlSignature\(snapshot = controlsSnapshot\) \{([\s\S]*?)\n  \}/)?.[1] || '';
-for (const [key] of expectedControls) {
-  assert.match(temporalControlSignature, new RegExp(`snapshot\\.${key}`), `${key} changes invalidate temporal history`);
-}
+assert.match(core, /flowKernelReconstructionActive[\s\S]*select\(directCellOpticalSupport\(p\), 1\.0, flowKernelReconstructionActive\)/, 'wider authored reconstruction disables narrow empty-cell skipping instead of truncating its support');
 assert.match(witness, /expectedFlowKernelStrength/, 'visual witness derives expected kernel strength from the requested route');
 assert.match(witness, /function quantizeFlowKernelControl/, 'visual witness models the declared HTML range steps instead of expecting impossible values');
 assert.match(witness, /state\.flowKernelIdentity[\s\S]*FLOW_RECONSTRUCTION_KERNEL_IDENTITY/, 'visual witness verifies effective kernel identity');

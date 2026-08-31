@@ -42,7 +42,7 @@ assert.match(core, /function recordAppearanceDecompositionApplication\([\s\S]*ra
 assert.match(core, /appearanceDecompositionReceipt[\s\S]*requestedPasses[\s\S]*application/, 'assay distinguishes requested passes from applied evidence');
 
 assert.match(core, /uniforms\[307\]\s*=\s*appearanceDecompositionUniformMode\(\)/, 'assay has a dedicated shader uniform');
-assert.match(core, /appearanceDecompositionMode\s*=\s*u\.boundary_fire_display\.w/, 'shader reads the assay identity before tone mapping');
+assert.match(core, /appearanceDecompositionMode\s*=\s*select\(u\.boundary_fire_display\.w,\s*0\.0,\s*LEAN_STOCK_RAYMARCH\)/, 'full shader reads the assay identity before tone mapping while lean stock removes the assay branch');
 assert.match(core, /appearanceAssayActive[\s\S]*effectiveRaymarchSmokeSuppressed/, 'every assay view suppresses rendered smoke');
 assert.match(core, /appearanceAssayActive[\s\S]*directFlameCandidateStructuralSignal/, 'A support is evaluated in every assay view');
 
@@ -63,7 +63,7 @@ assert.doesNotMatch(assayShaderBoundary, /textureLoad\([^\n]*current|readPixels|
 
 assert.match(index, /params\.get\('volume_appearance_decomposition'\)/, 'native route admits an explicit assay identity');
 assert.match(presetContract, /requestedAppearanceDecompositionModes[\s\S]*volume_appearance_decomposition[\s\S]*unsupported[^\n]*appearance decomposition/, 'preset routes admit only canonical target-only assay identities');
-assert.match(presetContract, /key !== 'volume_appearance_decomposition'/, 'target-only assay identity is excluded from the immutable preset control count');
+assert.match(presetContract, /visualOwnedVolumeParams[\s\S]*'volume_appearance_decomposition'[\s\S]*!visualOwnedVolumeParams\.has\(key\)/, 'target-only assay identity is excluded from the immutable preset control count');
 assert.match(wrapper, /unsupported-appearance-decomposition-mode/, 'wrapper rejects unsupported assay substitution');
 assert.match(wrapper, /requestedAppearanceAssay[\s\S]*effectiveAppearanceAssay[\s\S]*appearanceDecompositionReceipt/, 'wrapper reports requested and effective assay identity');
 assert.match(wrapper, /function syncSubordinateControlAvailability\(\)[\s\S]*requestedAppearanceAssayEnabled[\s\S]*button\.disabled = disabled/, 'assay visibly disables subordinate controls whose passes it suppresses');

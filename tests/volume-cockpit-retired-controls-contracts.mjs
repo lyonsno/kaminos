@@ -56,18 +56,17 @@ const atlasSource = assertRetiredGroup({
 });
 assert.match(atlasSource, /Capture Atlas/, 'retired Atlas action remains available to the diagnostic backend');
 
-assertRetiredGroup({
-  name: 'raymarch-history',
-  endNeedle: 'id="volume-render-scale"',
-  ids: [
-    'volume-majorant-skip',
-    'volume-majorant-smooth',
-    'volume-majorant-guard',
-    'volume-temporal-accum',
-    'volume-temporal-jitter',
-    'volume-history-clamp',
-  ],
-});
+assert.doesNotMatch(index, /data-volume-retired-control-state="raymarch-history"/, 'deleted raymarch architecture does not survive as hidden cockpit state');
+for (const id of [
+  'volume-majorant-skip',
+  'volume-majorant-smooth',
+  'volume-majorant-guard',
+  'volume-temporal-accum',
+  'volume-temporal-jitter',
+  'volume-history-clamp',
+]) {
+  assert.doesNotMatch(index, new RegExp(`id="${id}"`), `deleted raymarch control ${id} is absent from the cockpit`);
+}
 
 const shellSource = assertRetiredGroup({
   name: 'topology-shell',
