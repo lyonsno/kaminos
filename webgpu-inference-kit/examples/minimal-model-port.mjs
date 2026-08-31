@@ -122,11 +122,11 @@ export async function runMinimalModelPort({
   const session = await createWebGpuInferenceSession({
     sessionId,
     gpu,
-    adapterName: 'browser-primary-adapter',
   });
   let route;
   let adapter;
   let completions = [];
+  let runError;
 
   try {
     route = await session.registerRoute({
@@ -150,12 +150,19 @@ export async function runMinimalModelPort({
     if (failed) throw terminalFailure(failed);
 
     for (const job of jobs) route.forgetJob(job.jobId);
+  } catch (error) {
+    runError = error;
   } finally {
     if (route) await route.drain();
     adapter?.dispose();
     if (route) session.unregisterRoute(route.routeId);
     await session.drain();
     session.close();
+  }
+
+  if (runError) {
+    runError.sessionSnapshot = session.snapshot();
+    throw runError;
   }
 
   return Object.freeze({
