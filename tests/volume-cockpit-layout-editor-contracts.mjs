@@ -7,6 +7,12 @@ const layoutSource = readFileSync(join(root, 'volume-cockpit-layout.mjs'), 'utf8
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v2.json'), 'utf8'));
 const layoutModule = await import('../volume-cockpit-layout.mjs');
+const executableLayoutSource = layoutSource.replace(
+  'class VolumeCockpitLayoutEditor {',
+  'export class VolumeCockpitLayoutEditor {',
+);
+assert.notEqual(executableLayoutSource, layoutSource, 'the exact layout editor implementation is exposed only inside this executable contract');
+const executableLayoutModule = await import(`data:text/javascript;base64,${Buffer.from(executableLayoutSource).toString('base64')}`);
 
 for (const exportName of [
   'VOLUME_COCKPIT_LAYOUT_IDENTITY',
@@ -185,6 +191,111 @@ assert.deepEqual(
   layoutModule.reorderVolumeCockpitLayoutIds({ orderedIds: ['a', 'b', 'c'], itemId: 'b', beforeId: 'b' }),
   ['a', 'b', 'c'],
   'dropping an item over itself cannot unexpectedly send it to the end',
+);
+
+function layoutDocument(layoutId, label, orderedControlIds) {
+  return {
+    identity: layoutModule.VOLUME_COCKPIT_LAYOUT_IDENTITY,
+    layoutId,
+    label,
+    groups: [{
+      id: 'controls',
+      label: 'Controls',
+      surface: 'primary',
+      collapsed: false,
+      controlIds: [...orderedControlIds],
+    }],
+  };
+}
+
+function createLayoutStore({ layouts = [], activeLayoutId = null } = {}) {
+  return {
+    layouts: new Map(layouts.map(layout => [layout.layoutId, structuredClone(layout)])),
+    activeLayoutId,
+  };
+}
+
+function layoutIndex(store) {
+  return {
+    identity: 'kaminos.volume.cockpit-layout-index.v1',
+    storePath: '/contract/layout-store',
+    activeLayoutId: store.activeLayoutId,
+    entries: [...store.layouts.values()].map(layout => ({
+      layoutId: layout.layoutId,
+      label: layout.label,
+    })),
+  };
+}
+
+function createExecutableEditor({ store, sourceDefault }) {
+  const Editor = executableLayoutModule.VolumeCockpitLayoutEditor;
+  const editor = Object.create(Editor.prototype);
+  Object.assign(editor, {
+    authorableControlIds: ['control-a', 'control-b'],
+    sourceDefault: structuredClone(sourceDefault),
+    layout: null,
+    editing: false,
+    saveGeneration: 0,
+    loadGeneration: 0,
+    saveQueue: Promise.resolve(),
+    index: null,
+    persistenceAvailable: true,
+    apply() {},
+    syncIndex() {},
+    setEditing(editing) { this.editing = Boolean(editing); },
+    status() {},
+    async requestJson(url, options = {}) {
+      if (url === '/api/volume-cockpit-layouts' && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        const layout = structuredClone(body.layout);
+        store.layouts.set(layout.layoutId, layout);
+        if (body.activate) store.activeLayoutId = layout.layoutId;
+        return {
+          identity: 'kaminos.volume.cockpit-layout-write-receipt.v1',
+          layoutId: layout.layoutId,
+          activeLayoutId: store.activeLayoutId,
+        };
+      }
+      if (url === '/api/volume-cockpit-layouts') return layoutIndex(store);
+      if (url.startsWith('/api/volume-cockpit-layout?id=')) {
+        const layoutId = decodeURIComponent(url.split('=', 2)[1]);
+        const layout = store.layouts.get(layoutId);
+        if (!layout) throw new Error(`volume-cockpit-layout-not-found:${layoutId}`);
+        return { layout: structuredClone(layout) };
+      }
+      throw new Error(`unexpected-layout-contract-request:${url}`);
+    },
+  });
+  return editor;
+}
+
+const sourceDefaultLayout = layoutDocument('source-default', 'Source default', ['control-a', 'control-b']);
+const emptyStore = createLayoutStore();
+const emptyStoreEditor = createExecutableEditor({ store: emptyStore, sourceDefault: sourceDefaultLayout });
+const emptyStoreReceipt = await emptyStoreEditor.initialize();
+assert.equal(emptyStoreReceipt.storedLayoutLoaded, false, 'an empty valid index resolves after persisting the source default');
+assert.equal(emptyStore.activeLayoutId, 'source-default', 'empty-store initialization activates the persisted source default');
+
+const layoutA = layoutDocument('layout-a', 'Layout A', ['control-a', 'control-b']);
+const layoutB = layoutDocument('layout-b', 'Layout B', ['control-b', 'control-a']);
+const selectionStore = createLayoutStore({ layouts: [layoutA, layoutB], activeLayoutId: 'layout-a' });
+const firstEditor = createExecutableEditor({ store: selectionStore, sourceDefault: sourceDefaultLayout });
+const firstReceipt = await firstEditor.initialize();
+assert.equal(firstReceipt.storedLayoutLoaded, true, 'a valid active stored layout resolves as loaded');
+assert.equal(firstEditor.layout.layoutId, 'layout-a');
+
+await firstEditor.loadLayout('layout-b', { activate: true });
+assert.equal(selectionStore.activeLayoutId, 'layout-b', 'selecting inactive B durably changes the store active pointer');
+const freshEditor = createExecutableEditor({ store: selectionStore, sourceDefault: sourceDefaultLayout });
+const freshReceipt = await freshEditor.initialize();
+assert.equal(freshReceipt.storedLayoutLoaded, true);
+assert.equal(freshEditor.layout.layoutId, 'layout-b', 'fresh initialization loads the newly activated layout B');
+assert.deepEqual(freshEditor.layout.groups[0].controlIds, ['control-b', 'control-a']);
+
+assert.match(
+  index,
+  /async function initKaminosVolumeRoute\(\)[\s\S]*await volumeCockpitLayoutReady;[\s\S]*volume-render-scale-full[\s\S]*volume-toggle'\)\.addEventListener\('click'/,
+  'the ordinary Volume listeners and activation toggle remain downstream of the resolving layout promise',
 );
 
 console.log('volume cockpit layout editor contracts passed');

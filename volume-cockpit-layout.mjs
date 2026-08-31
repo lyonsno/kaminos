@@ -536,13 +536,14 @@ class VolumeCockpitLayoutEditor {
   async initialize() {
     this.layout = cloneDocument(this.sourceDefault);
     this.apply();
+    let storedLayoutLoaded = false;
     try {
       this.index = await this.requestJson(LAYOUT_API, {}, { operation: 'index' });
       if (this.index.identity !== 'kaminos.volume.cockpit-layout-index.v1') {
         throw new Error('volume-cockpit-layout-index-identity-mismatch');
       }
       this.syncIndex();
-      const storedLayoutLoaded = Boolean(this.index.activeLayoutId);
+      storedLayoutLoaded = Boolean(this.index.activeLayoutId);
       if (storedLayoutLoaded) {
         await this.loadLayout(this.index.activeLayoutId, { saveReconciliation: true });
       } else {
