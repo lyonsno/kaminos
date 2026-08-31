@@ -79,15 +79,20 @@ assert.equal(calls.external.length, 0, 'fixed morphology performs no external ca
 assert.equal(ringRuntime.effective.sourceMode, 'analytic-fixed');
 assert.equal(ringRuntime.effective.sourceCount, 1);
 
-const analyticInfluence = core.match(/fn analyticEmitterInfluence\([\s\S]*?\n}/)?.[0] || '';
-assert.match(analyticInfluence, /analyticTorusSignedDistance/, 'main simulation pass evaluates Ring from an analytic torus distance');
-assert.match(analyticInfluence, /smoothstep\([^\n]+cellWidth/, 'analytic support uses a grid-aware compact antialias transition');
-assert.match(analyticInfluence, /support <= 0\.0/, 'analytic support exits exactly outside the compact boundary');
-assert.doesNotMatch(analyticInfluence, /\bfor\s*\(/, 'fixed analytic morphology is O(1) per cell');
+const analyticInjectionShader = core.match(/const ANALYTIC_EMITTER_INJECTION_WGSL = \/\* wgsl \*\/[\s\S]*?\n`;/)?.[0] || '';
+assert.match(analyticInjectionShader, /torusSignedDistance/, 'bounded injection pass evaluates Ring from an analytic torus distance');
+assert.match(analyticInjectionShader, /smoothstep\([^\n]+cellWidth/, 'analytic support uses a grid-aware compact antialias transition');
+assert.match(analyticInjectionShader, /support <= 0\.0/, 'analytic support exits exactly outside the compact boundary');
+assert.doesNotMatch(analyticInjectionShader, /\bfor\s*\(/, 'fixed analytic morphology remains O(1) per dispatched support cell');
 assert.doesNotMatch(
-  analyticInfluence,
+  analyticInjectionShader,
   /normalize\s*\(/,
-  'the analytic basis is normalized once at descriptor admission, not once per simulation cell',
+  'the analytic basis is normalized once at descriptor admission, not once per dispatched support cell',
+);
+assert.doesNotMatch(
+  core.slice(core.indexOf('const WGSL ='), core.indexOf('const ANALYTIC_EMITTER_INJECTION_WGSL')),
+  /analyticEmitter|analyticCapsuleSignedDistance|analyticCylinderSignedDistance|analyticRibbonSignedDistance|analyticTorusSignedDistance/,
+  'fixed morphology is absent from the ordinary full-grid fluid shader',
 );
 assert.match(core, /fn externalEmitterInfluence\([\s\S]*?for \(var i:/, 'the generic segment carrier remains available for real arbitrary trails');
 
