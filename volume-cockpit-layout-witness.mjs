@@ -443,8 +443,11 @@ try {
     authoritativeActiveLayoutId: authoritativeIndex.activeLayoutId,
   };
 
+  failurePhase = 'browser-event-audit';
+  const browserEventAudit = auditBrowserEvents(socket.browserEvents);
   const report = {
     identity: 'kaminos.volume.cockpit-layout-live-witness.v1',
+    browserEventAudit,
     ok: true,
     requested: {
       url,
@@ -462,7 +465,7 @@ try {
       storeOutageIsolation: lastTrustworthyEvidence.outage,
     },
     gesture: lastTrustworthyEvidence.authored,
-    browserEvents: socket.browserEvents.map(summarizeBrowserEvent),
+    browserEvents: browserEventAudit.events,
     fallbackApplied: false,
   };
   writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
@@ -518,4 +521,29 @@ function firstBrowserFailure(events) {
     || (event.method === 'Log.entryAdded' && event.level === 'error')
     || (event.method === 'Runtime.consoleAPICalled' && event.type === 'error')
   )) || null;
+}
+
+function auditBrowserEvents(events) {
+  const observed = events.map(summarizeBrowserEvent);
+  const allowed = observed.filter(event => (
+    event.method === 'Log.entryAdded'
+    && event.level === 'error'
+    && String(event.url || '').includes('/api/volume-cockpit-layouts')
+    && String(event.text || '').includes('ERR_BLOCKED_BY_CLIENT')
+  ));
+  const rejected = observed.filter(event => (
+    event.method === 'Runtime.exceptionThrown'
+    || (event.method === 'Log.entryAdded' && event.level === 'error')
+    || (event.method === 'Runtime.consoleAPICalled' && event.type === 'error')
+  ) && !allowed.includes(event));
+  if (rejected.length > 0) {
+    throw new TerminalWitnessError(`browser event audit failed: ${JSON.stringify(rejected)}`);
+  }
+  return {
+    observedEventCount: observed.length,
+    allowedExpectedFailureCount: allowed.length,
+    rejectedFailureCount: rejected.length,
+    allowed,
+    events: observed,
+  };
 }

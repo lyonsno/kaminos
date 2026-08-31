@@ -32,6 +32,11 @@ assert.match(
   /lastTrustworthyEvidence,[\s\S]*browserEvents:\s*\(socket\?\.browserEvents\s*\|\|\s*\[\]\)\.map\(summarizeBrowserEvent\)/,
   'terminal failure reports must preserve compact browser events beside the last trustworthy state',
 );
+assert.match(
+  witness,
+  /const browserEventAudit\s*=\s*auditBrowserEvents\(socket\.browserEvents\)[\s\S]*browserEventAudit[\s\S]*ok:\s*true/,
+  'a success report must reject browser errors observed after initial admission instead of merely recording them',
+);
 for (const phase of ['schema-fetch', 'source-layout-build', 'inventory-validation', 'editor-apply', 'store-index']) {
   assert.match(layout, new RegExp(`onPhase\\('${phase}'\\)`), `layout initialization must expose the ${phase} phase`);
 }
