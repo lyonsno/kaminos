@@ -14,10 +14,11 @@ inspectable inference routes, and the workbench that lets them meet.
 
 [![Live WebGPU combustion moving through a chromatic material basin](docs/flame-atlas/assets/live-webgpu-combustion.gif)](docs/flame-atlas/)
 
-This is a live `96^3` WebGPU combustion material under direct control, not a
-prerendered animation. The [Live Combustion Atlas](docs/flame-atlas/) preserves
-six source-timed captures across warm, blue-violet, filament-rich, and
-state-transition basins.
+These films were captured directly from the live browser runtime while one
+stateful WebGPU combustion material was being authored, not prerendered.
+[Live Combustion](docs/flame-atlas/) presents one complete composition, three
+authored transitions, and six compact studies of color, structure, width, and
+state history.
 
 ##  Live Browser Combustion
 
@@ -29,7 +30,7 @@ uses those fields to guide where the volumetric renderer spends work.
 The result is a live material process with:
 
 - dynamic fire and smoke at interactive cadence;
-- a `128^3` simulation route developed on Apple Silicon;
+- live simulation routes developed and profiled on Apple Silicon;
 - combustion-front topology and baked boundary-sidecar fields;
 - support, coverage, ridge, proximity, and footprint guidance;
 - adaptive raymarch and explicit quality controls;

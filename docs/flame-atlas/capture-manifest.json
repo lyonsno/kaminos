@@ -1,5 +1,5 @@
 {
-  "schema": "kaminos.live-combustion-atlas.v1",
+  "schema": "kaminos.live-combustion-screening-room.v2",
   "route": {
     "runtime": "browser-native WebGPU",
     "simulation_grid": 96,
@@ -8,8 +8,65 @@
   },
   "media": [
     {
+      "path": "assets/composition-ooh-baby.mp4",
+      "role": "ignition compression rebirth",
+      "presentation": "composition",
+      "primary": true,
+      "sha256": "423e2b6ee0c9ba43a0bd3055716316d9ab12dddb3396b8b3b51a198705de68ef",
+      "width": 960,
+      "height": 884,
+      "duration_seconds": 29.6,
+      "stream_rate": "60/1",
+      "average_rate": "4435/74",
+      "frame_count": 1774,
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/composition-phase-transition.mp4",
+      "role": "phase transition",
+      "presentation": "composition",
+      "primary": false,
+      "sha256": "a01169d2b67376a660f5c4742d4ad03cb966d9717b4326b75442fe17fa8e0b8b",
+      "width": 960,
+      "height": 884,
+      "duration_seconds": 36.433333,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "frame_count": 2186,
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/composition-warm-morphology.mp4",
+      "role": "warm morphology",
+      "presentation": "composition",
+      "primary": false,
+      "sha256": "98bc0bf6c49de9ae0690758a615ccdad5728af18f8c54e8d61a86ae5d9997bb3",
+      "width": 960,
+      "height": 884,
+      "duration_seconds": 34.266667,
+      "stream_rate": "60/1",
+      "average_rate": "15390/257",
+      "frame_count": 2052,
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/composition-ignition-sting.mp4",
+      "role": "ignition sting",
+      "presentation": "composition",
+      "primary": false,
+      "sha256": "258ca923fc8fafac1ea503fd5ed3e9eef78709b5cce753d6e876187bad457a60",
+      "width": 960,
+      "height": 884,
+      "duration_seconds": 12.783333,
+      "stream_rate": "60/1",
+      "average_rate": "45900/767",
+      "frame_count": 765,
+      "color": "BT.709"
+    },
+    {
       "path": "assets/chromatic-combustion-column.mp4",
       "role": "chromatic column",
+      "presentation": "study",
       "sha256": "bdbfc684349c55ea29a1e04206c915d8e46f07c62d4ad00c632f48f4911b7ed4",
       "width": 960,
       "height": 830,
@@ -21,6 +78,7 @@
     {
       "path": "assets/warm-width-cycle.mp4",
       "role": "warm width cycle",
+      "presentation": "study",
       "sha256": "2562fab113e1b9782443cae6ba601125d012e4293e19ff6b8059c5ae36f1e5d5",
       "width": 960,
       "height": 820,
@@ -32,6 +90,7 @@
     {
       "path": "assets/blue-violet-width-cycle.mp4",
       "role": "blue-violet width cycle",
+      "presentation": "study",
       "sha256": "af13046e2a8e31b473c220044307036f9154b49fc7aeabf41f037dadf2906695",
       "width": 960,
       "height": 820,
@@ -43,6 +102,7 @@
     {
       "path": "assets/violet-filament-drive.mp4",
       "role": "violet filament drive",
+      "presentation": "study",
       "sha256": "fa925d6d9a7dc9de2ada024d9ebd672eaebda67fffa0086cfa2971af7b645333",
       "width": 960,
       "height": 830,
@@ -54,6 +114,7 @@
     {
       "path": "assets/live-contraction.mp4",
       "role": "live contraction",
+      "presentation": "study",
       "sha256": "fdd001027dc6a2e41126f0ae1652a0284cc544fce2b4b0cf3512dbdcc0ef5a94",
       "width": 960,
       "height": 830,
@@ -65,6 +126,7 @@
     {
       "path": "assets/cool-oscillation.mp4",
       "role": "cool oscillation",
+      "presentation": "study",
       "sha256": "c88a736e2e6918c82a6bc8052bfc736a751f7e5a5b5b1712f929cb7fa28a7540",
       "width": 960,
       "height": 820,
@@ -76,6 +138,7 @@
     {
       "path": "assets/live-webgpu-combustion.gif",
       "role": "README lead",
+      "presentation": "readme_lead",
       "sha256": "cbf6dbd912299cf4e597c281b4f53a3f753632a15eb31e735312138c2a8bd3d7",
       "width": 640,
       "height": 554,
@@ -84,5 +147,5 @@
       "frame_count": 108
     }
   ],
-  "claim_boundary": "Recorded-media cadence is not a universal simulator-performance claim."
+  "claim_boundary": "The public screening room makes no simulator frame-rate or quality-tier claim; stream identity describes only the preserved media derivatives."
 }

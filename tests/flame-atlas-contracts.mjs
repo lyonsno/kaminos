@@ -16,18 +16,23 @@ function sha256(relativePath) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-test("flame atlas media, public manifest, and README routes agree", () => {
+test("flame screening room media, hierarchy, and public claims agree", () => {
   const manifest = JSON.parse(read("docs/flame-atlas/capture-manifest.json"));
   const html = read("docs/flame-atlas/index.html");
   const rootReadme = read("README.md");
   const atlasReadme = read("docs/flame-atlas/README.md");
 
-  assert.equal(manifest.schema, "kaminos.live-combustion-atlas.v1");
+  assert.equal(manifest.schema, "kaminos.live-combustion-screening-room.v2");
   assert.equal(manifest.route.simulation_grid, 96);
 
   const motion = manifest.media.filter(({ path: mediaPath }) => mediaPath.endsWith(".mp4"));
-  assert.equal(motion.length, 6);
-  assert.equal(new Set(motion.map(({ role }) => role)).size, 6);
+  const compositions = motion.filter(({ presentation }) => presentation === "composition");
+  const studies = motion.filter(({ presentation }) => presentation === "study");
+  assert.equal(motion.length, 10);
+  assert.equal(compositions.length, 4);
+  assert.equal(studies.length, 6);
+  assert.equal(compositions.filter(({ primary }) => primary).length, 1);
+  assert.equal(new Set(motion.map(({ role }) => role)).size, 10);
 
   for (const media of manifest.media) {
     assert.equal(sha256(media.path), media.sha256, `${media.path} must match its public hash`);
@@ -42,9 +47,17 @@ test("flame atlas media, public manifest, and README routes agree", () => {
   }
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/live-webgpu-combustion\.gif/);
-  assert.match(rootReadme, /\[Live Combustion Atlas\]\(docs\/flame-atlas\/\)/);
+  assert.match(rootReadme, /\[Live Combustion\]\(docs\/flame-atlas\/\)/);
   assert.match(html, /<a href=["']\.\.\/\.\.\/["']>Kaminos<\/a>/);
   assert.doesNotMatch(html, /href=["']\.\.\/\.\.\/README\.md["']/);
   assert.match(atlasReadme, /capture-manifest\.json/);
-  assert.match(manifest.claim_boundary, /not a universal simulator-performance claim/);
+  assert.match(manifest.claim_boundary, /no simulator frame-rate or quality-tier claim/i);
+
+  const publicCopy = `${rootReadme}\n${atlasReadme}\n${html}`;
+  assert.doesNotMatch(publicCopy, /hero settings/i);
+  assert.doesNotMatch(publicCopy, /\b\d+(?:[-–]\d+)?\s*fps\b/i);
+  assert.doesNotMatch(publicCopy, /\b(?:60|30|24|12)\s*\/\s*1\b/);
+  assert.doesNotMatch(publicCopy, /\b(?:96|128|160)\s*(?:\^?3|³)\b/i);
+  assert.match(publicCopy, /captured directly from the live browser runtime/i);
+  assert.doesNotMatch(html, /<video\b[^>]*\sautoplay(?:\s|>)/i);
 });

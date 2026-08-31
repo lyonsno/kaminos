@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="dark">
     <meta name="theme-color" content="#080808">
-    <title>Live Combustion Atlas | Kaminos</title>
+    <title>Live Combustion | Kaminos</title>
     <style>
       :root {
         color-scheme: dark;
@@ -46,10 +46,10 @@
       }
 
       .masthead {
-        min-height: 32vh;
+        min-height: 34vh;
         display: grid;
         align-content: end;
-        padding: 72px 0 34px;
+        padding: 72px 0 38px;
         border-bottom: 1px solid var(--line);
       }
 
@@ -63,6 +63,11 @@
         font-size: 0.82rem;
         font-weight: 650;
         text-transform: uppercase;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 24px;
       }
 
       .nav a {
@@ -86,22 +91,22 @@
         max-width: 920px;
         margin: 0;
         font-family: Georgia, "Times New Roman", serif;
-        font-size: clamp(3rem, 8vw, 7.2rem);
+        font-size: 6.8rem;
         font-weight: 400;
         line-height: 0.93;
         letter-spacing: 0;
       }
 
       .lede {
-        max-width: 760px;
+        max-width: 780px;
         margin: 24px 0 0;
         color: var(--muted);
-        font-size: clamp(1rem, 1.5vw, 1.24rem);
+        font-size: 1.18rem;
         line-height: 1.55;
       }
 
-      .atlas {
-        padding: 28px 0 80px;
+      .screening-room {
+        padding: 30px 0 80px;
       }
 
       .section-label {
@@ -124,11 +129,52 @@
         font-size: 0.78rem;
       }
 
+      .feature {
+        padding-bottom: 70px;
+      }
+
+      .feature-media {
+        width: min(100%, 1020px);
+        margin: 0 auto;
+        aspect-ratio: 960 / 884;
+        background: #000;
+      }
+
+      .feature-media video,
+      .media video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+      }
+
+      .feature-copy {
+        display: grid;
+        grid-template-columns: minmax(220px, 0.7fr) minmax(320px, 1.3fr);
+        gap: 40px;
+        padding: 24px 0 0;
+      }
+
+      .feature-copy h2 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 2.2rem;
+        font-weight: 400;
+      }
+
+      .feature-copy p {
+        max-width: 690px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
       .grid {
         display: grid;
         grid-template-columns: repeat(12, minmax(0, 1fr));
         gap: 14px;
-        margin-bottom: 54px;
+        margin-bottom: 60px;
       }
 
       .clip {
@@ -140,23 +186,14 @@
       }
 
       .media {
-        position: relative;
         width: 100%;
         aspect-ratio: 1 / 1;
         overflow: hidden;
         background: #000;
       }
 
-      video {
-        display: block;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        background: #000;
-      }
-
       .caption {
-        min-height: 102px;
+        min-height: 112px;
         padding: 16px 17px 18px;
         border-top: 1px solid var(--line);
       }
@@ -190,7 +227,7 @@
         display: grid;
         grid-template-columns: minmax(0, 0.8fr) minmax(280px, 1.2fr);
         gap: 40px;
-        padding: 34px 0 74px;
+        padding: 36px 0 74px;
         border-top: 1px solid var(--line);
       }
 
@@ -222,13 +259,18 @@
           margin-bottom: 44px;
         }
 
-        .clip {
-          grid-column: span 6;
+        h1 {
+          font-size: 4.4rem;
         }
 
+        .feature-copy,
         .provenance {
           grid-template-columns: 1fr;
           gap: 18px;
+        }
+
+        .clip {
+          grid-column: span 6;
         }
       }
 
@@ -242,8 +284,22 @@
           font-size: 0.7rem;
         }
 
+        .nav-links {
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 8px;
+        }
+
         h1 {
-          font-size: 3.3rem;
+          font-size: 3.2rem;
+        }
+
+        h1 span {
+          display: block;
+        }
+
+        .lede {
+          font-size: 1rem;
         }
 
         .section-label {
@@ -275,26 +331,81 @@
   <body>
     <header class="masthead">
       <div class="shell">
-        <nav class="nav" aria-label="Atlas navigation">
+        <nav class="nav" aria-label="Screening room navigation">
           <a href="../../">Kaminos</a>
-          <a href="#structural-range">Structural range</a>
+          <div class="nav-links">
+            <a href="#compositions">Compositions</a>
+            <a href="#studies">Studies</a>
+          </div>
         </nav>
         <p class="eyebrow">Browser-native WebGPU material</p>
-        <h1>Live Combustion Atlas</h1>
-        <p class="lede">One stateful volumetric process, driven through warm, cool, filament-rich, and changing-width basins in real time.</p>
+        <h1>Live <span>Combustion</span></h1>
+        <p class="lede">Complete compositions and material studies captured directly from the live browser runtime while one stateful volumetric process was being authored.</p>
       </div>
     </header>
 
-    <main class="shell atlas">
-      <section aria-labelledby="primary-forms">
+    <main class="shell screening-room">
+      <section class="feature" aria-labelledby="lead-composition">
         <div class="section-label">
-          <h2 id="primary-forms">Primary forms</h2>
-          <span>Source-timed, nominal 60/1 stream rate</span>
+          <h2 id="lead-composition">Composition 01</h2>
+          <span>Complete sequence</span>
+        </div>
+        <div class="feature-media">
+          <video src="assets/composition-ooh-baby.mp4" poster="assets/composition-ooh-baby.png" playsinline controls preload="metadata"></video>
+        </div>
+        <div class="feature-copy">
+          <h2>Ignition, compression, rebirth</h2>
+          <p>A violet-rooted ignition grows into a warm column, develops width and lean, constricts toward a needle, then reblooms as a low burner before withdrawing into darkness. Momentum carries every control change through the material already in flight.</p>
+        </div>
+      </section>
+
+      <section id="compositions" aria-labelledby="composition-title">
+        <div class="section-label">
+          <h2 id="composition-title">Authored transitions</h2>
+          <span>Three complete movements</span>
         </div>
         <div class="grid">
           <article class="clip">
             <div class="media">
-              <video src="assets/chromatic-combustion-column.mp4" poster="assets/chromatic-combustion-column.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video src="assets/composition-phase-transition.mp4" poster="assets/composition-phase-transition.png" playsinline controls preload="metadata"></video>
+            </div>
+            <div class="caption">
+              <h3>Phase transition</h3>
+              <p>A cool rooted body expands, narrows, and opens again while the violet interface remains continuous.</p>
+            </div>
+          </article>
+
+          <article class="clip">
+            <div class="media">
+              <video src="assets/composition-warm-morphology.mp4" poster="assets/composition-warm-morphology.png" playsinline controls preload="metadata"></video>
+            </div>
+            <div class="caption">
+              <h3>Warm morphology</h3>
+              <p>A broad amber burner collapses toward a jet, gathers momentum, and rebuilds its body without resetting.</p>
+            </div>
+          </article>
+
+          <article class="clip">
+            <div class="media">
+              <video src="assets/composition-ignition-sting.mp4" poster="assets/composition-ignition-sting.png" playsinline controls preload="metadata"></video>
+            </div>
+            <div class="caption">
+              <h3>Ignition sting</h3>
+              <p>A blue base catches, rises into a hot orange body, constricts, and leaves the frame.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="studies" aria-labelledby="studies-title">
+        <div class="section-label">
+          <h2 id="studies-title">Material studies</h2>
+          <span>Range, structure, and state history</span>
+        </div>
+        <div class="grid">
+          <article class="clip">
+            <div class="media">
+              <video data-autoplay src="assets/chromatic-combustion-column.mp4" poster="assets/chromatic-combustion-column.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Chromatic column</h3>
@@ -304,7 +415,7 @@
 
           <article class="clip">
             <div class="media">
-              <video src="assets/warm-width-cycle.mp4" poster="assets/warm-width-cycle.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video data-autoplay src="assets/warm-width-cycle.mp4" poster="assets/warm-width-cycle.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Warm width cycle</h3>
@@ -314,25 +425,17 @@
 
           <article class="clip">
             <div class="media">
-              <video src="assets/blue-violet-width-cycle.mp4" poster="assets/blue-violet-width-cycle.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video data-autoplay src="assets/blue-violet-width-cycle.mp4" poster="assets/blue-violet-width-cycle.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Blue-violet width cycle</h3>
               <p>A connected cool-spectrum passage with a changing footprint and upper crown.</p>
             </div>
           </article>
-        </div>
-      </section>
 
-      <section id="structural-range" aria-labelledby="structural-range-title">
-        <div class="section-label">
-          <h2 id="structural-range-title">Structural range</h2>
-          <span>Three adjacent material regimes</span>
-        </div>
-        <div class="grid">
           <article class="clip">
             <div class="media">
-              <video src="assets/violet-filament-drive.mp4" poster="assets/violet-filament-drive.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video data-autoplay src="assets/violet-filament-drive.mp4" poster="assets/violet-filament-drive.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Violet filament drive</h3>
@@ -342,7 +445,7 @@
 
           <article class="clip">
             <div class="media">
-              <video src="assets/live-contraction.mp4" poster="assets/live-contraction.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video data-autoplay src="assets/live-contraction.mp4" poster="assets/live-contraction.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Live contraction</h3>
@@ -352,7 +455,7 @@
 
           <article class="clip">
             <div class="media">
-              <video src="assets/cool-oscillation.mp4" poster="assets/cool-oscillation.png" autoplay muted loop playsinline controls preload="metadata"></video>
+              <video data-autoplay src="assets/cool-oscillation.mp4" poster="assets/cool-oscillation.png" muted loop playsinline controls preload="metadata"></video>
             </div>
             <div class="caption">
               <h3>Cool oscillation</h3>
@@ -364,20 +467,15 @@
 
       <section class="provenance" aria-labelledby="capture-boundary">
         <h2 id="capture-boundary">Capture boundary</h2>
-        <p>These are direct screen captures of the live 96<sup>3</sup> WebGPU route, encoded as BT.709 H.264 media with a nominal 60/1 video stream rate and source-timed durations. They are presentation evidence of the material's motion and authorable range, not a claim that every device or basin sustains the media frame rate.</p>
+        <p>These films were captured directly from the live browser runtime while the simulation was being authored. Their source timing is preserved without retiming, interpolation, optical flow, cadence repair, or frame synthesis. This presentation makes no simulator frame-rate, universal device-performance, or final quality-tier claim.</p>
       </section>
     </main>
 
     <script>
-      const videos = [...document.querySelectorAll("video")];
+      const videos = [...document.querySelectorAll("video[data-autoplay]")];
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-      if (reducedMotion) {
-        videos.forEach((video) => {
-          video.autoplay = false;
-          video.pause();
-        });
-      } else if ("IntersectionObserver" in window) {
+      if (!reducedMotion && "IntersectionObserver" in window) {
         const observer = new IntersectionObserver((entries) => {
           entries.forEach((entry) => {
             const video = entry.target;
