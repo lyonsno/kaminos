@@ -44,8 +44,18 @@ assert.doesNotMatch(
 );
 assert.match(
   core,
-  /return vec4<f32>\(displayRadiance, alpha\)/,
-  'kiln source matches the established premultiplied caller-product contract',
+  /fn kilnVisibleSourceCoverage\(result: RaymarchResult, displayRadiance: vec3<f32>\) -> f32[\s\S]*result\.residualFeature\.y[\s\S]*result\.residualFeature\.z[\s\S]*u\.boundary_fire_display\.z[\s\S]*smoothstep/,
+  'kiln source derives a visible optical matte from fire/interface authority and the effective smoke presentation mode',
+);
+assert.match(
+  core,
+  /return vec4<f32>\(displayRadiance \* coverage, rawAlpha \* coverage\)/,
+  'kiln source applies one coverage matte to premultiplied radiance and opacity',
+);
+assert.doesNotMatch(
+  core,
+  /fn fsKilnCompositeSource[\s\S]*?return vec4<f32>\(displayRadiance, alpha\)/,
+  'kiln source cannot retain invisible extinction outside its visible optical support',
 );
 assert.match(
   core,
