@@ -88,4 +88,24 @@ assert.throws(
   /Uint16Array/,
 );
 
+assert.throws(
+  () => createWebGpuWeightRepresentationPlan({
+    sourceDtype: 'fp16',
+    elementCount: Number.MAX_SAFE_INTEGER,
+    candidates: ['f16-packed-u32'],
+    adapterFeatures: [],
+  }),
+  /safe byte lengths/,
+);
+
+assert.throws(
+  () => createWebGpuWeightRepresentationPlan({
+    sourceDtype: 'fp16',
+    elementCount: 8,
+    candidates: ['f16-native'],
+    adapterFeatures: 'shader-f16',
+  }),
+  /iterable collection, not a string/,
+);
+
 console.log('weight representation contracts passed');

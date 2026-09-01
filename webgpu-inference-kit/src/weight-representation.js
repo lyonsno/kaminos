@@ -27,6 +27,9 @@ function alignedGpuBufferByteLength(byteLength) {
 
 function featureSet(adapterFeatures) {
   if (adapterFeatures == null) return new Set();
+  if (typeof adapterFeatures === 'string') {
+    throw new TypeError('adapterFeatures must be an iterable collection, not a string');
+  }
   if (typeof adapterFeatures[Symbol.iterator] !== 'function') {
     throw new TypeError('adapterFeatures must be iterable');
   }
@@ -48,6 +51,9 @@ function validateInput(input) {
   }
   if (!Number.isSafeInteger(input.elementCount) || input.elementCount <= 0) {
     throw new RangeError('elementCount must be a positive safe integer');
+  }
+  if (!Number.isSafeInteger(input.elementCount * 4)) {
+    throw new RangeError('elementCount must produce safe byte lengths');
   }
   if (!Array.isArray(input.candidates) || input.candidates.length === 0) {
     throw new TypeError('candidates must be a non-empty ordered array');
