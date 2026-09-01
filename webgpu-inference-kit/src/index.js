@@ -11,6 +11,12 @@ export {
 } from './tensor-manifest.js';
 
 export {
+  WEBGPU_WEIGHT_REPRESENTATION_PLAN_SCHEMA,
+  createWebGpuWeightRepresentationPlan,
+  packFp16WeightsToU32,
+} from './weight-representation.js';
+
+export {
   WEBGPU_BUFFER_USAGE,
   WEBGPU_COMPUTE_KERNEL_SCHEMA,
   WEBGPU_SHADER_STAGE,
