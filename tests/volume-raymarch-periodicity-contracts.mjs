@@ -111,13 +111,20 @@ function assertRetiredPyroBoundary(source) {
     'initial and live receipts must not advertise retired spatial-atlas authority',
   );
 
-  const reservedWrites = [...source.matchAll(/uniforms\s*\[([^\]]+)\]\s*=\s*([^;]+);/g)]
-    .map(match => ({ expression: match[1].replace(/\s+/g, ''), value: match[2].trim() }))
-    .filter(({ expression }) => /\b(?:88|89|90|91)\b/.test(expression));
-  assert.deepEqual(
-    reservedWrites,
-    [88, 89, 90, 91].map(offset => ({ expression: `${offset}+memoryIndex*4`, value: '0' })),
-    'reserved Pyro upload destinations must have exactly one per-cell zero write each and no later overwrite',
+  const reservedUploadLoop = sourceBetween(
+    source,
+    '    for (let memoryIndex = 0; memoryIndex < 24; memoryIndex += 1) {',
+    '    const pyroInterfaceFocus',
+  );
+  assert.equal(
+    reservedUploadLoop.trim(),
+    `for (let memoryIndex = 0; memoryIndex < 24; memoryIndex += 1) {
+      uniforms[88 + memoryIndex * 4] = 0;
+      uniforms[89 + memoryIndex * 4] = 0;
+      uniforms[90 + memoryIndex * 4] = 0;
+      uniforms[91 + memoryIndex * 4] = 0;
+    }`,
+    'the bounded reserved Pyro upload loop must contain exactly four direct zero writes and no aliases or later overwrite',
   );
 
   const receiptSlices = [
@@ -185,6 +192,15 @@ const retiredPyroMutations = [
       '      uniforms[91 + memoryIndex * 4] = 0;',
       `      uniforms[91 + memoryIndex * 4] = 0;
       uniforms[91 + memoryIndex * 4] = pyroMaterialEnergy;`,
+    ),
+  ],
+  [
+    'aliased reserved destination overwrite',
+    source => source.replace(
+      '      uniforms[91 + memoryIndex * 4] = 0;',
+      `      uniforms[91 + memoryIndex * 4] = 0;
+      const latePyroOffset = 91;
+      uniforms[latePyroOffset + memoryIndex * 4] = pyroMaterialEnergy;`,
     ),
   ],
   [

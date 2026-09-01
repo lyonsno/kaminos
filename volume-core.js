@@ -2925,7 +2925,7 @@ fn fireLickAshCarry(c: vec3<i32>, lick: f32, bonfireBlend: f32) -> f32 {
   return shred * (baseAsh + lick * lickAsh);
 }
 
-fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceGradient = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGradient);
   let localCurl = curlAtCell(c);
@@ -2956,7 +2956,7 @@ fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
-fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceGradient = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGradient);
   let localCurl = curlAtCell(c);
@@ -4133,8 +4133,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
   var bonfireLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 1.0));
   if (fireLickBreakupEnabled) {
-    columnLickBirth = fireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
-    bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, time, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+    columnLickBirth = fireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
+    bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);
