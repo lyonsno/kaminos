@@ -210,7 +210,7 @@ export function boundarySplatInstanceLayout(requestedCount) {
     return [
       (column - (columns - 1) * 0.5 + (row % 2 ? 0.5 : 0)) * spacingX,
       0,
-      (row - (rows - 1) * 0.5) * spacingZ + Math.sin(index * 12.9898) * 0.08,
+      (row - (rows - 1) * 0.5) * spacingZ,
       scale,
     ];
   });
@@ -1918,19 +1918,46 @@ function externalEmitterNowMs() {
   return globalThis.performance?.now?.() ?? Date.now();
 }
 
-function syntheticHandTrailEmitters(nowMs = externalEmitterNowMs()) {
-  const t = nowMs * 0.001;
+export const SYNTHETIC_HAND_TRAIL_MOTION_IDENTITY = 'deterministic-nonperiodic-hand-trail-v0';
+const SYNTHETIC_HAND_TRAIL_KEYFRAME_MS = 900;
+
+function syntheticTrailSignedUnit(step, emitterIndex, channel) {
+  let bits = Math.imul(Math.trunc(step) + 1, 0x45d9f3b)
+    ^ Math.imul(emitterIndex + 11, 0x27d4eb2d)
+    ^ Math.imul(channel + 29, 0x165667b1);
+  bits ^= bits >>> 16;
+  bits = Math.imul(bits, 0x7feb352d);
+  bits ^= bits >>> 15;
+  bits = Math.imul(bits, 0x846ca68b);
+  bits ^= bits >>> 16;
+  return (bits >>> 0) / 0xffffffff * 2 - 1;
+}
+
+function syntheticTrailSmoothUnit(value) {
+  return value * value * (3 - 2 * value);
+}
+
+function syntheticTrailSignal(nowMs, emitterIndex, channel) {
+  const keyframe = Math.max(0, Number(nowMs) || 0) / SYNTHETIC_HAND_TRAIL_KEYFRAME_MS;
+  const step = Math.floor(keyframe);
+  const blend = syntheticTrailSmoothUnit(keyframe - step);
+  const start = syntheticTrailSignedUnit(step, emitterIndex, channel);
+  const end = syntheticTrailSignedUnit(step + 1, emitterIndex, channel);
+  return start + (end - start) * blend;
+}
+
+export function syntheticHandTrailEmitters(nowMs = externalEmitterNowMs()) {
   const emitters = [];
   for (let i = 0; i < 5; i += 1) {
     const f = i - 2;
-    const phase = t * 1.75 + i * 0.72;
-    const x = f * 0.105 + Math.sin(phase * 0.81) * 0.035;
-    const y = -0.58 + Math.sin(phase * 0.63) * 0.28 + i * 0.012;
-    const z = Math.cos(phase * 0.74) * 0.055;
-    const dx = Math.cos(phase * 1.17) * 0.075;
-    const dy = 0.05 + Math.sin(phase * 0.91) * 0.045;
-    const dz = Math.sin(phase * 1.23) * 0.055;
+    const x = f * 0.105 + syntheticTrailSignal(nowMs, i, 0) * 0.025;
+    const y = -0.58 + syntheticTrailSignal(nowMs, i, 1) * 0.18 + i * 0.012;
+    const z = syntheticTrailSignal(nowMs, i, 2) * 0.045;
+    const dx = 0.0675 + syntheticTrailSignal(nowMs, i, 3) * 0.0125;
+    const dy = 0.045 + syntheticTrailSignal(nowMs, i, 4) * 0.020;
+    const dz = syntheticTrailSignal(nowMs, i, 5) * 0.040;
     emitters.push({
+      motionIdentity: SYNTHETIC_HAND_TRAIL_MOTION_IDENTITY,
       start: [x - dx, y - dy, z - dz],
       end: [x + dx, y + dy, z + dz],
       radius: 0.030 + i * 0.002,
