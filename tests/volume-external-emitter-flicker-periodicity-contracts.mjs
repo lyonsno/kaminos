@@ -5,6 +5,10 @@ import { balancedWgslBlock, wgslCallCount } from './helpers/wgsl-guard-ownership
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
+function normalizeWgslStatement(value) {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function assertExternalEmitterFlickerRetired(source) {
   const influence = balancedWgslBlock(source, 'fn externalEmitterInfluence(', {
     label: 'generic external-emitter influence',
@@ -29,6 +33,31 @@ function assertExternalEmitterFlickerRetired(source) {
     influence,
     /let strength = max\(0\.0, emitter\.end_strength\.w\);[\s\S]*?let falloff = exp\([\s\S]*?\* strength\s*\* ageFade\s*\* isActiveEmitter\s*;\s*let w = falloff;/,
     'generic external emitters must apply authored strength through spatial and lifetime falloff without hidden attenuation',
+  );
+  const directCarrierStart = influence.indexOf('let w = falloff;');
+  assert.notEqual(directCarrierStart, -1, 'generic external-emitter direct carrier marker must remain discoverable');
+  const directCarrierTail = influence.slice(directCarrierStart);
+  const actualAccumulations = [...directCarrierTail.matchAll(
+    /\b(result\.(?:material|fire|micro|velocity)(?:\.[xyzw])?)\s*=\s*([^;]+);/g,
+  )].map(match => normalizeWgslStatement(`${match[1]} = ${match[2]};`));
+  const expectedAccumulations = [
+    'result.material.x = max(result.material.x, emitter.material.x * w);',
+    'result.material.y = max(result.material.y, emitter.material.y * w);',
+    'result.material.z = max(result.material.z, emitter.material.z * w);',
+    'result.material.w = max(result.material.w, emitter.detail_lifetime.x * w);',
+    'result.fire.x = max(result.fire.x, emitter.material.w * w);',
+    'result.fire.y = max(result.fire.y, emitter.material.w * w * 0.42);',
+    'result.fire.z = max(result.fire.z, emitter.detail_lifetime.x * w * 0.82);',
+    'result.micro.x = max(result.micro.x, emitter.detail_lifetime.x * w * 0.72);',
+    'result.micro.y = max(result.micro.y, emitter.detail_lifetime.x * w * 0.42 + emitter.material.w * w * 0.12);',
+    'result.micro.z = max(result.micro.z, emitter.material.w * w * 0.60);',
+    'result.micro.w = max(result.micro.w, emitter.material.w * w * 0.22);',
+    'result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);',
+  ].map(normalizeWgslStatement);
+  assert.deepEqual(
+    actualAccumulations,
+    expectedAccumulations,
+    'every external-emitter accumulation must consume direct unattenuated w',
   );
   assert.match(
     injection,
@@ -121,6 +150,14 @@ const falseClosureMutations = [
     'constant authored-strength attenuation',
     source => source.replace('    let w = falloff;', '    let w = falloff * 0.82;'),
     /must apply authored strength through spatial and lifetime falloff without hidden attenuation/,
+  ],
+  [
+    'post-falloff carrier alias attenuation',
+    source => source
+      .replace('    let w = falloff;', '    let w = falloff;\n    let carrierWeight = w * 0.82;')
+      .replaceAll(' * w', ' * carrierWeight')
+      .replace('emitter.velocity_age.xyz * carrierWeight, w)', 'emitter.velocity_age.xyz * carrierWeight, carrierWeight)'),
+    /every external-emitter accumulation must consume direct unattenuated w/,
   ],
   [
     'pre-falloff authored-strength attenuation',

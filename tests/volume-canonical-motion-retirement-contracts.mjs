@@ -27,11 +27,24 @@ function assertCanonicalRetiredPackedComponent(source) {
     label: 'updateUniforms',
   });
   const aliases = new Map(
-    [...source.matchAll(/\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);/g)]
+    [...updateUniforms.matchAll(/\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);/g)]
       .map(match => [match[1], match[2]]),
   );
-  const retiredWrites = [...updateUniforms.matchAll(/\buniforms\s*\[([^\]]+)\]\s*=\s*([^;]+);/g)]
-    .map(match => ({ index: resolveIntegerExpression(match[1], aliases), value: match[2].trim() }))
+  const uniformBases = new Set(['uniforms']);
+  for (let pass = 0; pass < 8; pass += 1) {
+    let changed = false;
+    for (const [name, expression] of aliases) {
+      const base = expression.trim();
+      if (/^[A-Za-z_]\w*$/.test(base) && uniformBases.has(base) && !uniformBases.has(name)) {
+        uniformBases.add(name);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  const retiredWrites = [...updateUniforms.matchAll(/\b([A-Za-z_]\w*)\s*\[([^\]]+)\]\s*(?:\+=|-=|\*=|\/=|=)\s*([^;]+);/g)]
+    .filter(match => uniformBases.has(match[1]))
+    .map(match => ({ index: resolveIntegerExpression(match[2], aliases), value: match[3].trim() }))
     .filter(write => write.index === 73);
   assert.equal(retiredWrites.length, 1, 'retired Canonical packed component must have exactly one CPU write');
   assert.equal(
@@ -195,6 +208,19 @@ assert.throws(
   () => assertCanonicalRetiredPackedComponent(aliasedPackedAuthority),
   /must have exactly one CPU write/,
   'the barrier rejects an added aliased nonzero write even when the blessed zero line remains',
+);
+
+const aliasedUniformBaseAuthority = core.replace(
+  'uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;',
+  `uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
+    const restoredUniformsAlias = uniforms;
+    restoredUniformsAlias[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);`,
+);
+assert.notEqual(aliasedUniformBaseAuthority, core, 'the aliased uniform-base false-closure mutation must alter source');
+assert.throws(
+  () => assertCanonicalRetiredPackedComponent(aliasedUniformBaseAuthority),
+  /must have exactly one CPU write/,
+  'the barrier rejects a retired-slot write through an alias of the uniforms base array',
 );
 
 const indexedPackedAuthority = core.replace(
