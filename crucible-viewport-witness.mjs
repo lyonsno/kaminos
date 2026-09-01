@@ -814,7 +814,7 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
             metadata: {
               workloadIdentity: 'foreground-opportunity-no-render-v0',
               presentationIsolation: 'no-render',
-              serviceAuthorityPolicy: 'presented-raf-or-non-present-fallback',
+              serviceAuthorityPolicy: 'observed-raf-callback-or-non-present-fallback',
               routeId: context.routeId || null,
               runId: context.runId || null,
               stage: context.stage || null,
@@ -1302,6 +1302,46 @@ function validateNoRenderAssayEvidence(assay) {
   if (assay?.nonPresentFallbackCount !== nonPresentFallbackCount) failures.push('non-present-fallback-count-mismatch');
   if (observedRafCallbackCount + nonPresentFallbackCount !== assay?.serviceCount) failures.push('service-mode-count-incomplete');
   return [...new Set(failures)];
+}
+
+function assembleNoRenderTerminalEvidence({
+  enabled,
+  assay,
+  fullRoute,
+  lastTrustworthyEvidence,
+} = {}) {
+  if (!enabled) {
+    return {
+      ok: true,
+      failures: [],
+      fullRoute,
+      lastTrustworthyEvidence,
+    };
+  }
+  const failures = validateNoRenderAssayEvidence(assay);
+  const retainedEvidence = {
+    ...(lastTrustworthyEvidence || {}),
+    noRenderAssay: assay || null,
+    noRenderAssayFailures: failures,
+  };
+  if (failures.length) {
+    return {
+      ok: false,
+      failures,
+      fullRoute: null,
+      lastTrustworthyEvidence: retainedEvidence,
+    };
+  }
+  return {
+    ok: true,
+    failures,
+    fullRoute: {
+      ...(fullRoute || {}),
+      noRenderAssay: assay,
+      noRenderAssayFailures: failures,
+    },
+    lastTrustworthyEvidence: retainedEvidence,
+  };
 }
 
 function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }) {
@@ -2096,17 +2136,6 @@ try {
           : null,
       },
     };
-    if (noRenderAssay) {
-      browserFiringEvidence.noRenderAssayFailures = validateNoRenderAssayEvidence(browserFiringEvidence.noRenderAssay);
-      lastTrustworthyEvidence = {
-        ...lastTrustworthyEvidence,
-        noRenderAssay: browserFiringEvidence.noRenderAssay,
-        noRenderAssayFailures: browserFiringEvidence.noRenderAssayFailures,
-      };
-      if (browserFiringEvidence.noRenderAssayFailures.length) {
-        throw new Error(`No-render assay evidence is incomplete or invalid: ${browserFiringEvidence.noRenderAssayFailures.join(', ')}`);
-      }
-    }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       throw new Error(`Friendly firing did not expose an effective hybrid frame for visual capture: ${JSON.stringify(inFlightCapture)}`);
     }
@@ -2186,10 +2215,22 @@ try {
       });
     }
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
-    state.fullRoute = projectFriendlyFiringEvidence({
+    const projectedFullRoute = projectFriendlyFiringEvidence({
       browserFiringEvidence,
       pipelineReport,
     });
+    const noRenderTerminalAdmission = assembleNoRenderTerminalEvidence({
+      enabled: noRenderAssay,
+      assay: browserFiringEvidence.noRenderAssay,
+      fullRoute: projectedFullRoute,
+      lastTrustworthyEvidence,
+    });
+    lastTrustworthyEvidence = noRenderTerminalAdmission.lastTrustworthyEvidence;
+    browserFiringEvidence.noRenderAssayFailures = noRenderTerminalAdmission.failures;
+    if (!noRenderTerminalAdmission.ok) {
+      throw new Error(`No-render assay evidence is incomplete or invalid: ${noRenderTerminalAdmission.failures.join(', ')}`);
+    }
+    state.fullRoute = noRenderTerminalAdmission.fullRoute;
     state.fullRoute.hostGapCorrelation = correlateForegroundGapsWithHostEvents({
       firingId: state.fullRoute.foregroundKilnHeartbeat?.firingId,
       foregroundClock: state.fullRoute.foregroundKilnHeartbeat?.clock,

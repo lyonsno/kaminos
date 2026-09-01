@@ -48,7 +48,7 @@ assert.match(
 );
 assert.doesNotMatch(
   witness,
-  /serviceMode:\s*'presented-raf'|presentationObserved:\s*true/,
+  /presented-raf|presentationObserved:\s*true/,
   'A bare browser rAF callback must not impersonate rendered or presented product-frame evidence',
 );
 assert.match(
@@ -65,6 +65,11 @@ assert.match(
   witness,
   /validateNoRenderAssayEvidence[\s\S]*productHookAssignments[\s\S]*requestCount[\s\S]*serviceCount[\s\S]*commandBufferCount/,
   'Terminal success must validate complete no-render assignment, request, service, and zero-submission evidence',
+);
+assert.match(
+  witness,
+  /assembleNoRenderTerminalEvidence[\s\S]*state\.fullRoute = noRenderTerminalAdmission\.fullRoute[\s\S]*successfulReportPayload = \{[\s\S]*state,/,
+  'The live success-report path must consume the shared no-render terminal admission result',
 );
 assert.doesNotMatch(
   witness,
@@ -1134,10 +1139,18 @@ assert.equal(fallbackReceipt.fallbackReason, 'raf-suspended-or-delayed');
 assert.equal(fallbackReceipt.rafTimestampMs, null);
 
 const noRenderValidatorSource = witness.match(
-  /function validateNoRenderAssayEvidence\([\s\S]*?\n}\n(?=\nfunction projectFriendlyFiringEvidence)/,
+  /function validateNoRenderAssayEvidence\([\s\S]*?\n}\n(?=\nfunction assembleNoRenderTerminalEvidence)/,
 );
 assert.ok(noRenderValidatorSource, 'witness must expose executable terminal no-render admission');
 const validateNoRenderAssayEvidence = vm.runInNewContext(`(${noRenderValidatorSource[0]})`);
+const noRenderAssemblerSource = witness.match(
+  /function assembleNoRenderTerminalEvidence\([\s\S]*?\n}\n(?=\nfunction projectFriendlyFiringEvidence)/,
+);
+assert.ok(noRenderAssemblerSource, 'witness must expose shared no-render terminal report assembly');
+const assembleNoRenderTerminalEvidence = vm.runInNewContext(`(() => {
+  const validateNoRenderAssayEvidence = (${noRenderValidatorSource[0]});
+  return (${noRenderAssemblerSource[0]});
+})()`);
 const validNoRenderAssay = {
   schema: 'kaminos.current-source-no-render-assay.v0',
   status: 'armed',
@@ -1154,6 +1167,18 @@ const validNoRenderAssay = {
   })),
 };
 assert.equal(validateNoRenderAssayEvidence(validNoRenderAssay).length, 0);
+const validTerminalAdmission = assembleNoRenderTerminalEvidence({
+  enabled: true,
+  assay: validNoRenderAssay,
+  fullRoute: { status: 'complete', output: { sha256: 'abc' } },
+  lastTrustworthyEvidence: { preflight: 'preserved' },
+});
+assert.equal(validTerminalAdmission.ok, true);
+assert.equal(validTerminalAdmission.failures.length, 0);
+assert.equal(validTerminalAdmission.fullRoute.noRenderAssay.services.length, 2);
+assert.equal(validTerminalAdmission.fullRoute.output.sha256, 'abc');
+assert.equal(validTerminalAdmission.lastTrustworthyEvidence.preflight, 'preserved');
+assert.equal(validTerminalAdmission.lastTrustworthyEvidence.noRenderAssay.services.length, 2);
 for (const [label, mutate, expectedFailure] of [
   ['missing assignment', value => { value.productHookAssignments = 0; }, 'product-hook-unassigned'],
   ['zero requests', value => { value.requestCount = 0; }, 'request-count-empty'],
@@ -1166,6 +1191,18 @@ for (const [label, mutate, expectedFailure] of [
   const candidate = structuredClone(validNoRenderAssay);
   mutate(candidate);
   assert.ok(validateNoRenderAssayEvidence(candidate).includes(expectedFailure), `terminal no-render evidence must reject ${label}`);
+  const rejectedTerminal = assembleNoRenderTerminalEvidence({
+    enabled: true,
+    assay: candidate,
+    fullRoute: { status: 'complete', output: { sha256: 'must-not-be-admitted' } },
+    lastTrustworthyEvidence: { preflight: 'preserved' },
+  });
+  assert.equal(rejectedTerminal.ok, false, `terminal report assembly must reject ${label}`);
+  assert.equal(rejectedTerminal.fullRoute, null, `terminal report assembly must withhold success state for ${label}`);
+  assert.ok(rejectedTerminal.failures.includes(expectedFailure));
+  assert.equal(rejectedTerminal.lastTrustworthyEvidence.preflight, 'preserved');
+  assert.equal(rejectedTerminal.lastTrustworthyEvidence.noRenderAssay.services.length, candidate.services.length);
+  assert.ok(rejectedTerminal.lastTrustworthyEvidence.noRenderAssayFailures.includes(expectedFailure));
 }
 
 const projectedEvidence = projectFriendlyFiringEvidence({
