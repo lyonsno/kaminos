@@ -3667,43 +3667,48 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.92, 1.32, sourceCenter.y));
   let canonicalSourceY = canonicalSourceYControl;
   let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
+  let transportedSourceStructure = clamp(
+    material.w * 0.24
+      + fireLayer.z * 0.20
+      + fireLayer.w * 0.36
+      + microLayer.x * 0.08
+      + microLayer.y * 0.24
+      + microLayer.z * 0.12
+      + combustionFrontTopology * 0.32,
+    0.0,
+    1.6
+  );
+  let sourceSpatialDephase = hash31(vec3<f32>(
+    f32(cellI.x) * 0.173 + f32(cellI.y) * 0.071,
+    f32(cellI.y) * 0.193 + f32(cellI.z) * 0.059,
+    f32(cellI.z) * 0.157 + f32(cellI.x) * 0.083
+  )) - 0.5;
+  let sourceSpatialDephaseB = hash31(vec3<f32>(
+    f32(cellI.z) * 0.211 + 17.0,
+    f32(cellI.x) * 0.137 + 31.0,
+    f32(cellI.y) * 0.181 + 47.0
+  )) - 0.5;
   let breakup = clamp(
-    0.64
-      + 0.24 * sin(p.x * 19.0 * tallPlumeTransportedDetailFrequency + p.z * 7.0 * tallPlumeTransportedDetailFrequency + time * 1.7)
-      + 0.20 * cos(p.z * 23.0 * tallPlumeTransportedDetailFrequency - p.x * 5.0 * tallPlumeTransportedDetailFrequency - time * 1.3)
-      + 0.16 * hash31(vec3<f32>(gid) * 0.061 * tallPlumeTransportedDetailFrequency + vec3<f32>(floor(time * 2.0))),
-    0.16,
-    1.22
+    0.82 + transportedSourceStructure * 0.16 + sourceSpatialDephase * 0.12,
+    0.62,
+    1.14
   );
   var bonfireSourceBreakup = 0.0;
   var bonfireDetailBreakup = breakup;
   let smokeSourceFalloff = 1.0 / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius);
   let fireSourceFalloff = 1.0 / max(0.0036, scaledSourceRadius * scaledSourceRadius);
-  let tallPlumeSmokeDebandAngle = atan2(sourceCenter.z, sourceCenter.x);
-  let tallPlumeSmokeDebandWarp = sourceCenter.xz
-    + vec2<f32>(
-      sin(sourceCenter.z * 8.7 + sourceCenter.y * 4.9 + time * 0.23),
-      cos(sourceCenter.x * 7.9 - sourceCenter.y * 4.3 - time * 0.19)
-    ) * scaledSmokeSourceRadius * 0.28;
-  let tallPlumeSmokeDebandBasis = clamp(
-    0.78
-      + 0.11 * sin(length(tallPlumeSmokeDebandWarp) * 22.0 - sourceCenter.y * 6.4 + time * 0.42)
-      + 0.08 * cos(tallPlumeSmokeDebandAngle * 5.0 + sourceCenter.y * 7.2 - time * 0.31)
-      + 0.07 * (hash31(floor(vec3<f32>(
-        tallPlumeSmokeDebandWarp.x * 11.0,
-        sourceCenter.y * 9.0,
-        tallPlumeSmokeDebandWarp.y * 11.0
-      ))) - 0.5),
-    0.46,
-    1.16
+  let tallPlumeSmokeSourceBreakup = clamp(
+    0.86
+      + transportedSourceStructure * 0.10
+      + sourceSpatialDephase * 0.08
+      + sourceSpatialDephaseB * 0.06,
+    0.68,
+    1.10
   );
-  let tallPlumeSmokeSourceBreakup = tallPlumeSmokeDebandBasis;
   let columnSource = exp(-sourceRadial * sourceRadial * smokeSourceFalloff) * sourceBand * mix(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene) * inputFlow;
   let tallPlumeEmitterBand = smoothstep(-0.25, -0.10, sourceCenter.y) * (1.0 - smoothstep(0.12, 0.40, sourceCenter.y));
   let tallPlumeSourceWidthGate = tallPlumeScene * smoothstep(0.095, 0.180, scaledSourceRadius);
   let tallPlumeSourceRadial01 = clamp(sourceRadial / max(scaledSourceRadius, 0.001), 0.0, 3.0);
-  let tallPlumeFrontPacketDensity = mix(1.0, 2.25, tallPlumeSourceWidthGate);
-  let tallPlumeSourceAngle = tallPlumeSmokeDebandAngle;
   let tallPlumeAnnularFrontRadius = mix(0.70, 0.86, tallPlumeSourceWidthGate);
   let tallPlumeAnnularFrontWidth = 0.18 - tallPlumeSourceWidthGate * 0.035;
   let tallPlumeAnnularFrontBand = exp(
@@ -3711,12 +3716,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       / max(0.0025, tallPlumeAnnularFrontWidth * tallPlumeAnnularFrontWidth)
   );
   let tallPlumeFrontPacketBreakup = clamp(
-    0.72
-      + (breakup - 0.64) * 0.38
-      + 0.16 * sin(tallPlumeSourceAngle * (4.0 + tallPlumeFrontPacketDensity * 2.0) + sourceRadial * (23.0 + tallPlumeFrontPacketDensity * 7.0) - time * 1.45)
-      + 0.12 * cos(tallPlumeSourceAngle * (7.0 + tallPlumeFrontPacketDensity) - p.y * 13.0 + time * 1.10),
-    0.36,
-    1.34
+    0.84
+      + (breakup - 0.82) * 0.38
+      + fireLayer.w * 0.12
+      + combustionFrontTopology * 0.14
+      + sourceSpatialDephaseB * 0.08,
+    0.62,
+    1.16
   );
   let tallPlumeInteriorFireRelief = mix(
     1.0,
@@ -3724,12 +3730,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     tallPlumeSourceWidthGate
   );
   let tallPlumeEmitterBreakup = clamp(
-    0.70
-      + (breakup - 0.64) * 0.62
-      + 0.14 * sin(p.y * 18.0 + sourceRadial * 21.0 - time * 1.55)
-      + 0.10 * cos(p.x * 16.0 - p.z * 13.0 + time * 1.10),
-    0.28,
-    1.18
+    0.82
+      + (breakup - 0.82) * 0.62
+      + fireLayer.z * 0.10
+      + microLayer.y * 0.12
+      + sourceSpatialDephase * 0.07,
+    0.60,
+    1.14
   );
   let tallPlumeAnnularFrontBirth = tallPlumeSourceWidthGate
     * tallPlumeEmitterBand
@@ -3742,18 +3749,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * inputFlow
     * tallPlumeInteriorFireRelief
     + tallPlumeAnnularFrontBirth * 0.34;
-  let canonicalSourceCell = vec2<f32>(
-    sin(p.x * 8.1 + p.z * 2.7 + canonicalPhaseTime * 0.43),
-    cos(p.z * 7.6 - p.x * 3.2 - canonicalPhaseTime * 0.39)
-  );
-  let canonicalSourceWarp = sourceCenter.xz + canonicalSourceCell * scaledSmokeSourceRadius * 0.16;
+  let canonicalSourceWarp = sourceCenter.xz;
   let canonicalSourceBreakup = clamp(
-    0.78
-      + 0.16 * sin(atan2(p.z, p.x) * 3.0 + canonicalPhaseTime * 0.33)
-      + 0.12 * cos(sourceRadial * 22.0 - canonicalPhaseTime * 0.46)
-      + 0.08 * hash31(vec3<f32>(p.x * 5.0, p.y * 2.0, p.z * 5.0) + vec3<f32>(floor(canonicalPhaseTime * 0.75))),
-    0.48,
-    1.18
+    0.86
+      + transportedSourceStructure * 0.14
+      + sourceSpatialDephaseB * 0.10,
+    0.68,
+    1.12
   );
   let canonicalSource = exp(-dot(canonicalSourceWarp, canonicalSourceWarp) / max(0.0048, scaledSmokeSourceRadius * scaledSmokeSourceRadius * 1.20))
     * canonicalSourceBand
