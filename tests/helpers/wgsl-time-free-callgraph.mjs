@@ -21,12 +21,15 @@ const WGSL_BUILTINS = new Set([
   'exp2',
   'f32',
   'floor',
+  'for',
   'fract',
   'i32',
+  'if',
   'inverseSqrt',
   'length',
   'log',
   'log2',
+  'loop',
   'max',
   'min',
   'mix',
@@ -51,6 +54,7 @@ const WGSL_BUILTINS = new Set([
   'vec3',
   'vec4',
   'workgroupBarrier',
+  'while',
 ]);
 
 const TEMPORAL_TOKEN = /\b(?:time|frame|canonicalPhaseTime)\b|\b[A-Za-z_]\w*_(?:time|frame)\b/i;
