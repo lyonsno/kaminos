@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 185,
+  "controlCount": 187,
   "controls": [
     {
       "key": "volume-scene",
@@ -25,6 +25,20 @@
     {
       "key": "volume-phased-sway",
       "param": "volume_phased_sway",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-procedural-detail-forces",
+      "param": "volume_procedural_detail_forces",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-procedural-transport-slip",
+      "param": "volume_procedural_transport_slip",
       "tagName": "INPUT",
       "type": "checkbox",
       "additiveDefault": true

@@ -94,6 +94,23 @@ assert.doesNotMatch(
   /fn\s+samplePyroMaterialMemoryCell\b/,
   'the synthetic Pyro atlas sampler must be removed from shader authority',
 );
+assert.doesNotMatch(
+  core,
+  /u\.pyro_detail_cells\s*\[/,
+  'the reserved Pyro uniform slots must not regain shader authority through a renamed sampler or inline read',
+);
+assert.doesNotMatch(
+  core,
+  /identity:\s*'pyro-material-memory-spatial-coupling-v0'|updateRule:\s*'pyro-cellular-detail-memory-deterministic-ca-v0'|(?:materialShaderReadiness|shaderReadiness):\s*'blocked-reset'/,
+  'initial and live receipts must not advertise retired spatial-atlas authority',
+);
+for (const componentOffset of [88, 89, 90, 91]) {
+  assert.match(
+    core,
+    new RegExp(`uniforms\\[${componentOffset} \\+ memoryIndex \\* 4\\] = 0;`),
+    `reserved Pyro uniform component ${componentOffset - 88} must remain zero`,
+  );
+}
 assert.match(
   core,
   /materialShaderReadiness:\s*'retired-synthetic-atlas'/,

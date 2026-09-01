@@ -28,7 +28,7 @@ for (const [id, param, controlKey] of [
   );
   assert.deepEqual(
     schema.controls.find(control => control.key === id),
-    { key: id, param, tagName: 'INPUT', type: 'checkbox' },
+    { key: id, param, tagName: 'INPUT', type: 'checkbox', additiveDefault: true },
     `${id} is persisted by the strict preset inventory`,
   );
   assert.ok(

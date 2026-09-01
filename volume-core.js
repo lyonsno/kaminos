@@ -2897,7 +2897,8 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
 
 fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
-  let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06);
+  let proceduralTransportSlip = step(0.5, u.artistic_motion_controls.w);
+  let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06) * proceduralTransportSlip;
   let slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
   let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
@@ -4094,6 +4095,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let artisticSwirl = step(0.5, u.artistic_motion_controls.x);
   let phasedSway = step(0.5, u.artistic_motion_controls.y);
+  let proceduralDetailForces = step(0.5, u.artistic_motion_controls.z);
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
   let fireLickBreakupEnabled = fireLickOperatorGain > 0.0005;
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
@@ -4162,12 +4164,12 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
   let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
   let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
-  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
-  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
-  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
+  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
+  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
+  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
   let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
-  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
+  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
@@ -7901,17 +7903,17 @@ export function createKaminosVolumePrototype({
     pressureTierEffectiveBounds: null,
     pressureTierOverlayOpacity: DEFAULT_PRESSURE_TIER_OVERLAY,
     pyroMaterialRendererCoupling: {
-      identity: 'pyro-material-memory-spatial-coupling-v0',
+      identity: 'pyro-transported-field-coupling-v0',
       lineage: 'pyro-material-memory-render-coupling-v0',
-      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      visualRole: 'opt-in-transported-field-coupling-no-synthetic-atlas',
       requestedGain: 0,
       effectiveGain: 0,
-      materialShaderReadiness: 'blocked-reset',
+      materialShaderReadiness: 'retired-synthetic-atlas',
       energy: 0,
       liveFireAuthority: 0,
       smokeAuthority: 0,
       spatialMemory: {
-        identity: 'pyro-material-memory-spatial-coupling-v0',
+        identity: 'retired-pyro-material-memory-spatial-coupling-v0',
         textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
         uploadedCells: 0,
       },
@@ -7942,8 +7944,8 @@ export function createKaminosVolumePrototype({
       identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
-      visualRole: 'debug-atlas-only-not-main-fire',
+      updateRule: 'retired-synthetic-atlas-uniform-energy-envelope-v0',
+      visualRole: 'retired-synthetic-atlas-debug-history-not-renderer-authority',
       enabled: normalizePyroDynamicDetailEnabled(controlsSnapshot.pyroDynamicDetail),
       confidence: 0,
       liveFireAuthority: 0,
@@ -7959,9 +7961,9 @@ export function createKaminosVolumePrototype({
         identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
         authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
         resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-        visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+        visualRole: 'retired-synthetic-atlas-not-renderer-authority',
         textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
-        shaderReadiness: 'blocked-reset',
+        shaderReadiness: 'retired-synthetic-atlas',
         sampleVector4: new Array(24).fill(0).map(() => [0, 0, 0, 0]),
         energyMean: 0,
       },
@@ -11686,8 +11688,8 @@ export function createKaminosVolumePrototype({
     );
     uniforms[364] = controlsSnapshot.artisticSwirl === false ? 0 : 1;
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
-    uniforms[366] = 0;
-    uniforms[367] = 0;
+    uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
+    uniforms[367] = controlsSnapshot.proceduralTransportSlip === false ? 0 : 1;
     volumePresentationControls[0] = volumeExposure;
     device.queue.writeBuffer(volumePresentationControlsBuffer, 0, volumePresentationControls);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -11746,6 +11748,8 @@ export function createKaminosVolumePrototype({
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
     state.artisticSwirl = uniforms[364] >= 0.5;
     state.phasedSway = uniforms[365] >= 0.5;
+    state.proceduralDetailForces = uniforms[366] >= 0.5;
+    state.proceduralTransportSlip = uniforms[367] >= 0.5;
     state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
@@ -21022,6 +21026,8 @@ export function createKaminosVolumePrototype({
       state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
       state.artisticSwirl = controlsSnapshot.artisticSwirl !== false;
       state.phasedSway = controlsSnapshot.phasedSway !== false;
+      state.proceduralDetailForces = controlsSnapshot.proceduralDetailForces !== false;
+      state.proceduralTransportSlip = controlsSnapshot.proceduralTransportSlip !== false;
       state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
       state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
       state.adaptiveRaymarch = controlsSnapshot.adaptiveRays ?? 0.65;
