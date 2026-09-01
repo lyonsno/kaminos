@@ -1577,7 +1577,9 @@ assert.match(core, /transportedMicrodetailAdvection\(cell, advectVelocity, speed
 assert.match(core, /bonfireDetailLateralDamping = bonfireLocalLateralForceGain/, 'bonfire detail-force lateral authority preserves local zero-wind convection');
 assert.match(core, /isBonfireInitialScene/, 'initial fluid seed detects bonfire scene for centered no-wind reset state');
 assert.match(core, /seedLateralVelocity = isBonfireInitialScene \? 0 : 0\.11/, 'bonfire reset seed must not start with hidden swirl velocity');
-assert.match(core, /radialSeedDetail/, 'bonfire reset seed uses radial detail fields instead of directional fx/fz patterning');
+assert.match(core, /seedKeyX = isBonfireInitialScene \? Math\.round\(Math\.abs\(dx\)/, 'bonfire reset seed mirrors source-relative X before deterministic dephasing');
+assert.match(core, /seedKeyZ = isBonfireInitialScene \? Math\.round\(Math\.abs\(dz\)/, 'bonfire reset seed mirrors source-relative Z before deterministic dephasing');
+assert.match(core, /deterministicInitialSeedUnit/, 'bonfire reset seed uses deterministic spatial dephasing instead of directional or periodic patterning');
 assert.match(core, /state\.windStrength/, 'debug state exposes effective explicit wind strength');
 assert.match(core, /state\.windAngle/, 'debug state exposes effective explicit wind direction');
 assert.match(core, /state\.windHeight/, 'debug state exposes effective explicit wind height/ramp');

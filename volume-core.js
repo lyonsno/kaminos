@@ -8689,6 +8689,18 @@ export function createKaminosVolumePrototype({
     };
   }
 
+  function deterministicInitialSeedUnit(x, y, z, salt) {
+    let h = Math.imul((x | 0) ^ (salt | 0), 0x45d9f3b);
+    h = Math.imul(h ^ (y | 0), 0x119de1f3);
+    h = Math.imul(h ^ (z | 0), 0x3449f5d);
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x45d9f3b);
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x119de1f3);
+    h ^= h >>> 16;
+    return (h >>> 0) / 0xffffffff;
+  }
+
   function makeInitialFluid(nextGridSize) {
     const data = new Float32Array(gridCellCount(nextGridSize) * FLUID_COMPONENTS);
     const initialScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
@@ -8707,30 +8719,30 @@ export function createKaminosVolumePrototype({
           const dy = fy - sourcePrimitive.position[1];
           const dz = fz - sourcePrimitive.position[2];
           const radial = Math.hypot(dx, dz);
-          const fireScale = Math.max(0.35, Math.min(1.3, controlsSnapshot.fireScale ?? 0.86));
-          const detailScale = Math.max(0.45, Math.min(3.2, controlsSnapshot.detailScale ?? 1.75));
           const plumeHeight = Math.max(0.7, Math.min(2.2, controlsSnapshot.plumeHeight ?? 1.45));
           const plumeHeight01 = Math.max(0, Math.min(1, (plumeHeight - 0.7) / 1.5));
-          const scaledDetailFrequency = Math.max(0.55, Math.min(5.4, detailScale / Math.max(fireScale, 0.45)));
-          const seedDetailFrequency = isTallInitialScene ? 1 : scaledDetailFrequency;
           const inputRadius = sourcePrimitive.radius * (0.92 + (1.08 - 0.92) * plumeHeight01);
           const inputFlow = sourcePrimitive.flowRate;
           const seedBonfireSourceY = isBonfireInitialScene ? 0.62 : -0.74;
           const seedSourceY = volumePrimitives.length > 0 ? sourcePrimitive.position[1] : seedBonfireSourceY;
           const seedSourceDistance = fy - seedSourceY;
           const source = Math.exp(-(radial * radial) / Math.max(0.0036, inputRadius * inputRadius)) * Math.max(0, 1 - Math.abs(seedSourceDistance) * 4.2) * inputFlow;
-          const angle = Math.atan2(dz, dx);
-          const azimuthalSeedA = 0.5 + 0.5 * Math.sin(angle * 5 + radial * 19 * seedDetailFrequency + fy * 6);
-          const azimuthalSeedB = 0.5 + 0.5 * Math.cos(angle * 7 - radial * 13 * seedDetailFrequency + fy * 4);
-          const azimuthalSeedC = 0.5 + 0.5 * Math.sin(angle * 3 + fx * fz * 31 * seedDetailFrequency - fy * 8);
-          const radialSeedDetail = 0.34 + 0.66 * Math.sin((radial * 29 * seedDetailFrequency) + (fy * 5)) ** 2;
+          const seedKeyX = isBonfireInitialScene ? Math.round(Math.abs(dx) * nextGridSize * 0.5) : x;
+          const seedKeyY = y;
+          const seedKeyZ = isBonfireInitialScene ? Math.round(Math.abs(dz) * nextGridSize * 0.5) : z;
+          const seedNoiseA = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x1f123bb5);
+          const seedNoiseB = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x5f356495);
+          const seedNoiseC = deterministicInitialSeedUnit(seedKeyX, seedKeyY, seedKeyZ, 0x3c6ef372);
+          const seedNoiseACentered = seedNoiseA - 0.5;
+          const seedNoiseBCentered = seedNoiseB - 0.5;
+          const seedNoiseCCentered = seedNoiseC - 0.5;
           const seedMaterialDetail = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.26 + 0.36 * radialSeedDetail + 0.24 * azimuthalSeedA + 0.14 * azimuthalSeedB
+              ? 0.58 + seedNoiseACentered * 0.18 + seedNoiseBCentered * 0.12
               : isTallInitialScene
                 ? 0
-                : 0.35 + 0.65 * Math.sin((fx * 18 * seedDetailFrequency) + (fz * 11 * seedDetailFrequency)) ** 2;
+                : 0.50 + seedNoiseACentered * 0.22;
           const seedVisibleAboveSource = isBonfireInitialScene ? seedBonfireSourceY - fy : fy + 0.74;
           const seedVisibleHeightRelief = Math.max(0, Math.min(1, (seedVisibleAboveSource - 0.012) / 0.25));
           const seedVisibleRadialRelief = Math.max(0, Math.min(1, (radial - inputRadius * 0.28) / Math.max(0.001, inputRadius * 0.86)));
@@ -8743,28 +8755,28 @@ export function createKaminosVolumePrototype({
           const seedBonfireFlame = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? (0.22 + 0.28 * radialSeedDetail + 0.22 * azimuthalSeedA + 0.18 * azimuthalSeedC) * seedBonfireFlameSourceRelief
+              ? (0.58 + seedNoiseACentered * 0.14 + seedNoiseCCentered * 0.10) * seedBonfireFlameSourceRelief
               : 0.90;
           const seedVisibleFireCarrier = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? (0.28 + 0.32 * Math.cos((radial * 23 * seedDetailFrequency) - (fy * 3)) ** 2 + 0.26 * azimuthalSeedB + 0.14 * azimuthalSeedC) * seedVisibleFireCarrierRelief
-              : 0.30 + 0.70 * Math.cos((fx * 13 * seedDetailFrequency) - (fz * 17 * seedDetailFrequency)) ** 2;
+              ? (0.60 + seedNoiseBCentered * 0.16 + seedNoiseCCentered * 0.10) * seedVisibleFireCarrierRelief
+              : 0.60 + seedNoiseBCentered * 0.20;
           const seedMicroSmoke = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.20 + 0.30 * Math.sin((radial * 31 * seedDetailFrequency) + (fy * 4)) ** 2 + 0.30 * azimuthalSeedA + 0.20 * azimuthalSeedC
-              : 0.22 + 0.78 * Math.sin((fx * 31 * seedDetailFrequency) - (fz * 19 * seedDetailFrequency)) ** 2;
+              ? 0.56 + seedNoiseACentered * 0.18 + seedNoiseCCentered * 0.12
+              : 0.52 + seedNoiseACentered * 0.22 + seedNoiseCCentered * 0.12;
           const seedInterfaceShred = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.12 + 0.18 * Math.cos((radial * 27 * seedDetailFrequency) + (fy * 17)) ** 2 + 0.22 * azimuthalSeedB + 0.10 * azimuthalSeedC
-              : 0.12 + 0.50 * Math.cos((fx * 23 * seedDetailFrequency) + (fy * 17) - (fz * 29 * seedDetailFrequency)) ** 2;
+              ? 0.34 + seedNoiseBCentered * 0.16 + seedNoiseCCentered * 0.10
+              : 0.34 + seedNoiseBCentered * 0.18;
           const seedFireLick = isCanonicalInitialScene
             ? 0
             : isBonfireInitialScene
-              ? 0.18 + 0.36 * Math.sin((fy * 27) + (radial * 21 * seedDetailFrequency)) ** 2 + 0.28 * azimuthalSeedA + 0.18 * azimuthalSeedB
-              : 0.18 + 0.82 * Math.sin((fy * 27) + (fz * 21 * seedDetailFrequency)) ** 2;
+              ? 0.54 + seedNoiseACentered * 0.18 + seedNoiseBCentered * 0.12
+              : 0.52 + seedNoiseCCentered * 0.22;
           const i = ((x + y * nextGridSize + z * nextGridSize * nextGridSize) * FLUID_COMPONENTS);
           data[i] = -dz * source * seedLateralVelocity;
           data[i + 1] = source * 0.22;
