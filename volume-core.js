@@ -8332,6 +8332,8 @@ export function createKaminosVolumePrototype({
   let leanStockProductRaymarchPipeline = null;
   let kilnFireSourcePipeline = null;
   let leanStockKilnFireSourcePipeline = null;
+  let kilnFireSourceBaselinePipeline = null;
+  let leanStockKilnFireSourceBaselinePipeline = null;
   let kilnCompositePipeline = null;
   let kilnCompositeShader = null;
   let kilnCompositeBindGroupLayout = null;
@@ -9857,6 +9859,14 @@ export function createKaminosVolumePrototype({
       leanStockKilnFireSourcePipeline = makeKilnFireSourcePipeline(
         `kaminos kiln premultiplied lean-stock raymarch source ${gridSize}^3`,
         { ...leanStockRenderPipelineConstants, KILN_SOURCE_OVERSCAN: kilnFixedCameraComposition.fire.sourceOverscan },
+      );
+      kilnFireSourceBaselinePipeline = makeKilnFireSourcePipeline(
+        `kaminos kiln premultiplied raymarch source pre-overscan baseline ${gridSize}^3`,
+        { ...renderPipelineConstants, KILN_SOURCE_OVERSCAN: 1.0 },
+      );
+      leanStockKilnFireSourceBaselinePipeline = makeKilnFireSourcePipeline(
+        `kaminos kiln premultiplied lean-stock raymarch source pre-overscan baseline ${gridSize}^3`,
+        { ...leanStockRenderPipelineConstants, KILN_SOURCE_OVERSCAN: 1.0 },
       );
       kilnCompositePipeline = device.createRenderPipeline({
         label: 'kaminos normal-lit fixed-camera kiln composite',
@@ -15203,9 +15213,11 @@ export function createKaminosVolumePrototype({
     if (selectLean && targetPipeline === pipeline) effectivePipeline = leanStockPipeline;
     if (selectLean && targetPipeline === readbackPipeline) effectivePipeline = leanStockReadbackPipeline;
     if (selectLean && targetPipeline === kilnFireSourcePipeline) effectivePipeline = leanStockKilnFireSourcePipeline;
+    if (selectLean && targetPipeline === kilnFireSourceBaselinePipeline) effectivePipeline = leanStockKilnFireSourceBaselinePipeline;
     const effective = effectivePipeline === leanStockPipeline
       || effectivePipeline === leanStockReadbackPipeline
       || effectivePipeline === leanStockKilnFireSourcePipeline
+      || effectivePipeline === leanStockKilnFireSourceBaselinePipeline
       ? 'lean-stock-direct-cell-raymarch-v0'
       : 'full-authored-raymarch-v0';
     state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
@@ -19478,10 +19490,17 @@ export function createKaminosVolumePrototype({
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
-    const captureSurface = options.captureSurface === 'kiln-source'
-      ? 'kiln-source'
+    const requestedCaptureSurface = String(options.captureSurface || 'presentation');
+    const captureSurface = ['kiln-source', 'kiln-source-baseline'].includes(requestedCaptureSurface)
+      ? requestedCaptureSurface
       : 'presentation';
-    if (captureSurface === 'kiln-source' && (!kilnFixedCameraComposition || !kilnFireSourcePipeline)) {
+    const kilnSourceCaptureRequested = captureSurface === 'kiln-source'
+      || captureSurface === 'kiln-source-baseline';
+    if (kilnSourceCaptureRequested && (
+      !kilnFixedCameraComposition
+      || !kilnFireSourcePipeline
+      || !kilnFireSourceBaselinePipeline
+    )) {
       return {
         ok: false,
         reason: 'kiln-composition-source-capture-unavailable',
@@ -19616,20 +19635,31 @@ export function createKaminosVolumePrototype({
         captureContext: { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow },
       });
       encodeBoundarySplatTelemetry(encoder, true);
-    } else if (captureSurface === 'kiln-source') {
+    } else if (kilnSourceCaptureRequested) {
+      const baseline = captureSurface === 'kiln-source-baseline';
+      const sourcePipeline = baseline ? kilnFireSourceBaselinePipeline : kilnFireSourcePipeline;
+      const sourceOverscan = baseline ? 1.0 : kilnFixedCameraComposition.fire.sourceOverscan;
       encodeDraw(
         encoder,
         frameTexture.createView(),
-        'kaminos kiln source-pass witness readback',
-        kilnFireSourcePipeline,
+        baseline
+          ? 'kaminos kiln source-pass pre-overscan baseline witness readback'
+          : 'kaminos kiln source-pass witness readback',
+        sourcePipeline,
       );
       const terminalComposition = detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition);
       captureSurfaceReceipt = {
         identity: 'kiln-transparent-premultiplied-source-pass-v1',
         entryPoint: 'fsKilnCompositeSource',
         pipeline: state.raymarchShaderSpecialization.effective,
-        sourceOverscan: kilnFixedCameraComposition.fire.sourceOverscan,
-        sourceFraming: terminalComposition?.renderer?.sourceFraming || null,
+        comparisonRole: baseline ? 'pre-overscan-baseline' : 'effective',
+        sourceOverscan,
+        sourceFraming: baseline ? {
+          identity: 'kiln-pre-overscan-source-framing-baseline-v0',
+          sourceOverscan,
+          effectiveComparisonOverscan: kilnFixedCameraComposition.fire.sourceOverscan,
+          shaderEntryPoint: 'fsKilnCompositeSource',
+        } : (terminalComposition?.renderer?.sourceFraming || null),
         uniformUpload: terminalComposition?.uniformUpload || null,
       };
       presentationApplication = recordVolumePresentationApplication({
@@ -20254,6 +20284,83 @@ export function createKaminosVolumePrototype({
         rgba: Array.from(rgba),
       } : null,
     };
+  }
+
+  async function sampleKilnSourceFramingPair(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    if (!kilnFixedCameraComposition || !kilnFireSourcePipeline || !kilnFireSourceBaselinePipeline) {
+      return { ok: false, reason: 'kiln-composition-source-capture-unavailable' };
+    }
+    const resumeRenderLoop = raf !== 0 && !selectiveHeadLiveCapturePaused;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    await device.queue.onSubmittedWorkDone();
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `kiln-source-framing-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    try {
+      const commonOptions = {
+        advanceSim: false,
+        includeRgba: options.includeRgba === true,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+      };
+      const baseline = await sampleFrame({
+        ...commonOptions,
+        captureSurface: 'kiln-source-baseline',
+      });
+      const effective = await sampleFrame({
+        ...commonOptions,
+        captureSurface: 'kiln-source',
+      });
+      if (!baseline.ok || !effective.ok) {
+        return {
+          ok: false,
+          reason: 'kiln-source-framing-pair-capture-failed',
+          baseline,
+          effective,
+        };
+      }
+      if (baseline.frameCount !== effective.frameCount
+          || baseline.simStepCount !== effective.simStepCount
+          || baseline.frameCount !== baseFrameCount
+          || baseline.simStepCount !== baseSimStepCount) {
+        return {
+          ok: false,
+          reason: 'kiln-source-framing-pair-state-drift',
+          baseFrameCount,
+          baseSimStepCount,
+          baselineFrameCount: baseline.frameCount,
+          effectiveFrameCount: effective.frameCount,
+          baselineSimStepCount: baseline.simStepCount,
+          effectiveSimStepCount: effective.simStepCount,
+        };
+      }
+      return {
+        ok: true,
+        identity: 'kiln-same-state-source-framing-pair-v0',
+        sampleAuthority: 'render-only-frozen-sim-state',
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        fixedNowMs: fixedNow,
+        baseline,
+        effective,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+      };
+    } finally {
+      if (resumeRenderLoop && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
   }
 
   function compactRenderScaleSample(sample) {
@@ -21959,6 +22066,7 @@ export function createKaminosVolumePrototype({
       return canvas;
     },
     sampleFrame,
+    sampleKilnSourceFramingPair,
     sampleFourArmHeldStateLedger,
     sampleBoundarySplatOpticalAdjudication,
     sampleBoundarySplatOpticalDepthOrderDiagnostic,

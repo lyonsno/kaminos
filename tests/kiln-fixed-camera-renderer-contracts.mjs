@@ -169,28 +169,38 @@ assert.match(
 );
 assert.match(
   core,
-  /const captureSurface = options\.captureSurface === 'kiln-source'\s+\? 'kiln-source'\s+: 'presentation';/,
-  'frame sampling admits one explicit kiln source-pass evidence surface',
+  /const captureSurface = \['kiln-source', 'kiln-source-baseline'\]\.includes\(requestedCaptureSurface\)[\s\S]*?kilnSourceCaptureRequested/,
+  'frame sampling admits explicit effective and pre-overscan kiln source evidence surfaces',
 );
 assert.match(
   core,
-  /captureSurface === 'kiln-source' && \(!kilnFixedCameraComposition \|\| !kilnFireSourcePipeline\)[\s\S]*?reason: 'kiln-composition-source-capture-unavailable'/,
+  /kilnSourceCaptureRequested && \([\s\S]*?!kilnFixedCameraComposition[\s\S]*?!kilnFireSourcePipeline[\s\S]*?!kilnFireSourceBaselinePipeline[\s\S]*?reason: 'kiln-composition-source-capture-unavailable'/,
   'kiln source evidence fails loud when the exact composition pipeline is unavailable',
 );
 assert.match(
   core,
-  /else if \(captureSurface === 'kiln-source'\) \{[\s\S]*?encodeDraw\([\s\S]*?frameTexture\.createView\(\),[\s\S]*?'kaminos kiln source-pass witness readback',[\s\S]*?kilnFireSourcePipeline,[\s\S]*?\);/,
-  'kiln source evidence renders through the effective kiln source pipeline rather than ordinary readback',
+  /else if \(kilnSourceCaptureRequested\) \{[\s\S]*?const sourcePipeline = baseline \? kilnFireSourceBaselinePipeline : kilnFireSourcePipeline;[\s\S]*?encodeDraw\([\s\S]*?sourcePipeline,[\s\S]*?\);/,
+  'kiln source evidence renders through the selected source pipeline rather than ordinary readback',
 );
 assert.match(
   core,
-  /const terminalComposition = detachedKilnFixedCameraCompositionReceipt\(state\.kilnFixedCameraComposition\);[\s\S]*?captureSurfaceReceipt = \{[\s\S]*?identity: 'kiln-transparent-premultiplied-source-pass-v1'[\s\S]*?entryPoint: 'fsKilnCompositeSource'[\s\S]*?pipeline: state\.raymarchShaderSpecialization\.effective[\s\S]*?sourceOverscan: kilnFixedCameraComposition\.fire\.sourceOverscan[\s\S]*?sourceFraming: terminalComposition\?\.renderer\?\.sourceFraming/,
+  /const terminalComposition = detachedKilnFixedCameraCompositionReceipt\(state\.kilnFixedCameraComposition\);[\s\S]*?captureSurfaceReceipt = \{[\s\S]*?identity: 'kiln-transparent-premultiplied-source-pass-v1'[\s\S]*?entryPoint: 'fsKilnCompositeSource'[\s\S]*?pipeline: state\.raymarchShaderSpecialization\.effective[\s\S]*?sourceOverscan,[\s\S]*?sourceFraming: baseline \?/,
   'source readback binds the exact entry point, effective specialization, overscan, and terminal framing receipt',
 );
 assert.match(
   core,
   /captureSurface,\s+captureSurfaceReceipt: captureSurfaceReceipt \? \{ \.\.\.captureSurfaceReceipt \} : null,/,
   'sample result publishes the requested surface and effective source-pass receipt',
+);
+assert.match(
+  core,
+  /kilnFireSourceBaselinePipeline = makeKilnFireSourcePipeline\([\s\S]*?KILN_SOURCE_OVERSCAN: 1\.0[\s\S]*?leanStockKilnFireSourceBaselinePipeline = makeKilnFireSourcePipeline\([\s\S]*?KILN_SOURCE_OVERSCAN: 1\.0/,
+  'the pre-overscan comparator uses dedicated full and lean source pipelines',
+);
+assert.match(
+  core,
+  /async function sampleKilnSourceFramingPair\([\s\S]*?cancelAnimationFrame\(raf\)[\s\S]*?await device\.queue\.onSubmittedWorkDone\(\)[\s\S]*?captureSurface: 'kiln-source-baseline'[\s\S]*?captureSurface: 'kiln-source'[\s\S]*?baseline\.frameCount !== effective\.frameCount[\s\S]*?baseline\.simStepCount !== effective\.simStepCount/,
+  'paired source capture drains prior work and proves baseline/effective frame-state equality',
 );
 assert.match(
   core,
@@ -224,22 +234,27 @@ assert.match(
 );
 assert.match(
   browserWitness,
-  /sampleFrame\(\{ captureSurface: 'kiln-source', advanceSim: false, includeRgba: true \}\)/,
-  'browser witness captures the actual kiln source pass rather than generic readback',
+  /sampleKilnSourceFramingPair\(\{ includeRgba: true \}\)/,
+  'browser witness captures both actual kiln source passes rather than generic readback',
 );
 assert.match(
   browserWitness,
-  /assert\.equal\(sourceCapture\.captureSurface, 'kiln-source'[\s\S]*?assert\.equal\(sourceCapture\.captureSurfaceReceipt\?\.entryPoint, 'fsKilnCompositeSource'[\s\S]*?assert\.equal\(sourceCapture\.captureSurfaceReceipt\?\.sourceOverscan, expectedSourceOverscan/,
+  /sampleKilnSourceFramingPair\(\{ includeRgba: true \}\)[\s\S]*?sourceBaselineCapture[\s\S]*?sourceEffectiveCapture/,
+  'browser witness publishes the frame-locked baseline and effective source pair',
+);
+assert.match(
+  browserWitness,
+  /assert\.equal\(sourceBaselineCapture\.captureSurface, 'kiln-source-baseline'[\s\S]*?assert\.equal\(sourceEffectiveCapture\.captureSurface, 'kiln-source'[\s\S]*?sourceBaselineCapture\.captureSurfaceReceipt\?\.entryPoint[\s\S]*?sourceEffectiveCapture\.captureSurfaceReceipt\?\.entryPoint[\s\S]*?sourceEffectiveCapture\.captureSurfaceReceipt\?\.sourceOverscan, expectedSourceOverscan/,
   'browser witness fails if the captured surface, source entry point, or overscan drifts',
 );
 assert.match(
   browserWitness,
-  /report\.runtime\.source\?\.commit[\s\S]*?report\.terminal = terminal[\s\S]*?const effective = terminal\.freshDebugProjection[\s\S]*?report\.sourceCapture[\s\S]*?report\.fullCompositionCapture/,
-  'one report binds runtime source, terminal receipt, source-pass pixels, and full composition pixels',
+  /report\.runtime\.source\?\.commit[\s\S]*?report\.terminal = terminal[\s\S]*?const effective = terminal\.freshDebugProjection[\s\S]*?report\.sourceBaselineCapture[\s\S]*?report\.sourceEffectiveCapture[\s\S]*?report\.fullCompositionCapture/,
+  'one report binds runtime source, terminal receipt, both source-pass images, and full composition pixels',
 );
 assert.match(
   browserWitness,
-  /sourceImageSha256[\s\S]*?fullImageSha256[\s\S]*?assert\.equal\(report\.browserErrors\.length, 0/,
+  /sourceBaselineImageSha256[\s\S]*?sourceImageSha256[\s\S]*?fullImageSha256[\s\S]*?assert\.equal\(report\.browserErrors\.length, 0/,
   'published image hashes and browser errors participate in the pass predicate',
 );
 

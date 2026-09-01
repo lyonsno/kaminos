@@ -19,6 +19,7 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const route = String(args.get('--url') || '');
 const reportPath = String(args.get('--report') || '');
+const sourceBaselineImagePath = String(args.get('--source-baseline-image') || '');
 const sourceImagePath = String(args.get('--source-image') || '');
 const fullImagePath = String(args.get('--full-image') || '');
 const expectedCommit = String(args.get('--expected-commit') || '');
@@ -29,6 +30,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 
 assert.ok(route.startsWith('http://127.0.0.1:'), '--url must be an explicit local Kaminos route');
 assert.ok(reportPath, '--report is required');
+assert.ok(sourceBaselineImagePath, '--source-baseline-image is required');
 assert.ok(sourceImagePath, '--source-image is required');
 assert.ok(fullImagePath, '--full-image is required');
 assert.match(expectedCommit, /^[0-9a-f]{40}$/, '--expected-commit must be exact');
@@ -302,40 +304,75 @@ try {
   assert.ok(statusPhases.includes('effective'), 'detached effective status projection was not observed');
 
   report.phase = 'source-pass-capture';
-  const sourceCapture = await evaluate(cdp.call, `(async () => {
-    const sample = await window.__kaminosVolumePrototype.sampleFrame({ captureSurface: 'kiln-source', advanceSim: false, includeRgba: true });
-    if (!sample?.ok || !sample.image?.rgba) throw new Error('kiln-source-sample-failed:' + (sample?.reason || 'missing-rgba'));
-    const image = sample.image;
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext('2d');
-    context.putImageData(new ImageData(new Uint8ClampedArray(image.rgba), image.width, image.height), 0, 0);
+  const sourcePair = await evaluate(cdp.call, `(async () => {
+    const pair = await window.__kaminosVolumePrototype.sampleKilnSourceFramingPair({ includeRgba: true });
+    if (!pair?.ok) throw new Error('kiln-source-pair-failed:' + (pair?.reason || 'unknown'));
+    const encodeImage = sample => {
+      if (!sample?.image?.rgba) throw new Error('kiln-source-sample-missing-rgba:' + (sample?.captureSurface || 'unknown'));
+      const image = sample.image;
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.putImageData(new ImageData(new Uint8ClampedArray(image.rgba), image.width, image.height), 0, 0);
+      return {
+        ...sample,
+        image: {
+          width: image.width,
+          height: image.height,
+          pngDataUrl: canvas.toDataURL('image/png'),
+        },
+      };
+    };
     return {
-      ...sample,
+      ...pair,
       effectiveBrowserRoute: location.href,
-      image: {
-        width: image.width,
-        height: image.height,
-        pngDataUrl: canvas.toDataURL('image/png'),
-      },
+      baseline: encodeImage(pair.baseline),
+      effective: encodeImage(pair.effective),
     };
   })()`);
-  assert.equal(sourceCapture.captureSurface, 'kiln-source', 'wrong capture surface returned');
-  assert.equal(sourceCapture.captureSurfaceReceipt?.entryPoint, 'fsKilnCompositeSource', 'wrong source entry point returned');
-  assert.equal(sourceCapture.captureSurfaceReceipt?.sourceOverscan, expectedSourceOverscan, 'effective source overscan drifted');
-  assert.equal(sourceCapture.effectiveBrowserRoute, route, 'browser route drifted before source capture');
-  assert.deepEqual(sourceCapture.captureSurfaceReceipt?.sourceFraming, effective.renderer?.sourceFraming, 'source framing receipt drifted between terminal and captured source pass');
-  assert.deepEqual(sourceCapture.captureSurfaceReceipt?.uniformUpload, effective.uniformUpload, 'uniform receipt drifted between terminal and captured source pass');
-  const sourceImageBytes = Buffer.from(sourceCapture.image.pngDataUrl.split(',')[1] || '', 'base64');
+  const sourceBaselineCapture = sourcePair.baseline;
+  const sourceEffectiveCapture = sourcePair.effective;
+  assert.equal(sourcePair.identity, 'kiln-same-state-source-framing-pair-v0');
+  assert.equal(sourcePair.effectiveBrowserRoute, route, 'browser route drifted before source capture');
+  assert.equal(sourceBaselineCapture.captureSurface, 'kiln-source-baseline', 'wrong baseline capture surface returned');
+  assert.equal(sourceEffectiveCapture.captureSurface, 'kiln-source', 'wrong effective capture surface returned');
+  assert.equal(sourceBaselineCapture.captureSurfaceReceipt?.entryPoint, 'fsKilnCompositeSource', 'wrong baseline source entry point returned');
+  assert.equal(sourceEffectiveCapture.captureSurfaceReceipt?.entryPoint, 'fsKilnCompositeSource', 'wrong effective source entry point returned');
+  assert.equal(sourceBaselineCapture.captureSurfaceReceipt?.sourceOverscan, 1.0, 'baseline source overscan drifted');
+  assert.equal(sourceEffectiveCapture.captureSurfaceReceipt?.sourceOverscan, expectedSourceOverscan, 'effective source overscan drifted');
+  assert.equal(sourceBaselineCapture.frameCount, sourceEffectiveCapture.frameCount, 'source pair frame drifted');
+  assert.equal(sourceBaselineCapture.simStepCount, sourceEffectiveCapture.simStepCount, 'source pair simulation state drifted');
+  assert.deepEqual(sourceEffectiveCapture.captureSurfaceReceipt?.sourceFraming, effective.renderer?.sourceFraming, 'source framing receipt drifted between terminal and captured source pass');
+  assert.deepEqual(sourceEffectiveCapture.captureSurfaceReceipt?.uniformUpload, effective.uniformUpload, 'uniform receipt drifted between terminal and captured source pass');
+  const sourceBaselineImageBytes = Buffer.from(sourceBaselineCapture.image.pngDataUrl.split(',')[1] || '', 'base64');
+  assert.ok(sourceBaselineImageBytes.length > 0, 'baseline source capture produced an empty PNG');
+  writeFileSync(sourceBaselineImagePath, sourceBaselineImageBytes);
+  const sourceBaselineImageSha256 = sha256(sourceBaselineImageBytes);
+  const sourceImageBytes = Buffer.from(sourceEffectiveCapture.image.pngDataUrl.split(',')[1] || '', 'base64');
   assert.ok(sourceImageBytes.length > 0, 'source capture produced an empty PNG');
   writeFileSync(sourceImagePath, sourceImageBytes);
   const sourceImageSha256 = sha256(sourceImageBytes);
-  report.sourceCapture = {
-    ...sourceCapture,
+  report.sourcePair = {
+    ...sourcePair,
+    baseline: undefined,
+    effective: undefined,
+  };
+  report.sourceBaselineCapture = {
+    ...sourceBaselineCapture,
     image: {
-      width: sourceCapture.image.width,
-      height: sourceCapture.image.height,
+      width: sourceBaselineCapture.image.width,
+      height: sourceBaselineCapture.image.height,
+      path: sourceBaselineImagePath,
+      sha256: sourceBaselineImageSha256,
+      byteLength: sourceBaselineImageBytes.length,
+    },
+  };
+  report.sourceEffectiveCapture = {
+    ...sourceEffectiveCapture,
+    image: {
+      width: sourceEffectiveCapture.image.width,
+      height: sourceEffectiveCapture.image.height,
       path: sourceImagePath,
       sha256: sourceImageSha256,
       byteLength: sourceImageBytes.length,
@@ -352,7 +389,7 @@ try {
     path: fullImagePath,
     sha256: fullImageSha256,
     byteLength: fullImageBytes.length,
-    effectiveBrowserRoute: sourceCapture.effectiveBrowserRoute,
+    effectiveBrowserRoute: sourcePair.effectiveBrowserRoute,
   };
   assert.equal(report.browserErrors.length, 0, 'browser emitted an exception or error log');
 
