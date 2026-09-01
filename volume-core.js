@@ -46,7 +46,12 @@ import {
   PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY,
   packPersistentSparseCohortGpuRows,
 } from './volume-persistent-sparse-cohort-gpu-consumer.mjs';
-import { kilnFixedCameraUniformData } from './kiln-fixed-camera-composition.mjs';
+import {
+  createImmutableKilnFixedCameraComposition,
+  detachedKilnFixedCameraCompositionReceipt,
+  kilnFixedCameraUniformData,
+  validateKilnFixedCameraCanonicalAssets,
+} from './kiln-fixed-camera-composition.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -7698,6 +7703,7 @@ export function createKaminosVolumePrototype({
   if (productFrameOwner === 'caller' && (!externalDevice || !externalColorFormat)) {
     throw new Error('caller-product-frame-requires-external-device-and-color-format');
   }
+  kilnFixedCameraComposition = createImmutableKilnFixedCameraComposition(kilnFixedCameraComposition);
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
@@ -8630,15 +8636,19 @@ export function createKaminosVolumePrototype({
   }
 
   function emitStatus(extra = {}) {
-    onStatus?.({ ...state, ...extra });
+    onStatus?.({
+      ...state,
+      ...extra,
+      kilnFixedCameraComposition: detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition),
+    });
   }
 
   function publishKilnFixedCameraCompositionReceipt(receipt) {
     if (!kilnFixedCameraComposition) return null;
-    state.kilnFixedCameraComposition = receipt ? { ...receipt } : null;
-    onKilnFixedCameraCompositionReceipt?.(state.kilnFixedCameraComposition
-      ? { ...state.kilnFixedCameraComposition }
-      : null);
+    state.kilnFixedCameraComposition = createImmutableKilnFixedCameraComposition(receipt);
+    onKilnFixedCameraCompositionReceipt?.(
+      detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition),
+    );
     return state.kilnFixedCameraComposition;
   }
 
@@ -10379,6 +10389,7 @@ export function createKaminosVolumePrototype({
 
   async function initializeKilnFixedCameraComposition() {
     if (!kilnFixedCameraComposition) return null;
+    validateKilnFixedCameraCanonicalAssets(kilnFixedCameraComposition);
     publishKilnFixedCameraCompositionReceipt({
       ...kilnFixedCameraComposition,
       status: 'initializing',
@@ -21877,6 +21888,7 @@ export function createKaminosVolumePrototype({
     debugState() {
       return {
         ...state,
+        kilnFixedCameraComposition: detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition),
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),
         boundarySplatInstanceConsumerReceipt: boundarySplatInstanceConsumerReceipt(),

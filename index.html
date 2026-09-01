@@ -2781,6 +2781,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=kiln-fixed-camera-0901';
 import {
+  detachedKilnFixedCameraCompositionReceipt,
   parseKilnFixedCameraComposition,
   validateKilnFixedCameraCompositionRuntime,
 } from './kiln-fixed-camera-composition.mjs';
@@ -18465,7 +18466,9 @@ async function initKaminosVolumeRoute() {
   }
   updateVolumeControlLabels();
   const kilnFixedCameraCompositionRequest = parseKilnFixedCameraComposition(params);
-  window.__kaminosKilnFixedCameraCompositionReceipt = kilnFixedCameraCompositionRequest;
+  window.__kaminosKilnFixedCameraCompositionReceipt = detachedKilnFixedCameraCompositionReceipt(
+    kilnFixedCameraCompositionRequest,
+  );
   const kilnMountControls = readVolumeControls();
   const kilnFixedCameraComposition = validateKilnFixedCameraCompositionRuntime(
     kilnFixedCameraCompositionRequest,
@@ -18477,7 +18480,9 @@ async function initKaminosVolumeRoute() {
       productFrameOwner: 'prototype',
     },
   );
-  window.__kaminosKilnFixedCameraCompositionReceipt = kilnFixedCameraComposition;
+  window.__kaminosKilnFixedCameraCompositionReceipt = detachedKilnFixedCameraCompositionReceipt(
+    kilnFixedCameraComposition,
+  );
   volumePrototype = createKaminosVolumePrototype({
     THREE,
     viewport: document.getElementById('viewport'),

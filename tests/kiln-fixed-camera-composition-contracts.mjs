@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import {
   KILN_FIXED_CAMERA_COMPOSITION_IDENTITY,
   compositeKilnPremultipliedSource,
+  createImmutableKilnFixedCameraComposition,
+  detachedKilnFixedCameraCompositionReceipt,
   kilnFixedCameraUniformData,
   parseKilnFixedCameraComposition,
+  validateKilnFixedCameraCanonicalAssets,
   validateKilnFixedCameraCompositionRuntime,
 } from '../kiln-fixed-camera-composition.mjs';
 import { validateVolumeSettingsPresetTarget } from '../volume-settings-preset-contract.mjs';
@@ -97,13 +100,14 @@ assert.deepEqual(Array.from(kilnFixedCameraUniformData(parsed, {
   1, 0.2549999952316284, 0.04500000178813934, 0,
 ]);
 
-assert.deepEqual(validateKilnFixedCameraCompositionRuntime(parsed, {
+const routeAdmitted = validateKilnFixedCameraCompositionRuntime(parsed, {
   presetId: BASIN_ID,
   presetAuthority: 'shared-volume-settings-preset-v2',
   boundarySplats: false,
   browserResidual: false,
   productFrameOwner: 'prototype',
-}), {
+});
+assert.deepEqual(routeAdmitted, {
   ...parsed,
   status: 'route-admitted',
   failurePhase: null,
@@ -114,6 +118,51 @@ assert.deepEqual(validateKilnFixedCameraCompositionRuntime(parsed, {
     productFrameOwner: 'prototype',
   },
 });
+
+const privateComposition = createImmutableKilnFixedCameraComposition(routeAdmitted);
+assert.equal(validateKilnFixedCameraCanonicalAssets(privateComposition), true);
+assert.ok(Object.isFrozen(privateComposition));
+assert.ok(Object.isFrozen(privateComposition.plate));
+assert.ok(Object.isFrozen(privateComposition.plate.expectedDimensions));
+assert.ok(Object.isFrozen(privateComposition.fire.center));
+for (const exposedState of [
+  parsed,
+  routeAdmitted,
+  { ...routeAdmitted, status: 'initializing', failurePhase: 'asset-verification' },
+]) {
+  const exposed = detachedKilnFixedCameraCompositionReceipt(exposedState);
+  exposed.preset.id = `vsp-${'c'.repeat(64)}`;
+  Object.assign(exposed.plate, {
+    root: 'scratch',
+    path: 'other.png',
+    sha256: 'a'.repeat(64),
+    url: '/api/read?root=scratch&path=other.png',
+  });
+  exposed.plate.expectedDimensions[0] = 1;
+  Object.assign(exposed.normal, {
+    root: 'image-inbox',
+    path: 'other.png',
+    sha256: 'b'.repeat(64),
+    url: '/api/read?root=image-inbox&path=other.png',
+  });
+  exposed.normal.expectedDimensions[1] = 1;
+  exposed.fire.center[0] = 0;
+  exposed.fire.scale[1] = 2;
+  exposed.light.radius = 2;
+  exposed.light.intensity = 16;
+  exposed.light.ambient = 1;
+  exposed.light.normalYSign = 1;
+}
+assert.equal(privateComposition.preset.id, BASIN_ID);
+assert.deepEqual(privateComposition.plate, parsed.plate);
+assert.deepEqual(privateComposition.normal, parsed.normal);
+assert.deepEqual(privateComposition.fire, parsed.fire);
+assert.deepEqual(privateComposition.light, parsed.light);
+assert.throws(
+  () => { privateComposition.plate.root = 'scratch'; },
+  TypeError,
+  'private asset custody is recursively immutable',
+);
 
 assert.deepEqual(
   compositeKilnPremultipliedSource([0, 0, 0], 0, [0.2, 0.4, 0.6]),

@@ -37,6 +37,47 @@ const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const ROOT_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const DECIMAL_PATTERN = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
+function cloneKilnValue(value) {
+  if (Array.isArray(value)) return value.map(cloneKilnValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneKilnValue(nested)]));
+  }
+  return value;
+}
+
+function freezeKilnValue(value) {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value)) freezeKilnValue(nested);
+  return Object.freeze(value);
+}
+
+export function detachedKilnFixedCameraCompositionReceipt(composition) {
+  return composition ? cloneKilnValue(composition) : null;
+}
+
+export function createImmutableKilnFixedCameraComposition(composition) {
+  return composition ? freezeKilnValue(cloneKilnValue(composition)) : null;
+}
+
+export function validateKilnFixedCameraCanonicalAssets(composition) {
+  for (const role of ['plate', 'normal']) {
+    const asset = composition?.[role];
+    const expected = KILN_FIXED_CAMERA_ASSETS[role];
+    if (!asset) throw new Error(`missing-kiln-${role}`);
+    for (const field of ['root', 'path', 'sha256']) {
+      if (asset[field] !== expected[field]) throw new Error(`kiln-${role}-${field}-mismatch`);
+    }
+    if (!Array.isArray(asset.expectedDimensions)
+      || asset.expectedDimensions.length !== 2
+      || asset.expectedDimensions.some((value, index) => value !== expected.dimensions[index])) {
+      throw new Error(`kiln-${role}-dimensions-mismatch`);
+    }
+    const expectedQuery = new URLSearchParams({ root: expected.root, path: expected.path });
+    if (asset.url !== `/api/read?${expectedQuery}`) throw new Error(`kiln-${role}-url-mismatch`);
+  }
+  return true;
+}
+
 function exactParam(params, name, { required = true } = {}) {
   const values = params.getAll(name);
   if (values.length > 1) throw new Error(`duplicate-${name.replaceAll('_', '-')}`);
@@ -92,7 +133,7 @@ export function parseKilnFixedCameraComposition(params) {
   }
   const normalYSign = exactNumber(params, 'kiln_normal_y_sign', -1, 1);
   if (normalYSign !== -1 && normalYSign !== 1) throw new Error('invalid-kiln-normal-y-sign');
-  return {
+  const composition = {
     identity,
     status: 'requested',
     preset: { id: presetId, authority: presetAuthority },
@@ -115,6 +156,8 @@ export function parseKilnFixedCameraComposition(params) {
       normalYSign,
     },
   };
+  validateKilnFixedCameraCanonicalAssets(composition);
+  return composition;
 }
 
 export function validateKilnFixedCameraCompositionRuntime(composition, runtime = {}) {

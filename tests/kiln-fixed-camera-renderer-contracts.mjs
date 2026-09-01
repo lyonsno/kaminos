@@ -52,5 +52,20 @@ assert.match(
   /usage: GPUTextureUsage\.TEXTURE_BINDING \| GPUTextureUsage\.COPY_DST \| GPUTextureUsage\.RENDER_ATTACHMENT/,
   'external-image upload textures include Dawn-required render-attachment usage',
 );
+assert.match(
+  core,
+  /createImmutableKilnFixedCameraComposition\(kilnFixedCameraComposition\)/,
+  'prototype construction takes private immutable composition custody before asynchronous GPU work',
+);
+assert.match(
+  core,
+  /detachedKilnFixedCameraCompositionReceipt\(state\.kilnFixedCameraComposition\)/,
+  'renderer callbacks detach nested receipt state from private composition custody',
+);
+assert.match(
+  core,
+  /validateKilnFixedCameraCanonicalAssets\(kilnFixedCameraComposition\)/,
+  'the asynchronous fetch boundary reasserts exact canonical asset tuples',
+);
 
 console.log('kiln fixed-camera renderer contracts passed');
