@@ -54,9 +54,9 @@ a taller violet-edged column before withdrawing. [Motion](assets/blue-vertical-m
 
 ![An earlier live chromatic combustion column moving through orange, violet, and blue](assets/live-webgpu-combustion.gif)
 
-The browser-native screening room lives in [`index.html`](index.html). Serve
-the repository with `python3 serve.py 8095`, then open
-`http://127.0.0.1:8095/docs/flame-atlas/`.
+Open the [public flame boutique](https://lyonsno.github.io/kaminos/), or serve
+the repository with `python3 serve.py 8095` and open
+`http://127.0.0.1:8095/docs/flame-atlas/` for the local screening room.
 
 ## Evidence Boundary
 

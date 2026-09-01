@@ -18,7 +18,7 @@ The project spans four connected capabilities:
 - **A world kiln**. Images, meshes, splats, motion, material fields, simulation
   state, and generated environments become composable world matter.
 
-[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](docs/flame-atlas/)
+[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](https://lyonsno.github.io/kaminos/)
 
 ## Live Browser Combustion
 
@@ -31,7 +31,7 @@ source geometry, and renewed expansion. A broad burner can gather into a jet,
 retain the structure already in flight, and rebuild into another morphology
 without resetting the simulation.
 
-[Live Combustion](docs/flame-atlas/) presents one complete composition, four
+[Live Combustion](https://lyonsno.github.io/kaminos/) presents one complete composition, four
 authored transitions, and seven compact studies of color, structure, width, and
 state history.
 

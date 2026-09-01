@@ -55,7 +55,7 @@ test("generated-worlds README and flame screening room public claims agree", () 
   }
 
   assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
-  assert.match(rootReadme, /\[Live Combustion\]\(docs\/flame-atlas\/\)/);
+  assert.match(rootReadme, /\[Live Combustion\]\(https:\/\/lyonsno\.github\.io\/kaminos\/\)/);
   assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);
   assert.match(rootReadme, /\*\*Live materials\*\*/);
@@ -75,4 +75,25 @@ test("generated-worlds README and flame screening room public claims agree", () 
   assert.doesNotMatch(publicCopy, /\b(?:96|128|160)\s*(?:\^?3|³)\b/i);
   assert.match(publicCopy, /captured directly from the live browser runtime/i);
   assert.doesNotMatch(html, /<video\b[^>]*\sautoplay(?:\s|>)/i);
+});
+
+test("flame boutique deploys as the narrow Kaminos Pages artifact", () => {
+  const workflowPath = ".github/workflows/flame-atlas-pages.yml";
+  assert.ok(
+    fs.existsSync(path.join(repoRoot, workflowPath)),
+    `${workflowPath} must exist before the boutique URL can be public`,
+  );
+
+  const workflow = read(workflowPath);
+  const rootReadme = read("README.md");
+  const atlasReadme = read("docs/flame-atlas/README.md");
+  const html = read("docs/flame-atlas/index.html");
+
+  assert.match(workflow, /actions\/upload-pages-artifact@v3/);
+  assert.match(workflow, /actions\/deploy-pages@v4/);
+  assert.match(workflow, /path:\s*docs\/flame-atlas/);
+  assert.doesNotMatch(workflow, /path:\s*["']?\.["']?\s*$/m);
+  assert.match(rootReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
+  assert.match(atlasReadme, /https:\/\/lyonsno\.github\.io\/kaminos\//);
+  assert.match(html, /<link rel="canonical" href="https:\/\/lyonsno\.github\.io\/kaminos\/">/);
 });
