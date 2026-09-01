@@ -34,7 +34,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--chrome <executable>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--no-render-assay] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -51,6 +51,7 @@ const requestedCdpPort = args.has('cdp-port') ? Number(args.get('cdp-port')) : n
 const viewportWidth = Number(args.get('viewport-width') || 1600);
 const viewportHeight = Number(args.get('viewport-height') || 1100);
 const fireFriendly = args.has('fire-friendly');
+const noRenderAssay = args.has('no-render-assay');
 const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
 const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
@@ -118,6 +119,7 @@ const requestedInvocation = {
   screenshot: out,
   reportPath,
   fireFriendly,
+  noRenderAssay,
   replayCastReportPath,
   schedulerProfileId,
   sourceAssetId: requestedSourceAssetId,
@@ -717,6 +719,151 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
   })()`;
 }
 
+function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
+  return `(() => {
+    const volume = globalThis.__kaminosVolumePrototype;
+    if (!volume?.foregroundGpuContext || !volume?.debugState) {
+      return { ok: false, reason: 'product-volume-unavailable' };
+    }
+    const state = {
+      schema: 'kaminos.current-source-no-render-assay.v0',
+      status: 'armed',
+      presentationIsolation: 'foreground-opportunity-no-render-v0',
+      fallbackDelayMs: ${JSON.stringify(fallbackDelayMs)},
+      requestCount: 0,
+      serviceCount: 0,
+      observedRafCallbackCount: 0,
+      nonPresentFallbackCount: 0,
+      productHookAssignments: 0,
+      serviceRetention: 'uncapped',
+      services: [],
+      lastService: null,
+      authority: 'injected-evidence-hook-over-clean-product-source',
+    };
+    let assayHook = null;
+    const waitForOpportunity = signal => new Promise((resolve, reject) => {
+      let settled = false;
+      let rafHandle = null;
+      let fallbackHandle = null;
+      const cleanup = () => {
+        if (rafHandle !== null) cancelAnimationFrame(rafHandle);
+        if (fallbackHandle !== null) clearTimeout(fallbackHandle);
+        signal?.removeEventListener?.('abort', onAbort);
+        rafHandle = null;
+        fallbackHandle = null;
+      };
+      const finish = receipt => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(receipt);
+      };
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(signal?.reason instanceof Error
+          ? signal.reason
+          : new Error(String(signal?.reason || 'no-render opportunity aborted')));
+      };
+      signal?.addEventListener?.('abort', onAbort, { once: true });
+      if (signal?.aborted) {
+        onAbort();
+        return;
+      }
+      rafHandle = requestAnimationFrame(timestampMs => finish({
+        serviceMode: 'observed-raf-callback',
+        serviceAuthority: 'browser-request-animation-frame-callback-observed',
+        rafCallbackObserved: true,
+        renderedProductFrameObserved: false,
+        presentedProductFrameObserved: false,
+        rafTimestampMs: timestampMs,
+        fallbackReason: null,
+      }));
+      fallbackHandle = setTimeout(() => finish({
+        serviceMode: 'non-present-fallback',
+        serviceAuthority: 'browser-task-fallback-no-presentation',
+        rafCallbackObserved: false,
+        renderedProductFrameObserved: false,
+        presentedProductFrameObserved: false,
+        rafTimestampMs: null,
+        fallbackReason: 'raf-suspended-or-delayed',
+      }), state.fallbackDelayMs);
+    });
+    Object.defineProperty(globalThis, '__kaminosSharpForegroundOpportunity', {
+      configurable: true,
+      enumerable: false,
+      get() {
+        return assayHook;
+      },
+      set(productHook) {
+        state.productHookAssignments += 1;
+        state.productHookType = typeof productHook;
+        assayHook = context => {
+          const product = volume.foregroundGpuContext();
+          if (!product?.device || product.queue !== product.device.queue) {
+            throw new Error('no-render assay requires the live product WebGPU device and queue');
+          }
+          if (context.device !== product.device || context.queue !== product.queue) {
+            throw new Error('no-render assay shared-device or shared-queue identity mismatch');
+          }
+          state.requestCount += 1;
+          const requestId = 'no-render:' + context.runId + ':' + state.requestCount;
+          return {
+            requestId,
+            metadata: {
+              workloadIdentity: 'foreground-opportunity-no-render-v0',
+              presentationIsolation: 'no-render',
+              serviceAuthorityPolicy: 'presented-raf-or-non-present-fallback',
+              routeId: context.routeId || null,
+              runId: context.runId || null,
+              stage: context.stage || null,
+              phase: context.phase || null,
+              boundary: context.boundary || null,
+              dutyId: context.dutyId || null,
+              deviceIdentity: product.deviceIdentity || null,
+              queueIdentity: product.queueIdentity || null,
+            },
+            async run(service = {}) {
+              const effectiveProduct = volume.foregroundGpuContext();
+              if (service.device !== effectiveProduct.device || service.queue !== effectiveProduct.queue) {
+                throw new Error('no-render assay service left the product WebGPU device or queue');
+              }
+              const volumeState = volume.debugState();
+              if (volumeState?.foregroundOpportunityMode !== 'lease-driven') {
+                throw new Error('no-render assay requires quiesced lease-driven volume mode');
+              }
+              const opportunity = await waitForOpportunity(service.signal);
+              const receipt = {
+                schema: 'kaminos.volume-foreground-no-render-receipt.v0',
+                status: 'opportunity-served',
+                requestId,
+                simulationQuiesced: true,
+                raymarchSubmissionQuiesced: true,
+                commandBufferCount: 0,
+                sharedDeviceIdentityVerified: true,
+                sharedQueueIdentityVerified: true,
+                foregroundOpportunityMode: volumeState.foregroundOpportunityMode,
+                fallbackDelayMs: state.fallbackDelayMs,
+                volumeFrameCountAtService: volumeState.frameCount ?? null,
+                ...opportunity,
+              };
+              state.serviceCount += 1;
+              if (receipt.serviceMode === 'observed-raf-callback') state.observedRafCallbackCount += 1;
+              if (receipt.serviceMode === 'non-present-fallback') state.nonPresentFallbackCount += 1;
+              state.services.push(receipt);
+              state.lastService = receipt;
+              return receipt;
+            },
+          };
+        };
+      },
+    });
+    globalThis.__kaminosCurrentSourceNoRenderAssay = state;
+    return { ok: true, ...state };
+  })()`;
+}
+
 async function attemptInFlightHybridCapture({
   ws,
   outputPath,
@@ -1102,6 +1249,61 @@ function correlateForegroundGapsWithHostEvents({
   };
 }
 
+function validateNoRenderAssayEvidence(assay) {
+  const failures = [];
+  if (assay?.schema !== 'kaminos.current-source-no-render-assay.v0') failures.push('schema-invalid');
+  if (assay?.presentationIsolation !== 'foreground-opportunity-no-render-v0') failures.push('isolation-invalid');
+  if (!Number.isInteger(assay?.productHookAssignments) || assay.productHookAssignments < 1) failures.push('product-hook-unassigned');
+  if (!Number.isInteger(assay?.requestCount) || assay.requestCount < 1) failures.push('request-count-empty');
+  if (!Number.isInteger(assay?.serviceCount) || assay.serviceCount < 1) failures.push('service-count-empty');
+  if (assay?.requestCount !== assay?.serviceCount) failures.push('request-service-count-mismatch');
+  if (assay?.serviceRetention !== 'uncapped') failures.push('service-retention-capped-or-missing');
+  if (!Array.isArray(assay?.services)) failures.push('services-missing');
+  if (Array.isArray(assay?.services) && assay.services.length !== assay?.serviceCount) failures.push('service-array-count-mismatch');
+  const requestIds = new Set();
+  let observedRafCallbackCount = 0;
+  let nonPresentFallbackCount = 0;
+  for (const receipt of assay?.services || []) {
+    if (receipt?.schema !== 'kaminos.volume-foreground-no-render-receipt.v0') failures.push('service-schema-invalid');
+    if (receipt?.status !== 'opportunity-served') failures.push('service-status-invalid');
+    if (typeof receipt?.requestId !== 'string' || receipt.requestId === '' || requestIds.has(receipt.requestId)) {
+      failures.push('service-request-identity-invalid');
+    } else {
+      requestIds.add(receipt.requestId);
+    }
+    if (receipt?.simulationQuiesced !== true || receipt?.raymarchSubmissionQuiesced !== true) failures.push('volume-work-not-quiesced');
+    if (receipt?.commandBufferCount !== 0) failures.push('volume-command-buffer-submitted');
+    if (receipt?.sharedDeviceIdentityVerified !== true || receipt?.sharedQueueIdentityVerified !== true) failures.push('shared-gpu-identity-unverified');
+    if (receipt?.foregroundOpportunityMode !== 'lease-driven') failures.push('lease-driven-mode-unverified');
+    if (receipt?.renderedProductFrameObserved !== false || receipt?.presentedProductFrameObserved !== false) {
+      failures.push('render-or-presentation-overclaim');
+    }
+    if (receipt?.serviceMode === 'observed-raf-callback') {
+      observedRafCallbackCount += 1;
+      if (receipt?.serviceAuthority !== 'browser-request-animation-frame-callback-observed'
+        || receipt?.rafCallbackObserved !== true
+        || !Number.isFinite(receipt?.rafTimestampMs)
+        || receipt?.fallbackReason !== null) {
+        failures.push('observed-raf-authority-invalid');
+      }
+    } else if (receipt?.serviceMode === 'non-present-fallback') {
+      nonPresentFallbackCount += 1;
+      if (receipt?.serviceAuthority !== 'browser-task-fallback-no-presentation'
+        || receipt?.rafCallbackObserved !== false
+        || receipt?.rafTimestampMs !== null
+        || receipt?.fallbackReason !== 'raf-suspended-or-delayed') {
+        failures.push('non-present-fallback-authority-invalid');
+      }
+    } else {
+      failures.push('service-mode-invalid');
+    }
+  }
+  if (assay?.observedRafCallbackCount !== observedRafCallbackCount) failures.push('observed-raf-count-mismatch');
+  if (assay?.nonPresentFallbackCount !== nonPresentFallbackCount) failures.push('non-present-fallback-count-mismatch');
+  if (observedRafCallbackCount + nonPresentFallbackCount !== assay?.serviceCount) failures.push('service-mode-count-incomplete');
+  return [...new Set(failures)];
+}
+
 function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }) {
   const report = pipelineReport || {};
   const stage = (report.stages || [])[0] || {};
@@ -1210,6 +1412,7 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     status: browserFiringEvidence.status || null,
     message: browserFiringEvidence.message || null,
     reportPath: browserFiringEvidence.reportPath || null,
+    noRenderAssay: browserFiringEvidence.noRenderAssay || null,
     requestedPipelineId: report.requestedPipelineId || null,
     effectiveRouteId: report.effectiveRouteConfig?.routeId || null,
     effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
@@ -1280,6 +1483,12 @@ try {
   }
   if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
     throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
+  }
+  if (noRenderAssay && !fireFriendly) {
+    throw new Error('--no-render-assay requires --fire-friendly');
+  }
+  if (noRenderAssay && (captureInFlight || replayCastReportPath)) {
+    throw new Error('--no-render-assay cannot be combined with replay or in-flight visual capture');
   }
   if (args.has('scheduler-profile') && !fireFriendly) {
     throw new Error('--scheduler-profile requires --fire-friendly');
@@ -1580,6 +1789,21 @@ try {
 
   if (fireFriendly) {
     const expectedScheduler = expectedSchedulerForProfile(schedulerProfileId);
+    if (noRenderAssay) {
+      phase = 'arming-no-render-assay';
+      const noRenderArm = await evaluate(ws, buildNoRenderAssayInjectionExpression());
+      if (noRenderArm?.ok !== true) {
+        throw new Error(`Current-source no-render assay did not arm: ${JSON.stringify(noRenderArm)}`);
+      }
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, noRenderAssay: noRenderArm };
+      writeReport({
+        ok: null,
+        status: 'no-render-assay-armed-before-primary-output',
+        lastTrustworthyEvidence,
+        runtimeExceptions,
+        stderrTail: stderr.slice(-1000),
+      });
+    }
     phase = 'starting-friendly-firing';
     await evaluate(ws, `(() => {
       const requestedFlameContinuity = ${JSON.stringify(requestedFlameContinuity)};
@@ -1630,6 +1854,9 @@ try {
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
         effectiveFirePresentation: liveVolume?.firePresentation || null,
         effectiveFlameContinuity: liveVolume?.flameContinuityEffective || null,
+        noRenderAssay: window.__kaminosCurrentSourceNoRenderAssay
+          ? { ...window.__kaminosCurrentSourceNoRenderAssay }
+          : null,
         roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
         settleMonitor: (() => {
           const monitor = window.__kaminosInFlightHybridSettleMonitor;
@@ -1650,6 +1877,18 @@ try {
         })(),
         });
       })()`);
+      if (noRenderAssay && routeState.noRenderAssay) {
+        lastTrustworthyEvidence = {
+          ...lastTrustworthyEvidence,
+          noRenderAssay: routeState.noRenderAssay,
+          noRenderRouteState: {
+            status: routeState.status,
+            message: routeState.message,
+            firePhase: routeState.firePhase,
+            firingId: routeState.firingId,
+          },
+        };
+      }
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
       if ((routeState.runningProfileId || routeState.status === 'running') && routeState.roomPosture !== 'firing') {
         throw new Error(`Live firing did not fold the Crucible into its furnace-visible posture: ${JSON.stringify(routeState)}`);
@@ -1766,6 +2005,9 @@ try {
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       const kilnFrameStageLedger = routeState.result?.kilnFrameStageLedger || fire?.volumeDebugState?.kilnFrameStageLedger || null;
       const reportPath = routeState.result?.report?.path || null;
+      const noRenderAssay = window.__kaminosCurrentSourceNoRenderAssay
+        ? { ...window.__kaminosCurrentSourceNoRenderAssay }
+        : null;
       const snapshotIdentity = {
         nonce: globalThis.crypto?.randomUUID?.() || ('witness-' + Date.now() + '-' + Math.random()),
         reportPath,
@@ -1790,6 +2032,7 @@ try {
         ? { ...kilnFrameStageLedger, frames: undefined, events: undefined }
         : null;
       return {
+        noRenderAssay,
         status: routeState.status || null,
         message: routeState.message || null,
         requestedFirePresentation: '${requestedFirePresentation}',
@@ -1808,6 +2051,7 @@ try {
     })()`, fireOperationTimeoutMs);
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
+      noRenderAssay: browserFiringEvidence.noRenderAssay || lastTrustworthyEvidence?.noRenderAssay || null,
       postFiringSummary: {
         status: browserFiringEvidence.status,
         message: browserFiringEvidence.message,
@@ -1852,6 +2096,17 @@ try {
           : null,
       },
     };
+    if (noRenderAssay) {
+      browserFiringEvidence.noRenderAssayFailures = validateNoRenderAssayEvidence(browserFiringEvidence.noRenderAssay);
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        noRenderAssay: browserFiringEvidence.noRenderAssay,
+        noRenderAssayFailures: browserFiringEvidence.noRenderAssayFailures,
+      };
+      if (browserFiringEvidence.noRenderAssayFailures.length) {
+        throw new Error(`No-render assay evidence is incomplete or invalid: ${browserFiringEvidence.noRenderAssayFailures.join(', ')}`);
+      }
+    }
     if (captureInFlight && inFlightCapture.status !== 'captured') {
       throw new Error(`Friendly firing did not expose an effective hybrid frame for visual capture: ${JSON.stringify(inFlightCapture)}`);
     }
@@ -1864,13 +2119,15 @@ try {
     if (browserFiringEvidence.selectedFlameContinuity !== requestedFlameContinuity) {
       throw new Error(`Friendly firing did not retain the requested flame continuity: ${JSON.stringify(browserFiringEvidence)}`);
     }
-    browserFiringEvidence.firePresentationFailures = validateRequestedFirePresentation({
-      requestedPresentation: requestedFirePresentation,
-      requestedFlameContinuity,
-      firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
-      expected: browserFiringEvidence.foregroundKilnHeartbeat.expectedFirePresentation,
-      effective: browserFiringEvidence.foregroundKilnHeartbeat.effectiveFirePresentation,
-    });
+    browserFiringEvidence.firePresentationFailures = noRenderAssay
+      ? []
+      : validateRequestedFirePresentation({
+          requestedPresentation: requestedFirePresentation,
+          requestedFlameContinuity,
+          firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
+          expected: browserFiringEvidence.foregroundKilnHeartbeat.expectedFirePresentation,
+          effective: browserFiringEvidence.foregroundKilnHeartbeat.effectiveFirePresentation,
+        });
     if (browserFiringEvidence.firePresentationFailures.length) {
       throw new Error(`Friendly firing did not prove the requested fire presentation: ${browserFiringEvidence.firePresentationFailures.join(', ')}`);
     }

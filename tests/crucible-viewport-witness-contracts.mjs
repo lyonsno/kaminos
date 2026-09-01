@@ -36,6 +36,36 @@ assert.match(
   /const fireDeadlineAtMs = fireTimeoutMs === null[\s\S]*while \(fireDeadlineAtMs === null \|\| Date\.now\(\) < fireDeadlineAtMs\)/,
   'The live route wait must continue without an aggregate deadline by default',
 );
+assert.match(
+  witness,
+  /const noRenderAssay = args\.has\('no-render-assay'\)/,
+  'The witness must expose the current-source no-render discriminant explicitly',
+);
+assert.match(
+  witness,
+  /buildNoRenderAssayInjectionExpression[\s\S]*foreground-opportunity-no-render-v0[\s\S]*observed-raf-callback[\s\S]*browser-task-fallback-no-presentation/,
+  'The no-render discriminant must preserve observed-rAF and non-present fallback authority',
+);
+assert.doesNotMatch(
+  witness,
+  /serviceMode:\s*'presented-raf'|presentationObserved:\s*true/,
+  'A bare browser rAF callback must not impersonate rendered or presented product-frame evidence',
+);
+assert.match(
+  witness,
+  /Object\.defineProperty\(globalThis, '__kaminosSharpForegroundOpportunity'[\s\S]*simulationQuiesced:\s*true[\s\S]*raymarchSubmissionQuiesced:\s*true[\s\S]*commandBufferCount:\s*0/,
+  'The no-render hook must quiesce volume submissions without impersonating rendered work',
+);
+assert.match(
+  witness,
+  /if \(noRenderAssay\)[\s\S]*arming-no-render-assay[\s\S]*buildNoRenderAssayInjectionExpression[\s\S]*phase = 'starting-friendly-firing'/,
+  'The no-render hook must arm before the real Friendly firing starts',
+);
+assert.match(
+  witness,
+  /validateNoRenderAssayEvidence[\s\S]*productHookAssignments[\s\S]*requestCount[\s\S]*serviceCount[\s\S]*commandBufferCount/,
+  'Terminal success must validate complete no-render assignment, request, service, and zero-submission evidence',
+);
 assert.doesNotMatch(
   witness,
   /\/Applications\/Google Chrome\.app\/Contents\/MacOS\/Google Chrome/,
@@ -127,6 +157,7 @@ try {
     screenshot: join(argumentFailureRoot, 'should-not-exist.png'),
     reportPath: argumentFailureReport,
     fireFriendly: true,
+    noRenderAssay: false,
     replayCastReportPath: join(argumentFailureRoot, 'completed-pipeline-witness.json'),
     schedulerProfileId: 'cooperative-spn-gaussian',
     sourceAssetId: null,
@@ -965,7 +996,7 @@ assert.ok(
 );
 
 const settleMonitorBuilderSource = witness.match(
-  /function buildInFlightHybridSettleMonitorExpression\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
+  /function buildInFlightHybridSettleMonitorExpression\([\s\S]*?\n}\n(?=\nfunction buildNoRenderAssayInjectionExpression)/,
 );
 assert.ok(settleMonitorBuilderSource, 'witness must expose an executable browser RAF settle monitor');
 const buildInFlightHybridSettleMonitorExpression = vm.runInNewContext(`(() => {
@@ -1021,10 +1052,127 @@ assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.ready, false);
 assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.eligibleSinceMs, null);
 assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.resetCount, 1);
 
+const noRenderBuilderSource = witness.match(
+  /function buildNoRenderAssayInjectionExpression\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
+);
+assert.ok(noRenderBuilderSource, 'witness must expose an executable current-source no-render assay injection');
+const buildNoRenderAssayInjectionExpression = vm.runInNewContext(`(${noRenderBuilderSource[0]})`);
+
+async function exerciseNoRenderService(mode) {
+  const device = { queue: {} };
+  const volumeState = { foregroundOpportunityMode: 'lease-driven', frameCount: 801 };
+  let rafCallback = null;
+  let fallbackCallback = null;
+  const context = {
+    __kaminosVolumePrototype: {
+      foregroundGpuContext: () => ({
+        device,
+        queue: device.queue,
+        deviceIdentity: 'device-current-source',
+        queueIdentity: 'queue-current-source',
+      }),
+      debugState: () => volumeState,
+    },
+    performance: { now: () => 100 },
+    requestAnimationFrame(callback) {
+      rafCallback = callback;
+      return 11;
+    },
+    cancelAnimationFrame() {},
+    setTimeout(callback, delayMs) {
+      assert.equal(delayMs, 250);
+      fallbackCallback = callback;
+      return 22;
+    },
+    clearTimeout() {},
+  };
+  const armed = vm.runInNewContext(buildNoRenderAssayInjectionExpression(), context);
+  assert.equal(armed.ok, true);
+  context.__kaminosSharpForegroundOpportunity = () => ({ product: 'hook' });
+  const hook = context.__kaminosSharpForegroundOpportunity;
+  const request = hook({
+    device,
+    queue: device.queue,
+    routeId: 'sharp-image-to-splat-live-v0',
+    runId: `run-${mode}`,
+    stage: 'sharp',
+    phase: 'vit',
+    boundary: 'before-encode',
+    dutyId: `duty-${mode}`,
+  });
+  const resultPromise = request.run({
+    device,
+    queue: device.queue,
+    signal: new AbortController().signal,
+  });
+  if (mode === 'observed-raf-callback') rafCallback(116.67);
+  else fallbackCallback();
+  const receipt = await resultPromise;
+  assert.equal(receipt.commandBufferCount, 0);
+  assert.equal(receipt.simulationQuiesced, true);
+  assert.equal(receipt.raymarchSubmissionQuiesced, true);
+  assert.equal(receipt.serviceMode, mode);
+  assert.equal(
+    receipt.serviceAuthority,
+    mode === 'observed-raf-callback'
+      ? 'browser-request-animation-frame-callback-observed'
+      : 'browser-task-fallback-no-presentation',
+  );
+  assert.equal(receipt.rafCallbackObserved, mode === 'observed-raf-callback');
+  assert.equal(receipt.renderedProductFrameObserved, false);
+  assert.equal(receipt.presentedProductFrameObserved, false);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 1);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceRetention, 'uncapped');
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.services.length, 1);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.services[0].requestId, receipt.requestId);
+  return receipt;
+}
+
+const observedRafReceipt = await exerciseNoRenderService('observed-raf-callback');
+const fallbackReceipt = await exerciseNoRenderService('non-present-fallback');
+assert.equal(fallbackReceipt.fallbackReason, 'raf-suspended-or-delayed');
+assert.equal(fallbackReceipt.rafTimestampMs, null);
+
+const noRenderValidatorSource = witness.match(
+  /function validateNoRenderAssayEvidence\([\s\S]*?\n}\n(?=\nfunction projectFriendlyFiringEvidence)/,
+);
+assert.ok(noRenderValidatorSource, 'witness must expose executable terminal no-render admission');
+const validateNoRenderAssayEvidence = vm.runInNewContext(`(${noRenderValidatorSource[0]})`);
+const validNoRenderAssay = {
+  schema: 'kaminos.current-source-no-render-assay.v0',
+  status: 'armed',
+  presentationIsolation: 'foreground-opportunity-no-render-v0',
+  productHookAssignments: 1,
+  requestCount: 2,
+  serviceCount: 2,
+  observedRafCallbackCount: 1,
+  nonPresentFallbackCount: 1,
+  serviceRetention: 'uncapped',
+  services: [observedRafReceipt, fallbackReceipt].map((receipt, index) => ({
+    ...receipt,
+    requestId: `terminal-request-${index + 1}`,
+  })),
+};
+assert.equal(validateNoRenderAssayEvidence(validNoRenderAssay).length, 0);
+for (const [label, mutate, expectedFailure] of [
+  ['missing assignment', value => { value.productHookAssignments = 0; }, 'product-hook-unassigned'],
+  ['zero requests', value => { value.requestCount = 0; }, 'request-count-empty'],
+  ['partial service', value => { value.serviceCount = 1; value.services = value.services.slice(0, 1); }, 'request-service-count-mismatch'],
+  ['malformed receipt', value => { value.services[0].schema = 'wrong'; }, 'service-schema-invalid'],
+  ['submitted volume work', value => { value.services[0].commandBufferCount = 1; }, 'volume-command-buffer-submitted'],
+  ['presentation overclaim', value => { value.services[0].presentedProductFrameObserved = true; }, 'render-or-presentation-overclaim'],
+  ['capped receipts', value => { value.serviceRetention = 'last-only'; }, 'service-retention-capped-or-missing'],
+]) {
+  const candidate = structuredClone(validNoRenderAssay);
+  mutate(candidate);
+  assert.ok(validateNoRenderAssayEvidence(candidate).includes(expectedFailure), `terminal no-render evidence must reject ${label}`);
+}
+
 const projectedEvidence = projectFriendlyFiringEvidence({
   browserFiringEvidence: {
     status: 'complete',
     reportPath: '/tmp/pipeline-witness.json',
+    noRenderAssay: validNoRenderAssay,
     foregroundKilnHeartbeat: { schema: 'kaminos.foreground-kiln-heartbeat.v0', sampleRetention: 'uncapped' },
     sharpDutyCorrelation: { schema: 'kaminos.foreground-sharp-duty-correlation.v0', status: 'verified' },
     volumeReleased: true,
@@ -1043,6 +1191,7 @@ const projectedEvidence = projectFriendlyFiringEvidence({
   },
 });
 assert.equal(projectedEvidence.reportPath, '/tmp/pipeline-witness.json');
+assert.deepEqual(projectedEvidence.noRenderAssay, validNoRenderAssay);
 assert.equal(projectedEvidence.effectiveSharpRevision, 'sharp-revision');
 assert.equal(projectedEvidence.output.sha256, 'abc');
 assert.equal(projectedEvidence.foregroundKilnHeartbeat.sampleRetention, 'uncapped');
