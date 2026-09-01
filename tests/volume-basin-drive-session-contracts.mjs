@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   VOLUME_BASIN_DRIVE_SESSION_SCHEMA,
   createVolumeBasinDriveSessionRecorder,
@@ -14,47 +15,44 @@ const source = {
   branch: 'cc/handy-basin-atlas-rail-recorder-0830',
   dirty: false,
 };
-const basinInventory = Array.from({ length: 192 }, (_, index) => index === 0
-  ? { axis: 'basin', id: 'volume-exposure', param: 'volume_exposure', type: 'range' }
-  : index === 1
-    ? { axis: 'basin', id: 'volume-emitter-family', param: 'volume_emitter_family', type: 'select-one' }
-    : { axis: 'basin', id: `volume-contract-${index}`, param: `volume_contract_${index}`, type: 'range' });
-const rendererInventory = [
-  { axis: 'renderer', id: 'renderer-ray-steps', param: 'renderer_ray_steps', type: 'range' },
-  { axis: 'renderer', id: 'renderer-adaptive', param: 'renderer_adaptive', type: 'range' },
-  { axis: 'renderer', id: 'renderer-scale', param: 'renderer_scale', type: 'range' },
-];
-const presentationInventory = [
-  { axis: 'presentation', id: 'raymarch-smoke-presentation', param: 'volume_raymarch_smoke', type: 'button-state' },
-];
+const canonicalSchema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
+const inventoryFor = (axis, descriptors) => descriptors.map(descriptor => ({
+  axis,
+  id: descriptor.key,
+  param: descriptor.param,
+  type: descriptor.type,
+}));
+const basinInventory = inventoryFor('basin', canonicalSchema.controls);
+const rendererInventory = inventoryFor('renderer', canonicalSchema.rendererControls);
+const presentationInventory = inventoryFor('presentation', canonicalSchema.presentationControls);
 const controlSchema = {
   identity: 'kaminos-volume-settings-preset-schema-v2',
   sha256: '2'.repeat(64),
-  basinControlCount: 192,
-  rendererControlCount: 3,
-  presentationControlCount: 1,
+  basinControlCount: basinInventory.length,
+  rendererControlCount: rendererInventory.length,
+  presentationControlCount: presentationInventory.length,
   inventory: [...basinInventory, ...rendererInventory, ...presentationInventory],
 };
 const runtime = {
   requestedRoute: 'http://127.0.0.1:18412/?kaminos_volume_smoke=1',
-  effectiveRoute: 'http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_emitter_family=ring',
+  effectiveRoute: 'http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_density=1',
   backend: 'WebGPU:apple',
   requestedStorePath: '/var/operator/basin-drives',
   effectiveStorePath: '/var/operator/basin-drives',
 };
-function controlState({ exposure = 0.937891234567, family = 'ring' } = {}) {
+function controlState({ exposure = 0.937891234567, density = 1 } = {}) {
   return {
     schema: 'kaminos.volume.basin-drive-control-state.v0',
     basin: Object.fromEntries(basinInventory.map(descriptor => [
       descriptor.id,
-      descriptor.id === 'volume-exposure' ? exposure : descriptor.id === 'volume-emitter-family' ? family : 0,
+      descriptor.id === 'volume-exposure' ? exposure : descriptor.id === 'volume-density' ? density : 0,
     ])),
     renderer: Object.fromEntries(rendererInventory.map((descriptor, index) => [descriptor.id, [132, 0.5, 0.25][index]])),
     presentation: { 'raymarch-smoke-presentation': 'on' },
     effectivePresentation: {
       'raymarch-smoke-presentation': { effective: 'on', fallbackReason: null },
     },
-    route: `http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_exposure=${exposure}&volume_emitter_family=${family}`,
+    route: `http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_exposure=${exposure}&volume_density=${density}`,
   };
 }
 const initialState = controlState();
@@ -89,32 +87,32 @@ recorder.recordControl({
 monotonicMs = 1002.5;
 recorder.mark({
   label: 'blue ring attachment',
-  state: controlState({ exposure: 0.12345678901234566, family: 'ring' }),
+  state: controlState({ exposure: 0.12345678901234566, density: 1 }),
 });
 monotonicMs = 1004;
 recorder.recordControl({
-  controlId: 'volume-emitter-family',
-  param: 'volume_emitter_family',
-  requested: 'wick',
-  effective: 'wick',
-  inputType: 'select-one',
+  controlId: 'volume-density',
+  param: 'volume_density',
+  requested: 1.1,
+  effective: 1.1,
+  inputType: 'range',
   axis: 'basin',
   gesture: {
     eventType: 'change',
-    targetId: 'volume-emitter-family',
+    targetId: 'volume-density',
     targeted: true,
     trusted: true,
     commandDriven: false,
   },
 });
 
-const mutableFinalState = controlState({ exposure: 0.12345678901234566, family: 'wick' });
+const mutableFinalState = controlState({ exposure: 0.12345678901234566, density: 1.1 });
 monotonicMs = 1005;
 const session = recorder.finish({
   finalState: mutableFinalState,
   endedAt: '2026-08-30T18:00:05.000Z',
 });
-mutableFinalState.basin['volume-emitter-family'] = 'forged-after-finish';
+mutableFinalState.basin['volume-density'] = 999;
 
 assert.equal(session.schema, VOLUME_BASIN_DRIVE_SESSION_SCHEMA);
 assert.equal(session.status, 'complete');
@@ -132,7 +130,7 @@ assert.deepEqual(session.events[0].gesture, {
   trusted: true,
   commandDriven: false,
 });
-assert.equal(session.finalState.basin['volume-emitter-family'], 'wick', 'finished state is detached from caller mutation');
+assert.equal(session.finalState.basin['volume-density'], 1.1, 'finished state is detached from caller mutation');
 assert.equal(Object.isFrozen(session), true, 'finished session is immutable');
 assert.equal(Object.isFrozen(session.events), true, 'finished event stream is immutable');
 assert.equal(validateVolumeBasinDriveSession(session), true);
@@ -164,7 +162,7 @@ const replayReceipt = await replayVolumeBasinDriveSession(session, {
 assert.deepEqual(replayInitialStates, [session.initialState], 'replay restores the recorded initial condition before applying motion');
 assert.deepEqual(replayed, [
   ['volume-exposure', 0.12345678901234566],
-  ['volume-emitter-family', 'wick'],
+  ['volume-density', 1.1],
 ]);
 assert.deepEqual(marks, ['blue ring attachment']);
 assert.equal(replayReceipt.status, 'replayed');

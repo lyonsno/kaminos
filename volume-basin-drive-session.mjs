@@ -265,12 +265,12 @@ function validateControlSchema(controlSchema) {
   }
   const sha256 = requiredString(controlSchema.sha256, 'controlSchema sha256');
   if (!/^[0-9a-f]{64}$/i.test(sha256)) throw new Error('controlSchema sha256 must be an exact SHA-256 identity');
-  if (!Number.isInteger(controlSchema.basinControlCount) || controlSchema.basinControlCount < 1) {
-    throw new Error('controlSchema basinControlCount must be a positive integer');
+  for (const field of ['basinControlCount', 'rendererControlCount', 'presentationControlCount']) {
+    if (!Number.isInteger(controlSchema[field]) || controlSchema[field] < 0) {
+      throw new Error(`controlSchema ${field} must be a nonnegative integer`);
+    }
   }
-  for (const [field, expected] of [['basinControlCount', 192], ['rendererControlCount', 3], ['presentationControlCount', 1]]) {
-    if (controlSchema[field] !== expected) throw new Error(`controlSchema ${field} must be exactly ${expected}`);
-  }
+  if (controlSchema.basinControlCount < 1) throw new Error('controlSchema basinControlCount must be positive');
   if (!Array.isArray(controlSchema.inventory)) throw new Error('controlSchema inventory must be an array');
   const expectedTotal = controlSchema.basinControlCount + controlSchema.rendererControlCount + controlSchema.presentationControlCount;
   if (controlSchema.inventory.length !== expectedTotal) throw new Error('controlSchema inventory count mismatch');
