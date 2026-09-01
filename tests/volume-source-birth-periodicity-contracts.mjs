@@ -25,8 +25,9 @@ function sourceBetween(source, startMarker, endMarker) {
   return source.slice(start, end);
 }
 
+function assertSourceBirthAuthorityBoundary(source) {
 const commonTallCanonicalSourceBirth = sourceBetween(
-  core,
+  source,
   '  let sourceCenter = p - u.primitive_source.xyz;',
   '  let bonfireSourceY = 0.62;',
 );
@@ -51,6 +52,21 @@ assert.match(
   /let\s+sourceSpatialDephase\s*=\s*hash31\(/,
   'empty-field source startup may retain low-authority static spatial dephasing',
 );
+assert.match(
+  commonTallCanonicalSourceBirth,
+  /let\s+sourceStartupAuthority\s*=\s*1\.0\s*-\s*smoothstep\([^;]*transportedSourceStructure[^;]*\);/,
+  'static source dephasing must explicitly relinquish authority as transported structure develops',
+);
+assert.match(
+  commonTallCanonicalSourceBirth,
+  /let\s+sourceStartupDephase\s*=\s*sourceSpatialDephase\s*\*\s*sourceStartupAuthority;/,
+  'the first static dephasing channel must pass through transported-state startup authority',
+);
+assert.match(
+  commonTallCanonicalSourceBirth,
+  /let\s+sourceStartupDephaseB\s*=\s*sourceSpatialDephaseB\s*\*\s*sourceStartupAuthority;/,
+  'the second static dephasing channel must pass through transported-state startup authority',
+);
 const staticDephaseDefinitions = sourceBetween(
   commonTallCanonicalSourceBirth,
   '  let sourceSpatialDephase = hash31(',
@@ -60,6 +76,24 @@ assert.doesNotMatch(
   staticDephaseDefinitions,
   /\b(?:time|frame|canonicalPhaseTime)\b/,
   'static source dephasing must not become animated source choreography',
+);
+const sourceBirthConsumers = commonTallCanonicalSourceBirth.slice(
+  commonTallCanonicalSourceBirth.indexOf('  let breakup = clamp('),
+);
+assert.doesNotMatch(
+  sourceBirthConsumers,
+  /\bsourceSpatialDephaseB?\b/,
+  'common, Tall Plume, and Canonical source birth must not consume raw static dephasing after the startup-authority transfer',
+);
+assert.match(
+  sourceBirthConsumers,
+  /\bsourceStartupDephase\b/,
+  'source birth must consume the authority-decayed first startup channel',
+);
+assert.match(
+  sourceBirthConsumers,
+  /\bsourceStartupDephaseB\b/,
+  'source birth must consume the authority-decayed second startup channel',
 );
 assert.match(
   commonTallCanonicalSourceBirth,
@@ -80,6 +114,20 @@ assert.match(
   commonTallCanonicalSourceBirth,
   /let\s+canonicalSourceBreakup\s*=\s*clamp\(/,
   'Canonical source birth must retain bounded nonperiodic irregularity',
+);
+}
+
+assertSourceBirthAuthorityBoundary(core);
+
+const ungatedStaticMutation = core.replace(
+  '      + sourceStartupDephase * 0.08',
+  '      + sourceSpatialDephase * 0.08',
+);
+assert.notEqual(ungatedStaticMutation, core, 'the ungated static-dephasing false-closure mutation must alter reviewed source');
+assert.throws(
+  () => assertSourceBirthAuthorityBoundary(ungatedStaticMutation),
+  /must not consume raw static dephasing/,
+  'the source-birth authority barrier must reject one restored ungated static term',
 );
 
 console.log('volume source-birth periodicity: common, Tall, and Canonical source waves are replaced by transported/static breakup');

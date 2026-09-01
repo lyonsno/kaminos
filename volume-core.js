@@ -1218,15 +1218,20 @@ function normalizeBonfireAblationValue(value, fallback = 1, max = 1.5) {
 }
 
 function normalizeBonfireAblationControls(controls = {}) {
+  const requestedShear = normalizeBonfireAblationValue(controls.bonfireShear);
+  const requestedTemporal = normalizeBonfireAblationValue(controls.bonfireTemporal);
   return {
     recenter: normalizeBonfireAblationValue(controls.bonfireRecenter),
     lateralDamping: normalizeBonfireAblationValue(controls.bonfireLateralDamping),
-    shear: normalizeBonfireAblationValue(controls.bonfireShear),
+    shear: 0,
     detailForces: normalizeBonfireAblationValue(controls.bonfireDetailForces),
     depinch: normalizeBonfireAblationValue(controls.bonfireDepinch),
     projection: normalizeBonfireAblationValue(controls.bonfireProjection),
-    temporal: normalizeBonfireAblationValue(controls.bonfireTemporal),
+    temporal: 0,
     instabilityProbe: normalizeBonfireAblationValue(controls.bonfireInstabilityProbe, 0, 1),
+    requestedShear,
+    requestedTemporal,
+    periodicMacroForcePolicy: MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED,
   };
 }
 
@@ -1318,10 +1323,7 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE = 'bonfire-combustion-
 const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-combustion-field-bypass-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE = 'bonfire-symmetric-force-active-v0';
-const MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-symmetric-force-bypass-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE = 'bonfire-non-wind-force-active-v0';
-const MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-non-wind-force-bypass-v0';
+const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
@@ -3086,63 +3088,6 @@ fn bonfireInterfaceCombustion(combustion: vec4<f32>, smoke: f32, heat: f32, flam
   return clamp(combustion.z * hotBoundary * smokeCarrier + combustion.y * combustion.x * 0.10, 0.0, 1.35);
 }
 
-fn bonfireZeroMeanLateralFlow(p: vec3<f32>, sourceY: f32, combustion: vec4<f32>, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let ring = smoothstep(0.045, 0.42, radial) * (1.0 - smoothstep(0.86, 1.16, radial));
-  let sourceBand = smoothstep(sourceY - 0.44, sourceY - 0.08, p.y) * (1.0 - smoothstep(sourceY + 0.08, sourceY + 0.42, p.y));
-  let quadrupole = sin((p.x * p.x - p.z * p.z) * 38.0 + time * 1.7) * cos(p.x * p.z * 44.0 - time * 1.1);
-  let eddy = tangent * quadrupole * ring * sourceBand * combustion.y * clamp(strength, 0.0, 1.0) * 0.018;
-  return vec3<f32>(eddy.x, 0.0, eddy.y);
-}
-
-fn bonfireSymmetricLateralForce(p: vec3<f32>, time: f32, carrier: f32, strength: f32, phaseOffset: f32) -> vec2<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let ring = smoothstep(0.035, 0.26, radial) * (1.0 - smoothstep(0.68, 1.04, radial));
-  let q = sin((p.x * p.x - p.z * p.z) * (26.0 + phaseOffset * 1.7) + p.y * (6.0 + phaseOffset) + time * (1.1 + phaseOffset * 0.13));
-  let r = cos(radial * (21.0 + phaseOffset * 2.3) - p.y * (5.0 + phaseOffset * 0.7) - time * (0.9 + phaseOffset * 0.11));
-  return (tangent * q * 0.72 + dir * r * 0.38) * ring * clamp(carrier, 0.0, 2.0) * strength;
-}
-
-fn bonfireZeroMeanPlumeRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let visualAboveSource = sourceY - p.y;
-  let riseBand = smoothstep(-0.04, 0.18, visualAboveSource) * (1.0 - smoothstep(1.30, 1.70, visualAboveSource));
-  let ring = smoothstep(0.035, 0.30, radial) * (1.0 - smoothstep(0.64, 1.03, radial));
-  let coreRoll = 1.0 - smoothstep(0.05, 0.38, radial);
-  let carrier = clamp(smoke * 0.70 + heat * 0.22 + flame * 0.15 + source * 0.20, 0.0, 1.6);
-  let rollPhase = visualAboveSource * 10.5 + radial * 15.0 + time * 1.35;
-  let quadrupole = sin((p.x * p.x - p.z * p.z) * 29.0 + visualAboveSource * 5.0 + time * 0.95);
-  let radialRoll = sin(rollPhase) * 0.66 + quadrupole * 0.22;
-  let verticalRoll = cos(rollPhase) * (0.40 + coreRoll * 0.58);
-  let horizontal = (dir * radialRoll + tangent * quadrupole * 0.34) * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.058;
-  let vertical = -verticalRoll * ring * riseBand * carrier * clamp(strength, 0.0, 1.0) * 0.024;
-  return vec3<f32>(horizontal.x, vertical, horizontal.y);
-}
-
-fn bonfireConvectiveCellRoll(p: vec3<f32>, sourceY: f32, smoke: f32, heat: f32, flame: f32, source: f32, time: f32, strength: f32) -> vec3<f32> {
-  let radial = max(length(p.xz), 0.025);
-  let dir = p.xz / radial;
-  let tangent = vec2<f32>(-dir.y, dir.x);
-  let visualAboveSource = sourceY - p.y;
-  let lowerPlume = smoothstep(0.16, 0.34, visualAboveSource) * (1.0 - smoothstep(1.04, 1.58, visualAboveSource));
-  let ringBand = smoothstep(0.055, 0.22, radial) * (1.0 - smoothstep(0.56, 0.92, radial));
-  let coreBand = 1.0 - smoothstep(0.02, 0.46, radial);
-  let bodyBand = clamp(ringBand + coreBand * 0.58, 0.0, 1.0);
-  let cellA = sin((p.x * p.x - p.z * p.z) * 37.0 + visualAboveSource * 7.0 + time * 1.18);
-  let cellB = cos(p.x * p.z * 52.0 - visualAboveSource * 6.0 + time * 0.87);
-  let overturn = sin(visualAboveSource * 16.0 + radial * 11.0 + time * 1.62);
-  let carrier = clamp(smoke * 0.62 + heat * 0.28 + flame * 0.13 + source * 0.18, 0.0, 1.7);
-  let lateral = (dir * (cellA * 0.58 + overturn * 0.34) + tangent * (cellB * 0.54)) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.084;
-  let vertical = (cellB * 0.38 - overturn * 0.34) * bodyBand * lowerPlume * carrier * clamp(strength, 0.0, 1.0) * 0.026;
-  return vec3<f32>(lateral.x, vertical, lateral.y);
-}
-
 fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combustion: vec4<f32>, plumeRiseScale: f32, speed: f32) -> f32 {
   let carrier = clamp(source * 0.46 + smoke * 0.24 + heat * 0.28 + flame * 0.12 + combustion.w * 0.62, 0.0, 1.8);
   return carrier * plumeRiseScale * (0.021 + speed * 0.0062);
@@ -3527,7 +3472,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
   let bonfireRecenterAblation = mix(1.0, clamp(u.bonfire_ablation_controls.x, 0.0, 1.5), bonfireScene);
   let bonfireLateralDampingAblation = mix(1.0, clamp(u.bonfire_ablation_controls.y, 0.0, 1.5), bonfireScene);
-  let bonfireShearAblation = mix(1.0, clamp(u.bonfire_ablation_controls.z, 0.0, 1.5), bonfireScene);
   let bonfireDetailForcesAblation = mix(1.0, clamp(u.bonfire_ablation_controls.w, 0.0, 1.5), bonfireScene);
   let bonfireDepinchAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.x, 0.0, 1.5), bonfireScene);
   let bonfireProjectionAblation = mix(1.0, clamp(u.bonfire_ablation_controls2.y, 0.0, 1.5), bonfireScene);
@@ -3642,8 +3586,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     f32(cellI.x) * 0.137 + 31.0,
     f32(cellI.y) * 0.181 + 47.0
   )) - 0.5;
+  let sourceStartupAuthority = 1.0 - smoothstep(0.025, 0.30, transportedSourceStructure);
+  let sourceStartupDephase = sourceSpatialDephase * sourceStartupAuthority;
+  let sourceStartupDephaseB = sourceSpatialDephaseB * sourceStartupAuthority;
   let breakup = clamp(
-    0.82 + transportedSourceStructure * 0.16 + sourceSpatialDephase * 0.12,
+    0.82 + transportedSourceStructure * 0.16 + sourceStartupDephase * 0.12,
     0.62,
     1.14
   );
@@ -3654,8 +3601,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let tallPlumeSmokeSourceBreakup = clamp(
     0.86
       + transportedSourceStructure * 0.10
-      + sourceSpatialDephase * 0.08
-      + sourceSpatialDephaseB * 0.06,
+      + sourceStartupDephase * 0.08
+      + sourceStartupDephaseB * 0.06,
     0.68,
     1.10
   );
@@ -3674,7 +3621,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + (breakup - 0.82) * 0.38
       + fireLayer.w * 0.12
       + combustionFrontTopology * 0.14
-      + sourceSpatialDephaseB * 0.08,
+      + sourceStartupDephaseB * 0.08,
     0.62,
     1.16
   );
@@ -3688,7 +3635,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + (breakup - 0.82) * 0.62
       + fireLayer.z * 0.10
       + microLayer.y * 0.12
-      + sourceSpatialDephase * 0.07,
+      + sourceStartupDephase * 0.07,
     0.60,
     1.14
   );
@@ -3707,7 +3654,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalSourceBreakup = clamp(
     0.86
       + transportedSourceStructure * 0.14
-      + sourceSpatialDephaseB * 0.10,
+      + sourceStartupDephaseB * 0.10,
     0.68,
     1.12
   );
@@ -3833,7 +3780,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth))
     * sourceBand
     * inputFlow
-    * clamp(0.22 + transportedSourceStructure * 0.10 + sourceSpatialDephase * 0.06, 0.16, 0.42);
+    * clamp(0.22 + transportedSourceStructure * 0.10 + sourceStartupDephase * 0.06, 0.16, 0.42);
   let bonfireEmberRing = (
     exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8))
       * bonfireInterfaceSmokeBand
@@ -4149,24 +4096,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
   let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
   let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source);
-  var symmetricDetailForce = vec2<f32>(0.0);
-  var symmetricMicroForce = vec2<f32>(0.0);
-  var symmetricShredForce = vec2<f32>(0.0);
-  var symmetricFineBreakup = vec2<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    symmetricDetailForce = bonfireSymmetricLateralForce(p, time, rawDetailCarrier, 0.018 + curl * 0.010, 0.0);
-    symmetricMicroForce = bonfireSymmetricLateralForce(p, time * 1.31, rawMicroCarrier, 0.026, 1.7);
-    symmetricShredForce = bonfireSymmetricLateralForce(p, time * 1.13, length(rawShredForce.xz), 1.0, 3.2);
-    symmetricFineBreakup = bonfireSymmetricLateralForce(p, time * 0.91, length(rawFineBreakup.xz), 1.0, 4.6);
-  }
-  let detailLateral = mix(vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping, symmetricDetailForce, bonfireNonWindAuthority);
-  let microLateral = mix(vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping, symmetricMicroForce, bonfireNonWindAuthority);
-  let shredLateral = mix(vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping, symmetricShredForce, bonfireNonWindAuthority);
+  let detailLateral = vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping;
+  let microLateral = vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping;
+  let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping;
   let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
-  let fineBreakupLateral = mix(vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping, symmetricFineBreakup, bonfireNonWindAuthority);
+  let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
   let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
@@ -4242,37 +4179,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * bonfireNonWindAuthority
     * bonfireCenteringCarrier
     * (0.076 + speed * 0.0120);
-  var bonfireZeroMeanFlow = vec3<f32>(0.0);
-  var bonfirePlumeRoll = vec3<f32>(0.0);
-  var bonfireCellRoll = vec3<f32>(0.0);
-  var bonfireLayeredPlumeShear = vec3<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    bonfireZeroMeanFlow = bonfireZeroMeanLateralFlow(p, bonfireSourceY, bonfireCombustion, time, curl * 0.23 + microAmount * 0.15 + shredAmount * 0.070 + fireLickAmount * 0.060);
-    bonfirePlumeRoll = bonfireZeroMeanPlumeRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.24 + microAmount * 0.13 + shredAmount * 0.080 + fireLickAmount * 0.060);
-    bonfireCellRoll = bonfireConvectiveCellRoll(p, bonfireSourceY, smoke, heat, flame, source, time, curl * 0.22 + microAmount * 0.12 + shredAmount * 0.085 + fireLickAmount * 0.055);
-    let bonfireLayerShearRadial = max(length(p.xz), 0.025);
-    let bonfireLayerShearDir = p.xz / bonfireLayerShearRadial;
-    let bonfireLayerShearTangent = vec2<f32>(-bonfireLayerShearDir.y, bonfireLayerShearDir.x);
-    let bonfireLayerShearBand = smoothstep(0.12, 0.32, bonfireVisualAboveSource) * (1.0 - smoothstep(1.02, 1.52, bonfireVisualAboveSource));
-    let bonfireLayerShearPhase = bonfireVisualAboveSource * 19.0 + bonfireLayerShearRadial * 12.0 + time * 1.18;
-    let bonfireLayeredPlumeShear2 = (bonfireLayerShearDir * sin(bonfireLayerShearPhase) * 0.64 + bonfireLayerShearTangent * cos(bonfireLayerShearPhase * 0.73 + bonfireLayeredBreakup * 2.0) * 0.52)
-      * bonfireLayerShearBand
-      * bonfireCenteringCarrier
-      * (0.026 + curl * 0.007 + microAmount * 0.004)
-      * (0.62 + bonfireLayeredBreakup * 0.48);
-    bonfireLayeredPlumeShear = vec3<f32>(
-      bonfireLayeredPlumeShear2.x,
-      -sin(bonfireLayerShearPhase * 0.81) * bonfireLayerShearBand * bonfireCenteringCarrier * 0.010,
-      bonfireLayeredPlumeShear2.y
-    );
-  }
-  vel = vel + bonfireZeroMeanFlow * bonfireNonWindAuthority;
-  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority;
-  vel = vel + bonfireCellRoll * bonfireNonWindAuthority;
-  vel = vel + bonfireLayeredPlumeShear * bonfireNonWindAuthority * bonfireShearAblation;
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireInstabilityProbe * 1.6;
-  vel = vel + bonfirePlumeRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.4;
-  vel = vel + bonfireCellRoll * bonfireNonWindAuthority * bonfireInstabilityProbe * 1.2;
   vel = vel + bonfireUpperDepinchOutflow * bonfireDepinchAblation;
   vel = vel + bonfireNonWindCenteringForce;
   let windMaterialCoupling = clamp(smoke * 0.54 + heat * 0.30 + source * 0.34 + flame * 0.18, 0.0, 1.6);
@@ -4372,8 +4279,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireSmokeDetailCurlFold = clamp(
     0.50
       + interfaceEnergy * 1.55
-      + length(bonfireLayeredPlumeShear.xz) * 8.0
-      + abs(bonfireLayeredPlumeShear.y) * 14.0
       + bonfireLayeredSmokeBreakup * 0.22
       + bonfireDetailBreakup * 0.18
       + bonfireTongues * 0.12,
@@ -4413,8 +4318,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + transportedSourceStructure * 0.20
       + fireLayer.w * 0.10
       + microLayer.y * 0.08
-      + sourceSpatialDephase * 0.10
-      + sourceSpatialDephaseB * 0.08,
+      + sourceStartupDephase * 0.10
+      + sourceStartupDephaseB * 0.08,
     0.30,
     1.20
   );
@@ -11965,14 +11870,10 @@ export function createKaminosVolumePrototype({
       ? MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;
-    const mainFluidBonfireSymmetricForceStrategy = bonfireCombustionFieldActive
-      ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
-      : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireSymmetricForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
-    const mainFluidBonfireNonWindForceStrategy = bonfireCombustionFieldActive
-      ? MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_ACTIVE
-      : MAIN_FLUID_BONFIRE_NON_WIND_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireNonWindForceEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const mainFluidBonfireSymmetricForceStrategy = MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED;
+    const bonfireSymmetricForceEvaluationsPerCell = 0;
+    const mainFluidBonfireNonWindForceStrategy = MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED;
+    const bonfireNonWindForceEvaluationsPerCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;

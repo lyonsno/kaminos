@@ -82,9 +82,14 @@ function functionCallees(body) {
     .map(match => match[1]);
 }
 
-export function assertTimeFreeWgslCallGraph(source, roots, { label = 'WGSL call graph' } = {}) {
+export function assertTimeFreeWgslCallGraph(
+  source,
+  roots,
+  { label = 'WGSL call graph', forbiddenCallees = [] } = {},
+) {
   const visited = new Set();
   const active = new Set();
+  const forbidden = new Set(forbiddenCallees);
 
   function visit(name, path) {
     if (WGSL_BUILTINS.has(name) || visited.has(name)) return;
@@ -95,6 +100,11 @@ export function assertTimeFreeWgslCallGraph(source, roots, { label = 'WGSL call 
     assert.doesNotMatch(fn.body, TEMPORAL_TOKEN, `${label} helper ${name} must not read temporal globals or tokens`);
     assert.doesNotMatch(fn.body, PERIODIC_CALL, `${label} helper ${name} must not introduce explicit periodic behavior`);
     for (const callee of functionCallees(fn.body)) {
+      assert.equal(
+        forbidden.has(callee),
+        false,
+        `${label} helper ${name} must not call forbidden helper ${callee}`,
+      );
       if (!WGSL_BUILTINS.has(callee)) visit(callee, [...path, name]);
     }
     active.delete(name);

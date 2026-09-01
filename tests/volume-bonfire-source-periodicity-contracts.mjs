@@ -33,6 +33,16 @@ function wgslFunction(source, name) {
   throw new Error(`unterminated WGSL body for ${name}`);
 }
 
+function replaceInsideWgslFunction(source, name, anchor, replacement) {
+  const functionStart = source.indexOf(`fn ${name}(`);
+  assert.notEqual(functionStart, -1, `missing WGSL function ${name} for mutation`);
+  const replacementIndex = source.indexOf(anchor, functionStart);
+  assert.notEqual(replacementIndex, -1, `missing ${name} mutation anchor: ${anchor}`);
+  return source.slice(0, replacementIndex)
+    + replacement
+    + source.slice(replacementIndex + anchor.length);
+}
+
 function assertBonfireSourcePeriodicityBoundary(source) {
   assertTimeFreeWgslCallGraph(
     source,
@@ -42,6 +52,19 @@ function assertBonfireSourcePeriodicityBoundary(source) {
       'materialInterfaceGradient',
     ],
     { label: 'Bonfire transported source call graph' },
+  );
+  assertTimeFreeWgslCallGraph(
+    source,
+    ['bonfireTransportedCombustionField', 'bonfireTransportedSourceBreakup'],
+    {
+      label: 'Bonfire zero-neighborhood-read source call graph',
+      forbiddenCallees: [
+        'readSlot',
+        'readFrontField',
+        'curlAtCell',
+        'materialInterfaceGradient',
+      ],
+    },
   );
   for (const retiredName of [
     'bonfireSymmetricCombustionPairOffset',
@@ -70,13 +93,10 @@ function assertBonfireSourcePeriodicityBoundary(source) {
     'floor',
     'hash31',
     'length',
-    'materialInterfaceGradient',
     'max',
     'min',
     'mix',
     'pow',
-    'readFrontField',
-    'readSlot',
     'smoothstep',
     'vec3',
     'vec4',
@@ -143,7 +163,8 @@ function assertBonfireSourcePeriodicityBoundary(source) {
   assert.doesNotMatch(tallPlumeContourBirth, /\b(?:sin|cos)\s*\(/, 'Tall Plume reaction-contour birth must not contain periodic waves');
   assert.doesNotMatch(tallPlumeContourBirth, /\btime\b/, 'Tall Plume reaction-contour birth must not advance from simulation time');
   assert.match(tallPlumeContourBirth, /transportedSourceStructure/, 'Tall Plume reaction-contour breakup must use transported source structure');
-  assert.match(tallPlumeContourBirth, /sourceSpatialDephase/, 'Tall Plume reaction-contour startup may retain bounded static dephasing');
+  assert.match(tallPlumeContourBirth, /sourceStartupDephase/, 'Tall Plume reaction-contour startup may retain bounded static dephasing only through transported-state authority decay');
+  assert.doesNotMatch(tallPlumeContourBirth, /\bsourceSpatialDephaseB?\b/, 'Tall Plume reaction-contour birth must not retain raw static dephasing after transported structure develops');
 
   assert.match(
     source,
@@ -198,6 +219,15 @@ const falseClosureMutations = [
     source => source.replace(
       'const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;',
       'const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 2 : 0;',
+    ),
+  ],
+  [
+    'helper-local hidden neighborhood read',
+    source => replaceInsideWgslFunction(
+      source,
+      'bonfireTransportedCombustionField',
+      '  let radial = length(p.xz);',
+      '  let reviewerHiddenState = readSlot(vec3<i32>(0), 2u);\n  let radial = length(p.xz) + reviewerHiddenState.x * 0.0001;',
     ),
   ],
 ];
