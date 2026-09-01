@@ -1325,9 +1325,10 @@ const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedura
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
 const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
+const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
-const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
+const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS = 'transported-field-detail-direction-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
@@ -2551,11 +2552,12 @@ fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
 }
 
-fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
+fn oracleActivityCurlForce(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
   let amount = clamp(cue * gain, 0.0, 3.0);
-  let base = turbulentDetailForce(p * 2.05 + vec3<f32>(0.17, -0.23, 0.11), time * 1.37 + f32(c.x + c.y * 3 + c.z * 7) * 0.0009);
-  let crossA = cross(normalize(base + vec3<f32>(0.001)), normalize(vec3<f32>(p.z, -p.x, p.y) + vec3<f32>(0.001)));
-  return normalize(base + crossA * 0.55 + vec3<f32>(0.001)) * amount * 0.020;
+  let localVelocity = readSlot(c, 0u).xyz;
+  let localCurl = curlAtCell(c);
+  let fieldDirection = localCurl + cross(localVelocity, localCurl) * 0.55;
+  return fieldDirection / max(length(fieldDirection), 0.0001) * amount * 0.020;
 }
 
 fn oracleActivityVorticityConfinement(c: vec3<i32>, cue: f32, gain: f32) -> vec3<f32> {
@@ -2770,18 +2772,7 @@ fn vorticityConfinement(c: vec3<i32>, amount: f32) -> vec3<f32> {
   return cross(normal, curlAtCell(c)) * amount;
 }
 
-fn fineScaleBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
-  let localCurl = curlAtCell(c);
-  let curlEnergy = length(localCurl);
-  let detailA = turbulentDetailForce(p * 1.63 + vec3<f32>(0.17, -0.11, 0.23), time * 1.37);
-  let detailB = turbulentDetailForce(p * 2.41 + vec3<f32>(-0.31, 0.19, -0.07), time * 1.91);
-  let shearAxis = normalize(localCurl + detailA * 0.19 + vec3<f32>(0.001));
-  let shear = normalize(cross(shearAxis, detailB) + detailA * 0.36 + vec3<f32>(0.001));
-  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
-  return shear * activeFlow * (0.006 + curl * 0.010);
-}
-
-fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, velocity: vec3<f32>, p: vec3<f32>) -> vec3<f32> {
+fn transportedDetailDirection(material: vec4<f32>, fireLayer: vec4<f32>, microLayer: vec4<f32>, frontTopology: f32, velocity: vec3<f32>) -> vec3<f32> {
   let carrier = clamp(
     material.x * 0.34
       + material.w * 0.52
@@ -2792,13 +2783,22 @@ fn transportedDetailPhaseAnchor(material: vec4<f32>, fireLayer: vec4<f32>, micro
     0.0,
     2.4
   );
-  let scalarPhase = vec3<f32>(
+  let scalarAxis = vec3<f32>(
     material.w - microLayer.x * 0.45 + frontTopology * 0.32,
     fireLayer.z * 0.58 + microLayer.y * 0.28 - material.x * 0.22,
     microLayer.x * 0.46 + material.y * 0.18 - fireLayer.x * 0.16
   );
-  let flow = normalize(velocity + vec3<f32>(0.012, 0.019, -0.014));
-  return (scalarPhase * 0.075 + flow * carrier * 0.040 + p.yzx * carrier * 0.012) * carrier;
+  let direction = velocity * (0.58 + carrier * 0.18)
+    + cross(velocity, scalarAxis) * 0.46
+    + scalarAxis * (0.10 + frontTopology * 0.08);
+  return direction / max(length(direction), 0.0001);
+}
+
+fn transportedScalarSlip(velocity: vec3<f32>, heat: f32, smoke: f32, flame: f32) -> vec3<f32> {
+  let lateralFlow = vec3<f32>(velocity.z, velocity.y * 0.16, -velocity.x);
+  let scalarSkew = vec3<f32>(heat - smoke * 0.52, flame - heat * 0.38, smoke - flame * 0.34);
+  let direction = lateralFlow + cross(velocity, scalarSkew) * 0.34 + scalarSkew * 0.08;
+  return direction / max(length(direction), 0.0001);
 }
 
 fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, microSmoke: f32, interfaceShred: f32, flameDetail: f32, frontTopology: f32) -> f32 {
@@ -2813,21 +2813,6 @@ fn tallPlumeTransitionBandStagger(contourBreakup: f32, materialDetail: f32, micr
     0.44,
     1.24
   );
-}
-
-fn turbulentDetailForce(p: vec3<f32>, time: f32) -> vec3<f32> {
-  let q = p * vec3<f32>(9.0, 13.0, 11.0) + vec3<f32>(time * 1.7, -time * 2.1, time * 1.3);
-  let a = vec3<f32>(
-    sin(q.y + cos(q.z)),
-    sin(q.z + cos(q.x)),
-    sin(q.x + cos(q.y))
-  );
-  let b = vec3<f32>(
-    cos(q.z * 1.37 - q.y),
-    cos(q.x * 1.21 - q.z),
-    cos(q.y * 1.43 - q.x)
-  );
-  return normalize(a + b * 0.72 + vec3<f32>(0.001));
 }
 
 fn materialInterfaceGradient(c: vec3<i32>) -> vec3<f32> {
@@ -2901,19 +2886,35 @@ fn bonfireReferenceConfinementForce(c: vec3<i32>, smoke: f32, heat: f32, flame: 
 fn transportedMicrodetailAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, smoke: f32, flame: f32, lateralSlipScale: f32, microdetailRiseDirection: f32) -> vec4<f32> {
   let lift = vec3<f32>(0.0, (heat * 0.22 + flame * 0.34) * (0.28 + speed * 0.055) * microdetailRiseDirection, 0.0);
   let proceduralTransportSlip = step(0.5, u.artistic_motion_controls.w);
-  let rawSlip = turbulentDetailForce(cell * 0.031 + vec3<f32>(0.11, -0.07, 0.17), u.cameraPos_time.w * 1.27) * (0.18 + heat * 0.12 + smoke * 0.06) * proceduralTransportSlip;
-  let slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
+  var slip = vec3<f32>(0.0);
+  if (proceduralTransportSlip > 0.5) {
+    let rawSlip = transportedScalarSlip(velocity, heat, smoke, flame) * (0.18 + heat * 0.12 + smoke * 0.06);
+    slip = vec3<f32>(rawSlip.x * lateralSlipScale, rawSlip.y, rawSlip.z * lateralSlipScale);
+  }
   let backCell = cell - (velocity + lift + slip) * (1.44 + speed * 0.28);
   return sampleFluidSlot(backCell, 3u);
 }
 
-fn interfaceShreddingForce(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
+fn interfaceShreddingForce(c: vec3<i32>, amount: f32, heat: f32, smoke: f32, flame: f32, carriedShred: f32) -> vec3<f32> {
   let interfaceGrad = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGrad);
   let localCurl = curlAtCell(c);
-  let crossCurl = cross(normalize(interfaceGrad + vec3<f32>(0.001)), normalize(localCurl + turbulentDetailForce(p * 2.2, time) * 0.24 + vec3<f32>(0.001)));
+  let crossCurl = cross(
+    interfaceGrad / max(interfaceEnergy, 0.0001),
+    localCurl / max(length(localCurl), 0.0001)
+  );
   let interfaceActive = smoothstep(0.018, 0.23, interfaceEnergy) * (0.28 + smoke * 0.34 + heat * 0.28 + flame * 0.20 + carriedShred * 0.30);
-  return normalize(crossCurl + turbulentDetailForce(p * 1.7 + vec3<f32>(0.23, -0.19, 0.13), time * 1.5) * 0.36 + vec3<f32>(0.001)) * interfaceActive * amount * 0.036;
+  let direction = crossCurl + localCurl * 0.20 + interfaceGrad * 0.14;
+  return direction / max(length(direction), 0.0001) * interfaceActive * amount * 0.036;
+}
+
+fn fieldDerivedFineScaleBreakup(c: vec3<i32>, curl: f32, heat: f32, smoke: f32, source: f32) -> vec3<f32> {
+  let localCurl = curlAtCell(c);
+  let curlEnergy = length(localCurl);
+  let scalarAxis = vec3<f32>(heat - smoke * 0.48, source - heat * 0.34, smoke - source * 0.28);
+  let direction = cross(localCurl, scalarAxis) + localCurl * 0.28 + scalarAxis * curlEnergy * 0.12;
+  let activeFlow = source * 1.55 + heat * 0.52 + smoke * 0.18 + smoothstep(0.006, 0.095, curlEnergy) * 0.32;
+  return direction / max(length(direction), 0.0001) * activeFlow * (0.006 + curl * 0.010);
 }
 
 fn smokeShredEnergy(c: vec3<i32>) -> f32 {
@@ -4051,6 +4052,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
   let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
+  let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);
+  var oracleActivityCurl = vec3<f32>(0.0);
+  if (oracleActivityCue > 0.0005 && oracleActivityCurlGain > 0.0005) {
+    oracleActivityCurl = oracleActivityCurlForce(cellI, oracleActivityCue, oracleActivityCurlGain);
+  }
   let confinement = vorticityConfinement(cellI, 0.034 + curl * 0.044);
   let bonfireReferenceFrontContact = clamp(
     bonfireFrontContactRadiance * 0.42
@@ -4075,30 +4081,36 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireDetailLateralDamping = bonfireLocalLateralForceGain;
   let rawDetailCarrier = source + smoke * 0.26 + heat * 0.18;
   let rawMicroCarrier = microAmount * (source * 0.74 + microSmoke * 0.38 + interfaceShred * 0.26 + fireLick * 0.22);
-  let detailForceArtifactGain = 1.0 - detailScaleArtifactQuarantine;
-  let tallPlumeDetailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz, p) * tallPlumeScene;
-  let tallPlumeDetailTime = mix(time, time * 0.72 + dot(tallPlumeDetailPhaseAnchor, vec3<f32>(1.7, -1.1, 1.3)), tallPlumeScene);
-  let tallPlumeDetailP = p + tallPlumeDetailPhaseAnchor;
-  let oracleActivityCurlNoise = oracleActivityCurlNoiseForce(cellI, tallPlumeDetailP, tallPlumeDetailTime, oracleActivityCue, clamp(u.oracle_activity_controls.y, 0.0, 3.0));
   let oracleActivityConfinement = oracleActivityVorticityConfinement(cellI, oracleActivityCue, clamp(u.oracle_activity_controls.z, 0.0, 3.0));
-  let rawDetailForce = turbulentDetailForce(tallPlumeDetailP * (0.82 + physicalDetailScale * 0.30), tallPlumeDetailTime) * rawDetailCarrier * (0.018 + curl * 0.010) * detailForceArtifactGain;
-  let rawMicroForce = turbulentDetailForce(tallPlumeDetailP * (2.85 * tallPlumeTransportedDetailFrequency) + vec3<f32>(0.13, -0.27, 0.31), tallPlumeDetailTime * 2.4) * rawMicroCarrier * 0.026;
-  let rawShredForce = interfaceShreddingForce(cellI, (p + tallPlumeDetailPhaseAnchor * 0.35) * detailDomain, tallPlumeDetailTime, shredOperatorGain, heat, smoke, flame, interfaceShred);
-  let rawFineBreakup = fineScaleBreakup(cellI, tallPlumeDetailP, tallPlumeDetailTime, curl, heat, smoke, source);
-  let detailLateral = vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping;
-  let microLateral = vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping;
-  let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping;
-  let detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
-  let microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
-  let shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
+  var detailForce = vec3<f32>(0.0);
+  var microForce = vec3<f32>(0.0);
+  var shredForce = vec3<f32>(0.0);
+  var fineBreakup = vec3<f32>(0.0);
+  if (proceduralDetailForces > 0.5) {
+    let rawDetailForce = transportedDetailDirection(material, fireLayer, microLayer, combustionFrontTopology, prev.xyz)
+      * rawDetailCarrier
+      * (0.018 + curl * 0.010)
+      * (1.0 - detailScaleArtifactQuarantine);
+    let rawMicroForce = transportedDetailDirection(microLayer, fireLayer, material, combustionFrontTopology, prev.xyz)
+      * rawMicroCarrier
+      * 0.026;
+    let rawShredForce = interfaceShreddingForce(cellI, shredOperatorGain, heat, smoke, flame, interfaceShred);
+    let rawFineBreakup = fieldDerivedFineScaleBreakup(cellI, curl, heat, smoke, source);
+    let detailLateral = vec2<f32>(rawDetailForce.x, rawDetailForce.z) * bonfireDetailLateralDamping;
+    let microLateral = vec2<f32>(rawMicroForce.x, rawMicroForce.z) * bonfireDetailLateralDamping;
+    let shredLateral = vec2<f32>(rawShredForce.x, rawShredForce.z) * bonfireDetailLateralDamping;
+    let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
+    detailForce = vec3<f32>(detailLateral.x, rawDetailForce.y, detailLateral.y) * bonfireDetailForcesAblation;
+    microForce = vec3<f32>(microLateral.x, rawMicroForce.y, microLateral.y) * bonfireDetailForcesAblation;
+    shredForce = vec3<f32>(shredLateral.x, rawShredForce.y, shredLateral.y) * bonfireDetailForcesAblation;
+    fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation;
+  }
   let heatExpansion = thermalExpansionForce(cellI, heat, 0.048 + curl * 0.019);
-  let fineBreakupLateral = vec2<f32>(rawFineBreakup.x, rawFineBreakup.z) * bonfireDetailLateralDamping;
-  let fineBreakup = vec3<f32>(fineBreakupLateral.x, rawFineBreakup.y, fineBreakupLateral.y) * bonfireDetailForcesAblation * proceduralDetailForces;
   let projectionCorrection = vec3<f32>(0.0);
   let bonfireSwirlSymmetryGain = mix(1.0, max(explicitWindAuthority, 0.84), bonfireScene);
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement * (0.35 + smoke * 0.34 + heat * 0.52);
-  vel = vel + oracleActivityCurlNoise;
+  vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
   vel = vel + detailForce;
@@ -11865,13 +11877,15 @@ export function createKaminosVolumePrototype({
     const bonfireNonWindForceEvaluationsPerCell = 0;
     const mainFluidScalarAdvectionPeriodicSlipStrategy = MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED;
     const scalarAdvectionPeriodicSlipEvaluationsPerCell = 0;
+    const mainFluidPeriodicDetailForceStrategy = MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED;
+    const periodicDetailForceEvaluationsPerCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
     const bonfireSourceTopologyExtraReadsPerCell = 0;
     const tallPlumeDetailCoherenceStrategy = scene === 'tall_plume'
-      ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
+      ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS
       : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
     const tallPlumeDetailCoherenceExtraReadsPerCell = 0;
     const tallPlumeTransitionBandStrategy = scene === 'tall_plume'
@@ -11941,6 +11955,8 @@ export function createKaminosVolumePrototype({
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
     state.mainFluidScalarAdvectionPeriodicSlipStrategy = mainFluidScalarAdvectionPeriodicSlipStrategy;
     state.scalarAdvectionPeriodicSlipEvaluationsPerCell = scalarAdvectionPeriodicSlipEvaluationsPerCell;
+    state.mainFluidPeriodicDetailForceStrategy = mainFluidPeriodicDetailForceStrategy;
+    state.periodicDetailForceEvaluationsPerCell = periodicDetailForceEvaluationsPerCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
@@ -11997,6 +12013,8 @@ export function createKaminosVolumePrototype({
       bonfireNonWindForceEvaluationsPerCell,
       mainFluidScalarAdvectionPeriodicSlipStrategy,
       scalarAdvectionPeriodicSlipEvaluationsPerCell,
+      mainFluidPeriodicDetailForceStrategy,
+      periodicDetailForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell,
@@ -19108,6 +19126,8 @@ export function createKaminosVolumePrototype({
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
         mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
         scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
+        mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
+        periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
@@ -19486,6 +19506,8 @@ export function createKaminosVolumePrototype({
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
       mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
       scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
+      mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
+      periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,

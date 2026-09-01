@@ -40,16 +40,18 @@ assert.match(core, /let proceduralDetailForces = step\(0\.5, u\.artistic_motion_
 assert.match(core, /let proceduralTransportSlip = step\(0\.5, u\.artistic_motion_controls\.w\);/);
 assert.match(
   core,
-  /let rawSlip = turbulentDetailForce\([^;]+\) \* \([^;]+\) \* proceduralTransportSlip;/,
-  'transport-slip control gates the analytic slip at its only advection consumer',
+  /var slip = vec3<f32>\(0\.0\);[\s\S]*if \(proceduralTransportSlip > 0\.5\) \{[\s\S]*let rawSlip = transportedScalarSlip\(/,
+  'transport-slip control prevents field-derived slip evaluation at its only advection consumer',
 );
+const detailGateStart = core.indexOf('if (proceduralDetailForces > 0.5) {');
+assert.notEqual(detailGateStart, -1, 'transported detail-force operator gate is present');
 for (const force of ['detailForce', 'microForce', 'shredForce', 'fineBreakup']) {
-  assert.match(
-    core,
-    new RegExp(`let ${force} = [^;]+\\* proceduralDetailForces;`),
-    `${force} is independently gated as a broad periodic body force`,
-  );
+  assert.match(core, new RegExp(`var ${force} = vec3<f32>\\(0\\.0\\);`), `${force} initializes inert`);
 }
+for (const call of ['transportedDetailDirection', 'interfaceShreddingForce', 'fieldDerivedFineScaleBreakup']) {
+  assert.ok(core.indexOf(`${call}(`, detailGateStart) > detailGateStart, `${call} is evaluated only after the detail-force gate`);
+}
+assert.match(core, /const periodicDetailForceEvaluationsPerCell = 0;/, 'retired periodic detail-force work is explicit in the cost ledger');
 assert.match(
   core,
   /vel = vel \+ confinement \* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\);/,
