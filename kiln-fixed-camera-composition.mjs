@@ -1,6 +1,20 @@
 export const KILN_FIXED_CAMERA_COMPOSITION_IDENTITY = 'normal-lit-fixed-camera-plate-v0';
 export const KILN_FIXED_CAMERA_PRESET_ID = 'vsp-341c2a315b094a6de625f63dfffa5a8b4e3c49cf534e428f5c9301698286b424';
 export const KILN_FIXED_CAMERA_PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
+export const KILN_FIXED_CAMERA_ASSETS = Object.freeze({
+  plate: Object.freeze({
+    root: 'image-inbox',
+    path: 'kiln-room-pre-ignition-source-v1.png',
+    sha256: '6fd7e60f95f81452c62ac8e5c8b82c93d7736b1f0552c521495bf21e2335debb',
+    dimensions: Object.freeze([1536, 1024]),
+  }),
+  normal: Object.freeze({
+    root: 'reconstructions',
+    path: 'kiln-room-pre-ignition-source-v1/lotus-normal-v1/normal.png',
+    sha256: 'f7237e8eceedeb8833a217b7bc45f21d553a2fd1e04170d217260658435ca216',
+    dimensions: Object.freeze([1024, 1024]),
+  }),
+});
 export const KILN_FIXED_CAMERA_ROUTE_PARAMS = Object.freeze([
   'kiln_composition',
   'kiln_plate_root',
@@ -32,7 +46,7 @@ function exactParam(params, name, { required = true } = {}) {
   return values[0] ?? null;
 }
 
-function routeAsset(params, prefix) {
+function routeAsset(params, prefix, expected) {
   const root = exactParam(params, `${prefix}_root`);
   const path = exactParam(params, `${prefix}_path`);
   const sha256 = exactParam(params, `${prefix}_sha256`);
@@ -41,8 +55,17 @@ function routeAsset(params, prefix) {
     throw new Error(`invalid-${prefix.replaceAll('_', '-')}-path`);
   }
   if (!SHA256_PATTERN.test(sha256)) throw new Error(`invalid-${prefix.replaceAll('_', '-')}-sha256`);
+  for (const [field, value] of Object.entries({ root, path, sha256 })) {
+    if (value !== expected[field]) throw new Error(`${prefix.replaceAll('_', '-')}-${field}-mismatch`);
+  }
   const query = new URLSearchParams({ root, path });
-  return { root, path, sha256, url: `/api/read?${query}` };
+  return {
+    root,
+    path,
+    sha256,
+    expectedDimensions: [...expected.dimensions],
+    url: `/api/read?${query}`,
+  };
 }
 
 function exactNumber(params, name, minimum, maximum) {
@@ -73,8 +96,8 @@ export function parseKilnFixedCameraComposition(params) {
     identity,
     status: 'requested',
     preset: { id: presetId, authority: presetAuthority },
-    plate: routeAsset(params, 'kiln_plate'),
-    normal: routeAsset(params, 'kiln_normal'),
+    plate: routeAsset(params, 'kiln_plate', KILN_FIXED_CAMERA_ASSETS.plate),
+    normal: routeAsset(params, 'kiln_normal', KILN_FIXED_CAMERA_ASSETS.normal),
     fire: {
       center: [
         exactNumber(params, 'kiln_fire_x', 0, 1),
@@ -109,7 +132,8 @@ export function validateKilnFixedCameraCompositionRuntime(composition, runtime =
   }
   return {
     ...composition,
-    status: 'admitted',
+    status: 'route-admitted',
+    failurePhase: null,
     effective: {
       presetId: runtime.presetId,
       presetAuthority: runtime.presetAuthority,
@@ -117,6 +141,16 @@ export function validateKilnFixedCameraCompositionRuntime(composition, runtime =
       productFrameOwner: runtime.productFrameOwner,
     },
   };
+}
+
+export function compositeKilnPremultipliedSource(radiance, alpha, background) {
+  if (![radiance, background].every(value => Array.isArray(value) && value.length === 3)
+    || ![...radiance, ...background, alpha].every(Number.isFinite)
+    || alpha < 0
+    || alpha > 1) {
+    throw new Error('invalid-kiln-premultiplied-source-over-input');
+  }
+  return radiance.map((channel, index) => channel + background[index] * (1 - alpha));
 }
 
 export function kilnFixedCameraUniformData(composition, { plateWidth, plateHeight } = {}) {

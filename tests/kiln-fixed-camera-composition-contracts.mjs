@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   KILN_FIXED_CAMERA_COMPOSITION_IDENTITY,
+  compositeKilnPremultipliedSource,
   kilnFixedCameraUniformData,
   parseKilnFixedCameraComposition,
   validateKilnFixedCameraCompositionRuntime,
@@ -69,12 +70,14 @@ assert.deepEqual(parsed.plate, {
   root: 'image-inbox',
   path: 'kiln-room-pre-ignition-source-v1.png',
   sha256: PLATE_SHA,
+  expectedDimensions: [1536, 1024],
   url: '/api/read?root=image-inbox&path=kiln-room-pre-ignition-source-v1.png',
 });
 assert.deepEqual(parsed.normal, {
   root: 'reconstructions',
   path: 'kiln-room-pre-ignition-source-v1/lotus-normal-v1/normal.png',
   sha256: NORMAL_SHA,
+  expectedDimensions: [1024, 1024],
   url: '/api/read?root=reconstructions&path=kiln-room-pre-ignition-source-v1%2Flotus-normal-v1%2Fnormal.png',
 });
 assert.deepEqual(parsed.fire, { center: [0.584, 0.516], scale: [0.31, 0.46] });
@@ -102,7 +105,8 @@ assert.deepEqual(validateKilnFixedCameraCompositionRuntime(parsed, {
   productFrameOwner: 'prototype',
 }), {
   ...parsed,
-  status: 'admitted',
+  status: 'route-admitted',
+  failurePhase: null,
   effective: {
     presetId: BASIN_ID,
     presetAuthority: 'shared-volume-settings-preset-v2',
@@ -110,6 +114,22 @@ assert.deepEqual(validateKilnFixedCameraCompositionRuntime(parsed, {
     productFrameOwner: 'prototype',
   },
 });
+
+assert.deepEqual(
+  compositeKilnPremultipliedSource([0, 0, 0], 0, [0.2, 0.4, 0.6]),
+  [0.2, 0.4, 0.6],
+  'zero-alpha fire preserves the plate',
+);
+assert.deepEqual(
+  compositeKilnPremultipliedSource([0.3, 0.2, 0.1], 0.5, [0.2, 0.4, 0.6]),
+  [0.4, 0.4, 0.4],
+  'partial-alpha source-over does not multiply already premultiplied radiance again',
+);
+assert.deepEqual(
+  compositeKilnPremultipliedSource([0.3, 0.2, 0.1], 1, [0.2, 0.4, 0.6]),
+  [0.3, 0.2, 0.1],
+  'opaque fire replaces the plate',
+);
 
 for (const [name, mutate, pattern] of [
   ['missing plate hash', params => params.delete('kiln_plate_sha256'), /missing-kiln-plate-sha256/],
@@ -119,6 +139,19 @@ for (const [name, mutate, pattern] of [
   ['wrong basin', params => params.set('settings_preset', `vsp-${'a'.repeat(64)}`), /unsupported-kiln-preset/],
   ['out of range fire scale', params => params.set('kiln_fire_scale_x', '0'), /invalid-kiln-fire-scale-x/],
   ['silent numeric coercion', params => params.set('kiln_light_intensity', '2.4watts'), /invalid-kiln-light-intensity/],
+]) {
+  const params = admittedParams();
+  mutate(params);
+  assert.throws(() => parseKilnFixedCameraComposition(params), pattern, name);
+}
+
+for (const [name, mutate, pattern] of [
+  ['substituted plate root', params => params.set('kiln_plate_root', 'scratch'), /kiln-plate-root-mismatch/],
+  ['substituted plate path', params => params.set('kiln_plate_path', 'other.png'), /kiln-plate-path-mismatch/],
+  ['substituted plate hash', params => params.set('kiln_plate_sha256', 'a'.repeat(64)), /kiln-plate-sha256-mismatch/],
+  ['substituted normal root', params => params.set('kiln_normal_root', 'image-inbox'), /kiln-normal-root-mismatch/],
+  ['substituted normal path', params => params.set('kiln_normal_path', 'other.png'), /kiln-normal-path-mismatch/],
+  ['substituted normal hash', params => params.set('kiln_normal_sha256', 'b'.repeat(64)), /kiln-normal-sha256-mismatch/],
 ]) {
   const params = admittedParams();
   mutate(params);

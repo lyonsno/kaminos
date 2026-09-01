@@ -17857,6 +17857,17 @@ function reportKaminosVolumeRouteInitFailure(error) {
     const toggle = document.getElementById('volume-toggle');
     if (toggle) toggle.disabled = true;
   }
+  if (params.has('kiln_composition')) {
+    window.__kaminosKilnFixedCameraCompositionReceipt = {
+      ...(window.__kaminosKilnFixedCameraCompositionReceipt || {
+        identity: params.get('kiln_composition'),
+        status: 'requested',
+      }),
+      status: 'failed',
+      failurePhase: 'route-initialization',
+      error: message,
+    };
+  }
   console.error('Volume route initialization failed:', error);
   setInfo(`Volume route initialization failed: ${message}`);
 }
@@ -18454,6 +18465,7 @@ async function initKaminosVolumeRoute() {
   }
   updateVolumeControlLabels();
   const kilnFixedCameraCompositionRequest = parseKilnFixedCameraComposition(params);
+  window.__kaminosKilnFixedCameraCompositionReceipt = kilnFixedCameraCompositionRequest;
   const kilnMountControls = readVolumeControls();
   const kilnFixedCameraComposition = validateKilnFixedCameraCompositionRuntime(
     kilnFixedCameraCompositionRequest,
@@ -18473,6 +18485,9 @@ async function initKaminosVolumeRoute() {
     controls,
     getControls: readVolumeControls,
     kilnFixedCameraComposition,
+    onKilnFixedCameraCompositionReceipt: receipt => {
+      window.__kaminosKilnFixedCameraCompositionReceipt = receipt;
+    },
     onStatus: status => {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);

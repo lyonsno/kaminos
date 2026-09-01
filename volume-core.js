@@ -6076,7 +6076,7 @@ fn fsKilnCompositeSource(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in, 1.0e6);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let displayRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
-  return vec4<f32>(displayRadiance * alpha, alpha);
+  return vec4<f32>(displayRadiance, alpha);
 }
 
 @fragment
@@ -7690,6 +7690,7 @@ export function createKaminosVolumePrototype({
   externalDepthFormat = 'depth24plus',
   externalProductTransform = { translate: [0, 0, 0], scale: 1 },
   kilnFixedCameraComposition = null,
+  onKilnFixedCameraCompositionReceipt = null,
 }) {
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
@@ -8630,6 +8631,29 @@ export function createKaminosVolumePrototype({
 
   function emitStatus(extra = {}) {
     onStatus?.({ ...state, ...extra });
+  }
+
+  function publishKilnFixedCameraCompositionReceipt(receipt) {
+    if (!kilnFixedCameraComposition) return null;
+    state.kilnFixedCameraComposition = receipt ? { ...receipt } : null;
+    onKilnFixedCameraCompositionReceipt?.(state.kilnFixedCameraComposition
+      ? { ...state.kilnFixedCameraComposition }
+      : null);
+    return state.kilnFixedCameraComposition;
+  }
+
+  function failKilnFixedCameraComposition(failurePhase, error) {
+    if (!kilnFixedCameraComposition) return null;
+    return publishKilnFixedCameraCompositionReceipt({
+      ...(state.kilnFixedCameraComposition || kilnFixedCameraComposition),
+      status: 'failed',
+      failurePhase,
+      error: error?.message || String(error),
+    });
+  }
+
+  if (state.kilnFixedCameraComposition) {
+    publishKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition);
   }
 
   function updateExternalEmitterDebug(nowMs = externalEmitterNowMs()) {
@@ -10284,18 +10308,47 @@ export function createKaminosVolumePrototype({
   }
 
   async function loadVerifiedKilnTexture(asset, { label, format: textureFormat }) {
-    const response = await fetch(asset.url, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`kiln-asset-fetch-failed:${label}:${response.status}`);
+    let response;
+    try {
+      response = await fetch(asset.url, { cache: 'no-store' });
+    } catch (cause) {
+      const error = new Error(`kiln-asset-fetch-failed:${label}:${cause?.message || String(cause)}`);
+      error.kilnFailurePhase = 'asset-fetch';
+      throw error;
+    }
+    if (!response.ok) {
+      const error = new Error(`kiln-asset-fetch-failed:${label}:${response.status}`);
+      error.kilnFailurePhase = 'asset-fetch';
+      throw error;
+    }
     const bytes = await response.arrayBuffer();
     const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => (
       byte.toString(16).padStart(2, '0')
     )).join('');
     if (digest !== asset.sha256) {
-      throw new Error(`kiln-asset-sha256-mismatch:${label}:requested=${asset.sha256}:effective=${digest}`);
+      const error = new Error(`kiln-asset-sha256-mismatch:${label}:requested=${asset.sha256}:effective=${digest}`);
+      error.kilnFailurePhase = 'asset-sha256';
+      throw error;
     }
-    const bitmap = await createImageBitmap(new Blob([bytes], {
-      type: response.headers.get('content-type') || 'image/png',
-    }));
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(new Blob([bytes], {
+        type: response.headers.get('content-type') || 'image/png',
+      }));
+    } catch (cause) {
+      const error = new Error(`kiln-asset-decode-failed:${label}:${cause?.message || String(cause)}`);
+      error.kilnFailurePhase = 'asset-decode';
+      throw error;
+    }
+    if (bitmap.width !== asset.expectedDimensions[0] || bitmap.height !== asset.expectedDimensions[1]) {
+      const effectiveDimensions = `${bitmap.width}x${bitmap.height}`;
+      bitmap.close?.();
+      const error = new Error(
+        `kiln-asset-dimensions-mismatch:${label}:requested=${asset.expectedDimensions.join('x')}:effective=${effectiveDimensions}`,
+      );
+      error.kilnFailurePhase = 'asset-dimensions';
+      throw error;
+    }
     const texture = device.createTexture({
       label: `kaminos kiln ${label} ${digest}`,
       size: { width: bitmap.width, height: bitmap.height, depthOrArrayLayers: 1 },
@@ -10308,6 +10361,10 @@ export function createKaminosVolumePrototype({
       { width: bitmap.width, height: bitmap.height, depthOrArrayLayers: 1 },
     );
     const receipt = {
+      requestedRoot: asset.root,
+      requestedPath: asset.path,
+      effectiveRoot: asset.root,
+      effectivePath: asset.path,
       requestedUrl: asset.url,
       effectiveUrl: response.url || asset.url,
       requestedSha256: asset.sha256,
@@ -10322,48 +10379,65 @@ export function createKaminosVolumePrototype({
 
   async function initializeKilnFixedCameraComposition() {
     if (!kilnFixedCameraComposition) return null;
-    const [plate, normal] = await Promise.all([
-      loadVerifiedKilnTexture(kilnFixedCameraComposition.plate, {
+    publishKilnFixedCameraCompositionReceipt({
+      ...kilnFixedCameraComposition,
+      status: 'initializing',
+      failurePhase: 'asset-verification',
+    });
+    let plate = null;
+    let normal = null;
+    try {
+      plate = await loadVerifiedKilnTexture(kilnFixedCameraComposition.plate, {
         label: 'fixed-camera plate',
         format: 'rgba8unorm-srgb',
-      }),
-      loadVerifiedKilnTexture(kilnFixedCameraComposition.normal, {
+      });
+      normal = await loadVerifiedKilnTexture(kilnFixedCameraComposition.normal, {
         label: 'image-aligned normal',
         format: 'rgba8unorm',
-      }),
-    ]);
-    kilnCompositePlateTexture = plate.texture;
-    kilnCompositeNormalTexture = normal.texture;
-    const uniformData = kilnFixedCameraUniformData(kilnFixedCameraComposition, {
-      plateWidth: plate.receipt.width,
-      plateHeight: plate.receipt.height,
-    });
-    kilnCompositeUniformBuffer = device.createBuffer({
-      label: 'kaminos kiln fixed-camera composite uniforms',
-      size: uniformData.byteLength,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-    device.queue.writeBuffer(kilnCompositeUniformBuffer, 0, uniformData);
-    state.kilnFixedCameraComposition = {
-      ...kilnFixedCameraComposition,
-      status: 'effective',
-      assets: { plate: plate.receipt, normal: normal.receipt },
-      alignment: {
-        identity: 'normalized-uv-image-alignment-v0',
-        plateAspect: plate.receipt.width / plate.receipt.height,
-        plateDimensions: [plate.receipt.width, plate.receipt.height],
-        normalDimensions: [normal.receipt.width, normal.receipt.height],
-      },
-      renderer: {
-        identity: 'premultiplied-raymarch-plus-normal-lit-fixed-camera-plate-v0',
-        flameCount: 1,
-        fireSourcePass: 'transparent-premultiplied-raymarch-v0',
-        relightingPass: 'analytic-screen-space-normal-diffuse-v0',
-        geometryAuthority: 'none',
-        shadowAuthority: 'none',
-      },
-    };
-    return state.kilnFixedCameraComposition;
+      });
+      kilnCompositePlateTexture = plate.texture;
+      kilnCompositeNormalTexture = normal.texture;
+      const uniformData = kilnFixedCameraUniformData(kilnFixedCameraComposition, {
+        plateWidth: plate.receipt.width,
+        plateHeight: plate.receipt.height,
+      });
+      kilnCompositeUniformBuffer = device.createBuffer({
+        label: 'kaminos kiln fixed-camera composite uniforms',
+        size: uniformData.byteLength,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(kilnCompositeUniformBuffer, 0, uniformData);
+      return publishKilnFixedCameraCompositionReceipt({
+        ...kilnFixedCameraComposition,
+        status: 'effective',
+        failurePhase: null,
+        assets: { plate: plate.receipt, normal: normal.receipt },
+        alignment: {
+          identity: 'normalized-uv-image-alignment-v0',
+          plateAspect: plate.receipt.width / plate.receipt.height,
+          plateDimensions: [plate.receipt.width, plate.receipt.height],
+          normalDimensions: [normal.receipt.width, normal.receipt.height],
+        },
+        renderer: {
+          identity: 'premultiplied-raymarch-plus-normal-lit-fixed-camera-plate-v0',
+          flameCount: 1,
+          fireSourcePass: 'transparent-premultiplied-raymarch-v0',
+          relightingPass: 'analytic-screen-space-normal-diffuse-v0',
+          geometryAuthority: 'none',
+          shadowAuthority: 'none',
+        },
+      });
+    } catch (error) {
+      plate?.texture?.destroy();
+      normal?.texture?.destroy();
+      kilnCompositePlateTexture = null;
+      kilnCompositeNormalTexture = null;
+      failKilnFixedCameraComposition(
+        error.kilnFailurePhase || 'kiln-composition-initialization-failed',
+        error,
+      );
+      throw error;
+    }
   }
 
   async function ensureGpu() {
@@ -10450,6 +10524,7 @@ export function createKaminosVolumePrototype({
     }
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
+      failKilnFixedCameraComposition('gpu-uncaptured-error', state.error);
       emitStatus({ phase: 'gpu-error', error: state.error });
     });
     uniformBuffer = device.createBuffer({
@@ -15319,13 +15394,18 @@ export function createKaminosVolumePrototype({
         );
         encodeKilnFixedCameraComposite(encoder, currentTexture.createView());
         state.volumeReconstructionStyle = 'normal-lit-fixed-camera-plate-v0';
-        state.kilnFixedCameraComposition = {
-          ...state.kilnFixedCameraComposition,
-          status: 'effective',
-          frameCount: state.frameCount,
-          simStepCount: state.simStepCount,
-          raymarchShaderSpecialization: state.raymarchShaderSpecialization,
-        };
+        if (!state.kilnFixedCameraComposition.firstFrame) {
+          publishKilnFixedCameraCompositionReceipt({
+            ...state.kilnFixedCameraComposition,
+            status: 'effective',
+            failurePhase: null,
+            firstFrame: {
+              frameCount: state.frameCount,
+              simStepCount: state.simStepCount,
+              raymarchShaderSpecialization: state.raymarchShaderSpecialization,
+            },
+          });
+        }
         recordBrowserResidualCost({ applied: false });
         recordVolumePresentationApplication({
           raymarchEncoded: true,
@@ -15534,6 +15614,7 @@ export function createKaminosVolumePrototype({
       }
       state.active = false;
       state.error = err?.message || String(err);
+      failKilnFixedCameraComposition('kiln-composition-render-failed', err);
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
       emitStatus({ phase: 'render-error', error: state.error });
@@ -21781,6 +21862,7 @@ export function createKaminosVolumePrototype({
           state.active = false;
           state.error = err?.message || String(err);
           state.backend = 'unavailable';
+          failKilnFixedCameraComposition('kiln-composition-activation-failed', err);
           canvas.classList.remove('active');
           emitStatus({ phase: 'error', error: state.error });
           throw err;
