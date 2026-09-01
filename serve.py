@@ -3,6 +3,7 @@
 
 import http.server
 import copy
+from decimal import Decimal, InvalidOperation
 import fcntl
 import hashlib
 import json
@@ -949,7 +950,15 @@ def _volume_settings_alias_for_label(store, label):
     return disambiguated
 
 
-def write_volume_settings_preset(store_path, label, payload, source, schema=None):
+def write_volume_settings_preset(
+    store_path,
+    label,
+    payload,
+    source,
+    schema=None,
+    *,
+    preserve_existing_alias=False,
+):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     validate_volume_settings_preset_payload(payload, schema)
     store = _volume_settings_store_path(store_path)
@@ -972,12 +981,25 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
         alias = _volume_settings_alias_for_label(store, effective_label)
         preset_path = store / "presets" / f"{preset_id}.json"
         alias_path = store / "aliases" / f"{alias}.json"
+        if preserve_existing_alias and alias_path.exists():
+            existing_alias = _read_json_object(alias_path, "alias")
+            if (
+                existing_alias.get("identity") != "kaminos-volume-settings-preset-alias-v1"
+                or existing_alias.get("alias") != alias
+            ):
+                raise ValueError(f"volume settings preset alias identity mismatch: {alias}")
+            if existing_alias.get("presetId") != preset_id:
+                raise ValueError(f"projection would repoint existing alias: {alias}")
         created = _atomic_create_json(preset_path, document)
         idempotent = not created
         if idempotent:
-            existing = read_volume_settings_preset(store, preset_id, schema)
+            existing = _read_json_object(preset_path, "artifact")
             if existing.get("contentHash") != document["contentHash"]:
                 raise ValueError("volume settings preset content identity collision")
+            if existing.get("preset") != payload:
+                raise ValueError(
+                    "volume settings preset content identity resolves to a different canonical payload"
+                )
 
         alias_document = {
             "identity": "kaminos-volume-settings-preset-alias-v1",
@@ -1020,6 +1042,28 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
     }
 
 
+def _exact_profile_tick(value, minimum, maximum, quantum, label):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f"{label} must be a finite number")
+    try:
+        decimal_value = Decimal(str(value))
+    except InvalidOperation as error:
+        raise ValueError(f"{label} must be a finite number") from error
+    if decimal_value < minimum or decimal_value > maximum:
+        raise ValueError(
+            f"{label} must be from {minimum} through {maximum} in exact {quantum} increments"
+        )
+    ticks = decimal_value / quantum
+    if ticks != ticks.to_integral_value():
+        raise ValueError(
+            f"{label} must be from {minimum} through {maximum} in exact {quantum} increments"
+        )
+    canonical = decimal_value.quantize(quantum)
+    if canonical == canonical.to_integral_value():
+        return int(canonical)
+    return float(canonical)
+
+
 def project_volume_settings_preset(store_path, preset_ref, label, profile, source, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     expected_profile_fields = {
@@ -1049,24 +1093,25 @@ def project_volume_settings_preset(store_path, preset_ref, label, profile, sourc
     ray_steps = profile["raySteps"]
     if isinstance(ray_steps, bool) or not isinstance(ray_steps, int) or not 24 <= ray_steps <= 160:
         raise ValueError("raySteps must be an integer from 24 through 160")
-    adaptive_rays = profile["adaptiveRays"]
-    if isinstance(adaptive_rays, bool) or not isinstance(adaptive_rays, (int, float)) or not math.isfinite(adaptive_rays):
-        raise ValueError("adaptiveRays must be a finite number")
-    if not 0 <= adaptive_rays <= 1 or not math.isclose(adaptive_rays * 20, round(adaptive_rays * 20), abs_tol=1e-9):
-        raise ValueError("adaptiveRays must be from 0 through 1 in exact 0.05 increments")
-    render_scale = profile["renderScale"]
-    if isinstance(render_scale, bool) or not isinstance(render_scale, (int, float)) or not math.isfinite(render_scale):
-        raise ValueError("renderScale must be a finite number")
-    if not 0.1 <= render_scale <= 0.3 or not math.isclose(render_scale * 1000, round(render_scale * 1000), abs_tol=1e-9):
-        raise ValueError("renderScale must be from 0.1 through 0.3 in exact 0.001 increments")
+    adaptive_rays = _exact_profile_tick(
+        profile["adaptiveRays"], Decimal("0"), Decimal("1"), Decimal("0.05"), "adaptiveRays"
+    )
+    render_scale = _exact_profile_tick(
+        profile["renderScale"], Decimal("0.1"), Decimal("0.3"), Decimal("0.001"), "renderScale"
+    )
 
     normalized_profile = {
         "simulationResolution": resolution,
         "raySteps": ray_steps,
-        "adaptiveRays": float(adaptive_rays) if isinstance(adaptive_rays, float) else adaptive_rays,
-        "renderScale": float(render_scale),
+        "adaptiveRays": adaptive_rays,
+        "renderScale": render_scale,
     }
     parent = read_volume_settings_preset(store_path, preset_ref, schema)
+    schema_projection = parent.get("schemaProjection") or {}
+    if schema_projection.get("defaultsApplied") or schema_projection.get("retiredControlsStripped"):
+        raise ValueError(
+            "projection source requires schema normalization outside the four-control profile contract"
+        )
     projected = copy.deepcopy(parent["preset"])
     updates = {
         "volume-resolution": str(resolution),
@@ -1100,7 +1145,18 @@ def project_volume_settings_preset(store_path, preset_ref, label, profile, sourc
     projected["route"] = route._replace(query=urlencode(route_entries)).geturl()
     validate_volume_settings_preset_payload(projected, schema)
 
-    derived = write_volume_settings_preset(store_path, label, projected, source, schema)
+    projected_preset_id = f"vsp-{_volume_settings_content_hash(projected, schema)}"
+    if projected_preset_id == parent["presetId"]:
+        raise ValueError("projection does not create a distinct child preset")
+
+    derived = write_volume_settings_preset(
+        store_path,
+        label,
+        projected,
+        source,
+        schema,
+        preserve_existing_alias=True,
+    )
     store = _volume_settings_store_path(store_path)
     return {
         "ok": True,

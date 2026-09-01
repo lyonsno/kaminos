@@ -99,6 +99,30 @@ def route_values(document):
     return dict(parse_qsl(urlparse(document["preset"]["route"]).query, keep_blank_values=True))
 
 
+def set_control(payload, key, value):
+    updated = copy.deepcopy(payload)
+    descriptor = updated["domControls"][key]
+    descriptor["value"] = value
+    route = urlparse(updated["route"])
+    route_entries = parse_qsl(route.query, keep_blank_values=True)
+    updated["route"] = route._replace(query=urlencode([
+        (param, str(value) if param == descriptor["param"] else current)
+        for param, current in route_entries
+    ])).geturl()
+    return updated
+
+
+def set_quality_reason(payload, reason):
+    updated = copy.deepcopy(payload)
+    route = urlparse(updated["route"])
+    route_entries = parse_qsl(route.query, keep_blank_values=True)
+    updated["route"] = route._replace(query=urlencode([
+        (param, reason if param == "volume_quality_reason" else current)
+        for param, current in route_entries
+    ])).geturl()
+    return updated
+
+
 def main():
     schema = json.loads((ROOT / "volume-settings-preset-schema-v2.json").read_text())
     payload = build_payload(schema)
@@ -171,6 +195,123 @@ def main():
         )
         assert repeated["effective"]["presetId"] == projection["effective"]["presetId"]
         assert repeated["effective"]["idempotent"] is True
+
+        presets_before_alias_rejection = {
+            path.name for path in (store / "presets").glob("*.json")
+        }
+        try:
+            serve.project_volume_settings_preset(
+                store,
+                "actually-looks-like-fire-fuckahhhhh",
+                "actually-looks-like-fire-FUCKAHHHHH",
+                {**PROFILE, "renderScale": 0.251},
+                source,
+                schema,
+            )
+        except ValueError as error:
+            assert "repoint existing alias" in str(error)
+        else:
+            raise AssertionError("projection silently repointed the source alias")
+        source_alias = serve.read_volume_settings_preset(
+            store,
+            "actually-looks-like-fire-fuckahhhhh",
+            schema,
+        )
+        assert source_alias["presetId"] == parent_id
+        assert {
+            path.name for path in (store / "presets").glob("*.json")
+        } == presets_before_alias_rejection
+
+        parent_profile = {
+            "simulationResolution": 160,
+            "raySteps": 160,
+            "adaptiveRays": 1,
+            "renderScale": 0.278,
+        }
+        try:
+            serve.project_volume_settings_preset(
+                store,
+                parent_id,
+                "no-op-profile",
+                parent_profile,
+                source,
+                schema,
+            )
+        except ValueError as error:
+            assert "does not create a distinct child" in str(error)
+        else:
+            raise AssertionError("no-op projection impersonated a distinct child")
+
+        parent_b_payload = set_quality_reason(
+            set_control(payload, "volume-resolution", "128"),
+            "second-parent",
+        )
+        parent_b = serve.write_volume_settings_preset(
+            store,
+            "second-parent",
+            parent_b_payload,
+            source,
+            schema,
+        )
+        try:
+            serve.project_volume_settings_preset(
+                store,
+                parent_b["effective"]["presetId"],
+                "colliding-child-route",
+                PROFILE,
+                source,
+                schema,
+            )
+        except ValueError as error:
+            assert "content identity resolves to a different canonical payload" in str(error)
+        else:
+            raise AssertionError("colliding child reused an older route payload")
+
+        original_reader = serve.read_volume_settings_preset
+
+        def legacy_reader(*args, **kwargs):
+            document = original_reader(*args, **kwargs)
+            document["schemaProjection"] = {
+                "defaultsApplied": [{"key": "volume-flow-kernel-strength", "value": 0}],
+                "retiredControlsStripped": [],
+            }
+            return document
+
+        serve.read_volume_settings_preset = legacy_reader
+        try:
+            try:
+                serve.project_volume_settings_preset(
+                    store,
+                    parent_id,
+                    "legacy-normalized-parent",
+                    PROFILE,
+                    source,
+                    schema,
+                )
+            except ValueError as error:
+                assert "requires schema normalization" in str(error)
+            else:
+                raise AssertionError("legacy normalization escaped the four-control receipt")
+        finally:
+            serve.read_volume_settings_preset = original_reader
+
+        for field, value in (
+            ("adaptiveRays", 0.50000000002),
+            ("renderScale", 0.2500000002),
+        ):
+            try:
+                serve.project_volume_settings_preset(
+                    store,
+                    parent_id,
+                    f"off-tick-{field}",
+                    {**PROFILE, field: value},
+                    source,
+                    schema,
+                )
+            except ValueError as error:
+                assert "exact" in str(error)
+            else:
+                raise AssertionError(f"off-tick {field} was silently admitted")
 
         try:
             serve.project_volume_settings_preset(
