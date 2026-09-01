@@ -1327,6 +1327,7 @@ const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-period
 const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
 const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
 const MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED = 'retired-periodic-entrainment-sway-v0';
+const MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED = 'retired-hidden-external-emitter-flicker-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS = 'transported-field-detail-direction-v0';
@@ -3096,7 +3097,7 @@ fn bonfireEntrainedLift(smoke: f32, heat: f32, flame: f32, source: f32, combusti
   return carrier * plumeRiseScale * (0.021 + speed * 0.0062);
 }
 
-fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence {
+fn externalEmitterInfluence(p: vec3<f32>) -> ExternalEmitterInfluence {
   var result: ExternalEmitterInfluence;
   result.material = vec4<f32>(0.0);
   result.fire = vec4<f32>(0.0);
@@ -3119,8 +3120,7 @@ fn externalEmitterInfluence(p: vec3<f32>, time: f32) -> ExternalEmitterInfluence
     let isActiveEmitter = step(0.5, emitter.detail_lifetime.w);
     let ageFade = 1.0 - smoothstep(lifetime * 0.68, lifetime, age);
     let falloff = exp(-dist2 / max(0.00001, radius * radius)) * strength * ageFade * isActiveEmitter;
-    let flicker = 0.82 + 0.18 * hash31(vec3<f32>(f32(i) * 13.7, time * 4.1, t * 9.3));
-    let w = falloff * flicker;
+    let w = falloff;
     result.material.x = max(result.material.x, emitter.material.x * w);
     result.material.y = max(result.material.y, emitter.material.y * w);
     result.material.z = max(result.material.z, emitter.material.z * w);
@@ -4047,7 +4047,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let combustionFrontBirth = mix(columnCombustionFrontBirth, bonfireCombustionFrontBirth, bonfireScene);
   let columnFrontTopologyBirth = max(columnCombustionFrontBirth * 0.32, tallPlumeAnnularFrontBirth * 0.42);
   combustionFrontTopology = max(combustionFrontTopology, mix(columnFrontTopologyBirth, bonfireFrontTopologyBirth + bonfireCombustionFrontBirth * 0.18, bonfireScene));
-  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p, time));
+  let externalInjection = applyExternalEmitterInjection(externalEmitterInfluence(p));
   let oracleActivityCue = truthOracleActivityCueAtCell(cellI);
   let oracleActivityCurlGain = clamp(u.oracle_activity_controls.y, 0.0, 3.0);
   var oracleActivityCurl = vec3<f32>(0.0);
@@ -11889,6 +11889,8 @@ export function createKaminosVolumePrototype({
     const periodicDetailForceEvaluationsPerCell = 0;
     const mainFluidPeriodicEntrainmentSwayStrategy = MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED;
     const periodicEntrainmentSwayEvaluationsPerCell = 0;
+    const mainFluidExternalCarrierHiddenFlickerStrategy = MAIN_FLUID_EXTERNAL_CARRIER_HIDDEN_FLICKER_STRATEGY_RETIRED;
+    const externalCarrierHiddenFlickerEvaluationsPerEmitterCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
@@ -11969,6 +11971,8 @@ export function createKaminosVolumePrototype({
     state.periodicDetailForceEvaluationsPerCell = periodicDetailForceEvaluationsPerCell;
     state.mainFluidPeriodicEntrainmentSwayStrategy = mainFluidPeriodicEntrainmentSwayStrategy;
     state.periodicEntrainmentSwayEvaluationsPerCell = periodicEntrainmentSwayEvaluationsPerCell;
+    state.mainFluidExternalCarrierHiddenFlickerStrategy = mainFluidExternalCarrierHiddenFlickerStrategy;
+    state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell = externalCarrierHiddenFlickerEvaluationsPerEmitterCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
@@ -12029,6 +12033,8 @@ export function createKaminosVolumePrototype({
       periodicDetailForceEvaluationsPerCell,
       mainFluidPeriodicEntrainmentSwayStrategy,
       periodicEntrainmentSwayEvaluationsPerCell,
+      mainFluidExternalCarrierHiddenFlickerStrategy,
+      externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell,
@@ -19144,6 +19150,8 @@ export function createKaminosVolumePrototype({
         periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
         mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
         periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
+        mainFluidExternalCarrierHiddenFlickerStrategy: state.mainFluidExternalCarrierHiddenFlickerStrategy,
+        externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
@@ -19526,6 +19534,8 @@ export function createKaminosVolumePrototype({
       periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
       mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
       periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
+      mainFluidExternalCarrierHiddenFlickerStrategy: state.mainFluidExternalCarrierHiddenFlickerStrategy,
+      externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
