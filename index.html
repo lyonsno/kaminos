@@ -2694,7 +2694,7 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=fire-light-field-0831';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=fire-authority-repair-0901d';
 
 // One explicit GPUDevice shared by the Three scene renderer and the Pyro
 // volume simulator; seated in initScene before either consumer constructs.
@@ -17963,6 +17963,7 @@ function readVolumeControls() {
     oracleActivityMaterial: parseFloat(document.getElementById('volume-oracle-activity-material').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
     fireLightField: new URLSearchParams(window.location.search).get('volume_light_field') === '1',
+    fireProbe: parseInt(new URLSearchParams(window.location.search).get('volume_fire_probe') || '', 10) || 0,
     fireLightFieldGrid: parseInt(new URLSearchParams(window.location.search).get('volume_light_field_grid') || '', 10) || undefined,
     reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
     reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),

@@ -1102,6 +1102,7 @@ override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
 override IRRADIANCE_GRID: u32 = 32u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
+override FIRE_PROBE: f32 = 0.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -4169,6 +4170,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  // Fire-chain diagnostic probe accumulator (FIRE_PROBE pipeline constant;
+  // route volume_fire_probe). Max-projects a chosen intermediate along the ray.
+  var fireProbeAccum = vec3<f32>(0.0);
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -4610,6 +4614,27 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
+    if (FIRE_PROBE > 0.5) {
+      var fireProbeValue = vec3<f32>(0.0);
+      if (FIRE_PROBE < 1.5) {
+        fireProbeValue = vec3<f32>(rawTemp, temp, 0.0);
+      } else if (FIRE_PROBE < 2.5) {
+        fireProbeValue = vec3<f32>(renderTemp, quenchCoreCollapse, 0.0);
+      } else if (FIRE_PROBE < 3.5) {
+        fireProbeValue = baseRadianceEmission;
+      } else if (FIRE_PROBE < 4.5) {
+        fireProbeValue = vec3<f32>(stockFireAlpha * 8.0, visibleFlameAlphaCarrier * 2.0, 0.0);
+      } else if (FIRE_PROBE < 5.5) {
+        fireProbeValue = vec3<f32>(flameBodyAuthority, fireGain, fireSnuffDamping);
+      } else if (FIRE_PROBE < 6.5) {
+        fireProbeValue = flameCol * 0.25;
+      } else if (FIRE_PROBE > 8.5 && FIRE_PROBE < 9.5) {
+        fireProbeValue = vec3<f32>(shellMask, frontSupport, thermalSupport);
+      } else if (FIRE_PROBE > 9.5) {
+        fireProbeValue = vec3<f32>(combustionFrontTopology * 4.0, combustionFront * 4.0, heat * 4.0);
+      }
+      fireProbeAccum = max(fireProbeAccum, fireProbeValue);
+    }
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -5074,6 +5099,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
+    if (FIRE_PROBE > 7.5) {
+      fireProbeAccum = max(fireProbeAccum, vec3<f32>(pyroStockFireVisibility, selectiveRaymarchFireAuthority, stockRenderMode));
+    }
     color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
@@ -5086,12 +5114,18 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     t = t + localDt;
   }
 
+  if (FIRE_PROBE > 0.5) {
+    return makeRaymarchResult(vec4<f32>(clamp(fireProbeAccum, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0), vec4<f32>(0.0));
+  }
   let vignette = 1.0 - smoothstep(0.28, 1.48, length(ndc));
   let exposed = vec3<f32>(1.0) - exp(-color * 0.96);
   var grade = exposed * (0.80 + 0.18 * vignette);
   let overlay = clamp(gridAccum * u.grid_overlay_debug.x * 1.8, 0.0, 1.0);
   grade = mix(grade, vec3<f32>(0.04, 0.86, 0.98), overlay * 0.76);
   let current = pow(max(grade, vec3<f32>(0.0)), vec3<f32>(0.84));
+  if (FIRE_PROBE > 6.5 && FIRE_PROBE < 7.5) {
+    return makeRaymarchResult(vec4<f32>(clamp(current, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0), vec4<f32>(0.0));
+  }
   let temporalInvWeight = 1.0 / max(temporalMaterialWeight, 0.0001);
   let temporalWorld = temporalWorldSum * temporalInvWeight;
   let temporalVelocity = temporalVelocitySum * temporalInvWeight;
@@ -7372,7 +7406,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0 };
+    const renderPipelineConstants = {
+      GRID: gridSize,
+      MAJORANT_GRID: majorantGridSize,
+      TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0,
+      FIRE_PROBE: Number(controlsSnapshot.fireProbe) || 0,
+    };
     const computePipelineConstants = { GRID: gridSize };
     const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const makePipeline = (targetFormat, label) => device.createRenderPipeline({
@@ -8534,7 +8573,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
-    uniforms[316] = 1 - selectiveCompositionDefinition.raymarchFireAuthority;
+    // False-authority guard: the smoke-only partition may only strip raymarch
+    // fire authority when the selective-head splat layer is actually seated.
+    // The raw composition request defaults to smoke-raymarch-under-splats-v0,
+    // and packing it unconditionally let an inactive splat layer own fire,
+    // leaving plain routes with no fire renderer at all.
+    uniforms[316] = state.selectiveHeadLiveEffectiveRole === 'off' ? 0 : (1 - selectiveCompositionDefinition.raymarchFireAuthority);
     uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
     uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
     uniforms[319] = 0;

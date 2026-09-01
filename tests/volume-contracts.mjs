@@ -2311,3 +2311,4 @@ assert.match(index, /kaminosFireLightFieldDebugState/, 'fire light field exposes
 assert.match(index, /fireLightFieldStrength/, 'receiver pass has an explicit strength/mute uniform rather than an unconditional contribution');
 assert.match(index, /sceneProjectionMatrixInverse/, 'receiver pass binds the scene camera projection inverse explicitly; the output-pass TSL camera nodes resolve to the fullscreen quad camera and must not be used for unprojection');
 assert.match(index, /sceneCameraWorldMatrix\.value\.copy\(camera\.matrixWorld\)/, 'receiver pass refreshes scene-camera matrices every frame');
+assert.match(core, /uniforms\[316\] = state\.selectiveHeadLiveEffectiveRole === 'off'\s*\? 0\s*: \(1 - selectiveCompositionDefinition\.raymarchFireAuthority\)/, 'an inactive selective-head splat layer must not strip raymarch fire authority: the smoke-only partition uniform is gated on the effective role, not the raw composition request');
