@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { assertWgslCallsOwnedByBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -43,6 +44,12 @@ assert.match(
   /var slip = vec3<f32>\(0\.0\);[\s\S]*if \(proceduralTransportSlip > 0\.5\) \{[\s\S]*let rawSlip = transportedScalarSlip\(/,
   'transport-slip control prevents field-derived slip evaluation at its only advection consumer',
 );
+assertWgslCallsOwnedByBlock(
+  core,
+  'if (proceduralTransportSlip > 0.5) {',
+  { transportedScalarSlip: 1 },
+  { label: 'persisted transport-slip control guard' },
+);
 const detailGateStart = core.indexOf('if (proceduralDetailForces > 0.5) {');
 assert.notEqual(detailGateStart, -1, 'transported detail-force operator gate is present');
 for (const force of ['detailForce', 'microForce', 'shredForce', 'fineBreakup']) {
@@ -51,6 +58,16 @@ for (const force of ['detailForce', 'microForce', 'shredForce', 'fineBreakup']) 
 for (const call of ['transportedDetailDirection', 'interfaceShreddingForce', 'fieldDerivedFineScaleBreakup']) {
   assert.ok(core.indexOf(`${call}(`, detailGateStart) > detailGateStart, `${call} is evaluated only after the detail-force gate`);
 }
+assertWgslCallsOwnedByBlock(
+  core,
+  'if (proceduralDetailForces > 0.5) {',
+  {
+    transportedDetailDirection: 2,
+    interfaceShreddingForce: 1,
+    fieldDerivedFineScaleBreakup: 1,
+  },
+  { label: 'persisted procedural detail-force control guard' },
+);
 assert.match(core, /const periodicDetailForceEvaluationsPerCell = 0;/, 'retired periodic detail-force work is explicit in the cost ledger');
 assert.match(
   core,
