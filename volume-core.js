@@ -5086,16 +5086,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       state.yzx,
       u.cameraPos_time.w * 0.73 + 2.9
     );
-    let verticalPhaseBreak = sin(p.y * 43.0 + (p.x * p.x - p.z * p.z) * 19.0 + u.cameraPos_time.w * 1.4);
-    let verticalPuffBreak = cos(p.y * 27.0 + length(p.xz) * 23.0 - p.x * p.z * 31.0 - u.cameraPos_time.w * 0.92);
     let bonfireCurtainBreakup = mix(
       1.0,
-      clamp(0.91 + curtainNoise * 0.10 + verticalPhaseBreak * 0.15 + verticalPuffBreak * 0.17, 0.64, 1.18),
+      clamp(0.91 + curtainNoise * 0.10, 0.64, 1.18),
       bonfireRenderScene * smoothstep(0.05, 0.62, smoke)
     );
     let bonfireFireRenderBreakup = mix(
       1.0,
-      clamp(0.78 + fireNoise * 0.22 + verticalPuffBreak * 0.14 + fireLick * 0.20 + flameDetail * 0.16 + interfaceShred * 0.10, 0.58, 1.32),
+      clamp(0.78 + fireNoise * 0.22 + fireLick * 0.20 + flameDetail * 0.16 + interfaceShred * 0.10, 0.58, 1.32),
       bonfireRenderScene * smoothstep(0.035, 0.92, flame + flameDetail + fireLick)
     );
     let bonfireTransportedFireLumaShaper = mix(
@@ -5129,7 +5127,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.003, 0.24, flame + flameDetail * 0.74 + fireLick * 0.45 + heat * 0.55 + smokeDensity * 0.24 + microSmoke * 0.18)
         * smoothstep(0.02, 0.70, y)
-        * (0.84 + curtainNoise * 0.22 + verticalPuffBreak * 0.16),
+        * (0.84 + curtainNoise * 0.22),
       0.0,
       1.85
     );
@@ -5147,7 +5145,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.10, 1.08, quenchCoreHeatSignal)
         * smoothstep(0.0, 0.22, y)
-        * clamp(0.88 + fireNoise * 0.10 + verticalPuffBreak * 0.08, 0.68, 1.18),
+        * clamp(0.88 + fireNoise * 0.10, 0.68, 1.18),
       0.0,
       1.0
     );
@@ -5368,15 +5366,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
     let pyroFlowMask = clamp(pyroNormalView + pyroFlowView + pyroAllView, 0.0, 1.0);
-    let pyroMemoryPattern = 0.5 + 0.5 * sin(
-      p.y * 31.0
-        + p.x * 17.0
-        - p.z * 13.0
-        + pyroMemoryCell.x * 1.4
-        + pyroMemoryCell.w * 0.7
-        + u.cameraPos_time.w * (0.38 + pyroSmokeAuthority * 0.18)
-        + filamentNoise * 1.2
-        + fireNoise * 0.8
+    let pyroMemoryStructure = clamp(
+      0.18
+        + pyroSpatialEnergy * 0.46
+        + pyroMemoryCell.w * 0.18
+        + interfaceShred * 0.10
+        + fireLick * 0.06,
+      0.0,
+      1.0
     );
     let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
     let smokeCol = mix(
@@ -5519,7 +5516,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       * pyroEdgeBite
       * pyroBiteMask
       * pyroCarrierOverdrive
-      * (0.40 + pyroMemoryPattern * 0.60)
+      * (0.40 + pyroMemoryStructure * 0.60)
       * pyroStackedBiteEvent;
     let pyroFlowTopology = smoothstep(
       mix(0.0006, 0.006, pyroFlowTeeth),
@@ -5562,7 +5559,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
         * pyroFlowHeightGate
         * pyroFlowCarrierShape
         * max(pyroFlowTopology, pyroFlowShear * (0.18 + pyroFlowTeeth * 0.22))
-        * (0.22 + pyroMemoryPattern * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
+        * (0.22 + pyroMemoryStructure * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
       0.0,
       4.0
     );
@@ -5571,7 +5568,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       mix(0.92, 0.52, pyroFlowSpikes),
       pyroFlowTopology * (0.64 + pyroFlowSpikes * 0.52)
         + pyroFlowShear * (0.18 + pyroFlowSpikes * 0.36)
-        + pyroMemoryPattern * (0.10 + pyroFlowSpikes * 0.28)
+        + pyroMemoryStructure * (0.10 + pyroFlowSpikes * 0.28)
         + fireLick * (0.10 + pyroFlowSpikes * 0.20)
     );
     let pyroFlowSpikeSignal = clamp(
@@ -5641,7 +5638,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       pyroInterfaceSignal
         * smoothstep(0.014, 0.54, pyroFireEventCarrier + flameDetail * 0.40 + fireLick * 0.30 + combustionFront * 0.22)
         * (1.0 - smoothstep(0.64, 1.06, pyroFireEventCarrier + pyroRawCombustionSignal * 0.34))
-        * (0.70 + pyroMemoryPattern * 0.22 + fireLick * 0.14),
+        * (0.70 + pyroMemoryStructure * 0.22 + fireLick * 0.14),
       0.0,
       1.25
     );
@@ -5653,7 +5650,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroRadianceBorderEvent = mix(pyroRadianceFireBodyEvent, max(pyroRadianceFireEdgeEvent, pyroRadianceFireBodyEvent * 0.24), pyroRadianceBorder);
     let pyroRadianceToothedEvent = mix(
       pyroRadianceBorderEvent,
-      pyroRadianceFireEdgeEvent * (0.72 + pyroMemoryPattern * 0.48 + fireLick * 0.20),
+      pyroRadianceFireEdgeEvent * (0.72 + pyroMemoryStructure * 0.48 + fireLick * 0.20),
       pyroRadianceTeeth
     );
     let pyroFireRadianceEvent = clamp(
@@ -5717,7 +5714,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
           0.78 + pyroRadianceFreshFireGate * 0.62 + pyroRadianceFireEdgeEvent * 0.44 + pyroRawFireMix * 0.30,
           mix(
             0.16 + renderTemp * 0.12,
-            0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryPattern * 0.08,
+            0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryStructure * 0.08,
             pyroRadianceSpill
           ),
           1.0 - pyroRadianceFireSourceWeight
@@ -5821,7 +5818,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       clamp(pyroFoldExtinctionBoost, 0.0, 0.78)
     );
     let pyroWakeNeutralColor = pyroWakeShadowEndpoint * (0.70 + smoke * 0.16);
-    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + pyroMemoryPattern * 0.10 + pyroRawFireMix * 0.08);
+    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + pyroMemoryStructure * 0.10 + pyroRawFireMix * 0.08);
     let pyroWakeColor = mix(pyroWakeNeutralColor, pyroWakeAmberColor, pyroWakeWarmth);
     local = mix(
       local,
