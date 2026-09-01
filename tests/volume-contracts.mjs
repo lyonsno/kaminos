@@ -842,7 +842,7 @@ assert.match(index, /volume_canonical_centerline/, 'URL route can override canon
 assert.match(index, /volume_canonical_body_balance/, 'URL route can override canonical plume body/chimney cockpit gain');
 assert.match(index, /volume_canonical_source_mode/, 'URL route can select canonical passive/forced/buoyant source physics mode');
 assert.match(index, /volume_canonical_render_mode/, 'URL route can select canonical smoke-only render diagnostic mode');
-assert.match(index, /volume_canonical_motion_mode/, 'URL route can select canonical frozen procedural-motion diagnostic mode');
+assert.match(index, /volume_canonical_motion_mode/, 'URL route retains compatibility custody for legacy canonical motion requests');
 assert.match(index, /volume_canonical_content/, 'URL route can select canonical smoke/fire content mode');
 assert.match(index, /CANONICAL_VOLUME_CONTENT_MODE_VALUES/, 'canonical plume has stable content-mode identities for smoke/fire separation');
 assert.match(index, /honest_smoke_0622/, 'canonical plume preserves the operator-accepted honest smoke route by stable preset identity');
@@ -858,10 +858,10 @@ assert.match(index, /volume_canonical_preset/, 'URL route can select a named can
 assert.match(index, /applyCanonicalVolumeMacroPreset/, 'canonical macro preset application is a named control path before route overrides');
 assert.match(index, /canonicalMacroPreset/, 'volume controls carry effective canonical macro preset identity into renderer debug state');
 assert.match(index, /canonicalRenderMode/, 'volume controls carry effective canonical render diagnostic mode into renderer debug state');
-assert.match(index, /canonicalMotionMode/, 'volume controls carry effective canonical motion diagnostic mode into renderer debug state');
+assert.match(index, /canonicalMotionRetirementIdentity/, 'volume controls carry canonical analytic motion retirement identity into renderer debug state');
 assert.match(index, /canonicalContentMode/, 'volume controls carry effective canonical content mode into renderer debug state');
 assert.match(index, /volume-canonical-render-mode-state'\)\.textContent/, 'volume readout prints effective canonical render diagnostic mode');
-assert.match(index, /volume-canonical-motion-mode-state'\)\.textContent/, 'volume readout prints effective canonical motion diagnostic mode');
+assert.match(index, /volume-canonical-motion-mode-state'\)\.textContent/, 'volume readout prints the canonical analytic motion retirement state');
 assert.match(index, /volume-canonical-content-mode-state'\)\.textContent/, 'volume readout prints effective canonical content mode');
 assert.match(index, /density:\s*0\.45/, 'canonical macro foothold preserves the operator-tuned low density control');
 assert.match(index, /smoke:\s*2\.80/, 'canonical macro foothold preserves the operator-tuned smoke visibility control');
@@ -976,7 +976,7 @@ assert.doesNotMatch(core, /let canonicalScalarSpread =[^;]*(fire|radiance|microd
 assert.match(core, /canonicalPlumeBodyBalance/, 'canonical plume has a named body/chimney balance term after scalar spread produced a broad lower smoke body and narrow top chimney');
 assert.match(core, /canonicalSmokeCapacity[\s\S]*canonicalPlumeBodyBalance/, 'canonical plume body balance constrains smoke capacity rather than only adding decorative velocity or renderer noise');
 assert.match(core, /canonical_controls/, 'canonical plume cockpit controls reach the fluid shader through explicit uniform state');
-assert.match(core, /canonical_render_motion_controls/, 'canonical plume render/motion diagnostic modes reach the shader through explicit uniform state');
+assert.match(core, /canonical_render_motion_controls/, 'canonical plume render/content state retains the existing packed shader ABI');
 assert.match(core, /canonicalContentMode/, 'canonical plume content mode reaches the shader through explicit uniform state');
 assert.match(core, /canonicalMinimalFireBirth/, 'canonical fire bridge uses a named minimal fire birth carrier');
 assert.match(core, /canonicalFireContent/, 'canonical fire bridge explicitly gates fire content instead of reusing smoke-only proof state');
@@ -991,7 +991,9 @@ assert.match(core, /sourceY:\s*uniforms\[68\]/, 'debug state exposes the effecti
 assert.match(core, /sourceInjection:\s*uniforms\[69\]/, 'debug state exposes the effective canonical source injection gain');
 assert.match(core, /buoyancyLift:\s*uniforms\[70\]/, 'debug state exposes the effective canonical buoyancy lift gain');
 assert.match(core, /renderMode:\s*normalizeCanonicalRenderMode\(controlsSnapshot\.canonicalRenderMode\)/, 'debug state exposes the effective canonical render diagnostic mode');
-assert.match(core, /motionMode:\s*normalizeCanonicalMotionMode\(controlsSnapshot\.canonicalMotionMode\)/, 'debug state exposes the effective canonical motion diagnostic mode');
+assert.match(core, /motionRetirementIdentity:\s*canonicalMotionReceipt\.identity/, 'debug state exposes the canonical analytic motion retirement identity');
+assert.match(core, /requestedRetiredMotionMode:\s*canonicalMotionReceipt\.requested/, 'debug state distinguishes the legacy canonical motion request from effective state');
+assert.match(core, /uniforms\[73\]\s*=\s*CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE/, 'the retired Canonical motion ABI slot is reserved at explicit zero authority');
 assert.match(core, /contentMode:\s*normalizeCanonicalContentMode\(controlsSnapshot\.canonicalContentMode\)/, 'debug state exposes the effective canonical content mode');
 assert.doesNotMatch(core, /let canonicalPlumeBodyBalance =[^;]*(fire|radiance|microdetail|frontTopology|bonfire)/, 'canonical plume body balance must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');
 assert.doesNotMatch(core, /let canonicalMinimalFireBirth =[^;]*(bonfire|fireLick|frontTopology|microdetail|interfaceShred)/, 'minimal canonical fire bridge must not reintroduce bonfire/detail/front-topology carriers');
@@ -1777,8 +1779,9 @@ assert.match(witness, /expectedCanonicalSourceMode/, 'witness records and verifi
 assert.match(witness, /canonicalSourceMode/, 'witness reports the effective canonical source mode in controls/debug output');
 assert.match(witness, /expectedCanonicalRenderMode/, 'witness records and verifies the canonical render diagnostic mode route identity');
 assert.match(witness, /canonicalRenderMode/, 'witness reports the effective canonical render diagnostic mode in controls/debug output');
-assert.match(witness, /expectedCanonicalMotionMode/, 'witness records and verifies the canonical motion diagnostic mode route identity');
-assert.match(witness, /canonicalMotionMode/, 'witness reports the effective canonical motion diagnostic mode in controls/debug output');
+assert.match(witness, /expectedCanonicalMotionRequest/, 'witness records the legacy canonical motion request as compatibility input');
+assert.match(witness, /expectedCanonicalMotionRetirementIdentity/, 'witness verifies the canonical analytic motion retirement identity');
+assert.match(witness, /requestedRetiredMotionMode/, 'witness separates the legacy canonical motion request from effective state');
 assert.match(witness, /expectedCanonicalSourceY/, 'witness verifies canonical source height route identity');
 assert.match(witness, /expectedCanonicalInjection/, 'witness verifies canonical source injection route identity');
 assert.match(witness, /expectedCanonicalBuoyancy/, 'witness verifies canonical buoyancy route identity');

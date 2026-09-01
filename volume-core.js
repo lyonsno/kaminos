@@ -519,10 +519,12 @@ const CANONICAL_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_MOTION_MODE_VALUES = {
+const CANONICAL_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
+export const CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY = 'retired-analytic-canonical-motion-v0';
+const CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE = 0;
 const CANONICAL_CONTENT_MODE_VALUES = {
   smoke: 0,
   fire: 1,
@@ -748,15 +750,33 @@ function canonicalRenderModeValue(value) {
 }
 
 function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_MOTION_MODE_VALUES, value) ? value : 'animated';
+  return Object.hasOwn(CANONICAL_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 
-function canonicalMotionModeValue(value) {
-  return CANONICAL_MOTION_MODE_VALUES[normalizeCanonicalMotionMode(value)] || 0;
+export function canonicalMotionCompatibilityReceipt(value) {
+  return {
+    identity: CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY,
+    requested: normalizeCanonicalMotionMode(value),
+    effective: 'retired',
+    uniformValue: CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE,
+  };
 }
 
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_CONTENT_MODE_VALUES, value) ? value : 'smoke';
+}
+
+export function canonicalSourceControlSignature(snapshot = {}) {
+  return [
+    normalizeVolumeScene(snapshot.volumeScene),
+    snapshot.inputRadius,
+    snapshot.flowRate,
+    normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
+    normalizeCanonicalContentMode(snapshot.canonicalContentMode),
+    snapshot.canonicalSourceY,
+    snapshot.canonicalSourceInjection,
+    snapshot.canonicalBuoyancy,
+  ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
 }
 
 function canonicalContentModeValue(value) {
@@ -8788,20 +8808,6 @@ export function createKaminosVolumePrototype({
     pressureReadBindGroups = [];
   }
 
-  function canonicalSourceControlSignature(snapshot = controlsSnapshot) {
-    return [
-      normalizeVolumeScene(snapshot.volumeScene),
-      snapshot.inputRadius,
-      snapshot.flowRate,
-      normalizeCanonicalSourceMode(snapshot.canonicalSourceMode),
-      normalizeCanonicalMotionMode(snapshot.canonicalMotionMode),
-      normalizeCanonicalContentMode(snapshot.canonicalContentMode),
-      snapshot.canonicalSourceY,
-      snapshot.canonicalSourceInjection,
-      snapshot.canonicalBuoyancy,
-    ].map(value => Number.isFinite(value) ? Number(value).toFixed(4) : String(value ?? '')).join('|');
-  }
-
   function effectiveControlsSignature(snapshot = controlsSnapshot) {
     return JSON.stringify(Object.fromEntries(
       Object.entries(snapshot).sort(([left], [right]) => left.localeCompare(right)),
@@ -11317,7 +11323,8 @@ export function createKaminosVolumePrototype({
     uniforms[70] = Math.max(0, Math.min(1.5, controlsSnapshot.canonicalBuoyancy ?? 1));
     uniforms[71] = normalizeReactionFuelScale(controlsSnapshot.reactionFuelScale);
     uniforms[72] = canonicalRenderModeValue(controlsSnapshot.canonicalRenderMode);
-    uniforms[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);
+    const canonicalMotionReceipt = canonicalMotionCompatibilityReceipt(controlsSnapshot.canonicalMotionMode);
+    uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
     uniforms[74] = canonicalContentModeValue(controlsSnapshot.canonicalContentMode);
     const quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
     uniforms[75] = quenchVaporStrength;
@@ -11830,8 +11837,10 @@ export function createKaminosVolumePrototype({
       buoyancyLift: uniforms[70],
       renderMode: normalizeCanonicalRenderMode(controlsSnapshot.canonicalRenderMode),
       renderModeValue: uniforms[72],
-      motionMode: normalizeCanonicalMotionMode(controlsSnapshot.canonicalMotionMode),
-      motionModeValue: uniforms[73],
+      motionStrategy: canonicalMotionReceipt.effective,
+      motionRetirementIdentity: canonicalMotionReceipt.identity,
+      requestedRetiredMotionMode: canonicalMotionReceipt.requested,
+      reservedMotionUniformValue: uniforms[73],
       contentMode: normalizeCanonicalContentMode(controlsSnapshot.canonicalContentMode),
       contentModeValue: uniforms[74],
     };

@@ -1083,7 +1083,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Identity</span><span class="field-val" id="volume-identity">kaminos-volume-prototype-v0</span></div>
       <div class="field"><span class="field-key">Orientation</span><span class="field-val" id="volume-render-source-orientation">unverified</span></div>
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
-      <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
+      <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">retired</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
       <div class="field"><span class="field-key">Emitter requested</span><span class="field-val" id="volume-emitter-requested">cluster</span></div>
       <div class="field"><span class="field-key">Emitter effective</span><span class="field-val" id="volume-emitter-effective">cluster</span></div>
@@ -11291,7 +11291,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalRenderMode: 'default',
     canonicalRenderModeValue: 0,
     canonicalMotionMode: 'animated',
-    canonicalMotionModeValue: 0,
+    canonicalMotionRetirementIdentity: 'retired-analytic-canonical-motion-v0',
     canonicalContentMode: 'smoke',
     canonicalContentModeValue: 0,
     canonicalSourceY: -0.74,
@@ -11408,10 +11408,11 @@ const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
+const CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
+const CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY = 'retired-analytic-canonical-motion-v0';
 const CANONICAL_VOLUME_CONTENT_MODE_VALUES = {
   smoke: 0,
   fire: 1,
@@ -11427,7 +11428,7 @@ function normalizeCanonicalRenderMode(value) {
 }
 
 function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+  return Object.hasOwn(CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 
 function normalizeCanonicalContentMode(value) {
@@ -17374,7 +17375,7 @@ function readVolumeControls() {
     canonicalRenderMode: routedCanonicalRenderMode,
     canonicalRenderModeValue: CANONICAL_VOLUME_RENDER_MODE_VALUES[routedCanonicalRenderMode] || 0,
     canonicalMotionMode: routedCanonicalMotionMode,
-    canonicalMotionModeValue: CANONICAL_VOLUME_MOTION_MODE_VALUES[routedCanonicalMotionMode] || 0,
+    canonicalMotionRetirementIdentity: CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY,
     canonicalContentMode: routedCanonicalContentMode,
     canonicalContentModeValue: CANONICAL_VOLUME_CONTENT_MODE_VALUES[routedCanonicalContentMode] || 0,
     canonicalSourceY: routedCanonicalSourceY,
@@ -17719,7 +17720,7 @@ function refreshVolumeReadout() {
   }
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
-  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionMode || 'animated') : 'live';
+  document.getElementById('volume-canonical-motion-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.motionStrategy || 'retired') : 'live';
   document.getElementById('volume-canonical-content-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.contentMode || 'smoke') : sceneContentLabel;
   document.getElementById('volume-frames').textContent = String(s.frameCount ?? 0);
   document.getElementById('volume-energy').textContent = (s.lastFrameEnergy ?? 0).toFixed(3);

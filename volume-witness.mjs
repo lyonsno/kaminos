@@ -1248,7 +1248,7 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalRenderMode: 'default',
     canonicalRenderModeValue: 0,
     canonicalMotionMode: 'animated',
-    canonicalMotionModeValue: 0,
+    canonicalMotionRetirementIdentity: 'retired-analytic-canonical-motion-v0',
     canonicalContentMode: 'smoke',
     canonicalContentModeValue: 0,
     canonicalSourceY: -0.74,
@@ -1349,7 +1349,7 @@ const CANONICAL_VOLUME_RENDER_MODE_VALUES = {
   default: 0,
   smoke_only: 1,
 };
-const CANONICAL_VOLUME_MOTION_MODE_VALUES = {
+const CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES = {
   animated: 0,
   frozen: 1,
 };
@@ -1364,8 +1364,8 @@ function normalizeCanonicalSourceMode(value) {
 function normalizeCanonicalRenderMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_RENDER_MODE_VALUES, value) ? value : 'default';
 }
-function normalizeCanonicalMotionMode(value) {
-  return Object.hasOwn(CANONICAL_VOLUME_MOTION_MODE_VALUES, value) ? value : 'animated';
+function normalizeCanonicalMotionRequest(value) {
+  return Object.hasOwn(CANONICAL_VOLUME_LEGACY_MOTION_REQUEST_VALUES, value) ? value : 'animated';
 }
 function normalizeCanonicalContentMode(value) {
   return Object.hasOwn(CANONICAL_VOLUME_CONTENT_MODE_VALUES, value) ? value : 'smoke';
@@ -1408,7 +1408,8 @@ const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESET
 const canonicalMacroPreset = CANONICAL_VOLUME_MACRO_PRESETS[expectedCanonicalMacroPreset] || {};
 const expectedCanonicalSourceMode = normalizeCanonicalSourceMode(routeParams.get('volume_canonical_source_mode') || canonicalMacroPreset.sourceMode || 'current');
 const expectedCanonicalRenderMode = normalizeCanonicalRenderMode(routeParams.get('volume_canonical_render_mode') || canonicalMacroPreset.renderMode || 'default');
-const expectedCanonicalMotionMode = normalizeCanonicalMotionMode(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRequest = normalizeCanonicalMotionRequest(routeParams.get('volume_canonical_motion_mode') || canonicalMacroPreset.motionMode || 'animated');
+const expectedCanonicalMotionRetirementIdentity = 'retired-analytic-canonical-motion-v0';
 const expectedCanonicalContentMode = normalizeCanonicalContentMode(routeParams.get('volume_canonical_content') || canonicalMacroPreset.contentMode || 'smoke');
 const canonicalContentRequestsFire = expectedCanonicalContentMode === 'fire' || expectedCanonicalContentMode === 'fire_smoke';
 const canonicalSourceDefault = canonicalSourceDefaults(expectedCanonicalSourceMode);
@@ -2649,8 +2650,11 @@ async function main() {
     assert.equal(state.canonicalPlumeControls?.sourceMode || 'current', expectedCanonicalSourceMode, 'effective canonical source mode did not reach debug state');
     assert.equal(state.controls?.canonicalRenderMode || 'default', expectedCanonicalRenderMode, 'canonical render diagnostic route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.renderMode || 'default', expectedCanonicalRenderMode, 'effective canonical render diagnostic mode did not reach debug state');
-    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionMode, 'canonical motion diagnostic route identity did not apply');
-    assert.equal(state.canonicalPlumeControls?.motionMode || 'animated', expectedCanonicalMotionMode, 'effective canonical motion diagnostic mode did not reach debug state');
+    assert.equal(state.controls?.canonicalMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request route identity did not apply');
+    assert.equal(state.canonicalPlumeControls?.requestedRetiredMotionMode || 'animated', expectedCanonicalMotionRequest, 'legacy canonical motion request did not reach compatibility debug state');
+    assert.equal(state.canonicalPlumeControls?.motionStrategy, 'retired', 'retired canonical analytic motion cannot claim an effective animated/frozen mode');
+    assert.equal(state.canonicalPlumeControls?.motionRetirementIdentity, expectedCanonicalMotionRetirementIdentity, 'canonical analytic motion retirement identity did not reach debug state');
+    assert.equal(state.canonicalPlumeControls?.reservedMotionUniformValue, 0, 'retired canonical analytic motion must reserve a zero GPU uniform slot');
     assert.equal(state.controls?.canonicalContentMode || 'smoke', expectedCanonicalContentMode, 'canonical content route identity did not apply');
     assert.equal(state.canonicalPlumeControls?.contentMode || 'smoke', expectedCanonicalContentMode, 'effective canonical content mode did not reach debug state');
     assert.ok(Math.abs((state.controls?.canonicalSourceY ?? 0) - expectedCanonicalSourceY) < 0.001, 'canonical source height route/control did not apply');
@@ -4214,7 +4218,8 @@ async function main() {
       expectedCanonicalMacroPreset,
       expectedCanonicalSourceMode,
       expectedCanonicalRenderMode,
-      expectedCanonicalMotionMode,
+      expectedCanonicalMotionRequest,
+      expectedCanonicalMotionRetirementIdentity,
       expectedCanonicalContentMode,
       expectedCanonicalSourceY,
       expectedCanonicalInjection,
