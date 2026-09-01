@@ -9,6 +9,9 @@ function assertExternalEmitterFlickerRetired(source) {
   const influence = balancedWgslBlock(source, 'fn externalEmitterInfluence(', {
     label: 'generic external-emitter influence',
   });
+  const injection = balancedWgslBlock(source, 'fn applyExternalEmitterInjection(', {
+    label: 'generic external-emitter injection wrapper',
+  });
   assertTimeFreeWgslCallGraph(
     source,
     ['externalEmitterInfluence'],
@@ -24,8 +27,13 @@ function assertExternalEmitterFlickerRetired(source) {
   );
   assert.match(
     influence,
-    /let falloff = exp\([\s\S]*?;\s*let w = falloff;/,
+    /let strength = max\(0\.0, emitter\.end_strength\.w\);[\s\S]*?let falloff = exp\([\s\S]*?\* strength\s*\* ageFade\s*\* isActiveEmitter\s*;\s*let w = falloff;/,
     'generic external emitters must apply authored strength through spatial and lifetime falloff without hidden attenuation',
+  );
+  assert.match(
+    injection,
+    /^fn applyExternalEmitterInjection\(influence: ExternalEmitterInfluence\) -> ExternalEmitterInfluence \{\s*return influence;\s*\}$/,
+    'the external-emitter injection wrapper must preserve the influence without hidden post-attenuation',
   );
   assert.equal(
     wgslCallCount(source, 'externalEmitterInfluence'),
@@ -55,6 +63,17 @@ function assertExternalEmitterFlickerRetired(source) {
   ]) {
     assert.match(source, projection, 'public runtime/debug receipts must preserve the hidden-flicker retirement ledger');
   }
+  const publicEvaluationProjections = [...source.matchAll(
+    /externalCarrierHiddenFlickerEvaluationsPerEmitterCell:\s*([^,\n}]+)/g,
+  )].map(match => match[1].trim());
+  assert.deepEqual(
+    publicEvaluationProjections,
+    [
+      'state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell',
+      'state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell',
+    ],
+    'both public projections must independently preserve the authoritative zero-work state',
+  );
 }
 
 const failFirst = [];
@@ -104,12 +123,56 @@ const falseClosureMutations = [
     /must apply authored strength through spatial and lifetime falloff without hidden attenuation/,
   ],
   [
+    'pre-falloff authored-strength attenuation',
+    source => source.replace(
+      'let strength = max(0.0, emitter.end_strength.w);',
+      'let strength = max(0.0, emitter.end_strength.w) * 0.82;',
+    ),
+    /must apply authored strength through spatial and lifetime falloff without hidden attenuation/,
+  ],
+  [
+    'post-influence wrapper attenuation',
+    source => source.replace(
+      `fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> ExternalEmitterInfluence {
+  return influence;
+}`,
+      `fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> ExternalEmitterInfluence {
+  var attenuated = influence;
+  attenuated.material = attenuated.material * 0.82;
+  attenuated.fire = attenuated.fire * 0.82;
+  attenuated.micro = attenuated.micro * 0.82;
+  attenuated.velocity = attenuated.velocity * 0.82;
+  return attenuated;
+}`,
+    ),
+    /injection wrapper must preserve the influence without hidden post-attenuation/,
+  ],
+  [
     'restored hidden flicker cost',
     source => source.replace(
       'const externalCarrierHiddenFlickerEvaluationsPerEmitterCell = 0;',
       'const externalCarrierHiddenFlickerEvaluationsPerEmitterCell = 1;',
     ),
     /cost ledger must report zero hidden flicker evaluations per external-emitter cell/,
+  ],
+  [
+    'first public zero-work projection drift',
+    source => source.replace(
+      'externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,',
+      'externalCarrierHiddenFlickerEvaluationsPerEmitterCell: 1,',
+    ),
+    /both public projections must independently preserve the authoritative zero-work state/,
+  ],
+  [
+    'second public zero-work projection drift',
+    source => {
+      const needle = 'externalCarrierHiddenFlickerEvaluationsPerEmitterCell: state.externalCarrierHiddenFlickerEvaluationsPerEmitterCell,';
+      const first = source.indexOf(needle);
+      const second = source.indexOf(needle, first + needle.length);
+      assert.ok(second > first, 'second public projection mutation requires two live projections');
+      return `${source.slice(0, second)}externalCarrierHiddenFlickerEvaluationsPerEmitterCell: 1,${source.slice(second + needle.length)}`;
+    },
+    /both public projections must independently preserve the authoritative zero-work state/,
   ],
 ];
 
@@ -125,5 +188,28 @@ for (const [name, mutate, expectedFailure] of falseClosureMutations) {
   }
 }
 assert.deepEqual(acceptedFalseClosures, [], 'the external-emitter boundary must reject every false-closure mutation');
+
+const switchFixture = `
+fn carrierLeaf(value: f32) -> f32 { return value; }
+fn carrierRoot(value: u32) -> f32 {
+  switch(value) {
+    case 0u: { return carrierLeaf(0.0); }
+    default: { return carrierLeaf(1.0); }
+  }
+}`;
+assert.deepEqual(
+  assertTimeFreeWgslCallGraph(switchFixture, ['carrierRoot']),
+  ['carrierLeaf', 'carrierRoot'],
+  'WGSL switch syntax is ignored while real callees remain under recursive authority',
+);
+const temporalSwitchFixture = switchFixture.replace(
+  'fn carrierLeaf(value: f32) -> f32 { return value; }',
+  'fn carrierLeaf(value: f32) -> f32 { return value + u.cameraPos_time.w; }',
+);
+assert.throws(
+  () => assertTimeFreeWgslCallGraph(temporalSwitchFixture, ['carrierRoot']),
+  /helper carrierLeaf must not read temporal globals or tokens/,
+  'switch handling cannot hide temporal authority inside a real reachable helper',
+);
 
 console.log('volume external emitter carrier: hidden time/hash flicker retired and authored strength preserved');

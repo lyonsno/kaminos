@@ -2,10 +2,60 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as volumeCore from '../volume-core.js';
+import { balancedWgslBlock } from './helpers/wgsl-guard-ownership.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+
+function resolveIntegerExpression(expression, aliases) {
+  let expanded = expression.trim();
+  for (let pass = 0; pass < 8; pass += 1) {
+    const next = expanded.replace(/\b[A-Za-z_]\w*\b/g, name => (
+      aliases.has(name) ? `(${aliases.get(name)})` : name
+    ));
+    if (next === expanded) break;
+    expanded = next;
+  }
+  if (!/^[0-9+\-*/()\s]+$/.test(expanded)) return null;
+  const value = Function(`"use strict"; return (${expanded});`)();
+  return Number.isInteger(value) ? value : null;
+}
+
+function assertCanonicalRetiredPackedComponent(source) {
+  const updateUniforms = balancedWgslBlock(source, 'function updateUniforms(now)', {
+    label: 'updateUniforms',
+  });
+  const aliases = new Map(
+    [...source.matchAll(/\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);/g)]
+      .map(match => [match[1], match[2]]),
+  );
+  const retiredWrites = [...updateUniforms.matchAll(/\buniforms\s*\[([^\]]+)\]\s*=\s*([^;]+);/g)]
+    .map(match => ({ index: resolveIntegerExpression(match[1], aliases), value: match[2].trim() }))
+    .filter(write => write.index === 73);
+  assert.equal(retiredWrites.length, 1, 'retired Canonical packed component must have exactly one CPU write');
+  assert.equal(
+    retiredWrites[0].value,
+    'CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE',
+    'the sole retired Canonical packed-component write must use the zero-authority constant',
+  );
+
+  const accesses = [...source.matchAll(/canonical_render_motion_controls\s*(\.[A-Za-z]+|\[[^\]]+\])/g)]
+    .map(match => match[1].replace(/\s+/g, ''));
+  const packedControlTokenCount = [...source.matchAll(/\bcanonical_render_motion_controls\b/g)].length;
+  assert.ok(accesses.length > 0, 'Canonical packed control consumers must remain discoverable');
+  assert.equal(
+    packedControlTokenCount,
+    accesses.length + 1,
+    'Canonical packed controls may appear bare only in their one ABI declaration',
+  );
+  for (const access of accesses) {
+    assert.ok(
+      ['.x', '.z', '.w'].includes(access),
+      `retired Canonical packed component cannot be consumed through ${access}`,
+    );
+  }
+}
 
 assert.equal(
   volumeCore.CANONICAL_ANALYTIC_MOTION_RETIREMENT_IDENTITY,
@@ -57,11 +107,7 @@ assert.match(
   /uniforms\[73\]\s*=\s*CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE\s*;/,
   'the former motion uniform slot remains reserved at an explicit zero value',
 );
-assert.doesNotMatch(
-  core,
-  /canonical_render_motion_controls\.y/,
-  'no shader stage may consume the retired Canonical motion slot',
-);
+assertCanonicalRetiredPackedComponent(core);
 assert.match(
   core,
   /motionRetirementIdentity:\s*canonicalMotionReceipt\.identity/,
@@ -130,6 +176,36 @@ assert.doesNotMatch(
   nonzeroUniformAuthority,
   /uniforms\[73\]\s*=\s*CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE\s*;/,
   'the barrier detects restored GPU authority in the reserved slot',
+);
+
+const aliasedPackedAuthority = core
+  .replace(
+    'uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;',
+    `uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
+    const restoredCanonicalMotionSlot = 72 + 1;
+    uniforms[restoredCanonicalMotionSlot] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);`,
+  )
+  .replace(
+    'let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);',
+    `let restoredCanonicalMotionAuthority = u.canonical_render_motion_controls.g;
+  let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0) * (1.0 - restoredCanonicalMotionAuthority);`,
+  );
+assert.notEqual(aliasedPackedAuthority, core, 'the aliased packed-component false-closure mutation must alter source');
+assert.throws(
+  () => assertCanonicalRetiredPackedComponent(aliasedPackedAuthority),
+  /must have exactly one CPU write/,
+  'the barrier rejects an added aliased nonzero write even when the blessed zero line remains',
+);
+
+const indexedPackedAuthority = core.replace(
+  'u.canonical_render_motion_controls.x',
+  'u.canonical_render_motion_controls[1]',
+);
+assert.notEqual(indexedPackedAuthority, core, 'the indexed packed-component false-closure mutation must alter source');
+assert.throws(
+  () => assertCanonicalRetiredPackedComponent(indexedPackedAuthority),
+  /cannot be consumed through \[1\]/,
+  'the barrier rejects indexed access to the retired packed component',
 );
 
 console.log('canonical analytic motion retirement contracts passed');

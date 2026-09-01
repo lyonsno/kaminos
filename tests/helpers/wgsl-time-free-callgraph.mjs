@@ -21,15 +21,12 @@ const WGSL_BUILTINS = new Set([
   'exp2',
   'f32',
   'floor',
-  'for',
   'fract',
   'i32',
-  'if',
   'inverseSqrt',
   'length',
   'log',
   'log2',
-  'loop',
   'max',
   'min',
   'mix',
@@ -54,6 +51,13 @@ const WGSL_BUILTINS = new Set([
   'vec3',
   'vec4',
   'workgroupBarrier',
+]);
+
+const WGSL_CONTROL_FLOW = new Set([
+  'for',
+  'if',
+  'loop',
+  'switch',
   'while',
 ]);
 
@@ -96,7 +100,7 @@ export function assertTimeFreeWgslCallGraph(
   const forbidden = new Set(forbiddenCallees);
 
   function visit(name, path) {
-    if (WGSL_BUILTINS.has(name) || visited.has(name)) return;
+    if (WGSL_BUILTINS.has(name) || WGSL_CONTROL_FLOW.has(name) || visited.has(name)) return;
     assert.equal(active.has(name), false, `${label} contains a recursive helper cycle: ${[...path, name].join(' -> ')}`);
     active.add(name);
     const fn = wgslFunction(source, name);
@@ -109,7 +113,7 @@ export function assertTimeFreeWgslCallGraph(
         false,
         `${label} helper ${name} must not call forbidden helper ${callee}`,
       );
-      if (!WGSL_BUILTINS.has(callee)) visit(callee, [...path, name]);
+      if (!WGSL_BUILTINS.has(callee) && !WGSL_CONTROL_FLOW.has(callee)) visit(callee, [...path, name]);
     }
     active.delete(name);
     visited.add(name);
