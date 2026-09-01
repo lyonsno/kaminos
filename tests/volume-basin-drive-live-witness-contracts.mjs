@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const witness = readFileSync(new URL('../volume-basin-drive-live-witness.mjs', import.meta.url), 'utf8');
+assert.ok(
+  witness.indexOf('class CdpSocket') < witness.lastIndexOf('await main()'),
+  'live execution begins only after CDP helpers are initialized',
+);
 
 for (const argument of [
   '--url',

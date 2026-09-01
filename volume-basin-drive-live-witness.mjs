@@ -29,6 +29,7 @@ let lastTrustworthyEvidence = {
   expectedSessionStore,
 };
 
+async function main() {
 try {
   requiredArgument('--url');
   requiredArgument('--expected-repo-root');
@@ -335,6 +336,7 @@ try {
   await terminateBrowser(browser);
   rmSync(browserProfilePath, { recursive: true, force: true });
 }
+}
 
 class CdpSocket {
   constructor(url, deadlineAt) {
@@ -584,3 +586,5 @@ async function terminateBrowser(process) {
     await exited;
   }
 }
+
+await main();
