@@ -41,6 +41,7 @@ function admittedParams() {
     kiln_fire_y: '0.516',
     kiln_fire_scale_x: '0.31',
     kiln_fire_scale_y: '0.46',
+    kiln_fire_source_overscan: '1.5',
     kiln_light_radius: '0.36',
     kiln_light_intensity: '2.4',
     kiln_plate_ambient: '0.34',
@@ -83,7 +84,12 @@ assert.deepEqual(parsed.normal, {
   expectedDimensions: [1024, 1024],
   url: '/api/read?root=reconstructions&path=kiln-room-pre-ignition-source-v1%2Flotus-normal-v1%2Fnormal.png',
 });
-assert.deepEqual(parsed.fire, { center: [0.584, 0.516], scale: [0.31, 0.46] });
+assert.deepEqual(parsed.fire, {
+  center: [0.584, 0.516],
+  scale: [0.31, 0.46],
+  sourceOverscan: 1.5,
+  sourceFramingIdentity: 'ndc-overscan-with-compensated-plate-scale-v0',
+});
 assert.deepEqual(parsed.light, {
   radius: 0.36,
   intensity: 2.4,
@@ -94,7 +100,7 @@ assert.deepEqual(Array.from(kilnFixedCameraUniformData(parsed, {
   plateWidth: 1536,
   plateHeight: 1024,
 })), [
-  0.5839999914169312, 0.515999972820282, 0.3100000023841858, 0.46000000834465027,
+  0.5839999914169312, 0.515999972820282, 0.4650000035762787, 0.6899999976158142,
   0.5839999914169312, 0.515999972820282, 0.36000001430511475, 2.4000000953674316,
   0.3400000035762787, -1, 1.5, 0.2800000011920929,
   1, 0.2549999952316284, 0.04500000178813934, 0,
@@ -187,6 +193,9 @@ for (const [name, mutate, pattern] of [
   ['wrong composition identity', params => params.set('kiln_composition', 'fallback'), /unsupported-kiln-composition/],
   ['wrong basin', params => params.set('settings_preset', `vsp-${'a'.repeat(64)}`), /unsupported-kiln-preset/],
   ['out of range fire scale', params => params.set('kiln_fire_scale_x', '0'), /invalid-kiln-fire-scale-x/],
+  ['missing source overscan', params => params.delete('kiln_fire_source_overscan'), /missing-kiln-fire-source-overscan/],
+  ['source overscan below transparent-margin floor', params => params.set('kiln_fire_source_overscan', '1'), /invalid-kiln-fire-source-overscan/],
+  ['source overscan above admitted framing range', params => params.set('kiln_fire_source_overscan', '2.01'), /invalid-kiln-fire-source-overscan/],
   ['silent numeric coercion', params => params.set('kiln_light_intensity', '2.4watts'), /invalid-kiln-light-intensity/],
 ]) {
   const params = admittedParams();

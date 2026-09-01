@@ -1980,6 +1980,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override LEAN_STOCK_RAYMARCH: bool = false;
+override KILN_SOURCE_OVERSCAN: f32 = 1.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -6085,7 +6086,9 @@ fn kilnVisibleSourceCoverage(displayRadiance: vec3<f32>) -> f32 {
 
 @fragment
 fn fsKilnCompositeSource(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in, 1.0e6);
+  var framedIn = in;
+  framedIn.uv = (in.uv - vec2<f32>(0.5)) * KILN_SOURCE_OVERSCAN + vec2<f32>(0.5);
+  let result = raymarchVolume(framedIn, 1.0e6);
   let displayRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
   let coverage = kilnVisibleSourceCoverage(displayRadiance);
   return vec4<f32>(displayRadiance * coverage, coverage);
@@ -9834,6 +9837,7 @@ export function createKaminosVolumePrototype({
       leanStockRenderPipelineConstants,
     );
     if (kilnFixedCameraComposition) {
+      const kilnSourcePipelineConstants = { ...renderPipelineConstants, KILN_SOURCE_OVERSCAN: kilnFixedCameraComposition.fire.sourceOverscan };
       const makeKilnFireSourcePipeline = (label, constants) => device.createRenderPipeline({
         label,
         layout: pipelineLayout,
@@ -9848,11 +9852,11 @@ export function createKaminosVolumePrototype({
       });
       kilnFireSourcePipeline = makeKilnFireSourcePipeline(
         `kaminos kiln premultiplied raymarch source ${gridSize}^3`,
-        renderPipelineConstants,
+        kilnSourcePipelineConstants,
       );
       leanStockKilnFireSourcePipeline = makeKilnFireSourcePipeline(
         `kaminos kiln premultiplied lean-stock raymarch source ${gridSize}^3`,
-        leanStockRenderPipelineConstants,
+        { ...leanStockRenderPipelineConstants, KILN_SOURCE_OVERSCAN: kilnFixedCameraComposition.fire.sourceOverscan },
       );
       kilnCompositePipeline = device.createRenderPipeline({
         label: 'kaminos normal-lit fixed-camera kiln composite',
@@ -10444,7 +10448,12 @@ export function createKaminosVolumePrototype({
         renderer: {
           identity: 'premultiplied-raymarch-plus-normal-lit-fixed-camera-plate-v0',
           flameCount: 1,
-          fireSourcePass: 'transparent-premultiplied-raymarch-v0',
+          fireSourcePass: 'transparent-premultiplied-raymarch-radiance-matte-overscan-v1',
+          sourceFraming: {
+            identity: kilnFixedCameraComposition.fire.sourceFramingIdentity,
+            ndcOverscan: kilnFixedCameraComposition.fire.sourceOverscan,
+            compensatedPlateScale: [uniformData[2], uniformData[3]],
+          },
           relightingPass: 'analytic-screen-space-normal-diffuse-v0',
           geometryAuthority: 'none',
           shadowAuthority: 'none',

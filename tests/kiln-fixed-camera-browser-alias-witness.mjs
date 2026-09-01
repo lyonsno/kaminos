@@ -37,8 +37,8 @@ const expectedNormalUrl = `/api/read?root=${encodeURIComponent(routeUrl.searchPa
 const expectedUniformData = Array.from(new Float32Array([
   Number(routeUrl.searchParams.get('kiln_fire_x')),
   Number(routeUrl.searchParams.get('kiln_fire_y')),
-  Number(routeUrl.searchParams.get('kiln_fire_scale_x')),
-  Number(routeUrl.searchParams.get('kiln_fire_scale_y')),
+  Number(routeUrl.searchParams.get('kiln_fire_scale_x')) * Number(routeUrl.searchParams.get('kiln_fire_source_overscan')),
+  Number(routeUrl.searchParams.get('kiln_fire_scale_y')) * Number(routeUrl.searchParams.get('kiln_fire_source_overscan')),
   Number(routeUrl.searchParams.get('kiln_fire_x')),
   Number(routeUrl.searchParams.get('kiln_fire_y')),
   Number(routeUrl.searchParams.get('kiln_light_radius')),

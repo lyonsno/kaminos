@@ -5,6 +5,12 @@ const root = new URL('..', import.meta.url);
 const core = readFileSync(new URL('volume-core.js', root), 'utf8');
 const index = readFileSync(new URL('index.html', root), 'utf8');
 
+assert.match(
+  core,
+  /override KILN_SOURCE_OVERSCAN: f32 = 1\.0;/,
+  'kiln source framing is an explicit pipeline override',
+);
+
 function assertKilnVisibleSourceCoverageContract(source) {
   const coverageBody = source.match(
     /fn kilnVisibleSourceCoverage\(displayRadiance: vec3<f32>\) -> f32 \{([\s\S]*?)\n\}/,
@@ -40,6 +46,11 @@ function assertKilnVisibleSourceCoverageContract(source) {
     /fn fsKilnCompositeSource\(in: VSOut\) -> @location\(0\) vec4<f32> \{([\s\S]*?)\n\}/,
   )?.[1];
   assert.ok(sourceBody, 'kiln composite source entry point is missing');
+  assert.match(
+    sourceBody,
+    /var framedIn = in;\s+framedIn\.uv = \(in\.uv - vec2<f32>\(0\.5\)\) \* KILN_SOURCE_OVERSCAN \+ vec2<f32>\(0\.5\);\s+let result = raymarchVolume\(framedIn, 1\.0e6\);/,
+    'kiln source widens its NDC before raymarching to create optical margin',
+  );
   assert.match(
     sourceBody,
     /let coverage = kilnVisibleSourceCoverage\(displayRadiance\);/,
@@ -144,6 +155,16 @@ assert.doesNotMatch(
   core,
   /fn fsKilnCompositeSource[\s\S]*?return vec4<f32>\(displayRadiance, alpha\)/,
   'kiln source cannot retain invisible extinction outside its visible optical support',
+);
+assert.match(
+  core,
+  /const kilnSourcePipelineConstants = \{ \.\.\.renderPipelineConstants, KILN_SOURCE_OVERSCAN: kilnFixedCameraComposition\.fire\.sourceOverscan \};/,
+  'kiln source pipeline receives exact caller-addressed overscan',
+);
+assert.match(
+  core,
+  /makeKilnFireSourcePipeline\([\s\S]*?kilnSourcePipelineConstants,[\s\S]*?makeKilnFireSourcePipeline\([\s\S]*?\{ \.\.\.leanStockRenderPipelineConstants, KILN_SOURCE_OVERSCAN: kilnFixedCameraComposition\.fire\.sourceOverscan \},/,
+  'full and lean kiln source pipelines share the exact framing authority',
 );
 assert.match(
   core,

@@ -27,6 +27,7 @@ export const KILN_FIXED_CAMERA_ROUTE_PARAMS = Object.freeze([
   'kiln_fire_y',
   'kiln_fire_scale_x',
   'kiln_fire_scale_y',
+  'kiln_fire_source_overscan',
   'kiln_light_radius',
   'kiln_light_intensity',
   'kiln_plate_ambient',
@@ -148,6 +149,8 @@ export function parseKilnFixedCameraComposition(params) {
         exactNumber(params, 'kiln_fire_scale_x', 0.01, 2),
         exactNumber(params, 'kiln_fire_scale_y', 0.01, 2),
       ],
+      sourceOverscan: exactNumber(params, 'kiln_fire_source_overscan', 1.01, 2),
+      sourceFramingIdentity: 'ndc-overscan-with-compensated-plate-scale-v0',
     },
     light: {
       radius: exactNumber(params, 'kiln_light_radius', 0.01, 2),
@@ -202,7 +205,7 @@ export function kilnFixedCameraUniformData(composition, { plateWidth, plateHeigh
   }
   return new Float32Array([
     ...composition.fire.center,
-    ...composition.fire.scale,
+    ...composition.fire.scale.map(value => value * composition.fire.sourceOverscan),
     ...composition.fire.center,
     composition.light.radius,
     composition.light.intensity,
