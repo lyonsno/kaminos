@@ -32,6 +32,16 @@ function assertKilnVisibleSourceCoverageContract(source) {
   );
   assert.match(
     coverageBody,
+    /let radianceSignal = max\(displayRadiance\.r, max\(displayRadiance\.g, displayRadiance\.b\)\) \* 0\.18;/,
+    'visible radiance support is bounded by the declared display-radiance expression',
+  );
+  assert.doesNotMatch(
+    coverageBody,
+    /let radianceSignal = 1\.0;/,
+    'radiance support cannot become an always-on coverage source',
+  );
+  assert.match(
+    coverageBody,
     /return smoothstep\(0\.02, 0\.12, max\(max\(fireInterfaceSignal, smokeSignal\), radianceSignal\)\);/,
     'coverage combines the admitted optical support signals through the declared matte transition',
   );
@@ -116,6 +126,14 @@ assert.throws(
   )),
   /Smoke Off suppresses smoke-only coverage/,
   'contract rejects inverted smoke presentation polarity',
+);
+assert.throws(
+  () => assertKilnVisibleSourceCoverageContract(core.replace(
+    'let radianceSignal = max(displayRadiance.r, max(displayRadiance.g, displayRadiance.b)) * 0.18;',
+    'let radianceSignal = 1.0;',
+  )),
+  /visible radiance support is bounded/,
+  'contract rejects always-on radiance coverage',
 );
 assert.equal(kilnCoverage(), 0, 'unsupported extinction contributes zero source coverage');
 assert.equal(kilnCoverage({ smoke: 0.5, smokeSuppressed: 1 }), 0, 'Smoke Off excludes smoke-only support');
