@@ -2907,7 +2907,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let sourceRadial = length(sourceCenter.xz);
   let sourceBand = smoothstep(-0.25, -0.06, sourceCenter.y) * (1.0 - smoothstep(0.92, 1.32, sourceCenter.y));
   let canonicalSourceY = canonicalSourceYControl;
-  let canonicalSourceBand = exp(-pow((p.y - canonicalSourceY) / 0.070, 2.0));
+  // Square by multiplication, never pow: WGSL pow(x, 2.0) is exp2(2*log2(x)),
+  // which is NaN for the negative bases every cell below the source line
+  // produces. Chrome 152's Tint stopped strength-reducing pow(x, 2.0) to x*x,
+  // so the old form injected NaN into the birth chains and the scene-gate
+  // mixes (NaN * 0 = NaN) spread it through every scene's combustion-front
+  // carriers within seconds.
+  let canonicalSourceBandT = (p.y - canonicalSourceY) / 0.070;
+  let canonicalSourceBand = exp(-canonicalSourceBandT * canonicalSourceBandT);
   let breakup = clamp(
     0.64
       + 0.24 * sin(p.x * 19.0 * tallPlumeTransportedDetailFrequency + p.z * 7.0 * tallPlumeTransportedDetailFrequency + time * 1.7)
@@ -4631,7 +4638,20 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       } else if (FIRE_PROBE > 8.5 && FIRE_PROBE < 9.5) {
         fireProbeValue = vec3<f32>(shellMask, frontSupport, thermalSupport);
       } else if (FIRE_PROBE > 9.5) {
-        fireProbeValue = vec3<f32>(combustionFrontTopology * 4.0, combustionFront * 4.0, heat * 4.0);
+        let probeSlot0 = readSlot(sampleCell, 0u);
+        let probeSlot1 = readSlot(sampleCell, 1u);
+        let probeSlot2 = readSlot(sampleCell, 2u);
+        let probeSlot3 = readSlot(sampleCell, 3u);
+        let probeNaN0 = select(0.0, 1.0, any(probeSlot0 != probeSlot0));
+        let probeNaN1 = select(0.0, 1.0, any(probeSlot1 != probeSlot1));
+        let probeNaN2xyz = select(0.0, 1.0, any(probeSlot2.xyz != probeSlot2.xyz));
+        let probeNaN2w = select(0.0, 1.0, probeSlot2.w != probeSlot2.w);
+        let probeNaN3 = select(0.0, 1.0, any(probeSlot3 != probeSlot3));
+        fireProbeValue = vec3<f32>(
+          max(probeNaN0, probeNaN1),
+          max(probeNaN2xyz, probeNaN3),
+          probeNaN2w
+        );
       }
       fireProbeAccum = max(fireProbeAccum, fireProbeValue);
     }
@@ -4989,6 +5009,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     var local = smokeCol;
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
     local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
+    if (FIRE_PROBE > 10.5) {
+      fireProbeAccum = max(fireProbeAccum, shellColor * smoothstep(0.002, 0.060, shellAlpha) * 8.0);
+    }
     local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
@@ -14132,6 +14155,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     canvasElement() {
       return canvas;
+    },
+    async sampleFluidFieldNaNCensus() {
+      if (!gpuInitialized || !device) return { ok: false, reason: 'gpu-not-initialized' };
+      const bytes = fluidBufferBytes(gridSize);
+      const staging = device.createBuffer({ label: 'kaminos fluid nan census staging', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      try {
+        const encoder = device.createCommandEncoder({ label: 'kaminos fluid nan census copy' });
+        encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, staging, 0, bytes);
+        const frontStaging = device.createBuffer({ label: 'kaminos front nan census staging', size: frontFieldBufferBytes(gridSize), usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+        encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontStaging, 0, frontFieldBufferBytes(gridSize));
+        device.queue.submit([encoder.finish()]);
+        await staging.mapAsync(GPUMapMode.READ);
+        await frontStaging.mapAsync(GPUMapMode.READ);
+        const data = new Float32Array(staging.getMappedRange());
+        const front = new Float32Array(frontStaging.getMappedRange());
+        const cells = gridCellCount(gridSize);
+        const slotStats = [];
+        for (let slot = 0; slot < 4; slot += 1) {
+          const perComponent = [0, 0, 0, 0];
+          const maxAbs = [0, 0, 0, 0];
+          for (let cell = 0; cell < cells; cell += 1) {
+            const base = cell * 16 + slot * 4;
+            for (let component = 0; component < 4; component += 1) {
+              const value = data[base + component];
+              if (Number.isNaN(value)) perComponent[component] += 1;
+              else if (Math.abs(value) > maxAbs[component]) maxAbs[component] = Math.abs(value);
+            }
+          }
+          slotStats.push({ slot, nanPerComponent: perComponent, maxAbsPerComponent: maxAbs.map(value => +value.toFixed(3)) });
+        }
+        let frontNaN = 0;
+        let frontMax = 0;
+        for (let cell = 0; cell < cells; cell += 1) {
+          const value = front[cell];
+          if (Number.isNaN(value)) frontNaN += 1;
+          else if (Math.abs(value) > frontMax) frontMax = Math.abs(value);
+        }
+        staging.unmap();
+        frontStaging.unmap();
+        frontStaging.destroy();
+        return { ok: true, cells, slotStats, frontNaN, frontMax: +frontMax.toFixed(3), frame: state.frameCount };
+      } finally {
+        staging.destroy();
+      }
     },
     fireIrradianceLightField,
     sampleFireLightFieldGpuProfile,
