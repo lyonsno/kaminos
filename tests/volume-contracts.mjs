@@ -1120,7 +1120,8 @@ assert.match(core, /transportedFireStructure/, 'bonfire fire variation derives f
 assert.match(core, /bonfireSpatialRayDephase/, 'bonfire raymarch uses deterministic spatial dephasing so no-temporal diagnostic captures do not phase-lock into vertical lanes');
 assert.doesNotMatch(core, /bonfireVisibleSourceRelief/, 'bonfire must not hide a smooth source plug by suppressing the render transfer after solver fire already exists');
 assert.match(core, /bonfireTransportedFireLumaShaper/, 'bonfire fire transfer compresses saturation through transported fire detail so solver breakup remains visible as luma variation');
-assert.match(core, /let lickWarp = turbulentDetailForce/, 'fire-lick breakup dephases its comb with turbulent warp before transport');
+assert.match(core, /let transportedStructure = clamp\(/, 'fire-lick breakup derives its modulation from transported fire, microdetail, front, and flow structure');
+assert.doesNotMatch(core, /let lickWarp = turbulentDetailForce/, 'fire-lick breakup must not hide an analytic periodic field behind a dephasing warp');
 assert.doesNotMatch(core, /sin\(p\.x \* 43\.0 \+ p\.y \* 61\.0 - p\.z \* 37\.0/, 'visible microdetail must not use the old single coherent diagonal phase wave');
 assert.match(core, /shredOperatorGain/, 'Shred slider has explicit nonlinear leverage for the exaggerated end of the range');
 assert.match(core, /fireLickOperatorGain/, 'Fire Licks slider has explicit nonlinear leverage for the exaggerated end of the range');

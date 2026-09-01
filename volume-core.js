@@ -2926,30 +2926,60 @@ fn fireLickAshCarry(c: vec3<i32>, lick: f32, bonfireBlend: f32) -> f32 {
 }
 
 fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
-  let interfaceEnergy = length(materialInterfaceGradient(c));
-  let lickWarp = turbulentDetailForce(p * 2.64 + vec3<f32>(0.19, -0.23, 0.11), time * 0.91) * (0.046 + source * 0.040 + heat * 0.018 + flameDetail * 0.016);
-  let q = p + lickWarp;
-  let combA = sin(q.y * 23.0 + sin(q.x * 19.0 + q.z * 11.0 + time * 3.2) + source * 2.6);
-  let combB = cos(q.z * 27.0 - q.x * 13.0 + q.y * 7.0 - time * 4.1 + flameDetail * 1.7);
-  let combC = hash31(floor((q + vec3<f32>(1.0)) * 24.0) + vec3<f32>(floor(time * 3.0)));
-  let verticalComb = clamp(0.54 + 0.22 * combA + 0.18 * combB + 0.10 * (combC - 0.5), 0.12, 1.10);
+  let interfaceGradient = materialInterfaceGradient(c);
+  let interfaceEnergy = length(interfaceGradient);
+  let localCurl = curlAtCell(c);
+  let curlEnergy = smoothstep(0.006, 0.24, length(localCurl));
+  let fireState = readSlot(c, 2u);
+  let microState = readSlot(c, 3u);
+  let frontTopology = readFrontField(c);
+  let transportedStructure = clamp(
+    fireState.z * 0.22
+      + fireState.w * 0.34
+      + microState.y * 0.20
+      + microState.z * 0.08
+      + frontTopology * 0.38,
+    0.0,
+    1.4
+  );
+  let structuralDirection = normalize(
+    interfaceGradient * 0.72
+      + cross(interfaceGradient, localCurl) * 0.28
+      + vec3<f32>(0.001, -0.0007, 0.0004)
+  );
+  let q = p + structuralDirection * (0.010 + source * 0.012 + heat * 0.006 + flameDetail * 0.004);
+  let irregularBreakup = hash31(floor((q + vec3<f32>(1.0)) * 24.0)) - 0.5;
+  let breakupGain = clamp(0.54 + transportedStructure * 0.22 + curlEnergy * 0.14 + irregularBreakup * 0.10, 0.30, 1.12);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
-  let lick = hotEdge * verticalComb * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
+  let lick = hotEdge * breakupGain * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
   let ash = fireLickAshCarry(c, lick, 0.0);
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
 fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, time: f32, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
-  let interfaceEnergy = length(materialInterfaceGradient(c));
+  let interfaceGradient = materialInterfaceGradient(c);
+  let interfaceEnergy = length(interfaceGradient);
+  let localCurl = curlAtCell(c);
+  let curlEnergy = smoothstep(0.006, 0.24, length(localCurl));
+  let fireState = readSlot(c, 2u);
+  let microState = readSlot(c, 3u);
+  let frontTopology = readFrontField(c);
+  let transportedStructure = clamp(
+    fireState.z * 0.20
+      + fireState.w * 0.36
+      + microState.y * 0.18
+      + microState.z * 0.10
+      + frontTopology * 0.40,
+    0.0,
+    1.4
+  );
   let radial = length(p.xz);
-  let radialWarp = (hash31(vec3<f32>(floor(radial * 19.0), floor((p.y + 1.0) * 17.0), floor(time * 3.0))) - 0.5) * 0.085;
+  let radialWarp = (hash31(vec3<f32>(floor(radial * 19.0), floor((p.y + 1.0) * 17.0), f32(c.x * 31 + c.z * 17))) - 0.5) * 0.085;
   let qRadius = max(0.0, radial + radialWarp * (0.30 + source * 0.42 + heat * 0.18));
-  let combA = sin(p.y * 24.0 + qRadius * 31.0 + time * 3.0 + source * 2.4);
-  let combB = cos(p.y * 9.0 - qRadius * 23.0 - time * 4.0 + flameDetail * 1.6);
-  let combC = hash31(vec3<f32>(floor(qRadius * 26.0), floor((p.y + 1.0) * 22.0), floor(time * 3.0)));
-  let verticalComb = clamp(0.56 + 0.22 * combA + 0.16 * combB + 0.08 * (combC - 0.5), 0.14, 1.06);
+  let irregularBreakup = hash31(vec3<f32>(floor(qRadius * 26.0), floor((p.y + 1.0) * 22.0), f32(c.x * 13 - c.z * 29))) - 0.5;
+  let breakupGain = clamp(0.56 + transportedStructure * 0.22 + curlEnergy * 0.12 + irregularBreakup * 0.08, 0.32, 1.10);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
-  let lick = hotEdge * verticalComb * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
+  let lick = hotEdge * breakupGain * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
   let ash = fireLickAshCarry(c, lick, 1.0);
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
