@@ -1,6 +1,23 @@
 export const KILN_FIXED_CAMERA_COMPOSITION_IDENTITY = 'normal-lit-fixed-camera-plate-v0';
 export const KILN_FIXED_CAMERA_PRESET_ID = 'vsp-341c2a315b094a6de625f63dfffa5a8b4e3c49cf534e428f5c9301698286b424';
 export const KILN_FIXED_CAMERA_PRESET_AUTHORITY = 'shared-volume-settings-preset-v2';
+export const KILN_FIXED_CAMERA_ROUTE_PARAMS = Object.freeze([
+  'kiln_composition',
+  'kiln_plate_root',
+  'kiln_plate_path',
+  'kiln_plate_sha256',
+  'kiln_normal_root',
+  'kiln_normal_path',
+  'kiln_normal_sha256',
+  'kiln_fire_x',
+  'kiln_fire_y',
+  'kiln_fire_scale_x',
+  'kiln_fire_scale_y',
+  'kiln_light_radius',
+  'kiln_light_intensity',
+  'kiln_plate_ambient',
+  'kiln_normal_y_sign',
+]);
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const ROOT_PATTERN = /^[a-z0-9][a-z0-9-]*$/;

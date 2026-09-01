@@ -1,3 +1,8 @@
+import {
+  KILN_FIXED_CAMERA_ROUTE_PARAMS,
+  parseKilnFixedCameraComposition,
+} from './kiln-fixed-camera-composition.mjs';
+
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
   'splat-only': Object.freeze({ role: 'truthHigh', composition: 'splat-only-v0' }),
@@ -440,6 +445,7 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     throw new Error(`unsupported target raymarch smoke presentation: ${requestedSmokePresentationModes[0]}`);
   }
   validateAppearanceDecompositionTarget(params);
+  const kilnComposition = parseKilnFixedCameraComposition(params);
   const allowed = new Set([
     ...receipt.routeEntries.map(([key]) => key),
     'settings_preset',
@@ -448,6 +454,7 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     'volume_raymarch_smoke',
     'volume_appearance_decomposition',
     'volume_appearance_selection',
+    ...(kilnComposition ? KILN_FIXED_CAMERA_ROUTE_PARAMS : []),
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

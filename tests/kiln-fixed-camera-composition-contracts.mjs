@@ -6,13 +6,24 @@ import {
   parseKilnFixedCameraComposition,
   validateKilnFixedCameraCompositionRuntime,
 } from '../kiln-fixed-camera-composition.mjs';
+import { validateVolumeSettingsPresetTarget } from '../volume-settings-preset-contract.mjs';
 
 const BASIN_ID = 'vsp-341c2a315b094a6de625f63dfffa5a8b4e3c49cf534e428f5c9301698286b424';
 const PLATE_SHA = '6fd7e60f95f81452c62ac8e5c8b82c93d7736b1f0552c521495bf21e2335debb';
 const NORMAL_SHA = 'f7237e8eceedeb8833a217b7bc45f21d553a2fd1e04170d217260658435ca216';
+const TARGET_RECEIPT = Object.freeze({
+  presetId: BASIN_ID,
+  sourcePresetAuthority: 'shared-volume-settings-preset-v2',
+  routeEntries: Object.freeze([
+    Object.freeze(['kaminos_volume_smoke', '1']),
+    Object.freeze(['volume_resolution', '96']),
+  ]),
+});
 
 function admittedParams() {
   return new URLSearchParams({
+    kaminos_volume_smoke: '1',
+    volume_resolution: '96',
     kiln_composition: KILN_FIXED_CAMERA_COMPOSITION_IDENTITY,
     settings_preset: BASIN_ID,
     settings_preset_authority: 'shared-volume-settings-preset-v2',
@@ -32,6 +43,20 @@ function admittedParams() {
     kiln_normal_y_sign: '-1',
   });
 }
+
+assert.equal(
+  validateVolumeSettingsPresetTarget(TARGET_RECEIPT, admittedParams()),
+  true,
+  'the exact complete kiln consumer extension is admitted beside the saved basin route',
+);
+
+const unknownConsumerParam = admittedParams();
+unknownConsumerParam.set('kiln_fallback_mode', 'silent');
+assert.throws(
+  () => validateVolumeSettingsPresetTarget(TARGET_RECEIPT, unknownConsumerParam),
+  /unexpected parameters.*kiln_fallback_mode/i,
+  'kiln admission does not broaden into a prefix-based route allowlist',
+);
 
 assert.equal(parseKilnFixedCameraComposition(new URLSearchParams()), null, 'composition is opt-in');
 
