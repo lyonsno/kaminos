@@ -1078,7 +1078,7 @@ assert.match(core, /rawDetailForce\s*=\s*transportedDetailDirection\(/, 'raw det
 assert.match(core, /rawMicroForce\s*=\s*transportedDetailDirection\(/, 'raw micro force derives from transported state');
 assert.match(core, /rawFineBreakup\s*=\s*fieldDerivedFineScaleBreakup\(/, 'fine breakup derives from local curl and transported scalars');
 assert.doesNotMatch(core, /fn\s+microDetailDomainWarp\b/, 'raymarch must not repaint transported detail through a presentation-only periodic domain warp');
-assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
+assert.match(core, /bonfireFireLickBreakup/, 'bonfire fire-lick breakup preserves its transported-state scene specialization without authored radial texture');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
 assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
 assert.match(core, /bonfireSwirlSymmetryGain/, 'bonfire scene damps one-handed global swirl at zero wind so liveliness does not read as wind drift');

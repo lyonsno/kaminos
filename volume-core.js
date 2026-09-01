@@ -2972,7 +2972,7 @@ fn fireLickAshCarry(c: vec3<i32>, lick: f32, bonfireBlend: f32) -> f32 {
   return shred * (baseAsh + lick * lickAsh);
 }
 
-fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+fn fireLickBreakup(c: vec3<i32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceGradient = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGradient);
   let localCurl = curlAtCell(c);
@@ -2989,21 +2989,14 @@ fn fireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f32, fuel: f32
     0.0,
     1.4
   );
-  let structuralDirection = normalize(
-    interfaceGradient * 0.72
-      + cross(interfaceGradient, localCurl) * 0.28
-      + vec3<f32>(0.001, -0.0007, 0.0004)
-  );
-  let q = p + structuralDirection * (0.010 + source * 0.012 + heat * 0.006 + flameDetail * 0.004);
-  let irregularBreakup = hash31(floor((q + vec3<f32>(1.0)) * 24.0)) - 0.5;
-  let breakupGain = clamp(0.54 + transportedStructure * 0.22 + curlEnergy * 0.14 + irregularBreakup * 0.10, 0.30, 1.12);
+  let breakupGain = clamp(0.54 + transportedStructure * 0.22 + curlEnergy * 0.14, 0.30, 1.12);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
   let lick = hotEdge * breakupGain * amount * (0.16 + fuel * 0.22 + flameDetail * 0.18 + source * 0.24);
   let ash = fireLickAshCarry(c, lick, 0.0);
   return vec4<f32>(lick, lick * (0.42 + fuel * 0.24), lick * (0.58 + heat * 0.22), ash);
 }
 
-fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
+fn bonfireFireLickBreakup(c: vec3<i32>, amount: f32, heat: f32, fuel: f32, flame: f32, flameDetail: f32, source: f32) -> vec4<f32> {
   let interfaceGradient = materialInterfaceGradient(c);
   let interfaceEnergy = length(interfaceGradient);
   let localCurl = curlAtCell(c);
@@ -3020,11 +3013,7 @@ fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f
     0.0,
     1.4
   );
-  let radial = length(p.xz);
-  let radialWarp = (hash31(vec3<f32>(floor(radial * 19.0), floor((p.y + 1.0) * 17.0), f32(c.x * 31 + c.z * 17))) - 0.5) * 0.085;
-  let qRadius = max(0.0, radial + radialWarp * (0.30 + source * 0.42 + heat * 0.18));
-  let irregularBreakup = hash31(vec3<f32>(floor(qRadius * 26.0), floor((p.y + 1.0) * 22.0), f32(c.x * 13 - c.z * 29))) - 0.5;
-  let breakupGain = clamp(0.56 + transportedStructure * 0.22 + curlEnergy * 0.12 + irregularBreakup * 0.08, 0.32, 1.10);
+  let breakupGain = clamp(0.56 + transportedStructure * 0.22 + curlEnergy * 0.12, 0.32, 1.10);
   let hotEdge = smoothstep(0.10, 1.20, heat + flame * 0.62) * smoothstep(0.014, 0.18, interfaceEnergy + source * 0.08);
   let lick = hotEdge * breakupGain * amount * (0.15 + fuel * 0.21 + flameDetail * 0.17 + source * 0.22);
   let ash = fireLickAshCarry(c, lick, 1.0);
@@ -4073,8 +4062,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
   var bonfireLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 1.0));
   if (fireLickBreakupEnabled) {
-    columnLickBirth = fireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
-    bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
+    columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);
+    bonfireLickBirth = bonfireFireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);
   }
   let lickBirth = mix(columnLickBirth, bonfireLickBirth, bonfireScene);
   let tallPlumeAnnularFrontContribution = tallPlumeAnnularFrontBirth * (0.34 + fireLickOperatorGain * 0.025);

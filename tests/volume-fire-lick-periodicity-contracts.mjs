@@ -48,10 +48,7 @@ const allowedFireLickCallees = new Set([
   'clamp',
   'cross',
   'curlAtCell',
-  'f32',
   'fireLickAshCarry',
-  'floor',
-  'hash31',
   'length',
   'materialInterfaceGradient',
   'max',
@@ -66,16 +63,24 @@ const allowedFireLickCallees = new Set([
 function assertFireLickPeriodicityBoundary(source) {
   assertTimeFreeWgslCallGraph(
     source,
-    ['fireLickBreakup', 'bonfireRadialFireLickBreakup'],
-    { label: 'Fire Lick transported-breakup call graph' },
+    ['fireLickBreakup', 'bonfireFireLickBreakup'],
+    {
+      label: 'Fire Lick transported-breakup call graph',
+      forbiddenCallees: ['hash31'],
+    },
   );
-  for (const name of ['fireLickBreakup', 'bonfireRadialFireLickBreakup']) {
+  for (const name of ['fireLickBreakup', 'bonfireFireLickBreakup']) {
     const signature = wgslFunctionSignature(source, name);
     const body = wgslFunctionBody(source, name);
     assert.doesNotMatch(
       signature,
       /\btime\b/,
       `${name} must not retain an unused time channel that can silently restore animated breakup`,
+    );
+    assert.doesNotMatch(
+      signature,
+      /\bp\s*:\s*vec3/,
+      `${name} must not retain source coordinates solely as authority for authored breakup texture`,
     );
     assert.doesNotMatch(
       body,
@@ -104,20 +109,24 @@ function assertFireLickPeriodicityBoundary(source) {
     assert.match(body, /readSlot\(c, 3u\)/, `${name} derives breakup from transported microdetail state`);
     assert.match(body, /readFrontField\(c\)/, `${name} derives breakup from the transported combustion front`);
     assert.match(body, /curlAtCell\(c\)/, `${name} derives breakup from live flow structure`);
-    assert.match(body, /hash31\(/, `${name} retains only low-amplitude irregular variation`);
+    assert.doesNotMatch(
+      body,
+      /\bhash31\s*\(/,
+      `${name} must not stamp permanent static hash texture into the transported Fire Lick field`,
+    );
   }
 
   const guardedBreakup = braceBodyAfter(source, '  if (fireLickBreakupEnabled) {');
   const expectedGuardedCalls = [
-    'columnLickBirth = fireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);',
-    'bonfireLickBirth = bonfireRadialFireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);',
+    'columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);',
+    'bonfireLickBirth = bonfireFireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);',
   ];
   assert.deepEqual(
     guardedBreakup.trim().split('\n').map(line => line.trim()).filter(Boolean),
     expectedGuardedCalls,
     'the Fire Licks enable guard owns exactly one evaluation of each breakup operator',
   );
-  for (const name of ['fireLickBreakup', 'bonfireRadialFireLickBreakup']) {
+  for (const name of ['fireLickBreakup', 'bonfireFireLickBreakup']) {
     assert.equal(
       [...source.matchAll(new RegExp(`\\b${name}\\s*\\(`, 'g'))].length,
       2,
@@ -164,13 +173,6 @@ const falseClosureMutations = [
     ),
   ],
   [
-    'time-phased admitted hash helper',
-    source => source.replace(
-      '  return fract((r.x + r.y) * r.z);',
-      '  return fract((r.x + r.y) * r.z + sin(u.cameraPos_time.w * 0.73) * 0.01);',
-    ),
-  ],
-  [
     'time-phased admitted ash helper',
     source => source.replace(
       '  return shred * (baseAsh + lick * lickAsh);',
@@ -181,7 +183,21 @@ const falseClosureMutations = [
     'unguarded extra breakup evaluation',
     source => source.replace(
       '  if (fireLickBreakupEnabled) {',
-      `  columnLickBirth = fireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);\n  if (fireLickBreakupEnabled) {`,
+      `  columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);\n  if (fireLickBreakupEnabled) {`,
+    ),
+  ],
+  [
+    'restored permanent cell hash',
+    source => source.replace(
+      '  let breakupGain = clamp(0.54 + transportedStructure',
+      `  let permanentCellTexture = hash31(vec3<f32>(f32(c.x), f32(c.y), f32(c.z))) - 0.5;\n  let breakupGain = clamp(0.54 + permanentCellTexture * 0.10 + transportedStructure`,
+    ),
+  ],
+  [
+    'helper-hidden permanent hash',
+    source => source.replace(
+      '  return shred * (baseAsh + lick * lickAsh);',
+      '  return shred * (baseAsh + lick * lickAsh) + hash31(vec3<f32>(f32(c.x), f32(c.y), f32(c.z))) * 0.01;',
     ),
   ],
   [
@@ -215,4 +231,4 @@ assert.deepEqual(
   'the Fire Lick periodicity and cost boundary must reject every false-closure mutation',
 );
 
-console.log('volume fire-lick periodicity: transported-field breakup replaces animated combs and zero remains a hard bypass');
+console.log('volume fire-lick periodicity: transported-field breakup owns the effect without periodic or permanent-hash texture, and zero remains a hard bypass');
