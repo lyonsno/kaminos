@@ -29,13 +29,13 @@ assert.doesNotMatch(
 );
 assert.match(
   raymarch,
-  /let\s+pyroMemoryStructure\s*=\s*clamp\(/,
-  'pyro appearance must use transported material-memory structure rather than a presentation-time phase wave',
+  /let\s+transportedPyroStructure\s*=\s*clamp\(/,
+  'pyro appearance must derive structure from transported fields rather than a synthetic CPU atlas',
 );
 assert.doesNotMatch(
   raymarch,
-  /pyroMemoryPattern/,
-  'the retired periodic pyro-memory pattern must not remain as an alias',
+  /pyroMemoryPattern|pyroMemoryCell|pyroSpatialEnergy|pyroMemoryStructure|samplePyroMaterialMemoryCell/,
+  'the retired periodic pyro-memory atlas must not remain in production raymarch through an alias or sampler',
 );
 assert.doesNotMatch(
   raymarch,
@@ -56,6 +56,33 @@ assert.match(
   raymarch,
   /let\s+transportedFireStructure\s*=\s*clamp\(/,
   'fire variation must derive from transported reaction and interface structure',
+);
+
+const pyroStateUpdate = sourceBetween(
+  core,
+  'function updatePyroDynamicDetailState({ simReadback = null, inputKind = \'control-proxy\' } = {}) {',
+  '\n  let adapter = null;',
+);
+
+assert.doesNotMatch(
+  pyroStateUpdate,
+  /Math\.(?:sin|cos)\s*\(/,
+  'renderer-adjacent Pyro state must not synthesize a self-advancing periodic atlas',
+);
+assert.doesNotMatch(
+  core,
+  /fn\s+samplePyroMaterialMemoryCell\b/,
+  'the synthetic Pyro atlas sampler must be removed from shader authority',
+);
+assert.match(
+  core,
+  /materialShaderReadiness:\s*'retired-synthetic-atlas'/,
+  'runtime receipts must state that synthetic atlas sampling is retired',
+);
+assert.match(
+  core,
+  /uploadedCells:\s*0/,
+  'runtime receipts must fail closed on synthetic atlas uploads',
 );
 
 console.log('volume raymarch periodicity contracts passed');

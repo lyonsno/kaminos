@@ -1333,9 +1333,6 @@ const PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY = 'pyro-dynamic-detail-atlas-v0';
 const PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE = 'pyro-dynamic-detail-authority-live-fields-v0';
 const PYRO_DYNAMIC_DETAIL_RESET_POLICY = 'pyro-dynamic-detail-reset-policy-v0';
 const PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT = 'pyro-dynamic-detail-material-contract-v0';
-const PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP = 0.004;
-const PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP = 0.018;
-const PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP = 0.004;
 const PYRO_DYNAMIC_DETAIL_CELL_BLEND = 0.14;
 const PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT = {
   width: 8,
@@ -2623,24 +2620,6 @@ fn pressureTierDebugOverlayColor(y: f32) -> vec4<f32> {
   let color = mix(bandColor, p3Color, inPressure3);
   let lineBoost = clamp(lowerBoundary * 0.34 + heroBoundary * 0.46, 0.0, 0.72);
   return vec4<f32>(mix(color, vec3<f32>(1.0, 0.92, 0.52), lineBoost), clamp(u.pressure_tier_controls.w, 0.0, 1.0) * (0.32 + inPressure3 * 0.24 + lineBoost * 0.70));
-}
-
-fn samplePyroMaterialMemoryCell(p: vec3<f32>) -> vec4<f32> {
-  let normalized = clamp(p * 0.5 + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(0.999));
-  let lateral = clamp(normalized.x * 0.64 + normalized.z * 0.36, 0.0, 0.999);
-  let cellUv = vec2<f32>(lateral * 7.0, normalized.y * 2.0);
-  let col0 = u32(clamp(floor(cellUv.x), 0.0, 7.0));
-  let row0 = u32(clamp(floor(cellUv.y), 0.0, 2.0));
-  let col1 = min(col0 + 1u, 7u);
-  let row1 = min(row0 + 1u, 2u);
-  let blend = fract(cellUv);
-  let memoryIndex00 = row0 * 8u + col0;
-  let memoryIndex10 = row0 * 8u + col1;
-  let memoryIndex01 = row1 * 8u + col0;
-  let memoryIndex11 = row1 * 8u + col1;
-  let lower = mix(u.pyro_detail_cells[memoryIndex00], u.pyro_detail_cells[memoryIndex10], blend.x);
-  let upper = mix(u.pyro_detail_cells[memoryIndex01], u.pyro_detail_cells[memoryIndex11], blend.x);
-  return mix(lower, upper, blend.y);
 }
 
 fn pressureReadComposite(c: vec3<i32>) -> vec4<f32> {
@@ -4794,7 +4773,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
   let pyroMaterialGain = select(clamp(u.pyro_detail_controls.x, 0.0, 1.5), 0.0, LEAN_STOCK_RAYMARCH);
-  let pyroMaterialEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
+  let pyroTransportEnergy = clamp(u.pyro_detail_controls.y, 0.0, 1.0);
   let pyroLiveAuthority = clamp(u.pyro_detail_controls.z, 0.0, 1.0);
   let pyroSmokeAuthority = clamp(u.pyro_detail_controls.w, 0.0, 1.0);
   let pyroInterfaceFocus = clamp(u.pyro_carrier_controls.x, 0.0, 1.0);
@@ -5299,12 +5278,19 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let materialStructure = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal));
     let shredStructure = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12);
     let fireStructure = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44));
-    let pyroMemoryCell = samplePyroMaterialMemoryCell(p);
-    let pyroSpatialEnergy = clamp(pyroMemoryCell.x * pyroMemoryCell.y * pyroMemoryCell.z, 0.0, 1.0);
+    let transportedPyroStructure = clamp(
+      materialStructure * 0.16
+        + shredStructure * 0.20
+        + fireStructure * 0.28
+        + transportedFireStructure * 0.22
+        + transportedCurtainStructure * 0.14,
+      0.0,
+      1.0
+    );
     let pyroBaseCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.22 + pyroSpatialEnergy * 0.78)
+      * (0.22 + transportedPyroStructure * 0.78)
       * smoothstep(0.018, 0.36, temp + flameDetail * 0.75 + fireLick * 0.42 + heat * 0.16)
       * smoothstep(0.012, 0.34, density + smoke * 0.18 + microTextureSignal * 0.20);
     let pyroInterfaceSignal = clamp(
@@ -5331,15 +5317,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroWakeMask = clamp(pyroNormalView + pyroWakeView + pyroAllView, 0.0, 1.0);
     let pyroRadianceMask = clamp(pyroNormalView + pyroRadianceView + pyroAllView, 0.0, 1.0);
     let pyroFlowMask = clamp(pyroNormalView + pyroFlowView + pyroAllView, 0.0, 1.0);
-    let pyroMemoryStructure = clamp(
-      0.18
-        + pyroSpatialEnergy * 0.46
-        + pyroMemoryCell.w * 0.18
-        + interfaceShred * 0.10
-        + fireLick * 0.06,
-      0.0,
-      1.0
-    );
     let fineShadow = 0.48 + 0.64 * materialStructure - 0.20 * shredStructure;
     let smokeCol = mix(
       vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredStructure * 0.26),
@@ -5481,7 +5458,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       * pyroEdgeBite
       * pyroBiteMask
       * pyroCarrierOverdrive
-      * (0.40 + pyroMemoryStructure * 0.60)
+      * (0.40 + transportedPyroStructure * 0.60)
       * pyroStackedBiteEvent;
     let pyroFlowTopology = smoothstep(
       mix(0.0006, 0.006, pyroFlowTeeth),
@@ -5500,9 +5477,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     );
     let pyroFlowFront = mix(pyroRawCurrentFire, max(pyroRawCurrentFire * 0.28, pyroInterfaceSignal), pyroFlowBorder);
     let pyroFlowLiveCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.18 + pyroSpatialEnergy * 0.58 + pyroSmokeAuthority * 0.24)
+      * (0.18 + transportedPyroStructure * 0.58 + pyroSmokeAuthority * 0.24)
       * smoothstep(0.006, 0.22, density + smoke * 0.28 + rawExtinction * 0.24 + microSmoke * 0.28)
       * smoothstep(0.001, 0.045, combustionFrontTopology * 0.58 + fireLick * 0.34 + interfaceShred * 0.22 + curlDebug * 0.72 + divDebug * 0.28);
     let pyroFlowHeightGate = 1.0 - smoothstep(
@@ -5524,7 +5501,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
         * pyroFlowHeightGate
         * pyroFlowCarrierShape
         * max(pyroFlowTopology, pyroFlowShear * (0.18 + pyroFlowTeeth * 0.22))
-        * (0.22 + pyroMemoryStructure * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
+        * (0.22 + transportedPyroStructure * 0.16 + pyroFlowShear * 0.30 + combustionFrontTopology * 0.06 + fireLick * 0.05),
       0.0,
       4.0
     );
@@ -5533,7 +5510,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       mix(0.92, 0.52, pyroFlowSpikes),
       pyroFlowTopology * (0.64 + pyroFlowSpikes * 0.52)
         + pyroFlowShear * (0.18 + pyroFlowSpikes * 0.36)
-        + pyroMemoryStructure * (0.10 + pyroFlowSpikes * 0.28)
+        + transportedPyroStructure * (0.10 + pyroFlowSpikes * 0.28)
         + fireLick * (0.10 + pyroFlowSpikes * 0.20)
     );
     let pyroFlowSpikeSignal = clamp(
@@ -5567,7 +5544,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       * pyroSmokeFold
       * pyroFoldMask
       * pyroCarrierOverdrive
-      * (0.34 + pyroSpatialEnergy * 0.66)
+      * (0.34 + transportedPyroStructure * 0.66)
       * pyroFoldWakeSignal;
     let pyroWakeHeightGate = 1.0 - smoothstep(
       mix(0.48, 0.92, pyroWakeLift),
@@ -5584,7 +5561,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroWakeSignal = pyroBaseCarrier
       * pyroWakeMask
       * pyroCarrierOverdrive
-      * (0.20 + pyroSpatialEnergy * 0.62 + pyroSmokeAuthority * 0.18)
+      * (0.20 + transportedPyroStructure * 0.62 + pyroSmokeAuthority * 0.18)
       * pyroWakeEvent;
     let pyroRadianceFreshFireGate = smoothstep(
       0.018,
@@ -5603,7 +5580,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       pyroInterfaceSignal
         * smoothstep(0.014, 0.54, pyroFireEventCarrier + flameDetail * 0.40 + fireLick * 0.30 + combustionFront * 0.22)
         * (1.0 - smoothstep(0.64, 1.06, pyroFireEventCarrier + pyroRawCombustionSignal * 0.34))
-        * (0.70 + pyroMemoryStructure * 0.22 + fireLick * 0.14),
+        * (0.70 + transportedPyroStructure * 0.22 + fireLick * 0.14),
       0.0,
       1.25
     );
@@ -5615,7 +5592,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroRadianceBorderEvent = mix(pyroRadianceFireBodyEvent, max(pyroRadianceFireEdgeEvent, pyroRadianceFireBodyEvent * 0.24), pyroRadianceBorder);
     let pyroRadianceToothedEvent = mix(
       pyroRadianceBorderEvent,
-      pyroRadianceFireEdgeEvent * (0.72 + pyroMemoryStructure * 0.48 + fireLick * 0.20),
+      pyroRadianceFireEdgeEvent * (0.72 + transportedPyroStructure * 0.48 + fireLick * 0.20),
       pyroRadianceTeeth
     );
     let pyroFireRadianceEvent = clamp(
@@ -5642,9 +5619,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     );
     let pyroRadianceBody = max(smoke + rawExtinction + microSmoke * 0.32, pyroRawCurrentFire * (0.26 + (1.0 - pyroRadianceSpill) * 0.42));
     let pyroRadianceFireCarrier = pyroMaterialGain
-      * pyroMaterialEnergy
+      * pyroTransportEnergy
       * pyroLiveAuthority
-      * (0.24 + pyroSpatialEnergy * 0.76)
+      * (0.24 + transportedPyroStructure * 0.76)
       * smoothstep(0.012, 0.38, rawTemp + heat * 0.26 + flameDetail * 0.58 + fireLick * 0.40 + combustionFront * 0.26)
       * smoothstep(0.010, 0.48, pyroRadianceFreshFireGate + pyroFireRadianceEvent * 0.84 + pyroRawCurrentFire * 0.22);
     let pyroRadianceCarrier = mix(pyroBaseCarrier, max(pyroBaseCarrier * 0.36, pyroRadianceFireCarrier), pyroRadianceFireSourceWeight);
@@ -5665,7 +5642,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
         * pyroContrastRadiance
         * pyroRadianceMask
         * pyroCarrierOverdrive
-        * (0.36 + pyroSpatialEnergy * 0.64)
+        * (0.36 + transportedPyroStructure * 0.64)
         * pyroRadianceSparsity
         * pyroRadianceSpillSignal
         * pyroRadianceHeightGate
@@ -5679,7 +5656,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
           0.78 + pyroRadianceFreshFireGate * 0.62 + pyroRadianceFireEdgeEvent * 0.44 + pyroRawFireMix * 0.30,
           mix(
             0.16 + renderTemp * 0.12,
-            0.18 + smoke * 0.42 + renderTemp * 0.14 + pyroMemoryStructure * 0.08,
+            0.18 + smoke * 0.42 + renderTemp * 0.14 + transportedPyroStructure * 0.08,
             pyroRadianceSpill
           ),
           1.0 - pyroRadianceFireSourceWeight
@@ -5705,7 +5682,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1) * visibleSmokeAuthority;
     let pyroOwnedFireAlphaBoost = clamp(
       pyroOwnedFireMode * pyroBaseCarrier * pyroLiveAuthority * pyroFlamePaint * pyroRawCurrentFire
-        * (0.32 + pyroSpatialEnergy * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
+        * (0.32 + transportedPyroStructure * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
       0.0,
       2.4
     ) * selectiveRaymarchFireAuthority;
@@ -5730,7 +5707,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
         * pyroLiveAuthority
         * pyroFlamePaint
         * pyroRawFireMix
-        * (0.34 + pyroSpatialEnergy * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.12),
+        * (0.34 + transportedPyroStructure * 0.46 + flameDetail * 0.16 + quenchedFireLick * 0.12),
       0.0,
       3.0
     );
@@ -5783,7 +5760,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       clamp(pyroFoldExtinctionBoost, 0.0, 0.78)
     );
     let pyroWakeNeutralColor = pyroWakeShadowEndpoint * (0.70 + smoke * 0.16);
-    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + pyroMemoryStructure * 0.10 + pyroRawFireMix * 0.08);
+    let pyroWakeAmberColor = pyroWakeEmberEndpoint * (0.24 + smoke * 0.18 + transportedPyroStructure * 0.10 + pyroRawFireMix * 0.08);
     let pyroWakeColor = mix(pyroWakeNeutralColor, pyroWakeAmberColor, pyroWakeWarmth);
     local = mix(
       local,
@@ -8008,7 +7985,6 @@ export function createKaminosVolumePrototype({
 
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
-  let pyroDynamicDetailPhase = 0;
   let pyroDynamicDetailAtlasCells = new Array(24).fill(0);
   let pyroDynamicDetailLastInputMs = -Infinity;
   let pyroDynamicDetailLastReadbackFrame = -1;
@@ -8033,32 +8009,20 @@ export function createKaminosVolumePrototype({
   }
 
   function buildPyroDynamicDetailMaterialMemory({
-    atlasCells,
     resetGate,
-    confidence,
-    liveFireAuthority,
-    smokeAuthority,
     stateEnergy,
   }) {
     const usable = !resetGate;
     const sampleVector4 = new Array(PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.width * PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT.height)
       .fill(0)
-      .map((_, index) => {
-        const energy = usable ? clampFinite(atlasCells[index], 0, 1, 0) : 0;
-        return [
-          energy,
-          usable ? clampFinite(confidence, 0, 1, 0) : 0,
-          usable ? clampFinite(liveFireAuthority, 0, 1, 0) : 0,
-          usable ? clampFinite(smokeAuthority, 0, 1, 0) : 0,
-        ];
-      });
+      .map(() => [0, 0, 0, 0]);
     return {
       identity: PYRO_DYNAMIC_DETAIL_MATERIAL_CONTRACT,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      visualRole: 'renderer-adjacent-detail-memory-not-main-fire',
+      visualRole: 'retired-synthetic-atlas-not-renderer-authority',
       textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
-      shaderReadiness: resetGate ? 'blocked-reset' : 'sampleable-debug-only',
+      shaderReadiness: 'retired-synthetic-atlas',
       sampleVector4,
       energyMean: usable ? clampFinite(stateEnergy, 0, 1, 0) : 0,
     };
@@ -8129,19 +8093,7 @@ export function createKaminosVolumePrototype({
       pyroDynamicDetailEnergy = clampFinite(pyroDynamicDetailEnergy * 0.68, 0, 1, 0);
       pyroDynamicDetailConfidence = clampFinite(pyroDynamicDetailConfidence * 0.62, 0, 1, 0);
     }
-    pyroDynamicDetailPhase = (
-      pyroDynamicDetailPhase
-      + PYRO_DYNAMIC_DETAIL_PHASE_BASE_STEP
-      + liveFireAuthority * PYRO_DYNAMIC_DETAIL_PHASE_FIRE_STEP
-      + smokeAuthority * PYRO_DYNAMIC_DETAIL_PHASE_SMOKE_STEP
-    ) % 1024;
-    const targetAtlasCells = new Array(24).fill(0).map((_, index) => {
-      const x = index % 8;
-      const y = Math.floor(index / 8);
-      const wave = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 6.283 + x * 1.73 + y * 2.11);
-      const neighbor = 0.5 + 0.5 * Math.sin(pyroDynamicDetailPhase * 3.71 + x * 0.79 - y * 1.39);
-      return clampFinite(pyroDynamicDetailEnergy * (0.28 + wave * 0.54 + neighbor * 0.18), 0, 1, 0);
-    });
+    const targetAtlasCells = new Array(24).fill(resetGate ? 0 : pyroDynamicDetailEnergy);
     pyroDynamicDetailAtlasCells = targetAtlasCells.map((target, index) => {
       const previous = resetGate ? 0 : clampFinite(pyroDynamicDetailAtlasCells[index], 0, 1, 0);
       return clampFinite(previous * (1 - PYRO_DYNAMIC_DETAIL_CELL_BLEND) + target * PYRO_DYNAMIC_DETAIL_CELL_BLEND, 0, 1, 0);
@@ -8151,14 +8103,14 @@ export function createKaminosVolumePrototype({
       identity: PYRO_DYNAMIC_DETAIL_ATLAS_IDENTITY,
       authoritySource: PYRO_DYNAMIC_DETAIL_AUTHORITY_SOURCE,
       resetPolicy: PYRO_DYNAMIC_DETAIL_RESET_POLICY,
-      updateRule: 'pyro-cellular-detail-memory-deterministic-ca-v0',
+      updateRule: 'pyro-transported-authority-scalar-debug-v0',
       visualRole: 'debug-atlas-only-not-main-fire',
       enabled,
       confidence: pyroDynamicDetailConfidence,
       liveFireAuthority,
       smokeAuthority,
       stateEnergy: pyroDynamicDetailEnergy,
-      statePhase: pyroDynamicDetailPhase,
+      statePhase: 0,
       resetGate,
       resetReasons,
       lastUpdateFrame: state.frameCount,
@@ -11460,29 +11412,22 @@ export function createKaminosVolumePrototype({
         lastInputKind: 'look-lab-frozen',
       };
     }
-    const materialMemory = pyroDetailForRender.materialMemory || {};
     const pyroMaterialRequestedGain = Math.max(0, Math.min(1.5, controlsSnapshot.pyroMaterialGain ?? 0));
-    const pyroMaterialSampleable = pyroMaterialRequestedGain > 0 && materialMemory.shaderReadiness === 'sampleable-debug-only';
     const pyroCompareMuted = pyroCompareMode === 'base';
-    const pyroMaterialGain = pyroMaterialSampleable && !pyroCompareMuted ? pyroMaterialRequestedGain : 0;
-    const pyroMaterialEnergy = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, materialMemory.energyMean ?? pyroDetailForRender.stateEnergy ?? 0)) : 0;
-    const pyroMaterialLiveAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
-    const pyroMaterialSmokeAuthority = pyroMaterialSampleable && !pyroCompareMuted ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
+    const pyroMaterialActive = pyroMaterialRequestedGain > 0 && !pyroCompareMuted && !pyroDetailForRender.resetGate;
+    const pyroMaterialGain = pyroMaterialActive ? pyroMaterialRequestedGain : 0;
+    const pyroMaterialEnergy = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.stateEnergy ?? 0)) : 0;
+    const pyroMaterialLiveAuthority = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.liveFireAuthority ?? 0)) : 0;
+    const pyroMaterialSmokeAuthority = pyroMaterialActive ? Math.max(0, Math.min(1, pyroDetailForRender.smokeAuthority ?? 0)) : 0;
     uniforms[84] = pyroMaterialGain;
     uniforms[85] = pyroMaterialEnergy;
     uniforms[86] = pyroMaterialLiveAuthority;
     uniforms[87] = pyroMaterialSmokeAuthority;
-    const materialSamples = Array.isArray(materialMemory.sampleVector4) ? materialMemory.sampleVector4 : [];
-    let uploadedPyroMaterialCells = 0;
     for (let memoryIndex = 0; memoryIndex < 24; memoryIndex += 1) {
-      const sample = pyroMaterialSampleable && !pyroCompareMuted && Array.isArray(materialSamples[memoryIndex])
-        ? materialSamples[memoryIndex]
-        : [0, 0, 0, 0];
-      uniforms[88 + memoryIndex * 4] = sample[0] ?? 0;
-      uniforms[89 + memoryIndex * 4] = sample[1] ?? 0;
-      uniforms[90 + memoryIndex * 4] = sample[2] ?? 0;
-      uniforms[91 + memoryIndex * 4] = sample[3] ?? 0;
-      if (pyroMaterialSampleable && !pyroCompareMuted) uploadedPyroMaterialCells += 1;
+      uniforms[88 + memoryIndex * 4] = 0;
+      uniforms[89 + memoryIndex * 4] = 0;
+      uniforms[90 + memoryIndex * 4] = 0;
+      uniforms[91 + memoryIndex * 4] = 0;
     }
     const pyroInterfaceFocus = Math.max(0, Math.min(1, controlsSnapshot.pyroInterfaceFocus ?? 0.75));
     const pyroEdgeBite = Math.max(0, Math.min(1, controlsSnapshot.pyroEdgeBite ?? 0.35));
@@ -11818,14 +11763,14 @@ export function createKaminosVolumePrototype({
     state.snuffVisualModel = quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
     state.flameQuenchModel = quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
     state.pyroMaterialRendererCoupling = {
-      identity: 'pyro-material-memory-spatial-coupling-v0',
+      identity: 'pyro-transported-field-coupling-v0',
       lineage: 'pyro-material-memory-render-coupling-v0',
-      visualRole: 'opt-in-renderer-diagnostic-not-main-fire-authority',
+      visualRole: 'opt-in-transported-field-coupling-no-synthetic-atlas',
       compareMode: pyroCompareMode,
       compareMuted: pyroCompareMuted,
       requestedGain: pyroMaterialRequestedGain,
       effectiveGain: pyroMaterialGain,
-      materialShaderReadiness: materialMemory.shaderReadiness || 'blocked-reset',
+      materialShaderReadiness: 'retired-synthetic-atlas',
       energy: pyroMaterialEnergy,
       liveFireAuthority: pyroMaterialLiveAuthority,
       smokeAuthority: pyroMaterialSmokeAuthority,
@@ -11922,9 +11867,9 @@ export function createKaminosVolumePrototype({
         paletteShape: `${controlsSnapshot.pyroFlameCoreColor || '#fff4b8'}/${controlsSnapshot.pyroFlameEdgeColor || '#ff8a24'}/${controlsSnapshot.pyroBiteEmberColor || '#e65a1a'}/${controlsSnapshot.pyroRadianceWarmColor || '#d18438'}/${controlsSnapshot.pyroFlowHotColor || '#ff7a36'}`,
       },
       spatialMemory: {
-        identity: 'pyro-material-memory-spatial-coupling-v0',
-        textureLayout: { ...(materialMemory.textureLayout || PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT) },
-        uploadedCells: uploadedPyroMaterialCells,
+        identity: 'retired-pyro-material-memory-spatial-coupling-v0',
+        textureLayout: { ...PYRO_DYNAMIC_DETAIL_TEXTURE_LAYOUT },
+        uploadedCells: 0,
       },
     };
     state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
