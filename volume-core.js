@@ -19478,6 +19478,17 @@ export function createKaminosVolumePrototype({
   async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const advanceSim = options.advanceSim !== false;
+    const captureSurface = options.captureSurface === 'kiln-source'
+      ? 'kiln-source'
+      : 'presentation';
+    if (captureSurface === 'kiln-source' && (!kilnFixedCameraComposition || !kilnFireSourcePipeline)) {
+      return {
+        ok: false,
+        reason: 'kiln-composition-source-capture-unavailable',
+        captureSurface,
+        kilnFixedCameraComposition: detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition),
+      };
+    }
     const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const includeRgba = options.includeRgba === true;
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
@@ -19525,6 +19536,7 @@ export function createKaminosVolumePrototype({
       encodeBoundarySplats(encoder);
     }
     let presentationApplication = null;
+    let captureSurfaceReceipt = null;
     if (boundarySplatRequested()) {
       const composition = updateSelectiveHeadLiveCompositionState();
       let raymarchEncoded = false;
@@ -19604,6 +19616,28 @@ export function createKaminosVolumePrototype({
         captureContext: { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow },
       });
       encodeBoundarySplatTelemetry(encoder, true);
+    } else if (captureSurface === 'kiln-source') {
+      encodeDraw(
+        encoder,
+        frameTexture.createView(),
+        'kaminos kiln source-pass witness readback',
+        kilnFireSourcePipeline,
+      );
+      const terminalComposition = detachedKilnFixedCameraCompositionReceipt(state.kilnFixedCameraComposition);
+      captureSurfaceReceipt = {
+        identity: 'kiln-transparent-premultiplied-source-pass-v1',
+        entryPoint: 'fsKilnCompositeSource',
+        pipeline: state.raymarchShaderSpecialization.effective,
+        sourceOverscan: kilnFixedCameraComposition.fire.sourceOverscan,
+        sourceFraming: terminalComposition?.renderer?.sourceFraming || null,
+        uniformUpload: terminalComposition?.uniformUpload || null,
+      };
+      presentationApplication = recordVolumePresentationApplication({
+        raymarchEncoded: true,
+        raymarchApplied: false,
+        compositionEffective: 'kiln-source-pass-readback-v1',
+        captureContext: { sameStateCaptureId, baseFrameCount, baseSimStepCount, sampleNow },
+      });
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
       state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
@@ -20196,6 +20230,8 @@ export function createKaminosVolumePrototype({
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      captureSurface,
+      captureSurfaceReceipt: captureSurfaceReceipt ? { ...captureSurfaceReceipt } : null,
       sampleAuthority: advanceSim ? 'sim-advanced-frame-readback' : 'render-only-frozen-sim-state',
       simAdvanced: advanceSim,
       sameStateCaptureId,

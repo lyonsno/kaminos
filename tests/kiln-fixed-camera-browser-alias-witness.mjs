@@ -19,6 +19,8 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const route = String(args.get('--url') || '');
 const reportPath = String(args.get('--report') || '');
+const sourceImagePath = String(args.get('--source-image') || '');
+const fullImagePath = String(args.get('--full-image') || '');
 const expectedCommit = String(args.get('--expected-commit') || '');
 const deadlineMs = Number(args.get('--deadline-ms'));
 const allowDirty = args.has('--allow-dirty');
@@ -27,11 +29,14 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 
 assert.ok(route.startsWith('http://127.0.0.1:'), '--url must be an explicit local Kaminos route');
 assert.ok(reportPath, '--report is required');
+assert.ok(sourceImagePath, '--source-image is required');
+assert.ok(fullImagePath, '--full-image is required');
 assert.match(expectedCommit, /^[0-9a-f]{40}$/, '--expected-commit must be exact');
 assert.ok(Number.isFinite(deadlineMs) && deadlineMs > 0, '--deadline-ms must be explicit and positive');
 
 const routeUrl = new URL(route);
 const expectedPresetId = routeUrl.searchParams.get('settings_preset');
+const expectedSourceOverscan = Number(routeUrl.searchParams.get('kiln_fire_source_overscan'));
 const expectedPlateUrl = `/api/read?root=${encodeURIComponent(routeUrl.searchParams.get('kiln_plate_root'))}&path=${encodeURIComponent(routeUrl.searchParams.get('kiln_plate_path'))}`;
 const expectedNormalUrl = `/api/read?root=${encodeURIComponent(routeUrl.searchParams.get('kiln_normal_root'))}&path=${encodeURIComponent(routeUrl.searchParams.get('kiln_normal_path'))}`;
 const expectedUniformData = Array.from(new Float32Array([
@@ -68,6 +73,10 @@ let ws = null;
 
 function writeReport() {
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function delay(ms) {
@@ -291,6 +300,60 @@ try {
     .filter(Boolean);
   assert.ok(statusPhases.includes('initializing'), 'detached initializing status projection was not observed');
   assert.ok(statusPhases.includes('effective'), 'detached effective status projection was not observed');
+
+  report.phase = 'source-pass-capture';
+  const sourceCapture = await evaluate(cdp.call, `(async () => {
+    const sample = await window.__kaminosVolumePrototype.sampleFrame({ captureSurface: 'kiln-source', advanceSim: false, includeRgba: true });
+    if (!sample?.ok || !sample.image?.rgba) throw new Error('kiln-source-sample-failed:' + (sample?.reason || 'missing-rgba'));
+    const image = sample.image;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.putImageData(new ImageData(new Uint8ClampedArray(image.rgba), image.width, image.height), 0, 0);
+    return {
+      ...sample,
+      effectiveBrowserRoute: location.href,
+      image: {
+        width: image.width,
+        height: image.height,
+        pngDataUrl: canvas.toDataURL('image/png'),
+      },
+    };
+  })()`);
+  assert.equal(sourceCapture.captureSurface, 'kiln-source', 'wrong capture surface returned');
+  assert.equal(sourceCapture.captureSurfaceReceipt?.entryPoint, 'fsKilnCompositeSource', 'wrong source entry point returned');
+  assert.equal(sourceCapture.captureSurfaceReceipt?.sourceOverscan, expectedSourceOverscan, 'effective source overscan drifted');
+  assert.equal(sourceCapture.effectiveBrowserRoute, route, 'browser route drifted before source capture');
+  assert.deepEqual(sourceCapture.captureSurfaceReceipt?.sourceFraming, effective.renderer?.sourceFraming, 'source framing receipt drifted between terminal and captured source pass');
+  assert.deepEqual(sourceCapture.captureSurfaceReceipt?.uniformUpload, effective.uniformUpload, 'uniform receipt drifted between terminal and captured source pass');
+  const sourceImageBytes = Buffer.from(sourceCapture.image.pngDataUrl.split(',')[1] || '', 'base64');
+  assert.ok(sourceImageBytes.length > 0, 'source capture produced an empty PNG');
+  writeFileSync(sourceImagePath, sourceImageBytes);
+  const sourceImageSha256 = sha256(sourceImageBytes);
+  report.sourceCapture = {
+    ...sourceCapture,
+    image: {
+      width: sourceCapture.image.width,
+      height: sourceCapture.image.height,
+      path: sourceImagePath,
+      sha256: sourceImageSha256,
+      byteLength: sourceImageBytes.length,
+    },
+  };
+
+  report.phase = 'full-composition-capture';
+  const fullScreenshot = await cdp.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  const fullImageBytes = Buffer.from(fullScreenshot.data || '', 'base64');
+  assert.ok(fullImageBytes.length > 0, 'full composition capture produced an empty PNG');
+  writeFileSync(fullImagePath, fullImageBytes);
+  const fullImageSha256 = sha256(fullImageBytes);
+  report.fullCompositionCapture = {
+    path: fullImagePath,
+    sha256: fullImageSha256,
+    byteLength: fullImageBytes.length,
+    effectiveBrowserRoute: sourceCapture.effectiveBrowserRoute,
+  };
   assert.equal(report.browserErrors.length, 0, 'browser emitted an exception or error log');
 
   report.phase = 'complete';

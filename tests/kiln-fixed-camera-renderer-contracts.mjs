@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const root = new URL('..', import.meta.url);
 const core = readFileSync(new URL('volume-core.js', root), 'utf8');
 const index = readFileSync(new URL('index.html', root), 'utf8');
+const browserWitness = readFileSync(new URL('tests/kiln-fixed-camera-browser-alias-witness.mjs', root), 'utf8');
 
 assert.match(
   core,
@@ -168,6 +169,31 @@ assert.match(
 );
 assert.match(
   core,
+  /const captureSurface = options\.captureSurface === 'kiln-source'\s+\? 'kiln-source'\s+: 'presentation';/,
+  'frame sampling admits one explicit kiln source-pass evidence surface',
+);
+assert.match(
+  core,
+  /captureSurface === 'kiln-source' && \(!kilnFixedCameraComposition \|\| !kilnFireSourcePipeline\)[\s\S]*?reason: 'kiln-composition-source-capture-unavailable'/,
+  'kiln source evidence fails loud when the exact composition pipeline is unavailable',
+);
+assert.match(
+  core,
+  /else if \(captureSurface === 'kiln-source'\) \{[\s\S]*?encodeDraw\([\s\S]*?frameTexture\.createView\(\),[\s\S]*?'kaminos kiln source-pass witness readback',[\s\S]*?kilnFireSourcePipeline,[\s\S]*?\);/,
+  'kiln source evidence renders through the effective kiln source pipeline rather than ordinary readback',
+);
+assert.match(
+  core,
+  /const terminalComposition = detachedKilnFixedCameraCompositionReceipt\(state\.kilnFixedCameraComposition\);[\s\S]*?captureSurfaceReceipt = \{[\s\S]*?identity: 'kiln-transparent-premultiplied-source-pass-v1'[\s\S]*?entryPoint: 'fsKilnCompositeSource'[\s\S]*?pipeline: state\.raymarchShaderSpecialization\.effective[\s\S]*?sourceOverscan: kilnFixedCameraComposition\.fire\.sourceOverscan[\s\S]*?sourceFraming: terminalComposition\?\.renderer\?\.sourceFraming/,
+  'source readback binds the exact entry point, effective specialization, overscan, and terminal framing receipt',
+);
+assert.match(
+  core,
+  /captureSurface,\s+captureSurfaceReceipt: captureSurfaceReceipt \? \{ \.\.\.captureSurfaceReceipt \} : null,/,
+  'sample result publishes the requested surface and effective source-pass receipt',
+);
+assert.match(
+  core,
   /usage: GPUTextureUsage\.TEXTURE_BINDING \| GPUTextureUsage\.COPY_DST \| GPUTextureUsage\.RENDER_ATTACHMENT/,
   'external-image upload textures include Dawn-required render-attachment usage',
 );
@@ -195,6 +221,26 @@ assert.match(
   index,
   /window\.__kaminosVolumeStatusReceipt\s*=\s*\{[\s\S]*kilnFixedCameraComposition:\s*detachedKilnFixedCameraCompositionReceipt/,
   'status callback publishes a detached kiln projection for behavioral alias probing',
+);
+assert.match(
+  browserWitness,
+  /sampleFrame\(\{ captureSurface: 'kiln-source', advanceSim: false, includeRgba: true \}\)/,
+  'browser witness captures the actual kiln source pass rather than generic readback',
+);
+assert.match(
+  browserWitness,
+  /assert\.equal\(sourceCapture\.captureSurface, 'kiln-source'[\s\S]*?assert\.equal\(sourceCapture\.captureSurfaceReceipt\?\.entryPoint, 'fsKilnCompositeSource'[\s\S]*?assert\.equal\(sourceCapture\.captureSurfaceReceipt\?\.sourceOverscan, expectedSourceOverscan/,
+  'browser witness fails if the captured surface, source entry point, or overscan drifts',
+);
+assert.match(
+  browserWitness,
+  /report\.runtime\.source\?\.commit[\s\S]*?report\.terminal = terminal[\s\S]*?const effective = terminal\.freshDebugProjection[\s\S]*?report\.sourceCapture[\s\S]*?report\.fullCompositionCapture/,
+  'one report binds runtime source, terminal receipt, source-pass pixels, and full composition pixels',
+);
+assert.match(
+  browserWitness,
+  /sourceImageSha256[\s\S]*?fullImageSha256[\s\S]*?assert\.equal\(report\.browserErrors\.length, 0/,
+  'published image hashes and browser errors participate in the pass predicate',
 );
 
 console.log('kiln fixed-camera renderer contracts passed');
