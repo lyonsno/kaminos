@@ -25,7 +25,7 @@ try {
     ['pack', packageRoot, '--pack-destination', temporaryRoot, '--json'],
     temporaryRoot,
   ));
-  assert.equal(packOutput[0].version, '0.1.46');
+  assert.equal(packOutput[0].version, '0.1.47');
   assert.ok(packOutput[0].files.some(row => row.path === 'docs/getting-started.md'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
