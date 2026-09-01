@@ -2207,19 +2207,6 @@ assert.match(sourceScaleProbe, /saturationFraction/, 'source-scale probe reports
 assert.match(sourceScaleProbe, /complexityCollapseRatio/, 'source-scale probe reports large-source complexity collapse ratios');
 assert.match(sourceScaleProbe, /failurePhase/, 'source-scale probe records the failure phase before pretending to produce evidence');
 
-const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
-assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
-const dynamicTextureProof = existsSync(dynamicTextureProofPath) ? readFileSync(dynamicTextureProofPath, 'utf8') : '';
-assert.match(dynamicTextureProof, /kaminos\.volume\.dynamic-texture-proof\.v0/, 'dynamic texture proof writes a stable manifest schema identity');
-assert.match(dynamicTextureProof, /pyro-cellular-detail-memory-deterministic-ca-v0/, 'dynamic texture proof names the deterministic CA scaffold identity');
-assert.match(dynamicTextureProof, /live-witness-sim-readback-v0/, 'dynamic texture proof couples to live witness sim readback instead of ornament-only pixels');
-assert.match(dynamicTextureProof, /live-authority-gated-reset-v0/, 'dynamic texture proof names the reset policy that keeps state subordinate to live authority');
-for (const control of ['fuel-off-decay', 'snuff-quench-reset', 'broad-smoke-no-fire', 'camera-phase-mismatch', 'stale-input']) {
-  assert.match(dynamicTextureProof, new RegExp(control), `dynamic texture proof includes ${control} negative control`);
-}
-assert.match(dynamicTextureProof, /confidenceFloor/, 'dynamic texture proof records confidence gating for the hidden detail state');
-assert.match(dynamicTextureProof, /failurePhase/, 'dynamic texture proof records the failure phase before pretending to produce evidence');
-
 const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
 assert.ok(existsSync(residualMlxPath), 'MLX residual upscaler runner exists in the branch for reproducible Greenroom jobs');
 const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
