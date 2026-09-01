@@ -29,6 +29,16 @@ assert.match(
 );
 assert.match(
   cockpit,
+  /buildVolumeBasinUrl as buildVolumeBasinRuntimeUrl[\s\S]*restoreVolumeBasinState[\s\S]*from '\.\/volume-basin-runtime\.mjs'/,
+  'the cockpit consumes the executable production Basin boundary',
+);
+assert.match(
+  cockpit,
+  /return buildVolumeBasinRuntimeUrl\(\{[\s\S]*controls: controlsSnapshot,[\s\S]*routeFields: VOLUME_BASIN_ROUTE_FIELDS/,
+  'copied Basin URLs run through the tested serializer with the production route field inventory',
+);
+assert.match(
+  cockpit,
   /emitterFamily:\s*document\.getElementById\('emitter-assay-family'\)\.value/,
   'the production controls snapshot records emitter family identity',
 );
@@ -42,6 +52,13 @@ assert.match(
   /restoreVolumeBasinSlot\(selectedVolumeBasinSlot\(\), applyVolumeEmitterFamilyRuntimeToCockpit\)/,
   'restoring a named Basin slot passes through the emitter runtime composition boundary',
 );
+for (const restoreName of ['restoreVolumeBasinSnapshot', 'restoreVolumeBasinSlot']) {
+  const restoreBody = cockpit.match(new RegExp(`function ${restoreName}\\([\\s\\S]*?\\n}`))?.[0] || '';
+  assert.match(restoreBody, /restoreVolumeBasinState\(\{/, `${restoreName} uses the executable restore orchestrator`);
+  assert.match(restoreBody, /applyControls: applyVolumeControlsSnapshot/, `${restoreName} restores the DOM controls`);
+  assert.match(restoreBody, /readControls: readVolumeControls/, `${restoreName} rereads the effective DOM state`);
+  assert.match(restoreBody, /applyRuntime:/, `${restoreName} applies the restored runtime after the DOM state`);
+}
 assert.match(
   cockpit,
   /resolveVolumeEmitterRoute\(\{[\s\S]*requestedFamily:[\s\S]*requestedExternalMode:/,
@@ -51,6 +68,11 @@ assert.match(
   cockpit,
   /function applyVolumeEmitterFamilyRuntimeToCockpit\(/,
   'cockpit has one named runtime composition boundary for controls and emitter morphology',
+);
+assert.match(
+  cockpit,
+  /const activeRouteReceipt = resolveVolumeEmitterRoute\(\{[\s\S]*requestedFamily: controlsSnapshot\.emitterFamily[\s\S]*receipt\.routeReceipt = activeRouteReceipt/,
+  'runtime receipts resolve authority from the restored controls instead of retaining initial-page route identity',
 );
 assert.match(
   cockpit,

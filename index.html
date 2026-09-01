@@ -2997,6 +2997,14 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
 import { applyVolumeEmitterFamilyRuntime, resolveVolumeEmitterRoute } from './volume-emitter-runtime.mjs';
 import {
+  KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX,
+  KAMINOS_VOLUME_BASIN_STORAGE_KEY,
+  buildVolumeBasinUrl as buildVolumeBasinRuntimeUrl,
+  createVolumeBasinSnapshot,
+  persistVolumeBasinSnapshot,
+  restoreVolumeBasinState,
+} from './volume-basin-runtime.mjs';
+import {
   createForegroundKilnHeartbeatEpisode,
   firePresentationMismatchReasons,
   foregroundKilnStartAllowsPipeline,
@@ -10621,9 +10629,6 @@ const NON_CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
   'volume-canonical-body-balance',
 ]);
 
-const KAMINOS_VOLUME_BASIN_STORAGE_KEY = 'kaminos.volume.lastBasin.v1';
-const KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX = 'kaminos.volume.basinSlot.v1.';
-const VOLUME_BASIN_SNAPSHOT_IDENTITY = 'kaminos-volume-basin-snapshot-v1';
 const KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY = 'kaminos.volume.lookLibrary.v1';
 const VOLUME_LOOK_LIBRARY_IDENTITY = 'kaminos-volume-look-library-v1';
 const PYRO_LOOK_FIELDS = [
@@ -12556,15 +12561,11 @@ function formatVolumeBasinRouteValue(value) {
 }
 
 function buildVolumeBasinUrl(controlsSnapshot = readVolumeControls()) {
-  const url = new URL(window.location.href);
-  url.search = '';
-  url.searchParams.set('kaminos_volume_smoke', '1');
-  for (const [key, param] of VOLUME_BASIN_ROUTE_FIELDS) {
-    if (controlsSnapshot[key] === undefined || controlsSnapshot[key] === null) continue;
-    url.searchParams.set(param, formatVolumeBasinRouteValue(controlsSnapshot[key]));
-  }
-  url.searchParams.set('volume_quality_reason', 'pyro-contrast-basin-copied-0702');
-  return url.toString();
+  return buildVolumeBasinRuntimeUrl({
+    href: window.location.href,
+    controls: controlsSnapshot,
+    routeFields: VOLUME_BASIN_ROUTE_FIELDS,
+  });
 }
 
 function volumeDomControlKeyFromId(id) {
@@ -12665,17 +12666,23 @@ async function saveVolumeAgentCapture(kind = 'view') {
 
 function saveVolumeBasinSnapshot(reason = 'control-change') {
   const controlsSnapshot = readVolumeControls();
-  const snapshot = {
-    identity: VOLUME_BASIN_SNAPSHOT_IDENTITY,
-    reason,
-    savedAt: new Date().toISOString(),
-    controls: controlsSnapshot,
-    url: buildVolumeBasinUrl(controlsSnapshot),
-  };
   try {
-    localStorage.setItem(KAMINOS_VOLUME_BASIN_STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {}
-  return snapshot;
+    return persistVolumeBasinSnapshot({
+      storage: localStorage,
+      storageKey: KAMINOS_VOLUME_BASIN_STORAGE_KEY,
+      reason,
+      controls: controlsSnapshot,
+      href: window.location.href,
+      routeFields: VOLUME_BASIN_ROUTE_FIELDS,
+    });
+  } catch {
+    return createVolumeBasinSnapshot({
+      reason,
+      controls: controlsSnapshot,
+      href: window.location.href,
+      routeFields: VOLUME_BASIN_ROUTE_FIELDS,
+    });
+  }
 }
 
 function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
@@ -12690,21 +12697,22 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
 }
 
 function restoreVolumeBasinSnapshot(applyEmitterRuntime = null) {
-  let snapshot = null;
-  try {
-    snapshot = JSON.parse(localStorage.getItem(KAMINOS_VOLUME_BASIN_STORAGE_KEY));
-  } catch {}
-  if (!snapshot || snapshot.identity !== VOLUME_BASIN_SNAPSHOT_IDENTITY || !snapshot.controls) {
+  const result = restoreVolumeBasinState({
+    storage: localStorage,
+    storageKey: KAMINOS_VOLUME_BASIN_STORAGE_KEY,
+    applyControls: applyVolumeControlsSnapshot,
+    afterApplyControls: updateVolumeControlLabels,
+    readControls: readVolumeControls,
+    applyRuntime: typeof applyEmitterRuntime === 'function'
+      ? applyEmitterRuntime
+      : controls => volumePrototype?.setControls(controls),
+  });
+  if (!result.ok) {
     setInfo('No saved volume basin found');
     return false;
   }
-  applyVolumeControlsSnapshot(snapshot.controls);
-  updateVolumeControlLabels();
-  const restoredControls = readVolumeControls();
-  if (typeof applyEmitterRuntime === 'function') applyEmitterRuntime(restoredControls);
-  else volumePrototype?.setControls(restoredControls);
   refreshVolumeReadout();
-  setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
+  setInfo(`Restored volume basin from ${result.snapshot.savedAt || 'local storage'}`);
   return true;
 }
 
@@ -12758,19 +12766,20 @@ function saveVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
 }
 
 function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot(), applyEmitterRuntime = null) {
-  let snapshot = null;
-  try {
-    snapshot = JSON.parse(localStorage.getItem(`${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`));
-  } catch {}
-  if (!snapshot || snapshot.identity !== VOLUME_BASIN_SNAPSHOT_IDENTITY || !snapshot.controls) {
+  const result = restoreVolumeBasinState({
+    storage: localStorage,
+    storageKey: `${KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX}${slot}`,
+    applyControls: applyVolumeControlsSnapshot,
+    afterApplyControls: updateVolumeControlLabels,
+    readControls: readVolumeControls,
+    applyRuntime: typeof applyEmitterRuntime === 'function'
+      ? applyEmitterRuntime
+      : controls => volumePrototype?.setControls(controls),
+  });
+  if (!result.ok) {
     setInfo(`No saved volume basin in slot ${slot.toUpperCase()}`);
     return false;
   }
-  applyVolumeControlsSnapshot(snapshot.controls);
-  updateVolumeControlLabels();
-  const restoredControls = readVolumeControls();
-  if (typeof applyEmitterRuntime === 'function') applyEmitterRuntime(restoredControls);
-  else volumePrototype?.setControls(restoredControls);
   refreshVolumeReadout();
   setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
   return true;
@@ -21473,10 +21482,11 @@ async function initKaminosVolumeRoute() {
   window.__kaminosVolumePrototype = volumePrototype;
   let volumeEmitterRuntimeFrame = 0;
   function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot) {
-    const family = document.getElementById('emitter-assay-family').value;
-    if (routeExternalEmitters !== 'off' && family !== 'cluster') {
-      throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
-    }
+    const activeRouteReceipt = resolveVolumeEmitterRoute({
+      requestedFamily: controlsSnapshot.emitterFamily,
+      requestedExternalMode: routeExternalEmitters,
+    });
+    const family = activeRouteReceipt.effectiveFamily;
     const timestampMs = performance.now();
     const frameId = `cockpit-${family}-${volumePrototype.debugState().frameCount}-${volumeEmitterRuntimeFrame += 1}`;
     const externalRequest = routeExternalEmitters === 'synthetic_hand_trails'
@@ -21496,7 +21506,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
     });
-    receipt.routeReceipt = emitterRouteReceipt;
+    receipt.routeReceipt = activeRouteReceipt;
     window.__kaminosVolumeEmitterReceipt = receipt;
     renderVolumeEmitterReceipt(receipt);
     return receipt;
