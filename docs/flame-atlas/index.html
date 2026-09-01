@@ -109,6 +109,18 @@
         padding: 30px 0 80px;
       }
 
+      .hero-still {
+        width: min(100%, 1120px);
+        margin: 0 auto 70px;
+      }
+
+      .hero-still img {
+        display: block;
+        width: 100%;
+        height: auto;
+        background: #000;
+      }
+
       .section-label {
         display: flex;
         align-items: baseline;
@@ -345,6 +357,10 @@
     </header>
 
     <main class="shell screening-room">
+      <figure class="hero-still">
+        <img src="assets/conventional-fire-hero.png" alt="A live orange flame with a luminous crown and rooted filament structure">
+      </figure>
+
       <section class="feature" aria-labelledby="lead-composition">
         <div class="section-label">
           <h2 id="lead-composition">Composition 01</h2>
@@ -362,7 +378,7 @@
       <section id="compositions" aria-labelledby="composition-title">
         <div class="section-label">
           <h2 id="composition-title">Authored transitions</h2>
-          <span>Three complete movements</span>
+          <span>Four complete movements</span>
         </div>
         <div class="grid">
           <article class="clip">
@@ -392,6 +408,16 @@
             <div class="caption">
               <h3>Ignition sting</h3>
               <p>A blue base catches, rises into a hot orange body, constricts, and leaves the frame.</p>
+            </div>
+          </article>
+
+          <article class="clip">
+            <div class="media">
+              <video src="assets/blue-wide-ignition-extinction.mp4" poster="assets/blue-wide-ignition-extinction.png" playsinline controls preload="metadata"></video>
+            </div>
+            <div class="caption">
+              <h3>Blue wide ignition and extinction</h3>
+              <p>A compact blue body accelerates laterally, carries a violet crown across its footprint, and withdraws into smoke.</p>
             </div>
           </article>
         </div>
@@ -430,6 +456,16 @@
             <div class="caption">
               <h3>Blue-violet width cycle</h3>
               <p>A connected cool-spectrum passage with a changing footprint and upper crown.</p>
+            </div>
+          </article>
+
+          <article class="clip">
+            <div class="media">
+              <video data-autoplay src="assets/blue-vertical-morphology.mp4" poster="assets/blue-vertical-morphology.png" muted loop playsinline controls preload="metadata"></video>
+            </div>
+            <div class="caption">
+              <h3>Blue vertical morphology</h3>
+              <p>A compact body rises, narrows, and rebuilds into a taller violet-edged column before withdrawing.</p>
             </div>
           </article>
 

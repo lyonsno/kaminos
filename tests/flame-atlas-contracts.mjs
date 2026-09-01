@@ -28,11 +28,19 @@ test("generated-worlds README and flame screening room public claims agree", () 
   const motion = manifest.media.filter(({ path: mediaPath }) => mediaPath.endsWith(".mp4"));
   const compositions = motion.filter(({ presentation }) => presentation === "composition");
   const studies = motion.filter(({ presentation }) => presentation === "study");
-  assert.equal(motion.length, 10);
-  assert.equal(compositions.length, 4);
-  assert.equal(studies.length, 6);
+  assert.equal(motion.length, 12);
+  assert.equal(compositions.length, 5);
+  assert.equal(studies.length, 7);
   assert.equal(compositions.filter(({ primary }) => primary).length, 1);
-  assert.equal(new Set(motion.map(({ role }) => role)).size, 10);
+  assert.equal(new Set(motion.map(({ role }) => role)).size, 12);
+  assert.ok(
+    compositions.some(({ role }) => role === "blue wide ignition and extinction"),
+    "the wide blue burn must remain a complete composition",
+  );
+  assert.ok(
+    studies.some(({ role }) => role === "blue vertical morphology"),
+    "the vertical blue-violet passage must remain a morphology study",
+  );
 
   for (const media of manifest.media) {
     assert.equal(sha256(media.path), media.sha256, `${media.path} must match its public hash`);
@@ -46,7 +54,7 @@ test("generated-worlds README and flame screening room public claims agree", () 
     assert.match(html, new RegExp(`poster=["']${posterPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`));
   }
 
-  assert.match(rootReadme, /docs\/flame-atlas\/assets\/live-webgpu-combustion\.gif/);
+  assert.match(rootReadme, /docs\/flame-atlas\/assets\/conventional-fire-hero\.png/);
   assert.match(rootReadme, /\[Live Combustion\]\(docs\/flame-atlas\/\)/);
   assert.match(rootReadme, /^> A browser-native workbench for making generated worlds live\.$/m);
   assert.match(rootReadme, /\*\*Generated beings\*\*/);

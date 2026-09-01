@@ -8,6 +8,15 @@
   },
   "media": [
     {
+      "path": "assets/conventional-fire-hero.png",
+      "role": "conventional fire hero",
+      "presentation": "readme_hero",
+      "sha256": "9019029ade9d928fac45256ffead1cf14d63aaa20b09614e0536083eb67f0ab9",
+      "width": 1654,
+      "height": 1640,
+      "color": "sRGB"
+    },
+    {
       "path": "assets/composition-ooh-baby.mp4",
       "role": "ignition compression rebirth",
       "presentation": "composition",
@@ -64,6 +73,20 @@
       "color": "BT.709"
     },
     {
+      "path": "assets/blue-wide-ignition-extinction.mp4",
+      "role": "blue wide ignition and extinction",
+      "presentation": "composition",
+      "primary": false,
+      "sha256": "e532adaa6c49b81c81ac7d685afd1266f50476a1def9641141b7097546dd6e1c",
+      "width": 960,
+      "height": 876,
+      "duration_seconds": 9,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "frame_count": 540,
+      "color": "BT.709"
+    },
+    {
       "path": "assets/chromatic-combustion-column.mp4",
       "role": "chromatic column",
       "presentation": "study",
@@ -97,6 +120,19 @@
       "duration_seconds": 18,
       "stream_rate": "60/1",
       "average_rate": "60/1",
+      "color": "BT.709"
+    },
+    {
+      "path": "assets/blue-vertical-morphology.mp4",
+      "role": "blue vertical morphology",
+      "presentation": "study",
+      "sha256": "f3ccce071ea517141126ac2a87d5df0e0444ad794bc57e37c0065964b1fb26ab",
+      "width": 960,
+      "height": 876,
+      "duration_seconds": 8.5,
+      "stream_rate": "60/1",
+      "average_rate": "60/1",
+      "frame_count": 510,
       "color": "BT.709"
     },
     {

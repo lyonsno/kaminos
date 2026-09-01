@@ -18,7 +18,7 @@ The project spans four connected capabilities:
 - **A world kiln**. Images, meshes, splats, motion, material fields, simulation
   state, and generated environments become composable world matter.
 
-[![Live WebGPU combustion moving through a chromatic material basin](docs/flame-atlas/assets/live-webgpu-combustion.gif)](docs/flame-atlas/)
+[![A live browser-native orange flame with a luminous crown and rooted filament structure](docs/flame-atlas/assets/conventional-fire-hero.png)](docs/flame-atlas/)
 
 ## Live Browser Combustion
 
@@ -31,8 +31,8 @@ source geometry, and renewed expansion. A broad burner can gather into a jet,
 retain the structure already in flight, and rebuild into another morphology
 without resetting the simulation.
 
-[Live Combustion](docs/flame-atlas/) presents one complete composition, three
-authored transitions, and six compact studies of color, structure, width, and
+[Live Combustion](docs/flame-atlas/) presents one complete composition, four
+authored transitions, and seven compact studies of color, structure, width, and
 state history.
 
 Kaminos currently carries a multi-field volumetric fire and smoke simulation
