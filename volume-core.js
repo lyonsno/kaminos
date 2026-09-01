@@ -10422,6 +10422,11 @@ export function createKaminosVolumePrototype({
         ...kilnFixedCameraComposition,
         status: 'effective',
         failurePhase: null,
+        uniformUpload: {
+          identity: 'kiln-fixed-camera-uniform-upload-v0',
+          values: Array.from(uniformData),
+          byteLength: uniformData.byteLength,
+        },
         assets: { plate: plate.receipt, normal: normal.receipt },
         alignment: {
           identity: 'normalized-uv-image-alignment-v0',

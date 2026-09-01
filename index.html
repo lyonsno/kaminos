@@ -18494,6 +18494,14 @@ async function initKaminosVolumeRoute() {
       window.__kaminosKilnFixedCameraCompositionReceipt = receipt;
     },
     onStatus: status => {
+      window.__kaminosVolumeStatusReceipt = {
+        backend: status.backend || null,
+        phase: status.phase || null,
+        error: status.error || null,
+        kilnFixedCameraComposition: detachedKilnFixedCameraCompositionReceipt(
+          status.kilnFixedCameraComposition,
+        ),
+      };
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },

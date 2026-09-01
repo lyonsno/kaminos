@@ -67,5 +67,15 @@ assert.match(
   /validateKilnFixedCameraCanonicalAssets\(kilnFixedCameraComposition\)/,
   'the asynchronous fetch boundary reasserts exact canonical asset tuples',
 );
+assert.match(
+  core,
+  /uniformUpload:\s*\{[\s\S]*identity:\s*'kiln-fixed-camera-uniform-upload-v0'[\s\S]*values:\s*Array\.from\(uniformData\)[\s\S]*byteLength:\s*uniformData\.byteLength/,
+  'effective receipt records the exact uploaded kiln uniform array',
+);
+assert.match(
+  index,
+  /window\.__kaminosVolumeStatusReceipt\s*=\s*\{[\s\S]*kilnFixedCameraComposition:\s*detachedKilnFixedCameraCompositionReceipt/,
+  'status callback publishes a detached kiln projection for behavioral alias probing',
+);
 
 console.log('kiln fixed-camera renderer contracts passed');
