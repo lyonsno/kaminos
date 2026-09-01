@@ -47,5 +47,10 @@ assert.match(
   /return vec4<f32>\(displayRadiance, alpha\)/,
   'kiln source matches the established premultiplied caller-product contract',
 );
+assert.match(
+  core,
+  /usage: GPUTextureUsage\.TEXTURE_BINDING \| GPUTextureUsage\.COPY_DST \| GPUTextureUsage\.RENDER_ATTACHMENT/,
+  'external-image upload textures include Dawn-required render-attachment usage',
+);
 
 console.log('kiln fixed-camera renderer contracts passed');

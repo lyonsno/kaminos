@@ -10353,7 +10353,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos kiln ${label} ${digest}`,
       size: { width: bitmap.width, height: bitmap.height, depthOrArrayLayers: 1 },
       format: textureFormat,
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
     device.queue.copyExternalImageToTexture(
       { source: bitmap },
