@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { assertTimeFreeWgslCallGraph } from './helpers/wgsl-time-free-callgraph.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 
@@ -63,6 +64,11 @@ const allowedFireLickCallees = new Set([
 ]);
 
 function assertFireLickPeriodicityBoundary(source) {
+  assertTimeFreeWgslCallGraph(
+    source,
+    ['fireLickBreakup', 'bonfireRadialFireLickBreakup'],
+    { label: 'Fire Lick transported-breakup call graph' },
+  );
   for (const name of ['fireLickBreakup', 'bonfireRadialFireLickBreakup']) {
     const signature = wgslFunctionSignature(source, name);
     const body = wgslFunctionBody(source, name);
@@ -123,6 +129,21 @@ function assertFireLickPeriodicityBoundary(source) {
     /const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled \? 2 : 0;/,
     'the cost ledger still records zero periodic-breakup work when Fire Licks are disabled',
   );
+  assert.match(
+    source,
+    /const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0\.0005;/,
+    'Fire Lick owns one explicit authoritative bypass threshold',
+  );
+  assert.match(
+    source,
+    /let fireLickBreakupEnabled = fireLickOperatorGain > \$\{FIRE_LICK_BREAKUP_BYPASS_THRESHOLD\};/,
+    'the WGSL execution predicate is generated from the authoritative Fire Lick threshold',
+  );
+  assert.match(
+    source,
+    /const fireLickBreakupEnabled = fireLickOperatorGain > FIRE_LICK_BREAKUP_BYPASS_THRESHOLD;/,
+    'the JavaScript cost predicate uses the same authoritative Fire Lick threshold',
+  );
 }
 
 assertFireLickPeriodicityBoundary(core);
@@ -143,10 +164,38 @@ const falseClosureMutations = [
     ),
   ],
   [
+    'time-phased admitted hash helper',
+    source => source.replace(
+      '  return fract((r.x + r.y) * r.z);',
+      '  return fract((r.x + r.y) * r.z + sin(u.cameraPos_time.w * 0.73) * 0.01);',
+    ),
+  ],
+  [
+    'time-phased admitted ash helper',
+    source => source.replace(
+      '  return shred * (baseAsh + lick * lickAsh);',
+      '  return shred * (baseAsh + lick * lickAsh) + sin(u.cameraPos_time.w * 0.61) * 0.01;',
+    ),
+  ],
+  [
     'unguarded extra breakup evaluation',
     source => source.replace(
       '  if (fireLickBreakupEnabled) {',
       `  columnLickBirth = fireLickBreakup(cellI, p * detailDomain, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);\n  if (fireLickBreakupEnabled) {`,
+    ),
+  ],
+  [
+    'shader threshold above ledger threshold',
+    source => source.replace(
+      'let fireLickBreakupEnabled = fireLickOperatorGain > ${FIRE_LICK_BREAKUP_BYPASS_THRESHOLD};',
+      'let fireLickBreakupEnabled = fireLickOperatorGain > 0.10;',
+    ),
+  ],
+  [
+    'shader threshold below ledger threshold',
+    source => source.replace(
+      'let fireLickBreakupEnabled = fireLickOperatorGain > ${FIRE_LICK_BREAKUP_BYPASS_THRESHOLD};',
+      'let fireLickBreakupEnabled = fireLickOperatorGain > 0.0;',
     ),
   ],
 ];

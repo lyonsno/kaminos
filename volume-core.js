@@ -2984,146 +2984,100 @@ fn bonfireRadialFireLickBreakup(c: vec3<i32>, p: vec3<f32>, amount: f32, heat: f
   return vec4<f32>(lick, lick * (0.40 + fuel * 0.22), lick * (0.54 + heat * 0.20), ash);
 }
 
-fn bonfireSymmetricCombustionPairOffset(pairIndex: f32, side: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec2<f32> {
-  let ringRadius = sourceRadius * (0.72 + detailFrequency * 0.045);
-  let angle = pairIndex * 2.0943951 + sin(time * (0.31 + pairIndex * 0.049)) * 0.18;
-  let spoke = vec2<f32>(cos(angle), sin(angle));
-  let tangent = vec2<f32>(-spoke.y, spoke.x);
-  let radialPulse = sin(time * 0.73 + pairIndex * 1.71) * sourceRadius * 0.045;
-  let tangentPulse = cos(time * 0.61 - pairIndex * 1.33) * sourceRadius * 0.035;
-  return (spoke * (ringRadius + radialPulse) + tangent * tangentPulse) * side;
-}
-
-fn bonfirePairStrength(pairIndex: f32, time: f32) -> f32 {
-  return 0.46 + 0.22 * sin(time * 1.23 + pairIndex * 1.37);
-}
-
-fn bonfirePairYOffset(pairIndex: f32, time: f32) -> f32 {
-  return sin(time * 0.82 + pairIndex * 1.31) * 0.045 + cos(time * 0.47 - pairIndex * 0.73) * 0.024;
-}
-
-fn bonfirePairRadius(pairIndex: f32, time: f32) -> f32 {
-  return 0.32 + 0.040 * sin(time + pairIndex * 1.17);
-}
-
-fn bonfireSymmetricEdgeBreakup(p: vec3<f32>, scaledDetailFrequency: f32, bonfireTongues: f32, time: f32) -> f32 {
+fn bonfireTransportedCombustionField(
+  p: vec3<f32>,
+  sourceY: f32,
+  sourceRadius: f32,
+  fireState: vec4<f32>,
+  microState: vec4<f32>,
+  frontTopology: f32,
+  interfaceEnergy: f32,
+  flowEnergy: f32
+) -> vec4<f32> {
   let radial = length(p.xz);
-  let radialWave = sin(radial * 43.0 * scaledDetailFrequency + p.y * 13.0 - time * 1.9);
-  let ringWave = cos(radial * 47.0 * scaledDetailFrequency - p.y * 9.0 + time * 1.4);
-  let quadrupoleWave = sin((p.x * p.x - p.z * p.z) * 31.0 * scaledDetailFrequency + time * 1.1);
-  return clamp(
-    0.58
-      + 0.18 * radialWave
-      + 0.16 * ringWave
-      + 0.10 * quadrupoleWave
-      + 0.20 * bonfireTongues,
-    0.18,
-    1.34
+  let vertical = (p.y - sourceY) / max(0.058, sourceRadius * 1.05);
+  let coreSupport = exp(-radial * radial / max(0.0024, sourceRadius * sourceRadius * 0.92) - vertical * vertical * 0.82);
+  let annularRadius = sourceRadius * 0.62;
+  let annularWidth = max(0.024, sourceRadius * 0.30);
+  let annularSupport = exp(-pow(abs(radial - annularRadius), 2.0) / max(0.0012, annularWidth * annularWidth) - vertical * vertical * 1.08);
+  let transportedStructure = clamp(
+    fireState.z * 0.22
+      + fireState.w * 0.34
+      + microState.y * 0.18
+      + microState.z * 0.12
+      + frontTopology * 0.42,
+    0.0,
+    1.5
   );
-}
-
-fn bonfireAzimuthalBreakup(p: vec3<f32>, scaledDetailFrequency: f32, time: f32, phaseOffset: f32) -> f32 {
-  let radial = max(length(p.xz), 0.001);
-  let dir = p.xz / radial;
-  let rotA = vec2<f32>(cos(time * 0.37 + phaseOffset), sin(time * 0.37 + phaseOffset));
-  let rotB = vec2<f32>(-rotA.y, rotA.x);
-  let angularA = sin(dot(dir, rotA) * (8.0 + scaledDetailFrequency * 1.4) + radial * (17.0 + scaledDetailFrequency * 2.3) + p.y * 5.2 + time * 1.21);
-  let angularB = cos(dot(dir, rotB) * (11.0 + scaledDetailFrequency * 1.1) - radial * (13.0 + scaledDetailFrequency * 1.9) + p.y * 3.7 - time * 0.94);
-  let quadrupole = sin((dir.x * dir.x - dir.y * dir.y) * (13.0 + scaledDetailFrequency * 2.0) + p.x * p.z * 18.0 + time * 0.73 + phaseOffset);
-  let cellular = hash31(floor(vec3<f32>(p.x * 17.0 + p.y * 5.0, p.z * 19.0 - p.y * 4.0, p.y * 11.0 + time * 1.6 + phaseOffset) * max(1.0, scaledDetailFrequency * 0.42)));
-  return clamp(0.72 + angularA * 0.14 + angularB * 0.12 + quadrupole * 0.10 + (cellular - 0.5) * 0.12, 0.34, 1.18);
-}
-
-fn bonfireMirrorBalancedBreakup(p: vec3<f32>, scaledDetailFrequency: f32, time: f32, phaseOffset: f32) -> f32 {
-  return (
-    bonfireAzimuthalBreakup(p, scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(-p.x, p.y, p.z), scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(p.x, p.y, -p.z), scaledDetailFrequency, time, phaseOffset) +
-    bonfireAzimuthalBreakup(vec3<f32>(-p.x, p.y, -p.z), scaledDetailFrequency, time, phaseOffset)
-  ) * 0.25;
-}
-
-fn bonfireCombustionPacketOffset(packetIndex: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec3<f32> {
-  let angle = packetIndex * 2.3999632 + sin(time * (0.27 + packetIndex * 0.037) + packetIndex * 1.31) * 0.18;
-  let spoke = vec2<f32>(cos(angle), sin(angle));
-  let tangent = vec2<f32>(-spoke.y, spoke.x);
-  let radial = sourceRadius * (0.52 + 0.24 * sin(time * 0.41 + packetIndex * 1.17) + detailFrequency * 0.030);
-  let orbital = spoke * radial + tangent * sourceRadius * 0.12 * cos(time * 0.52 - packetIndex * 0.91);
-  let riseStagger = -sourceRadius * (0.18 + 0.11 * (packetIndex - floor(packetIndex * 0.25) * 4.0));
-  let breathing = sin(time * 0.69 + packetIndex * 0.83) * sourceRadius * 0.055;
-  return vec3<f32>(orbital.x, riseStagger + breathing, orbital.y);
-}
-
-fn bonfireCombustionPacketField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
-  var field = 0.0;
-  var peak = 0.0;
-  var combustionInterface = 0.0;
-  var lift = 0.0;
-  var activePackets = 0.0;
-  for (var i = 0; i < 9; i = i + 1) {
-    let fi = f32(i);
-    let packetOffset = bonfireCombustionPacketOffset(fi, sourceRadius, detailFrequency, time);
-    let packetRadius = sourceRadius * (0.30 + 0.055 * sin(time * 0.77 + fi * 1.43));
-    let packetVerticalSpan = max(0.034, sourceRadius * (0.48 + 0.05 * cos(time * 0.62 - fi * 0.79)));
-    let localY = (p.y - sourceY - packetOffset.y) / packetVerticalSpan;
-    let localXZ = p.xz - packetOffset.xz;
-    let lobe = exp(-dot(localXZ, localXZ) / max(0.0014, packetRadius * packetRadius) - localY * localY);
-    let packetPulse = 0.64 + 0.22 * sin(time * (1.04 + fi * 0.031) + fi * 1.77) + 0.14 * cos(time * 0.83 - fi * 1.13);
-    let weighted = lobe * packetPulse;
-    field = field + weighted;
-    peak = max(peak, weighted);
-    combustionInterface = combustionInterface + smoothstep(0.10, 0.42, lobe) * (1.0 - smoothstep(0.62, 0.92, lobe));
-    lift = lift + weighted * smoothstep(-0.12, 0.62, -localY);
-    activePackets = activePackets + step(0.10, weighted);
-  }
-  let normalized = clamp(field * 0.98, 0.0, 1.70);
-  let packetedness = clamp(peak / max(field, 0.001) * 3.10 + combustionInterface * 0.085 + activePackets * 0.025, 0.0, 1.75);
-  return vec4<f32>(
-    normalized,
-    packetedness,
-    clamp(combustionInterface * 0.23, 0.0, 1.55),
-    clamp(lift * 0.34, 0.0, 1.45)
+  let staticDephase = hash31(floor(vec3<f32>(abs(p.x) * 29.0, (p.y + 1.0) * 23.0, abs(p.z) * 29.0))) - 0.5;
+  let startupAuthority = 1.0 - smoothstep(0.025, 0.30, transportedStructure + interfaceEnergy * 0.80);
+  let startupDephase = staticDephase * startupAuthority;
+  let occupancy = clamp(
+    coreSupport * (0.76 + transportedStructure * 0.20 + startupDephase * 0.035)
+      + annularSupport * (0.20 + interfaceEnergy * 0.62 + frontTopology * 0.18),
+    0.0,
+    1.70
   );
-}
-
-fn bonfireCombustionCellField(p: vec3<f32>, sourceY: f32, sourceRadius: f32, detailFrequency: f32, time: f32) -> vec4<f32> {
-  var field = 0.0;
-  var peak = 0.0;
-  var combustionInterface = 0.0;
-  var lift = 0.0;
-  let verticalSpan = max(0.058, sourceRadius * 1.05);
-  for (var i = 0; i < 7; i = i + 1) {
-    let fi = f32(i);
-    let isCore = 1.0 - step(0.5, fi);
-    let pairSlot = max(fi - 1.0, 0.0);
-    let pairIndex = floor(pairSlot * 0.5);
-    let pairSide = 1.0 - (pairSlot - pairIndex * 2.0) * 2.0;
-    let offset = bonfireSymmetricCombustionPairOffset(pairIndex, pairSide, sourceRadius, detailFrequency, time) * (1.0 - isCore);
-    let yOffset = bonfirePairYOffset(pairIndex, time) * (1.0 - isCore);
-    let cellRadius = sourceRadius * mix(0.72, bonfirePairRadius(pairIndex, time), 1.0 - isCore);
-    let vertical = (p.y - sourceY - yOffset) / verticalSpan;
-    let delta = p.xz - offset;
-    let lobe = exp(-dot(delta, delta) / max(0.0024, cellRadius * cellRadius) - vertical * vertical * mix(0.70, 1.28, 1.0 - isCore));
-    let strength = mix(0.42, bonfirePairStrength(pairIndex, time), 1.0 - isCore);
-    let weighted = lobe * strength;
-    field = field + weighted;
-    peak = max(peak, weighted);
-    combustionInterface = combustionInterface + smoothstep(0.18, 0.64, lobe) * (1.0 - smoothstep(0.70, 0.96, lobe)) * mix(0.56, 1.0, 1.0 - isCore);
-    lift = lift + weighted * smoothstep(-0.18, 0.42, -vertical) * mix(0.74, 1.0, 1.0 - isCore);
-  }
-  let normalized = clamp(field * 0.82, 0.0, 1.55);
-  let clusteredness = clamp(peak / max(field, 0.001) * 2.80 + combustionInterface * 0.075, 0.0, 1.55);
-  return vec4<f32>(
-    normalized,
-    clusteredness,
-    clamp(combustionInterface * 0.28, 0.0, 1.40),
-    clamp(lift * 0.36, 0.0, 1.30)
+  let topology = clamp(
+    transportedStructure * 0.78
+      + flowEnergy * 0.22
+      + annularSupport * 0.24
+      + occupancy * 0.12
+      + startupDephase * 0.035,
+    0.0,
+    1.55
   );
+  let interfaceShell = clamp(
+    interfaceEnergy * 2.20
+      + frontTopology * 0.46
+      + annularSupport * (1.0 - smoothstep(0.68, 1.12, occupancy)) * 0.32
+      + microState.z * 0.16,
+    0.0,
+    1.45
+  );
+  let lift = clamp(
+    occupancy * smoothstep(-0.18, 0.58, -vertical) * (0.54 + topology * 0.24 + flowEnergy * 0.12),
+    0.0,
+    1.35
+  );
+  return vec4<f32>(occupancy, topology, interfaceShell, lift);
 }
 
-fn bonfireFlameTongues(combustion: vec4<f32>, fireLickAmount: f32, detailFrequency: f32) -> f32 {
+fn bonfireTransportedSourceBreakup(
+  p: vec3<f32>,
+  sourceY: f32,
+  sourceRadius: f32,
+  fireState: vec4<f32>,
+  microState: vec4<f32>,
+  frontTopology: f32,
+  interfaceEnergy: f32,
+  flowEnergy: f32
+) -> vec4<f32> {
+  let radial = length(p.xz);
+  let vertical = (p.y - sourceY) / max(0.058, sourceRadius * 1.12);
+  let continuousSupport = exp(-radial * radial / max(0.0028, sourceRadius * sourceRadius * 1.18) - vertical * vertical * 0.72);
+  let transportedStructure = clamp(
+    fireState.z * 0.18
+      + fireState.w * 0.32
+      + microState.y * 0.22
+      + microState.z * 0.14
+      + frontTopology * 0.44,
+    0.0,
+    1.5
+  );
+  let staticDephase = hash31(floor(vec3<f32>(abs(p.x) * 31.0, (p.y + 1.0) * 27.0, abs(p.z) * 31.0))) - 0.5;
+  let startupAuthority = 1.0 - smoothstep(0.025, 0.28, transportedStructure + interfaceEnergy * 0.75);
+  let startupDephase = staticDephase * startupAuthority;
+  let sourceBreakup = clamp(0.72 + transportedStructure * 0.20 + flowEnergy * 0.12 + startupDephase * 0.055, 0.42, 1.18);
+  let detailBreakup = clamp(0.68 + transportedStructure * 0.24 + microState.y * 0.12 + flowEnergy * 0.12 + startupDephase * 0.050, 0.38, 1.22);
+  let edgeBreakup = clamp(0.62 + interfaceEnergy * 1.75 + frontTopology * 0.24 + flowEnergy * 0.12 + startupDephase * 0.040, 0.34, 1.30);
+  let layeredBreakup = clamp(0.66 + transportedStructure * 0.20 + microState.z * 0.16 + frontTopology * 0.18 + continuousSupport * 0.06 + startupDephase * 0.045, 0.36, 1.28);
+  return vec4<f32>(sourceBreakup, detailBreakup, edgeBreakup, layeredBreakup);
+}
+
+fn bonfireFlameTongues(combustion: vec4<f32>, fireLickAmount: f32) -> f32 {
   let operatorGain = clamp(fireLickAmount * 0.13, 0.0, 1.0);
-  return clamp(combustion.y * (0.46 + operatorGain * 0.78) + combustion.z * 0.16 + detailFrequency * 0.018, 0.0, 1.6);
+  return clamp(combustion.y * (0.46 + operatorGain * 0.78) + combustion.z * 0.16, 0.0, 1.6);
 }
 
 fn bonfireInterfaceCombustion(combustion: vec4<f32>, smoke: f32, heat: f32, flame: f32) -> f32 {
@@ -3765,36 +3719,43 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireVertical = (p.y - bonfireSourceY) / 0.23;
   let bonfireCoreRadius = max(0.090, scaledSourceRadius * 1.72);
   let bonfireSmokeRadius = max(0.125, scaledSmokeSourceRadius * 1.38);
-  var bonfireSmoothCombustion = vec4<f32>(0.0);
-  var bonfirePacketCombustion = vec4<f32>(0.0);
-  if (bonfireScene > 0.5) {
-    bonfireSmoothCombustion = bonfireCombustionCellField(p, bonfireSourceY, bonfireCoreRadius, scaledDetailFrequency, time);
-    bonfirePacketCombustion = bonfireCombustionPacketField(p, bonfireSourceY, bonfireCoreRadius, scaledDetailFrequency, time);
-  }
-  let bonfireCombustion = mix(bonfireSmoothCombustion, bonfirePacketCombustion, bonfireScene);
-  let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain, scaledDetailFrequency);
-  let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let interfaceEnergy = length(materialInterfaceGradient(cellI));
+  var bonfireCombustion = vec4<f32>(0.0);
+  var bonfireSourceStructure = vec4<f32>(0.0);
+  if (bonfireScene > 0.5) {
+    let bonfireSourceFlowEnergy = smoothstep(0.004, 0.18, length(prev.xyz - advected.xyz));
+    bonfireCombustion = bonfireTransportedCombustionField(
+      p,
+      bonfireSourceY,
+      bonfireCoreRadius,
+      fireLayer,
+      microLayer,
+      combustionFrontTopology,
+      interfaceEnergy,
+      bonfireSourceFlowEnergy
+    );
+    bonfireSourceStructure = bonfireTransportedSourceBreakup(
+      p,
+      bonfireSourceY,
+      bonfireCoreRadius,
+      fireLayer,
+      microLayer,
+      combustionFrontTopology,
+      interfaceEnergy,
+      bonfireSourceFlowEnergy
+    );
+  }
+  let bonfireTongues = bonfireFlameTongues(bonfireCombustion, fireLickOperatorGain);
+  let bonfireInterfaceBirth = bonfireInterfaceCombustion(bonfireCombustion, smoke, heat, flame);
   let smoothBonfireFireball = exp(-(sourceRadial * sourceRadial) / max(0.0048, bonfireCoreRadius * bonfireCoreRadius) - bonfireVertical * bonfireVertical);
   let bonfireVisualAboveSource = bonfireSourceY - p.y;
   var bonfireEdgeBreakup = 1.0;
   var bonfireLayeredBreakup = 1.0;
   if (bonfireScene > 0.5) {
-    bonfireSourceBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time, 0.0);
-    bonfireDetailBreakup = bonfireMirrorBalancedBreakup(p, scaledDetailFrequency, time * 1.07, 1.4);
-    bonfireEdgeBreakup = bonfireSymmetricEdgeBreakup(p, scaledDetailFrequency, bonfireTongues, time);
-    bonfireLayeredBreakup = clamp(
-      0.68
-        + (bonfireMirrorBalancedBreakup(vec3<f32>(
-          p.x * 0.94 + sin(bonfireVisualAboveSource * 7.0 + time * 0.81) * 0.025,
-          p.y * 1.31 + sourceRadial * 0.28,
-          p.z * 1.08 + cos(bonfireVisualAboveSource * 6.0 - time * 0.67) * 0.025
-        ), scaledDetailFrequency * 1.18, time * 1.19, 6.4) - 0.72) * 0.58
-        + sin(bonfireVisualAboveSource * 18.0 + sourceRadial * 13.0 - time * 1.33) * 0.16
-        + cos(bonfireVisualAboveSource * 11.0 - sourceRadial * 17.0 + time * 1.06) * 0.12,
-      0.30,
-      1.34
-    );
+    bonfireSourceBreakup = bonfireSourceStructure.x;
+    bonfireDetailBreakup = bonfireSourceStructure.y;
+    bonfireEdgeBreakup = bonfireSourceStructure.z;
+    bonfireLayeredBreakup = bonfireSourceStructure.w;
   }
   let bonfireSourcePlugSuppressor = mix(0.14, 1.0, smoothstep(0.018, bonfireCoreRadius * 0.82, sourceRadial));
   let bonfireCentralFireRelief = bonfireSourcePlugSuppressor;
@@ -3802,17 +3763,17 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireFuelInjectionMask = smoothstep(bonfireSourceY - 0.34, bonfireSourceY - 0.04, p.y);
   let bonfireLiftedFireBand = smoothstep(0.04, 0.18, bonfireVisualAboveSource) * (1.0 - smoothstep(0.54, 0.88, bonfireVisualAboveSource));
   let bonfireLiftedFireRadius = mix(bonfireCoreRadius * 0.82, bonfireSmokeRadius * 1.12, smoothstep(0.10, 0.58, bonfireVisualAboveSource));
-  let bonfirePacketRisingFireGate = mix(0.24, 1.0, smoothstep(0.055, 0.35, bonfireVisualAboveSource));
+  let bonfireRisingFireGate = mix(0.24, 1.0, smoothstep(0.055, 0.35, bonfireVisualAboveSource));
   let bonfireInjectedFuel = clamp(
     (
       smoothBonfireFireball * 0.32
-        + bonfirePacketCombustion.x * 0.38
-        + bonfirePacketCombustion.w * 0.16
+        + bonfireCombustion.x * 0.38
+        + bonfireCombustion.w * 0.16
     ) * bonfireFuelInjectionMask * inputFlow * sourceScaleCompensation,
     0.0,
     2.2
   );
-  let bonfireLiftedFireLobes = exp(-sourceRadial * sourceRadial / max(0.0068, bonfireLiftedFireRadius * bonfireLiftedFireRadius))
+  let bonfireLiftedFireStructure = exp(-sourceRadial * sourceRadial / max(0.0068, bonfireLiftedFireRadius * bonfireLiftedFireRadius))
     * bonfireLiftedFireBand
     * (0.20 + bonfireInterfaceBirth * 0.52 + bonfireCombustion.z * 0.20 + bonfireTongues * 0.16)
     * bonfireEdgeBreakup;
@@ -3826,11 +3787,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (0.46 + bonfireLayeredBreakup * 0.28 + bonfireTongues * 0.18 + bonfireEdgeBreakup * 0.16);
   let bonfireFuelHeatContact = clamp(
     bonfireInjectedFuel
-      * (bonfireSupportHeat + heat * 0.30 + bonfirePacketCombustion.x * 0.18)
+      * (bonfireSupportHeat + heat * 0.30 + bonfireCombustion.x * 0.18)
       * (
         bonfireInterfaceBirth * 0.55
           + bonfireCombustion.z * 0.38
-          + bonfirePacketCombustion.y * 0.30
+          + bonfireCombustion.y * 0.30
           + bonfireOffAxisReactionRing * 0.42
           + interfaceEnergy * 1.35
       ),
@@ -3839,9 +3800,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let bonfireReactionProgress = clamp(
     bonfireFuelHeatContact * (1.10 + bonfireTongues * 0.16)
-      + bonfireOffAxisReactionRing * (0.46 + bonfirePacketCombustion.z * 0.24)
-      + bonfireLiftedFireLobes * (0.48 + bonfireInterfaceBirth * 0.20)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20,
+      + bonfireOffAxisReactionRing * (0.46 + bonfireCombustion.z * 0.24)
+      + bonfireLiftedFireStructure * (0.48 + bonfireInterfaceBirth * 0.20)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.20,
     0.0,
     2.8
   );
@@ -3855,7 +3816,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   let bonfireReferenceSourceModel = vec4<f32>(bonfireSupportHeat, bonfireInjectedFuel, bonfireReactionProgress, bonfireSootFromReaction);
   let bonfireFireball = bonfireReactionProgress;
-  let bonfireSourceCarrier = bonfireReactionProgress * 0.38 + bonfirePacketCombustion.x * 0.18 + bonfireLiftedFireLobes * 0.24 + bonfireOffAxisReactionRing * 0.18;
+  let bonfireSourceCarrier = bonfireReactionProgress * 0.38 + bonfireCombustion.x * 0.18 + bonfireLiftedFireStructure * 0.24 + bonfireOffAxisReactionRing * 0.18;
   let bonfireInterfaceSmokeBand = smoothstep(-0.04, 0.06, bonfireVisualAboveSource) * (1.0 - smoothstep(0.28, 0.52, bonfireVisualAboveSource));
   let bonfireInterfaceSmokeRadius = bonfireSmokeRadius * mix(1.18, 0.86, smoothstep(0.02, 0.42, bonfireVisualAboveSource));
   let bonfireNarrowInterfaceSmokeSource = (
@@ -3869,9 +3830,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let source = mix(mix(columnSource, canonicalSource, canonicalPlumeScene), max(bonfireSmokeSource, bonfireSourceCarrier * inputFlow * 0.72), bonfireScene);
   let emberRingRadius = scaledSourceRadius * 0.94;
   let emberRingWidth = max(0.026, scaledSourceRadius * 0.22);
-  let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth)) * sourceBand * inputFlow * (0.22 + 0.18 * sin(time * 1.7 + p.x * 9.0));
+  let columnEmberRing = exp(-pow(abs(sourceRadial - emberRingRadius), 2.0) / max(0.002, emberRingWidth * emberRingWidth))
+    * sourceBand
+    * inputFlow
+    * clamp(0.22 + transportedSourceStructure * 0.10 + sourceSpatialDephase * 0.06, 0.16, 0.42);
   let bonfireEmberRing = (
-    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8)) * bonfireInterfaceSmokeBand * (0.24 + 0.18 * sin(time * 2.4 + sourceRadial * 19.0 * scaledDetailFrequency))
+    exp(-pow(abs(sourceRadial - bonfireCoreRadius * 0.78), 2.0) / max(0.002, emberRingWidth * emberRingWidth * 1.8))
+      * bonfireInterfaceSmokeBand
+      * clamp(0.22 + bonfireSourceStructure.y * 0.12 + bonfireSourceStructure.z * 0.10, 0.18, 0.48)
       + bonfireCombustion.z * 0.18
   ) * inputFlow;
   let emberRing = mix(columnEmberRing * (1.0 - canonicalPlumeScene), bonfireEmberRing, bonfireScene);
@@ -3887,7 +3853,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireCoreHeat = clamp(
     bonfireReferenceSourceModel.x * 0.92
       + bonfireReactionProgress * 0.18
-      + bonfirePacketCombustion.x * 0.28
+      + bonfireCombustion.x * 0.28
       + bonfireEmberRing * 0.18,
     0.0,
     2.2
@@ -3895,18 +3861,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireReactionCoreRelief = mix(0.14, 1.0, smoothstep(bonfireCoreRadius * 0.40, bonfireCoreRadius * 1.08, sourceRadial));
   let bonfireReactionRiseBias = mix(0.45, 1.32, smoothstep(0.06, 0.52, bonfireVisualAboveSource));
   let bonfireLiftedReactionFront = (
-    bonfireOffAxisReactionRing * (0.54 + bonfirePacketCombustion.y * 0.34 + bonfirePacketCombustion.z * 0.26 + bonfireInterfaceBirth * 0.20)
-      + bonfireLiftedFireLobes * bonfireFrontLiftGate * (0.74 + bonfireTongues * 0.18)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.28
+    bonfireOffAxisReactionRing * (0.54 + bonfireCombustion.y * 0.34 + bonfireCombustion.z * 0.26 + bonfireInterfaceBirth * 0.20)
+      + bonfireLiftedFireStructure * bonfireFrontLiftGate * (0.74 + bonfireTongues * 0.18)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.28
   ) * (0.76 + bonfireEdgeBreakup * 0.22);
   let bonfireReactionFront = clamp(
     bonfireReactionProgress * 0.72
       + bonfireFuelHeatContact * 0.46
       + bonfireInterfaceBirth * 0.38
       + bonfireCombustion.z * 0.24
-      + bonfirePacketCombustion.y * 0.22
-      + bonfirePacketCombustion.z * 0.18
-      + bonfireLiftedFireLobes * 0.38
+      + bonfireCombustion.y * 0.22
+      + bonfireCombustion.z * 0.18
+      + bonfireLiftedFireStructure * 0.38
       + bonfireLiftedReactionFront * 1.18
       + bonfireEmberRing * 0.12,
     0.0,
@@ -3921,14 +3887,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.0
   );
-  let bonfirePacketFireBirth = bonfirePacketCombustion.x * bonfirePacketRisingFireGate * (0.56 + 0.48 * bonfireTongues + bonfireLayeredBreakup * 0.18)
-    + bonfirePacketCombustion.w * (0.48 + 0.24 * bonfireTongues)
-    + bonfireLiftedFireLobes * (2.28 + 0.92 * bonfireTongues + bonfireLayeredBreakup * 0.56);
+  let bonfireTopologyFireBirth = bonfireCombustion.x * bonfireRisingFireGate * (0.56 + 0.48 * bonfireTongues + bonfireLayeredBreakup * 0.18)
+    + bonfireCombustion.w * (0.48 + 0.24 * bonfireTongues)
+    + bonfireLiftedFireStructure * (2.28 + 0.92 * bonfireTongues + bonfireLayeredBreakup * 0.56);
   let bonfireFireBirth = (
     bonfireReactionProgress * (0.28 + 0.10 * bonfireSourceBreakup + 0.12 * bonfireTongues)
       + bonfireReactionFront * (1.32 + 0.44 * bonfireTongues)
       + bonfireLiftedReactionFront * (0.58 + 0.24 * bonfireTongues)
-      + bonfirePacketFireBirth * 0.92
+      + bonfireTopologyFireBirth * 0.92
       + bonfireEmberRing * 0.26
   ) * inputFlow * sourceScaleCompensation * bonfireEdgeBreakup * (0.82 + bonfireLayeredBreakup * 0.26);
   let bonfireFireSourceBinRelief = mix(
@@ -3943,7 +3909,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireFireBirth * bonfireFireSourceBinRelief * 0.52
       + bonfireReactionFront * bonfireFrontLiftGate * (0.92 + bonfireTongues * 0.24)
       + bonfireLiftedReactionFront * (1.16 + bonfireTongues * 0.30)
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.34,
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * 0.34,
     0.0,
     3.0
   ) * (0.86 + bonfireLayeredBreakup * 0.18);
@@ -3951,26 +3917,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     bonfireLiftedFlameBirth * 0.72
       + bonfireReactionFront * bonfireFrontLiftGate * 0.42
       + bonfireLiftedReactionFront * 0.34
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * 0.22,
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * 0.22,
     0.0,
     3.0
   );
   let bonfireInteriorEmissionBridge = exp(-sourceRadial * sourceRadial / max(0.0058, bonfireLiftedFireRadius * bonfireLiftedFireRadius * 0.42))
     * bonfireFrontLiftGate
     * smoothstep(0.030, 0.92, bonfireReactionProgress)
-    * (0.10 + bonfireFuelHeatContact * 0.20 + bonfireInterfaceBirth * 0.24 + bonfirePacketCombustion.y * 0.18 + bonfirePacketCombustion.z * 0.16)
+    * (0.10 + bonfireFuelHeatContact * 0.20 + bonfireInterfaceBirth * 0.24 + bonfireCombustion.y * 0.18 + bonfireCombustion.z * 0.16)
     * (0.58 + bonfireLayeredBreakup * 0.26 + bonfireTongues * 0.18);
   let bonfireCombustionFrontLiftCarrier = (
     bonfireLiftedReactionFront * 0.72
-      + bonfireOffAxisReactionRing * (0.40 + bonfirePacketCombustion.y * 0.20 + bonfirePacketCombustion.z * 0.18)
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.20
+      + bonfireOffAxisReactionRing * (0.40 + bonfireCombustion.y * 0.20 + bonfireCombustion.z * 0.18)
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.20
   ) * (0.82 + bonfireLayeredBreakup * 0.18);
   let bonfireFrontTopologyBirth = bonfireScene * clamp(
     bonfireCombustionFrontLiftCarrier * 1.24
       + bonfireLiftedReactionFront * 0.42
-      + bonfireOffAxisReactionRing * (0.36 + bonfirePacketCombustion.z * 0.18)
-      + bonfireLiftedFireLobes * bonfireFrontLiftGate * 0.24
-      + bonfirePacketCombustion.w * bonfireFrontLiftGate * 0.22,
+      + bonfireOffAxisReactionRing * (0.36 + bonfireCombustion.z * 0.18)
+      + bonfireLiftedFireStructure * bonfireFrontLiftGate * 0.24
+      + bonfireCombustion.w * bonfireFrontLiftGate * 0.22,
     0.0,
     2.4
   ) * (0.76 + bonfireLayeredBreakup * 0.20 + bonfireTongues * 0.12);
@@ -3980,7 +3946,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + (bonfireEdgeBreakup - 0.70) * 0.58
       + (bonfireLayeredBreakup - 0.68) * 0.42
       + bonfireTongues * 0.20
-      + bonfirePacketCombustion.z * 0.18,
+      + bonfireCombustion.z * 0.18,
     0.22,
     1.12
   );
@@ -3999,7 +3965,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireCombustionFrontLiftCarrier * 0.46
       + combustionFrontTopology * 0.12
       + bonfireInteriorEmissionBridge * 0.78
-      + bonfirePacketCombustion.z * bonfireFrontLiftGate * 0.24,
+      + bonfireCombustion.z * bonfireFrontLiftGate * 0.24,
     0.0,
     2.6
   );
@@ -4010,14 +3976,14 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     0.0,
     2.4
   );
-  let bonfireTopologyPacketTransfer = clamp(
+  let bonfireTopologyTransfer = clamp(
     combustionFrontTopology
       * bonfireFrontLiftGate
       * (
         0.22
-          + bonfirePacketCombustion.y * 0.28
-          + bonfirePacketCombustion.z * 0.42
-          + bonfirePacketCombustion.w * 0.20
+          + bonfireCombustion.y * 0.28
+          + bonfireCombustion.z * 0.42
+          + bonfireCombustion.w * 0.20
           + (bonfireLayeredBreakup - 0.68) * 0.34
           + bonfireTongues * 0.24
       )
@@ -4031,18 +3997,18 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireCombustion.z * 0.18
       + bonfireReactionFront * 0.28
       + combustionFrontTopology * 0.12
-      + bonfirePacketCombustion.y * 0.16
-      + bonfirePacketCombustion.z * 0.14
-      + bonfireLiftedFireLobes * 0.24
+      + bonfireCombustion.y * 0.16
+      + bonfireCombustion.z * 0.14
+      + bonfireLiftedFireStructure * 0.24
       + bonfireCombustionFrontLiftCarrier * 1.16
       + interfaceEnergy * (bonfireSmokeSource + bonfireFireBirth) * 0.20,
     0.0,
     1.85
   );
-  let bonfireVisibleFlamePacketGate = clamp(
-    bonfireTopologyPacketTransfer * (0.74 + bonfireRadianceBreakup * 0.18)
+  let bonfireVisibleFlameTopologyGate = clamp(
+    bonfireTopologyTransfer * (0.74 + bonfireRadianceBreakup * 0.18)
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.18
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.14,
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.14,
     0.0,
     2.4
   );
@@ -4052,7 +4018,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       smoothstep(bonfireCoreRadius * 0.56, bonfireCoreRadius * 1.22, sourceRadial)
     )
       + bonfireFrontLiftGate * 0.18
-      + bonfireTopologyPacketTransfer * 0.08,
+      + bonfireTopologyTransfer * 0.08,
     0.10,
     1.0
   );
@@ -4062,15 +4028,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       smoothstep(bonfireCoreRadius * 0.72, bonfireCoreRadius * 1.34, sourceRadial)
     )
       + bonfireFrontLiftGate * 0.10
-      + bonfireTopologyPacketTransfer * 0.04,
+      + bonfireTopologyTransfer * 0.04,
     0.08,
     1.0
   );
   let bonfirePrimaryVisibleFrontEmission = clamp(
-    bonfireTopologyPacketTransfer * (1.34 + bonfireRadianceBreakup * 0.32)
+    bonfireTopologyTransfer * (1.34 + bonfireRadianceBreakup * 0.32)
       + bonfireTopologyRadianceCarrier * (0.64 + bonfireRadianceBreakup * 0.18)
-      + bonfireVisibleFlamePacketGate * (0.42 + bonfireRadianceBreakup * 0.10)
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.32
+      + bonfireVisibleFlameTopologyGate * (0.42 + bonfireRadianceBreakup * 0.10)
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.32
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.24,
     0.0,
     3.0
@@ -4083,7 +4049,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.06
       + bonfireLiftedReactionFront * bonfireRadianceBreakup * 0.18
       + bonfireInteriorEmissionBridge * bonfireVisibleSourcePlugRelief * 0.18
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * bonfireRadianceSourceGate * 0.12
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * bonfireRadianceSourceGate * 0.12
       + bonfireEmberRing * bonfireRadianceSourceGate * 0.04,
     0.0,
     2.4
@@ -4094,7 +4060,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireLayeredBreakup * 0.26
       + bonfireDetailBreakup * 0.22
       + bonfireTongues * 0.18
-      + bonfirePacketCombustion.z * 0.22
+      + bonfireCombustion.z * 0.22
       + fireLick * 0.08,
     0.36,
     1.55
@@ -4102,7 +4068,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let bonfireEmissionDetailBirth = clamp(
     bonfireRadianceBirth * (0.34 + bonfireRadianceBreakup * 0.24)
       + bonfireLiftedReactionFront * bonfireFrontLiftGate * bonfireRadianceBreakup * (0.14 + bonfireEmissionDetailCurlFold * 0.16)
-      + bonfirePacketFireBirth * bonfirePacketRisingFireGate * (0.12 + bonfireTongues * 0.06 + bonfireEmissionDetailCurlFold * 0.08)
+      + bonfireTopologyFireBirth * bonfireRisingFireGate * (0.12 + bonfireTongues * 0.06 + bonfireEmissionDetailCurlFold * 0.08)
       + bonfireInteriorEmissionBridge * (0.14 + bonfireEmissionDetailCurlFold * 0.10)
       + fireLick * 0.12,
     0.0,
@@ -4129,7 +4095,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let phasedSway = step(0.5, u.artistic_motion_controls.y);
   let proceduralDetailForces = step(0.5, u.artistic_motion_controls.z);
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
-  let fireLickBreakupEnabled = fireLickOperatorGain > 0.0005;
+  let fireLickBreakupEnabled = fireLickOperatorGain > ${FIRE_LICK_BREAKUP_BYPASS_THRESHOLD};
   var columnLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 0.0));
   var bonfireLickBirth = vec4<f32>(0.0, 0.0, 0.0, fireLickAshCarry(cellI, 0.0, 1.0));
   if (fireLickBreakupEnabled) {
@@ -4242,7 +4208,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (0.018 + speed * 0.004);
   vel = vel + canonicalRadialSpread;
   let bonfireLiftImpulse = bonfireEntrainedLift(smoke, heat, flame, source, bonfireCombustion, plumeRiseScale, speed);
-  let bonfirePacketLiftImpulse = bonfirePacketCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
+  let bonfireTopologyLiftImpulse = bonfireCombustion.w * plumeRiseScale * (0.014 + speed * 0.0048 + fireLickAmount * 0.0012);
   let bonfireBroadSupportLiftImpulse = bonfireBroadSupportSmokeSource * plumeRiseScale * (0.012 + speed * 0.0028);
   let bonfireLiftedSootBuoyancy = (
     bonfireSootBirth * 0.38
@@ -4250,7 +4216,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       + bonfireLiftedReactionFront * 0.22
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
-  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfirePacketLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
+  vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
   vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl * phasedSway;
   vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl * phasedSway;
   let bonfireNonWindLateralDampingTarget = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
@@ -4429,24 +4395,26 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = max(interfaceShred, interfaceEnergy * shredOperatorGain * (smoke * 0.54 + heat * 0.38 + flame * 0.32 + materialDetail * 0.28 + microSmoke * 0.13 + interfaceSourceTerm) * 1.72);
   interfaceShred = max(interfaceShred, oracleMaterialBirth * 0.26);
   interfaceShred = max(interfaceShred, externalInjection.micro.y);
-  let bonfirePacketLickBirth = bonfireScene * (
-    bonfirePacketCombustion.y * (0.46 + fireLickOperatorGain * 0.22 + bonfireLayeredBreakup * 0.18)
-      + bonfirePacketCombustion.z * (0.24 + bonfireTongues * 0.16)
-      + bonfirePacketCombustion.w * 0.11
+  let bonfireTopologyLickBirth = bonfireScene * (
+    bonfireCombustion.y * (0.46 + fireLickOperatorGain * 0.22 + bonfireLayeredBreakup * 0.18)
+      + bonfireCombustion.z * (0.24 + bonfireTongues * 0.16)
+      + bonfireCombustion.w * 0.11
   );
   fireLick = fireLick * mix(1.0, max(0.18, bonfireVisibleSourcePlugRelief), bonfireScene);
-  let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyPacketTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
+  let bonfireFireLickSourceBirth = clamp((bonfireFrontContactRadiance * 0.42 + bonfireRadianceBirth * 0.34 + bonfireCombustionFrontBirth * 0.14 + bonfireTopologyTransfer * 0.62) * bonfireVisibleSourcePlugRelief, 0.0, 2.6);
   let fireLickSourceBirth = mix(fireBirth, bonfireFireLickSourceBirth, bonfireScene);
-  fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireLobes * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfirePacketLickBirth);
+  fireLick = max(fireLick, lickBirth.x + fireLickSourceBirth * fireLickOperatorGain * (0.30 + 0.22 * bonfireTongues * bonfireScene) + bonfireRadianceBirth * bonfireScene * 0.28 + bonfireLiftedFireStructure * bonfireScene * 0.10 + bonfireBroadSupportSmokeSource * bonfireScene * 0.008 + bonfireTopologyLickBirth);
   fireLick = max(fireLick, oracleMaterialBirth * 0.16);
   let tallPlumeAboveSource = smoothstep(-0.72, 0.34, p.y);
   let tallPlumeRadialContour = smoothstep(scaledSourceRadius * 0.22, scaledSourceRadius * 1.10, sourceRadial)
     * (1.0 - smoothstep(scaledSmokeSourceRadius * 1.55, scaledSmokeSourceRadius * 3.00, sourceRadial));
   let tallPlumeFireContourBreakup = clamp(
     0.72
-      + 0.20 * sin(p.y * 17.0 + sourceRadial * 29.0 - time * 2.4)
-      + 0.16 * cos(p.x * 23.0 - p.z * 19.0 + p.y * 7.0 + time * 1.6)
-      + 0.14 * (hash31(floor(vec3<f32>(p.x * 18.0, p.y * 24.0, p.z * 18.0) + vec3<f32>(floor(time * 3.0)))) - 0.5),
+      + transportedSourceStructure * 0.20
+      + fireLayer.w * 0.10
+      + microLayer.y * 0.08
+      + sourceSpatialDephase * 0.10
+      + sourceSpatialDephaseB * 0.08,
     0.30,
     1.20
   );
@@ -4480,16 +4448,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * tallPlumeFuelReactionGate;
   let columnReactionBoundFlameStorageBirth = mix(columnFlameStorageBirth, tallPlumeReactionBoundFlameStorageBirth, tallPlumeScene);
   let bonfireFrontStorageOccupancy = clamp(
-    bonfireVisibleFlamePacketGate * 1.08
+    bonfireVisibleFlameTopologyGate * 1.08
       + bonfireFlameOccupancy * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.12
       + bonfireFrontContactRadiance * bonfireFrontLiftGate * 0.22
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.20
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.20
       + bonfireTransportedEmissionDetail * 0.18,
     0.0,
     3.0
   );
   let bonfireFlameStorageBirth = bonfireFrontStorageOccupancy * (0.42 + bonfireTongues * 0.08) * bonfireFlameStorageSourceRelief
-    + bonfireVisibleFlamePacketGate * 0.28 * max(0.44, bonfireFlameStorageSourceRelief)
+    + bonfireVisibleFlameTopologyGate * 0.28 * max(0.44, bonfireFlameStorageSourceRelief)
     + bonfireRadianceBirth * 0.06 * bonfireFlameStorageSourceRelief
     + bonfireFuelHeatContact * bonfireRadianceSourceGate * bonfireFrontLiftGate * 0.004
     + fireLick * 0.14 * bonfireFlameStorageSourceRelief;
@@ -4498,10 +4466,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let columnEmberBirth = mix(fireBirth * 0.78 + flame * 0.22, tallPlumeFuelHeatReaction * 0.62 + flame * 0.18 + fireLick * 0.08, tallPlumeScene);
   ember = max(ember, mix(columnEmberBirth, bonfireRadianceBirth * 0.54 + flame * 0.16, bonfireScene) + emberFleck * 0.18);
   ember = max(ember, externalInjection.fire.y);
-  let bonfirePacketVisibleCarrierBirth = bonfireScene * (
-    bonfirePacketCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
-      + bonfirePacketCombustion.y * 0.34
-      + bonfirePacketCombustion.w * 0.18
+  let bonfireTopologyVisibleCarrierBirth = bonfireScene * (
+    bonfireCombustion.z * (0.72 + bonfireLayeredBreakup * 0.28)
+      + bonfireCombustion.y * 0.34
+      + bonfireCombustion.w * 0.18
   ) * (0.52 + bonfireTongues * 0.34 + fireLickOperatorGain * 0.12);
   let columnFlameDetailBirth = (fireBirth * 1.02 + heatExpansion.y * 4.0) * (0.42 + 0.42 * bonfireDetailBreakup) + lickBirth.z + fireLick * 0.34;
   let tallPlumeSourceSlabRelief = mix(1.0, tallPlumeRawSourceFireRelief * tallPlumeFireContourBreakup, tallPlumeScene);
@@ -4520,23 +4488,23 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
       bonfireFrontLiftGate,
       smoothstep(0.13, 0.42, bonfireVisualAboveSource) * (1.0 - smoothstep(0.96, 1.28, bonfireVisualAboveSource))
     )
-      + bonfireTopologyPacketTransfer * 0.06,
+      + bonfireTopologyTransfer * 0.06,
     0.0,
     1.0
   );
   let bonfireFrontAuthoredVisibleFireBirth = clamp(
-    bonfireVisibleFlamePacketGate * (0.72 + bonfireRadianceBreakup * 0.16)
-      + bonfireTopologyPacketTransfer * (1.06 + bonfireRadianceBreakup * 0.26)
-      + bonfireCombustionFrontBirth * bonfirePacketRisingFireGate * 0.36
+    bonfireVisibleFlameTopologyGate * (0.72 + bonfireRadianceBreakup * 0.16)
+      + bonfireTopologyTransfer * (1.06 + bonfireRadianceBreakup * 0.26)
+      + bonfireCombustionFrontBirth * bonfireRisingFireGate * 0.36
       + bonfireFrontContactRadiance * bonfireVisibleFireFrontGate * 0.24
-      + bonfirePacketVisibleCarrierBirth * 0.46,
+      + bonfireTopologyVisibleCarrierBirth * 0.46,
     0.0,
     3.0
   );
   let bonfireVisibleFireCarrierBirth = bonfirePrimaryVisibleFrontEmission * (0.72 + bonfireRadianceBreakup * 0.18)
     + bonfireTransportedEmissionDetail * (0.34 + bonfireRadianceBreakup * 0.08) * max(0.30, bonfireVisibleFireFrontGate)
     + bonfireFrontAuthoredVisibleFireBirth
-    + bonfireTopologyPacketTransfer * bonfireVisibleFireFrontGate * 0.10
+    + bonfireTopologyTransfer * bonfireVisibleFireFrontGate * 0.10
     + bonfireRadianceBirth * 0.08 * bonfireVisibleSourcePlugRelief
     + bonfireInteriorEmissionBridge * bonfireVisibleFireFrontGate * 0.14
     + heatExpansion.y * 0.92 * bonfireVisibleFireFrontGate
@@ -11980,11 +11948,11 @@ export function createKaminosVolumePrototype({
     const mainFluidBonfireCombustionFieldStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 2 : 0;
+    const bonfireCombustionFieldEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;
     const mainFluidBonfireProceduralBreakupStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS;
-    const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 4 : 0;
+    const bonfireProceduralBreakupEvaluationsPerCell = bonfireCombustionFieldActive ? 1 : 0;
     const mainFluidBonfireSymmetricForceStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SYMMETRIC_FORCE_STRATEGY_NON_BONFIRE_BYPASS;
@@ -11997,6 +11965,7 @@ export function createKaminosVolumePrototype({
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
     const bonfireScalarNeighborhoodReadsPerCell = bonfireCombustionFieldActive ? 36 : 0;
+    const bonfireSourceTopologyExtraReadsPerCell = 0;
     const tallPlumeDetailCoherenceStrategy = scene === 'tall_plume'
       ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
       : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
@@ -12068,6 +12037,7 @@ export function createKaminosVolumePrototype({
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
+    state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
     state.tallPlumeDetailCoherenceStrategy = tallPlumeDetailCoherenceStrategy;
     state.tallPlumeDetailCoherenceExtraReadsPerCell = tallPlumeDetailCoherenceExtraReadsPerCell;
     state.tallPlumeTransitionBandStrategy = tallPlumeTransitionBandStrategy;
@@ -12121,6 +12091,7 @@ export function createKaminosVolumePrototype({
       bonfireNonWindForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
+      bonfireSourceTopologyExtraReadsPerCell,
       tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell,
       tallPlumeTransitionBandStrategy,
@@ -19229,6 +19200,7 @@ export function createKaminosVolumePrototype({
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+        bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
         tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
         tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
         tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,
@@ -19604,6 +19576,7 @@ export function createKaminosVolumePrototype({
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
+      bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
       tallPlumeDetailCoherenceStrategy: state.tallPlumeDetailCoherenceStrategy,
       tallPlumeDetailCoherenceExtraReadsPerCell: state.tallPlumeDetailCoherenceExtraReadsPerCell,
       tallPlumeTransitionBandStrategy: state.tallPlumeTransitionBandStrategy,

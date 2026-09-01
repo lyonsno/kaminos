@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { assertTimeFreeWgslCallGraph } from './helpers/wgsl-time-free-callgraph.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+
+assertTimeFreeWgslCallGraph(core, ['hash31'], { label: 'static source-dephasing call graph' });
+
+const timePhasedHash = core.replace(
+  '  return fract((r.x + r.y) * r.z);',
+  '  return fract((r.x + r.y) * r.z + sin(u.cameraPos_time.w * 0.73) * 0.01);',
+);
+assert.notEqual(timePhasedHash, core, 'the static-hash false-closure mutation must alter the reviewed source');
+assert.throws(
+  () => assertTimeFreeWgslCallGraph(timePhasedHash, ['hash31'], { label: 'static source-dephasing call graph' }),
+  /must not read temporal globals or tokens|must not introduce explicit periodic behavior/,
+  'source-birth static dephasing must reject time phase added inside the already-admitted hash helper',
+);
 
 function sourceBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker);
