@@ -41,6 +41,7 @@ VOLUME_COCKPIT_LAYOUT_STORE = VOLUME_COCKPIT_LAYOUT_STORE_DEFAULT
 VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
 VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
 VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
+VOLUME_SETTINGS_PRESET_PROJECTION_RECEIPT_IDENTITY = "kaminos-volume-settings-preset-projection-receipt-v1"
 VOLUME_BASIN_PROMOTION_CLI = ROOT / "volume-basin-promotion-package.mjs"
 VOLUME_BASIN_DRIVE_SESSION_CLI = ROOT / "volume-basin-drive-session-cli.mjs"
 
@@ -1016,6 +1017,116 @@ def write_volume_settings_preset(store_path, label, payload, source, schema=None
             view: f"{preset_url}&view={view}"
             for view in ("splat-only", "raymarch-only", "smoke-hybrid", "full-hybrid-diagnostic")
         },
+    }
+
+
+def project_volume_settings_preset(store_path, preset_ref, label, profile, source, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    expected_profile_fields = {
+        "simulationResolution",
+        "raySteps",
+        "adaptiveRays",
+        "renderScale",
+    }
+    if not isinstance(profile, dict) or set(profile) != expected_profile_fields:
+        raise ValueError(
+            "projection profile requires exactly adaptiveRays, raySteps, renderScale, and simulationResolution"
+        )
+
+    resolution = profile["simulationResolution"]
+    if isinstance(resolution, bool) or not isinstance(resolution, int):
+        raise ValueError("simulation resolution must be an integer")
+    resolution_schema = next(
+        (entry for entry in schema.get("controls") or [] if entry.get("key") == "volume-resolution"),
+        None,
+    )
+    allowed_resolutions = {
+        int(value) for value in (resolution_schema or {}).get("allowedValues") or []
+    }
+    if resolution not in allowed_resolutions:
+        raise ValueError(f"unsupported simulation resolution: {resolution}")
+
+    ray_steps = profile["raySteps"]
+    if isinstance(ray_steps, bool) or not isinstance(ray_steps, int) or not 24 <= ray_steps <= 160:
+        raise ValueError("raySteps must be an integer from 24 through 160")
+    adaptive_rays = profile["adaptiveRays"]
+    if isinstance(adaptive_rays, bool) or not isinstance(adaptive_rays, (int, float)) or not math.isfinite(adaptive_rays):
+        raise ValueError("adaptiveRays must be a finite number")
+    if not 0 <= adaptive_rays <= 1 or not math.isclose(adaptive_rays * 20, round(adaptive_rays * 20), abs_tol=1e-9):
+        raise ValueError("adaptiveRays must be from 0 through 1 in exact 0.05 increments")
+    render_scale = profile["renderScale"]
+    if isinstance(render_scale, bool) or not isinstance(render_scale, (int, float)) or not math.isfinite(render_scale):
+        raise ValueError("renderScale must be a finite number")
+    if not 0.1 <= render_scale <= 0.3 or not math.isclose(render_scale * 1000, round(render_scale * 1000), abs_tol=1e-9):
+        raise ValueError("renderScale must be from 0.1 through 0.3 in exact 0.001 increments")
+
+    normalized_profile = {
+        "simulationResolution": resolution,
+        "raySteps": ray_steps,
+        "adaptiveRays": float(adaptive_rays) if isinstance(adaptive_rays, float) else adaptive_rays,
+        "renderScale": float(render_scale),
+    }
+    parent = read_volume_settings_preset(store_path, preset_ref, schema)
+    projected = copy.deepcopy(parent["preset"])
+    updates = {
+        "volume-resolution": str(resolution),
+        "volume-steps": ray_steps,
+        "volume-adaptive-rays": normalized_profile["adaptiveRays"],
+        "volume-render-scale": normalized_profile["renderScale"],
+    }
+    route = urlparse(projected["route"])
+    route_entries = parse_qsl(route.query, keep_blank_values=True)
+    route_indices = {key: index for index, (key, _) in enumerate(route_entries)}
+    changed_controls = []
+    for key, value in updates.items():
+        descriptor = projected["domControls"].get(key)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"projection source is missing canonical control: {key}")
+        parameter = descriptor.get("param")
+        if parameter not in route_indices:
+            raise ValueError(f"projection source route is missing canonical parameter: {parameter}")
+        before = descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
+        value_field = "rawValue" if "rawValue" in descriptor else "value"
+        descriptor[value_field] = value
+        route_index = route_indices[parameter]
+        route_entries[route_index] = (parameter, _settings_preset_route_value(value))
+        changed_controls.append({
+            "key": key,
+            "param": parameter,
+            "before": before,
+            "requested": value,
+            "effective": value,
+        })
+    projected["route"] = route._replace(query=urlencode(route_entries)).geturl()
+    validate_volume_settings_preset_payload(projected, schema)
+
+    derived = write_volume_settings_preset(store_path, label, projected, source, schema)
+    store = _volume_settings_store_path(store_path)
+    return {
+        "ok": True,
+        "identity": VOLUME_SETTINGS_PRESET_PROJECTION_RECEIPT_IDENTITY,
+        "parent": {
+            "requestedPresetRef": str(preset_ref),
+            "alias": parent.get("alias"),
+            "label": parent.get("label"),
+            "presetId": parent["presetId"],
+            "contentHash": parent["contentHash"],
+            "artifactPath": str(store / "presets" / f"{parent['presetId']}.json"),
+        },
+        "requested": {
+            "label": label,
+            "storePath": str(store),
+            "profile": dict(profile),
+        },
+        "effective": {
+            **derived["effective"],
+            "artifactPath": str(store / "presets" / f"{derived['effective']['presetId']}.json"),
+            "profile": normalized_profile,
+            "changedControls": changed_controls,
+            "sourcePresetAuthority": "shared-volume-settings-preset-v2",
+        },
+        "presetUrl": derived["presetUrl"],
+        "presetViewUrls": derived["presetViewUrls"],
     }
 
 
@@ -2224,6 +2335,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_capture()
         elif parsed.path == "/api/volume-settings-presets":
             self.handle_volume_settings_presets_post()
+        elif parsed.path == "/api/volume-settings-preset-projections":
+            self.handle_volume_settings_preset_projections_post()
         elif parsed.path == "/api/volume-basin-promotions":
             self.handle_volume_basin_promotions_post()
         elif parsed.path == "/api/volume-basin-drive-sessions":
@@ -2365,6 +2478,48 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 "requestedLabel": request.get("label"),
                 "storePath": str(VOLUME_SETTINGS_STORE),
                 "failurePhase": "shared-preset-write",
+            }, 400)
+            return
+        self.send_json(receipt)
+
+    def handle_volume_settings_preset_projections_post(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self.send_json({"error": "Invalid JSON"}, 400)
+            return
+        if not isinstance(request, dict) or set(request) != {"label", "sourcePreset", "profile"}:
+            self.send_json({
+                "error": "settings preset projection requires exactly label, sourcePreset, and profile inputs",
+                "failurePhase": "settings-preset-projection-request",
+            }, 400)
+            return
+        if not isinstance(request.get("label"), str) or not request["label"].strip():
+            self.send_json({"error": "settings preset projection label is required"}, 400)
+            return
+        if not isinstance(request.get("sourcePreset"), str) or not request["sourcePreset"].strip():
+            self.send_json({"error": "settings preset projection sourcePreset is required"}, 400)
+            return
+        try:
+            receipt = project_volume_settings_preset(
+                VOLUME_SETTINGS_STORE,
+                request["sourcePreset"],
+                request["label"],
+                request["profile"],
+                volume_settings_server_source(),
+            )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            self.send_json({
+                "error": str(error),
+                "requestedLabel": request.get("label"),
+                "sourcePreset": request.get("sourcePreset"),
+                "storePath": str(VOLUME_SETTINGS_STORE),
+                "failurePhase": "settings-preset-projection",
             }, 400)
             return
         self.send_json(receipt)

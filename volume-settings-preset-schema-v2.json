@@ -546,7 +546,17 @@
       "key": "volume-resolution",
       "param": "volume_resolution",
       "tagName": "SELECT",
-      "type": "select-one"
+      "type": "select-one",
+      "allowedValues": [
+        "32",
+        "48",
+        "64",
+        "96",
+        "128",
+        "136",
+        "140",
+        "160"
+      ]
     },
     {
       "key": "volume-grid-overlay",
