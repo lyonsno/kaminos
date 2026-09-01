@@ -3482,7 +3482,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let shredOperatorGain = shredAmount * (0.80 + shredAmount * 0.080);
   let fireLickOperatorGain = fireLickAmount * (0.82 + fireLickAmount * 0.110);
   let detailDomain = vec3<f32>(tallPlumeTransportedDetailFrequency, mix(1.0, 1.18, plumeHeight01), tallPlumeTransportedDetailFrequency);
-  let time = u.cameraPos_time.w;
   let windStrength = clamp(u.scene_controls.y, 0.0, 1.5);
   let windAngle = u.scene_controls.z;
   let windHeight = clamp(u.scene_controls.w, -0.8, 0.8);
@@ -11293,12 +11292,12 @@ export function createKaminosVolumePrototype({
       };
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
-    const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
+    const { renderPhaseTimeMs } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
     uniforms[16] = productLocalCameraPosition.x;
     uniforms[17] = productLocalCameraPosition.y;
     uniforms[18] = productLocalCameraPosition.z;
-    uniforms[19] = renderPhaseTimeMs * 0.001;
+    uniforms[19] = 0;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -11323,7 +11322,7 @@ export function createKaminosVolumePrototype({
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     uniforms.fill(0, 41, 47);
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
-    uniforms[47] = renderPhaseFrame % 4096;
+    uniforms[47] = 0;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;

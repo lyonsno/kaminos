@@ -638,8 +638,9 @@ assert.match(index, /occupancySkip/, 'Volume controls carry occupancy/importance
 assert.doesNotMatch(index, /volume_(?:majorant|temporal)|volume_history_clamp/, 'Volume routes do not retain retired raymarch controls');
 assert.match(core, /stripRetiredRaymarchControls/, 'historical controls cross one explicit retirement boundary');
 assert.match(core, /retiredRaymarchControls/, 'runtime state receipts every stripped historical control');
-assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins shader time through the freeze-aware render phase');
-assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'look freeze pins shader frame index through the freeze-aware render phase');
+assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'ordinary product shaders receive explicit zero render-time authority');
+assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'reserved render controls receive explicit zero frame-cycle authority');
+assert.match(core, /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins time only for explicit analytic-emitter temporal descriptors');
 assert.match(core, /if \(advanceSim && !sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)/, 'sampleFrame does not advance simulation while look freeze is active');
 assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale control');
 assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
@@ -1201,11 +1202,11 @@ assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Bas
 assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
 assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
 assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)/, 'Look-lab freeze skips simulation while live mode keeps stepping');
-assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins renderer time as well as sim stepping so radiance probes do not crawl');
-assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins temporal-frame shader input as well as sim stepping');
+assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins explicit emitter temporal descriptors and render-phase evidence as well as sim stepping');
+assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins render-phase evidence as well as sim stepping');
 assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');
-assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'Renderer time uniform uses the freeze-aware render phase instead of raw RAF time');
-assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'Temporal frame uniform uses the freeze-aware render frame instead of raw frameCount');
+assert.match(core, /uniforms\[19\]\s*=\s*0\s*;/, 'retired renderer-time ABI component remains explicit zero authority');
+assert.match(core, /uniforms\[47\]\s*=\s*0\s*;/, 'retired temporal-frame ABI component remains explicit zero authority');
 assert.match(core, /const renderPhaseAuthority\s*=\s*lookFreeze\s*\?\s*'look-freeze-pinned-render-phase'/, 'Debug state reports whether render phase is live or look-freeze pinned');
 assert.match(core, /setControls\(next\)[\s\S]*const controlsLookFreeze[\s\S]*if \(!controlsLookFreeze\) updatePyroDynamicDetailState\(\{ inputKind: 'control-proxy' \}\)/, 'Look-lab freeze prevents control scrubbing from advancing Pyro material-memory state');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU preserves a nonspatial live-field energy gate after retiring the synthetic atlas');
