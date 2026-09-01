@@ -7,6 +7,12 @@ const retiredHarnessUrl = new URL('../volume-dynamic-texture-proof.mjs', import.
 const broadContracts = readFileSync(new URL('./volume-contracts.mjs', import.meta.url), 'utf8');
 const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const TOP_LEVEL_PERIODIC_INVENTORY_SOURCE = /^volume.*\.(?:html|cjs|js|mjs|py|ts|tsx)$/;
+
+function separatelyInventoriedExecutablePath(path) {
+  return !path.includes('/')
+    && (TOP_LEVEL_PERIODIC_INVENTORY_SOURCE.test(path) || path === 'selective-head-live-runtime.mjs');
+}
 
 function executableSourceMap() {
   const sources = new Map();
@@ -26,15 +32,41 @@ function executableSourceMap() {
   return sources;
 }
 
-function importedSpecifiers(source) {
-  return [...source.matchAll(
+function importedSpecifiers(source, fromPath) {
+  const specifiers = [...source.matchAll(
     /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s*)['"]([^'"]+)['"]/gm,
-  )].map(match => match[1]);
+  )].map(match => ({ kind: 'javascript', value: match[1] }));
+  if (!fromPath.endsWith('.py')) return specifiers;
+  for (const match of source.matchAll(/^\s*from\s+([.A-Za-z_]\w*(?:\.\w+)*)\s+import\s+/gm)) {
+    specifiers.push({ kind: 'python', value: match[1] });
+  }
+  for (const match of source.matchAll(/^\s*import\s+([^#\n]+)/gm)) {
+    for (const imported of match[1].split(',')) {
+      const moduleName = imported.trim().split(/\s+as\s+/)[0];
+      if (/^[.A-Za-z_]\w*(?:\.\w+)*$/.test(moduleName)) {
+        specifiers.push({ kind: 'python', value: moduleName });
+      }
+    }
+  }
+  return specifiers;
 }
 
 function resolveLocalImport(fromPath, specifier, sources) {
-  if (!specifier.startsWith('.')) return null;
-  const base = posix.normalize(posix.join(posix.dirname(fromPath), specifier));
+  if (specifier.kind === 'python') {
+    const leadingDots = specifier.value.match(/^\.+/)?.[0].length || 0;
+    let baseDirectory = leadingDots > 0 ? posix.dirname(fromPath) : '';
+    for (let level = 1; level < leadingDots; level += 1) {
+      baseDirectory = posix.dirname(baseDirectory);
+    }
+    const moduleName = specifier.value.slice(leadingDots).replaceAll('.', '/');
+    const base = posix.normalize(posix.join(baseDirectory, moduleName));
+    for (const candidate of [`${base}.py`, posix.join(base, '__init__.py')]) {
+      if (sources.has(candidate)) return candidate;
+    }
+    return null;
+  }
+  if (!specifier.value.startsWith('.')) return null;
+  const base = posix.normalize(posix.join(posix.dirname(fromPath), specifier.value));
   for (const candidate of [base, `${base}.js`, `${base}.mjs`, `${base}.cjs`, `${base}.ts`, `${base}.tsx`, `${base}.py`]) {
     if (sources.has(candidate)) return candidate;
   }
@@ -53,7 +85,7 @@ function liveExecutablePaths({ packageSource: packageText, executableSources }) 
     const path = pending.pop();
     if (live.has(path)) continue;
     live.add(path);
-    for (const specifier of importedSpecifiers(executableSources.get(path))) {
+    for (const specifier of importedSpecifiers(executableSources.get(path), path)) {
       const imported = resolveLocalImport(path, specifier, executableSources);
       if (imported && !live.has(imported)) pending.push(imported);
     }
@@ -73,12 +105,10 @@ function assertDynamicTextureProofRetired({ exactHarnessExists, contractSource, 
     'broad contracts must not require or advertise the retired synthetic proof identity',
   );
   for (const path of liveExecutablePaths({ packageSource: packageText, executableSources })) {
-    const separatelyInventoried = !path.includes('/')
-      && (/^volume.*\.(?:js|mjs|py|ts|tsx)$/.test(path) || path === 'selective-head-live-runtime.mjs');
-    if (separatelyInventoried) continue;
+    if (separatelyInventoriedExecutablePath(path)) continue;
     assert.doesNotMatch(
       executableSources.get(path),
-      /\b(?:Math|np)\s*(?:\.\s*(?:sin|cos|tan)\b|\[[^\]]+\])|(?<![\w.])(?:sin|cos|tan)\s*\(/,
+      /\b(?:Math|np|numpy|math)\s*(?:\.\s*(?:sin|cos|tan)\b|\[[^\]]+\])|(?<![\w.])(?:sin|cos|tan)\s*\(/,
       `live executable synthetic texture producer ${path} must not restore unclassified periodic authorship`,
     );
   }
@@ -120,6 +150,30 @@ assert.throws(
   }),
   /live executable synthetic texture producer/,
   'the retirement barrier follows a product-owned import to a relocated periodic producer',
+);
+
+const acceptedCrossLanguageFalseClosures = [];
+if (!separatelyInventoriedExecutablePath('volume-restored-painter.ts')) {
+  acceptedCrossLanguageFalseClosures.push('top-level TypeScript omitted from the separate periodicity inventory');
+}
+try {
+  assertDynamicTextureProofRetired({
+    exactHarnessExists: false,
+    contractSource: broadContracts,
+    packageSource: '{}',
+    executableSources: new Map([
+      ['volume-proof-wrapper.py', 'from tools.dynamic_texture_evidence import plume'],
+      ['tools/dynamic_texture_evidence.py', 'plume = np.sin(y * 8)'],
+    ]),
+  });
+  acceptedCrossLanguageFalseClosures.push('nested Python periodic producer imported by top-level Volume wrapper');
+} catch {
+  // The executable reachability boundary must reject the nested producer.
+}
+assert.deepEqual(
+  acceptedCrossLanguageFalseClosures,
+  [],
+  'the composed executable-source boundary must own TypeScript entries and local Python import reachability',
 );
 
 console.log('volume dynamic texture proof retirement contracts passed');

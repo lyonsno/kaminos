@@ -61,8 +61,13 @@ function assertExternalEmitterFlickerRetired(source) {
   );
   assert.doesNotMatch(
     directCarrierTail,
-    /\b(?:let|var)\s+[A-Za-z_]\w*\s*=\s*result\s*;/,
+    /\b(?:let|var)\s+[A-Za-z_]\w*(?:\s*:\s*[A-Za-z_]\w*(?:\s*<[^;=]+>)?)?\s*=\s*result\s*;/,
     'the returned external-emitter carrier must not escape through a mutable result alias',
+  );
+  assert.doesNotMatch(
+    directCarrierTail,
+    /\bresult\s*(?:=|\+=|-=|\*=|\/=)/,
+    'the returned external-emitter carrier must not be replaced after direct accumulation',
   );
   assert.match(
     directCarrierTail,
@@ -215,6 +220,39 @@ const falseClosureMutations = [
   return attenuateReturnedCarrier(result);`,
       ),
     /influence must return the enumerated result directly/,
+  ],
+  [
+    'helper-copy-back return attenuation',
+    source => source
+      .replace(
+        'fn externalEmitterInfluence(',
+        'fn attenuateReturnedCarrier(value: ExternalEmitterInfluence) -> ExternalEmitterInfluence { var scaled = value; scaled.material *= 0.82; return scaled; }\n\nfn externalEmitterInfluence(',
+      )
+      .replace(
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  result = attenuateReturnedCarrier(result);
+  return result;`,
+      ),
+    /returned external-emitter carrier must not be replaced after direct accumulation/,
+  ],
+  [
+    'typed mutable alias copy-back attenuation',
+    source => source.replace(
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  var returnedCarrier: ExternalEmitterInfluence = result;
+  returnedCarrier.material *= 0.82;
+  result = returnedCarrier;
+  return result;`,
+    ),
+    /returned external-emitter carrier must not escape through a mutable result alias/,
   ],
   [
     'pre-falloff authored-strength attenuation',

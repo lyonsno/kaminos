@@ -4,13 +4,19 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const TOP_LEVEL_PERIODIC_INVENTORY_SOURCE = /^volume.*\.(?:html|cjs|js|mjs|py|ts|tsx)$/;
+const isPeriodicInventorySource = name => (
+  TOP_LEVEL_PERIODIC_INVENTORY_SOURCE.test(name) || name === 'selective-head-live-runtime.mjs'
+);
 const sourceFiles = readdirSync(root)
-  .filter(name => /^volume.*\.(?:html|js|mjs|py)$/.test(name) || name === 'selective-head-live-runtime.mjs')
+  .filter(isPeriodicInventorySource)
   .sort();
-const qualifiedTrigAuthority = /\b(?:Math|np)\s*\.\s*(?:sin|cos|tan)\b/g;
+const qualifiedTrigAuthority = /\b(?:Math|np|numpy|math)\s*\.\s*(?:sin|cos|tan)\b/g;
 const unqualifiedTrigCall = /(?<![\w.])(?:sin|cos|tan)\s*\(/g;
 const destructuredTrigAuthority = /\b(?:const|let|var)\s*\{[^}]*\b(?:sin|cos|tan)\b[^}]*\}\s*=\s*(?:Math|np)\b/g;
 const bareTrigAliasAuthority = /\b(?:const|let|var)\s+[A-Za-z_]\w*\s*=\s*(?:sin|cos|tan)\s*;/g;
+const pythonImportedTrigAuthority = /^\s*from\s+(?:numpy|math)\s+import\s+[^#\n]*\b(?:sin|cos|tan)\b/g;
+const pythonBareTrigAliasAuthority = /^\s*[A-Za-z_]\w*\s*=\s*(?:sin|cos|tan)\s*(?:#.*)?$/g;
 
 function explicitTrigAuthorities(line) {
   return [
@@ -18,6 +24,8 @@ function explicitTrigAuthorities(line) {
     ...line.matchAll(unqualifiedTrigCall),
     ...line.matchAll(destructuredTrigAuthority),
     ...line.matchAll(bareTrigAliasAuthority),
+    ...line.matchAll(pythonImportedTrigAuthority),
+    ...line.matchAll(pythonBareTrigAliasAuthority),
   ].sort((left, right) => left.index - right.index);
 }
 
@@ -53,7 +61,7 @@ function assertPeriodicAuthorshipInventory(entries) {
     for (const [lineIndex, line] of source.split('\n').entries()) {
       assert.doesNotMatch(
         line,
-        /\b(?:Math|np)\s*\[/,
+        /\b(?:Math|np|numpy|math)\s*\[|\bgetattr\s*\(\s*(?:np|numpy|math|Math)\s*,/,
         `${file}:${lineIndex + 1} has unresolved computed math authority: ${line.trim()}`,
       );
       const calls = explicitTrigAuthorities(line);
@@ -135,5 +143,46 @@ for (const [name, declaration, expectedFailure] of [
     `the inventory rejects ${name} used to animate a simulation uniform`,
   );
 }
+
+const acceptedCrossLanguageFalseClosures = [];
+for (const candidate of ['volume-restored-painter.ts', 'volume-restored-painter.tsx']) {
+  if (!isPeriodicInventorySource(candidate)) {
+    acceptedCrossLanguageFalseClosures.push(`${candidate} omitted from top-level inventory`);
+  }
+}
+for (const [name, injectedPython] of [
+  [
+    'Python imported callable alias',
+    'from numpy import sin as periodic_gain\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python direct callable alias',
+    'periodic_gain = np.sin\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python unqualified callable alias',
+    'from numpy import sin\nperiodic_gain = sin\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+  [
+    'Python computed callable acquisition',
+    'periodic_gain = getattr(np, "sin")\nanimated_wind = periodic_gain(now * 0.001)',
+  ],
+]) {
+  const entries = sourceEntries.map(([file, source]) => [
+    file,
+    file === 'volume-exact-basin-support-probe.py' ? `${source}\n${injectedPython}\n` : source,
+  ]);
+  try {
+    assertPeriodicAuthorshipInventory(entries);
+    acceptedCrossLanguageFalseClosures.push(name);
+  } catch {
+    // The cross-language callable-authority boundary must reject the mutation.
+  }
+}
+assert.deepEqual(
+  acceptedCrossLanguageFalseClosures,
+  [],
+  'the periodic-authorship inventory must own TypeScript entries and Python trig callable aliases',
+);
 
 console.log('volume periodic authorship inventory contracts passed');
