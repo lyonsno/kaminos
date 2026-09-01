@@ -1324,6 +1324,7 @@ const MAIN_FLUID_BONFIRE_COMBUSTION_FIELD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bon
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_ACTIVE = 'bonfire-procedural-breakup-active-v0';
 const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-procedural-breakup-bypass-v0';
 const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
+const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR = 'transported-detail-phase-anchor-v0';
@@ -3138,15 +3139,9 @@ fn applyExternalEmitterInjection(influence: ExternalEmitterInfluence) -> Externa
   return influence;
 }
 
-fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, lateralSlipScale: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
+fn thermalAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, localHeat: f32, thermalAdvectionRiseDirection: f32) -> vec4<f32> {
   let thermalLift = vec3<f32>(0.0, clamp(localHeat, 0.0, 1.7) * (0.24 + speed * 0.055) * thermalAdvectionRiseDirection, 0.0);
-  let rawThermalSlip = vec3<f32>(
-    sin(cell.z * 0.41 + localHeat * 2.7),
-    0.0,
-    cos(cell.x * 0.37 - localHeat * 2.1)
-  ) * localHeat * 0.032;
-  let thermalSlip = vec3<f32>(rawThermalSlip.x * lateralSlipScale, rawThermalSlip.y, rawThermalSlip.z * lateralSlipScale);
-  let backCell = cell - (velocity + thermalLift + thermalSlip) * (2.30 + speed * 0.46);
+  let backCell = cell - (velocity + thermalLift) * (2.30 + speed * 0.46);
   return sampleFluidSlot(backCell, 1u);
 }
 
@@ -3179,15 +3174,9 @@ fn heatToSmokeConversion(heat: f32, fuel: f32, y: f32) -> f32 {
   return coolingBand * upperAir * 0.064 + fuelSmoke;
 }
 
-fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, lateralSlipScale: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
+fn fireLayerAdvection(cell: vec3<f32>, velocity: vec3<f32>, speed: f32, heat: f32, fireLayerRiseDirection: f32) -> vec4<f32> {
   let fastLift = vec3<f32>(0.0, clamp(heat, 0.0, 1.9) * (0.40 + speed * 0.13) * fireLayerRiseDirection, 0.0);
-  let rawLick = vec3<f32>(
-    sin(cell.y * 0.44 + cell.z * 0.19 + heat * 3.8),
-    0.0,
-    cos(cell.y * 0.38 - cell.x * 0.21 - heat * 3.1)
-  ) * heat * 0.070;
-  let lick = vec3<f32>(rawLick.x * lateralSlipScale, rawLick.y, rawLick.z * lateralSlipScale);
-  let backCell = cell - (velocity + fastLift + lick) * (1.82 + speed * 0.34);
+  let backCell = cell - (velocity + fastLift) * (1.82 + speed * 0.34);
   return sampleFluidSlot(backCell, 2u);
 }
 
@@ -3483,15 +3472,15 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let microdetailRiseDirection = bonfireThermalRiseDirection;
   let bonfireLocalLateralTransportGain = mix(1.0, max(explicitWindAuthority, 0.78), bonfireScene);
   let bonfireAdvectionLateralDamping = bonfireLocalLateralTransportGain;
-  let bonfireZeroMeanScalarSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
-  let bonfireLocalLateralSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanScalarSlipGain), bonfireScene);
+  let bonfireZeroMeanMicrodetailSlipGain = bonfireScene * (1.0 - explicitWindAuthority) * 0.58;
+  let bonfireLocalMicrodetailSlipGain = mix(1.0, max(explicitWindAuthority, bonfireZeroMeanMicrodetailSlipGain), bonfireScene);
   let advectVelocity = vec3<f32>(prev.x * bonfireAdvectionLateralDamping, prev.y, prev.z * bonfireAdvectionLateralDamping);
   let backCell = cell - advectVelocity * (2.55 + speed * 0.55);
   let advected = sampleFluidSlot(backCell, 0u);
   let localMaterial = readSlot(cellI, 1u);
-  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, thermalAdvectionRiseDirection);
-  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, bonfireLocalLateralSlipGain, fireLayerRiseDirection);
-  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalLateralSlipGain, microdetailRiseDirection);
+  var material = thermalAdvection(cell, advectVelocity, speed, localMaterial.y, thermalAdvectionRiseDirection);
+  var fireLayer = fireLayerAdvection(cell, advectVelocity, speed, localMaterial.y, fireLayerRiseDirection);
+  var microLayer = transportedMicrodetailAdvection(cell, advectVelocity, speed, localMaterial.y, localMaterial.x, fireLayer.x, bonfireLocalMicrodetailSlipGain, microdetailRiseDirection);
   var combustionFrontTopology = sampleFrontField(backCell) * 0.936;
   if (bonfireScene > 0.5) {
     let bonfireTurbulentDiffusionMix = bonfireScene * (1.0 - explicitWindAuthority) * clamp(0.044 + curl * 0.008 + microAmount * 0.006, 0.0, 0.115);
@@ -11874,6 +11863,8 @@ export function createKaminosVolumePrototype({
     const bonfireSymmetricForceEvaluationsPerCell = 0;
     const mainFluidBonfireNonWindForceStrategy = MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED;
     const bonfireNonWindForceEvaluationsPerCell = 0;
+    const mainFluidScalarAdvectionPeriodicSlipStrategy = MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED;
+    const scalarAdvectionPeriodicSlipEvaluationsPerCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
@@ -11948,6 +11939,8 @@ export function createKaminosVolumePrototype({
     state.bonfireSymmetricForceEvaluationsPerCell = bonfireSymmetricForceEvaluationsPerCell;
     state.mainFluidBonfireNonWindForceStrategy = mainFluidBonfireNonWindForceStrategy;
     state.bonfireNonWindForceEvaluationsPerCell = bonfireNonWindForceEvaluationsPerCell;
+    state.mainFluidScalarAdvectionPeriodicSlipStrategy = mainFluidScalarAdvectionPeriodicSlipStrategy;
+    state.scalarAdvectionPeriodicSlipEvaluationsPerCell = scalarAdvectionPeriodicSlipEvaluationsPerCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
@@ -12002,6 +11995,8 @@ export function createKaminosVolumePrototype({
       bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell,
+      mainFluidScalarAdvectionPeriodicSlipStrategy,
+      scalarAdvectionPeriodicSlipEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell,
@@ -19111,6 +19106,8 @@ export function createKaminosVolumePrototype({
         bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
         mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
         bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+        mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
+        scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
@@ -19487,6 +19484,8 @@ export function createKaminosVolumePrototype({
       bonfireSymmetricForceEvaluationsPerCell: state.bonfireSymmetricForceEvaluationsPerCell,
       mainFluidBonfireNonWindForceStrategy: state.mainFluidBonfireNonWindForceStrategy,
       bonfireNonWindForceEvaluationsPerCell: state.bonfireNonWindForceEvaluationsPerCell,
+      mainFluidScalarAdvectionPeriodicSlipStrategy: state.mainFluidScalarAdvectionPeriodicSlipStrategy,
+      scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
