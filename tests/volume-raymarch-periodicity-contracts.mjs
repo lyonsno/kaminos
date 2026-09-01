@@ -57,6 +57,26 @@ assert.match(
   /let\s+transportedFireStructure\s*=\s*clamp\(/,
   'fire variation must derive from transported reaction and interface structure',
 );
+assert.match(
+  raymarch,
+  /let\s+visibleDetailOverlayGain\s*=\s*mix\(1\.0, 0\.35, detailScaleArtifactQuarantine\);/,
+  'transported detail must preserve the inherited tall-plume amplitude quarantine',
+);
+assert.match(
+  raymarch,
+  /let\s+materialStructure\s*=\s*smoothstep\([^;]+\)\s*\*\s*visibleDetailOverlayGain;/,
+  'transported material structure must respect the visible-detail amplitude quarantine',
+);
+assert.match(
+  raymarch,
+  /let\s+shredStructure\s*=\s*smoothstep\([^;]+\)\s*\*\s*visibleDetailOverlayGain;/,
+  'transported shred structure must respect the visible-detail amplitude quarantine',
+);
+assert.match(
+  raymarch,
+  /let\s+fireStructure\s*=\s*smoothstep\([^;]+\)\s*\*\s*visibleDetailOverlayGain;/,
+  'transported fire structure must respect the visible-detail amplitude quarantine',
+);
 
 const pyroStateUpdate = sourceBetween(
   core,

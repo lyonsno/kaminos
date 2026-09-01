@@ -4769,6 +4769,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
   let tallPlumeRenderScene = step(0.5, renderSceneMode) * (1.0 - step(1.5, renderSceneMode));
+  let detailScaleArtifactQuarantine = tallPlumeRenderScene;
+  let visibleDetailOverlayGain = mix(1.0, 0.35, detailScaleArtifactQuarantine);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
@@ -5275,9 +5277,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
     var alpha = clamp(visibleSmokeAlpha + fireAlpha, 0.0, 0.18);
-    let materialStructure = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal));
-    let shredStructure = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12);
-    let fireStructure = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44));
+    let materialStructure = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * visibleDetailOverlayGain;
+    let shredStructure = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * visibleDetailOverlayGain;
+    let fireStructure = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * visibleDetailOverlayGain;
     let transportedPyroStructure = clamp(
       materialStructure * 0.16
         + shredStructure * 0.20
