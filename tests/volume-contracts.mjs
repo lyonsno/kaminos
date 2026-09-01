@@ -960,12 +960,12 @@ assert.match(core, /canonicalPassiveBottomProof/, 'canonical plume has a passive
 assert.match(core, /canonicalBuoyantBottomProof/, 'canonical plume has a buoyant bottom-source proof branch');
 assert.match(core, /canonicalReadbackSourceYNorm/, 'canonical plume readback derives its source row from the same source-height control as the shader');
 assert.match(core, /canonicalSourceBreakup/, 'canonical plume source birth has low-order smoke-only breakup instead of one smooth radial plug');
-assert.match(core, /canonicalFrozenMotion/, 'canonical plume can freeze source/entrainment phase for transported-smoke diagnostics');
+assert.doesNotMatch(core, /canonicalFrozenMotion|canonicalPhaseTime/, 'canonical plume transport no longer owns a procedural entrainment clock');
 assert.match(core, /let source = mix\(mix\(columnSource, canonicalSource, canonicalPlumeScene\)/, 'canonical plume live injection must route through the canonical low source before bonfire override');
 assert.match(core, /canonicalLiftGate/, 'canonical plume uses a named smoke-only lift term instead of renderer-only height shaping');
 assert.match(core, /canonicalSmokeBirth/, 'canonical plume uses a named smoke-only birth term separate from compact plume fire/detail transport');
 assert.match(core, /canonicalRadialSpread/, 'canonical plume uses named radial field spread so the simple smoke proof is not only a vertical tube');
-assert.match(core, /canonicalEntrainmentCell/, 'canonical plume has a named low-order entrainment cell instead of a smooth tube');
+assert.match(core, /canonicalTransportDelta/, 'canonical plume entrainment derives variation from transported flow instead of an analytic periodic cell');
 assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalRadialSpread/, 'canonical entrainment participates in smoke transport before final canonical spreading');
 assert.match(core, /canonicalEntrainmentVelocity[\s\S]*canonicalPlumeScene/, 'canonical entrainment is scene-gated to the minimal plume proof');
 assert.doesNotMatch(core, /let canonicalEntrainmentVelocity =[^;]*(bonfire|fireLick|frontTopology|radiance|microdetail)/, 'canonical entrainment must stay smoke-only and must not reintroduce bonfire/fire/detail carriers');

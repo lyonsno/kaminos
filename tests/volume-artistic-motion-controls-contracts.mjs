@@ -47,8 +47,12 @@ assert.match(
   /vel = vel \+ \(swirl \* heat[\s\S]*?\* artisticSwirl;/,
   'Artistic Swirl gates only the authored macro rotation',
 );
-assert.match(core, /sin\(phase\)[^\n]+\* phasedSway;/, 'Phased Sway gates the X lateral phase force');
-assert.match(core, /cos\(phase \* 0\.93\)[^\n]+\* phasedSway;/, 'Phased Sway gates the Z lateral phase force');
+assert.match(
+  core,
+  /if \(transportedLateralExcitationEnabled > 0\.5\) \{[\s\S]*?let transportedLateralDelta = prev\.xz - advected\.xz;/,
+  'the legacy phased-sway route now gates transported lateral variation instead of imposing a phase wave',
+);
+assert.doesNotMatch(core, /let phasedSway\b|sin\(phase\) \* \(smoke \+ heat\)|cos\(phase \* 0\.93\)/, 'the simulation retains no phased-sway force authority while the persisted route key survives');
 assert.match(
   core,
   /vel = vel \+ confinement \* \(0\.35 \+ smoke \* 0\.34 \+ heat \* 0\.52\);/,

@@ -1326,6 +1326,7 @@ const MAIN_FLUID_BONFIRE_PROCEDURAL_BREAKUP_STRATEGY_NON_BONFIRE_BYPASS = 'non-b
 const MAIN_FLUID_BONFIRE_PERIODIC_MACRO_FORCE_STRATEGY_RETIRED = 'retired-periodic-bonfire-macro-forces-v0';
 const MAIN_FLUID_SCALAR_ADVECTION_PERIODIC_SLIP_STRATEGY_RETIRED = 'retired-periodic-scalar-advection-slip-v0';
 const MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED = 'retired-periodic-detail-force-basis-v0';
+const MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED = 'retired-periodic-entrainment-sway-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE = 'bonfire-scalar-neighborhood-active-v0';
 const MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS = 'non-bonfire-scalar-neighborhood-bypass-v0';
 const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_FIELDS = 'transported-field-detail-direction-v0';
@@ -3447,7 +3448,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalBuoyancyLift = clamp(u.canonical_source_controls.z, 0.0, 1.5);
   let reactionFuelScale = clamp(u.canonical_source_controls.w, 0.0, 1.5);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
-  let canonicalMotionMode = clamp(u.canonical_render_motion_controls.y, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let windDirection = vec3<f32>(cos(windAngle), 0.0, sin(windAngle));
   let windHeightRamp = smoothstep(windHeight - 0.32, windHeight + 0.52, p.y);
@@ -3455,8 +3455,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalPlumeScene = step(2.5, sceneMode);
   let canonicalSmokeContent = 1.0 - canonicalPlumeScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = canonicalPlumeScene * step(0.5, canonicalContentMode);
-  let canonicalFrozenMotion = canonicalPlumeScene * step(0.5, canonicalMotionMode);
-  let canonicalPhaseTime = mix(time, 0.0, canonicalFrozenMotion);
   let canonicalPassiveBottomProof = canonicalPlumeScene * step(0.5, canonicalSourceMode) * (1.0 - step(1.5, canonicalSourceMode));
   let canonicalBuoyantBottomProof = canonicalPlumeScene * step(2.5, canonicalSourceMode);
   let bonfireScene = step(1.5, sceneMode) * (1.0 - canonicalPlumeScene);
@@ -4027,9 +4025,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     * (1.0 - smoothstep(0.36, 0.90, p.y));
   let canonicalMinimalFireHeat = canonicalMinimalFireBirth * (0.80 + canonicalBuoyancyLift * 0.30);
   let swirl = vec3<f32>(-p.z, 0.0, p.x) / max(radial, 0.08);
-  let phase = time * 4.8 + p.y * 12.0 + hash31(vec3<f32>(gid) * 0.071) * 3.2;
   let artisticSwirl = step(0.5, u.artistic_motion_controls.x);
-  let phasedSway = step(0.5, u.artistic_motion_controls.y);
+  let transportedLateralExcitationEnabled = step(0.5, u.artistic_motion_controls.y);
   let proceduralDetailForces = step(0.5, u.artistic_motion_controls.z);
   let tallPlumeFireLickSource = mix(source, tallPlumeCombustionSource, tallPlumeScene);
   let fireLickBreakupEnabled = fireLickOperatorGain > ${FIRE_LICK_BREAKUP_BYPASS_THRESHOLD};
@@ -4123,21 +4120,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let canonicalLiftGate = canonicalPlumeScene * (1.0 - smoothstep(0.52, 0.94, p.y));
   vel.y = vel.y + canonicalLiftGate * (source * (0.070 + speed * 0.012) * canonicalSourceInjection + smoke * (0.010 + speed * 0.002) * canonicalBuoyancyLift);
   let canonicalRadial = max(length(p.xz), 0.025);
-  let canonicalEntrainmentCell = vec3<f32>(
-    sin(p.y * 5.2 + p.z * 3.1 + canonicalPhaseTime * 0.37),
-    sin(p.x * 4.7 - p.z * 2.9 - canonicalPhaseTime * 0.31) * 0.35,
-    cos(p.y * 4.8 - p.x * 3.4 + canonicalPhaseTime * 0.41)
-  );
   let canonicalEntrainmentBand = canonicalPlumeScene
     * smoothstep(-0.64, -0.28, p.y)
     * (1.0 - smoothstep(0.50, 0.86, p.y));
   let canonicalTangent = vec3<f32>(-p.z / canonicalRadial, 0.0, p.x / canonicalRadial);
   let canonicalInward = vec3<f32>(-p.x / canonicalRadial, 0.0, -p.z / canonicalRadial);
-  let canonicalEntrainmentVelocity = (
-    canonicalTangent * canonicalEntrainmentCell.x * 0.030
-      + canonicalInward * max(canonicalEntrainmentCell.z, -0.25) * 0.018
-      + vec3<f32>(0.0, canonicalEntrainmentCell.y * 0.009, 0.0)
-  ) * smoke * canonicalEntrainmentBand * (0.75 + speed * 0.12);
+  var canonicalEntrainmentVelocity = vec3<f32>(0.0);
+  if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {
+    let canonicalTransportDelta = prev.xyz - advected.xyz;
+    let canonicalDensityDelta = prev.w - advected.w;
+    let canonicalTangentTransport = clamp(dot(canonicalTransportDelta, canonicalTangent), -0.05, 0.05);
+    let canonicalInwardTransport = clamp(dot(canonicalTransportDelta, canonicalInward) + canonicalDensityDelta * 0.035, -0.035, 0.035);
+    let canonicalVerticalTransport = clamp(canonicalTransportDelta.y + canonicalDensityDelta * 0.020, -0.025, 0.025);
+    canonicalEntrainmentVelocity = (
+      canonicalTangent * canonicalTangentTransport * 0.42
+        + canonicalInward * canonicalInwardTransport * 0.30
+        + vec3<f32>(0.0, canonicalVerticalTransport * 0.14, 0.0)
+    ) * smoke * canonicalEntrainmentBand * (0.75 + speed * 0.12);
+  }
   vel = vel + canonicalEntrainmentVelocity;
   let canonicalRadialSpreadBand = canonicalPlumeScene * smoothstep(-0.66, -0.20, p.y) * (1.0 - smoothstep(0.42, 0.82, p.y));
   let canonicalRadialSpread = vec3<f32>(p.x / canonicalRadial, 0.0, p.z / canonicalRadial)
@@ -4155,8 +4155,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   ) * bonfireFrontLiftGate * plumeRiseScale * (0.011 + speed * 0.0026 + curl * 0.0012);
   let columnLiftImpulse = (source * (0.022 + speed * 0.006) + smoke * 0.003) * plumeRiseScale;
   vel.y = vel.y + mix(columnLiftImpulse, bonfireLiftImpulse + bonfireTopologyLiftImpulse + bonfireBroadSupportLiftImpulse + bonfireLiftedSootBuoyancy, bonfireScene) * bonfireThermalRiseDirection;
-  vel.x = vel.x + sin(phase) * (smoke + heat) * 0.0038 * curl * phasedSway;
-  vel.z = vel.z + cos(phase * 0.93) * (smoke + heat) * 0.0038 * curl * phasedSway;
+  if (transportedLateralExcitationEnabled > 0.5) {
+    let transportedLateralDelta = prev.xz - advected.xz;
+    let transportedLateralGain = clamp((smoke + heat) * 0.16 + curl * 0.022, 0.0, 0.24);
+    let transportedLateralExcitation = clamp(
+      transportedLateralDelta * transportedLateralGain,
+      vec2<f32>(-0.006),
+      vec2<f32>(0.006)
+    );
+    vel = vel + vec3<f32>(transportedLateralExcitation.x, 0.0, transportedLateralExcitation.y);
+  }
   let bonfireNonWindLateralDampingTarget = mix(1.0, max(explicitWindAuthority, 0.82), bonfireScene);
   let bonfireNonWindLateralDamping = mix(1.0, bonfireNonWindLateralDampingTarget, bonfireLateralDampingAblation);
   vel.x = vel.x * bonfireNonWindLateralDamping;
@@ -11879,6 +11887,8 @@ export function createKaminosVolumePrototype({
     const scalarAdvectionPeriodicSlipEvaluationsPerCell = 0;
     const mainFluidPeriodicDetailForceStrategy = MAIN_FLUID_PERIODIC_DETAIL_FORCE_STRATEGY_RETIRED;
     const periodicDetailForceEvaluationsPerCell = 0;
+    const mainFluidPeriodicEntrainmentSwayStrategy = MAIN_FLUID_PERIODIC_ENTRAINMENT_SWAY_STRATEGY_RETIRED;
+    const periodicEntrainmentSwayEvaluationsPerCell = 0;
     const mainFluidBonfireScalarNeighborhoodStrategy = bonfireCombustionFieldActive
       ? MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_ACTIVE
       : MAIN_FLUID_BONFIRE_SCALAR_NEIGHBORHOOD_STRATEGY_NON_BONFIRE_BYPASS;
@@ -11957,6 +11967,8 @@ export function createKaminosVolumePrototype({
     state.scalarAdvectionPeriodicSlipEvaluationsPerCell = scalarAdvectionPeriodicSlipEvaluationsPerCell;
     state.mainFluidPeriodicDetailForceStrategy = mainFluidPeriodicDetailForceStrategy;
     state.periodicDetailForceEvaluationsPerCell = periodicDetailForceEvaluationsPerCell;
+    state.mainFluidPeriodicEntrainmentSwayStrategy = mainFluidPeriodicEntrainmentSwayStrategy;
+    state.periodicEntrainmentSwayEvaluationsPerCell = periodicEntrainmentSwayEvaluationsPerCell;
     state.mainFluidBonfireScalarNeighborhoodStrategy = mainFluidBonfireScalarNeighborhoodStrategy;
     state.bonfireScalarNeighborhoodReadsPerCell = bonfireScalarNeighborhoodReadsPerCell;
     state.bonfireSourceTopologyExtraReadsPerCell = bonfireSourceTopologyExtraReadsPerCell;
@@ -12015,6 +12027,8 @@ export function createKaminosVolumePrototype({
       scalarAdvectionPeriodicSlipEvaluationsPerCell,
       mainFluidPeriodicDetailForceStrategy,
       periodicDetailForceEvaluationsPerCell,
+      mainFluidPeriodicEntrainmentSwayStrategy,
+      periodicEntrainmentSwayEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell,
@@ -19128,6 +19142,8 @@ export function createKaminosVolumePrototype({
         scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
         mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
         periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
+        mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
+        periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
         mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
         bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
         bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
@@ -19508,6 +19524,8 @@ export function createKaminosVolumePrototype({
       scalarAdvectionPeriodicSlipEvaluationsPerCell: state.scalarAdvectionPeriodicSlipEvaluationsPerCell,
       mainFluidPeriodicDetailForceStrategy: state.mainFluidPeriodicDetailForceStrategy,
       periodicDetailForceEvaluationsPerCell: state.periodicDetailForceEvaluationsPerCell,
+      mainFluidPeriodicEntrainmentSwayStrategy: state.mainFluidPeriodicEntrainmentSwayStrategy,
+      periodicEntrainmentSwayEvaluationsPerCell: state.periodicEntrainmentSwayEvaluationsPerCell,
       mainFluidBonfireScalarNeighborhoodStrategy: state.mainFluidBonfireScalarNeighborhoodStrategy,
       bonfireScalarNeighborhoodReadsPerCell: state.bonfireScalarNeighborhoodReadsPerCell,
       bonfireSourceTopologyExtraReadsPerCell: state.bonfireSourceTopologyExtraReadsPerCell,
