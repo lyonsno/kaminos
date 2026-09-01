@@ -204,6 +204,16 @@ assert.match(
 );
 assert.match(
   core,
+  /const simReadback = options\.includeSimReadback === false[\s\S]*?\? null[\s\S]*?: await sampleSimReadback\(\);[\s\S]*?if \(simReadback\) updatePyroDynamicDetailState/,
+  'generic frame sampling preserves sim diagnostics by default and permits an explicit narrow readback',
+);
+assert.match(
+  core,
+  /async function sampleKilnSourceFramingPair\([\s\S]*?const commonOptions = \{[\s\S]*?includeSimReadback: false,[\s\S]*?captureSurface: 'kiln-source-baseline'[\s\S]*?captureSurface: 'kiln-source'/,
+  'paired source framing suppresses the unrelated full-grid sim readback in both source captures',
+);
+assert.match(
+  core,
   /usage: GPUTextureUsage\.TEXTURE_BINDING \| GPUTextureUsage\.COPY_DST \| GPUTextureUsage\.RENDER_ATTACHMENT/,
   'external-image upload textures include Dawn-required render-attachment usage',
 );

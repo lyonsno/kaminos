@@ -20028,8 +20028,10 @@ export function createKaminosVolumePrototype({
     }
     buffer.unmap();
     buffer.destroy();
-    const simReadback = await sampleSimReadback();
-    updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
+    const simReadback = options.includeSimReadback === false
+      ? null
+      : await sampleSimReadback();
+    if (simReadback) updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
     const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
@@ -20305,6 +20307,7 @@ export function createKaminosVolumePrototype({
       const commonOptions = {
         advanceSim: false,
         includeRgba: options.includeRgba === true,
+        includeSimReadback: false,
         now: fixedNow,
         sameStateCaptureId,
         baseFrameCount,
