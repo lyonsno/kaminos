@@ -2170,12 +2170,6 @@ fn hash31(p: vec3<f32>) -> f32 {
   return fract((r.x + r.y) * r.z);
 }
 
-fn rotate2(p: vec2<f32>, a: f32) -> vec2<f32> {
-  let c = cos(a);
-  let s = sin(a);
-  return vec2<f32>(c * p.x - s * p.y, s * p.x + c * p.y);
-}
-
 fn index3(c: vec3<u32>) -> u32 {
   return c.x + c.y * GRID + c.z * GRID * GRID;
 }

@@ -38,8 +38,8 @@ function assertExternalEmitterFlickerRetired(source) {
   assert.notEqual(directCarrierStart, -1, 'generic external-emitter direct carrier marker must remain discoverable');
   const directCarrierTail = influence.slice(directCarrierStart);
   const actualAccumulations = [...directCarrierTail.matchAll(
-    /\b(result\.(?:material|fire|micro|velocity)(?:\.[xyzw])?)\s*=\s*([^;]+);/g,
-  )].map(match => normalizeWgslStatement(`${match[1]} = ${match[2]};`));
+    /\b(result\.(?:material|fire|micro|velocity)(?:\.[xyzw])?)\s*(\+=|-=|\*=|\/=|=)\s*([^;]+);/g,
+  )].map(match => normalizeWgslStatement(`${match[1]} ${match[2]} ${match[3]};`));
   const expectedAccumulations = [
     'result.material.x = max(result.material.x, emitter.material.x * w);',
     'result.material.y = max(result.material.y, emitter.material.y * w);',
@@ -58,6 +58,16 @@ function assertExternalEmitterFlickerRetired(source) {
     actualAccumulations,
     expectedAccumulations,
     'every external-emitter accumulation must consume direct unattenuated w',
+  );
+  assert.doesNotMatch(
+    directCarrierTail,
+    /\b(?:let|var)\s+[A-Za-z_]\w*\s*=\s*result\s*;/,
+    'the returned external-emitter carrier must not escape through a mutable result alias',
+  );
+  assert.match(
+    directCarrierTail,
+    /\breturn\s+result\s*;\s*}$/,
+    'the external-emitter influence must return the enumerated result directly',
   );
   assert.match(
     injection,
@@ -158,6 +168,53 @@ const falseClosureMutations = [
       .replaceAll(' * w', ' * carrierWeight')
       .replace('emitter.velocity_age.xyz * carrierWeight, w)', 'emitter.velocity_age.xyz * carrierWeight, carrierWeight)'),
     /every external-emitter accumulation must consume direct unattenuated w/,
+  ],
+  [
+    'compound post-accumulation attenuation',
+    source => source.replace(
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  result.material *= 0.82;
+  result.fire *= 0.82;
+  result.micro *= 0.82;
+  result.velocity *= 0.82;
+  return result;`,
+    ),
+    /every external-emitter accumulation must consume direct unattenuated w/,
+  ],
+  [
+    'mutable returned-result alias attenuation',
+    source => source.replace(
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+      `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  var returnedCarrier = result;
+  returnedCarrier.material *= 0.82;
+  return returnedCarrier;`,
+    ),
+    /returned external-emitter carrier must not escape through a mutable result alias/,
+  ],
+  [
+    'helper-mediated return attenuation',
+    source => source
+      .replace(
+        'fn externalEmitterInfluence(',
+        'fn attenuateReturnedCarrier(value: ExternalEmitterInfluence) -> ExternalEmitterInfluence { var scaled = value; scaled.material *= 0.82; return scaled; }\n\nfn externalEmitterInfluence(',
+      )
+      .replace(
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return result;`,
+        `    result.velocity = result.velocity + vec4<f32>(emitter.velocity_age.xyz * w, w);
+  }
+  return attenuateReturnedCarrier(result);`,
+      ),
+    /influence must return the enumerated result directly/,
   ],
   [
     'pre-falloff authored-strength attenuation',

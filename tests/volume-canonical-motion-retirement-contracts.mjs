@@ -22,6 +22,28 @@ function resolveIntegerExpression(expression, aliases) {
   return Number.isInteger(value) ? value : null;
 }
 
+function resolveSimpleIdentifierAlias(expression) {
+  let candidate = expression
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .trim();
+  while (candidate.startsWith('(') && candidate.endsWith(')')) {
+    let depth = 0;
+    let outerPairClosesAtEnd = false;
+    for (let index = 0; index < candidate.length; index += 1) {
+      if (candidate[index] === '(') depth += 1;
+      if (candidate[index] === ')') depth -= 1;
+      if (depth === 0) {
+        outerPairClosesAtEnd = index === candidate.length - 1;
+        break;
+      }
+    }
+    if (!outerPairClosesAtEnd) break;
+    candidate = candidate.slice(1, -1).trim();
+  }
+  return /^[A-Za-z_]\w*$/.test(candidate) ? candidate : null;
+}
+
 function assertCanonicalRetiredPackedComponent(source) {
   const updateUniforms = balancedWgslBlock(source, 'function updateUniforms(now)', {
     label: 'updateUniforms',
@@ -34,8 +56,8 @@ function assertCanonicalRetiredPackedComponent(source) {
   for (let pass = 0; pass < 8; pass += 1) {
     let changed = false;
     for (const [name, expression] of aliases) {
-      const base = expression.trim();
-      if (/^[A-Za-z_]\w*$/.test(base) && uniformBases.has(base) && !uniformBases.has(name)) {
+      const base = resolveSimpleIdentifierAlias(expression);
+      if (base && uniformBases.has(base) && !uniformBases.has(name)) {
         uniformBases.add(name);
         changed = true;
       }
@@ -221,6 +243,32 @@ assert.throws(
   () => assertCanonicalRetiredPackedComponent(aliasedUniformBaseAuthority),
   /must have exactly one CPU write/,
   'the barrier rejects a retired-slot write through an alias of the uniforms base array',
+);
+
+const parenthesizedUniformBaseAuthority = core.replace(
+  'uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;',
+  `uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
+    const parenthesizedUniformsAlias = (uniforms);
+    parenthesizedUniformsAlias[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);`,
+);
+assert.notEqual(parenthesizedUniformBaseAuthority, core, 'the parenthesized uniform-base mutation must alter source');
+assert.throws(
+  () => assertCanonicalRetiredPackedComponent(parenthesizedUniformBaseAuthority),
+  /must have exactly one CPU write/,
+  'the barrier rejects a retired-slot write through a parenthesized alias of the uniforms base array',
+);
+
+const commentedParenthesizedUniformBaseAuthority = core.replace(
+  'uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;',
+  `uniforms[73] = CANONICAL_ANALYTIC_MOTION_RETIRED_UNIFORM_VALUE;
+    const commentedUniformsAlias = (/* same destination */ uniforms);
+    commentedUniformsAlias[73] = canonicalMotionModeValue(controlsSnapshot.canonicalMotionMode);`,
+);
+assert.notEqual(commentedParenthesizedUniformBaseAuthority, core, 'the commented uniform-base mutation must alter source');
+assert.throws(
+  () => assertCanonicalRetiredPackedComponent(commentedParenthesizedUniformBaseAuthority),
+  /must have exactly one CPU write/,
+  'the barrier rejects a retired-slot write through a commented parenthesized uniforms alias',
 );
 
 const indexedPackedAuthority = core.replace(

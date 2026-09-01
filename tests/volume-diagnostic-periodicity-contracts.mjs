@@ -21,7 +21,37 @@ function assertNoExplicitPeriodicity(source, label) {
 function reachableJavascriptFunctions(source, rootNames) {
   const declarations = new Map();
   for (const match of source.matchAll(/\b(?:export\s+)?function\s+([A-Za-z_]\w*)\s*\(/g)) {
-    declarations.set(match[1], match[0]);
+    declarations.set(
+      match[1],
+      balancedWgslBlock(source.slice(match.index), match[0], { label: `JavaScript helper ${match[1]}` }),
+    );
+  }
+  for (const match of source.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s+)?function\b[^\{]*\{/g,
+  )) {
+    declarations.set(
+      match[1],
+      balancedWgslBlock(source.slice(match.index), match[0], { label: `JavaScript function-expression helper ${match[1]}` }),
+    );
+  }
+  for (const match of source.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>/g,
+  )) {
+    const tail = source.slice(match.index);
+    const bodyStart = match[0].length;
+    const nextTokenIndex = tail.slice(bodyStart).search(/\S/);
+    assert.ok(nextTokenIndex >= 0, `JavaScript arrow helper ${match[1]} must have a body`);
+    const bodyIndex = bodyStart + nextTokenIndex;
+    if (tail[bodyIndex] === '{') {
+      declarations.set(
+        match[1],
+        balancedWgslBlock(tail, match[0], { label: `JavaScript arrow helper ${match[1]}` }),
+      );
+    } else {
+      const statementEnd = tail.indexOf(';', bodyIndex);
+      assert.ok(statementEnd > bodyIndex, `JavaScript arrow helper ${match[1]} expression must terminate`);
+      declarations.set(match[1], tail.slice(0, statementEnd + 1));
+    }
   }
 
   const pending = [...rootNames];
@@ -30,10 +60,9 @@ function reachableJavascriptFunctions(source, rootNames) {
   while (pending.length > 0) {
     const name = pending.pop();
     if (visited.has(name)) continue;
-    const marker = declarations.get(name);
-    assert.ok(marker, `missing reachable JavaScript helper ${name}`);
+    const block = declarations.get(name);
+    assert.ok(block, `missing reachable JavaScript helper ${name}`);
     visited.add(name);
-    const block = balancedWgslBlock(source, marker, { label: `JavaScript helper ${name}` });
     blocks.push(block);
     for (const call of block.matchAll(/\b([A-Za-z_]\w*)\s*\(/g)) {
       const callee = call[1];
@@ -90,6 +119,36 @@ assert.throws(
   () => assertDiagnosticPeriodicityRetired(helperOutsidePriorWindow),
   /must not author explicit trigonometric motion/,
   'the diagnostic barrier rejects trigonometry in a reachable helper outside the old local source window',
+);
+
+const arrowHelperOutsidePriorWindow = core
+  .replace(
+    'function externalEmitterNowMs()',
+    'const restoredPeriodicTrailHelper = value => Math.sin(value);\n\nfunction externalEmitterNowMs()',
+  )
+  .replace(
+    'const blend = syntheticTrailSmoothUnit(keyframe - step);',
+    'const blend = syntheticTrailSmoothUnit(keyframe - step) + restoredPeriodicTrailHelper(keyframe) * 0.01;',
+  );
+assert.throws(
+  () => assertDiagnosticPeriodicityRetired(arrowHelperOutsidePriorWindow),
+  /must not author explicit trigonometric motion/,
+  'the diagnostic barrier rejects trigonometry in a reachable arrow-function helper',
+);
+
+const functionExpressionHelperOutsidePriorWindow = core
+  .replace(
+    'function externalEmitterNowMs()',
+    'const restoredPeriodicTrailHelper = function(value) { return Math.sin(value); };\n\nfunction externalEmitterNowMs()',
+  )
+  .replace(
+    'const blend = syntheticTrailSmoothUnit(keyframe - step);',
+    'const blend = syntheticTrailSmoothUnit(keyframe - step) + restoredPeriodicTrailHelper(keyframe) * 0.01;',
+  );
+assert.throws(
+  () => assertDiagnosticPeriodicityRetired(functionExpressionHelperOutsidePriorWindow),
+  /must not author explicit trigonometric motion/,
+  'the diagnostic barrier rejects trigonometry in a reachable function-expression helper',
 );
 
 const shortCycleTrail = core.replace(
