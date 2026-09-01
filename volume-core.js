@@ -134,6 +134,15 @@ const BOUNDARY_SPLAT_CHANNELS = [
 ];
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
+const FIRE_IRRADIANCE_LATTICE_IDENTITY = 'fire-irradiance-lattice-32-same-state-rgb-v0';
+const FIRE_IRRADIANCE_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
+const FIRE_IRRADIANCE_PROPAGATION_IDENTITY = 'irradiance-lattice-axis-diffusion-4-round-v0';
+const FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY = 'fire-light-field-gpu-timestamp-profile-v0';
+const DEFAULT_FIRE_IRRADIANCE_GRID_SIZE = 32;
+const SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES = [32, 48];
+const FIRE_IRRADIANCE_ATLAS_TILES_X = 8;
+const FIRE_IRRADIANCE_PROPAGATION_ROUNDS = 4;
+const KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
@@ -566,6 +575,65 @@ function fluidBufferBytes(gridSize) {
 
 function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
   return majorantGridSize * majorantGridSize * majorantGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function irradianceLatticeBufferBytes(irradianceGridSize = DEFAULT_FIRE_IRRADIANCE_GRID_SIZE) {
+  return irradianceGridSize * irradianceGridSize * irradianceGridSize * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function normalizeFireIrradianceGridSize(value) {
+  const parsed = Number(value);
+  return SUPPORTED_FIRE_IRRADIANCE_GRID_SIZES.includes(parsed) ? parsed : DEFAULT_FIRE_IRRADIANCE_GRID_SIZE;
+}
+
+// One explicit GPUDevice for both the Three scene renderer and the Pyro volume
+// simulator. Native same-device GPU texture sharing is the implementation
+// ancestor; browser-canvas-to-Three CanvasTexture transport is the falsified
+// path and must not carry scene lighting.
+export async function requestKaminosSharedWebGpuDevice() {
+  if (!navigator.gpu) throw new Error('WebGPU unavailable');
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: 'high-performance',
+    featureLevel: 'core',
+  });
+  if (!adapter) throw new Error('WebGPU adapter unavailable');
+  const requiredLimits = {};
+  const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+  if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+    requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+  }
+  // Request the adapter's own per-stage storage-buffer capacity: the fluid
+  // pipeline layouts declare 10 compute-visible storage buffers, and newer
+  // Chrome validates layout counts strictly, so a hardcoded 9 is a silent cap
+  // that breaks pipeline creation.
+  if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
+    requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
+  }
+  const storageStageRequirements = {
+    maxStorageBuffersInFragmentStage: 5,
+    maxStorageBuffersInVertexStage: 4,
+  };
+  for (const [name, required] of Object.entries(storageStageRequirements)) {
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below Kaminos shared-device requirement ${required}`);
+    }
+    requiredLimits[name] = required;
+  }
+  const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
+  const device = await adapter.requestDevice({
+    ...(Object.keys(requiredLimits).length ? { requiredLimits } : {}),
+    ...(requiredFeatures.length ? { requiredFeatures } : {}),
+  });
+  return {
+    identity: KAMINOS_SHARED_WEBGPU_DEVICE_IDENTITY,
+    authority: 'single-explicit-device-three-and-volume-v0',
+    adapter,
+    device,
+    queue: device.queue,
+    requiredLimits,
+    requiredFeatures,
+  };
 }
 
 function boundarySidecarBufferBytes(gridSize) {
@@ -1032,6 +1100,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
+override IRRADIANCE_GRID: u32 = 32u;
 override TRANSPARENT_CANVAS: f32 = 0.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
@@ -1128,6 +1197,9 @@ struct ExternalEmitterInfluence {
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
 @group(3) @binding(0) var<storage, read_write> boundarySidecarDst: array<vec4<f32>>;
+@group(1) @binding(1) var<storage, read_write> irradianceDst: array<vec4<f32>>;
+@group(1) @binding(2) var<storage, read> irradianceSrc: array<vec4<f32>>;
+@group(1) @binding(3) var irradianceAtlasOut: texture_storage_2d<rgba16float, write>;
 
 struct VSOut {
   @builtin(position) pos: vec4<f32>,
@@ -2575,6 +2647,93 @@ fn csMajorant(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
   majorantDst[majorantIndex(gid)] = majorant;
+}
+
+// Fire irradiance light field: a compact world-space RGB lattice seeded from
+// the same advancing fluid state and emission law as the visible raymarch
+// flame. Identity: fire-irradiance-lattice-32-same-state-rgb-v0. The lattice
+// spans the same [-1,1]^3 shared-camera world box as the raymarch.
+const IRRADIANCE_TILES_X: u32 = 8u;
+
+fn irradianceIndex(cell: vec3<u32>) -> u32 {
+  return cell.x + cell.y * IRRADIANCE_GRID + cell.z * IRRADIANCE_GRID * IRRADIANCE_GRID;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csIrradianceSeed(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+    return;
+  }
+  let brickStart = vec3<u32>(floor(vec3<f32>(gid) * f32(GRID) / f32(IRRADIANCE_GRID)));
+  let brickEnd = max(brickStart + vec3<u32>(1), vec3<u32>(ceil(vec3<f32>(gid + vec3<u32>(1)) * f32(GRID) / f32(IRRADIANCE_GRID))));
+  let radianceGain = max(u.radiance_controls.x, 0.0);
+  let glowGain = max(u.radiance_controls.z, 0.0);
+  var accum = vec3<f32>(0.0);
+  var weightAccum = 0.0;
+  var cellCount = 0.0;
+  for (var z = brickStart.z; z < min(brickEnd.z, GRID); z = z + 1u) {
+    for (var y = brickStart.y; y < min(brickEnd.y, GRID); y = y + 1u) {
+      for (var x = brickStart.x; x < min(brickEnd.x, GRID); x = x + 1u) {
+        let c = vec3<i32>(vec3<u32>(x, y, z));
+        let velocityDensity = readSlot(c, 0u);
+        let material = readSlot(c, 1u);
+        let fireLayer = readSlot(c, 2u);
+        let microLayer = readSlot(c, 3u);
+        let velMag = length(velocityDensity.xyz);
+        let temp = emissiveTemperature(fireLayer, material, microLayer, velMag);
+        // Gate by live combustion presence so the emission-law ambient floor
+        // cannot masquerade as fire light in empty cells.
+        let fireBodyWeight = smoothstep(0.04, 0.30, temp);
+        let emission = fireRadianceEmission(temp, fireLayer.z, microLayer.z, microLayer.w, radianceGain, glowGain);
+        accum = accum + emission * fireBodyWeight;
+        weightAccum = weightAccum + fireBodyWeight;
+        cellCount = cellCount + 1.0;
+      }
+    }
+  }
+  let inv = 1.0 / max(cellCount, 1.0);
+  irradianceDst[irradianceIndex(gid)] = vec4<f32>(accum * inv, weightAccum * inv);
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn csIrradiancePropagate(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(IRRADIANCE_GRID))) {
+    return;
+  }
+  let cell = vec3<i32>(gid);
+  let bound = i32(IRRADIANCE_GRID);
+  // Six axis neighbors, fully unrolled (dynamic vector indexing is
+  // pathologically slow on Metal). Out-of-lattice neighbors contribute zero:
+  // the open boundary lets light dilute toward the box faces instead of
+  // reflecting inward.
+  var neighborSum = vec4<f32>(0.0);
+  if (cell.x > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(1, 0, 0)))]; }
+  if (cell.x < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(1, 0, 0)))]; }
+  if (cell.y > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 1, 0)))]; }
+  if (cell.y < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 1, 0)))]; }
+  if (cell.z > 0) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell - vec3<i32>(0, 0, 1)))]; }
+  if (cell.z < bound - 1) { neighborSum = neighborSum + irradianceSrc[irradianceIndex(vec3<u32>(cell + vec3<i32>(0, 0, 1)))]; }
+  let center = irradianceSrc[irradianceIndex(gid)];
+  irradianceDst[irradianceIndex(gid)] = center * 0.55 + neighborSum * (0.60 / 6.0);
+}
+
+@compute @workgroup_size(8, 8, 1)
+fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let tilesY = (IRRADIANCE_GRID + IRRADIANCE_TILES_X - 1u) / IRRADIANCE_TILES_X;
+  let atlasWidth = IRRADIANCE_GRID * IRRADIANCE_TILES_X;
+  let atlasHeight = IRRADIANCE_GRID * tilesY;
+  if (gid.x >= atlasWidth || gid.y >= atlasHeight) {
+    return;
+  }
+  let tileX = gid.x / IRRADIANCE_GRID;
+  let tileY = gid.y / IRRADIANCE_GRID;
+  let slice = tileY * IRRADIANCE_TILES_X + tileX;
+  if (slice >= IRRADIANCE_GRID) {
+    textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), vec4<f32>(0.0));
+    return;
+  }
+  let cell = vec3<u32>(gid.x % IRRADIANCE_GRID, gid.y % IRRADIANCE_GRID, slice);
+  textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), irradianceSrc[irradianceIndex(cell)]);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -5821,6 +5980,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
+  let irradianceLatticeBuffers = null;
+  let irradianceAtlasTexture = null;
+  let irradianceBindGroups = null;
+  let irradianceLatticeBindGroupLayout = null;
+  let irradiancePipelineLayout = null;
+  let irradianceSeedPipeline = null;
+  let irradiancePropagatePipeline = null;
+  let irradianceResolvePipeline = null;
+  let irradianceResourcesKey = null;
+  let irradianceAtlasGeneration = 0;
+  const irradianceGridSize = normalizeFireIrradianceGridSize(controlsSnapshot.fireLightFieldGrid);
   let pressureWriteBindGroup = null;
   let pressureJacobiBindGroups = [];
   let pressureReadBindGroups = [];
@@ -6360,6 +6530,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
+    destroyFireIrradianceResources();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
@@ -7452,7 +7623,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
       }
       if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
-        requiredLimits.maxStorageBuffersPerShaderStage = 9;
+        // Grant the adapter's own capacity: the fluid pipeline layouts declare
+        // 10 compute-visible storage buffers and newer Chrome validates layout
+        // counts strictly, so the old hardcoded 9 broke pipeline creation.
+        requiredLimits.maxStorageBuffersPerShaderStage = adapter.limits.maxStorageBuffersPerShaderStage;
       }
       const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
       const deviceDescriptor = {};
@@ -8982,6 +9156,267 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
+  function fireLightFieldRequested() {
+    return controlsSnapshot.fireLightField === true;
+  }
+
+  function destroyFireIrradianceResources() {
+    if (irradianceLatticeBuffers) for (const buffer of irradianceLatticeBuffers) buffer?.destroy?.();
+    irradianceAtlasTexture?.destroy?.();
+    irradianceLatticeBuffers = null;
+    irradianceAtlasTexture = null;
+    irradianceBindGroups = null;
+    irradianceSeedPipeline = null;
+    irradiancePropagatePipeline = null;
+    irradianceResolvePipeline = null;
+    irradianceResourcesKey = null;
+  }
+
+  function ensureFireIrradianceResources() {
+    if (!device || !shader || !boundarySidecarReadBindGroupLayout) return false;
+    const key = `${gridSize}:${irradianceGridSize}`;
+    if (irradianceResourcesKey === key && irradianceSeedPipeline && irradianceAtlasTexture) return true;
+    destroyFireIrradianceResources();
+    const latticeBytes = irradianceLatticeBufferBytes(irradianceGridSize);
+    irradianceLatticeBuffers = [0, 1].map(index => device.createBuffer({
+      label: `kaminos ${FIRE_IRRADIANCE_LATTICE_IDENTITY} lattice ${index}`,
+      size: latticeBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    }));
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    irradianceAtlasTexture = device.createTexture({
+      label: `kaminos ${FIRE_IRRADIANCE_ATLAS_IDENTITY} atlas`,
+      size: {
+        width: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
+        height: irradianceGridSize * atlasTilesY,
+        depthOrArrayLayers: 1,
+      },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    irradianceLatticeBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos fire irradiance lattice bind group layout',
+      entries: [
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba16float', viewDimension: '2d' } },
+      ],
+    });
+    irradiancePipelineLayout = device.createPipelineLayout({
+      label: 'kaminos fire irradiance pipeline layout',
+      bindGroupLayouts: [boundarySidecarReadBindGroupLayout, irradianceLatticeBindGroupLayout],
+    });
+    const atlasView = irradianceAtlasTexture.createView();
+    irradianceBindGroups = [0, 1].map(index => device.createBindGroup({
+      label: `kaminos fire irradiance lattice bind group dst${index}`,
+      layout: irradianceLatticeBindGroupLayout,
+      entries: [
+        { binding: 1, resource: { buffer: irradianceLatticeBuffers[index] } },
+        { binding: 2, resource: { buffer: irradianceLatticeBuffers[1 - index] } },
+        { binding: 3, resource: atlasView },
+      ],
+    }));
+    const irradiancePipelineConstants = { GRID: gridSize, IRRADIANCE_GRID: irradianceGridSize };
+    irradianceSeedPipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance seed ${gridSize}^3 to ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceSeed', constants: irradiancePipelineConstants },
+    });
+    irradiancePropagatePipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance propagate ${irradianceGridSize}^3`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradiancePropagate', constants: irradiancePipelineConstants },
+    });
+    irradianceResolvePipeline = device.createComputePipeline({
+      label: `kaminos fire irradiance resolve ${irradianceGridSize}^3 atlas`,
+      layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csIrradianceResolve', constants: irradiancePipelineConstants },
+    });
+    irradianceResourcesKey = key;
+    irradianceAtlasGeneration += 1;
+    state.fireLightFieldGrid = irradianceGridSize;
+    state.fireLightFieldBytes = latticeBytes * 2
+      + irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X * irradianceGridSize * atlasTilesY * 8;
+    return true;
+  }
+
+  function encodeFireIrradianceLightField(encoder, options = {}) {
+    const requested = fireLightFieldRequested();
+    state.fireLightFieldRequested = requested;
+    state.fireLightFieldIdentity = FIRE_IRRADIANCE_LATTICE_IDENTITY;
+    if (!requested) {
+      state.fireLightFieldEffective = false;
+      state.fireLightFieldReason = 'fire-light-field-route-not-requested';
+      return false;
+    }
+    if (!ensureFireIrradianceResources()) {
+      state.fireLightFieldEffective = false;
+      state.fireLightFieldReason = 'fire-light-field-resources-unavailable';
+      return false;
+    }
+    const readBindGroup = options.readBindGroup || boundarySidecarReadBindGroups[currentFluid];
+    const latticeWorkgroups = Math.ceil(irradianceGridSize / 4);
+    const seedPass = encoder.beginComputePass({
+      label: 'kaminos fire irradiance seed pass',
+      ...(options.seedTimestampWrites ? { timestampWrites: options.seedTimestampWrites } : {}),
+    });
+    seedPass.setPipeline(irradianceSeedPipeline);
+    seedPass.setBindGroup(0, readBindGroup);
+    seedPass.setBindGroup(1, irradianceBindGroups[0]);
+    seedPass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+    seedPass.end();
+    const propagatePass = encoder.beginComputePass({
+      label: `kaminos ${FIRE_IRRADIANCE_PROPAGATION_IDENTITY} pass`,
+      ...(options.propagationTimestampWrites ? { timestampWrites: options.propagationTimestampWrites } : {}),
+    });
+    propagatePass.setPipeline(irradiancePropagatePipeline);
+    propagatePass.setBindGroup(0, readBindGroup);
+    for (let round = 0; round < FIRE_IRRADIANCE_PROPAGATION_ROUNDS; round += 1) {
+      propagatePass.setBindGroup(1, irradianceBindGroups[(round + 1) % 2]);
+      propagatePass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroups, latticeWorkgroups);
+    }
+    propagatePass.end();
+    // With an even round count the final lattice lives in buffer 0, which is
+    // bound as irradianceSrc inside bind group 1.
+    const resolveReadGroup = irradianceBindGroups[FIRE_IRRADIANCE_PROPAGATION_ROUNDS % 2 === 0 ? 1 : 0];
+    const resolvePass = encoder.beginComputePass({
+      label: 'kaminos fire irradiance atlas resolve pass',
+      ...(options.resolveTimestampWrites ? { timestampWrites: options.resolveTimestampWrites } : {}),
+    });
+    resolvePass.setPipeline(irradianceResolvePipeline);
+    resolvePass.setBindGroup(0, readBindGroup);
+    resolvePass.setBindGroup(1, resolveReadGroup);
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    resolvePass.dispatchWorkgroups(
+      Math.ceil((irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X) / 8),
+      Math.ceil((irradianceGridSize * atlasTilesY) / 8),
+      1
+    );
+    resolvePass.end();
+    state.fireLightFieldEffective = true;
+    state.fireLightFieldReason = null;
+    state.fireLightFieldPropagationRounds = FIRE_IRRADIANCE_PROPAGATION_ROUNDS;
+    state.fireLightFieldPropagationIdentity = FIRE_IRRADIANCE_PROPAGATION_IDENTITY;
+    state.fireLightFieldLastBuiltFrame = state.frameCount;
+    state.fireLightFieldFrameCount = (state.fireLightFieldFrameCount || 0) + 1;
+    state.fireLightFieldGeneration = irradianceAtlasGeneration;
+    state.fireLightFieldProducedAtMs = performance.now();
+    return true;
+  }
+
+  function fireIrradianceLightField() {
+    const requested = fireLightFieldRequested();
+    const atlasTilesY = Math.ceil(irradianceGridSize / FIRE_IRRADIANCE_ATLAS_TILES_X);
+    const base = {
+      identity: FIRE_IRRADIANCE_ATLAS_IDENTITY,
+      latticeIdentity: FIRE_IRRADIANCE_LATTICE_IDENTITY,
+      propagationIdentity: FIRE_IRRADIANCE_PROPAGATION_IDENTITY,
+      requested,
+      device: gpuInitialized ? device : null,
+      deviceIdentity: configuredSharedGpuContext?.identity ?? null,
+      grid: irradianceGridSize,
+      tilesX: FIRE_IRRADIANCE_ATLAS_TILES_X,
+      tilesY: atlasTilesY,
+      atlasWidth: irradianceGridSize * FIRE_IRRADIANCE_ATLAS_TILES_X,
+      atlasHeight: irradianceGridSize * atlasTilesY,
+      worldMin: [-1, -1, -1],
+      worldMax: [1, 1, 1],
+      worldBoundsAuthority: 'raymarch-unit-box-shared-camera-world-v0',
+      generation: irradianceAtlasGeneration,
+      builtFrame: state.fireLightFieldLastBuiltFrame ?? null,
+      frameCount: state.fireLightFieldFrameCount || 0,
+      producedAtMs: state.fireLightFieldProducedAtMs ?? null,
+      cpuReadbackAuthority: false,
+      fallbackAuthority: false,
+      canvasAuthority: false,
+    };
+    if (!requested) {
+      return { ...base, status: 'inactive', reason: 'fire-light-field-route-not-requested', atlasTexture: null };
+    }
+    if (!gpuInitialized || !irradianceAtlasTexture || !state.fireLightFieldEffective) {
+      return {
+        ...base,
+        status: 'unavailable',
+        reason: state.fireLightFieldReason || 'fire-light-field-not-built-yet',
+        atlasTexture: null,
+      };
+    }
+    return { ...base, status: 'effective', reason: null, atlasTexture: irradianceAtlasTexture };
+  }
+
+  async function sampleFireLightFieldGpuProfile() {
+    const profile = {
+      identity: FIRE_LIGHT_FIELD_GPU_PROFILE_IDENTITY,
+      timestampStatus: 'unsupported',
+      reason: null,
+      stages: [],
+    };
+    if (!gpuInitialized || !device) {
+      profile.reason = 'gpu-not-initialized';
+      return profile;
+    }
+    if (!device.features?.has?.('timestamp-query')) {
+      profile.reason = 'timestamp-query-not-supported';
+      return profile;
+    }
+    if (!fireLightFieldRequested()) {
+      profile.reason = 'fire-light-field-route-not-requested';
+      return profile;
+    }
+    if (!ensureFireIrradianceResources()) {
+      profile.reason = 'fire-light-field-resources-unavailable';
+      return profile;
+    }
+    const queryCount = 6;
+    const querySet = device.createQuerySet({ type: 'timestamp', count: queryCount });
+    const resolveBuffer = device.createBuffer({
+      label: 'kaminos fire light field profile resolve',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: 'kaminos fire light field profile readback',
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos fire light field gpu profile' });
+      const encoded = encodeFireIrradianceLightField(encoder, {
+        seedTimestampWrites: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+        propagationTimestampWrites: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+        resolveTimestampWrites: { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
+      });
+      if (!encoded) {
+        profile.reason = state.fireLightFieldReason || 'fire-light-field-encode-unavailable';
+        return profile;
+      }
+      encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      let invalid = false;
+      for (const value of timestamps) {
+        if (value === 0n) invalid = true;
+      }
+      const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      profile.timestampStatus = invalid ? 'invalid-zero-timestamp' : 'sampled';
+      profile.stages = [
+        { name: 'irradiance-seed', gpuMs: nsToMs(1, 0) },
+        { name: 'irradiance-propagation', gpuMs: nsToMs(3, 2), rounds: FIRE_IRRADIANCE_PROPAGATION_ROUNDS },
+        { name: 'irradiance-resolve', gpuMs: nsToMs(5, 4) },
+      ];
+      profile.grid = irradianceGridSize;
+      profile.sourceGrid = gridSize;
+      return profile;
+    } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
   function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
@@ -9573,6 +10008,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           readBindGroup: selectiveMajorant,
           force: state.selectiveHeadLiveEffectiveRole !== 'off',
         });
+        encodeFireIrradianceLightField(encoder);
       }
       const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
       const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
@@ -13653,6 +14089,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     canvasElement() {
       return canvas;
     },
+    fireIrradianceLightField,
+    sampleFireLightFieldGpuProfile,
     sampleFrame,
     sampleLiquidFireContactConsumer,
     sampleDeterministicReplayFrame,
