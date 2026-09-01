@@ -78,48 +78,129 @@ assert.match(
   'transported fire structure must respect the visible-detail amplitude quarantine',
 );
 
-const pyroStateUpdate = sourceBetween(
-  core,
-  'function updatePyroDynamicDetailState({ simReadback = null, inputKind = \'control-proxy\' } = {}) {',
-  '\n  let adapter = null;',
-);
+function assertRetiredPyroBoundary(source) {
+  const pyroStateUpdate = sourceBetween(
+    source,
+    'function updatePyroDynamicDetailState({ simReadback = null, inputKind = \'control-proxy\' } = {}) {',
+    '\n  let adapter = null;',
+  );
 
-assert.doesNotMatch(
-  pyroStateUpdate,
-  /Math\.(?:sin|cos)\s*\(/,
-  'renderer-adjacent Pyro state must not synthesize a self-advancing periodic atlas',
-);
-assert.doesNotMatch(
-  core,
-  /fn\s+samplePyroMaterialMemoryCell\b/,
-  'the synthetic Pyro atlas sampler must be removed from shader authority',
-);
-assert.doesNotMatch(
-  core,
-  /u\.pyro_detail_cells\s*\[/,
-  'the reserved Pyro uniform slots must not regain shader authority through a renamed sampler or inline read',
-);
-assert.doesNotMatch(
-  core,
-  /identity:\s*'pyro-material-memory-spatial-coupling-v0'|updateRule:\s*'pyro-cellular-detail-memory-deterministic-ca-v0'|(?:materialShaderReadiness|shaderReadiness):\s*'blocked-reset'/,
-  'initial and live receipts must not advertise retired spatial-atlas authority',
-);
-for (const componentOffset of [88, 89, 90, 91]) {
+  assert.doesNotMatch(
+    pyroStateUpdate,
+    /Math\.(?:sin|cos)\s*\(/,
+    'renderer-adjacent Pyro state must not synthesize a self-advancing periodic atlas',
+  );
+  assert.doesNotMatch(
+    source,
+    /fn\s+samplePyroMaterialMemoryCell\b/,
+    'the synthetic Pyro atlas sampler must be removed from shader authority',
+  );
+  assert.equal(
+    [...source.matchAll(/\bpyro_detail_cells\b/g)].length,
+    1,
+    'the reserved Pyro field name may occur only in its uniform-layout declaration; expression access and aliases are forbidden',
+  );
   assert.match(
-    core,
-    new RegExp(`uniforms\\[${componentOffset} \\+ memoryIndex \\* 4\\] = 0;`),
-    `reserved Pyro uniform component ${componentOffset - 88} must remain zero`,
+    source,
+    /^\s*pyro_detail_cells:\s*array<vec4<f32>,\s*24>,\s*$/m,
+    'the one reserved Pyro field occurrence must remain the exact compatibility declaration',
+  );
+  assert.doesNotMatch(
+    source,
+    /identity:\s*'pyro-material-memory-spatial-coupling-v0'|updateRule:\s*'pyro-cellular-detail-memory-deterministic-ca-v0'|(?:materialShaderReadiness|shaderReadiness):\s*'blocked-reset'/,
+    'initial and live receipts must not advertise retired spatial-atlas authority',
+  );
+
+  const reservedWrites = [...source.matchAll(/uniforms\s*\[([^\]]+)\]\s*=\s*([^;]+);/g)]
+    .map(match => ({ expression: match[1].replace(/\s+/g, ''), value: match[2].trim() }))
+    .filter(({ expression }) => /\b(?:88|89|90|91)\b/.test(expression));
+  assert.deepEqual(
+    reservedWrites,
+    [88, 89, 90, 91].map(offset => ({ expression: `${offset}+memoryIndex*4`, value: '0' })),
+    'reserved Pyro upload destinations must have exactly one per-cell zero write each and no later overwrite',
+  );
+
+  const receiptSlices = [
+    {
+      name: 'initial renderer coupling',
+      source: sourceBetween(source, '    pyroMaterialRendererCoupling: {', '    pressureTierDispatches: [],'),
+      readinessField: 'materialShaderReadiness',
+      requireUploadedCells: true,
+    },
+    {
+      name: 'initial material-memory projection',
+      source: sourceBetween(source, '    pyroDynamicDetail: {', '    lastFrameEnergy: 0,'),
+      readinessField: 'shaderReadiness',
+      requireUploadedCells: false,
+    },
+    {
+      name: 'rebuilt material-memory projection',
+      source: sourceBetween(source, '  function buildPyroDynamicDetailMaterialMemory({', '  function updatePyroDynamicDetailState({'),
+      readinessField: 'shaderReadiness',
+      requireUploadedCells: false,
+    },
+    {
+      name: 'live renderer coupling',
+      source: sourceBetween(source, '    state.pyroMaterialRendererCoupling = {', '    state.runtimeQualityRequested ='),
+      readinessField: 'materialShaderReadiness',
+      requireUploadedCells: true,
+    },
+  ];
+  for (const receipt of receiptSlices) {
+    const readinessValues = [...receipt.source.matchAll(
+      new RegExp(`${receipt.readinessField}:\\s*'([^']+)'`, 'g'),
+    )].map(match => match[1]);
+    assert.deepEqual(
+      readinessValues,
+      ['retired-synthetic-atlas'],
+      `${receipt.name} must independently declare retired synthetic-atlas readiness exactly once`,
+    );
+    if (receipt.requireUploadedCells) {
+      const uploadedCellValues = [...receipt.source.matchAll(/uploadedCells:\s*([^,\n}]+)/g)]
+        .map(match => match[1].trim());
+      assert.deepEqual(
+        uploadedCellValues,
+        ['0'],
+        `${receipt.name} must independently fail closed on synthetic atlas uploads`,
+      );
+    }
+  }
+}
+
+assertRetiredPyroBoundary(core);
+
+const retiredPyroMutations = [
+  [
+    'aliased reserved-array read',
+    source => source.replace(
+      'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {',
+      `fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
+  let renamedReservedCells = u.pyro_detail_cells;
+  let leakedReservedCell = renamedReservedCells[0u];`,
+    ),
+  ],
+  [
+    'post-zero nonzero overwrite',
+    source => source.replace(
+      '      uniforms[91 + memoryIndex * 4] = 0;',
+      `      uniforms[91 + memoryIndex * 4] = 0;
+      uniforms[91 + memoryIndex * 4] = pyroMaterialEnergy;`,
+    ),
+  ],
+  [
+    'single-projection receipt drift',
+    source => source.replace(
+      "      materialShaderReadiness: 'retired-synthetic-atlas',",
+      "      materialShaderReadiness: 'active-synthetic-atlas',",
+    ),
+  ],
+];
+
+for (const [name, mutate] of retiredPyroMutations) {
+  assert.throws(
+    () => assertRetiredPyroBoundary(mutate(core)),
+    `${name} must violate the retired Pyro semantic boundary`,
   );
 }
-assert.match(
-  core,
-  /materialShaderReadiness:\s*'retired-synthetic-atlas'/,
-  'runtime receipts must state that synthetic atlas sampling is retired',
-);
-assert.match(
-  core,
-  /uploadedCells:\s*0/,
-  'runtime receipts must fail closed on synthetic atlas uploads',
-);
 
 console.log('volume raymarch periodicity contracts passed');
