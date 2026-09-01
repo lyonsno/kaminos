@@ -6076,21 +6076,19 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   return result.color;
 }
 
-fn kilnVisibleSourceCoverage(result: RaymarchResult, displayRadiance: vec3<f32>) -> f32 {
-  let fireInterfaceSignal = max(result.residualFeature.y, result.residualFeature.z);
-  let smokePresentation = 1.0 - clamp(u.boundary_fire_display.z, 0.0, 1.0);
-  let smokeSignal = result.residualFeature.w * smokePresentation;
-  let radianceSignal = max(displayRadiance.r, max(displayRadiance.g, displayRadiance.b)) * 0.18;
-  return smoothstep(0.02, 0.12, max(max(fireInterfaceSignal, smokeSignal), radianceSignal));
+fn kilnVisibleSourceCoverage(displayRadiance: vec3<f32>) -> f32 {
+  let radiancePeak = max(displayRadiance.r, max(displayRadiance.g, displayRadiance.b));
+  let radianceLuma = dot(displayRadiance, vec3<f32>(0.2126, 0.7152, 0.0722));
+  let visibleRadiance = max(radianceLuma, radiancePeak * 0.55);
+  return smoothstep(0.035, 0.18, visibleRadiance);
 }
 
 @fragment
 fn fsKilnCompositeSource(in: VSOut) -> @location(0) vec4<f32> {
   let result = raymarchVolume(in, 1.0e6);
-  let rawAlpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let displayRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
-  let coverage = kilnVisibleSourceCoverage(result, displayRadiance);
-  return vec4<f32>(displayRadiance * coverage, rawAlpha * coverage);
+  let coverage = kilnVisibleSourceCoverage(displayRadiance);
+  return vec4<f32>(displayRadiance * coverage, coverage);
 }
 
 @fragment

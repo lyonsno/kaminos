@@ -7,43 +7,33 @@ const index = readFileSync(new URL('index.html', root), 'utf8');
 
 function assertKilnVisibleSourceCoverageContract(source) {
   const coverageBody = source.match(
-    /fn kilnVisibleSourceCoverage\(result: RaymarchResult, displayRadiance: vec3<f32>\) -> f32 \{([\s\S]*?)\n\}/,
+    /fn kilnVisibleSourceCoverage\(displayRadiance: vec3<f32>\) -> f32 \{([\s\S]*?)\n\}/,
   )?.[1];
   assert.ok(coverageBody, 'kiln visible-source coverage helper is missing');
   assert.match(
     coverageBody,
-    /let fireInterfaceSignal = max\(result\.residualFeature\.y, result\.residualFeature\.z\);/,
-    'coverage helper admits fire and interface authority',
+    /let radiancePeak = max\(displayRadiance\.r, max\(displayRadiance\.g, displayRadiance\.b\)\);/,
+    'coverage derives peak support from displayed radiance',
   );
   assert.match(
     coverageBody,
-    /let smokePresentation = 1\.0 - clamp\(u\.boundary_fire_display\.z, 0\.0, 1\.0\);/,
-    'effective Smoke Off suppresses smoke-only coverage',
+    /let radianceLuma = dot\(displayRadiance, vec3<f32>\(0\.2126, 0\.7152, 0\.0722\)\);/,
+    'coverage derives perceptual support from displayed radiance',
+  );
+  assert.match(
+    coverageBody,
+    /let visibleRadiance = max\(radianceLuma, radiancePeak \* 0\.55\);/,
+    'coverage preserves narrow hot color even when luminance is lower',
+  );
+  assert.match(
+    coverageBody,
+    /return smoothstep\(0\.035, 0\.18, visibleRadiance\);/,
+    'coverage rejects the dim evolved carrier and admits displayed flame radiance',
   );
   assert.doesNotMatch(
     coverageBody,
-    /let smokePresentation = clamp\(u\.boundary_fire_display\.z, 0\.0, 1\.0\);/,
-    'smoke coverage polarity cannot be inverted',
-  );
-  assert.match(
-    coverageBody,
-    /let smokeSignal = result\.residualFeature\.w \* smokePresentation;/,
-    'smoke authority is gated by effective smoke presentation',
-  );
-  assert.match(
-    coverageBody,
-    /let radianceSignal = max\(displayRadiance\.r, max\(displayRadiance\.g, displayRadiance\.b\)\) \* 0\.18;/,
-    'visible radiance support is bounded by the declared display-radiance expression',
-  );
-  assert.doesNotMatch(
-    coverageBody,
-    /let radianceSignal = 1\.0;/,
-    'radiance support cannot become an always-on coverage source',
-  );
-  assert.match(
-    coverageBody,
-    /return smoothstep\(0\.02, 0\.12, max\(max\(fireInterfaceSignal, smokeSignal\), radianceSignal\)\);/,
-    'coverage combines the admitted optical support signals through the declared matte transition',
+    /result\.|residualFeature|transmittance|boundary_fire_display/,
+    'smoke-off kiln opacity cannot be reopened by broad simulation support or extinction',
   );
 
   const sourceBody = source.match(
@@ -52,13 +42,18 @@ function assertKilnVisibleSourceCoverageContract(source) {
   assert.ok(sourceBody, 'kiln composite source entry point is missing');
   assert.match(
     sourceBody,
-    /let coverage = kilnVisibleSourceCoverage\(result, displayRadiance\);/,
+    /let coverage = kilnVisibleSourceCoverage\(displayRadiance\);/,
     'kiln source obtains coverage from the admitted helper',
   );
   assert.match(
     sourceBody,
-    /return vec4<f32>\(displayRadiance \* coverage, rawAlpha \* coverage\);/,
-    'one computed coverage scales both premultiplied radiance and opacity',
+    /return vec4<f32>\(displayRadiance \* coverage, coverage\);/,
+    'one radiance-derived coverage owns both premultiplication and source opacity',
+  );
+  assert.doesNotMatch(
+    sourceBody,
+    /rawAlpha|result\.transmittance|residualFeature/,
+    'smoke-off kiln source cannot derive opacity from broad extinction or simulation support',
   );
 }
 
@@ -67,10 +62,10 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
-function kilnCoverage({ fire = 0, interfaceAuthority = 0, smoke = 0, smokeSuppressed = 1, radiance = 0 } = {}) {
-  const fireInterfaceSignal = Math.max(fire, interfaceAuthority);
-  const smokeSignal = smoke * (1 - smokeSuppressed);
-  return smoothstep(0.02, 0.12, Math.max(fireInterfaceSignal, smokeSignal, radiance * 0.18));
+function kilnCoverage(displayRadiance = [0, 0, 0]) {
+  const radiancePeak = Math.max(...displayRadiance);
+  const radianceLuma = displayRadiance[0] * 0.2126 + displayRadiance[1] * 0.7152 + displayRadiance[2] * 0.0722;
+  return smoothstep(0.035, 0.18, Math.max(radianceLuma, radiancePeak * 0.55));
 }
 
 assert.match(
@@ -113,7 +108,7 @@ assert.doesNotMatch(
 assertKilnVisibleSourceCoverageContract(core);
 assert.throws(
   () => assertKilnVisibleSourceCoverageContract(core.replace(
-    'let coverage = kilnVisibleSourceCoverage(result, displayRadiance);',
+    'let coverage = kilnVisibleSourceCoverage(displayRadiance);',
     'let coverage = 1.0;',
   )),
   /obtains coverage from the admitted helper/,
@@ -121,28 +116,24 @@ assert.throws(
 );
 assert.throws(
   () => assertKilnVisibleSourceCoverageContract(core.replace(
-    'let smokePresentation = 1.0 - clamp(u.boundary_fire_display.z, 0.0, 1.0);',
-    'let smokePresentation = clamp(u.boundary_fire_display.z, 0.0, 1.0);',
+    'return smoothstep(0.035, 0.18, visibleRadiance);',
+    'return smoothstep(0.0, 0.001, visibleRadiance);',
   )),
-  /Smoke Off suppresses smoke-only coverage/,
-  'contract rejects inverted smoke presentation polarity',
+  /rejects the dim evolved carrier/,
+  'contract rejects a nearly always-on radiance matte',
 );
 assert.throws(
   () => assertKilnVisibleSourceCoverageContract(core.replace(
-    'let radianceSignal = max(displayRadiance.r, max(displayRadiance.g, displayRadiance.b)) * 0.18;',
-    'let radianceSignal = 1.0;',
+    'let coverage = kilnVisibleSourceCoverage(displayRadiance);',
+    'let coverage = kilnVisibleSourceCoverage(displayRadiance) + result.residualFeature.y;',
   )),
-  /visible radiance support is bounded/,
-  'contract rejects always-on radiance coverage',
+  /obtains coverage from the admitted helper/,
+  'contract rejects residual simulation support reconnected at the source entry point',
 );
-assert.equal(kilnCoverage(), 0, 'unsupported extinction contributes zero source coverage');
-assert.equal(kilnCoverage({ smoke: 0.5, smokeSuppressed: 1 }), 0, 'Smoke Off excludes smoke-only support');
-assert.ok(kilnCoverage({ smoke: 0.5, smokeSuppressed: 0 }) > 0, 'Smoke On admits smoke-only support');
-for (const smokeSuppressed of [0, 1]) {
-  assert.ok(kilnCoverage({ fire: 0.5, smokeSuppressed }) > 0, 'fire support is admitted in either smoke mode');
-  assert.ok(kilnCoverage({ interfaceAuthority: 0.5, smokeSuppressed }) > 0, 'interface support is admitted in either smoke mode');
-}
-const partialCoverage = kilnCoverage({ fire: 0.07 });
+assert.equal(kilnCoverage(), 0, 'zero displayed radiance contributes zero source coverage');
+assert.equal(kilnCoverage([0.01, 0.01, 0.01]), 0, 'dim evolved carrier remains transparent');
+assert.equal(kilnCoverage([1.0, 0.5, 0.1]), 1, 'bright displayed flame owns full source coverage');
+const partialCoverage = kilnCoverage([0.12, 0.06, 0.02]);
 assert.ok(partialCoverage > 0 && partialCoverage < 1, 'test fixture exercises partial coverage');
 assert.deepEqual(
   [...[0.3, 0.2, 0.1].map(channel => channel * partialCoverage), 0.5 * partialCoverage],
