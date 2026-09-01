@@ -46,6 +46,7 @@ import {
   PERSISTENT_COHORT_GPU_SOURCE_AUTHORITY,
   packPersistentSparseCohortGpuRows,
 } from './volume-persistent-sparse-cohort-gpu-consumer.mjs';
+import { kilnFixedCameraUniformData } from './kiln-fixed-camera-composition.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -6071,6 +6072,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
 }
 
 @fragment
+fn fsKilnCompositeSource(in: VSOut) -> @location(0) vec4<f32> {
+  let result = raymarchVolume(in, 1.0e6);
+  let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
+  let displayRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
+  return vec4<f32>(displayRadiance * alpha, alpha);
+}
+
+@fragment
 fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearWorldRaw = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
@@ -6100,6 +6109,80 @@ fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOut
   out.sharedNonRidge = result.sharedNonRidgeContribution;
   out.sharedComplete = result.sharedCompleteContribution;
   return out;
+}
+`;
+
+const KILN_FIXED_CAMERA_COMPOSITE_WGSL = /* wgsl */`
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+struct KilnCompositeUniforms {
+  fireCenterScale: vec4<f32>,
+  lightCenterRadiusIntensity: vec4<f32>,
+  ambientNormalAspectHeight: vec4<f32>,
+  lightColor: vec4<f32>,
+};
+
+@group(0) @binding(0) var fireFrame: texture_2d<f32>;
+@group(0) @binding(1) var plateFrame: texture_2d<f32>;
+@group(0) @binding(2) var normalFrame: texture_2d<f32>;
+@group(0) @binding(3) var frameSampler: sampler;
+@group(0) @binding(4) var<uniform> params: KilnCompositeUniforms;
+
+@vertex
+fn kilnCompositeVs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  let position = positions[vertexIndex];
+  var out: VertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+
+fn linearToSrgb(linear: vec3<f32>) -> vec3<f32> {
+  let low = linear * 12.92;
+  let high = 1.055 * pow(max(linear, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) - 0.055;
+  return select(high, low, linear <= vec3<f32>(0.0031308));
+}
+
+@fragment
+fn kilnCompositeFs(in: VertexOut) -> @location(0) vec4<f32> {
+  let plateUv = clamp(vec2<f32>(in.uv.x, 1.0 - in.uv.y), vec2<f32>(0.0), vec2<f32>(1.0));
+  let fireUv = (plateUv - params.fireCenterScale.xy) / params.fireCenterScale.zw + vec2<f32>(0.5);
+  var fire = vec4<f32>(0.0);
+  if (all(fireUv >= vec2<f32>(0.0)) && all(fireUv <= vec2<f32>(1.0))) {
+    fire = textureSampleLevel(fireFrame, frameSampler, fireUv, 0.0);
+  }
+
+  let plateLinear = textureSampleLevel(plateFrame, frameSampler, plateUv, 0.0).rgb;
+  let decodedNormal = textureSampleLevel(normalFrame, frameSampler, plateUv, 0.0).xyz * 2.0 - vec3<f32>(1.0);
+  let normal = normalize(vec3<f32>(
+    decodedNormal.x,
+    decodedNormal.y * params.ambientNormalAspectHeight.y,
+    decodedNormal.z
+  ));
+  let toLightUv = params.lightCenterRadiusIntensity.xy - plateUv;
+  let aspectDelta = vec2<f32>(toLightUv.x * params.ambientNormalAspectHeight.z, toLightUv.y);
+  let distanceToLight = length(aspectDelta);
+  let radius = max(params.lightCenterRadiusIntensity.z, 1.0e-4);
+  let falloff = smoothstep(radius, 0.0, distanceToLight);
+  let lightDirection = normalize(vec3<f32>(
+    aspectDelta.x,
+    -aspectDelta.y,
+    params.ambientNormalAspectHeight.w
+  ));
+  let normalResponse = max(dot(normal, lightDirection), 0.0);
+  let diffuse = params.lightCenterRadiusIntensity.w * falloff * (0.12 + 0.88 * normalResponse);
+  let lighting = vec3<f32>(params.ambientNormalAspectHeight.x) + params.lightColor.rgb * diffuse;
+  let litPlate = linearToSrgb(max(plateLinear * lighting, vec3<f32>(0.0)));
+  let composite = fire.rgb + litPlate * (1.0 - fire.a);
+  return vec4<f32>(composite, 1.0);
 }
 `;
 
@@ -7606,6 +7689,7 @@ export function createKaminosVolumePrototype({
   externalColorFormat = null,
   externalDepthFormat = 'depth24plus',
   externalProductTransform = { translate: [0, 0, 0], scale: 1 },
+  kilnFixedCameraComposition = null,
 }) {
   if (productFrameOwner !== 'prototype' && productFrameOwner !== 'caller') {
     throw new Error(`unsupported-product-frame-owner:${productFrameOwner}`);
@@ -7677,6 +7761,9 @@ export function createKaminosVolumePrototype({
       : null,
     productFrameDepthFormat: productFrameOwner === 'caller' ? externalDepthFormat : null,
     productFrameReceipt: null,
+    kilnFixedCameraComposition: kilnFixedCameraComposition
+      ? { ...kilnFixedCameraComposition, status: 'initializing' }
+      : null,
     volumePresentationModeRequestedRaw,
     volumePresentationModeRequested,
     volumePresentationModeEffective,
@@ -8226,6 +8313,18 @@ export function createKaminosVolumePrototype({
   let leanStockReadbackPipeline = null;
   let productRaymarchPipeline = null;
   let leanStockProductRaymarchPipeline = null;
+  let kilnFireSourcePipeline = null;
+  let leanStockKilnFireSourcePipeline = null;
+  let kilnCompositePipeline = null;
+  let kilnCompositeShader = null;
+  let kilnCompositeBindGroupLayout = null;
+  let kilnCompositePipelineLayout = null;
+  let kilnCompositeSampler = null;
+  let kilnCompositeUniformBuffer = null;
+  let kilnCompositePlateTexture = null;
+  let kilnCompositeNormalTexture = null;
+  let kilnCompositeBindGroup = null;
+  let kilnCompositeBindGroupFrameTexture = null;
   let debugRaymarchShaderSpecialization = 'auto';
   let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
@@ -9693,6 +9792,35 @@ export function createKaminosVolumePrototype({
       `kaminos volume readback lean-stock-direct-cell-raymarch-v0 ${gridSize}^3`,
       leanStockRenderPipelineConstants,
     );
+    if (kilnFixedCameraComposition) {
+      const makeKilnFireSourcePipeline = (label, constants) => device.createRenderPipeline({
+        label,
+        layout: pipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsKilnCompositeSource',
+          constants,
+          targets: [{ format: 'rgba8unorm' }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      kilnFireSourcePipeline = makeKilnFireSourcePipeline(
+        `kaminos kiln premultiplied raymarch source ${gridSize}^3`,
+        renderPipelineConstants,
+      );
+      leanStockKilnFireSourcePipeline = makeKilnFireSourcePipeline(
+        `kaminos kiln premultiplied lean-stock raymarch source ${gridSize}^3`,
+        leanStockRenderPipelineConstants,
+      );
+      kilnCompositePipeline = device.createRenderPipeline({
+        label: 'kaminos normal-lit fixed-camera kiln composite',
+        layout: kilnCompositePipelineLayout,
+        vertex: { module: kilnCompositeShader, entryPoint: 'kilnCompositeVs' },
+        fragment: { module: kilnCompositeShader, entryPoint: 'kilnCompositeFs', targets: [{ format }] },
+        primitive: { topology: 'triangle-list' },
+      });
+    }
     if (productFrameOwner === 'caller') {
       const makeProductRaymarchPipeline = (label, constants) => device.createRenderPipeline({
         label,
@@ -10155,6 +10283,89 @@ export function createKaminosVolumePrototype({
     emitStatus({ phase: reason });
   }
 
+  async function loadVerifiedKilnTexture(asset, { label, format: textureFormat }) {
+    const response = await fetch(asset.url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`kiln-asset-fetch-failed:${label}:${response.status}`);
+    const bytes = await response.arrayBuffer();
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => (
+      byte.toString(16).padStart(2, '0')
+    )).join('');
+    if (digest !== asset.sha256) {
+      throw new Error(`kiln-asset-sha256-mismatch:${label}:requested=${asset.sha256}:effective=${digest}`);
+    }
+    const bitmap = await createImageBitmap(new Blob([bytes], {
+      type: response.headers.get('content-type') || 'image/png',
+    }));
+    const texture = device.createTexture({
+      label: `kaminos kiln ${label} ${digest}`,
+      size: { width: bitmap.width, height: bitmap.height, depthOrArrayLayers: 1 },
+      format: textureFormat,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.copyExternalImageToTexture(
+      { source: bitmap },
+      { texture },
+      { width: bitmap.width, height: bitmap.height, depthOrArrayLayers: 1 },
+    );
+    const receipt = {
+      requestedUrl: asset.url,
+      effectiveUrl: response.url || asset.url,
+      requestedSha256: asset.sha256,
+      effectiveSha256: digest,
+      width: bitmap.width,
+      height: bitmap.height,
+      textureFormat,
+    };
+    bitmap.close?.();
+    return { texture, receipt };
+  }
+
+  async function initializeKilnFixedCameraComposition() {
+    if (!kilnFixedCameraComposition) return null;
+    const [plate, normal] = await Promise.all([
+      loadVerifiedKilnTexture(kilnFixedCameraComposition.plate, {
+        label: 'fixed-camera plate',
+        format: 'rgba8unorm-srgb',
+      }),
+      loadVerifiedKilnTexture(kilnFixedCameraComposition.normal, {
+        label: 'image-aligned normal',
+        format: 'rgba8unorm',
+      }),
+    ]);
+    kilnCompositePlateTexture = plate.texture;
+    kilnCompositeNormalTexture = normal.texture;
+    const uniformData = kilnFixedCameraUniformData(kilnFixedCameraComposition, {
+      plateWidth: plate.receipt.width,
+      plateHeight: plate.receipt.height,
+    });
+    kilnCompositeUniformBuffer = device.createBuffer({
+      label: 'kaminos kiln fixed-camera composite uniforms',
+      size: uniformData.byteLength,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(kilnCompositeUniformBuffer, 0, uniformData);
+    state.kilnFixedCameraComposition = {
+      ...kilnFixedCameraComposition,
+      status: 'effective',
+      assets: { plate: plate.receipt, normal: normal.receipt },
+      alignment: {
+        identity: 'normalized-uv-image-alignment-v0',
+        plateAspect: plate.receipt.width / plate.receipt.height,
+        plateDimensions: [plate.receipt.width, plate.receipt.height],
+        normalDimensions: [normal.receipt.width, normal.receipt.height],
+      },
+      renderer: {
+        identity: 'premultiplied-raymarch-plus-normal-lit-fixed-camera-plate-v0',
+        flameCount: 1,
+        fireSourcePass: 'transparent-premultiplied-raymarch-v0',
+        relightingPass: 'analytic-screen-space-normal-diffuse-v0',
+        geometryAuthority: 'none',
+        shadowAuthority: 'none',
+      },
+    };
+    return state.kilnFixedCameraComposition;
+  }
+
   async function ensureGpu() {
     if (device) return;
     if (!navigator.gpu) {
@@ -10265,6 +10476,15 @@ export function createKaminosVolumePrototype({
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
+    if (kilnFixedCameraComposition) {
+      kilnCompositeSampler = device.createSampler({
+        label: 'kaminos kiln fixed-camera composite sampler',
+        magFilter: 'linear',
+        minFilter: 'linear',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+    }
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
@@ -10294,6 +10514,20 @@ export function createKaminosVolumePrototype({
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
+    }
+    if (kilnFixedCameraComposition) {
+      kilnCompositeShader = device.createShaderModule({
+        label: 'kaminos normal-lit fixed-camera kiln composite wgsl',
+        code: KILN_FIXED_CAMERA_COMPOSITE_WGSL,
+      });
+      const kilnCompilationInfo = await kilnCompositeShader.getCompilationInfo();
+      const kilnCompilationErrors = kilnCompilationInfo.messages.filter(message => message.type === 'error');
+      if (kilnCompilationErrors.length > 0) {
+        const detail = kilnCompilationErrors
+          .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+          .join('\n');
+        throw new Error(`Kiln fixed-camera composite WGSL compilation failed:\n${detail}`);
+      }
     }
     boundarySplatShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_WGSL });
     const boundarySplatCompilationInfo = await boundarySplatShader.getCompilationInfo();
@@ -10579,6 +10813,18 @@ export function createKaminosVolumePrototype({
         },
       ],
     });
+    if (kilnFixedCameraComposition) {
+      kilnCompositeBindGroupLayout = device.createBindGroupLayout({
+        label: 'kaminos kiln fixed-camera composite bind group layout',
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+          { binding: 2, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+          { binding: 3, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+          { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        ],
+      });
+    }
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
@@ -10595,6 +10841,12 @@ export function createKaminosVolumePrototype({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
     });
+    if (kilnFixedCameraComposition) {
+      kilnCompositePipelineLayout = device.createPipelineLayout({
+        label: 'kaminos kiln fixed-camera composite pipeline layout',
+        bindGroupLayouts: [kilnCompositeBindGroupLayout],
+      });
+    }
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
@@ -10629,6 +10881,7 @@ export function createKaminosVolumePrototype({
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution);
+    await initializeKilnFixedCameraComposition();
     if (gridSize === 160) {
       selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
         device,
@@ -10686,6 +10939,8 @@ export function createKaminosVolumePrototype({
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
       browserResidualFeatureTextureSize = '';
+      kilnCompositeBindGroup = null;
+      kilnCompositeBindGroupFrameTexture = null;
     }
   }
 
@@ -10702,6 +10957,31 @@ export function createKaminosVolumePrototype({
     frameTextureSize = key;
     browserResidualBindGroup = null;
     browserResidualTextureKey = '';
+    kilnCompositeBindGroup = null;
+    kilnCompositeBindGroupFrameTexture = null;
+  }
+
+  function ensureKilnCompositeBindGroup() {
+    if (!kilnFixedCameraComposition) return null;
+    if (!frameTexture || !kilnCompositePlateTexture || !kilnCompositeNormalTexture || !kilnCompositeUniformBuffer) {
+      throw new Error('kiln-composite-resources-incomplete');
+    }
+    if (kilnCompositeBindGroup && kilnCompositeBindGroupFrameTexture === frameTexture) {
+      return kilnCompositeBindGroup;
+    }
+    kilnCompositeBindGroup = device.createBindGroup({
+      label: 'kaminos kiln fixed-camera composite bind group',
+      layout: kilnCompositeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: frameTexture.createView() },
+        { binding: 1, resource: kilnCompositePlateTexture.createView() },
+        { binding: 2, resource: kilnCompositeNormalTexture.createView() },
+        { binding: 3, resource: kilnCompositeSampler },
+        { binding: 4, resource: { buffer: kilnCompositeUniformBuffer } },
+      ],
+    });
+    kilnCompositeBindGroupFrameTexture = frameTexture;
+    return kilnCompositeBindGroup;
   }
 
   function ensureBoundarySplatHdrTexture() {
@@ -14815,7 +15095,10 @@ export function createKaminosVolumePrototype({
     const selectLean = leanStockEligible && debugRaymarchShaderSpecialization !== 'force-full';
     if (selectLean && targetPipeline === pipeline) effectivePipeline = leanStockPipeline;
     if (selectLean && targetPipeline === readbackPipeline) effectivePipeline = leanStockReadbackPipeline;
-    const effective = effectivePipeline === leanStockPipeline || effectivePipeline === leanStockReadbackPipeline
+    if (selectLean && targetPipeline === kilnFireSourcePipeline) effectivePipeline = leanStockKilnFireSourcePipeline;
+    const effective = effectivePipeline === leanStockPipeline
+      || effectivePipeline === leanStockReadbackPipeline
+      || effectivePipeline === leanStockKilnFireSourcePipeline
       ? 'lean-stock-direct-cell-raymarch-v0'
       : 'full-authored-raymarch-v0';
     state.raymarchShaderSpecialization = raymarchShaderSpecializationReceipt({ admission, effective });
@@ -14837,6 +15120,24 @@ export function createKaminosVolumePrototype({
     pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
+  }
+
+  function encodeKilnFixedCameraComposite(encoder, view) {
+    const bindGroup = ensureKilnCompositeBindGroup();
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos normal-lit fixed-camera kiln composite pass',
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(kilnCompositePipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+    return true;
   }
 
   function encodeProductSmokeRaymarch(encoder, colorView, sceneDepthView, bindGroup) {
@@ -15006,7 +15307,32 @@ export function createKaminosVolumePrototype({
         encodeBoundarySplats(encoder);
       }
       const currentTexture = context.getCurrentTexture();
-      if (boundarySplatRequested()) {
+      if (kilnFixedCameraComposition) {
+        if (boundarySplatRequested()) throw new Error('kiln-composition-requires-raymarch-only');
+        if (browserResidualCanApply()) throw new Error('kiln-composition-rejects-browser-residual');
+        ensureFrameTexture();
+        encodeDraw(
+          encoder,
+          frameTexture.createView(),
+          'kaminos kiln transparent premultiplied raymarch source pass',
+          kilnFireSourcePipeline,
+        );
+        encodeKilnFixedCameraComposite(encoder, currentTexture.createView());
+        state.volumeReconstructionStyle = 'normal-lit-fixed-camera-plate-v0';
+        state.kilnFixedCameraComposition = {
+          ...state.kilnFixedCameraComposition,
+          status: 'effective',
+          frameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          raymarchShaderSpecialization: state.raymarchShaderSpecialization,
+        };
+        recordBrowserResidualCost({ applied: false });
+        recordVolumePresentationApplication({
+          raymarchEncoded: true,
+          raymarchApplied: true,
+          compositionEffective: 'premultiplied-raymarch-plus-normal-lit-fixed-camera-plate-v0',
+        });
+      } else if (boundarySplatRequested()) {
         const composition = updateSelectiveHeadLiveCompositionState();
         let raymarchEncoded = false;
         let raymarchApplied = false;
@@ -21524,6 +21850,14 @@ export function createKaminosVolumePrototype({
       fourArmHeldStateResidualGrid = null;
       clearBoundarySplatLiveUnionCoefficientOverlay({ skipBindGroupRebuild: true, silent: true });
       frameTexture?.destroy();
+      kilnCompositePlateTexture?.destroy();
+      kilnCompositeNormalTexture?.destroy();
+      kilnCompositeUniformBuffer?.destroy();
+      kilnCompositePlateTexture = null;
+      kilnCompositeNormalTexture = null;
+      kilnCompositeUniformBuffer = null;
+      kilnCompositeBindGroup = null;
+      kilnCompositeBindGroupFrameTexture = null;
       boundarySplatHdrTexture?.destroy();
       boundarySplatOpticalTexture?.destroy();
       fourArmHeldStateLinearTexture?.destroy();

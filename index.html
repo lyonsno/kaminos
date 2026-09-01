@@ -2779,7 +2779,11 @@ import * as THREE from 'three';
 import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=fire-actor-parity-0722';
+import { createKaminosVolumePrototype } from './volume-core.js?v=kiln-fixed-camera-0901';
+import {
+  parseKilnFixedCameraComposition,
+  validateKilnFixedCameraCompositionRuntime,
+} from './kiln-fixed-camera-composition.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs';
 import { installFireActorLiveParitySurface } from './fire-actor-live-parity-browser.mjs';
 import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contract.mjs';
@@ -18449,12 +18453,26 @@ async function initKaminosVolumeRoute() {
     setVolumeControlValue('volume-phased-sway', params.get('volume_phased_sway'));
   }
   updateVolumeControlLabels();
+  const kilnFixedCameraCompositionRequest = parseKilnFixedCameraComposition(params);
+  const kilnMountControls = readVolumeControls();
+  const kilnFixedCameraComposition = validateKilnFixedCameraCompositionRuntime(
+    kilnFixedCameraCompositionRequest,
+    {
+      presetId: activeVolumeSettingsPresetReceipt?.presetId || null,
+      presetAuthority: params.get('settings_preset_authority'),
+      boundarySplats: kilnMountControls.boundarySplatMode !== 'off',
+      browserResidual: kilnMountControls.volumeResidualMode !== 'off',
+      productFrameOwner: 'prototype',
+    },
+  );
+  window.__kaminosKilnFixedCameraCompositionReceipt = kilnFixedCameraComposition;
   volumePrototype = createKaminosVolumePrototype({
     THREE,
     viewport: document.getElementById('viewport'),
     camera,
     controls,
     getControls: readVolumeControls,
+    kilnFixedCameraComposition,
     onStatus: status => {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
