@@ -37,5 +37,25 @@ assert.doesNotMatch(
   /pyroMemoryPattern/,
   'the retired periodic pyro-memory pattern must not remain as an alias',
 );
+assert.doesNotMatch(
+  raymarch,
+  /microDetailDomainWarp|microFilamentNoise|filamentNoise|shredNoise|fireNoise|curtainNoise/,
+  'production raymarch appearance must not call indirect periodic filament or domain-warp painters',
+);
+assert.doesNotMatch(
+  core,
+  /fn\s+microDetailDomainWarp\b|fn\s+microFilamentNoise\b/,
+  'presentation-only periodic helper functions must be removed rather than left as dormant authority',
+);
+assert.match(
+  raymarch,
+  /let\s+transportedCurtainStructure\s*=\s*clamp\(/,
+  'smoke curtain variation must derive from transported microdetail and material structure',
+);
+assert.match(
+  raymarch,
+  /let\s+transportedFireStructure\s*=\s*clamp\(/,
+  'fire variation must derive from transported reaction and interface structure',
+);
 
 console.log('volume raymarch periodicity contracts passed');

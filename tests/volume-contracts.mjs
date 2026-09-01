@@ -1071,7 +1071,7 @@ assert.match(core, /let\s+tallPlumeDetailPhaseAnchor\s*=\s*transportedDetailPhas
 assert.match(core, /rawDetailForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume detail force is phase-anchored before turbulence sampling');
 assert.match(core, /rawMicroForce\s*=\s*turbulentDetailForce\(tallPlumeDetailP\s*\*/, 'raw tall-plume micro force is phase-anchored before turbulence sampling');
 assert.match(core, /rawFineBreakup\s*=\s*fineScaleBreakup\(cellI,\s*tallPlumeDetailP,\s*tallPlumeDetailTime/, 'fine breakup samples the anchored tall-plume detail phase');
-assert.match(core, /microDetailDomainWarp\([^)]*detailCoherenceGain/, 'raymarch microdetail warp accepts a scene-gated detail coherence gain');
+assert.doesNotMatch(core, /fn\s+microDetailDomainWarp\b/, 'raymarch must not repaint transported detail through a presentation-only periodic domain warp');
 assert.match(core, /bonfireRadialFireLickBreakup/, 'bonfire fire-lick breakup uses radial source-local texture rather than one-sided directional combs');
 assert.match(core, /bonfireDetailLateralDamping/, 'bonfire detail forces damp non-wind lateral breakup so Shred/Fire Licks do not impersonate wind');
 assert.match(core, /bonfireAdvectionLateralDamping/, 'bonfire material advection damps hidden lateral slip unless explicit wind has authority');
@@ -1107,15 +1107,13 @@ assert.match(core, /volumeReconstructionStyle/, 'canvas uses an explicit reconst
 assert.match(core, /scaledSourceRadius/, 'fluid source scales fire size without relying only on screen zoom');
 assert.match(core, /scaledDetailFrequency/, 'raymarch detail frequency can increase so fire details read smaller');
 assert.match(core, /tallPlumeTransportedDetailFrequency/, 'tall plume decouples transported detail frequency from emitter scale');
-assert.match(core, /tallPlumeRenderDetailFrequency/, 'tall plume decouples raymarch detail frequency from emitter scale');
 assert.match(core, /detailDomain = vec3<f32>\(tallPlumeTransportedDetailFrequency/, 'transport detail domains use Fire Scale-decoupled frequency for tall plume');
-assert.match(core, /scaleDomain = vec3<f32>\(tallPlumeRenderDetailFrequency/, 'render detail domains use Fire Scale-decoupled frequency for tall plume');
+assert.doesNotMatch(core, /tallPlumeRenderDetailFrequency|scaleDomain = vec3<f32>/, 'Detail Scale must not drive a second presentation-only raymarch frequency domain');
 assert.match(core, /plumeRiseScale/, 'fluid sim has an explicit plume height/world-rise scale');
 assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multiply opacity or brightness accumulation');
-assert.match(core, /microDetailDomainWarp/, 'raymarch domain-warps visible microdetail so it does not phase-lock into diagonal bands');
-assert.match(core, /microFilamentNoise/, 'raymarch derives visible microdetail from multi-axis turbulent filament noise');
-assert.match(core, /bonfireCurtainBreakup/, 'bonfire raymarch breaks up visible column-aligned smoke curtains after transport evidence is satisfied');
-assert.match(core, /bonfireFireRenderBreakup/, 'bonfire fire raymarch uses transported fire/detail fields to break up the visible source plug');
+assert.doesNotMatch(core, /fn\s+microFilamentNoise\b/, 'raymarch must not paint periodic filament noise over transported material');
+assert.match(core, /transportedCurtainStructure/, 'bonfire smoke variation derives from transported microdetail and material structure');
+assert.match(core, /transportedFireStructure/, 'bonfire fire variation derives from transported reaction and interface structure');
 assert.match(core, /bonfireSpatialRayDephase/, 'bonfire raymarch uses deterministic spatial dephasing so no-temporal diagnostic captures do not phase-lock into vertical lanes');
 assert.doesNotMatch(core, /bonfireVisibleSourceRelief/, 'bonfire must not hide a smooth source plug by suppressing the render transfer after solver fire already exists');
 assert.match(core, /bonfireTransportedFireLumaShaper/, 'bonfire fire transfer compresses saturation through transported fire detail so solver breakup remains visible as luma variation');

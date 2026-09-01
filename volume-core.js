@@ -3443,34 +3443,6 @@ fn raymarchEarlyTermination(transmittance: f32) -> bool {
   return transmittance < 0.012;
 }
 
-fn microDetailDomainWarp(p: vec3<f32>, microLayer: vec4<f32>, fireLayer: vec4<f32>, material: vec4<f32>, velocity: vec3<f32>, time: f32, detailCoherenceGain: f32) -> vec3<f32> {
-  let carrier = clamp(
-    microLayer.x * 0.62
-      + microLayer.y * 1.08
-      + microLayer.z * 0.78
-      + microLayer.w * 0.30
-      + fireLayer.z * 0.28
-      + material.w * 0.18,
-    0.0,
-    2.6
-  );
-  let detailPhaseAnchor = transportedDetailPhaseAnchor(material, fireLayer, microLayer, 0.0, velocity, p) * clamp(detailCoherenceGain, 0.0, 1.0);
-  let coherentP = p + detailPhaseAnchor * 0.65;
-  let coherentTime = mix(time, time * 0.72 + dot(detailPhaseAnchor, vec3<f32>(1.1, -0.7, 0.9)), clamp(detailCoherenceGain, 0.0, 1.0));
-  let flow = normalize(velocity + turbulentDetailForce(coherentP * 1.31 + vec3<f32>(0.17, -0.11, 0.23), coherentTime * 0.47) * 0.16 + vec3<f32>(0.012, 0.019, -0.014));
-  let foldA = turbulentDetailForce(coherentP * 2.17 + flow * (0.42 + carrier * 0.34), coherentTime * 0.83);
-  let foldB = turbulentDetailForce(coherentP.yzx * 2.91 + vec3<f32>(carrier * 0.19, -carrier * 0.13, carrier * 0.17), coherentTime * 1.19);
-  return (foldA * 0.70 + foldB * 0.36 + flow * 0.24) * carrier * 0.038;
-}
-
-fn microFilamentNoise(p: vec3<f32>, warp: vec3<f32>, carrier: f32, velocity: vec3<f32>, time: f32) -> f32 {
-  let q = p + warp + velocity * 0.31;
-  let phaseA = dot(q, vec3<f32>(29.0, 17.0, -23.0)) + sin(dot(q.yzx, vec3<f32>(11.0, -19.0, 31.0)) + carrier * 2.7 + time * 2.3);
-  let phaseB = dot(q.zxy, vec3<f32>(-13.0, 37.0, 19.0)) + cos(dot(q, vec3<f32>(23.0, -7.0, 13.0)) - carrier * 1.9 - time * 3.1);
-  let cellNoise = hash31(floor((q + vec3<f32>(1.0)) * 28.0) + vec3<f32>(floor(time * 2.0)));
-  return clamp(0.50 + 0.25 * sin(phaseA) + 0.18 * sin(phaseB) + 0.14 * (cellNoise - 0.5), 0.12, 1.12);
-}
-
 fn boundarySupportAtCell(c: vec3<i32>, supportWeights: vec4<f32>) -> f32 {
   return boundarySupportFromSlots(readSlot(c, 0u), readSlot(c, 1u), readSlot(c, 2u), readSlot(c, 3u), readFrontField(c), supportWeights);
 }
@@ -4814,19 +4786,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   }
 
   let steps = select(clamp(u.viewport_steps_density.z, 24.0, 192.0), f32(GRID), fullGridCapture);
-  let fireScale = clamp(u.scale_controls.x, 0.35, 1.30);
-  let detailScale = clamp(u.scale_controls.y, 0.45, 3.20);
-  let plumeHeight = clamp(u.scale_controls.z, 0.70, 2.20);
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
   let tallPlumeRenderScene = step(0.5, renderSceneMode) * (1.0 - step(1.5, renderSceneMode));
-  let detailScaleArtifactQuarantine = tallPlumeRenderScene;
-  let visibleDetailOverlayGain = mix(1.0, 0.35, detailScaleArtifactQuarantine);
-  let physicalDetailScale = mix(detailScale, 1.0, detailScaleArtifactQuarantine);
-  let scaledDetailFrequency = clamp(physicalDetailScale / max(fireScale, 0.45), 0.55, 5.40);
-  let tallPlumeRenderDetailFrequency = mix(scaledDetailFrequency, 1.0, tallPlumeRenderScene);
-  let scaleDomain = vec3<f32>(tallPlumeRenderDetailFrequency, mix(1.0, 1.24, smoothstep(0.70, 2.20, plumeHeight)), tallPlumeRenderDetailFrequency);
   let canonicalRenderMode = clamp(u.canonical_render_motion_controls.x, 0.0, 1.0);
   let canonicalContentMode = clamp(u.canonical_render_motion_controls.z, 0.0, 2.0);
   let quenchVaporStrength = clamp(u.canonical_render_motion_controls.w, 0.0, 2.0);
@@ -5070,30 +5033,32 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       t = t + min(dtBase * emptySpanScale, max(0.0001, endT - t));
       continue;
     }
-    let detailP = p * scaleDomain;
-    let microWarp = microDetailDomainWarp(detailP, microLayer, fireLayer, material, state.xyz, u.cameraPos_time.w, tallPlumeRenderScene);
-    let detailCarrier = clamp(microTextureSignal + materialDetail * 0.22 + flameDetail * 0.18 + velMag * 0.36, 0.0, 2.8);
-    let filamentNoise = microFilamentNoise(detailP, microWarp, detailCarrier, state.xyz, u.cameraPos_time.w);
-    let shredNoise = microFilamentNoise(detailP.zxy + vec3<f32>(0.13, -0.21, 0.09), microWarp.yzx * 1.21, detailCarrier + interfaceShred * 1.7, state.zxy, u.cameraPos_time.w * 1.17 + 1.3);
-    let fireNoise = microFilamentNoise(detailP.yzx + vec3<f32>(-0.18, 0.07, 0.24), microWarp.zxy * 1.38, detailCarrier + fireLick * 2.1, state.yzx, u.cameraPos_time.w * 1.31 + 2.1);
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
     let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
     let rayStepOpacity = localDt * 3.65;
-    let curtainNoise = microFilamentNoise(
-      detailP.xzy + vec3<f32>(0.31, -0.17, 0.23),
-      microWarp.zxy + state.yzx * 0.38,
-      detailCarrier + smoke * 0.12,
-      state.yzx,
-      u.cameraPos_time.w * 0.73 + 2.9
+    let transportedCurtainStructure = clamp(
+      0.86
+        + smoothstep(0.012, 0.52, microSmoke + interfaceShred * 0.72 + materialDetail * 0.34) * 0.16,
+      0.72,
+      1.18
+    );
+    let transportedFireStructure = clamp(
+      0.72
+        + fireLick * 0.22
+        + flameDetail * 0.18
+        + interfaceShred * 0.10
+        + combustionFront * 0.08,
+      0.58,
+      1.32
     );
     let bonfireCurtainBreakup = mix(
       1.0,
-      clamp(0.91 + curtainNoise * 0.10, 0.64, 1.18),
+      transportedCurtainStructure,
       bonfireRenderScene * smoothstep(0.05, 0.62, smoke)
     );
     let bonfireFireRenderBreakup = mix(
       1.0,
-      clamp(0.78 + fireNoise * 0.22 + fireLick * 0.20 + flameDetail * 0.16 + interfaceShred * 0.10, 0.58, 1.32),
+      transportedFireStructure,
       bonfireRenderScene * smoothstep(0.035, 0.92, flame + flameDetail + fireLick)
     );
     let bonfireTransportedFireLumaShaper = mix(
@@ -5127,7 +5092,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.003, 0.24, flame + flameDetail * 0.74 + fireLick * 0.45 + heat * 0.55 + smokeDensity * 0.24 + microSmoke * 0.18)
         * smoothstep(0.02, 0.70, y)
-        * (0.84 + curtainNoise * 0.22),
+        * (0.84 + transportedCurtainStructure * 0.22),
       0.0,
       1.85
     );
@@ -5145,7 +5110,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       quenchVaporStrength
         * smoothstep(0.10, 1.08, quenchCoreHeatSignal)
         * smoothstep(0.0, 0.22, y)
-        * clamp(0.88 + fireNoise * 0.10, 0.68, 1.18),
+        * clamp(0.88 + transportedFireStructure * 0.10, 0.68, 1.18),
       0.0,
       1.0
     );
@@ -5331,9 +5296,9 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
     fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
     var alpha = clamp(visibleSmokeAlpha + fireAlpha, 0.0, 0.18);
-    let filament = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal)) * filamentNoise * visibleDetailOverlayGain;
-    let shredFilament = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12) * shredNoise * visibleDetailOverlayGain;
-    let fireFilament = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44)) * fireNoise * visibleDetailOverlayGain;
+    let materialStructure = smoothstep(0.014, 0.34, max(materialDetail * 0.66, microTextureSignal));
+    let shredStructure = smoothstep(0.004, 0.22, interfaceShred * 3.10 + fireLick * 0.50 + microSmoke * 0.12);
+    let fireStructure = smoothstep(0.008, 0.34, max(flameDetail * 0.72, fireLick * 2.25 + emberFleck * 0.44));
     let pyroMemoryCell = samplePyroMaterialMemoryCell(p);
     let pyroSpatialEnergy = clamp(pyroMemoryCell.x * pyroMemoryCell.y * pyroMemoryCell.z, 0.0, 1.0);
     let pyroBaseCarrier = pyroMaterialGain
@@ -5375,13 +5340,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       0.0,
       1.0
     );
-    let fineShadow = 0.48 + 0.64 * filament - 0.20 * shredFilament;
+    let fineShadow = 0.48 + 0.64 * materialStructure - 0.20 * shredStructure;
     let smokeCol = mix(
-      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredFilament * 0.26),
+      vec3<f32>(0.28, 0.38, 0.42) * fineShadow * (0.88 + bonfireRenderScene * (bonfireCurtainBreakup - 1.0) * 0.58) * (0.42 + min(0.78, velMag * 6.0) + shredStructure * 0.26),
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
-    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
+    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireStructure * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredStructure * 0.10) * bonfireTransportedFireLumaShaper;
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
@@ -5425,7 +5390,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       + boundaryFireColor * inspectBoundaryFireMask
     ) * (0.24 + inspectSignal * 1.85);
     let radianceEmission = baseRadianceEmission * stockRenderMode;
-    let smokeBacklight = fireColor(renderTemp * 0.72) * visibleSmokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireFilament * 0.10 * flameBodyAuthority);
+    let smokeBacklight = fireColor(renderTemp * 0.72) * visibleSmokeAlpha * glowGain * stockRenderMode * smoothstep(0.16, 1.25, renderTemp) * (0.13 + fireStructure * 0.10 * flameBodyAuthority);
     let shellSmokeBacklight = shellColor * shellRenderMode * visibleSmokeAlpha * shellSmokeCoupling * shellAlpha * 0.26;
     let fireMix = smoothstep(0.005, 0.052, fireAlpha) * smoothstep(0.08, 0.70, renderTemp);
     let pyroOwnedFireMode = step(1.5, pyroFireMode);
@@ -5770,8 +5735,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
       3.0
     );
     let pyroFlamePaintChroma = mix(
-      pyroFlameEdgeColor * (0.54 + renderTemp * 0.20 + fireFilament * 0.10),
-      pyroFlameCoreColor * (0.84 + rawTemp * 0.42 + fireFilament * 0.18),
+      pyroFlameEdgeColor * (0.54 + renderTemp * 0.20 + fireStructure * 0.10),
+      pyroFlameCoreColor * (0.84 + rawTemp * 0.42 + fireStructure * 0.18),
       smoothstep(0.22, 0.92, pyroRawFireMix + rawTemp * 0.20 + flameDetail * 0.22)
     );
     let pyroLocalLuma = max(dot(local, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.001);
@@ -5859,7 +5824,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let pyroDiagnosticPaintAlpha = clamp(pyroDiagnosticPaint * pyroDiagnosticSignal * (0.72 + pyroCarrierOverdrive * 0.055), 0.0, 1.0);
     alpha = clamp(alpha + pyroDiagnosticPaintAlpha * rayStepOpacity * 0.16, 0.0, 0.42);
     local = mix(local, pyroDiagnosticColor * (0.96 + pyroCarrierOverdrive * 0.045), clamp(pyroDiagnosticPaintAlpha * 1.28, 0.0, 1.0));
-    let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + filament * 0.18 + shredFilament * 0.12);
+    let vaporCol = vec3<f32>(0.78, 0.88, 0.92) * (0.76 + materialStructure * 0.18 + shredStructure * 0.12);
     local = mix(local, vaporCol, clamp(max(vaporCarrier * 0.92, quenchCoreCollapse * 0.62), 0.0, 0.96) * visibleSmokeAuthority);
     let diagnosticColor = mix(vec3<f32>(0.08, 0.72, 0.95), vec3<f32>(1.0, 0.18, 0.08), smoothstep(0.010, 0.085, divDebug)) * (0.35 + smoothstep(0.012, 0.18, curlDebug));
     local = mix(local, diagnosticColor, flowDebug * smoothstep(0.015, 0.12, curlDebug + divDebug));
