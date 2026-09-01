@@ -257,5 +257,30 @@ assert.match(
   /sourceBaselineImageSha256[\s\S]*?sourceImageSha256[\s\S]*?fullImageSha256[\s\S]*?assert\.equal\(report\.browserErrors\.length, 0/,
   'published image hashes and browser errors participate in the pass predicate',
 );
+assert.match(
+  browserWitness,
+  /function setPhase\(phase\) \{[\s\S]*?report\.phase = phase;[\s\S]*?writeReport\(\);[\s\S]*?\}[\s\S]*?writeReport\(\);\s*try \{/,
+  'the witness writes an initial report before browser work and persists every phase transition',
+);
+assert.match(
+  browserWitness,
+  /async function waitUntil\(predicate, description\)[\s\S]*?const remainingMs = deadlineMs - \(Date\.now\(\) - startedAt\)[\s\S]*?predicate\(remainingMs\)[\s\S]*?async function withinCallerDeadline\([\s\S]*?Promise\.race\([\s\S]*?caller deadline elapsed during/,
+  'each wait passes its caller-provided remaining deadline into awaited browser operations rather than a hidden cap',
+);
+assert.match(
+  browserWitness,
+  /const call = \(method, params = \{\}, budgetMs = deadlineMs\) => withinCallerDeadline\([\s\S]*?cdp\.call\(method, params\)[\s\S]*?await call\('Page\.enable'\)[\s\S]*?evaluate\(call,/,
+  'CDP setup and Runtime.evaluate calls use the bounded caller-deadline wrapper',
+);
+assert.doesNotMatch(
+  browserWitness,
+  /await cdp\.call\(/,
+  'no direct awaited CDP call may bypass the caller deadline',
+);
+assert.match(
+  browserWitness,
+  /catch \(error\) \{[\s\S]*?report\.status = 'failed';[\s\S]*?report\.failurePhase = report\.phase;[\s\S]*?writeReport\(\);/,
+  'failure reports retain the exact last persisted phase',
+);
 
 console.log('kiln fixed-camera renderer contracts passed');

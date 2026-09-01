@@ -64,6 +64,8 @@ const report = {
   schema: 'kaminos.kiln-fixed-camera-browser-alias-witness.v0',
   status: 'failed',
   phase: 'preflight',
+  failurePhase: null,
+  startedAt: new Date().toISOString(),
   requestedRoute: route,
   expectedCommit,
   deadlineMs,
@@ -77,6 +79,11 @@ function writeReport() {
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 }
 
+function setPhase(phase) {
+  report.phase = phase;
+  writeReport();
+}
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -88,11 +95,30 @@ function delay(ms) {
 async function waitUntil(predicate, description) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < deadlineMs) {
-    const value = await predicate();
+    const remainingMs = deadlineMs - (Date.now() - startedAt);
+    const value = await predicate(remainingMs);
     if (value) return value;
-    await delay(100);
+    await delay(Math.min(100, Math.max(1, remainingMs)));
   }
   throw new Error(`caller deadline elapsed waiting for ${description}`);
+}
+
+async function withinCallerDeadline(operation, description, budgetMs = deadlineMs) {
+  const effectiveBudgetMs = Math.max(1, Number(budgetMs));
+  let timeout = null;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(operation),
+      new Promise((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`caller deadline elapsed during ${description}`)),
+          effectiveBudgetMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== null) clearTimeout(timeout);
+  }
 }
 
 async function waitForCdp() {
@@ -208,12 +234,17 @@ const injectedProbe = String.raw`
 })();
 `;
 
-async function evaluate(call, expression) {
-  const result = await call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+async function evaluate(call, expression, budgetMs = deadlineMs) {
+  const result = await call(
+    'Runtime.evaluate',
+    { expression, returnByValue: true, awaitPromise: true },
+    budgetMs,
+  );
   if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Runtime.evaluate failed');
   return result.result.value;
 }
 
+writeReport();
 try {
   const runtimeResponse = await fetch(`${routeUrl.origin}/api/runtime-config`);
   assert.equal(runtimeResponse.ok, true, 'runtime config route failed');
@@ -221,7 +252,7 @@ try {
   assert.equal(report.runtime.source?.commit, expectedCommit, 'runtime source commit drifted');
   if (!allowDirty) assert.equal(report.runtime.source?.dirty, false, 'runtime source is dirty');
 
-  report.phase = 'browser-launch';
+  setPhase('browser-launch');
   const userDataDir = mkdtempSync('/tmp/kaminos-kiln-alias-witness-');
   browser = spawn(chrome, [
     `--remote-debugging-port=${port}`,
@@ -239,14 +270,19 @@ try {
   const cdp = connectCdp(page.webSocketDebuggerUrl);
   ws = cdp.socket;
   await cdp.opened;
-  await cdp.call('Page.enable');
-  await cdp.call('Runtime.enable');
-  await cdp.call('Log.enable');
-  await cdp.call('Page.addScriptToEvaluateOnNewDocument', { source: injectedProbe });
+  const call = (method, params = {}, budgetMs = deadlineMs) => withinCallerDeadline(
+    () => cdp.call(method, params),
+    `CDP ${method}`,
+    budgetMs,
+  );
+  await call('Page.enable');
+  await call('Runtime.enable');
+  await call('Log.enable');
+  await call('Page.addScriptToEvaluateOnNewDocument', { source: injectedProbe });
 
-  report.phase = 'initialization-suspended';
-  await cdp.call('Page.navigate', { url: route });
-  const suspended = await waitUntil(async () => evaluate(cdp.call, `(() => {
+  setPhase('initialization-suspended');
+  await call('Page.navigate', { url: route });
+  const suspended = await waitUntil(async remainingMs => evaluate(call, `(() => {
     const probe = window.__kilnAliasProbe;
     const state = window.__kaminosVolumePrototype?.debugState?.();
     if (!probe || probe.fetches.length < 1 || !state?.kilnFixedCameraComposition) return null;
@@ -257,7 +293,7 @@ try {
       statusAssignments: structuredClone(probe.statusAssignments),
       poisonedDebugProjection: state.kilnFixedCameraComposition,
     };
-  })()`), 'suspended kiln asset initialization');
+  })()`, remainingMs), 'suspended kiln asset initialization');
   report.suspended = suspended;
   assert.deepEqual(
     suspended.kilnAssignments.slice(0, 2).map(entry => entry.before?.status),
@@ -269,9 +305,9 @@ try {
     'initializing callback projection was not trapped',
   );
 
-  report.phase = 'asset-release';
-  await evaluate(cdp.call, 'window.__kilnAliasProbe.releaseFetches()');
-  const terminal = await waitUntil(async () => evaluate(cdp.call, `(() => {
+  setPhase('asset-release');
+  await evaluate(call, 'window.__kilnAliasProbe.releaseFetches()');
+  const terminal = await waitUntil(async remainingMs => evaluate(call, `(() => {
     const probe = window.__kilnAliasProbe;
     const fresh = window.__kaminosVolumePrototype?.debugState?.().kilnFixedCameraComposition;
     const firstFrame = [...(probe?.kilnAssignments || [])].reverse().find(entry => entry.before?.firstFrame)?.before;
@@ -283,7 +319,7 @@ try {
       freshDebugProjection: fresh,
       firstFrame,
     };
-  })()`), 'effective detached kiln receipt');
+  })()`, remainingMs), 'effective detached kiln receipt');
   report.terminal = terminal;
 
   const effective = terminal.freshDebugProjection;
@@ -303,8 +339,8 @@ try {
   assert.ok(statusPhases.includes('initializing'), 'detached initializing status projection was not observed');
   assert.ok(statusPhases.includes('effective'), 'detached effective status projection was not observed');
 
-  report.phase = 'source-pass-capture';
-  const sourcePair = await evaluate(cdp.call, `(async () => {
+  setPhase('source-pass-capture');
+  const sourcePair = await evaluate(call, `(async () => {
     const pair = await window.__kaminosVolumePrototype.sampleKilnSourceFramingPair({ includeRgba: true });
     if (!pair?.ok) throw new Error('kiln-source-pair-failed:' + (pair?.reason || 'unknown'));
     const encodeImage = sample => {
@@ -379,8 +415,8 @@ try {
     },
   };
 
-  report.phase = 'full-composition-capture';
-  const fullScreenshot = await cdp.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  setPhase('full-composition-capture');
+  const fullScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const fullImageBytes = Buffer.from(fullScreenshot.data || '', 'base64');
   assert.ok(fullImageBytes.length > 0, 'full composition capture produced an empty PNG');
   writeFileSync(fullImagePath, fullImageBytes);
@@ -393,14 +429,19 @@ try {
   };
   assert.equal(report.browserErrors.length, 0, 'browser emitted an exception or error log');
 
-  report.phase = 'complete';
   report.status = 'passed';
+  report.failurePhase = null;
+  report.finishedAt = new Date().toISOString();
+  setPhase('complete');
   report.reportSha256BeforeWrite = null;
   writeReport();
   report.reportSha256BeforeWrite = createHash('sha256').update(readFileSync(reportPath)).digest('hex');
   writeReport();
   console.log(`kiln fixed-camera browser alias witness passed: ${reportPath}`);
 } catch (error) {
+  report.status = 'failed';
+  report.failurePhase = report.phase;
+  report.finishedAt = new Date().toISOString();
   report.error = error?.stack || error?.message || String(error);
   writeReport();
   console.error(report.error);
