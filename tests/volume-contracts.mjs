@@ -2262,3 +2262,52 @@ assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom 
 assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
 assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
 assert.match(residualGreenroomRunner, /--residual-application-mask-mode/, 'Greenroom residual wrapper forwards residual application mask mode for inference-authority gate probes');
+
+// --- Fire irradiance light field: shared-device + same-state lattice contracts (Beaming 2026-08-31) ---
+// Static resource/dispatch contracts only. Visual acceptance evidence is owned by
+// the Visual-Contact PIP witness discipline and is deliberately NOT asserted here.
+
+// Shared GPU device factory and Three seating.
+assert.match(core, /export async function requestKaminosSharedWebGpuDevice\(/, 'volume core exports the shared Three/Pyro WebGPU device factory');
+assert.match(core, /kaminos-three-volume-shared-webgpu-device-v0/, 'shared device contract carries stable identity');
+assert.match(core, /single-explicit-device-three-and-volume-v0/, 'shared device contract names its single-device authority');
+assert.match(core, /maxStorageBuffersInFragmentStage/, 'shared device factory requests per-fragment-stage storage buffer limits for Three node materials');
+assert.match(index, /requestKaminosSharedWebGpuDevice/, 'index imports the shared device factory');
+assert.match(index, /new THREE\.WebGPURenderer\(\{[^}]*device:\s*sharedGpu\.device/, 'Three renderer is constructed on the shared GPUDevice when available');
+assert.match(index, /sharedGpuContext:\s*sharedGpu/, 'volume prototype is seated on the same shared GPU context');
+
+// Same-state, same-law irradiance lattice seed.
+assert.match(core, /override IRRADIANCE_GRID/, 'irradiance lattice grid size is a shader override, not a hardcoded constant');
+assert.match(core, /fn csIrradianceSeed/, 'irradiance lattice is seeded by a dedicated GPU compute entry point');
+assert.match(core, /fn csIrradiancePropagate/, 'irradiance lattice has a dedicated GPU propagation entry point');
+assert.match(core, /fn csIrradianceResolve/, 'irradiance lattice resolves into a sampleable atlas by a dedicated GPU entry point');
+assert.match(core, /fn csIrradianceSeed[\s\S]*?emissiveTemperature\([\s\S]*?fireRadianceEmission\(/, 'irradiance seed reuses the exact raymarch emissiveTemperature and fireRadianceEmission law rather than a reimplemented palette');
+assert.match(core, /fire-irradiance-lattice-32-same-state-rgb-v0/, 'irradiance lattice carries stable same-state identity');
+assert.match(core, /irradianceLatticeBufferBytes/, 'irradiance lattice has an explicit storage-buffer byte size');
+assert.match(core, /irradianceSeedPipeline/, 'irradiance seed has a dedicated compute pipeline');
+assert.match(core, /irradiancePropagatePipeline/, 'irradiance propagation has a dedicated compute pipeline');
+assert.match(core, /irradianceResolvePipeline/, 'irradiance resolve has a dedicated compute pipeline');
+assert.match(core, /encodeSim\(encoder\)[\s\S]*?encodeMajorant\(encoder[\s\S]*?encodeFireIrradianceLightField\(encoder/, 'frame encoding seeds the irradiance lattice from the freshly advanced fluid state after sim and majorant');
+
+// Native sampleable atlas export on the shared device.
+assert.match(core, /gpu-fire-irradiance-lattice-atlas-v0/, 'irradiance atlas export carries stable identity');
+assert.match(core, /fireIrradianceLightField\(\)/, 'volume prototype exposes the fire irradiance light field export surface');
+assert.match(core, /irradianceAtlasTexture\s*=\s*device\.createTexture\(\{[\s\S]*?format:\s*'rgba16float'/, 'irradiance atlas is an HDR rgba16float GPU texture');
+assert.match(core, /cpuReadbackAuthority:\s*false/, 'irradiance light field export forswears CPU readback authority');
+
+// GPU timestamp stages for the three incremental passes.
+assert.match(core, /sampleFireLightFieldGpuProfile/, 'fire light field exposes a GPU timestamp profile surface');
+assert.match(core, /'irradiance-seed'/, 'GPU profile names the seed stage');
+assert.match(core, /'irradiance-propagation'/, 'GPU profile names the propagation stage');
+assert.match(core, /'irradiance-resolve'/, 'GPU profile names the resolve stage');
+
+// Receiver evaluation in the Three/TSL post-forward composition.
+assert.match(index, /volume_light_field/, 'URL route gates the fire light field receiver pass');
+assert.match(index, /world-position-fire-light-field-receiver-pass-v0/, 'receiver pass carries stable world-position identity');
+assert.match(index, /createFireLightFieldReceiverPass/, 'receiver pass has a dedicated constructor in the scene composition');
+assert.match(index, /getViewPosition/, 'receiver pass reconstructs receiver position from scene depth');
+assert.match(index, /lightField\.device === sharedGpu\.device/, 'receiver pass rejects atlas textures from a mismatched GPUDevice');
+assert.match(index, /kaminosFireLightFieldDebugState/, 'fire light field exposes a window debug state surface');
+assert.match(index, /fireLightFieldStrength/, 'receiver pass has an explicit strength/mute uniform rather than an unconditional contribution');
+assert.match(index, /sceneProjectionMatrixInverse/, 'receiver pass binds the scene camera projection inverse explicitly; the output-pass TSL camera nodes resolve to the fullscreen quad camera and must not be used for unprojection');
+assert.match(index, /sceneCameraWorldMatrix\.value\.copy\(camera\.matrixWorld\)/, 'receiver pass refreshes scene-camera matrices every frame');

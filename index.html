@@ -2691,10 +2691,28 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=fire-light-field-0831';
+
+// One explicit GPUDevice shared by the Three scene renderer and the Pyro
+// volume simulator; seated in initScene before either consumer constructs.
+let sharedGpu = null;
+let sharedGpuFailureReason = null;
+let fireLightFieldPass = null;
+
+function isFireLightFieldRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('volume_light_field') === '1';
+}
+
+function isFireLightFieldIsolateRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('volume_light_field_isolate') === '1';
+}
+
+function isFireLightFieldTimingRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('volume_light_field_timing') === '1';
+}
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -8806,6 +8824,240 @@ const HDR_ENVS = {
 const envCache = {};
 
 // --- Three.js Setup ---
+// World-position fire light-field receiver pass. Samples the volume producer's
+// same-state RGB irradiance lattice atlas (native GPU texture on the shared
+// device) at the world position reconstructed from the scene prepass depth,
+// then adds the response to the post-AO scene color.
+// Identity: world-position-fire-light-field-receiver-pass-v0
+function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneNormalNode) {
+  const FIRE_LIGHT_FIELD_PASS_IDENTITY = 'world-position-fire-light-field-receiver-pass-v0';
+  const FIRE_LIGHT_FIELD_ATLAS_IDENTITY = 'gpu-fire-irradiance-lattice-atlas-v0';
+  const FIRE_LIGHT_FIELD_MASK_AUTHORITY = 'scene-prepass-depth-world-position-normal-material-v0';
+  const routeParams = new URLSearchParams(window.location.search);
+  const blackAtlasTexture = sharedGpu.device.createTexture({
+    label: 'kaminos fire light field black atlas placeholder',
+    size: { width: 1, height: 1, depthOrArrayLayers: 1 },
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const atlasExternalTexture = new THREE.ExternalTexture(blackAtlasTexture);
+  atlasExternalTexture.image = { width: 1, height: 1, depth: 1 };
+  atlasExternalTexture.format = THREE.RGBAFormat;
+  atlasExternalTexture.type = THREE.HalfFloatType;
+  atlasExternalTexture.colorSpace = THREE.NoColorSpace;
+  atlasExternalTexture.minFilter = THREE.LinearFilter;
+  atlasExternalTexture.magFilter = THREE.LinearFilter;
+  atlasExternalTexture.generateMipmaps = false;
+
+  const routeStrength = parseFloat(routeParams.get('volume_light_field_strength') ?? '');
+  const baseStrength = Number.isFinite(routeStrength) ? Math.max(0, routeStrength) : 1.0;
+  const debugView = routeParams.get('volume_light_field_debug') || '';
+  const fireLightFieldStrength = uniform(0.0);
+  const isolateMix = uniform(isFireLightFieldIsolateRoute(routeParams) ? 1.0 : 0.0);
+  const atlasGrid = uniform(32.0);
+  const atlasTilesX = uniform(8.0);
+  const atlasTexelSize = uniform(new THREE.Vector2(1 / 256, 1 / 128));
+
+  const atlasTextureNode = texture(atlasExternalTexture);
+  const depthSampleNode = sceneDepthNode.sample(viewportUV).r;
+  // The output pass renders with a fullscreen quad camera, so the TSL
+  // cameraProjectionMatrixInverse/cameraWorldMatrix nodes would resolve to the
+  // quad's ortho camera. Bind the scene camera's matrices explicitly and
+  // refresh them every frame in update(), the same way GTAO does.
+  const sceneProjectionMatrixInverse = uniform(new THREE.Matrix4());
+  const sceneCameraWorldMatrix = uniform(new THREE.Matrix4());
+  const viewPositionNode = getViewPosition(viewportUV, depthSampleNode, sceneProjectionMatrixInverse);
+  const worldPositionNode = sceneCameraWorldMatrix.mul(vec4(viewPositionNode, 1.0)).xyz;
+
+  // Trilinear sample of the 32^3 lattice through its 2D tile atlas. The
+  // lattice spans the raymarch's [-1,1]^3 shared-camera world box.
+  const latticeUvw = worldPositionNode.mul(0.5).add(vec3(0.5)).clamp(vec3(0.0), vec3(1.0));
+  const sliceCoord = latticeUvw.z.mul(atlasGrid).sub(0.5);
+  const slice0 = floor(sliceCoord).clamp(float(0.0), atlasGrid.sub(1.0));
+  const slice1 = slice0.add(1.0).clamp(float(0.0), atlasGrid.sub(1.0));
+  const sliceMix = sliceCoord.sub(slice0).clamp(0.0, 1.0);
+  const inTileTexel = latticeUvw.xy.mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+  const atlasUvForSlice = (sliceIndex) => {
+    const tileX = mod(sliceIndex, atlasTilesX);
+    const tileY = floor(sliceIndex.div(atlasTilesX));
+    return vec2(
+      tileX.mul(atlasGrid).add(inTileTexel.x),
+      tileY.mul(atlasGrid).add(inTileTexel.y)
+    ).mul(atlasTexelSize);
+  };
+  const latticeSample = mix(
+    atlasTextureNode.sample(atlasUvForSlice(slice0)),
+    atlasTextureNode.sample(atlasUvForSlice(slice1)),
+    sliceMix
+  );
+
+  // Outside the lattice box, attenuate continuously with exterior distance so
+  // nearby receivers keep light while the far scene falls off.
+  const exteriorNode = worldPositionNode.abs().sub(vec3(1.0)).max(vec3(0.0));
+  const exteriorDistance = exteriorNode.length();
+  const exteriorFalloff = float(1.0).div(
+    exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
+  );
+
+  const backgroundMask = float(1.0).sub(step(float(0.999), depthSampleNode));
+  const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
+  const facingResponse = normalSampleNode.z.abs().mul(0.65).add(0.35);
+  const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
+  const receiverSignal = latticeSample.rgb
+    .mul(exteriorFalloff)
+    .mul(backgroundMask)
+    .mul(facingResponse)
+    .mul(materialResponse)
+    .mul(fireLightFieldStrength);
+  const compositeOutput = baseOutputNode.add(vec4(receiverSignal, 0.0));
+  const isolateOutput = vec4(
+    baseOutputNode.rgb.mul(0.08).mul(backgroundMask).add(receiverSignal),
+    1.0
+  );
+  let outputNode = mix(compositeOutput, isolateOutput, isolateMix);
+  // Compile-time diagnostic views (route volume_light_field_debug=uvw|lattice|mask).
+  if (debugView === 'uvw') {
+    outputNode = vec4(latticeUvw, 1.0);
+  } else if (debugView === 'lattice') {
+    outputNode = vec4(latticeSample.rgb.mul(4.0), 1.0);
+  } else if (debugView === 'mask') {
+    outputNode = vec4(backgroundMask, facingResponse, exteriorFalloff, 1.0);
+  } else if (debugView === 'atlas') {
+    outputNode = vec4(atlasTextureNode.sample(viewportUV).rgb.mul(4.0), 1.0);
+  } else if (debugView === 'groundtest') {
+    // World-coordinate readout for the unflipped reconstruction:
+    // R = worldY mapped [-2,2] -> [0,1]; G = worldZ mapped [-4,4] -> [0,1];
+    // B = geometry mask.
+    const altView = getViewPosition(vec2(viewportUV.x, viewportUV.y.oneMinus()), depthSampleNode, sceneProjectionMatrixInverse);
+    const altWorld = sceneCameraWorldMatrix.mul(vec4(altView, 1.0)).xyz;
+    const primaryHit = float(1.0).sub(step(float(0.1), worldPositionNode.y.add(0.85).abs()));
+    const altHit = float(1.0).sub(step(float(0.1), altWorld.y.add(0.85).abs()));
+    outputNode = vec4(primaryHit, altHit, backgroundMask.mul(0.5), 1.0);
+  } else if (debugView === 'slab') {
+    // Exercise the exact tile/trilinear math over a fixed mid-depth slab.
+    const slabTexel = vec2(viewportUV.x, float(1.0).sub(viewportUV.y)).mul(atlasGrid).clamp(float(0.5), atlasGrid.sub(0.5));
+    const slabSliceCoord = float(0.5).mul(atlasGrid).sub(0.5);
+    const slabSlice0 = floor(slabSliceCoord);
+    const slabTile = vec2(mod(slabSlice0, atlasTilesX), floor(slabSlice0.div(atlasTilesX)));
+    const slabUv = slabTile.mul(atlasGrid).add(slabTexel).mul(atlasTexelSize);
+    outputNode = vec4(atlasTextureNode.sample(slabUv).rgb.mul(4.0), 1.0);
+  }
+
+  const passState = {
+    identity: FIRE_LIGHT_FIELD_PASS_IDENTITY,
+    maskAuthority: FIRE_LIGHT_FIELD_MASK_AUTHORITY,
+    atlasIdentity: FIRE_LIGHT_FIELD_ATLAS_IDENTITY,
+    requested: true,
+    effective: false,
+    reason: 'fire-light-field-not-polled-yet',
+    adoptionKey: null,
+    sameDevice: false,
+    witnessMuted: false,
+    isolate: isFireLightFieldIsolateRoute(routeParams),
+    baseStrength,
+    lightField: null,
+    cpuReadbackAuthority: false,
+    canvasBridgeAuthority: false,
+    fallbackAuthority: false,
+  };
+
+  // Adoption swaps a fresh THREE.ExternalTexture into the texture node's
+  // public value slot; no renderer-internal cache surgery.
+  const makeAdoptedAtlasTexture = (sourceTexture, width, height) => {
+    const adopted = new THREE.ExternalTexture(sourceTexture);
+    adopted.image = { width, height, depth: 1 };
+    adopted.format = THREE.RGBAFormat;
+    adopted.type = THREE.HalfFloatType;
+    adopted.colorSpace = THREE.NoColorSpace;
+    adopted.minFilter = THREE.LinearFilter;
+    adopted.magFilter = THREE.LinearFilter;
+    adopted.generateMipmaps = false;
+    return adopted;
+  };
+
+  const bindBlackAtlas = (reason) => {
+    if (passState.adoptionKey !== 'black') {
+      atlasTextureNode.value = atlasExternalTexture;
+      passState.adoptionKey = 'black';
+    }
+    passState.effective = false;
+    passState.reason = reason;
+    passState.sameDevice = false;
+    fireLightFieldStrength.value = 0;
+  };
+
+  return {
+    outputNode,
+    update() {
+      camera.updateMatrixWorld();
+      sceneProjectionMatrixInverse.value.copy(camera.projectionMatrixInverse);
+      sceneCameraWorldMatrix.value.copy(camera.matrixWorld);
+      const lightField = volumePrototype?.fireIrradianceLightField?.() ?? null;
+      passState.lightField = lightField ? { ...lightField, atlasTexture: undefined, device: undefined } : null;
+      const sameDevice = !!lightField && lightField.device === sharedGpu.device;
+      if (
+        !lightField
+        || lightField.status !== 'effective'
+        || lightField.identity !== FIRE_LIGHT_FIELD_ATLAS_IDENTITY
+        || !sameDevice
+        || !lightField.atlasTexture
+      ) {
+        bindBlackAtlas(
+          !lightField
+            ? 'volume-prototype-light-field-unavailable'
+            : (!sameDevice && lightField.status === 'effective'
+              ? 'producer-consumer-device-mismatch'
+              : lightField.reason || `light-field-${lightField.status}`)
+        );
+        return false;
+      }
+      const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
+      if (passState.adoptionKey !== adoptionKey) {
+        atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
+        passState.adoptionKey = adoptionKey;
+        atlasGrid.value = lightField.grid;
+        atlasTilesX.value = lightField.tilesX;
+        atlasTexelSize.value.set(1 / lightField.atlasWidth, 1 / lightField.atlasHeight);
+      }
+      passState.effective = true;
+      passState.reason = null;
+      passState.sameDevice = true;
+      fireLightFieldStrength.value = passState.witnessMuted ? 0 : passState.baseStrength;
+      return true;
+    },
+    setWitnessMute(muted) {
+      passState.witnessMuted = muted === true;
+      fireLightFieldStrength.value = passState.witnessMuted ? 0 : (passState.effective ? passState.baseStrength : 0);
+      return {
+        identity: 'fire-light-field-witness-mute-v0',
+        muted: passState.witnessMuted,
+        strength: fireLightFieldStrength.value,
+      };
+    },
+    setWitnessIsolate(isolate) {
+      passState.isolate = isolate === true;
+      isolateMix.value = passState.isolate ? 1 : 0;
+      return {
+        identity: 'fire-light-field-witness-isolate-v0',
+        isolate: passState.isolate,
+        isolateMix: isolateMix.value,
+      };
+    },
+    debugState() {
+      return {
+        ...passState,
+        strength: fireLightFieldStrength.value,
+        isolateMix: isolateMix.value,
+        atlasGrid: atlasGrid.value,
+        sharedDeviceIdentity: sharedGpu?.identity ?? null,
+      };
+    },
+    dispose() {
+      blackAtlasTexture.destroy?.();
+    },
+  };
+}
+
 async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
@@ -8814,7 +9066,17 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  try {
+    sharedGpu = await requestKaminosSharedWebGpuDevice();
+    sharedGpuFailureReason = null;
+  } catch (error) {
+    sharedGpu = null;
+    sharedGpuFailureReason = String(error?.message || error);
+    console.warn('Kaminos shared WebGPU device unavailable; falling back to independent devices:', sharedGpuFailureReason);
+  }
+  renderer = sharedGpu?.device
+    ? new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device, trackTimestamp: isFireLightFieldTimingRoute() })
+    : new THREE.WebGPURenderer({ antialias: true });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -8926,7 +9188,52 @@ async function initScene() {
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  const baseSceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
+  fireLightFieldPass?.dispose?.();
+  fireLightFieldPass = null;
+  if (isFireLightFieldRoute() && sharedGpu?.device) {
+    fireLightFieldPass = createFireLightFieldReceiverPass(baseSceneOutput, prePassDepth, prePassNormal);
+    renderPipeline.outputNode = fireLightFieldPass.outputNode;
+  } else {
+    renderPipeline.outputNode = baseSceneOutput;
+  }
+  window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
+    ? fireLightFieldPass.debugState()
+    : {
+      identity: 'world-position-fire-light-field-receiver-pass-v0',
+      requested: isFireLightFieldRoute(),
+      status: 'pass-not-constructed',
+      reason: isFireLightFieldRoute()
+        ? (sharedGpu?.device ? 'pass-construction-pending' : `shared-device-unavailable: ${sharedGpuFailureReason || 'unknown'}`)
+        : 'fire-light-field-route-not-requested',
+      sharedDeviceIdentity: sharedGpu?.identity ?? null,
+      sharedDeviceFailureReason,
+    });
+  window.kaminosFireLightFieldSetWitnessMute = muted => (fireLightFieldPass
+    ? fireLightFieldPass.setWitnessMute(muted)
+    : { error: 'fire-light-field-pass-not-constructed' });
+  window.kaminosFireLightFieldSetWitnessIsolate = isolate => (fireLightFieldPass
+    ? fireLightFieldPass.setWitnessIsolate(isolate)
+    : { error: 'fire-light-field-pass-not-constructed' });
+  window.kaminosFireLightFieldGpuProfile = async () => {
+    const compute = await (volumePrototype?.sampleFireLightFieldGpuProfile?.() ?? Promise.resolve(null));
+    let renderTimestampMs = null;
+    if (renderer?.backend?.trackTimestamp) {
+      try {
+        await renderer.resolveTimestampsAsync(THREE.TimestampQuery.RENDER);
+        renderTimestampMs = renderer.info?.render?.timestamp ?? null;
+      } catch (error) {
+        renderTimestampMs = `resolve-failed: ${String(error?.message || error)}`;
+      }
+    }
+    return {
+      identity: 'fire-light-field-combined-gpu-profile-v0',
+      compute,
+      renderTimestampMs,
+      renderTimestampScope: 'whole-render-pipeline-not-receiver-only',
+      trackTimestamp: renderer?.backend?.trackTimestamp === true,
+    };
+  };
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -8953,6 +9260,13 @@ async function initScene() {
 
   // --- Render loop with idle detection ---
   let needsRender = true;
+  window.__kaminosSetSceneCameraFrame = (position, target) => {
+    camera.position.set(...position);
+    controls.target.set(...target);
+    controls.update();
+    needsRender = true;
+    return { position: camera.position.toArray(), target: controls.target.toArray() };
+  };
   let idleFrames = 0;
   const IDLE_THRESHOLD = 3;
 
@@ -9003,10 +9317,12 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
-    const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const fireLightFieldRouteActive = fireLightFieldPass !== null;
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && volumeBridge ? volumeBridge.update() === true : false;
+    const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
+    const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -9021,7 +9337,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive && !fireLightFieldActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -17646,6 +17962,8 @@ function readVolumeControls() {
     oracleActivityVorticity: parseFloat(document.getElementById('volume-oracle-activity-vorticity').value),
     oracleActivityMaterial: parseFloat(document.getElementById('volume-oracle-activity-material').value),
     lookFreeze: parseFloat(document.getElementById('volume-look-freeze').value),
+    fireLightField: new URLSearchParams(window.location.search).get('volume_light_field') === '1',
+    fireLightFieldGrid: parseInt(new URLSearchParams(window.location.search).get('volume_light_field_grid') || '', 10) || undefined,
     reactionHeatMin: parseFloat(document.getElementById('volume-reaction-heat-min').value),
     reactionHeatMax: parseFloat(document.getElementById('volume-reaction-heat-max').value),
     reactionFuelMin: parseFloat(document.getElementById('volume-reaction-fuel-min').value),
@@ -18726,8 +19044,16 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
-    transparentCanvas: fingerFluidPyroCompositionRequested(),
+    transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute(),
+    sharedGpuContext: sharedGpu,
   });
+  if (isFireLightFieldRoute()) {
+    // Fire-to-scene lighting needs the live Three scene visible under the
+    // flame: alpha-composite the native volume canvas instead of the opaque
+    // near-black overlay, and keep the CanvasTexture bridge out of the route.
+    const volumeCanvasElement = volumePrototype.canvasElement?.();
+    if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
+  }
   window.__kaminosVolumePrototype = volumePrototype;
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
