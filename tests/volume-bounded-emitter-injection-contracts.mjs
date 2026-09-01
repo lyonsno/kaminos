@@ -84,6 +84,16 @@ assert.doesNotMatch(
 assert.match(core, /const ANALYTIC_EMITTER_INJECTION_WGSL = \/\* wgsl \*\//, 'fixed morphology owns a separate shader');
 assert.doesNotMatch(
   injectionShader,
+  /\b(?:sin|cos)\s*\(/,
+  'analytic emitter injection must not silently distort authored strength with a periodic scalar',
+);
+assert.match(
+  injectionShader,
+  /let weight = support \* max\(0\.0, emitter\.axis_strength\.w\);/,
+  'bounded injection strength is the authored strength over geometric support',
+);
+assert.doesNotMatch(
+  injectionShader,
   /velocityDensity\.xyz\s*=/,
   'bounded emitter WGSL does not assign through a non-assignable vector swizzle',
 );

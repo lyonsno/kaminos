@@ -6128,8 +6128,7 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   let cellWidth = 2.0 / f32(GRID);
   let support = 1.0 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, signedDistance);
   if (support <= 0.0) { return; }
-  let coherentModulation = 0.94 + 0.06 * sin(emitter.geometry.w * 4.1 + dot(origin, vec3<f32>(5.3, 7.1, 3.7)));
-  let weight = support * max(0.0, emitter.axis_strength.w) * coherentModulation;
+  let weight = support * max(0.0, emitter.axis_strength.w);
   let chemistry = emitter.chemistry;
   let detail = max(0.0, emitter.geometry.z);
   let base = cellIndex(cell) * SLOTS_PER_CELL;
