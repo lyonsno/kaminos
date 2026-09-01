@@ -160,6 +160,12 @@ def main():
         assert projection["parent"]["contentHash"] == parent["effective"]["contentHash"]
         assert projection["requested"]["profile"] == PROFILE
         assert projection["effective"]["profile"] == PROFILE
+        assert projection["effective"]["projectionLineage"] == {
+            "identity": "kaminos-volume-settings-preset-projection-lineage-v1",
+            "parentPresetId": parent_id,
+            "parentContentHash": parent["effective"]["contentHash"],
+            "profile": PROFILE,
+        }
         assert projection["effective"]["presetId"] != parent_id
         assert parent_path.read_bytes() == parent_bytes
 
@@ -184,6 +190,7 @@ def main():
         assert derived["preset"]["rendererControls"] == parent_document["preset"]["rendererControls"]
         assert derived["preset"]["presentationControls"] == parent_document["preset"]["presentationControls"]
         assert serve.validate_volume_settings_preset_payload(derived["preset"], schema) is True
+        assert derived["projectionLineage"] == projection["effective"]["projectionLineage"]
 
         repeated = serve.project_volume_settings_preset(
             store,
@@ -195,6 +202,60 @@ def main():
         )
         assert repeated["effective"]["presetId"] == projection["effective"]["presetId"]
         assert repeated["effective"]["idempotent"] is True
+
+        convergent_parent = serve.write_volume_settings_preset(
+            store,
+            "convergent-second-parent",
+            set_control(payload, "volume-resolution", "128"),
+            source,
+            schema,
+        )
+        try:
+            serve.project_volume_settings_preset(
+                store,
+                convergent_parent["effective"]["presetId"],
+                "actually-looks-like-fire-FUCKAHHHHH-kiln-96-rs025",
+                PROFILE,
+                source,
+                schema,
+            )
+        except ValueError as error:
+            assert "parent lineage" in str(error)
+        else:
+            raise AssertionError("a second immutable parent impersonated an idempotent projection")
+
+        derived_path = store / "presets" / f"{projection['effective']['presetId']}.json"
+        pristine_derived = json.loads(derived_path.read_text())
+        derived_alias_path = (
+            store / "aliases" / "actually-looks-like-fire-fuckahhhhh-kiln-96-rs025.json"
+        )
+        pristine_derived_alias = derived_alias_path.read_bytes()
+        forged_wrappers = (
+            ("identity", "forged-artifact-wrapper", "artifact identity mismatch"),
+            ("presetId", "vsp-" + "0" * 64, "artifact identity mismatch"),
+            ("schemaIdentity", "wrong-schema", "artifact schema mismatch"),
+            ("controlCount", -1, "artifact schema mismatch"),
+        )
+        for field, forged_value, expected_error in forged_wrappers:
+            forged = copy.deepcopy(pristine_derived)
+            forged[field] = forged_value
+            derived_path.write_text(json.dumps(forged, indent=2) + "\n")
+            try:
+                serve.project_volume_settings_preset(
+                    store,
+                    parent_id,
+                    "actually-looks-like-fire-FUCKAHHHHH-kiln-96-rs025",
+                    PROFILE,
+                    source,
+                    schema,
+                )
+            except ValueError as error:
+                assert expected_error in str(error)
+            else:
+                raise AssertionError(f"forged child wrapper field was accepted: {field}")
+            finally:
+                derived_path.write_text(json.dumps(pristine_derived, indent=2) + "\n")
+            assert derived_alias_path.read_bytes() == pristine_derived_alias
 
         presets_before_alias_rejection = {
             path.name for path in (store / "presets").glob("*.json")
@@ -243,7 +304,7 @@ def main():
             raise AssertionError("no-op projection impersonated a distinct child")
 
         parent_b_payload = set_quality_reason(
-            set_control(payload, "volume-resolution", "128"),
+            set_control(payload, "volume-resolution", "136"),
             "second-parent",
         )
         parent_b = serve.write_volume_settings_preset(

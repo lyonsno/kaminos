@@ -43,6 +43,7 @@ VOLUME_SETTINGS_PRESET_IDENTITY = "kaminos-volume-settings-preset-v2"
 VOLUME_SETTINGS_PRESET_ARTIFACT_IDENTITY = "kaminos-volume-settings-preset-artifact-v2"
 VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = "kaminos-volume-settings-preset-schema-v2"
 VOLUME_SETTINGS_PRESET_PROJECTION_RECEIPT_IDENTITY = "kaminos-volume-settings-preset-projection-receipt-v1"
+VOLUME_SETTINGS_PRESET_PROJECTION_LINEAGE_IDENTITY = "kaminos-volume-settings-preset-projection-lineage-v1"
 VOLUME_BASIN_PROMOTION_CLI = ROOT / "volume-basin-promotion-package.mjs"
 VOLUME_BASIN_DRIVE_SESSION_CLI = ROOT / "volume-basin-drive-session-cli.mjs"
 
@@ -950,6 +951,60 @@ def _volume_settings_alias_for_label(store, label):
     return disambiguated
 
 
+def _validate_volume_settings_projection_lineage(lineage, schema):
+    if lineage is None:
+        return None
+    expected_fields = {
+        "identity",
+        "parentPresetId",
+        "parentContentHash",
+        "profile",
+    }
+    if not isinstance(lineage, dict) or set(lineage) != expected_fields:
+        raise ValueError("volume settings preset projection lineage fields mismatch")
+    if lineage.get("identity") != VOLUME_SETTINGS_PRESET_PROJECTION_LINEAGE_IDENTITY:
+        raise ValueError("volume settings preset projection lineage identity mismatch")
+    parent_id = lineage.get("parentPresetId")
+    if not isinstance(parent_id, str) or not re.fullmatch(r"vsp-[0-9a-f]{64}", parent_id):
+        raise ValueError("volume settings preset projection parent identity is invalid")
+    if lineage.get("parentContentHash") != f"sha256:{parent_id[4:]}":
+        raise ValueError("volume settings preset projection parent content hash mismatch")
+    profile = lineage.get("profile")
+    if not isinstance(profile, dict) or set(profile) != {
+        "simulationResolution",
+        "raySteps",
+        "adaptiveRays",
+        "renderScale",
+    }:
+        raise ValueError("volume settings preset projection lineage profile mismatch")
+    resolution = profile["simulationResolution"]
+    resolution_schema = next(
+        (entry for entry in schema.get("controls") or [] if entry.get("key") == "volume-resolution"),
+        None,
+    )
+    if (
+        isinstance(resolution, bool)
+        or not isinstance(resolution, int)
+        or resolution not in {int(value) for value in (resolution_schema or {}).get("allowedValues") or []}
+    ):
+        raise ValueError("volume settings preset projection lineage profile mismatch")
+    ray_steps = profile["raySteps"]
+    if isinstance(ray_steps, bool) or not isinstance(ray_steps, int) or not 24 <= ray_steps <= 160:
+        raise ValueError("volume settings preset projection lineage profile mismatch")
+    try:
+        adaptive_rays = _exact_profile_tick(
+            profile["adaptiveRays"], Decimal("0"), Decimal("1"), Decimal("0.05"), "adaptiveRays"
+        )
+        render_scale = _exact_profile_tick(
+            profile["renderScale"], Decimal("0.1"), Decimal("0.3"), Decimal("0.001"), "renderScale"
+        )
+    except ValueError as error:
+        raise ValueError("volume settings preset projection lineage profile mismatch") from error
+    if profile["adaptiveRays"] != adaptive_rays or profile["renderScale"] != render_scale:
+        raise ValueError("volume settings preset projection lineage profile mismatch")
+    return copy.deepcopy(lineage)
+
+
 def write_volume_settings_preset(
     store_path,
     label,
@@ -958,11 +1013,13 @@ def write_volume_settings_preset(
     schema=None,
     *,
     preserve_existing_alias=False,
+    projection_lineage=None,
 ):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     validate_volume_settings_preset_payload(payload, schema)
     store = _volume_settings_store_path(store_path)
     effective_label = str(label or "").strip() or "Unnamed preset"
+    projection_lineage = _validate_volume_settings_projection_lineage(projection_lineage, schema)
     content_hash = _volume_settings_content_hash(payload, schema)
     preset_id = f"vsp-{content_hash}"
     written_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -977,6 +1034,8 @@ def write_volume_settings_preset(
         "source": dict(source or {}),
         "preset": payload,
     }
+    if projection_lineage is not None:
+        document["projectionLineage"] = projection_lineage
     with _volume_settings_store_lock(store):
         alias = _volume_settings_alias_for_label(store, effective_label)
         preset_path = store / "presets" / f"{preset_id}.json"
@@ -994,11 +1053,14 @@ def write_volume_settings_preset(
         idempotent = not created
         if idempotent:
             existing = _read_json_object(preset_path, "artifact")
-            if existing.get("contentHash") != document["contentHash"]:
-                raise ValueError("volume settings preset content identity collision")
+            read_volume_settings_preset(store, preset_id, schema)
             if existing.get("preset") != payload:
                 raise ValueError(
                     "volume settings preset content identity resolves to a different canonical payload"
+                )
+            if existing.get("projectionLineage") != projection_lineage:
+                raise ValueError(
+                    "volume settings preset content identity resolves to different parent lineage"
                 )
 
         alias_document = {
@@ -1149,6 +1211,12 @@ def project_volume_settings_preset(store_path, preset_ref, label, profile, sourc
     if projected_preset_id == parent["presetId"]:
         raise ValueError("projection does not create a distinct child preset")
 
+    projection_lineage = {
+        "identity": VOLUME_SETTINGS_PRESET_PROJECTION_LINEAGE_IDENTITY,
+        "parentPresetId": parent["presetId"],
+        "parentContentHash": parent["contentHash"],
+        "profile": dict(normalized_profile),
+    }
     derived = write_volume_settings_preset(
         store_path,
         label,
@@ -1156,6 +1224,7 @@ def project_volume_settings_preset(store_path, preset_ref, label, profile, sourc
         source,
         schema,
         preserve_existing_alias=True,
+        projection_lineage=projection_lineage,
     )
     store = _volume_settings_store_path(store_path)
     return {
@@ -1180,6 +1249,7 @@ def project_volume_settings_preset(store_path, preset_ref, label, profile, sourc
             "profile": normalized_profile,
             "changedControls": changed_controls,
             "sourcePresetAuthority": "shared-volume-settings-preset-v2",
+            "projectionLineage": projection_lineage,
         },
         "presetUrl": derived["presetUrl"],
         "presetViewUrls": derived["presetViewUrls"],
@@ -1232,6 +1302,7 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
     content_hash = _volume_settings_content_hash(raw_payload, schema)
     if document.get("contentHash") != f"sha256:{content_hash}" or preset_id != f"vsp-{content_hash}":
         raise ValueError("volume settings preset artifact content hash mismatch")
+    _validate_volume_settings_projection_lineage(document.get("projectionLineage"), schema)
     if alias_document and alias_document.get("contentHash") != document.get("contentHash"):
         raise ValueError("volume settings preset alias content hash mismatch")
     normalized_payload, schema_projection = normalize_volume_settings_preset_payload(raw_payload, schema)

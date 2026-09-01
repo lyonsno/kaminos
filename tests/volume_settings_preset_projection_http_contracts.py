@@ -80,6 +80,7 @@ with tempfile.TemporaryDirectory(prefix="kaminos-preset-projection-http-") as te
         assert receipt["identity"] == "kaminos-volume-settings-preset-projection-receipt-v1"
         assert receipt["parent"]["presetId"] == parent_id
         assert receipt["effective"]["profile"] == contracts.PROFILE
+        assert receipt["effective"]["projectionLineage"]["parentPresetId"] == parent_id
         assert parent_path.read_bytes() == parent_bytes
 
         status, artifact = request_json(
@@ -89,6 +90,7 @@ with tempfile.TemporaryDirectory(prefix="kaminos-preset-projection-http-") as te
         assert artifact["presetId"] == receipt["effective"]["presetId"]
         assert artifact["preset"]["domControls"]["volume-resolution"]["value"] == "96"
         assert artifact["preset"]["domControls"]["volume-render-scale"]["value"] == 0.25
+        assert artifact["projectionLineage"] == receipt["effective"]["projectionLineage"]
 
         status, failure = request_json(
             f"{origin}/api/volume-settings-preset-projections",
