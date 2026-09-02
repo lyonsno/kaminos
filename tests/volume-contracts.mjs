@@ -1120,7 +1120,8 @@ assert.doesNotMatch(core, /dt \* steps/, 'raymarch steps must not secretly multi
 assert.doesNotMatch(core, /fn\s+microFilamentNoise\b/, 'raymarch must not paint periodic filament noise over transported material');
 assert.match(core, /transportedCurtainStructure/, 'bonfire smoke variation derives from transported microdetail and material structure');
 assert.match(core, /transportedFireStructure/, 'bonfire fire variation derives from transported reaction and interface structure');
-assert.match(core, /bonfireSpatialRayDephase/, 'bonfire raymarch uses deterministic spatial dephasing so no-temporal diagnostic captures do not phase-lock into vertical lanes');
+assert.doesNotMatch(core, /bonfireSpatialRayDephase/, 'bonfire raymarch does not replace coherent lanes with stable per-pixel hash texture');
+assert.match(core, /var t = startT \+ jitter;/, 'all scenes begin at the deterministic midpoint of the first ray segment');
 assert.doesNotMatch(core, /bonfireVisibleSourceRelief/, 'bonfire must not hide a smooth source plug by suppressing the render transfer after solver fire already exists');
 assert.match(core, /bonfireTransportedFireLumaShaper/, 'bonfire fire transfer compresses saturation through transported fire detail so solver breakup remains visible as luma variation');
 assert.match(core, /let transportedStructure = clamp\(/, 'fire-lick breakup derives its modulation from transported fire, microdetail, front, and flow structure');

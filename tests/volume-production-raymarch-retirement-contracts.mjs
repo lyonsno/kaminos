@@ -133,7 +133,8 @@ for (const schema of [schemaV1, schemaV2]) {
 assert.match(core, /directCellOpticalSupportFromSlots/, 'marcher derives support directly from native-cell slots');
 assert.match(core, /directCellOpticalSupport[\s\S]*directCellOpticalSupportAtCell\(c \+ vec3<i32>\(1, 1, 1\)\)/, 'direct support conservatively covers every corner consumed by trilinear reconstruction');
 assert.match(core, /directCellExitDistance[\s\S]*f32\(GRID\) - vec3<f32>\(0\.5\)/, 'cell-exit traversal uses the same half-cell lattice as trilinear reconstruction');
-assert.match(core, /reconstruction_kernel_controls\.x[\s\S]*directSupport/, 'empty-cell skipping refuses the narrow support claim while wider flow-kernel reconstruction is active');
+assert.doesNotMatch(core, /select\(directCellOpticalSupport\(p\), 1\.0, flowKernelReconstructionActive\)/, 'optional reconstruction does not globally defeat direct-cell empty-space traversal');
+assert.match(core, /let directSupport = directCellOpticalSupport\(p\);[\s\S]*directCellExitDistance\(p, rd\)[\s\S]*if \(flowKernelReconstructionActive\)/, 'native transported support gates optional reconstruction before any filter work');
 assert.match(core, /expensiveSamples\s*=\s*expensiveSamples\s*\+\s*1u/, 'occupied reconstruction spends the explicit expensive-sample budget');
 assert.match(core, /fn segmentOpacity\(opticalDepth:\s*f32,\s*maxOpacity:\s*f32\)/, 'variable segments preserve optical depth through exponential opacity');
 

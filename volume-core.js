@@ -4833,8 +4833,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
   let endT = select(min(hit.y, sceneDepthEndT), 2.0, fullGridCapture);
   let dtBase = (endT - startT) / steps;
   let jitter = dtBase * 0.5;
-  let bonfireSpatialRayDephase = (hash31(vec3<f32>(floor(in.uv * u.viewport_steps_density.xy), 37.0)) - 0.5) * dtBase * 0.90 * bonfireRenderScene;
-  var t = startT + jitter + bonfireSpatialRayDephase;
+  var t = startT + jitter;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   var structuralATransmittance = 1.0;
@@ -4878,14 +4877,19 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32) -> RaymarchResult {
     let fullGridP = (vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5)) * (2.0 / f32(GRID)) - vec3<f32>(1.0);
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
-    let directSupport = select(directCellOpticalSupport(p), 1.0, flowKernelReconstructionActive);
+    let directSupport = directCellOpticalSupport(p);
     if (!fullGridCapture && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       t = t + min(cellExit + 0.0001, max(0.0001, endT - t));
       continue;
     }
+    var reconstructed: FlowReconstructionSample;
+    if (flowKernelReconstructionActive) {
+      reconstructed = sampleWorldFlowReconstruction(p);
+    } else {
+      reconstructed = sampleWorldFlowReconstructionRaw(p);
+    }
     expensiveSamples = expensiveSamples + 1u;
-    let reconstructed = sampleWorldFlowReconstruction(p);
     let state = reconstructed.velocityDensity;
     let material = reconstructed.material;
     let fireLayer = reconstructed.fireLayer;
