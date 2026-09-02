@@ -722,7 +722,7 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
 function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
   return `(() => {
     const volume = globalThis.__kaminosVolumePrototype;
-    if (!volume?.foregroundGpuContext || !volume?.debugState) {
+    if (!volume?.foregroundGpuContext || !volume?.debugState || !volume?.setForegroundOpportunityMode) {
       return { ok: false, reason: 'product-volume-unavailable' };
     }
     const state = {
@@ -735,10 +735,55 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
       observedRafCallbackCount: 0,
       nonPresentFallbackCount: 0,
       productHookAssignments: 0,
+      activationReceiptCount: 0,
+      activationReceiptRetention: 'uncapped',
+      activationReceipts: [],
+      activationFailures: [],
+      leaseDrivenActivationReceipt: null,
+      modeTransitionReceiptRetention: 'uncapped',
+      modeTransitionReceipts: [],
       serviceRetention: 'uncapped',
       services: [],
       lastService: null,
       authority: 'injected-evidence-hook-over-clean-product-source',
+    };
+    const originalSetForegroundOpportunityMode = volume.setForegroundOpportunityMode;
+    volume.setForegroundOpportunityMode = async function(active, ...rest) {
+      const requestedActive = active === true;
+      const transitionOrdinal = state.modeTransitionReceipts.length + 1;
+      try {
+        const returned = await Reflect.apply(originalSetForegroundOpportunityMode, this, [active, ...rest]);
+        const retained = {
+          schema: 'kaminos.volume-foreground-mode-transition-receipt.v0',
+          receiptId: 'volume-mode-transition:' + transitionOrdinal,
+          status: 'returned',
+          requestedActive,
+          source: 'setForegroundOpportunityMode-return',
+          returned: returned && typeof returned === 'object' ? { ...returned } : returned,
+        };
+        state.modeTransitionReceipts.push(retained);
+        if (requestedActive) {
+          state.activationReceiptCount += 1;
+          state.activationReceipts.push(retained);
+          if (retained.returned?.active === true
+            && retained.returned?.foregroundOpportunityMode === 'lease-driven') {
+            state.leaseDrivenActivationReceipt = retained;
+          }
+        }
+        return returned;
+      } catch (error) {
+        const failure = {
+          schema: 'kaminos.volume-foreground-mode-transition-receipt.v0',
+          receiptId: 'volume-mode-transition:' + transitionOrdinal,
+          status: 'threw',
+          requestedActive,
+          source: 'setForegroundOpportunityMode-return',
+          error: error?.message || String(error),
+        };
+        state.modeTransitionReceipts.push(failure);
+        if (requestedActive) state.activationFailures.push(failure);
+        throw error;
+      }
     };
     let assayHook = null;
     const waitForOpportunity = signal => new Promise((resolve, reject) => {
@@ -829,10 +874,15 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
               if (service.device !== effectiveProduct.device || service.queue !== effectiveProduct.queue) {
                 throw new Error('no-render assay service left the product WebGPU device or queue');
               }
-              const volumeState = volume.debugState();
-              if (volumeState?.foregroundOpportunityMode !== 'lease-driven') {
+              const activationReceipt = state.leaseDrivenActivationReceipt;
+              if (activationReceipt?.status !== 'returned'
+                || activationReceipt?.requestedActive !== true
+                || activationReceipt?.source !== 'setForegroundOpportunityMode-return'
+                || activationReceipt?.returned?.active !== true
+                || activationReceipt?.returned?.foregroundOpportunityMode !== 'lease-driven') {
                 throw new Error('no-render assay requires quiesced lease-driven volume mode');
               }
+              const volumeState = volume.debugState();
               const opportunity = await waitForOpportunity(service.signal);
               const receipt = {
                 schema: 'kaminos.volume-foreground-no-render-receipt.v0',
@@ -843,7 +893,8 @@ function buildNoRenderAssayInjectionExpression({ fallbackDelayMs = 250 } = {}) {
                 commandBufferCount: 0,
                 sharedDeviceIdentityVerified: true,
                 sharedQueueIdentityVerified: true,
-                foregroundOpportunityMode: volumeState.foregroundOpportunityMode,
+                foregroundOpportunityMode: activationReceipt.returned.foregroundOpportunityMode,
+                activationReceiptId: activationReceipt.receiptId,
                 fallbackDelayMs: state.fallbackDelayMs,
                 volumeFrameCountAtService: volumeState.frameCount ?? null,
                 ...opportunity,
@@ -1257,6 +1308,27 @@ function validateNoRenderAssayEvidence(assay) {
   if (!Number.isInteger(assay?.requestCount) || assay.requestCount < 1) failures.push('request-count-empty');
   if (!Number.isInteger(assay?.serviceCount) || assay.serviceCount < 1) failures.push('service-count-empty');
   if (assay?.requestCount !== assay?.serviceCount) failures.push('request-service-count-mismatch');
+  if (!Number.isInteger(assay?.activationReceiptCount) || assay.activationReceiptCount < 1) failures.push('activation-receipt-empty');
+  if (assay?.activationReceiptRetention !== 'uncapped') failures.push('activation-receipt-retention-capped-or-missing');
+  if (!Array.isArray(assay?.activationReceipts)) failures.push('activation-receipts-missing');
+  if (Array.isArray(assay?.activationReceipts)
+    && assay.activationReceipts.length !== assay?.activationReceiptCount) failures.push('activation-receipt-count-mismatch');
+  const activationReceipt = assay?.leaseDrivenActivationReceipt;
+  if (activationReceipt?.status !== 'returned'
+    || activationReceipt?.requestedActive !== true
+    || activationReceipt?.source !== 'setForegroundOpportunityMode-return'
+    || activationReceipt?.returned?.active !== true
+    || activationReceipt?.returned?.foregroundOpportunityMode !== 'lease-driven') {
+    failures.push('lease-driven-activation-unverified');
+  }
+  const activationReceiptIds = new Set((assay?.activationReceipts || [])
+    .map(receipt => receipt?.receiptId)
+    .filter(receiptId => typeof receiptId === 'string' && receiptId !== ''));
+  if (typeof activationReceipt?.receiptId !== 'string'
+    || activationReceipt.receiptId === ''
+    || !activationReceiptIds.has(activationReceipt.receiptId)) {
+    failures.push('lease-driven-activation-not-retained');
+  }
   if (assay?.serviceRetention !== 'uncapped') failures.push('service-retention-capped-or-missing');
   if (!Array.isArray(assay?.services)) failures.push('services-missing');
   if (Array.isArray(assay?.services) && assay.services.length !== assay?.serviceCount) failures.push('service-array-count-mismatch');
@@ -1275,6 +1347,7 @@ function validateNoRenderAssayEvidence(assay) {
     if (receipt?.commandBufferCount !== 0) failures.push('volume-command-buffer-submitted');
     if (receipt?.sharedDeviceIdentityVerified !== true || receipt?.sharedQueueIdentityVerified !== true) failures.push('shared-gpu-identity-unverified');
     if (receipt?.foregroundOpportunityMode !== 'lease-driven') failures.push('lease-driven-mode-unverified');
+    if (receipt?.activationReceiptId !== activationReceipt?.receiptId) failures.push('service-activation-identity-mismatch');
     if (receipt?.renderedProductFrameObserved !== false || receipt?.presentedProductFrameObserved !== false) {
       failures.push('render-or-presentation-overclaim');
     }

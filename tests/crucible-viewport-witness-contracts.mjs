@@ -1063,9 +1063,13 @@ const noRenderBuilderSource = witness.match(
 assert.ok(noRenderBuilderSource, 'witness must expose an executable current-source no-render assay injection');
 const buildNoRenderAssayInjectionExpression = vm.runInNewContext(`(${noRenderBuilderSource[0]})`);
 
-async function exerciseNoRenderService(mode) {
+async function exerciseNoRenderService(mode, {
+  returnedActive = true,
+  returnedMode = 'lease-driven',
+  expectActivationFailure = false,
+} = {}) {
   const device = { queue: {} };
-  const volumeState = { foregroundOpportunityMode: 'lease-driven', frameCount: 801 };
+  const volumeState = { frameCount: 801 };
   let rafCallback = null;
   let fallbackCallback = null;
   const context = {
@@ -1077,6 +1081,10 @@ async function exerciseNoRenderService(mode) {
         queueIdentity: 'queue-current-source',
       }),
       debugState: () => volumeState,
+      setForegroundOpportunityMode: async () => ({
+        active: returnedActive,
+        foregroundOpportunityMode: returnedMode,
+      }),
     },
     performance: { now: () => 100 },
     requestAnimationFrame(callback) {
@@ -1094,6 +1102,19 @@ async function exerciseNoRenderService(mode) {
   const armed = vm.runInNewContext(buildNoRenderAssayInjectionExpression(), context);
   assert.equal(armed.ok, true);
   context.__kaminosSharpForegroundOpportunity = () => ({ product: 'hook' });
+  const activationResult = await context.__kaminosVolumePrototype.setForegroundOpportunityMode(true);
+  assert.equal(activationResult.foregroundOpportunityMode, returnedMode);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceiptCount, 1);
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceiptRetention, 'uncapped');
+  assert.equal(context.__kaminosCurrentSourceNoRenderAssay.activationReceipts.length, 1);
+  if (!expectActivationFailure) {
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.requestedActive, true);
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.returned.active, true);
+    assert.equal(
+      context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.returned.foregroundOpportunityMode,
+      'lease-driven',
+    );
+  }
   const hook = context.__kaminosSharpForegroundOpportunity;
   const request = hook({
     device,
@@ -1110,6 +1131,12 @@ async function exerciseNoRenderService(mode) {
     queue: device.queue,
     signal: new AbortController().signal,
   });
+  if (expectActivationFailure) {
+    await assert.rejects(resultPromise, /requires quiesced lease-driven volume mode/);
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt, null);
+    assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 0);
+    return null;
+  }
   if (mode === 'observed-raf-callback') rafCallback(116.67);
   else fallbackCallback();
   const receipt = await resultPromise;
@@ -1126,6 +1153,10 @@ async function exerciseNoRenderService(mode) {
   assert.equal(receipt.rafCallbackObserved, mode === 'observed-raf-callback');
   assert.equal(receipt.renderedProductFrameObserved, false);
   assert.equal(receipt.presentedProductFrameObserved, false);
+  assert.equal(
+    receipt.activationReceiptId,
+    context.__kaminosCurrentSourceNoRenderAssay.leaseDrivenActivationReceipt.receiptId,
+  );
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceCount, 1);
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.serviceRetention, 'uncapped');
   assert.equal(context.__kaminosCurrentSourceNoRenderAssay.services.length, 1);
@@ -1135,6 +1166,10 @@ async function exerciseNoRenderService(mode) {
 
 const observedRafReceipt = await exerciseNoRenderService('observed-raf-callback');
 const fallbackReceipt = await exerciseNoRenderService('non-present-fallback');
+await exerciseNoRenderService('invalid-activation', {
+  returnedMode: 'ordinary-raf',
+  expectActivationFailure: true,
+});
 assert.equal(fallbackReceipt.fallbackReason, 'raf-suspended-or-delayed');
 assert.equal(fallbackReceipt.rafTimestampMs, null);
 
@@ -1160,12 +1195,23 @@ const validNoRenderAssay = {
   serviceCount: 2,
   observedRafCallbackCount: 1,
   nonPresentFallbackCount: 1,
+  activationReceiptCount: 1,
+  activationReceiptRetention: 'uncapped',
+  activationReceipts: [{
+    schema: 'kaminos.volume-foreground-mode-transition-receipt.v0',
+    receiptId: 'volume-mode-transition:1',
+    status: 'returned',
+    requestedActive: true,
+    source: 'setForegroundOpportunityMode-return',
+    returned: { active: true, foregroundOpportunityMode: 'lease-driven' },
+  }],
   serviceRetention: 'uncapped',
   services: [observedRafReceipt, fallbackReceipt].map((receipt, index) => ({
     ...receipt,
     requestId: `terminal-request-${index + 1}`,
   })),
 };
+validNoRenderAssay.leaseDrivenActivationReceipt = validNoRenderAssay.activationReceipts[0];
 assert.equal(validateNoRenderAssayEvidence(validNoRenderAssay).length, 0);
 const validTerminalAdmission = assembleNoRenderTerminalEvidence({
   enabled: true,
@@ -1183,6 +1229,10 @@ for (const [label, mutate, expectedFailure] of [
   ['missing assignment', value => { value.productHookAssignments = 0; }, 'product-hook-unassigned'],
   ['zero requests', value => { value.requestCount = 0; }, 'request-count-empty'],
   ['partial service', value => { value.serviceCount = 1; value.services = value.services.slice(0, 1); }, 'request-service-count-mismatch'],
+  ['missing activation receipt', value => { value.activationReceiptCount = 0; value.activationReceipts = []; value.leaseDrivenActivationReceipt = null; }, 'activation-receipt-empty'],
+  ['inactive activation return', value => { value.leaseDrivenActivationReceipt.returned.active = false; }, 'lease-driven-activation-unverified'],
+  ['unretained activation return', value => { value.leaseDrivenActivationReceipt = { ...value.leaseDrivenActivationReceipt, receiptId: 'not-retained' }; }, 'lease-driven-activation-not-retained'],
+  ['service activation mismatch', value => { value.services[0].activationReceiptId = 'wrong-activation'; }, 'service-activation-identity-mismatch'],
   ['malformed receipt', value => { value.services[0].schema = 'wrong'; }, 'service-schema-invalid'],
   ['submitted volume work', value => { value.services[0].commandBufferCount = 1; }, 'volume-command-buffer-submitted'],
   ['presentation overclaim', value => { value.services[0].presentedProductFrameObserved = true; }, 'render-or-presentation-overclaim'],
