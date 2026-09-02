@@ -1147,7 +1147,7 @@ async function exerciseNoRenderService(mode, {
   const request = hook({
     device,
     queue: device.queue,
-    routeId: 'sharp-image-to-splat-live-v0',
+    routeId: 'sharp.image-to-splat.webgpu-local.v0',
     runId: `run-${mode}`,
     stage: 'sharp',
     phase: 'vit',
@@ -1212,7 +1212,7 @@ async function exerciseNoRenderService(mode, {
   );
   assert.deepEqual(
     { ...context.__kaminosCurrentSourceNoRenderAssay.productRouteIdentity },
-    { routeId: 'sharp-image-to-splat-live-v0', runId: `run-${mode}` },
+    { routeId: 'sharp.image-to-splat.webgpu-local.v0', runId: `run-${mode}` },
   );
   if (deactivateAfterService) {
     returnedMode = 'ordinary-raf';
@@ -1252,10 +1252,96 @@ const assembleNoRenderTerminalEvidence = vm.runInNewContext(`(() => {
 const validNoRenderAssay = structuredClone(observedRafResult.assay);
 assert.equal(validateNoRenderAssayEvidence(validNoRenderAssay).length, 0);
 assert.equal(validateNoRenderAssayEvidence(fallbackResult.assay).length, 0);
+const validNoRenderFullRoute = {
+  status: 'complete',
+  requestedPipelineId: 'sharp-image-to-splat-live-v0',
+  effectiveRouteId: 'sharp-image-to-splat-live-v0',
+  sharpRouteIdentity: {
+    requestedRouteId: 'sharp.image-to-splat.webgpu-local.v0',
+    effectiveRouteId: 'sharp.image-to-splat.webgpu-local.v0',
+    runId: 'run-observed-raf-callback',
+  },
+  sharedGpu: {
+    deviceIdentity: 'device-current-source',
+    queueIdentity: 'queue-current-source',
+    exactObjectIdentityVerified: true,
+  },
+  sharpDutyCorrelation: { runId: 'run-observed-raf-callback' },
+  backgroundHeartbeat: { crossPageClock: { runId: 'run-observed-raf-callback' } },
+  output: { sha256: 'abc' },
+};
+const wrongRouteAssay = structuredClone(validNoRenderAssay);
+wrongRouteAssay.productRouteIdentity.routeId = 'wrong-route';
+for (const request of wrongRouteAssay.requests) request.routeId = 'wrong-route';
+const wrongRouteAdmission = assembleNoRenderTerminalEvidence({
+  enabled: true,
+  assay: wrongRouteAssay,
+  fullRoute: validNoRenderFullRoute,
+  lastTrustworthyEvidence: { preflight: 'preserved' },
+});
+assert.equal(wrongRouteAdmission.ok, false, 'an internally valid wrong-route assay must not authorize this full route');
+assert.equal(wrongRouteAdmission.fullRoute, null);
+assert.ok(wrongRouteAdmission.failures.includes('assay-full-route-sharp-route-mismatch'));
+assert.equal(wrongRouteAdmission.lastTrustworthyEvidence.noRenderAssay.productRouteIdentity.routeId, 'wrong-route');
+assert.equal(
+  wrongRouteAdmission.lastTrustworthyEvidence.noRenderFullRouteIdentity.sharpRouteIdentity.requestedRouteId,
+  'sharp.image-to-splat.webgpu-local.v0',
+);
+for (const [label, mutateAssay, expectedFailure] of [
+  ['wrong run', value => {
+    value.productRouteIdentity.runId = 'wrong-run';
+    for (const request of value.requests) request.runId = 'wrong-run';
+  }, 'assay-full-route-run-mismatch'],
+  ['wrong device', value => {
+    value.productGpuIdentity.deviceIdentity = 'wrong-device';
+    for (const request of value.requests) request.deviceIdentity = 'wrong-device';
+    for (const service of value.services) service.deviceIdentity = 'wrong-device';
+  }, 'assay-full-route-device-mismatch'],
+  ['wrong queue', value => {
+    value.productGpuIdentity.queueIdentity = 'wrong-queue';
+    for (const request of value.requests) request.queueIdentity = 'wrong-queue';
+    for (const service of value.services) service.queueIdentity = 'wrong-queue';
+  }, 'assay-full-route-queue-mismatch'],
+]) {
+  const candidate = structuredClone(validNoRenderAssay);
+  mutateAssay(candidate);
+  assert.equal(validateNoRenderAssayEvidence(candidate).length, 0, `${label} fixture must remain internally valid`);
+  const rejected = assembleNoRenderTerminalEvidence({
+    enabled: true,
+    assay: candidate,
+    fullRoute: validNoRenderFullRoute,
+    lastTrustworthyEvidence: { preflight: 'preserved' },
+  });
+  assert.equal(rejected.ok, false, `${label} assay must not authorize this full route`);
+  assert.equal(rejected.fullRoute, null);
+  assert.ok(rejected.failures.includes(expectedFailure));
+  assert.equal(rejected.lastTrustworthyEvidence.preflight, 'preserved');
+  assert.deepEqual(rejected.lastTrustworthyEvidence.noRenderAssay, candidate);
+  assert.deepEqual(rejected.lastTrustworthyEvidence.noRenderFullRouteIdentity.sharedGpu, validNoRenderFullRoute.sharedGpu);
+}
+for (const [label, mutateFullRoute, expectedFailure] of [
+  ['wrong outer product route', value => { value.effectiveRouteId = 'fallback-route'; }, 'full-route-product-route-invalid'],
+  ['missing inner SHARP route', value => { value.sharpRouteIdentity.requestedRouteId = null; }, 'full-route-sharp-route-identity-invalid'],
+  ['conflicting full-route run', value => { value.backgroundHeartbeat.crossPageClock.runId = 'other-run'; }, 'full-route-run-identity-mismatch'],
+  ['missing shared GPU identity', value => { value.sharedGpu.deviceIdentity = null; }, 'full-route-shared-gpu-identity-invalid'],
+]) {
+  const candidateFullRoute = structuredClone(validNoRenderFullRoute);
+  mutateFullRoute(candidateFullRoute);
+  const rejected = assembleNoRenderTerminalEvidence({
+    enabled: true,
+    assay: validNoRenderAssay,
+    fullRoute: candidateFullRoute,
+    lastTrustworthyEvidence: { preflight: 'preserved' },
+  });
+  assert.equal(rejected.ok, false, `${label} must fail terminal admission`);
+  assert.equal(rejected.fullRoute, null);
+  assert.ok(rejected.failures.includes(expectedFailure));
+  assert.deepEqual(rejected.lastTrustworthyEvidence.noRenderFullRouteIdentity.sharedGpu, candidateFullRoute.sharedGpu);
+}
 const validTerminalAdmission = assembleNoRenderTerminalEvidence({
   enabled: true,
   assay: validNoRenderAssay,
-  fullRoute: { status: 'complete', output: { sha256: 'abc' } },
+  fullRoute: validNoRenderFullRoute,
   lastTrustworthyEvidence: { preflight: 'preserved' },
 });
 assert.equal(validTerminalAdmission.ok, true);
@@ -1313,7 +1399,7 @@ const projectedEvidence = projectFriendlyFiringEvidence({
     reportPath: '/tmp/pipeline-witness.json',
     noRenderAssay: validNoRenderAssay,
     foregroundKilnHeartbeat: { schema: 'kaminos.foreground-kiln-heartbeat.v0', sampleRetention: 'uncapped' },
-    sharpDutyCorrelation: { schema: 'kaminos.foreground-sharp-duty-correlation.v0', status: 'verified' },
+    sharpDutyCorrelation: { schema: 'kaminos.foreground-sharp-duty-correlation.v0', status: 'verified', runId: 'run-projected' },
     volumeReleased: true,
     volumeReleaseConfirmed: true,
     autoOpenedTab: 'assets',
@@ -1324,9 +1410,16 @@ const projectedEvidence = projectFriendlyFiringEvidence({
     artifacts: { splat: { path: '/tmp/output.ply', bytes: 64, sha256: 'abc', status: 'real' } },
     stages: [{ effectiveRoute: { adapterReport: {
       revision: 'sharp-revision',
+      sharedGpu: { deviceIdentity: 'device-projected', queueIdentity: 'queue-projected', exactObjectIdentityVerified: true },
       breathingRoom: { requestedScheduler: { mode: 'cooperative' }, effectiveScheduler: { mode: 'cooperative' }, telemetry: { events: [] } },
-      backgroundHeartbeat: { schema: 'sharp-webgpu.background-heartbeat.v0', worstFrameGaps: [], gpuDutyIntervals: { intervals: [] } },
+      backgroundHeartbeat: { schema: 'sharp-webgpu.background-heartbeat.v0', crossPageClock: { runId: 'run-projected' }, worstFrameGaps: [], gpuDutyIntervals: { intervals: [] } },
     } } }],
+    authoritativeTrace: {
+      sharpRunDebug: {
+        route: { requestedRouteId: 'sharp.image-to-splat.webgpu-local.v0', effectiveRouteId: 'sharp.image-to-splat.webgpu-local.v0' },
+        schedulerTelemetry: { runId: 'run-projected' },
+      },
+    },
   },
 });
 assert.equal(projectedEvidence.reportPath, '/tmp/pipeline-witness.json');
@@ -1335,6 +1428,10 @@ assert.equal(projectedEvidence.effectiveSharpRevision, 'sharp-revision');
 assert.equal(projectedEvidence.output.sha256, 'abc');
 assert.equal(projectedEvidence.foregroundKilnHeartbeat.sampleRetention, 'uncapped');
 assert.equal(projectedEvidence.sharpDutyCorrelation.status, 'verified');
+assert.equal(projectedEvidence.sharpRouteIdentity.runId, 'run-projected');
+assert.equal(projectedEvidence.sharpRouteIdentity.requestedRouteId, 'sharp.image-to-splat.webgpu-local.v0');
+assert.equal(projectedEvidence.sharedGpu.deviceIdentity, 'device-projected');
+assert.equal(projectedEvidence.backgroundHeartbeat.crossPageClock.runId, 'run-projected');
 assert.equal(projectedEvidence.volumeReleased, true);
 
 const hostGapCorrelationSource = witness.match(

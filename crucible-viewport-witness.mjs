@@ -1521,26 +1521,74 @@ function assembleNoRenderTerminalEvidence({
     };
   }
   const failures = validateNoRenderAssayEvidence(assay);
+  const fullRouteIdentity = {
+    requestedPipelineId: fullRoute?.requestedPipelineId ?? null,
+    effectiveRouteId: fullRoute?.effectiveRouteId ?? null,
+    sharpRouteIdentity: fullRoute?.sharpRouteIdentity ?? null,
+    sharpDutyCorrelationRunId: fullRoute?.sharpDutyCorrelation?.runId ?? null,
+    backgroundHeartbeatRunId: fullRoute?.backgroundHeartbeat?.crossPageClock?.runId ?? null,
+    sharedGpu: fullRoute?.sharedGpu ?? null,
+  };
+  if (fullRouteIdentity.requestedPipelineId !== 'sharp-image-to-splat-live-v0'
+    || fullRouteIdentity.effectiveRouteId !== 'sharp-image-to-splat-live-v0') {
+    failures.push('full-route-product-route-invalid');
+  }
+  const sharpRouteIdentity = fullRouteIdentity.sharpRouteIdentity;
+  if (typeof sharpRouteIdentity?.requestedRouteId !== 'string' || sharpRouteIdentity.requestedRouteId === ''
+    || typeof sharpRouteIdentity?.effectiveRouteId !== 'string' || sharpRouteIdentity.effectiveRouteId === ''
+    || sharpRouteIdentity.requestedRouteId !== sharpRouteIdentity.effectiveRouteId) {
+    failures.push('full-route-sharp-route-identity-invalid');
+  }
+  if (assay?.productRouteIdentity?.routeId !== sharpRouteIdentity?.requestedRouteId) {
+    failures.push('assay-full-route-sharp-route-mismatch');
+  }
+  const fullRouteRunIds = [
+    sharpRouteIdentity?.runId,
+    fullRouteIdentity.sharpDutyCorrelationRunId,
+    fullRouteIdentity.backgroundHeartbeatRunId,
+  ];
+  if (fullRouteRunIds.some(runId => typeof runId !== 'string' || runId === '')) {
+    failures.push('full-route-run-identity-invalid');
+  }
+  if (new Set(fullRouteRunIds).size !== 1) failures.push('full-route-run-identity-mismatch');
+  if (fullRouteRunIds.some(runId => assay?.productRouteIdentity?.runId !== runId)) {
+    failures.push('assay-full-route-run-mismatch');
+  }
+  const sharedGpu = fullRouteIdentity.sharedGpu;
+  if (typeof sharedGpu?.deviceIdentity !== 'string' || sharedGpu.deviceIdentity === ''
+    || typeof sharedGpu?.queueIdentity !== 'string' || sharedGpu.queueIdentity === ''
+    || sharedGpu?.exactObjectIdentityVerified !== true) {
+    failures.push('full-route-shared-gpu-identity-invalid');
+  }
+  if (assay?.productGpuIdentity?.deviceIdentity !== sharedGpu?.deviceIdentity) {
+    failures.push('assay-full-route-device-mismatch');
+  }
+  if (assay?.productGpuIdentity?.queueIdentity !== sharedGpu?.queueIdentity) {
+    failures.push('assay-full-route-queue-mismatch');
+  }
+  const uniqueFailures = [...new Set(failures)];
   const retainedEvidence = {
     ...(lastTrustworthyEvidence || {}),
     noRenderAssay: assay || null,
-    noRenderAssayFailures: failures,
+    noRenderFullRouteIdentity: fullRouteIdentity,
+    noRenderAssayFailures: uniqueFailures,
   };
-  if (failures.length) {
+  if (uniqueFailures.length) {
     return {
       ok: false,
-      failures,
+      failures: uniqueFailures,
       fullRoute: null,
       lastTrustworthyEvidence: retainedEvidence,
     };
   }
   return {
     ok: true,
-    failures,
+    failures: uniqueFailures,
     fullRoute: {
       ...(fullRoute || {}),
       noRenderAssay: assay,
-      noRenderAssayFailures: failures,
+      noRenderFullRouteIdentity: fullRouteIdentity,
+      noRenderAssayFailures: uniqueFailures,
     },
     lastTrustworthyEvidence: retainedEvidence,
   };
@@ -1551,7 +1599,9 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
   const stage = (report.stages || [])[0] || {};
   const adapter = stage.effectiveRoute?.adapterReport || {};
   const authoritativeTrace = report.authoritativeTrace || {};
-  const authoritativeScheduler = authoritativeTrace.sharpRunDebug?.schedulerTelemetry || null;
+  const authoritativeSharpRunDebug = authoritativeTrace.sharpRunDebug || {};
+  const authoritativeScheduler = authoritativeSharpRunDebug.schedulerTelemetry || null;
+  const sharpRoute = authoritativeSharpRunDebug.route || {};
   const backgroundHeartbeat = adapter.backgroundHeartbeat || authoritativeTrace.backgroundHeartbeat || null;
   const schedulerEvents = adapter.breathingRoom?.telemetry?.events
     || authoritativeScheduler?.eventTrace?.events
@@ -1657,6 +1707,16 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     noRenderAssay: browserFiringEvidence.noRenderAssay || null,
     requestedPipelineId: report.requestedPipelineId || null,
     effectiveRouteId: report.effectiveRouteConfig?.routeId || null,
+    sharpRouteIdentity: {
+      requestedRouteId: sharpRoute.requestedRouteId || null,
+      effectiveRouteId: sharpRoute.effectiveRouteId || null,
+      runId: authoritativeScheduler?.runId || null,
+    },
+    sharedGpu: adapter.sharedGpu ? {
+      deviceIdentity: adapter.sharedGpu.deviceIdentity || null,
+      queueIdentity: adapter.sharedGpu.queueIdentity || null,
+      exactObjectIdentityVerified: adapter.sharedGpu.exactObjectIdentityVerified === true,
+    } : null,
     effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
     requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
     effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
